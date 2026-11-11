@@ -30,6 +30,7 @@ export const devopsPatterns: NamedMigration = {
      spent_micros INTEGER NOT NULL DEFAULT 0
    );
    CREATE INDEX patterns_runs_state ON patterns_runs (state, kind);
+   CREATE UNIQUE INDEX patterns_runs_one_running ON patterns_runs (state) WHERE state = 'running';
    CREATE TABLE patterns_snapshots (
      run_id INTEGER NOT NULL,
      client_key TEXT NOT NULL,
@@ -92,6 +93,7 @@ export const devopsPatterns: NamedMigration = {
   spent_micros bigint NOT NULL CONSTRAINT patterns_runs_spent_default DEFAULT 0
 );
 CREATE INDEX patterns_runs_state ON patterns_runs (state, kind);
+CREATE UNIQUE INDEX patterns_runs_one_running ON patterns_runs (state) WHERE state = 'running';
 CREATE TABLE patterns_snapshots (
   run_id int NOT NULL,
   client_key nvarchar(100) NOT NULL,

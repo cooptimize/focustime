@@ -120,7 +120,7 @@ export function aSmallProject(base: number, o: { created?: string } = {}): RawIt
 }
 
 /** The stub provider's answer for patterns tasks: every ref labeled (a type from the list, or "other" by `other`). */
-export function patternsAnswer(o: { other?: (ref: string) => boolean; requestType?: string; layers?: string[] } = {}) {
+export function patternsAnswer(o: { other?: (ref: string) => boolean; requestType?: string; layers?: string[]; otherName?: string; otherMeaning?: string } = {}) {
   return (c: ProviderCall): string | ProviderReply => {
     if (c.schemaName === "patterns_merge") {
       const input = JSON.parse(c.input) as { current: { name: string; meaning: string }[]; suggestions: { name: string }[] };
@@ -133,7 +133,7 @@ export function patternsAnswer(o: { other?: (ref: string) => boolean; requestTyp
     return JSON.stringify({
       items: input.items.map((it) => {
         const other = o.other?.(it.ref) ?? false;
-        return { ref: it.ref, request_type: other ? "other" : (o.requestType ?? "new report"), other_name: other ? "housekeeping" : null, other_meaning: other ? "Tidying up folders and names" : null, layers: o.layers ?? ["fact", "report"], readiness: "needs discovery first", missing: ["grain"], confidence: "medium" };
+        return { ref: it.ref, request_type: other ? "other" : (o.requestType ?? "new report"), other_name: other ? (o.otherName ?? "housekeeping") : null, other_meaning: other ? (o.otherMeaning ?? "Tidying up folders and names") : null, layers: o.layers ?? ["fact", "report"], readiness: "needs discovery first", missing: ["grain"], confidence: "medium" };
       }),
     });
   };

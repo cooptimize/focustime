@@ -97,7 +97,7 @@ type Attempt = { reply: ProviderReply; spent: Usage; tier: AiTier; flexTries: nu
 
 const fail = (kind: AiErrorKind): { ok: false; error: AiError } => ({ ok: false, error: new AiError(kind, AI_MESSAGES[kind]) });
 /** GD-1: an answer naming another client was sent and paid for, but is never shown. */
-const OUTPUT_REFUSED = "The AI's answer mentions another client, so nothing is shown";
+export const OUTPUT_REFUSED = "The AI's answer mentions another client, so nothing is shown";
 const ZERO: Usage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
 
 export function createAi(d: AiDeps) {

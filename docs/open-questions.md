@@ -683,3 +683,7 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Dev scales to zero: a run lives only while the replica does. The page asks for status every 5 seconds while open, which keeps it up; a closed tab can let it scale down, and the run then shows Stopped with Resume. Fine for a preview?
 - Only the inventory's own reads are paced against the poller; the estimate reads only the store. A Resume of a classification needs a fresh estimate (the cost may have changed).
 - The history sample (200 closed items per client) reads one request per item. With 30 clients that is up to 6,000 requests on a first run, paced; later runs read it again (history isn't kept between runs). Keep it, or keep the booleans per item and revision?
+- The shared `htmlToText` (`sources/devops/normalize.ts`) throws on a numeric entity past U+10FFFF; the patterns page guards itself, the rest of FocusTime (screens, the poller's normalizing) doesn't. Fixing it is outside this step's scope; worth a one-line fix.
+- After a restart the page shows a run as running until its heartbeat is 3 minutes old, then Stopped. Shorter risks stopping a live run that is waiting out a DevOps delay. Fine?
+- An item's history over 200 updates is read in up to 5 pages back to back (one item's request). Rare; pace them too?
+- The AI's "other" names are kept with client names and emails replaced; a person's name in them can't be recognized. The instructions forbid names, and the list is made from names and meanings only.

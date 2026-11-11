@@ -96,9 +96,9 @@ export function Patterns({ onClose }: { onClose: () => void }) {
               const e = (await act("patterns.estimate", {})) as Estimate | null;
               if (e) setEstimate(e);
             }}
-            onClassify={() => {
-              const stopped = data.classify.last?.state === "stopped" ? data.classify.last.id : null;
-              void act(stopped ? "patterns.resume" : "patterns.run_classification", { ...(stopped ? { runId: stopped } : {}), total: estimate!.totalMicros }, "Classification started.").then(() => setEstimate(null));
+            onClassify={(resume) => {
+              const stopped = resume && data.classify.last?.state === "stopped" ? data.classify.last.id : null;
+              void act(stopped ? "patterns.resume" : "patterns.run_classification", { ...(stopped ? { runId: stopped } : {}), total: estimate!.totalMicros }, stopped ? "Classification resumed." : "Classification started.").then(() => setEstimate(null));
             }}
           />
           <section aria-label="Platform" className="pat-section">
@@ -141,7 +141,7 @@ function RunTable({ run }: { run: RunView }) {
   );
 }
 
-function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, onClassify }: { data: Status; busy: boolean; estimate: Estimate | null; msg: string | null; onInventory: () => void; onResume: (id: number) => void; onEstimate: () => void; onClassify: () => void }) {
+function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, onClassify }: { data: Status; busy: boolean; estimate: Estimate | null; msg: string | null; onInventory: () => void; onResume: (id: number) => void; onEstimate: () => void; onClassify: (resume: boolean) => void }) {
   const inv = data.inventory.last;
   const cls = data.classify.last;
   const running = inv?.state === "running" || cls?.state === "running";
@@ -155,8 +155,13 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
         {inv?.state === "stopped" && <button type="button" className="mini" disabled={busy || running} onClick={() => onResume(inv.id)}>Resume inventory</button>}
         <button type="button" className="mini" disabled={busy || running || !data.ai.ready} onClick={onEstimate}>Estimate</button>
         {estimate && (
-          <button type="button" className="mini" disabled={busy || running || !estimate.totalItems} onClick={onClassify}>
-            {cls?.state === "stopped" ? "Resume classification" : "Run classification"} ({estimate.totalItems} items, about {fmtUsd(estimate.totalMicros)})
+          <button type="button" className="mini" disabled={busy || running || !estimate.totalItems} onClick={() => onClassify(false)}>
+            Run classification ({estimate.totalItems} items, about {fmtUsd(estimate.totalMicros)})
+          </button>
+        )}
+        {estimate && cls?.state === "stopped" && (
+          <button type="button" className="mini" disabled={busy || running || !estimate.totalItems} onClick={() => onClassify(true)}>
+            Resume classification
           </button>
         )}
       </div>

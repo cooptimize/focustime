@@ -23,7 +23,8 @@ export type PatternsPort = {
   clients(): Promise<string[]>;
   /** A link to an item in DevOps (from the poller's target; no PAT), or null. */
   itemUrl(clientKey: string, id: number): Promise<string | null>;
-  /** The app's AI prices are set (the estimate uses them). */
+  /** A client's DevOps project names (from the poller's target), so every client's projects are masked in AI text. */
+  projects?(clientKey: string): Promise<string[]>;
 };
 
 /** What one request needs, built per request by dispatch. */
@@ -58,15 +59,23 @@ function runView(r: Run | null) {
   return { id: r.id, kind: r.kind, state: r.state, reason: r.reason, startedAt: r.startedAt, finishedAt: r.finishedAt, heartbeatAt: r.heartbeatAt, pass: r.progress.pass ?? null, listVersion: r.progress.listVersion ?? null, estimateMicros: r.estimateMicros, spentMicros: r.spentMicros, clients };
 }
 
-/** The list version the results show: the newest second list, else the starting one. */
+/**
+ * The list version the results show: the newest second list whose classification finished (a run still labeling with a
+ * new list, or stopped partway, leaves the previous results on screen), else the newest second list, else the starting one.
+ */
 async function shownVersion(store: PatternsStore): Promise<string> {
-  return (await store.lists()).filter((l) => l.version !== STARTING_LIST.version).at(-1)?.version ?? STARTING_LIST.version;
+  const second = (await store.lists()).filter((l) => l.version !== STARTING_LIST.version);
+  for (const l of [...second].reverse()) {
+    const id = /^v2-r(\d+)$/.exec(l.version)?.[1];
+    if (id && (await store.run(Number(id)))?.state === "done") return l.version;
+  }
+  return second.at(-1)?.version ?? STARTING_LIST.version;
 }
 
 async function clientResults(store: PatternsStore, k: string, version: string): Promise<ClientResults | null> {
   const labels = await store.labels(k, version);
   if (!labels.size) return null;
-  return resultsOf(await store.items(k), labels);
+  return resultsOf(await store.currentItems(k), labels);
 }
 
 export async function patternsAction(pc: PatternsContext, action: PatternsAction, input: unknown): Promise<ActionResponse> {
@@ -173,7 +182,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const k = mine.find((m) => m.toLowerCase() === (i.clientKey as string).toLowerCase());
       if (!k) return bad("Check by hand is only for clients you're on", 403, "not_yours");
       const version = await shownVersion(store);
-      const [items, labels] = await Promise.all([store.items(k), store.labels(k, version)]);
+      const [items, labels] = await Promise.all([store.currentItems(k), store.labels(k, version)]);
       const levels = levelsOf(items);
       const rows = await Promise.all(
         handCheck(items.filter((x) => x.inWindow), labels).map(async (it) => ({ id: it.id, url: await pc.port!.itemUrl(k, it.id).catch(() => null), title: it.title, type: it.type, level: levels.get(it.type) ?? "other", labels: labels.get(it.id)!.labels })),

@@ -1286,6 +1286,10 @@ if (devopsPoller && directorySource) {
       allowed: patternsAllowed,
       prices: () => app.ai.prices,
     }),
+    async projects(k) {
+      const t = await poller.reads.target(k);
+      return [...new Set([t?.projectName, t?.project].filter((x): x is string => !!x))];
+    },
     async itemUrl(k, id) {
       const t = await poller.reads.target(k);
       return t?.org && (t.projectName ?? t.project) ? workItemUrl(t.org, (t.projectName ?? t.project)!, id) : null;

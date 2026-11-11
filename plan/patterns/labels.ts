@@ -3,7 +3,7 @@
 // item by item (a partly valid answer keeps its valid items), the merge of "other" suggestions into a second list, the
 // agreement sample and the feature shapes. Nothing here stores or logs text.
 import type { JsonSchema } from "../../ai/types.ts";
-import { htmlToText } from "../../sources/devops/normalize.ts";
+import { safeText } from "./inventory.ts";
 import type { Labels, Level, RequestType, TypeChange, TypeList } from "./types.ts";
 
 // ---------- the fixed values ----------
@@ -76,7 +76,7 @@ export const BATCH = 10;
 
 export type ClassifyInput = { ref: string; type: string; title: string; description: string; acceptance: string; tags: string[]; children: string[] };
 
-export const plain = (html: unknown, cap = TEXT_CAP): string => (typeof html === "string" && html ? htmlToText(html).replace(/\s+/g, " ").trim().slice(0, cap) : "");
+export const plain = (html: unknown, cap = TEXT_CAP): string => (typeof html === "string" && html ? safeText(html).replace(/\s+/g, " ").trim().slice(0, cap) : "");
 
 export function classifyInstructions(list: TypeList): string {
   const types = list.types.filter((t) => t.name !== OTHER).map((t) => `- ${t.name}: ${t.meaning}`).join("\n");
@@ -180,10 +180,14 @@ export function suggestionsOf(labels: readonly Labels[]): Suggestion[] {
   return [...m.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 80);
 }
 
-/** The same suggestions and list give the same fingerprint: a rerun with nothing new reuses the saved second list. */
+/**
+ * The same suggested names and list give the same fingerprint: a rerun with no new name reuses the saved second list.
+ * Names only, never their counts: a few more items suggesting the same names must not make a new list (and relabel
+ * every item at a cost the estimate didn't name).
+ */
 export function fingerprintOf(list: TypeList, s: readonly Suggestion[]): string {
   let h = 2166136261;
-  for (const c of JSON.stringify([list.version, s.map((x) => [norm(x.name), x.count])])) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  for (const c of JSON.stringify([list.version, [...new Set(s.map((x) => norm(x.name)))].sort()])) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   return `f${(h >>> 0).toString(16)}`;
 }
 

@@ -310,4 +310,101 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     // Clients go to the logger as its client field only (printed as a one-way ref).
     expect(w.logs.every((l) => l.source === "devops" && /^patterns_/.test(l.op))).toBe(true);
   });
+
+  it("review: the database allows one running run (a race on SQL Server can't start two)", async () => {
+    const db = await fresh();
+    const w = world(db, fakePatternsReader(projects()));
+    const add = () => db.conn.run("INSERT INTO patterns_runs (kind, state, started_by, started_at, heartbeat_at, owner, progress) VALUES ('inventory', 'running', ?, ?, ?, 'other', '{}')", [ME, NOW, NOW]);
+    await add();
+    await expect(add()).rejects.toThrow();
+    expect(await w.store.startRun({ kind: "inventory", startedBy: ME, owner: "proc-1", progress: { clients: {} } })).toBeNull();
+  });
+
+  it("review: one item with a broken character entity doesn't stop its client", async () => {
+    const db = await fresh();
+    const reader = fakePatternsReader({ adatum: [...aSmallProject(100), aRawItem({ id: 140, type: "Step", title: "Odd text", desc: "<p>&#99999999; and more</p>", created: "2026-05-01T10:00:00Z" })] });
+    const w = world(db, reader);
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    expect((await w.store.latest("inventory")).last!.state).toBe("done");
+    const deps = ai();
+    const est = await w.runner.estimate(["adatum"], deps.aiAllowed);
+    await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum"]);
+    await done(w.runner);
+    expect((await w.store.latest("classify")).last!.state).toBe("done");
+  });
+
+  it("review: the AI's own 'other' words are kept without client names or emails", async () => {
+    const db = await fresh();
+    const w = world(db, fakePatternsReader(projects()));
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    // Another client's name in an answer is refused by the service (nothing kept); the client's own name and an email
+    // get through it, and are replaced here before they're kept, since the list is shown across clients.
+    const deps = ai({ respond: patternsAnswer({ other: () => true, otherName: "Adatum Corp cleanup", otherMeaning: "Ask jo@outside.example first" }) });
+    const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
+    await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum", "fabrikam"]);
+    await done(w.runner);
+    const kept = JSON.stringify([...(await w.store.labels("adatum", "v1")).values()]);
+    expect(kept).toMatch(/another client/);
+    expect(kept).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
+    expect(JSON.stringify(await w.store.lists())).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
+  });
+
+  it("review: more items suggesting the same names reuse the second list; the estimate prices a full pass 2 when pass 1 has new work", async () => {
+    const db = await fresh();
+    const items = projects();
+    const reader = fakePatternsReader(items);
+    const w = world(db, reader);
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    const deps = ai({ respond: patternsAnswer({ other: (r) => r === "i1" }) });
+    const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
+    await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum", "fabrikam"]);
+    await done(w.runner);
+    const first = (await w.store.lists()).map((l) => l.version);
+    // Two new items: pass 1 has new work, so the estimate covers every eligible item again.
+    items.adatum.push(aRawItem({ id: 150, type: "Step", title: "Add the region filter", created: "2026-10-01T10:00:00Z" }), aRawItem({ id: 151, type: "Step", title: "Rename the measures", created: "2026-10-02T10:00:00Z" }));
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    const again = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
+    expect(again.clients.adatum!.items).toBeGreaterThanOrEqual(9 + 2);
+    await w.runner.startClassify(ME, deps, again.totalMicros, ["adatum", "fabrikam"]);
+    await done(w.runner);
+    const run = (await w.store.latest("classify")).last!;
+    expect(run.state).toBe("done");
+    // The same suggested names: no new list.
+    expect((await w.store.lists()).map((l) => l.version)).toEqual(first);
+  });
+
+  it("review: Allow AI turned off for one client mid-run skips that client; the others finish", async () => {
+    const db = await fresh();
+    const w = world(db, fakePatternsReader(projects()));
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    const deps = ai();
+    const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
+    // The service now says Fabrikam isn't allowed (an admin turned it off after the estimate).
+    const off = ai({ allowed: ["adatum"] });
+    await w.runner.startClassify(ME, { ...off, aiAllowed: async () => true }, est.totalMicros * 10, ["adatum", "fabrikam"]);
+    await done(w.runner);
+    const run = (await w.store.latest("classify")).last!;
+    expect(run.progress.clients.fabrikam).toMatchObject({ state: "skipped", reason: "Allow AI is off for this client (Admin › AI)" });
+    expect(run.progress.clients.adatum!.state).toBe("done");
+    expect(run.state).toBe("done");
+  });
+
+  it("review: items the newest inventory no longer read leave the results", async () => {
+    const db = await fresh();
+    const items = projects();
+    const w = world(db, fakePatternsReader(items));
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    expect((await w.store.currentItems("adatum")).some((i) => i.id === 105)).toBe(true);
+    items.adatum = items.adatum.filter((i) => i.id !== 105);
+    await w.runner.startInventory(ME);
+    await done(w.runner);
+    expect((await w.store.currentItems("adatum")).some((i) => i.id === 105)).toBe(false);
+    expect((await w.store.items("adatum")).some((i) => i.id === 105)).toBe(true);
+  });
 });

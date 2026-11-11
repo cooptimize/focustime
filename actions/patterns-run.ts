@@ -13,6 +13,7 @@
 import type { AiService } from "../ai/service.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { maskTranscript } from "../ai/guard.ts";
+import { OUTPUT_REFUSED } from "../ai/service.ts";
 import { replaceMentions } from "../plan/boundary.ts";
 import { costMicros, type Prices } from "../ai/cost.ts";
 import type { Logger } from "../log/logger.ts";
@@ -78,6 +79,10 @@ export const COST_STOP = 1.5;
 class Halt extends Error {}
 /** Thrown to end a run as stopped with plain words (the switch went off, the cost passed the estimate, AI stopped). */
 class StopRun extends Error {}
+/** Thrown to leave one client of a classification as skipped (its Allow AI went off mid-run); the others carry on. */
+class SkipClient extends Error {}
+/** Emails in the AI's own words (its "other" names and meanings) are replaced before they are kept. */
+const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 const GONE = "Stopped: the server restarted or scaled down";
 const words = (e: unknown): string => {
@@ -89,6 +94,11 @@ export function createPatternsRunner(d: RunnerDeps) {
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const gapMs = d.gapMs ?? 2_000;
   const waitMs = d.waitMs ?? 30_000;
+  /** A request's cost from its size, at the app's prices (for paid answers the service refused). */
+  const guessMicros = (items: number, inputChars: number) => {
+    const p = d.prices?.() ?? null;
+    return p ? costMicros({ inputTokens: Math.round(inputChars / 4) + 600, cachedTokens: 0, outputTokens: items * 90 }, p) : 0;
+  };
   const staleMs = d.staleMs ?? 3 * 60_000;
   /** The run this process is working on (its loop is alive), and whether a test halted it. */
   let active: { id: number; loop: Promise<void> } | null = null;
@@ -208,7 +218,7 @@ export function createPatternsRunner(d: RunnerDeps) {
 
   /** The labels this run needs for one client and list version: eligible items (or pass 1's sample) not labeled at this revision. */
   async function todo(k: string, list: TypeList, pass: 1 | 2): Promise<{ items: PatternItem[]; need: PatternItem[]; needB: PatternItem[]; all: PatternItem[] }> {
-    const all = await d.store.items(k);
+    const all = await d.store.currentItems(k);
     const levels = levelsOf(all);
     const el = eligible(all, (t) => levels.get(t) ?? "other");
     const items = pass === 1 ? pass1Sample(el) : el;
@@ -248,14 +258,21 @@ export function createPatternsRunner(d: RunnerDeps) {
       if (r.ok) {
         run.spentMicros += Math.round(r.costUsd * 1_000_000);
         const parsed = parseLabels(r.value, batch.map((b) => b.input.ref), list);
+        // The "other" name and meaning are the AI's free text from one client's items, shown to everyone with the page
+        // and sent to the merge: every client's names (this one's too) and any email are replaced before they're kept.
+        const scrub = (t: string | null) => (t === null ? null : replaceMentions(t, "\u0000none", c.directory, { records: true, token: "another client" }).text.replace(EMAIL, "[email]"));
         for (const b of batch) {
           const l = parsed.labels.get(b.input.ref);
-          if (l) out.set(b.id, { rev: b.rev, labels: l });
+          if (l) out.set(b.id, { rev: b.rev, labels: { ...l, otherName: scrub(l.otherName), otherMeaning: scrub(l.otherMeaning) } });
         }
         if (parsed.dropped) log("classify_dropped", { count: parsed.dropped, client: k });
         return out;
       }
       const kind = r.error.kind;
+      // A request that reached the provider and was then refused on its answer is paid for: counted at a guess, so the
+      // cost stop sees it (the service's own log has the real figure).
+      if (kind === "invalid_output" || r.error.message === OUTPUT_REFUSED) run.spentMicros += guessMicros(batch.length, classifyInput(batch.map((b) => b.input)).length);
+      if (kind === "client_off") throw new SkipClient("Allow AI is off for this client (Admin › AI)");
       if (kind === "refused_client" || kind === "refused_secret" || kind === "refused_email") {
         // Something in one item still can't go: each item on its own, and the ones refused stay unlabeled (counted).
         if (batch.length === 1) return out;
@@ -393,7 +410,7 @@ export function createPatternsRunner(d: RunnerDeps) {
           cp.state = "done";
         } catch (e) {
           if (e instanceof Halt || e instanceof StopRun) throw e;
-          Object.assign(cp, { state: "stopped", reason: words(e) });
+          Object.assign(cp, e instanceof SkipClient ? { state: "skipped", reason: e.message } : { state: "stopped", reason: words(e) });
         }
         await save(run, run.spentMicros);
       }
@@ -415,7 +432,7 @@ export function createPatternsRunner(d: RunnerDeps) {
         cp.state = "done";
       } catch (e) {
         if (e instanceof Halt || e instanceof StopRun) throw e;
-        Object.assign(cp, { state: "stopped", reason: words(e) });
+        Object.assign(cp, e instanceof SkipClient ? { state: "skipped", reason: e.message } : { state: "stopped", reason: words(e) });
       }
       await save(run, run.spentMicros);
     }
@@ -497,19 +514,26 @@ export function createPatternsRunner(d: RunnerDeps) {
     const clients: Record<string, { items: number; micros: number; skipped: string | null }> = {};
     let totalItems = 0;
     let totalTokens = { input: 0, output: 0 };
+    // Pass 1 with anything new may suggest a new name, and then a new second list relabels every item: when any allowed
+    // client has pass-1 work, pass 2 is priced as a full pass (the conservative guess; a reused list costs less).
+    const allowed: string[] = [];
+    let fresh = !latest;
     for (const k of keys) {
       if (!(await aiAllowed(k))) {
         clients[k] = { items: 0, micros: 0, skipped: "Allow AI is off for this client (Admin › AI)" };
         continue;
       }
+      allowed.push(k);
+      if ((await todo(k, STARTING_LIST, 1)).need.length) fresh = true;
+    }
+    for (const k of allowed) {
       const p1 = await todo(k, STARTING_LIST, 1);
-      // Pass 2 with the newest second list, or (none yet) every eligible item, the conservative guess.
       const levels = levelsOf(p1.all);
-      const p2 = latest ? await todo(k, latest, 2) : { need: eligible(p1.all, (t) => levels.get(t) ?? "other"), needB: [] as PatternItem[] };
+      const p2 = !fresh && latest ? await todo(k, latest, 2) : { need: eligible(p1.all, (t) => levels.get(t) ?? "other"), needB: [] as PatternItem[] };
       const kids = new Map<number, number>();
       for (const i of p1.all) if (i.parentId !== null) kids.set(i.parentId, (kids.get(i.parentId) ?? 0) + 1);
       const tokensOf = (i: PatternItem) => (i.title.length + Math.min(i.facts.descLen, TEXT_CAP) + Math.min(i.facts.acLen, TEXT_CAP) + Math.min(kids.get(i.id) ?? 0, CHILD_TITLES) * 50 + 120) / 4;
-      const agreeB = latest ? p2.needB.length : Math.ceil(p2.need.length * 0.05);
+      const agreeB = !fresh && latest ? p2.needB.length : Math.ceil(p2.need.length * 0.05);
       const sent = [...p1.need, ...p2.need];
       const n = sent.length + agreeB;
       const input = sent.reduce((s, i) => s + tokensOf(i), 0) * (1 + agreeB / Math.max(1, sent.length)) + (n / BATCH) * instr;

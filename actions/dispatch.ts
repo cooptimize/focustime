@@ -2582,7 +2582,10 @@ export function patternsContext(ctx: ActionContext): PatternsContext {
       const mine = cfg ? await aiDirectory(ctx, cfg) : [];
       const r = await rules();
       // Every client the run covers is in the masking directory, with its aliases, not only the person's own.
-      const directory = [...mine, ...keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase())).map((k) => ({ key: k, names: [], projects: [], itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))];
+      const port = ctx.patterns;
+      const projectsOf = async (k: string) => (port.projects ? await port.projects(k).catch(() => []) : []);
+      const others = keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase()));
+      const directory = [...mine, ...(await Promise.all(others.map(async (k) => ({ key: k, names: [], projects: await projectsOf(k), itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))))];
       const internal = new Set<string>();
       for (const k of keys) if (await isInternalKey(ctx.org, k)) internal.add(k);
       return { deps: { ai: service, aiAllowed, directory, isInternal: (k: string) => internal.has(k) } };

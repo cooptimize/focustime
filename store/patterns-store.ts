@@ -70,27 +70,38 @@ const factsJson = (f: Facts): string =>
 const labelsJson = (l: Labels): string => JSON.stringify({ requestType: l.requestType, otherName: l.otherName, otherMeaning: l.otherMeaning, layers: l.layers, readiness: l.readiness, missing: l.missing, confidence: l.confidence });
 
 export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
+  /** A write that broke the one-running-run index means someone else's run started first: busy (null). */
+  const busyOnClash = async (f: () => Promise<Run | null>): Promise<Run | null> => {
+    try {
+      return await f();
+    } catch (e) {
+      if (await conn.get("SELECT id FROM patterns_runs WHERE state = 'running'").catch(() => null)) return null;
+      throw e;
+    }
+  };
   const at = () => now().toString();
   return {
     // ---------- runs ----------
     /** Starts a run unless one is running (one at a time for the whole deployment); null when one is. */
     async startRun(o: { kind: RunKind; startedBy: string; owner: string; progress: Progress; estimateMicros?: number }): Promise<Run | null> {
-      return conn.tx(async () => {
+      // The check is for the plain case; the filtered unique index (one 'running' row) decides a race (SQL Server reads
+      // committed rows, so two presses can both pass the check): the loser's insert fails and it is "busy".
+      return busyOnClash(() => conn.tx(async () => {
         if (await conn.get("SELECT id FROM patterns_runs WHERE state = 'running'")) return null;
         const t = at();
         const r = await conn.run("INSERT INTO patterns_runs (kind, state, started_by, started_at, heartbeat_at, owner, progress, estimate_micros, spent_micros) VALUES (?, 'running', ?, ?, ?, ?, ?, ?, 0)", [o.kind, o.startedBy.slice(0, 64), t, t, o.owner.slice(0, 64), JSON.stringify(o.progress), o.estimateMicros ?? 0]);
         const id = r.lastId ?? n((await conn.get("SELECT MAX(id) AS id FROM patterns_runs"))?.id);
         return runOf((await conn.get("SELECT * FROM patterns_runs WHERE id = ?", [id]))!);
-      });
+      }));
     },
     /** Takes a stopped run back (Resume) for this owner, unless another run is going. */
     async resumeRun(id: number, o: { owner: string; startedBy: string; estimateMicros?: number }): Promise<Run | null> {
-      return conn.tx(async () => {
+      return busyOnClash(() => conn.tx(async () => {
         if (await conn.get("SELECT id FROM patterns_runs WHERE state = 'running'")) return null;
         const r = await conn.run(`UPDATE patterns_runs SET state = 'running', owner = ?, heartbeat_at = ?, reason = NULL, started_by = ?${o.estimateMicros !== undefined ? ", estimate_micros = ?, spent_micros = 0" : ""} WHERE id = ? AND state = 'stopped'`, [o.owner.slice(0, 64), at(), o.startedBy.slice(0, 64), ...(o.estimateMicros !== undefined ? [o.estimateMicros] : []), id]);
         if (!r.changes) return null;
         return runOf((await conn.get("SELECT * FROM patterns_runs WHERE id = ?", [id]))!);
-      });
+      }));
     },
     async run(id: number): Promise<Run | null> {
       const r = await conn.get("SELECT * FROM patterns_runs WHERE id = ?", [id]);
@@ -152,6 +163,17 @@ export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
     /** A client's items as last read; `runId`: only those read by that run. */
     async items(clientKey: string, runId?: number): Promise<PatternItem[]> {
       const rows = runId === undefined ? await conn.all("SELECT * FROM patterns_items WHERE client_key = ? ORDER BY item_id", [clientKey]) : await conn.all("SELECT * FROM patterns_items WHERE client_key = ? AND run_id = ? ORDER BY item_id", [clientKey, runId]);
+      return rows.map(itemOf);
+    },
+    /**
+     * A client's items as of its newest finished inventory (its newest snapshot): items an earlier run read and the
+     * newest didn't (deleted in DevOps, or now older than the window) are left out. Items a later, unfinished run read
+     * again count too (their run id only grows). No snapshot yet: every item.
+     */
+    async currentItems(clientKey: string): Promise<PatternItem[]> {
+      const s = await conn.get("SELECT MAX(run_id) AS run_id FROM patterns_snapshots WHERE client_key = ?", [clientKey]);
+      const since = s && s.run_id !== null && s.run_id !== undefined ? n(s.run_id) : null;
+      const rows = since === null ? await conn.all("SELECT * FROM patterns_items WHERE client_key = ? ORDER BY item_id", [clientKey]) : await conn.all("SELECT * FROM patterns_items WHERE client_key = ? AND run_id >= ? ORDER BY item_id", [clientKey, since]);
       return rows.map(itemOf);
     },
     /** The run that last read each client's items (the newest inventory that reached it). */

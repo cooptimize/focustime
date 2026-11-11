@@ -33,7 +33,18 @@ export type ProcessFacts = { closed(type: string, state: string): boolean; propo
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 const date = (v: unknown) => (typeof v === "string" && v ? v : null);
 /** Text length after HTML is stripped and white space folded: a number, never the text. */
-export const textLength = (v: unknown): number => (typeof v === "string" && v ? htmlToText(v).replace(/\s+/g, " ").trim().length : 0);
+/**
+ * DevOps HTML as text. The shared `htmlToText` throws on a numeric entity past U+10FFFF (`&#99999999;`); one such item
+ * must never stop a client, so here it falls back to the tags stripped and every entity left as written.
+ */
+export function safeText(html: string): string {
+  try {
+    return htmlToText(html);
+  } catch {
+    return html.replace(/<[^>]*>/g, " ").slice(0, 4000);
+  }
+}
+export const textLength = (v: unknown): number => (typeof v === "string" && v ? safeText(v).replace(/\s+/g, " ").trim().length : 0);
 
 /** One raw batch value into what this page keeps: the text fields become lengths here and go no further. */
 export function itemOf(v: { id: number; fields: Readonly<Record<string, unknown>> }, p: ProcessFacts, inWindow: boolean): PatternItem {
