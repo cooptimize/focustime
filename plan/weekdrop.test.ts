@@ -13,7 +13,7 @@ const base = (o: Partial<Parameters<typeof dropCheck>[0]> = {}) => {
 
 describe("dropCheck (PV-1)", () => {
   it("shows the story's hours against the block's free time left", () => {
-    expect(dropCheck(base())).toEqual({ ok: true, text: "2h of 4h free", over: false });
+    expect(dropCheck(base())).toEqual({ ok: true, text: "2h of 4h free", over: false, freeMinutes: 210 });
     // QT-1: a 2h meeting and 1h already planned leave 1h: the 2h story still drops, and the tip says only what's free.
     const week = aWeek({ events: [aMeeting({ start: "2026-11-03T09:00", end: "2026-11-03T11:00" })] });
     const picks = [aPick({ date: "2026-11-03", half: "AM", itemId: 7, size: "S" })];

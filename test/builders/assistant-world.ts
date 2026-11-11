@@ -77,7 +77,9 @@ export function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"
   ]);
   const tailspin = aClient({ name: "Tailspin" }), qd = aClient({ name: "Wingtip" }), ini = aClient({ name: "Initech" });
   const patterns = [aFocusBlock({ client: tailspin, days: { Mon: "AM", Wed: "PM" } }), aFocusBlock({ client: qd, days: { Tue: "AM", Wed: "AM", Thu: "PM" } }), aFocusBlock({ client: ini, days: { Thu: "AM" } })];
-  const events = [aMeeting({ title: "Quarterly review", start: `${NEXT_TUE}T09:00`, end: `${NEXT_TUE}T15:00` })];
+  // QT-2: Wednesday afternoon has a long meeting, so the calendar puts Tailspin's block at risk (the only reason an
+  // answer names a block or suggests moving its to-dos; how much is planned there never does).
+  const events = [aMeeting({ title: "Quarterly review", start: `${NEXT_TUE}T09:00`, end: `${NEXT_TUE}T15:00` }), aMeeting({ title: "Data review", start: `${NEXT_WED}T13:00`, end: `${NEXT_WED}T16:45` })];
   const promises = [
     { id: 41, what: "Send the row counts", toName: "Dana Reyes", clientKey: Tailspin, clientName: "Tailspin", dueAt: null, dueDate: "2026-11-03", overdue: true },
     { id: 42, what: "Share the intake mockups", toName: "Lee Park", clientKey: QD, clientName: "Wingtip", dueAt: null, dueDate: NEXT_TUE, overdue: false },

@@ -185,11 +185,10 @@ export const markResolved = <P extends { clientKey: string; itemId: number | nul
 
 /** The budget inputs Commit and the Board share (plan/weekplan.ts weekBudget), so they always agree. */
 
-/** The week's PlanBits: the person's guidance, their Keep open shares, what DevOps resolved, the check-ins. */
+/** The week's PlanBits: what DevOps resolved and the check-ins (QT-2: Plan up to and Keep open are no longer read). */
 export async function planBitsFor(o: { cfg: AppConfig; plan: PlanStore; devops: Pick<DevOpsSource, "itemStates">; refs: readonly ClientRef[]; weekStart: IsoDate; items: readonly { clientKey: string; itemId: number | null }[] }): Promise<{ bits: PlanBits; resolved: Set<string> }> {
   const resolved = await resolvedKeys(o.devops, o.refs, idsByClient(o.items));
-  const g = o.cfg.org?.guidance;
-  return { resolved, bits: { planShare: g?.planShare ?? 100, keepOpenDefault: g?.keepOpen ?? 0, keepOpen: { ...o.cfg.keepOpen }, resolved: [...resolved].sort(), checkins: await weekCheckins(o.plan, o.weekStart) } };
+  return { resolved, bits: { resolved: [...resolved].sort(), checkins: await weekCheckins(o.plan, o.weekStart) } };
 }
 
 async function proposal(ctx: CarryContext, cfg: AppConfig, plan: PlanStore, weekStart: IsoDate, thisWeek: IsoDate): Promise<ProposalData> {

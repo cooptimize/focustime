@@ -181,34 +181,17 @@ export const overText = (plannedMinutes: number, freeMinutes: number) => {
 };
 
 /**
- * A client's week in words (Plan the week's line and header, Plan ahead): "7h free" and "9h planned", with the amber
- * "about 2h over" when what's on its week needs more than its free time. Never red.
+ * A client's week in words (Ahead's Gantt weeks): "7h free" and "9h planned", with the amber "about 2h over" when
+ * what's on its week needs more than its free time (a forward-planning view; open question for the product owner, QT-2). Never
+ * red. QT-2: free time as it is; "Plan up to" and "Keep open for walk-ins" no longer move the line.
  */
-export function budgetWords(freeMin: number, plannedMin: number, planShare = 100, keepOpen = 0): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string; /** PL-1: minutes it plans up to (the over line). */ line: number } {
-  // ADM-1: "Plan up to N% of free time" (a person's guidance) moves only where the amber over line falls; it never
-  // blocks. PL-1: a client's "Keep open" share joins it: planned up to = free × share × (1 − keep open).
-  const share = Math.min(100, Math.max(50, Math.round(planShare)));
-  const keep = Math.min(80, Math.max(0, Math.round(keepOpen)));
-  const reduced = share < 100 || keep > 0;
-  const line = reduced ? Math.round((freeMin * share * (100 - keep)) / 10_000) : freeMin;
+export function budgetWords(freeMin: number, plannedMin: number): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string } {
   const free = freeMin > 0 ? `${hoursText(freeMin)} free` : "No focus time this week";
-  const upTo = reduced && freeMin > 0 ? `plan up to ${hoursText(line)}` : null;
   const planned = plannedMin > 0 ? `${hoursText(plannedMin)} planned` : null;
-  const text = [free, upTo, planned].filter(Boolean).join(" · ");
-  if (isOver(plannedMin, line)) return { kind: "over", free, planned, over: overText(plannedMin, line), text, line };
-  if (!plannedMin) return { kind: "none", free, planned, over: null, text, line };
-  return { kind: line - plannedMin < 30 ? "all" : "free", free, planned, over: null, text, line };
-}
-
-/**
- * The one amber line when a client's week needs more than its free time: "About 2h more than Northwind's free time
- * this week. Move one to another week, or borrow Friday." Friday only when the week has a catch-up day.
- */
-export function overLine(clientName: string, freeMin: number, plannedMin: number, friday: boolean): string | null {
-  if (!isOver(plannedMin, freeMin)) return null;
-  const h = overHours(plannedMin, freeMin);
-  const amount = h < 1 ? "A little more" : `About ${h}h more`;
-  return `${amount} than ${clientName}'s free time this week. Move one to another week${friday ? ", or borrow Friday" : ""}.`;
+  const text = [free, planned].filter(Boolean).join(" · ");
+  if (isOver(plannedMin, freeMin)) return { kind: "over", free, planned, over: overText(plannedMin, freeMin), text };
+  if (!plannedMin) return { kind: "none", free, planned, over: null, text };
+  return { kind: freeMin - plannedMin < 30 ? "all" : "free", free, planned, over: null, text };
 }
 
 /** 1 block = 4h: what E1 (half blocks) and step 16.4 (whole blocks) stored, as minutes to the nearest hour (1h to 80h). */

@@ -466,7 +466,7 @@ The bot can come to the person: a morning brief, a midday check-in, a close out 
   `20261117T0900_assistant_pending`; `assistantQuestion` and `closeAssistantQuestion` in `store/plan-store.ts`),
   `move_plan` (server-built, across clients, the Board's `dropCheck` per target) with `undo`, `item_update`
   (state, comment and target in one card; `devops.done_offer`'s item mode). The day notes are shared:
-  `placeNote`/`overNote` in `plan/days.ts`, used by `plan/weekdrop.ts`, `pick.move` and `pick.add`. Teams: the
+  `placeNote`/`freeNote` in `plan/days.ts` (QT-2: `freeNote` replaced `overNote`), used by `plan/weekdrop.ts`, `pick.move` and `pick.add`. Teams: the
   `questionCard` and `answer` verb, the done card's Undo (`server/teams/cards.ts`, `server/teams/bot.ts`). The panel:
   chips and per-part results in `ui/Assistant.tsx`. Tests: `assistant/resolve.test.ts`, the AS-2 block of
   `assistant/service.test.ts`, `server/teams/bot.test.ts`, the demo script e2e.
@@ -897,7 +897,8 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 ## QT-1: a quieter board (Nov 11)
 
 - **Status.** `plan/blockstatus.ts` `blockStatus(risks)`: At risk from `week/risks.ts` (every rule there comes from the calendar or the focus blocks) or nothing; the plan's fit no longer makes a status. `watchTip` gives Watch reasons for a hover (a card's header, the panel's time line). `plan/blockpanel.ts` `riskLine` is null unless the block is at risk.
-- **Free time.** `plan/addwork.ts` `roomWords` ("1h 45m free" or "No free time") feeds the panel's `panelWhen`; `plan/weekdrop.ts` `dropCheck` says "2h of 3h free", "1h free" or "No free time left", never amber; its `shortBy` is read only by the assistant's move preview (`overNote` in `plan/days.ts`).
+- **Free time.** `plan/addwork.ts` `roomWords` ("1h 45m free" or "No free time") feeds the panel's `panelWhen`; `plan/weekdrop.ts` `dropCheck` says "2h of 3h free", "1h free" or "No free time left", never amber; its `freeMinutes` feeds the assistant's move preview note ("Wednesday PM: 3h free", `freeNote` in `plan/days.ts`; QT-2).
+- **No over-planning words (QT-2).** The midday check-in (`ui/Checkin.tsx`, `plan/checkin.ts`) says the afternoon's free time once (`checkLeft`) and gives every unfinished to-do its move (`plan/checkinmove.ts`); the assistant (`assistant/answer.ts`) names a block only when the calendar puts it at risk. `test/over-words.ts` holds the words and what's left out; `assistant/over-words.test.ts` and `e2e/qt2.test.ts` search what a person reads. Ahead's Gantt keeps its amber per week, from `budgetWords` with free time as it is (no plan share or Keep open). The inventory is `docs/ux/qt2/inventory.md`.
 - **Ended blocks.** `actions/plan-actions.ts` `placeAt` and `dropCheck` refuse only a day before today; a block that ended earlier today takes work.
 - **Past days.** `ui/BlockCard.tsx` folds a card dated before today (`.half.folded`): its header and `foldedLine` ("2 done · 1 not done"); a click opens the block panel in its past mode.
 - **Removed.** `ui/ClientChips.tsx`, `ui/WeekMusts.tsx`, `clientChip` and `chipsThatFit` (`plan/addwork.ts`), Settings' and Admin's "Plan up to", the Guide's Keep open answer, the unused `.detail-panel` styles. Inventory: `docs/ux/qt1/inventory.md`.

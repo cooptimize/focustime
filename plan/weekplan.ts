@@ -4,7 +4,7 @@
 import type { SizeScale } from "./estimate.ts";
 import { freeMinutes } from "../week/free.ts";
 import { budgetWords, estimate, plannedMinutesOf, type StorySize } from "./estimate.ts";
-import { keepOpenOf, resolvedOf, type PlanBits } from "./carry.ts";
+import { resolvedOf, type PlanBits } from "./carry.ts";
 import { countsFor } from "./process.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem, Slot, Week, WorkItem } from "../week/types.ts";
 
@@ -76,25 +76,21 @@ export type ClientBudget = {
   planned: string | null;
   /** The amber "about 2h over", or null. */
   over: string | null;
-  /** PL-1: the share of its block hours kept open for walk-ins (0: none), and its Watching check-ins' minutes. */
-  keepOpen?: number;
+  /** PL-1: its Watching check-ins' minutes. */
   checkinMinutes?: number;
-  /** PL-1: the minutes it plans up to: free × plan share × (1 − keep open); the over line and fit use this. */
-  planUpTo?: number;
 };
 
 /**
- * PL-1: the one budget Commit, the Board and Today's This week line show: weekBudget with the same inputs everywhere
- * (WT-1's background types, the plan share, Keep open, what DevOps resolved, the Watching check-ins).
+ * PL-1: one budget with the same inputs everywhere (WT-1's background types, what DevOps resolved, the Watching
+ * check-ins). QT-2: free time as it is; "Plan up to" and "Keep open for walk-ins" are no longer read.
  */
-export function planBudget(week: Week, items: readonly FeatureLike[], o: { borrowed: Parameters<typeof borrowedForWeek>[0]; weekStart: IsoDate; work: Parameters<typeof countsFor>[0]; bits: PlanBits | null | undefined; planShare?: number | undefined; sizes: SizeScale }): ClientBudget[] {
+export function planBudget(week: Week, items: readonly FeatureLike[], o: { borrowed: Parameters<typeof borrowedForWeek>[0]; weekStart: IsoDate; work: Parameters<typeof countsFor>[0]; bits: PlanBits | null | undefined; sizes: SizeScale }): ClientBudget[] {
   const bits = o.bits;
   return weekBudget(week, items, {
     sizes: o.sizes,
     borrowedMinutes: borrowedForWeek(o.borrowed, o.weekStart),
     counts: countsFor(o.work),
-    planShare: bits?.planShare ?? o.planShare ?? 100,
-    ...(bits ? { keepOpen: keepOpenOf(bits), resolved: resolvedOf(bits), checkins: bits.checkins } : {}),
+    ...(bits ? { resolved: resolvedOf(bits), checkins: bits.checkins } : {}),
   });
 }
 
@@ -133,10 +129,6 @@ export type BudgetOptions = {
   borrowedMinutes: Readonly<Record<string, number>>;
   /** WT-1: false for a background type (no hours). */
   counts?: (clientKey: string, itemType: string | null | undefined) => boolean;
-  /** ADM-1: plan up to this % of free time (100: all of it). */
-  planShare?: number;
-  /** PL-1: the client's Keep open share (0 to 80). */
-  keepOpen?: (clientKey: string) => number;
   /** PL-1: resolved, closed or removed in DevOps: counts zero hours. */
   resolved?: (clientKey: string, itemId: number) => boolean;
   /** PL-1: Watching check-in reservations: minutes per client, counted in its planned time. */
@@ -171,10 +163,9 @@ export function weekBudget(week: Week, all: readonly FeatureLike[], o: BudgetOpt
     const freeMinutes = Math.max(0, inBlocks - borrowed);
     const checkinMinutes = o.checkins?.[clientKey] ?? 0;
     const plannedMinutes = plannedMinutesOf(est, clientKey) + checkinMinutes;
-    const keepOpen = o.keepOpen?.(clientKey) ?? 0;
-    const w0 = budgetWords(freeMinutes, plannedMinutes, o.planShare ?? 100, keepOpen);
+    const w0 = budgetWords(freeMinutes, plannedMinutes);
     const w = onlyPto ? { ...w0, free: NO_TIME, text: [NO_TIME, w0.planned].filter(Boolean).join(" · ") } : w0;
-    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over, keepOpen, checkinMinutes, planUpTo: onlyPto ? 0 : w0.line };
+    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over, checkinMinutes };
   });
 }
 

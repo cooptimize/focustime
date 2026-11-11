@@ -36,10 +36,10 @@ export const addKey = (add: { draftId?: number; followUpId?: number; intention?:
 
 /**
  * `over` is always false since QT-1 (kept so older callers type-check); nothing on Week turns amber for being full.
- * `shortBy`: minutes the dragged work needs beyond the block's free time, for the assistant's preview note only
- * (QT-1 leaves the assistant's words to a later step).
+ * `freeMinutes`: the block's free time after meetings and personal events, as the assistant's answers and the
+ * check-in count it (QT-2: the move preview says it as a fact). Absent for a day with no hours or a PTO day.
  */
-export type DropCheck = { ok: true; text: string; over: false; shortBy?: number } | { ok: false; why: string };
+export type DropCheck = { ok: true; text: string; over: false; freeMinutes?: number } | { ok: false; why: string };
 
 export function dropCheck(i: {
   slot: SlotLike;
@@ -69,6 +69,6 @@ export function dropCheck(i: {
   const free = freeMinutes(slot);
   const left = Math.max(0, free - planMinutes(live, i.sizes, i.timeboxes, slot));
   const need = dragged.remainingMinutes || storyMinutes(dragged.size, i.sizes);
-  if (left > 0 && need <= left) return { ok: true, text: `${need < 60 ? `${need} min` : hoursText(need)} of ${hoursText(left)} free`, over: false };
-  return { ok: true, text: left > 0 ? `${hoursText(left)} free` : "No free time left", over: false, shortBy: need - left };
+  if (left > 0 && need <= left) return { ok: true, text: `${need < 60 ? `${need} min` : hoursText(need)} of ${hoursText(left)} free`, over: false, freeMinutes: free };
+  return { ok: true, text: left > 0 ? `${hoursText(left)} free` : "No free time left", over: false, freeMinutes: free };
 }

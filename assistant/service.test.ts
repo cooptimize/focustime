@@ -823,7 +823,7 @@ describe("AS-2", () => {
     expect(await view("Move today's picks to next Wednesday")).toEqual(await view("Move today's to-dos to next Wednesday"));
   });
 
-  it("a day never blocks a move: Saturday, a PTO day and an over-full block move with the Board's own note; an ended block stays", async () => {
+  it("a day never blocks a move: Saturday, a PTO day and a block with no free time move with a note; an ended block stays", async () => {
     const note = async (to: string, half: "AM" | "PM" | null, o: Parameters<typeof setup>[0] = {}, extra = 0) => {
       const s = opts(o);
       await s.plan.addPick({ date: TODAY, half: "PM", clientKey: FAB, kind: "intention", title: "Export spec", size: "L" });
@@ -837,8 +837,13 @@ describe("AS-2", () => {
     const pto = await note(NEXT_WED, null, { pto: [NEXT_WED] });
     expect(pto.r.proposals[0]!.preview.notes).toContain("You're on PTO that day");
     expect((await pto.s.a.confirm(pto.r.proposals[0]!.id)).ok).toBe(true);
+    // QT-2: a block with less free time than the work moves too; the note is where it goes and that block's free time.
     const over = await note(NEXT_WED, "PM", {}, 1);
-    expect(over.r.proposals[0]!.preview.notes.some((x) => /^Over your Wednesday PM hours by \dh$/.test(x))).toBe(true);
+    const notes = over.r.proposals[0]!.preview.notes;
+    expect(notes.some((x) => /^Wednesday PM: (\d+h|\d+ min) free$|^Wednesday PM: no free time$/.test(x))).toBe(true);
+    expect(notes.join(" ")).not.toMatch(/\bover\b|too much|doesn't fit/i);
+    const roomy = await note(NEXT_WED, "PM");
+    expect(roomy.r.proposals[0]!.preview.notes.some((x) => /^Wednesday PM: \d+h free$/.test(x))).toBe(true);
     // QT-1: the morning has ended at 2 PM, and it still takes work (only a day before today refuses).
     const s = opts();
     s.setNow("2026-11-05T19:00:00Z");
