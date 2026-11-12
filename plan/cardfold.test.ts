@@ -19,6 +19,13 @@ describe("folding done to-dos on a card (PS-1)", () => {
     expect(r.done).toHaveLength(3);
     expect(r.shown.every((p) => p.status !== "done")).toBe(true);
   });
+  it("a to-do ticked while the card is on screen stays in place on a heavy block today (focus never jumps)", () => {
+    const r = foldDone(picks(3, HEAVY), { isToday: true, stays: (p) => p.id === 2 });
+    expect(r.done.map((p) => p.id)).toEqual([0, 1]);
+    expect(r.shown.map((p) => p.id)).toContain(2);
+    // On other days a done to-do folds whatever happened on screen.
+    expect(foldDone(picks(3, 1), { isToday: false, stays: () => true }).done).toHaveLength(3);
+  });
   it("nothing done, nothing folded", () => {
     expect(foldDone(picks(0, 9), { isToday: true }).done).toEqual([]);
   });

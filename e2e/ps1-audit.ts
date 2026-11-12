@@ -20,6 +20,8 @@ export function smallTargets(page: Page, scope: string, min: number): Promise<Sm
           if (seen.has(el)) continue;
           seen.add(el);
           if (el.closest("[inert], [aria-hidden='true']")) continue;
+          // Drawn by time on a rail or timeline (their height is their length): exempt, docs/open-questions.md.
+          if (el.closest(".now-line:not(.now-row), .tbox, .r-ev, .r-promise")) continue;
           const target = (el instanceof HTMLInputElement && el.closest("label")) || el;
           const b = target.getBoundingClientRect();
           // A pseudo-element that widens the hit area (an absolutely placed ::after with negative insets) counts.

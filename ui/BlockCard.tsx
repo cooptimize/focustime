@@ -98,7 +98,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // Step 13.6 (D238): Friday's catch-up work shows on its card even though Friday is never committed.
   const ticks = overflow && !eve && !cp.picks.length ? catchUp(plan.week, slot) : cp.picks;
   // U3, PS-1: done picks fold to "N done" (a click opens them): always on other days, on today in a heavy block.
-  const fold = foldDone(ticks, { isToday });
+  const [doneAtStart] = useState(() => new Set(ticks.filter((p) => p.status === "done").map((p) => p.id)));
+  const fold = foldDone(ticks, { isToday, stays: (p) => !doneAtStart.has(p.id) });
   // UI-B: on a day that has passed, a pick kept or moved on from here stays as a dimmed "→ moved to Mon AM" line.
   const movedOn = slot.date < (plan.today ?? "") ? (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && p.status === "moved" && p.carriedTo) : [];
   const shown = [...fold.shown, ...movedOn];
@@ -250,7 +251,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {flexList}
       {listEvents && slot.events.length > 0 && (
         // MB-1, WD-1: with no rail the card's meetings are one line ("3 meetings · 2h 30m · 1h 45m free"); it opens into the list.
-        <FoldLine className="card-agenda-fold" open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label={meetingsLine(slot)} />
+        <FoldLine className="card-agenda-fold" tabIndex={selected ? 0 : -1} open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label={meetingsLine(slot)} />
       )}
       {listEvents && slot.events.length > 0 && agendaOpen && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
@@ -266,7 +267,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {!eve && primary && <PlacedFeatures clientKey={primary.clientKey} date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
       {!eve && <BlockSuggestions date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} where={phone ? "phone" : "card"} />}
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
-      {fold.done.length > 0 && <FoldLine className="card-done" open={doneOpen} onToggle={() => setDoneOpen(!doneOpen)} label={`${fold.done.length} done`} title={doneOpen ? "Fold the done to-dos" : "Show the done to-dos"} />}
+      {fold.done.length > 0 && <FoldLine className="card-done" tabIndex={selected ? 0 : -1} open={doneOpen} onToggle={() => setDoneOpen(!doneOpen)} label={`${fold.done.length} done`} title={doneOpen ? "Fold the done to-dos" : "Show the done to-dos"} />}
       {doneOpen && fold.done.length > 0 && <CardPicks picks={fold.done} label={`Done on ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
       {addWork && (
         // WD-1, WD-2: "+ Add" is the last row of every block that can take work, always visible: it selects the block

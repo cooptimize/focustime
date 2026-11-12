@@ -6632,12 +6632,12 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 
 /* C3: action links on these screens (Keep all, Clear, Review, Break down, N more in Inbox) are quiet: the text's own
    colour, underlined only on hover and focus. */
-:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn {
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title) {
   color: var(--text-muted); font-weight: 500; text-decoration: underline; text-underline-offset: 2px;
   text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
 }
-:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:hover,
-:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:focus-visible {
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title):hover,
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title):focus-visible {
   color: var(--text); text-decoration: underline; text-underline-offset: 2px;
 }
 
@@ -6649,7 +6649,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .now-mark .nl-time { position: static; transform: none; display: inline-flex; align-items: center; justify-content: center; min-height: var(--target); min-width: var(--target); margin: calc((var(--target) - 1lh) / -2) 0; padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
 .now-mark .nl-pill { padding: 0 4px; border-radius: 4px; background: var(--nl); color: var(--surface); font-size: var(--fs-1); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
 /* The now time on a rail is a target too; the pill keeps its size inside it. */
-.now-line .nl-time { min-height: var(--target); min-width: var(--target); justify-content: center; }
 
 /* D2: a past day's folded card reads as folded: a quieter fill and a hairline, so the eye skips it. */
 .half.folded, .half.card.folded { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
@@ -6668,7 +6667,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
    the hover and focus states it already has. The look stays the same size where it was a chip: the button around it
    grows, not the chip (the due chips, the size chip's pill). */
 :is(.day-view, .page-head.week-head, main.grid, aside.block-panel, .to-place-line, .next-empty-line, .ph-week)
-  :is(button, [role="button"]):not(.half, .whole, .fold-half, .tbox, .r-ev, .r-promise, .event, .nl-time) {
+  :is(button, [role="button"]):not(.half, .whole, .fold-half, .tbox, .tbox *, .tt-ph-acts *, .r-ev, .r-promise, .event, .nl-time) {
   min-height: var(--target); min-width: var(--target);
 }
 :is(.day-view, .page-head.week-head, main.grid, aside.block-panel, .to-place-line, .next-empty-line, .ph-week) .link-btn { display: inline-flex; align-items: center; }
@@ -6738,3 +6737,6 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 /* The panel's rows stay on one line (title, size, + time, ⋯), so ⋯ never drops below its row. */
 .bp-todos .pick-row { flex-wrap: nowrap; align-items: center; }
 .bp-todos .pick-row .pr-title { flex: 1 1 auto; min-width: 0; }
+/* The late chip draws at the due chips' height; its 28px target reaches around it (the phone's own ::after is 44). */
+.app:not(.phone) .card-status.card-due .late-chip { min-height: 0; }
+.app:not(.phone) .card-status.card-due .late-chip::after { content: ""; position: absolute; inset: -5px -2px; }

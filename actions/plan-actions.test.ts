@@ -222,8 +222,8 @@ describe("Plan the day actions", () => {
     await t.run("week.load", { weekStart: "2026-11-02" });
     const before = t.ado.calls.length;
     const dvBefore = t.dv.calls.length;
-    // After the week is loaded, plan actions make no DevOps call, and in Dataverse only the PTO reads
-    // that check a day isn't a full PTO day (step 6).
+    // After the week is loaded, plan actions make no DevOps call, and in Dataverse only the PTO (and, PS-1, holiday)
+    // reads that check a day isn't a day off (step 6).
     await t.run("planday.start", { date: D });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     await t.run("pick.set_size", { id: pick.id, size: "S" });
@@ -236,7 +236,8 @@ describe("Plan the day actions", () => {
     expect(t.ado.calls.length).toBe(before);
     for (const c of t.dv.calls.slice(dvBefore)) {
       if (c.method === "POST") expect(c.url).toMatch(/oauth2\/v2\.0\/token$/);
-      else expect(c.url).toMatch(/\/coop_timeofftracker(s|details)\?/);
+      // PS-1: and the observed holidays, a day off like PTO (read with the PTO ahead).
+      else expect(c.url).toMatch(/\/(coop_timeofftracker(s|details)|coop_workingdayscalendars)\?/);
     }
 
     // And the reads that did happen are reads.

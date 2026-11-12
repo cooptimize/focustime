@@ -118,6 +118,20 @@ describe.skipIf(!CHROMIUM)("PS-1: polish sweep on Day and Week", () => {
         await page.close();
       }, T);
 
+  it("a tick on a heavy block today keeps focus on its checkbox (the row doesn't fold away)", async () => {
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    await buildState(page, "heavy");
+    await go(page, "#/day");
+    const box = page.locator(".day-view .half.card.focus").first().locator(".checklist input[type=checkbox]:not(:checked)").first();
+    await box.focus();
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(800);
+    expect(await page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.type)).toBe("checkbox");
+    expect(await page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.checked)).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("Day opens with its panel on a wide window; closed once, it stays closed; a narrow window opens without it", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 }, DEFAULT);
     await buildState(page, "ordinary");

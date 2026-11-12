@@ -5,10 +5,12 @@
 /** A block with this many to-dos (done or not) or more folds its done ones on today too. */
 export const HEAVY = 6;
 
-export function foldDone<T extends { status: string }>(picks: readonly T[], o: { isToday: boolean }): { shown: T[]; done: T[] } {
+export function foldDone<T extends { status: string }>(picks: readonly T[], o: { isToday: boolean; stays?: (p: T) => boolean }): { shown: T[]; done: T[] } {
   const fold = !o.isToday || picks.length >= HEAVY;
   if (!fold) return { shown: [...picks], done: [] };
-  return { shown: picks.filter((p) => p.status !== "done"), done: picks.filter((p) => p.status === "done") };
+  // A to-do ticked while the card is on screen stays where it is until the next load, so the tick never moves focus.
+  const folds = (p: T) => p.status === "done" && !(o.isToday && o.stays?.(p));
+  return { shown: picks.filter((p) => !folds(p)), done: picks.filter(folds) };
 }
 
 /** PS-1: a card shows at most this many chips (late promises, due dates); the rest fold to "+N", which opens the block. */

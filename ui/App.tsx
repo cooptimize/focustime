@@ -1692,8 +1692,8 @@ export function App() {
       placeOpen={placeOpen}
       focusAdd={panelAt ? focusAdd : 0}
       focus={panelFocus}
-      // PS-1: on Day the card's next to-do carries the one Start focus; the panel repeats it only on Week.
-      onStart={dayOn ? undefined : startFocus}
+      // PS-1: on Day's cards the next to-do carries the one Start focus; the panel keeps it on Week and on Day's Timeline.
+      onStart={dayOn && !dayTimeline ? undefined : startFocus}
       onTimebox={(d) => void timeboxDay(d)}
       onClose={closePanel}
       onChanged={reloadQuiet}

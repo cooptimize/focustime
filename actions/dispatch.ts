@@ -332,8 +332,11 @@ async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<
 async function ptoAheadOf(ctx: ActionContext, cfg: AppConfig, monday: string): Promise<ReadonlySet<string>> {
   if (!cfg.dataverse.mySystemUserId) return new Set();
   const to = Temporal.PlainDate.from(monday).add({ days: AHEAD_DAYS }).toString();
-  const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(monday, to).catch(() => null);
-  return new Set((r?.items ?? []).map((e) => e.date));
+  const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+  const r = await dv.pto(monday, to).catch(() => null);
+  // PS-1: an observed holiday is a day off too, so the notifier, the scheduler and the bot stay quiet on it.
+  const h = dv.holidays ? await dv.holidays(monday, to).catch(() => null) : null;
+  return new Set([...(r?.items ?? []).map((e) => e.date), ...(h?.ok ? h.days.map((d) => d.date) : [])]);
 }
 
 /** Working hours or a flex session on a date: the day can be planned (step 6b, D127). */
