@@ -1,8 +1,10 @@
-// AH-1 (D653): Ahead is one model in three modes: Grid, Gantt and Fix next. This is the frame they share: the
-// filters (client, epic, owner, has gaps, dates, text; remembered per person, D654), my change set ("N changes
-// pending · Review", in every mode, surviving a reload, D657), the slim Fix next pane beside Grid and Gantt, and the
-// review that commits through the write framework (preview, confirm, read back, audit log, undo), one patch per item,
-// in batches of 10. Nothing is written to DevOps until Commit.
+// AH-1 (D653), BL-1: the Backlog tab (code name "ahead"): every client's DevOps on one screen, a workbench for editing,
+// cleaning up and organizing, in two views, Grid and Gantt. This is the frame they share: the one row of filters
+// (clients, people, Needs attention, search, and Filter's epic, dates and levels; remembered per person, D654), my change
+// set ("N changes to save · Review", in both views, surviving a reload, D657), and the review that commits through the
+// write framework (preview, confirm, read back, audit log, undo), one patch per item, in batches of 10. Nothing is
+// written to DevOps until Save. Needs attention (Readiness before BL-1) and one level as a ranked list (the Backlog mode
+// before BL-1) are the Grid's own shapes.
 import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -22,21 +24,21 @@ import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
 import { buildRows, DEFAULT_FILTERS, fixGroups, groups, hiddenBy, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
-import { Gantt } from "./Gantt.tsx";
-import { FixNext } from "./FixNext.tsx";
-import { Backlog } from "./Backlog.tsx";
-import { backlogGroups, DEFAULT_AHEAD } from "../../plan/backlog.ts";
+import { Gantt, LegendButton } from "./Gantt.tsx";
+import type { GridGroup, GridRow, GridShape } from "./Grid.tsx";
+import { backlogGroups, DEFAULT_AHEAD, lastText } from "../../plan/backlog.ts";
+import { fixRows, PER_CLIENT } from "../../plan/fixnext.ts";
 import { gridLayout, useWindowScale } from "./layout.ts";
-import { queryOf, setAheadQuery, type ModeName } from "../nav.ts";
+import { AHEAD_ADDRESS, queryOf, setAheadQuery, type AheadPreset } from "../nav.ts";
 import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-view.ts";
 import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts";
 import { isBool, usePref } from "./prefs.ts";
-import { Toolbar, type AheadViewState } from "./Toolbar.tsx";
-import { progressText, type Skips } from "../../plan/readiness.ts";
+import { AttentionLine, Toolbar, type AheadViewState } from "./Toolbar.tsx";
+import { kindCounts, progressText, startHere, type Skips } from "../../plan/readiness.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
-/** AH-7: how long a just-fixed entry fades out before it leaves Readiness. */
+/** AH-7: how long a just-fixed entry fades out before it leaves Needs attention. */
 const LEAVE_MS = 900;
 
 /** What every mode needs: the model, staging, the side panels. */
@@ -52,7 +54,7 @@ export type AheadEnv = {
   /** Break down's side panel for a feature or epic (Coop brief one click away there). */
   breakDown: (r: Row) => void;
   color: (clientKey: string) => string;
-  /** The item a notice opened (#/ahead/item/<id>). */
+  /** The item a notice opened (#/backlog/item/<id>). */
   focusItem: number | null;
   error: (s: string) => void;
   /** AH-6: the one level, carets and Show callouts, shared by every mode. */
@@ -68,7 +70,12 @@ export type AheadEnv = {
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
 
-export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; switcher?: React.ReactNode; renderSwitch?: (counts: Partial<Record<ModeName, number>>) => React.ReactNode; onChanged: () => void; readOnly: boolean }) {
+/** BL-1: an old address's preset not yet applied (see Ahead). */
+let pendingPreset: AheadPreset | null = null;
+/** The filters last set in this page: a read of my saved filters that answers after a change here never undoes it. */
+let pageFilters: AheadFilters | null = null;
+
+export function Ahead({ data, mode, item, preset = null, switcher, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; /** BL-1: an old address's filter (#/ahead/fix, #/ahead/backlog), applied once. */ preset?: AheadPreset | null; switcher?: React.ReactNode; onChanged: () => void; readOnly: boolean }) {
   const win = useWindowScale();
   const layout = gridLayout(win.width, win.scale);
   const [load, setLoad] = useState<AheadLoad | null>(null);
@@ -101,9 +108,8 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // BH-1: only Backlog asks for the change log's last change per item.
-  const wantLast = useRef(mode === "backlog");
-  wantLast.current = wantLast.current || mode === "backlog";
+  // BH-1: only the ranked list (one level as a list) asks for the change log's last change per item.
+  const wantLast = useRef(false);
   // DV-2: the revision of each item as last read, to see an item I have staged changes on change in DevOps underneath.
   const revs = useRef<Map<string, number>>(new Map());
   const [changedNow, setChangedNow] = useState<Set<string>>(new Set());
@@ -135,7 +141,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
       );
     } catch (e) {
       // A quiet reread that fails keeps what's showing, without a banner (the next signal tries again).
-      if (!quiet) setError(e instanceof Error ? e.message : "Could not read Ahead");
+      if (!quiet) setError(e instanceof Error ? e.message : "Could not read the Backlog");
     } finally {
       if (!quiet) setBusy(false);
     }
@@ -166,24 +172,45 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
       if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
       return f;
     };
-    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink({ ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(DEFAULT_FILTERS)));
+    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(pageFilters ?? DEFAULT_FILTERS)));
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
-  const askedLast = useRef(mode === "backlog");
+  const flatOn = !!filters?.flat;
   useEffect(() => {
-    if (mode === "backlog" && !askedLast.current) {
-      askedLast.current = true;
-      void reload();
+    if (flatOn && !wantLast.current) {
+      wantLast.current = true;
+      void reload(false, true);
     }
-  }, [mode, reload]);
+  }, [flatOn, reload]);
+  // BL-1: an old address lands with its filter on: #/ahead/fix with Needs attention, #/ahead/backlog with stories only,
+  // each as its old mode was (the other off). The address is rewritten to #/backlog right away, often before my saved
+  // filters arrive, so the preset waits in a ref until they do.
+  // Once per arrival: the address keeps the preset while it stays, so it is taken only when it changes. It waits
+  // outside the component: on arrival Backlog can mount twice before the filters come, the second time without it.
+  const lastPreset = useRef<AheadPreset | null>(null);
+  if (lastPreset.current !== preset) {
+    lastPreset.current = preset;
+    if (preset) pendingPreset = preset;
+  }
+  useEffect(() => {
+    const p = pendingPreset;
+    if (!filters || !p) return;
+    pendingPreset = null;
+    const { flat: _f, ...rest } = filters;
+    if (p === "attention" && (!filters.gaps || filters.flat)) setFilters({ ...rest, gaps: true });
+    if (p === "stories" && (filters.flat !== "story" || filters.gaps)) setFilters({ ...filters, flat: "story", gaps: false, kinds: [] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, filters]);
 
   const setFilters = (f: AheadFilters) => {
+    pageFilters = f;
     setFiltersRaw(f);
     void call("ahead.set_filters", { filters: f }).catch(() => null);
   };
   // AH-2: "Show the whole project" changes what the server reads, so it's saved first, then Ahead reads again.
   const setWhole = async (whole: boolean) => {
     const next = { ...(filters ?? DEFAULT_FILTERS), whole };
+    pageFilters = next;
     setFiltersRaw(next);
     await call("ahead.set_filters", { filters: next }).catch(() => null);
     await reload();
@@ -237,16 +264,18 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     const q = toQuery({ f: filters, level: fold.level, callouts });
     setAheadQuery(q);
     const base = location.hash.split("?")[0] ?? "";
-    if (/^#\/?ahead(\/|$)/.test(base) && location.hash !== base + (q ? `?${q}` : "")) history.replaceState(history.state, "", base + (q ? `?${q}` : ""));
+    if (AHEAD_ADDRESS.test(base) && location.hash !== base + (q ? `?${q}` : "")) history.replaceState(history.state, "", base + (q ? `?${q}` : ""));
   }, [filters, fold.level, callouts, mode]);
   const staleWeeks = load?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks;
   const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true, keep: madeKeys }) : []), [load, f, mode, madeKeys]);
   // QC-1: once the new item is read, say it was created and which filters would hide it after I leave.
   useEffect(() => {
     if (!justMade || !load || !filters) return;
-    const why = hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`);
+    // Needs attention and one level as a list don't keep a new item in view: the words say so.
+    const why = [...hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`, new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)))), ...(filters.flat ? ["One level as a list"] : [])];
+    const kept = !filters.gaps && !filters.flat;
     const there = load.clients.some((c) => c.clientKey === justMade.clientKey && c.items.some((i) => i.id === justMade.id));
-    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? `Created #${justMade.id}. Shown until you leave Ahead. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}` });
+    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? (kept ? `Created #${justMade.id}. Shown until you leave Backlog. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}. Not shown here: ${why.join(", ")}`) : `Created #${justMade.id}` });
     setJustMade(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justMade, load]);
@@ -266,7 +295,7 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     const filled = new Set(fixAll.flatMap((x) => (x.group.pending ?? []).map((p) => `${p.key}|${p.gap}`)));
     const was = before.current;
     before.current = { keys, changes: load.changes };
-    if (!was || mode !== "fix") return;
+    if (!was || !f.gaps) return;
     // Gone because every gap it had is filled in my change set (not because a new date moved it out of view).
     const gone = [...was.keys].filter(([k, gs]) => !keys.has(k) && !skipped.has(k) && gs.every((g) => filled.has(`${k}|${g}`))).map(([k]) => k);
     // A change of mine made it ready: it fades out, and Undo takes back just those changes.
@@ -305,24 +334,98 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
     local.current++;
     void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => (local.current++, setSkipOverride(r.skips)), (e: unknown) => {
       local.current++;
-      setSkipOverride(skips);
+      // Put back only this item's skip: others made meanwhile stay.
+      setSkipOverride((cur) => {
+        const back = { ...(cur ?? skips) };
+        if (skips[key] !== undefined) back[key] = skips[key];
+        else delete back[key];
+        return back;
+      });
       setError(e instanceof Error ? e.message : "That skip couldn't be kept");
     });
   };
   const fixN = fixCount(fix.map((x) => x.group));
-  // AH-6: Backlog's level is the shared one (BH-1's own tier is kept but no longer read).
-  const tier = fold.level;
+  const attention = f.gaps;
+  // BL-1: Needs attention's count: every reason under the filters shown (the kinds narrow the list, not the count).
+  const unkinded = fix.flatMap((x) => x.unkinded.filter((e) => !e.leaving));
+  const attentionN = unkinded.length;
+  const needOf = useMemo(() => new Map(fix.map((x) => [x.client.clientKey, x.unkinded.filter((e) => !e.leaving).length] as const)), [fix]);
+  const [moreOf, setMoreOf] = useState<ReadonlySet<string>>(new Set());
+  // AH-7, BL-1: Start here: the 5 most urgent of Needs attention across the clients shown (the rule in its tooltip).
+  const [startOn, setStartOn] = useState(false);
+  const starts = useMemo(() => new Set(startHere(fix.flatMap((x) => x.group.entries.filter((e) => !e.leaving).map((entry, rank) => ({ entry, rank, date: entry.due ?? null, mine: entry.mine === true })))).map((e) => e.key)), [fix]);
+  // Start here narrows the Grid's list; the Gantt has no list to narrow, so it isn't offered there.
+  const startNow = startOn && attention && mode === "grid" && starts.size > 0;
   const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
-  const backlog = useMemo(() => (load && mode === "backlog" ? backlogGroups(load, { ...f, tier }, { staleWeeks, last }) : []), [load, f, mode, tier, staleWeeks, last]);
+  // With Needs attention on, Stale is one of its reasons (an either-or with the kinds), so the list doesn't narrow by it too.
+  const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat, ...(f.gaps ? { stale: false } : {}) }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
   const names = useMemo(() => levelNames(shown), [shown]);
   const view: AheadViewState = { fold, setFold, names, callouts, setCallouts };
+  const shape: GridShape = f.flat ? "flat" : attention ? "attention" : "tree";
+  const rankedBy = (c: { orderField?: string | null }) => (c.orderField ? ("backlog" as const) : ("target" as const));
+  /** BL-1: the Grid's groups for its shape (the tree, one level as a ranked list, or Needs attention). */
+  const gridGroups: GridGroup[] = useMemo(() => {
+    if (!load) return [];
+    const need = (k: string) => needOf.get(k) ?? 0;
+    // The kinds and Stale narrow which rows Needs attention keeps (the chip's count stays every reason).
+    const attentionKeys = new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)));
+    if (shape === "flat") {
+      return flat.map((g) => {
+        const rows: GridRow[] = g.rows.filter((r) => !attention || attentionKeys.has(r.key)).map((r) => ({ ...r, depth: 0, context: false, entry: null, lastWords: lastText(r.age, r.last) }));
+        return { client: g.client, rows, rankedBy: g.rankedBy, count: rows.length, need: need(g.client.clientKey) };
+      });
+    }
+    if (shape === "attention") {
+      const byClient = new Map(fix.map((x) => [x.client.clientKey, x] as const));
+      return load.clients
+        .filter((c) => !f.clients.length || f.clients.includes(c.clientKey))
+        .map((c) => {
+          const x0 = byClient.get(c.clientKey);
+          if (!x0) return { client: c, rows: [], rankedBy: rankedBy(c), count: 0, need: 0 };
+          const x = startNow ? { ...x0, group: { ...x0.group, entries: x0.group.entries.filter((e) => starts.has(e.key)) } } : x0;
+          const all = moreOf.has(c.clientKey);
+          const n = x.group.entries.length;
+          const byId = new Map(x.rows.map((r) => [r.item.id, r] as const));
+          const rows: GridRow[] = fixRows(x.group, x.rows.map((r) => ({ id: r.item.id, parentId: r.item.parentId })), all ? n : PER_CLIENT).flatMap((fr) => {
+            const r = byId.get(fr.itemId);
+            return r ? [{ ...r, depth: fr.depth, context: !fr.entry, entry: fr.entry }] : [];
+          });
+          const skippedRows = (x.group.skipped ?? []).flatMap((e) => (byId.get(e.itemId) ? [{ e, r: byId.get(e.itemId)! }] : []));
+          return {
+            client: c,
+            rows,
+            rankedBy: x.group.rankedBy,
+            count: n,
+            need: need(c.clientKey),
+            more: { hidden: Math.max(0, n - PER_CLIENT), all, toggle: () => setMoreOf((s) => (s.has(c.clientKey) ? new Set([...s].filter((k) => k !== c.clientKey)) : new Set([...s, c.clientKey]))) },
+            skipped: skippedRows,
+          };
+        });
+    }
+    return shown.map((g) => ({ client: g.client, rows: g.rows, rankedBy: rankedBy(g.client), count: g.rows.filter((r) => !r.context).length, need: need(g.client.clientKey) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, shape, flat, fix, shown, moreOf, needOf, attention, f.clients, startNow, starts]);
+  /** BL-1: Needs attention on the Gantt: the same items, under their parents for context. */
+  const ganttGroups: Group[] = useMemo(() => {
+    if (!load || !attention) return shown;
+    const byClient = new Map(fix.map((x) => [x.client.clientKey, x] as const));
+    return shown.map((g) => {
+      const x = byClient.get(g.client.clientKey);
+      if (!x) return { ...g, rows: [] };
+      const keys = new Set(x.group.entries.map((e) => e.itemId));
+      const byId = new Map(x.rows.map((r) => [r.item.id, r] as const));
+      const ctx = new Set<number>();
+      for (const id of keys) for (let p = byId.get(id)?.item.parentId ?? null; p !== null && byId.has(p); p = byId.get(p)!.item.parentId) ctx.add(p);
+      return { ...g, rows: x.rows.filter((r) => keys.has(r.item.id) || ctx.has(r.item.id)).map((r) => (keys.has(r.item.id) ? r : { ...r, context: true })) };
+    });
+  }, [load, attention, fix, shown]);
   const counts = useMemo(() => {
     if (!load) return { shown: 0, total: 0 };
-    if (mode === "fix") return { shown: fixN, total: fix.reduce((n, x) => n + x.total, 0) };
-    if (mode === "backlog") return { shown: backlog.reduce((k, g) => k + g.rows.length, 0), total: backlogGroups(load, { ...everything, tier }, { staleWeeks }).reduce((k, g) => k + g.rows.length, 0) };
+    if (shape === "attention") return { shown: fixN, total: fix.reduce((n, x) => n + x.total, 0) };
+    if (shape === "flat") return { shown: gridGroups.reduce((k, g) => k + g.rows.length, 0), total: backlogGroups(load, { ...everything, tier: f.flat! }, { staleWeeks }).reduce((k, g) => k + g.rows.length, 0) };
     const n = (gs: Group[]) => gs.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
     return { shown: n(shown), total: n(groups(load, everything, { stories: true })) };
-  }, [load, mode, fix, fixN, backlog, shown, everything, tier, staleWeeks]);
+  }, [load, shape, fix, fixN, gridGroups, shown, everything, staleWeeks, f.flat]);
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
@@ -340,13 +443,15 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
   const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, ...(newUnder ? { newUnder } : {}) } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
-  const title = mode === "fix" ? "Readiness" : mode === "gantt" ? "Gantt" : mode === "backlog" ? "Backlog" : "Grid";
+  const title = mode === "gantt" ? "Gantt" : "Grid";
+  const kinds = kindCounts(unkinded);
+  const staleN = unkinded.filter((e) => e.stale).length;
 
   return (
-    <main className={`roadmap ahead ahead-${mode}`} aria-label={`Ahead: ${title}`}>
+    <main className={`roadmap ahead ahead-${mode}`} aria-label={`Backlog: ${title}`}>
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Ahead <span className="muted">{load ? `· ${mode === "fix" ? `${fixN} not ready yet` : plural(visible, "item", "items")}` : ""}</span>
+          Backlog <span className="muted">{load ? `· ${attention ? `${fixN} need attention` : plural(visible, "item", "items")}` : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void refreshNow()} title="Check DevOps now (R)">
           {busy ? "Reading…" : "Refresh"}
@@ -356,30 +461,32 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
             + New
           </button>
         )}
+        {load && n > 0 && (
+          <span className="ah-pending" data-tour="ah-pending" role="status" title={`${load.changes.some((c) => c.theirs !== undefined) ? "Some changed in DevOps since you started. " : ""}Nothing is written until you save.`}>
+            <strong>{pendingText(n)}</strong>
+            {load.changes.some((c) => c.theirs !== undefined) && (
+              <span className="ah-pending-warn" title="Some changed in DevOps since you started: Review shows both">
+                <span aria-hidden="true" className="ah-pending-dot" />
+                <span className="ah-pending-warn-text">changed in DevOps too</span>
+              </span>
+            )}
+            <span className="sr-only">Nothing is written until you save.</span>
+            <button type="button" className="primary mini" onClick={() => setReview(true)} disabled={readOnly}>
+              Review
+            </button>
+          </span>
+        )}
         {said && (
           <span className="muted ah-refreshed" role="status">
             {said.text}
           </span>
         )}
-        <ModeArea>{renderSwitch && load && !readOnly ? renderSwitch({ fix: fixN }) : switcher}</ModeArea>
+        <ModeArea>{switcher}</ModeArea>
       </div>
-      {load && n > 0 && (
-        <div className="ah-pending" data-tour="ah-pending" role="status">
-          <strong>{pendingText(n)}</strong>
-          <span className="muted">{load.changes.some((c) => c.theirs !== undefined) ? "Some changed in DevOps since you started. " : ""}Nothing is written until you save.</span>
-          <button type="button" className="primary" onClick={() => setReview(true)} disabled={readOnly}>
-            Review
-          </button>
-        </div>
-      )}
-      {load && mode === "fix" && progressText(load.fixedWeek ?? 0, pendingFixes) && (
-        <p className="muted ah-fx-progress" role="status">
-          {progressText(load.fixedWeek ?? 0, pendingFixes)}
-        </p>
-      )}
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
-      {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} color={color} />}
-      {load && <ScopeNote load={load} whole={!!f.whole} />}
+      {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} attention={attentionN} color={color} extra={mode === "gantt" ? <LegendButton /> : null} />}
+      {load && attention && <AttentionLine start={{ on: startNow, n: mode === "grid" ? starts.size : 0, toggle: () => setStartOn(!startOn) }} counts={kinds} stale={staleN} f={f} set={setFilters} progress={progressText(load.fixedWeek ?? 0, pendingFixes)} staleWeeks={staleWeeks} />}
+      {load && <ScopeProblems load={load} />}
       {error && <p className="error" role="alert">{error}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}
       {env && (
@@ -387,14 +494,12 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
           <div className={`ah-body lay-${layout}`}>
             <div className="ah-main">
               {load && !load.clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
-              {load && load.clients.length > 0 && mode !== "fix" && mode !== "backlog" && visible === 0 && <p className="muted">{anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try Owner: All."}</p>}
-              {mode === "grid" && <Grid groups={shown} layout={layout} />}
-              {mode === "gantt" && <Gantt data={data} groups={shown} onChanged={onChanged} />}
-              {mode === "backlog" && <Backlog groups={backlog} tier={tier} onChanged={onChanged} />}
-              {mode === "fix" && <FixNext groups={fix} skip={(k) => skipOne(k, true)} unskip={(k) => skipOne(k, false)} skips={skips} f={f} setFilters={setFilters} dots={layout === "cards" || layout === "dots"} filtered={anyFilter} />}
+              {load && load.clients.length > 0 && visible === 0 && <p className="muted">{attention ? (anyFilter ? "Nothing that needs attention matches these filters." : "Nothing needs attention on items you can change. The top of each backlog has its stories, dates, owners and sizes.") : anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try People: Everyone."}</p>}
+              {mode === "grid" && <Grid groups={gridGroups} layout={layout} shape={shape} skip={(k) => skipOne(k, true)} unskip={(k) => skipOne(k, false)} skips={skips} onChanged={onChanged} />}
+              {mode === "gantt" && <Gantt data={data} groups={ganttGroups} onChanged={onChanged} />}
             </div>
           </div>
-          {toast && mode === "fix" && (
+          {toast && attention && (
             <div className="undo-toast" role="status" aria-live="polite">
               <span>{toast.text}</span>
               {toast.undo && (
@@ -412,21 +517,14 @@ export function Ahead({ data, mode, item, switcher, renderSwitch, onChanged, rea
 }
 
 /**
- * AH-2: one quiet line for the clients whose scope is automatic and narrows what's shown (a project with only its root
- * area shows everything, so it gets none), and a problem with a set scope (teams not readable) in plain words.
+ * AH-2: a problem with a client's set scope (teams not readable), in plain words. BL-1: the note about an automatic
+ * scope moved to the toolbar's ⋯, as a line with its link.
  */
-function ScopeNote({ load, whole }: { load: AheadLoad; whole: boolean }) {
-  const auto = load.clients.filter((c) => c.scope?.automatic && !c.scope.all);
+function ScopeProblems({ load }: { load: AheadLoad }) {
   const problems = load.clients.filter((c) => c.scope?.problem);
-  if (!auto.length && !problems.length) return null;
-  const names = (cs: typeof auto) => (cs.length === 1 ? cs[0]!.clientName : `${cs.slice(0, -1).map((c) => c.clientName).join(", ")} and ${cs[cs.length - 1]!.clientName}`);
+  if (!problems.length) return null;
   return (
     <div className="ah-scope-note">
-      {auto.length > 0 && (
-        <p className="muted">
-          {whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for {names(auto)}. Set the scope in Admin › Clients.
-        </p>
-      )}
       {problems.map((c) => (
         <p key={c.clientKey} className="muted">
           {c.clientName}: {c.scope!.problem}.

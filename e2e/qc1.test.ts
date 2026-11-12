@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("QC-1: one New form, straight to DevOps (browser, dem
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Ahead: + New, Enter, the preview, Create; selected in Grid even when a filter would hide it; New under; a level above epic", async () => {
+  it("Backlog: + New, Enter, the preview, Create; selected in Grid even when a filter would hide it; New under; a level above epic", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     await failShot(page, "t0", async () => {
       await page.evaluate(() => (location.hash = "#/ahead"));
@@ -99,7 +99,7 @@ describe.skipIf(!CHROMIUM)("QC-1: one New form, straight to DevOps (browser, dem
       await choose(page, f, "Assigned to", "Unassigned");
       await createFromForm(page, "Loyalty export for nobody yet");
       await preview(page).getByRole("button", { name: "Create in DevOps" }).click();
-      await expect.poll(() => page.locator(".ah-refreshed").textContent(), { timeout: 30_000 }).toMatch(/^Created #\d+\. Shown until you leave Ahead\. Hidden by: Assigned to me$/);
+      await expect.poll(() => page.locator(".ah-refreshed").textContent(), { timeout: 30_000 }).toMatch(/^Created #\d+\. Shown until you leave Backlog\. Hidden by: Assigned to me$/);
       await expect.poll(() => page.locator("main").first().textContent()).toContain("Loyalty export for nobody yet");
       // Selected in Grid: its row is the highlighted one.
       await expect.poll(() => page.locator("tr.ah-row.highlighted").first().textContent()).toContain("Loyalty export for nobody yet");

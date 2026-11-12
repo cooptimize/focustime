@@ -172,11 +172,11 @@ export function StatusSheet({ sources, devops, clock, zone, loading, busy, extra
   );
 }
 
-/** The phone's notice for Ahead: made for a bigger screen, with Open anyway (Ahead as it is, read only). */
+/** BL-1: the phone's notice for Backlog (was Ahead): made for a bigger screen, with Open anyway (Ahead as it is, read only). */
 export function AheadNotice({ onOpen, onToday }: { onOpen: () => void; onToday: () => void }) {
   return (
-    <main className="ahead-notice" aria-label="Ahead">
-      <h1>Ahead is made for a bigger screen</h1>
+    <main className="ahead-notice" aria-label="Backlog">
+      <h1>Backlog is made for a bigger screen</h1>
       <p className="muted">Grid, Gantt, Gaps and Backlog need room for the whole roadmap. Open FocusTime on a computer to plan ahead.</p>
       <div className="an-acts">
         <button type="button" className="primary" onClick={onOpen}>

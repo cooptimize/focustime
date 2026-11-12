@@ -168,11 +168,14 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
       ["#/today/plan/2026-11-03/PM", "#/week/day/2026-11-03/PM", true],
       ["#/week/day/2026-11-04/AM", "#/week/day/2026-11-04/AM", true],
       ["#/week/team", "#/week/team", false],
-      ["#/roadmap", "#/ahead", false],
+      ["#/roadmap", "#/backlog", false],
+      ["#/ahead/fix", "#/backlog", false],
+      ["#/ahead/backlog", "#/backlog", false],
     ];
     for (const [old, now, withPanel] of lands) {
       await page.evaluate((h) => (location.hash = h), old);
-      await expect.poll(() => hash(page), { message: old }).toBe(now);
+      // BL-1: Backlog's address carries its filters as a query; the place is what's before it.
+      await expect.poll(async () => (await hash(page)).split("?")[0], { message: old }).toBe(now);
       await expect.poll(() => panel(page).count(), { message: `${old}: the panel` }).toBe(withPanel ? 1 : 0);
     }
     // The panel on a block opens that week and selects the block; the team address opens Team.
@@ -206,7 +209,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     await expect(page.locator("nav.views .view-tab").allInnerTexts()).resolves.toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Status/)]));
     const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-    expect(tabs).toEqual(["Day", "Week", "Ahead", "Status", "Inbox"]);
+    expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
     // RF-1: no number on Status (its dot is e2e/rf1.test.ts's).
     expect(await page.locator("nav.views .view-tab", { hasText: "Status" }).locator(".count").count()).toBe(0);
     // The command menu: nothing named Team.

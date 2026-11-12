@@ -213,7 +213,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const o = obj(input, ["clientKey"]);
     if (!o || !isKey(o.clientKey)) return bad("ahead.people takes { clientKey }");
     const c = await oneClient(o.clientKey);
-    if (!c) return bad("That client isn't one you see in Ahead", 404);
+    if (!c) return bad("That client isn't one you see in Backlog", 404);
     return { ok: true, data: { clientKey: c.clientKey, ...(await peopleOf(c)) } };
   }
 
@@ -264,7 +264,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       const ids = [...new Set(keys.filter((k) => k.clientKey === clientKey).map((k) => k.itemId))];
       const c = await oneClient(clientKey);
       if (!c) {
-        for (const itemId of ids) skipped.push({ clientKey, itemId, reason: "That client isn't one you see in Ahead" });
+        for (const itemId of ids) skipped.push({ clientKey, itemId, reason: "That client isn't one you see in Backlog" });
         continue;
       }
       const lead = await ctx.isLead(clientKey).catch(() => false);
@@ -314,7 +314,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       return bad((e as Error).message);
     }
     const c = await oneClient(o.clientKey);
-    if (!c) return bad("That client isn't one you see in Ahead", 404);
+    if (!c) return bad("That client isn't one you see in Backlog", 404);
     const item = c.items.find((i) => i.id === o.itemId);
     if (!item) return bad(`#${o.itemId} isn't in ${c.clientName}'s DevOps items here`, 404);
     const lead = await ctx.isLead(c.clientKey).catch(() => false);
@@ -450,6 +450,8 @@ export function checkFilters(v: unknown): AheadFilters | null {
   // BH-1: Backlog's tier and Stale filter.
   if (o.tier !== undefined && o.tier !== "epic" && o.tier !== "feature" && o.tier !== "story") return null;
   if (o.stale !== undefined && typeof o.stale !== "boolean") return null;
+  // BL-1: one level as a flat ranked list.
+  if (o.flat !== undefined && o.flat !== null && o.flat !== "epic" && o.flat !== "feature" && o.flat !== "story") return null;
   if (o.q !== undefined && (typeof o.q !== "string" || o.q.length > 200)) return null;
   // AH-6: the Dates quick pick and the readiness kinds.
   if (o.range !== undefined && o.range !== null && !(RANGES as readonly unknown[]).includes(o.range)) return null;
@@ -458,7 +460,7 @@ export function checkFilters(v: unknown): AheadFilters | null {
   const kinds = Array.isArray(o.kinds) ? [...new Set(o.kinds as AheadGapKind[])] : [];
   return {
     ...(range ? { range } : {}),
-    ...(kinds.length ? { kinds } : {}), owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}), ...(o.tier !== undefined ? { tier: o.tier as "epic" | "feature" | "story" } : {}), ...(o.stale === true ? { stale: true } : {}) };
+    ...(kinds.length ? { kinds } : {}), owner, clients, epic: (o.epic as string | null | undefined) ?? null, gaps: o.gaps === true, from, to, q: (o.q as string | undefined) ?? "", states, ...(o.whole === true ? { whole: true } : {}), ...(o.tier !== undefined ? { tier: o.tier as "epic" | "feature" | "story" } : {}), ...(o.stale === true ? { stale: true } : {}), ...(typeof o.flat === "string" ? { flat: o.flat as "epic" | "feature" | "story" } : {}) };
 }
 
 /** BH-1: a bulk action as Backlog sends it. */

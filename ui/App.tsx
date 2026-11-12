@@ -1794,8 +1794,6 @@ export function App() {
     inbox: null,
     status: null,
   };
-  // AH-3: Ahead's switch with Fix next's count, given by Ahead once it knows it.
-  const aheadSwitch = (counts: Partial<Record<ModeName, number>>) => <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} counts={counts} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />;
   const leavePlanning = () => goNav(afterDone(nav));
   const tbEnv: TimeboxEnv = {
     timeboxes: data.timeboxes,
@@ -2115,7 +2113,7 @@ export function App() {
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (
-          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} renderSwitch={aheadSwitch} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} preset={nav.preset ?? null} switcher={switches.ahead} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : base === "today" ? (
         <CarryProvider {...carryProps(now ?? new Date(clock).toISOString())}>

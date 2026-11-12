@@ -11,7 +11,7 @@ export function ModeSwitch({ tab, current, status = {}, counts = {}, badges = {}
   const modes = MODES[tab];
   if (modes.length < 2) return null;
   return (
-    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} modes`} data-tour={`modes-${tab}`}>
+    <nav className="mode-switch" aria-label={`${TAB_NAMES[tab]} ${tab === "ahead" ? "views" : "modes"}`} data-tour={`modes-${tab}`}>
       {modes.map((m) => {
         const s = status[m] ?? null;
         const n = badges[m] ?? 0;

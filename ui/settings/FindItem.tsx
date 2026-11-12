@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { FindAnswer } from "../../plan/devops-fresh-types.ts";
 import { call } from "../api.ts";
 
-const PART: Record<FindAnswer["lines"][number]["part"], string> = { devops: "DevOps", store: "FocusTime", scope: "Scope", day: "Day", week: "Week", ahead: "Ahead", status: "Status" };
+const PART: Record<FindAnswer["lines"][number]["part"], string> = { devops: "DevOps", store: "FocusTime", scope: "Scope", day: "Day", week: "Week", ahead: "Backlog", status: "Status" };
 
 export function FindItem({ clients }: { clients: { key: string; name: string }[] }) {
   const [client, setClient] = useState(clients[0]?.key ?? "");

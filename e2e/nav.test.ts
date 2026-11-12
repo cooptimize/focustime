@@ -1,5 +1,5 @@
-// Step 16.2, NV-1, WD-1, RF-1: five tabs (1–5: Day · Week · Ahead · Status · Inbox), Week with no switch and the Add work panel,
-// Ahead's Grid · Gantt · Readiness · Backlog, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
+// Step 16.2, NV-1, WD-1, RF-1: five tabs (1–5: Day · Week · Backlog · Status · Inbox), Week with no switch and the Add work panel,
+// Backlog's Grid · Gantt (BL-1; Ahead's Readiness and Backlog modes folded into the Grid), addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -16,11 +16,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("five tabs in order (Day · Week · Ahead · Status · Inbox), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
+  it("five tabs in order (Day · Week · Backlog · Status · Inbox), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Ahead", "Status", expect.stringMatching(/^Inbox/)]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/)]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);
@@ -111,15 +111,15 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Ahead: Grid · Gantt · Fix next; the ⋯ menu has Commands, the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings", async () => {
+  it("Backlog: Grid · Gantt; the ⋯ menu has Commands, the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
-    await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt", "Readiness · 8", "Backlog"]);
+    await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt"]);
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/ahead/gantt");
+    await expect.poll(() => hash(page)).toBe("#/backlog/gantt");
     await page.locator(".ahead .pa-grid").waitFor();
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/ahead");
+    await expect.poll(() => hash(page)).toBe("#/backlog");
     await page.locator(".top-more").click();
     await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
     await page.keyboard.press("Escape");
@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.getByRole("menuitem", { name: /^Settings/ }).click();
     await expect.poll(() => hash(page)).toBe("#/settings");
     await page.keyboard.press("Escape");
-    await expect.poll(() => hash(page)).toBe("#/ahead");
+    await expect.poll(() => hash(page)).toBe("#/backlog");
     await page.close();
   }, T);
 
@@ -137,8 +137,8 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
       ["checkin", "#/day/checkin"],
       ["closeout", "#/day/closeout"],
       ["planday", "#/week/add"],
-      ["ahead", "#/ahead/gantt"],
-      ["aheaditem:1113", "#/ahead/item/1113"],
+      ["ahead", "#/backlog/gantt"],
+      ["aheaditem:1113", "#/backlog/item/1113"],
       ["planweek:2026-11-09", "#/week/2026-11-09/add"],
       ["status", "#/status"],
       ["team", "#/week"],

@@ -47,7 +47,8 @@ describe("Settings registry", () => {
 
   it("search finds by new label first, then old label (named), then keyword", () => {
     const roadmap = searchSettings("roadmap");
-    expect(roadmap[0]).toMatchObject({ section: "ahead", setting: null, label: "Ahead", matched: "Roadmap" });
+    expect(roadmap[0]).toMatchObject({ section: "ahead", setting: null, label: "Backlog", matched: "Roadmap" });
+    expect(searchSettings("ahead").find((h) => h.section === "ahead" && h.setting === null)).toMatchObject({ label: "Backlog", matched: "Ahead" });
     expect(searchSettings("risk rules")[0]).toMatchObject({ section: "planning" });
     expect(searchSettings("write log").some((h) => h.setting === "write-log")).toBe(true);
     expect(searchSettings("Connections")[0]).toMatchObject({ section: "connections", label: "Accounts and calendars", matched: "Connections" });

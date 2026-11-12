@@ -4401,11 +4401,11 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .ah-cell { position: relative; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
 .ah-cell:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ah-cell.ah-col-item { white-space: normal; }
-.ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-dates, .ah-cell.ah-col-assignee, .ah-cell.ah-col-size, .ah-cell.ah-col-ready { white-space: nowrap; }
+.ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-dates, .ah-cell.ah-col-assignee, .ah-cell.ah-col-size, .ah-cell.ah-col-status { white-space: nowrap; }
 /* AH-5: readiness chips wrap to a second line inside their cell; Assigned to is a photo or initials and "First L.". */
-.ah-cell.ah-col-ready { white-space: normal; }
-.ah-col-ready .ah-ready { flex-wrap: wrap; max-width: 100%; }
-.ah-col-ready .ah-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ah-cell.ah-col-status { white-space: normal; }
+.ah-col-status .ah-ready { flex-wrap: wrap; max-width: 100%; }
+.ah-col-status .ah-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ah-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ah-who .avatar { margin-right: 0; }
 .ah-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4456,10 +4456,10 @@ button.ah-gapdot:hover, button.ah-gapdot:focus-visible { box-shadow: 0 0 0 2px v
 .lay-cards .ah-cell { display: block; padding: 2px 6px; border-bottom: 0; }
 .lay-cards .ah-cell.ah-col-item { flex: 1 1 100%; }
 .lay-cards .ah-cell:not(.ah-col-item) { flex: none; max-width: 100%; font-size: var(--fs-2); color: var(--text-muted); }
-.lay-cards .ah-cell.ah-col-state, .lay-cards .ah-cell.ah-col-dates, .lay-cards .ah-cell.ah-col-assignee, .lay-cards .ah-cell.ah-col-ready { padding-inline-start: calc(6px + 22px + var(--ah-depth, 0) * 18px); }
+.lay-cards .ah-cell.ah-col-state, .lay-cards .ah-cell.ah-col-dates, .lay-cards .ah-cell.ah-col-assignee, .lay-cards .ah-cell.ah-col-status { padding-inline-start: calc(6px + 22px + var(--ah-depth, 0) * 18px); }
 .lay-cards .ah-cell:not(.ah-col-item) ~ .ah-cell:not(.ah-col-item) { padding-inline-start: 0; }
 .lay-cards .ah-cell.ah-col-assignee { max-width: 14em; }
-.lay-cards .ah-cell.ah-col-ready:empty { display: none; }
+.lay-cards .ah-cell.ah-col-status:empty { display: none; }
 .ah-hint { font-size: var(--fs-2); }
 .ah-ready { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 /* AH-2: readiness as quiet outlined chips; the dot is the one muted amber for "needs action", neutral otherwise. */
@@ -6753,6 +6753,90 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .app:not(.phone) .card-status.card-due .late-chip { min-height: 0; }
 .app:not(.phone) .card-status.card-due .late-chip::after { content: ""; position: absolute; inset: -5px -2px; }
 
+/* ---- BL-1: the Backlog tab (was Ahead): one row of filters, the chevron, quiet empty cells, one status chip ---- */
+.ahead .follow-ups-head { flex-wrap: wrap; row-gap: 6px; }
+.ahead .ah-pending { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0; padding: 2px 4px 2px 10px; max-width: none; border-radius: 99px; font-size: var(--fs-2); }
+.ah-pending-warn { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.ah-pending-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--watch); }
+.ah-toolbar { gap: 6px; margin: 8px 0 10px; }
+.ah-toolbar .ah-tb-row { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px 12px; }
+.ah-tb-clients { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ah-tb-people button { white-space: nowrap; }
+.ah-attention { gap: 6px; }
+.ah-attention[aria-pressed="true"] { --c: var(--ah-attention); }
+.ah-attention-n { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-2); font-weight: 600; text-align: center; }
+.ah-tb-search { flex: 1 1 10em; min-width: 9em; max-width: 20em; }
+.ah-tb-search .rm-search { max-width: none; }
+.ah-tb-end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.ah-filter-n { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid var(--selected); border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-1); font-weight: 600; text-align: center; }
+.ah-tb-more { min-width: calc(32px * var(--text-scale)); justify-content: center; }
+.ah-filter-pop .cell-pop-body { gap: 14px; min-width: 22em; }
+.ah-fp-row { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 6px 10px; }
+.ah-fp-label { font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); }
+.ah-fp-levels .ah-fp-flat { grid-column: 2; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
+.ah-tb-summary { font-size: var(--fs-2); }
+.ah-att-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; }
+.ah-att-line .ah-fx-progress { margin-left: 6px; font-size: var(--fs-2); }
+/* The chevron: 16px, the text color on hover, a target the full height of its row and 28px wide. */
+.ah-chev { flex: none; align-self: stretch; display: inline-flex; align-items: center; justify-content: center; width: calc(28px * var(--text-scale)); min-height: calc(28px * var(--text-scale)); margin-block: -5px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.ah-chev:hover { color: var(--text); background: var(--sunken); }
+.ah-chev:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; color: var(--text); }
+.ah-chev svg, .ah-chev-svg { width: calc(16px * var(--text-scale)); height: calc(16px * var(--text-scale)); transition: transform 120ms ease; }
+.ah-chev svg.open, .ah-chev-svg.open { transform: rotate(90deg); }
+.ah-chev-space { flex: none; display: inline-block; width: calc(28px * var(--text-scale)); }
+.pa-label .ah-chev { margin-block: 0; min-height: 100%; }
+@media (prefers-reduced-motion: reduce) { .ah-chev svg, .ah-chev-svg { transition: none; } }
+/* Client sections: a header that folds. */
+.ahead .ah-client { margin: 0 0 14px; }
+.ahead .ah-client-head { flex-wrap: wrap; gap: 6px; margin: 0 0 2px; font-size: var(--fs-3); }
+.ah-client-head .muted { font-weight: 400; }
+.ah-client-fold { display: inline-flex; align-items: center; gap: 6px; min-height: calc(28px * var(--text-scale)); margin-left: -6px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.ah-client-fold:hover { background: var(--sunken); }
+.ah-client-fold:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ah-client-fold svg { color: var(--text-muted); }
+.ah-client-empty { margin: 4px 0 0; font-size: var(--fs-2); }
+/* One header row is enough: later clients' column names are for screen readers only. */
+.ahead .ah-client ~ .ah-client .ah-grid thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ahead .ah-grid th { padding: 2px 8px; }
+/* Ticks: shown on hover, on focus and whenever any row is selected. */
+.ah-tick { flex: none; display: inline-flex; align-items: center; justify-content: center; width: calc(20px * var(--text-scale)); min-height: 1.5em; }
+.ah-tick input { margin: 0; opacity: 0; cursor: pointer; }
+.ah-row:hover .ah-tick input, .ah-row:focus-within .ah-tick input, .has-sel .ah-tick input, .ah-tick input:focus-visible { opacity: 1; }
+.ah-row.sel > .ah-cell { background: color-mix(in oklab, var(--selected) 10%, transparent); }
+.shape-flat .bl-rank { flex: none; min-width: calc(28px * var(--text-scale)); text-align: right; padding-right: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* Titles in the app's quiet link style. */
+.ahead .ah-title a, .ahead .pa-title a { color: var(--text); text-decoration: none; }
+.ahead .ah-title a:hover, .ahead .ah-title a:focus-visible, .ahead .pa-title a:hover, .ahead .pa-title a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+.ahead .ah-row.context .ah-title a { color: var(--text-muted); }
+/* Empty cells: nothing at rest; "+ date" on hover and focus where I may fill it. */
+.ah-add { color: var(--text-muted); font-size: var(--fs-2); opacity: 0; }
+.ah-row:hover .ah-cell.ah-edit .ah-add, .ah-cell:focus .ah-add, .ah-cell:focus-within .ah-add { opacity: 1; }
+.ah-cell.ah-edit:not(.ah-editing):has(.ah-add):hover::after { content: none; }
+/* Status: one chip, the rest behind a quiet +N that lists them on hover and focus. */
+.ah-cell.ah-col-status { overflow: visible; white-space: normal; }
+.ah-status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.ah-more { position: relative; border-style: dashed; cursor: default; }
+.ah-more-list { display: none; position: absolute; z-index: 20; right: 0; top: calc(100% + 4px); flex-direction: column; gap: 2px; width: max-content; max-width: 26em; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); color: var(--text); box-shadow: var(--shadow-pop); white-space: normal; }
+.ah-more:hover .ah-more-list, .ah-cell:focus .ah-more-list, .ah-cell:focus-within .ah-more-list { display: flex; }
+.ah-fix { display: inline-flex; align-items: center; gap: 4px; }
+.shape-attention .ah-grid .w-ready { width: 20em; }
+.ah-row.leaving { opacity: 0.45; transition: opacity 600ms ease; }
+.ah-grid-box > .bl-bulk { margin: 0 0 10px; }
+/* The Gantt's legend behind one quiet control. */
+.pa-legend-box { position: relative; }
+.pa-legend-pop { position: absolute; z-index: 30; left: 0; top: calc(100% + 4px); width: max-content; max-width: min(46em, 90vw); padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); }
+.shape-attention .ah-grid .w-ready { width: 22em; }
+.shape-attention .ah-status { flex-wrap: nowrap; }
+.ah-tb-end .pa-legend-pop { left: auto; right: 0; }
+/* BL-1: a client's Select all, at the end of its header line (a 28px target). */
+.ah-client-head .ah-client-all { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; margin-inline-start: auto; cursor: pointer; }
+/* BL-1: a status chip keeps its "+1", and a fix keeps its words on one line; only whole pieces wrap. */
+.ah-col-status .ah-ready { flex-wrap: nowrap; }
+.ah-status .ah-fix { display: inline-flex; gap: 6px; align-items: center; }
+.ah-status .ah-fix .mini { white-space: nowrap; }
+.ah-chip-btn { font-family: inherit; line-height: inherit; cursor: pointer; }
+.ah-chip-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.ah-chip-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 /* WK-5: Week makes room for today (docs/design/style-guide.md section 10).
    Widths move with the app's usual motion when the focus day changes; none under Reduce motion. */
 main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms ease; }

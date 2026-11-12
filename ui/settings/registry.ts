@@ -37,7 +37,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "display", label: "Display", group: "you", description: "Theme, text size, timelines, personal events and motion." },
   { id: "planning", label: "Today and Week", group: "planning", description: "How to-dos, rituals, timeboxes, help sessions and risk work when you plan.", old: ["Planning", "Risk rules"] },
   { id: "focus", label: "Focus", group: "planning", description: "The focus timer, your Teams status while you focus, sounds and music." },
-  { id: "ahead", label: "Ahead", group: "planning", description: "When Backlog calls an item stale, and when a feature reads Stalled or Watch.", old: ["Roadmap"] },
+  { id: "ahead", label: "Backlog", group: "planning", description: "When Backlog calls an item stale, and when a feature reads Stalled or Watch.", old: ["Roadmap", "Ahead"] },
   { id: "clients", label: "Clients", group: "clients", description: "The clients FocusTime follows for you, and how each one shows." },
   { id: "client", label: "Client", group: "clients", description: "How this client shows for you, and what comes from Dataverse and your admin.", parent: "clients" },
   { id: "chats", label: "Client chats", group: "clients", description: "Your phrases for requests and promises, and how each client chat is read.", old: ["Requests", "Asks"] },

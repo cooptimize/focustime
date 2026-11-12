@@ -44,6 +44,8 @@ export type MenuItem = {
   aka?: readonly string[];
   /** RF-1: a status dot after the label (Status in the phone's ⋯), with its reason for screen readers. */
   mark?: { tone: "amber" | "red"; text: string };
+  /** BL-1: an on/off item (Callouts, Show the whole project): a menuitemcheckbox, its `checked` read out. */
+  toggle?: boolean;
   /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
   typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
@@ -1711,18 +1713,18 @@ function uiCommands(env: MenuEnv): MenuItem[] {
   return [
     { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
-    { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Ahead: features and epics ahead (Roadmap)", hint: "3", run: () => env.setView("roadmap") },
+    { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps, Grid", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "4", run: () => env.setView("status") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "5", run: () => env.setView("inbox") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Needs you: what your clients' chats and your promises need from you", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
-    { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Ahead: Grid or Gantt)", hint: "P", run: env.openRitual },
+    { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Backlog: Grid or Gantt)", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", aka: ["Plan today", "Plan the day"], group: "Views", label: "Add work to today", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", aka: ["Plan a day"], group: "Views", label: "Add work to a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit", "Plan the week", "Week › Plan"], group: "Views", label: "Add work to the week", hint: "W", run: () => env.openPlanWeek() },
-    { id: "view.ahead", action: "view.ahead", group: "Views", label: "Ahead › Plan ahead", run: () => env.setView("ahead") },
-    { id: "view.backlog", action: "view.backlog", aka: ["stale", "stack rank"], group: "Views", label: "Ahead › Backlog: each client's backlog in order, stale items", run: () => env.setView("backlog") },
-    { id: "view.gaps", action: "view.gaps", aka: ["fix next", "gaps", "get ready", "readiness"], group: "Views", label: "Ahead › Readiness: items not ready yet (missing stories, a target date, an owner or a size)", run: () => env.setView("gaps") },
+    { id: "view.ahead", action: "view.ahead", aka: ["ahead", "plan ahead", "timeline", "gantt"], group: "Views", label: "Backlog › Gantt: the timeline", run: () => env.setView("ahead") },
+    { id: "view.backlog", action: "view.backlog", aka: ["ahead", "stale", "stack rank", "rank order", "stories only"], group: "Views", label: "Backlog › stories in each client's rank order", run: () => env.setView("backlog") },
+    { id: "view.gaps", action: "view.gaps", aka: ["ahead", "fix next", "gaps", "get ready", "readiness", "not ready"], group: "Views", label: "Backlog › Needs attention: missing stories, a target date, an owner or a size, or stale", run: () => env.setView("gaps") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Day › Midday check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Day › Close out", hint: "E", run: () => env.openCloseOut() },

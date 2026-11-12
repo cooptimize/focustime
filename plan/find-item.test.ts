@@ -29,7 +29,7 @@ describe("Find an item", () => {
       "scope:ok: It's in what FocusTime shows for Contoso (Area Contoso Project\\BI and sub-areas).",
       "day:ok: Day shows it: it's a to-do on today's plan.",
       "week:ok: Week shows it under Your stories in Contoso's block details.",
-      "ahead:ok: Ahead shows it.",
+      "ahead:ok: Backlog shows it.",
       "status:ok: Status shows its feature #7; Status lists features, with stories under them.",
     ]);
   });
@@ -42,7 +42,7 @@ describe("Find an item", () => {
   it("in DevOps, not in FocusTime's store yet", () => {
     const lines = text(facts({ store: { has: false, changedAt: null, rev: null, checkedAt: ago(300), okAt: ago(300) }, ahead: { kind: "absent" } }));
     expect(lines[1]).toBe("store:no: FocusTime doesn't have it yet. Contoso last checked 5 min ago; it arrives with the next check (Refresh checks now).");
-    expect(lines.find((l) => l.startsWith("ahead"))).toBe("ahead:no: Ahead shows it after the next check.");
+    expect(lines.find((l) => l.startsWith("ahead"))).toBe("ahead:no: Backlog shows it after the next check.");
   });
 
   it("the store is behind DevOps", () => {
@@ -51,21 +51,21 @@ describe("Find an item", () => {
 
   it("out of area", () => {
     const lines = text(facts({ scope: { inScope: false, rule: "Area Contoso Project\\BI and sub-areas" }, ahead: { kind: "absent" } }, { area: "Contoso Project\\Finance" }));
-    expect(lines[2]).toBe("scope:no: It's in area Contoso Project\\Finance, outside what FocusTime shows for Contoso (Area Contoso Project\\BI and sub-areas). Ahead shows it with Show the whole project; an admin sets the scope in Admin › Clients.");
-    expect(lines.find((l) => l.startsWith("ahead"))).toBe("ahead:no: Ahead shows it only with Show the whole project (it's outside the scope).");
+    expect(lines[2]).toBe("scope:no: It's in area Contoso Project\\Finance, outside what FocusTime shows for Contoso (Area Contoso Project\\BI and sub-areas). Backlog shows it with Show the whole project; an admin sets the scope in Admin › Clients.");
+    expect(lines.find((l) => l.startsWith("ahead"))).toBe("ahead:no: Backlog shows it only with Show the whole project (it's outside the scope).");
   });
 
   it("a type the process doesn't place", () => {
     const lines = text(facts({ ahead: { kind: "absent" }, todayTodo: false }, { tier: null, type: "Impediment" }));
     expect(lines).toContain("scope:no: Contoso's process doesn't place the type Impediment on a backlog level, so FocusTime's screens don't show it.");
-    expect(lines).toContain("ahead:no: Ahead doesn't show it: Ahead shows epics, features and stories, not Impediment items.");
+    expect(lines).toContain("ahead:no: Backlog doesn't show it: Backlog shows epics, features and stories, not Impediment items.");
   });
 
   it("closed", () => {
     const lines = text(facts({ todayTodo: false, ahead: { kind: "absent" } }, { closed: true, state: "Closed" }));
     expect(lines).toContain("day:no: Day doesn't show it: it's Closed, and Day shows open to-dos.");
     expect(lines).toContain("week:no: Week doesn't show it: it's Closed. Your stories lists open ones.");
-    expect(lines).toContain("ahead:no: Ahead doesn't show it: it's Closed, and Ahead shows open items.");
+    expect(lines).toContain("ahead:no: Backlog doesn't show it: it's Closed, and Backlog shows open items.");
   });
 
   it("not mine (someone else's, or nobody's)", () => {
@@ -73,9 +73,9 @@ describe("Find an item", () => {
     expect(text(facts({ todayTodo: false }, { assignee: "nobody" }))).toContain("week:no: Week's Your stories doesn't show it: it's not assigned to anyone. Take one or assign it to yourself to see it there.");
   });
 
-  it("filtered in Ahead", () => {
-    expect(text(facts({ ahead: { kind: "filtered", filter: "owner", owner: "mine" } }))).toContain("ahead:no: Ahead hides it: your owner filter for Contoso is Mine. Choose All to see it.");
-    expect(text(facts({ ahead: { kind: "filtered", filter: "dates" } }))).toContain("ahead:no: Ahead hides it: the Dates filter is on.");
+  it("filtered in Backlog", () => {
+    expect(text(facts({ ahead: { kind: "filtered", filter: "owner", owner: "mine" } }))).toContain("ahead:no: Backlog hides it: People for Contoso is Mine. Choose Everyone to see it.");
+    expect(text(facts({ ahead: { kind: "filtered", filter: "dates" } }))).toContain("ahead:no: Backlog hides it: the Dates filter is on.");
   });
 
   it("a new unassigned feature with no parent", () => {

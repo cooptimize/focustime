@@ -158,7 +158,7 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
 
   if (want.ahead !== false) {
     const a = await data<AheadLoad>(d.run("ahead.load", {}));
-    if (typeof a === "string") unknown.push(`Ahead couldn't be read, so readiness gaps aren't known: ${a}`);
+    if (typeof a === "string") unknown.push(`Backlog couldn't be read, so its gaps aren't known: ${a}`);
     else {
       for (const c of a.clients) {
         if (!ok(c.clientKey)) continue;

@@ -1,7 +1,7 @@
 // NV-1: the main path through the new navigation, in demo mode on Monday Nov 2 at 9:30.
-// WD-1, RF-1: tabs Day · Week · Ahead · Status · Inbox (and 1 to 5); Day without modes: what's next, the Plan today card in the
+// WD-1, RF-1, BL-1: tabs Day · Week · Backlog · Status · Inbox (and 1 to 5); Day without modes: what's next, the Plan today card in the
 // morning, the Midday check-in card after lunch, the Close out card at the end of the day; Plan today is Week's Board
-// focused on today, with everything Plan the day did; Board and Commit; Ahead (was Roadmap); the Inbox; every older
+// focused on today, with everything Plan the day did; Board and Commit; Backlog (was Ahead, was Roadmap); the Inbox; every older
 // address landing on its new home with its date kept. Edge cases are unit tests (ui/nav.test.ts, plan/modes.test.ts,
 // plan/urgent.test.ts, ui/inboxcount.test.ts). Screenshots at 1920, 1366 by 768, Text size Larger and the phone
 // (390 wide, a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
@@ -38,13 +38,13 @@ async function shotAll(page: Page, name: string) {
 }
 
 describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
-  it("tabs and keys, Day's cards, Plan today opens Week with Add work on today, Ahead, the Inbox, Status and the old addresses", async () => {
+  it("tabs and keys, Day's cards, Plan today opens Week with Add work on today, Backlog, the Inbox, Status and the old addresses", async () => {
     const { page, errors } = await freshPage(h);
     page.setDefaultTimeout(30_000);
 
     // WD-1, RF-1: five tabs, Day first, Status fourth and the Inbox last; 1 to 5 pick them.
-    expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Week/), expect.stringMatching(/^Ahead/), expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]));
-    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Ahead", "#/ahead"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
+    expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Week/), expect.stringMatching(/^Backlog/), expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]));
+    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(key);
       await expect.poll(() => tab(page).textContent()).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(where);
@@ -80,10 +80,10 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.locator(".half.card").first().waitFor();
     expect(await page.getByRole("navigation", { name: "Week modes" }).count()).toBe(0);
 
-    // AH-1: Ahead is Grid, Gantt, Readiness and Backlog.
+    // AH-1, BL-1: Backlog is Grid and Gantt.
     await page.keyboard.press("3");
     await page.locator("main.roadmap").waitFor();
-    await page.getByRole("navigation", { name: "Ahead modes" }).waitFor();
+    await page.getByRole("navigation", { name: "Backlog views" }).waitFor();
     await shotAll(page, "nv1-ahead");
 
     // The Inbox (IB-1): one list with views, no mode switch.
@@ -98,9 +98,9 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       ["#/today/plan", "#/week/add"],
       ["#/week/plan/2026-11-09", "#/week/2026-11-09/add"],
       ["#/week/status", "#/status"],
-      ["#/roadmap", "#/ahead"],
-      ["#/roadmap/ahead", "#/ahead/gantt"],
-      ["#/ahead/plan", "#/ahead/gantt"],
+      ["#/roadmap", "#/backlog"],
+      ["#/roadmap/ahead", "#/backlog/gantt"],
+      ["#/ahead/plan", "#/backlog/gantt"],
       ["#/conversations", "#/inbox/needs-you"],
       ["#/my-promises", "#/inbox/promises"],
       ["#/inbox/conversations", "#/inbox/needs-you"],

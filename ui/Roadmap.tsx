@@ -137,7 +137,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
         <ModeArea>{switcher}</ModeArea>
       </div>
       {state && total > 0 && (
-        <div className="rm-summary" role="group" aria-label="Show only" title={`The first state that applies wins, in this order. Stalled after ${state.thresholds.stalledDays} days; Watch within ${plural(state.thresholds.watchWeeks, "week", "weeks")} of the target date (Settings › Ahead).`}>
+        <div className="rm-summary" role="group" aria-label="Show only" title={`The first state that applies wins, in this order. Stalled after ${state.thresholds.stalledDays} days; Watch within ${plural(state.thresholds.watchWeeks, "week", "weeks")} of the target date (Settings › Backlog).`}>
           {STATE_ORDER.filter((k) => counts[k] > 0 || filter.states.includes(k)).map((k) => (
             <button key={k} type="button" className={`rm-sum st-${k}`} title={STATE_MEANING[k]} aria-pressed={filter.states.includes(k)} onClick={() => setFilter({ ...filter, states: toggle(filter.states, k) })}>
               <span className="rm-sum-n">{counts[k]}</span>

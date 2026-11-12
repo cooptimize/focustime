@@ -65,6 +65,17 @@ function effOf(i: AheadItem, p: Row["pending"], states?: readonly { name: string
   };
 }
 
+/** BL-1: two siblings in a client's backlog order: the order field (unset last) when it has one, then target date, then id. */
+export function siblingOrder(a: Pick<AheadItem, "id" | "order" | "target">, b: Pick<AheadItem, "id" | "order" | "target">, byOrder: boolean): number {
+  if (byOrder) {
+    const oa = typeof a.order === "number" ? a.order : Number.POSITIVE_INFINITY;
+    const ob = typeof b.order === "number" ? b.order : Number.POSITIVE_INFINITY;
+    if (oa !== ob) return oa < ob ? -1 : 1;
+  }
+  const ta = a.target ?? "9999", tb = b.target ?? "9999";
+  return ta < tb ? -1 : ta > tb ? 1 : a.id - b.id;
+}
+
 /** Every client's rows in tree order, before filtering. */
 export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
   const items = c.items.filter((i) => tierOf(i));
@@ -74,6 +85,8 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
     const p = i.parentId !== null && byId.has(i.parentId) ? i.parentId : null;
     (kids.get(p) ?? kids.set(p, []).get(p)!).push(i);
   }
+  // BL-1: siblings in the client's backlog order (the process's order field, unset last), else by target date.
+  for (const list of kids.values()) list.sort((a, b) => siblingOrder(a, b, !!c.orderField));
   const editable = new Set(c.editable);
   // AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins).
   const me = new Set([lc(c.me), ...(c.mine ?? []).map(lc)].filter(Boolean));
@@ -126,8 +139,6 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
     return out;
   };
   const owner = ownerOf(f, c);
-  const kinds = f.kinds ?? [];
-  const notReady = f.gaps || kinds.length > 0;
   // A quick pick needs today; without it only from and to apply.
   const dates = o.today ? rangeDates(f, o.today) : f.from || f.to ? { from: f.from, to: f.to } : null;
   const mineIds = new Set(rows.filter((r) => r.mine).map((r) => r.item.id));
@@ -138,8 +149,7 @@ export function filterRows(rows: readonly Row[], c: LoadClient, f: AheadFilters,
     // Contributing (as Roadmap had it): the features and epics my stories are under, with those stories.
     if (owner === "contributing" && !((r.mine && r.tier === "story") || rows.some((x) => x.mine && x.tier === "story" && ancestors(x).includes(r)))) return false;
     if (f.epic && !(r.key === f.epic || ancestors(r).some((a) => a.key === f.epic))) return false;
-    // AH-6: Not ready only, narrowed to the kinds chosen (a kind implies it).
-    if (notReady && !r.gaps.some((g) => !kinds.length || kinds.includes(g))) return false;
+    // BL-1: Needs attention (f.gaps) isn't a row rule: it is Readiness's list (fixGroups), applied by the caller.
     if (dates) {
       const a = r.eff.start ?? r.eff.target, b = r.eff.target ?? r.eff.start;
       if (!a || !b) return false;
@@ -191,6 +201,7 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
     .filter((c) => !f?.clients.length || f.clients.includes(c.clientKey))
     .map((c) => {
       const rows = buildRows(load, c);
+      const weeks = o.staleWeeks ?? load.staleWeeks ?? 6;
       const input: FixClient = {
         clientKey: c.clientKey,
         orderField: c.orderField ?? null,
@@ -201,14 +212,17 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
           start: r.eff.start, target: r.eff.target, size: r.eff.size, assigneeEmail: r.eff.assignee?.email ?? null, canEdit: r.editable && !o.readOnly,
           tier: r.tier, parentId: r.item.parentId, order: r.item.order ?? null, inScope: r.item.inScope !== false, mine: r.mine,
           raw: { start: r.item.start, target: r.item.target, size: r.item.size, assigneeEmail: r.item.assignee?.email ?? null },
+          // BL-1: Stale is part of Needs attention (by the person's own weeks).
+          stale: isStale(r.item, load.today, weeks),
         })),
       };
       const group = fixClient(input, { today: load.today, topN: load.fixTopN, ...(o.skipped ? { skipped: o.skipped } : {}), ...(o.leaving ? { leaving: o.leaving } : {}) });
       if (!f) return { client: c, group, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded: group.entries };
-      // Every row the filters keep (Not ready is what Readiness is; the kinds narrow which gaps count).
-      const kept = new Set(filterRows(rows, c, { ...f, gaps: false, kinds: [] }, { stories: true, today: load.today, ...(o.staleWeeks !== undefined ? { staleWeeks: o.staleWeeks } : {}) }).filter((r) => !r.context).map((r) => r.item.id));
+      // Every row the filters keep (Needs attention is this list; the kinds and Stale narrow which reasons count).
+      const kept = new Set(filterRows(rows, c, { ...f, gaps: false, kinds: [], stale: false }, { stories: true, today: load.today, ...(o.staleWeeks !== undefined ? { staleWeeks: o.staleWeeks } : {}) }).filter((r) => !r.context).map((r) => r.item.id));
       const kinds = f.kinds ?? [];
-      const keep = (e: FixEntry) => kept.has(e.itemId) && (!kinds.length || e.gaps.some((g) => kinds.includes(g)));
+      const narrowed = kinds.length > 0 || !!f.stale;
+      const keep = (e: FixEntry) => kept.has(e.itemId) && (!narrowed || e.gaps.some((g) => kinds.includes(g)) || (!!f.stale && !!e.stale));
       // AH-7: the counts by kind are what each kind would show, so they're counted before the kinds narrow it.
       const unkinded = group.entries.filter((e) => kept.has(e.itemId));
       return { client: c, group: { ...group, entries: group.entries.filter(keep), skipped: (group.skipped ?? []).filter(keep) }, rows, total: group.entries.filter((e) => !e.leaving).length, unkinded };
@@ -219,7 +233,7 @@ export function fixGroups(load: AheadLoad, o: { readOnly: boolean; skipped?: Rea
  * QC-1: which of my filters would hide a row ("Assigned to me", "Clients"), each tried alone, so a create's
  * confirmation can say why the new item won't stay on screen once I leave Ahead. Empty: nothing hides it.
  */
-export function hiddenBy(load: AheadLoad, f: AheadFilters, key: string): string[] {
+export function hiddenBy(load: AheadLoad, f: AheadFilters, key: string, /** BL-1: the Needs attention list's keys, when it is on. */ attention?: ReadonlySet<string>): string[] {
   const c = load.clients.find((x) => key.startsWith(`${x.clientKey}:`));
   if (!c) return [];
   const rows = buildRows(load, c);
@@ -231,7 +245,7 @@ export function hiddenBy(load: AheadLoad, f: AheadFilters, key: string): string[
   const owner = ownerOf(f, c);
   if (owner !== "all" && !shows({ ...base, owner: { [c.clientKey]: owner } })) out.push(owner === "mine" ? "Assigned to me" : "Contributing");
   if (f.epic && !shows({ ...base, epic: f.epic })) out.push("Epic");
-  if ((f.gaps || f.kinds?.length) && !shows({ ...base, gaps: f.gaps, ...(f.kinds ? { kinds: f.kinds } : {}) })) out.push("Not ready only");
+  if (f.gaps && attention && !attention.has(key)) out.push("Needs attention");
   if ((f.from || f.to || f.range) && !shows({ ...base, from: f.from, to: f.to, ...(f.range ? { range: f.range } : {}) })) out.push("Dates");
   if (f.stale && !shows({ ...base, stale: true })) out.push("Stale");
   if (f.q.trim() && !shows({ ...base, q: f.q })) out.push("Search");

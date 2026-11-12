@@ -1,5 +1,5 @@
 // MB-1: the phone overhaul in the browser, demo mode (Mon Nov 2, 9:30 AM), at 360 and 390 px with the iPhone's 17 px
-// root font: the bottom bar (Today, Week, Capture, Inbox, Ask; no Ahead) and the computer's tabs unchanged; Ahead's
+// root font: the bottom bar (Today, Week, Capture, Inbox, Ask; no Backlog) and the computer's tabs unchanged; Ahead's
 // notice and Open anyway; the Now card; the urgent strip capped at 3 with "N more in Inbox"; the to-do sheet (Done,
 // Move to tomorrow, Snooze, Add time, each with Undo where it changes my plan; focus kept inside, Esc, focus back);
 // Week rows at 360 with the title on its own line; the status sheet and no source footer on the phone.
@@ -36,7 +36,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await at(page, "#/today");
     const bar = page.locator(".bottom-bar");
     expect(await bar.locator(".bb-tab").allTextContents()).toEqual(["Day", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
-    expect(await bar.getByText("Ahead").count()).toBe(0);
+    expect(await bar.getByText("Backlog").count()).toBe(0);
     expect(await bar.locator(".bb-count").count()).toBe(1);
     // The raised Capture: at least 56 px, labelled, opens the capture sheet.
     const cap = bar.getByRole("button", { name: "Capture" });
@@ -59,19 +59,19 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
 
     const { page: desk } = await freshPage(h);
     await at(desk, "#/today");
-    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Ahead.*Status.*Inbox/);
+    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Backlog.*Status.*Inbox/);
     expect(await desk.locator(".bottom-bar, .status-dot-btn").count()).toBe(0);
     expect(await desk.locator("footer.statusbar").count()).toBe(1);
     await desk.close();
   }, T);
 
-  it("Ahead on the phone: the notice, then Open anyway shows it", async () => {
+  it("Backlog on the phone: the notice, then Open anyway shows it", async () => {
     const page = await phonePage(h, 360);
     await at(page, "#/ahead");
-    await page.getByRole("heading", { name: "Ahead is made for a bigger screen" }).waitFor();
+    await page.getByRole("heading", { name: "Backlog is made for a bigger screen" }).waitFor();
     await page.getByRole("button", { name: "Open anyway" }).click();
     await page.waitForSelector(".phone-ro");
-    expect(await page.getByRole("heading", { name: "Ahead is made for a bigger screen" }).count()).toBe(0);
+    expect(await page.getByRole("heading", { name: "Backlog is made for a bigger screen" }).count()).toBe(0);
     await page.close();
   }, T);
 

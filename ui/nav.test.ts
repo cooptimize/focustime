@@ -1,5 +1,5 @@
-// Step 16.2, NV-1, WD-1, RF-1: tabs (Day · Week · Ahead · Status · Inbox), Week with no modes and its Add work panel,
-// Ahead's Grid, Gantt, Gaps and Backlog, Day's flows, addresses (back and reopen), every older address landing with
+// Step 16.2, NV-1, WD-1, RF-1, BL-1: tabs (Day · Week · Backlog · Status · Inbox), Week with no modes and its Add work panel,
+// Backlog's Grid and Gantt (BL-1: Ahead's Gaps and Backlog modes land on the Grid with a filter), Day's flows, addresses (back and reopen), every older address landing with
 // its date, block, week or id, P, keys 1–5, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
@@ -10,10 +10,10 @@ const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 describe("tabs and modes", () => {
   it("WD-1: five tabs in order, Today named Day and Status its own tab; Week, Day, Inbox and Status have no modes", () => {
     expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox"]);
-    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Ahead", "Status", "Inbox"]);
+    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual([]);
-    expect(MODES.ahead).toEqual(["grid", "gantt", "fix", "backlog"]);
+    expect(MODES.ahead).toEqual(["grid", "gantt"]);
     expect(MODES.inbox).toEqual([]);
     expect(MODES.status).toEqual([]);
   });
@@ -98,11 +98,9 @@ describe("addresses", () => {
     [loc(navOf.addWork("2026-11-03", "PM")), "#/week/day/2026-11-03/PM"],
     [loc(navOf.status()), "#/status"],
     [loc(navOf.statusNeeds()), "#/status/needs"],
-    [loc(navOf.ahead()), "#/ahead"],
-    [loc(navOf.ahead("gantt")), "#/ahead/gantt"],
-    [loc(navOf.ahead("backlog")), "#/ahead/backlog"],
-    [loc(navOf.ahead("fix")), "#/ahead/fix"],
-    [loc(navOf.aheadItem(437)), "#/ahead/item/437"],
+    [loc(navOf.ahead()), "#/backlog"],
+    [loc(navOf.ahead("gantt")), "#/backlog/gantt"],
+    [loc(navOf.aheadItem(437)), "#/backlog/item/437"],
     [loc(navOf.inbox()), "#/inbox"],
     [loc(navOf.inbox(12)), "#/inbox/item/f12"],
     [loc(navOf.conversations()), "#/inbox/needs-you"],
@@ -146,10 +144,20 @@ describe("addresses", () => {
     // WD-1: Week › Status is the Status tab.
     ["#/week/status", loc(navOf.status()), "#/status"],
     ["#/week/status/needs", loc(navOf.statusNeeds()), "#/status/needs"],
-    ["#/roadmap", loc(navOf.ahead()), "#/ahead"],
-    ["#/roadmap/ahead", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
-    ["#/ahead/plan", loc(navOf.ahead("gantt")), "#/ahead/gantt"],
-    ["#/ahead/gaps", loc(navOf.ahead("fix")), "#/ahead/fix"],
+    ["#/roadmap", loc(navOf.ahead()), "#/backlog"],
+    ["#/roadmap/ahead", loc(navOf.ahead("gantt")), "#/backlog/gantt"],
+    // BL-1: Ahead is Backlog; its Readiness (Gaps, Fix next) is the Grid with Needs attention on, its Backlog mode
+    // the Grid showing stories only, in rank order. The filter is applied once on arrival, so the address it reads
+    // back as is the plain Grid (the filters then live in the query).
+    ["#/ahead", loc(navOf.ahead()), "#/backlog"],
+    ["#/ahead/grid", loc(navOf.ahead()), "#/backlog"],
+    ["#/ahead/gantt", loc(navOf.ahead("gantt")), "#/backlog/gantt"],
+    ["#/ahead/plan", loc(navOf.ahead("gantt")), "#/backlog/gantt"],
+    ["#/ahead/item/437", loc(navOf.aheadItem(437)), "#/backlog/item/437"],
+    ["#/ahead/gaps", loc(navOf.ahead("grid", "attention")), "#/backlog"],
+    ["#/ahead/fix", loc(navOf.ahead("grid", "attention")), "#/backlog"],
+    ["#/ahead/readiness", loc(navOf.ahead("grid", "attention")), "#/backlog"],
+    ["#/ahead/backlog", loc(navOf.ahead("grid", "stories")), "#/backlog"],
     ["#/conversations", loc(navOf.conversations()), "#/inbox/needs-you"],
     ["#/my-promises", loc(navOf.myPromises()), "#/inbox/promises"],
     ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/needs-you"],
@@ -169,7 +177,7 @@ describe("addresses", () => {
   it("an empty address is Day; anything unknown or malformed is refused", () => {
     expect(parseHash("")).toEqual(HOME);
     expect(parseHash("#/")).toEqual(HOME);
-    for (const bad of ["#/delivery", "#/plan", "#/today/plan/2026-13-40", "#/today/plan/soon", "#/today/checkin/2026-11-02", "#/day/checkin/2026-11-02", "#/today/plan/2026-11-03/XM", "#/week/plan/x", "#/week/day/2026-11-03/XM", "#/week/commit/x/y", "#/week/2026-11-09/add/x", "#/week/add/x", "#/status/later", "#/status/needs/x", "#/week/status/2026-11-02", "#/inbox/0", "#/settings/../x", "#/roadmap/later", "#/ahead/later", "#/ahead/item/0", "#/ahead/gantt/x", "#/conversations/1", "#/today/plan/2026-11-03/PM/extra", "#/" + "x".repeat(90)]) expect(parseHash(bad), bad).toBeNull();
+    for (const bad of ["#/delivery", "#/plan", "#/today/plan/2026-13-40", "#/today/plan/soon", "#/today/checkin/2026-11-02", "#/day/checkin/2026-11-02", "#/today/plan/2026-11-03/XM", "#/week/plan/x", "#/week/day/2026-11-03/XM", "#/week/commit/x/y", "#/week/2026-11-09/add/x", "#/week/add/x", "#/status/later", "#/status/needs/x", "#/week/status/2026-11-02", "#/inbox/0", "#/settings/../x", "#/roadmap/later", "#/ahead/later", "#/ahead/item/0", "#/ahead/gantt/x", "#/backlog/later", "#/backlog/item/0", "#/backlog/gantt/x", "#/conversations/1", "#/today/plan/2026-11-03/PM/extra", "#/" + "x".repeat(90)]) expect(parseHash(bad), bad).toBeNull();
   });
 });
 
@@ -204,8 +212,8 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.week()))).toBe("Week");
     expect(viewName(loc(navOf.addWork("2026-11-03")))).toBe("Week › Block");
     expect(viewName(loc(navOf.status()))).toBe("Status");
-    expect(viewName(loc(navOf.ahead()))).toBe("Ahead › Grid");
-    expect(viewName(loc(navOf.ahead("gantt")))).toBe("Ahead › Gantt");
+    expect(viewName(loc(navOf.ahead()))).toBe("Backlog › Grid");
+    expect(viewName(loc(navOf.ahead("gantt")))).toBe("Backlog › Gantt");
     expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Needs you");
   });
 });
@@ -241,7 +249,7 @@ describe("notification routes (all kinds of step 15.5)", () => {
 describe("command menu views", () => {
   it("every view a command opens is a tab and mode, a flow, or an overlay", () => {
     const want: Partial<Record<ViewName, string>> = {
-      today: "#/day", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/ahead", ahead: "#/ahead/gantt", status: "#/status", team: "#/week/team",
+      today: "#/day", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/backlog", ahead: "#/backlog/gantt", gaps: "#/backlog", backlog: "#/backlog", status: "#/status", team: "#/week/team",
       planday: "#/week/add", planweek: "#/week/add", commit: "#/week/add", checkin: "#/day/checkin", closeout: "#/day/closeout", focus: "#/focus", settings: "#/settings/you",
       conversations: "#/inbox/needs-you", requests: "#/inbox/needs-you", my_promises: "#/inbox/promises",
     };
@@ -302,16 +310,18 @@ describe("Inbox views and items (IB-1)", () => {
   });
 });
 
-describe("AH-6: Ahead's address carries its view", () => {
-  it("an Ahead address may have a query; other addresses may not; hashOf adds Ahead's current query", () => {
+describe("AH-6: Backlog's address carries its view", () => {
+  it("a Backlog address may have a query; other addresses may not; hashOf adds Backlog's current query", () => {
     expect(parseHash("#/ahead/gantt?c=northwind&l=epic")?.nav).toEqual(navOf.ahead("gantt"));
+    expect(parseHash("#/backlog/gantt?c=northwind&l=epic")?.nav).toEqual(navOf.ahead("gantt"));
     expect(parseHash("#/ahead?r=next4")?.nav).toEqual(navOf.ahead());
-    expect(parseHash("#/ahead/fix?k=unsized")?.nav).toEqual(navOf.ahead("fix"));
+    expect(parseHash("#/backlog?r=next4")?.nav).toEqual(navOf.ahead());
+    expect(parseHash("#/ahead/fix?k=unsized")?.nav).toEqual(navOf.ahead("grid", "attention"));
     expect(parseHash("#/week?c=northwind")).toBeNull();
     expect(queryOf("#/ahead/gantt?c=northwind")).toBe("c=northwind");
     setAheadQuery("c=northwind");
     try {
-      expect(hashOf({ nav: navOf.ahead("backlog"), overlay: null })).toBe("#/ahead/backlog?c=northwind");
+      expect(hashOf({ nav: navOf.ahead("gantt"), overlay: null })).toBe("#/backlog/gantt?c=northwind");
       expect(hashOf({ nav: navOf.week(), overlay: null })).toBe("#/week");
     } finally {
       setAheadQuery("");

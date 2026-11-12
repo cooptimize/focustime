@@ -28,6 +28,7 @@ import { MenuCtx } from "../Menus.tsx";
 import { HoursStepper } from "../plan/Estimate.tsx";
 import { placePopover } from "../popover-place.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
+import { Chevron, ChevronSpace } from "./Chevron.tsx";
 import { NewUnder } from "./NewUnder.tsx";
 import { WorkLink } from "../WorkLink.tsx";
 import { ganttLabelW, useWindowScale } from "./layout.ts";
@@ -174,9 +175,6 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
   const env: Env | null = ahead && scale ? { ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, unsizedMinutes: data.planning.sizes.unsized, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
   return (
     <div className="ah-gantt-wrap">
-      <div className="ah-gantt-bar">
-        <Legend />
-      </div>
       <div className="pa-box ah-gantt" ref={box} style={maxH ? { maxHeight: maxH } : undefined}>
         {!ahead && <p className="muted">Reading the weeks ahead…</p>}
         {env && scale && (
@@ -191,7 +189,25 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
   );
 }
 
-/** What each bar's look means, in the toolbar. */
+/** BL-1: the legend behind one quiet "Legend" control (in the toolbar's row) instead of a permanent row. */
+export function LegendButton() {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  return (
+    <span className="pa-legend-box">
+      <button ref={btn} type="button" className="mini quiet pa-legend-btn" aria-expanded={open} aria-controls="pa-legend" onClick={() => setOpen(!open)} onKeyDown={(e) => e.key === "Escape" && open && (e.stopPropagation(), setOpen(false))}>
+        Legend
+      </button>
+      {open && (
+        <div id="pa-legend" className="pa-legend-pop" role="region" aria-label="Legend" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false), btn.current?.focus())}>
+          <Legend />
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** What each bar's look means. */
 function Legend() {
   const items: [string, string, string][] = [
     ["ok", "On track", "Solid: dates from DevOps (or your change)"],
@@ -593,13 +609,7 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
         onKeyDown={keys}
         style={{ paddingLeft: `calc(6px + ${levelRank(r.tier)} * var(--gantt-step))` }}
       >
-        {kids > 0 ? (
-          <button type="button" className="rm-expand pa-caret" tabIndex={-1} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} what's under ${r.item.title}`} onClick={() => env.setFold((f) => setRow(f, r, !open))}>
-            {open ? "▾" : "▸"}
-          </button>
-        ) : (
-          <span className="rm-expand-space pa-caret" aria-hidden="true" />
-        )}
+        {kids > 0 ? <Chevron open={open} title={r.item.title} onToggle={() => env.setFold((f) => setRow(f, r, !open))} /> : <ChevronSpace />}
         <TypeIcon clientKey={r.clientKey} type={r.item.type} className="pa-type" />
         <span className="pa-title" title={`${r.item.title} (#${r.item.id})`}>
           <WorkLink clientKey={r.clientKey} url={r.item.url} title={`${r.item.title} (#${r.item.id})`}>
