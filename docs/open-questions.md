@@ -739,3 +739,10 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Items drawn by time on Week's rail and Day's timeline (events, timeboxes, promises) are shorter than 28 px when they are short; their height is their length, so they are exempt from the target size. Give them a bigger hit area?
 - Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
 - On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?
+
+## PS-2
+
+- The check leaves out text cut at a scroll edge (a scroll container, the page's frame and the fixed status bar), which is scrolling, not clipping. Count the status bar too?
+- From the review, seen before and after PS-2 and left alone (outside this step): on Day's Cards at 1280 one row's gap is a few pixels larger than the others; in a block's feature group a title's first line sits a few pixels below its checkbox; the phone's Week keeps an empty second line on one-line to-dos.
+- The Timeline's "#id" sliver measured 3 px but showed no ink at 1x (the top of the digits' box is empty space). Fixed anyway; the check counts the box, so a font with taller digits would show it.
+

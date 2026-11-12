@@ -2,12 +2,14 @@
 // every clickable thing on Day, Week and the panel is at least 28px (44px on the phone); a card's chips never touch its
 // ⋯; the cards in a row start their first lines at one height; nothing sits under the phone's capture button at the end
 // of a scroll; the header's + Add is on Day and Week at every width and is the only filled button there; and Day opens
-// with its panel on a wide window and stays closed once closed. Demo data only (e2e/ps1-states.ts).
+// with its panel on a wide window and stays closed once closed. PS-2: no line of text shows in part (a line is whole or
+// hidden, never a sliver under a title) and no title link's focus ring is cut, at Default and the largest Text size.
+// Demo data only (e2e/ps1-states.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { buildState, PS_CLOCK, type PsState } from "./ps1-states.ts";
-import { chipTouchesMore, headTops, smallTargets, underCapture } from "./ps1-audit.ts";
+import { chipTouchesMore, clippedLines, cutFocusRings, headTops, smallTargets, underCapture } from "./ps1-audit.ts";
 
 const DEFAULT = { dayPanel: "default" } as const;
 const T = 300_000;
@@ -29,6 +31,19 @@ const closePanel = async (page: Page) => {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(250);
   }
+};
+
+const PANEL_SCOPE = "main, aside.block-panel";
+/** Opens the block under way (today's morning) in the panel, as a click on its card's head does. */
+const openBlock = async (page: Page) => {
+  if (await page.locator("aside.block-panel").count()) return;
+  await page.locator("main .half.focus .card-head").first().click({ position: { x: 4, y: 4 } }).catch(() => {});
+  await page.waitForTimeout(800);
+};
+/** Opens the panel's folds (More in <client>, To place, You sent, N done). */
+const openFolds = async (page: Page) => {
+  for (const f of await page.locator("aside.block-panel .pl-fold[aria-expanded=false]").all()) await f.click().catch(() => {});
+  await page.waitForTimeout(800);
 };
 
 /** The header's + Add: shown, and the only button in its header with the main action's fill. */
@@ -118,11 +133,58 @@ describe.skipIf(!CHROMIUM)("PS-1: polish sweep on Day and Week", () => {
         await page.close();
       }, T);
 
+  // PS-2: measured, not compared: every line of text inside an element that clips is fully inside or fully outside.
+  // Week, Day's Cards with its panel (opened on the block under way), Day's Timeline, and the panel on Week, with its
+  // folds open; at the largest Text size too.
+  for (const state of ["ordinary", "heavy"] as PsState[])
+    for (const size of SIZES)
+      for (const larger of [false, true])
+        it(`${state} at ${size.width}${larger ? ", Larger text" : ""}: no line of text shows in part, no focus ring is cut`, async () => {
+          const { page, errors } = await freshPage(h, size, DEFAULT);
+          await buildState(page, state);
+          if (larger) {
+            for (let i = 0; i < 2; i++) await page.keyboard.press("Control+Equal");
+            await page.waitForTimeout(400);
+          }
+          const phone = size.width < 600;
+          const where = `${state} at ${size.width}${larger ? " Larger" : ""}`;
+          const look = async (what: string) => {
+            await page.evaluate(() => window.scrollTo(0, 0));
+            expect(await clippedLines(page, PANEL_SCOPE), `${where} ${what}`).toEqual([]);
+            expect(await cutFocusRings(page, PANEL_SCOPE), `${where} ${what}: focus rings`).toEqual([]);
+          };
+          await go(page, "#/week");
+          await look("Week");
+          await openBlock(page);
+          if (await page.locator("aside.block-panel").count()) {
+            await openFolds(page);
+            await look("Week's panel");
+          }
+          await closePanel(page);
+          await go(page, "#/day");
+          if (!phone) await page.locator("aside.block-panel").waitFor({ timeout: 10_000 });
+          await look("Day");
+          if (!phone) {
+            await openFolds(page);
+            await look("Day's panel, folds open");
+            await page.locator(".day-switch button", { hasText: "Timeline" }).first().click();
+            await page.waitForTimeout(700);
+            await look("Day's Timeline");
+          } else {
+            await openBlock(page);
+            await openFolds(page);
+            await look("the phone's block");
+          }
+          expect(errors).toEqual([]);
+          await page.close();
+        }, T);
+
   it("a tick on a heavy block today keeps focus on its checkbox (the row doesn't fold away)", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await buildState(page, "heavy");
     await go(page, "#/day");
-    const box = page.locator(".day-view .half.card.focus").first().locator(".checklist input[type=checkbox]:not(:checked)").first();
+    // A plain to-do (a DevOps one's tick offers Mark done in DevOps, which takes focus on purpose).
+    const box = page.locator(".day-view .half.card.focus").first().locator('.checklist input[type=checkbox][aria-label="Done: Update the onboarding checklist"]').first();
     await box.focus();
     await page.keyboard.press("Space");
     await page.waitForTimeout(800);

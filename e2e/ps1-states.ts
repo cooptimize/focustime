@@ -3,6 +3,9 @@
 //   empty    Tuesday and later have no to-dos: the board's suggestions show.
 //   ordinary three or four to-dos a block today, some done, a promise due, an at-risk block (the demo's own).
 //   heavy    eight or more to-dos in today's morning block, long titles, three due chips.
+// PS-2: ordinary and heavy also put three DevOps stories with long titles (made through the demo's own create) on
+// today's morning block, so its rows show "#id" cues and the panel lists them under its feature, and two long draft
+// stories (one under the feature, one to place).
 import type { Page } from "playwright-core";
 import { call, emptyFrom } from "./sg1-helpers.ts";
 
@@ -13,7 +16,7 @@ export const PS_CLOCK = "2026-11-03T09:30:00-05:00";
 
 type Day = { picks: { id: number; status: string; half: string; clientKey: string }[] };
 type Slot = { half: string; focus: { clientKey: string }[]; pto: boolean };
-type WeekData = { plan?: Record<string, Day>; week: { days: { date: string; am: Slot; pm: Slot }[] } };
+type WeekData = { plan?: Record<string, Day>; week: { days: { date: string; am: Slot; pm: Slot }[] }; devops?: { clientKey: string; items: { id: number; tier?: string; assignedToMe?: boolean }[] }[] };
 
 const load = async (page: Page) => (await call(page, "week.load", {})).data as unknown as WeekData;
 const ready = async (page: Page) => {
@@ -52,6 +55,32 @@ async function add(page: Page, date: string, half: "AM" | "PM", clientKey: strin
   return ids;
 }
 
+export const LONG_ITEMS = [
+  "Let the front desk upload a scanned insurance card from the intake tablet before the visit starts",
+  "Check the date of birth against the insurer's record and flag a mismatch for the front desk to resolve",
+  "Show the patient a summary of what they entered before they submit the intake form",
+];
+
+/** PS-2: three new stories under the client's first open feature of mine, made through the write framework; their ids. */
+async function longItems(page: Page, w: WeekData, clientKey: string): Promise<number[]> {
+  const work = (w.devops ?? []).find((c) => c.clientKey === clientKey);
+  const feature = work?.items.find((i) => i.tier === "feature" && i.assignedToMe);
+  if (!feature) return [];
+  const ids: number[] = [];
+  for (const title of LONG_ITEMS) {
+    const pv = await call(page, "devops.preview", { clientKey, change: { kind: "new_item", title, type: "User Story", parentId: feature.id } });
+    const previewId = (pv.data as { preview?: { previewId: string } } | undefined)?.preview?.previewId;
+    if (!previewId) continue;
+    const c = await call(page, "devops.confirm", { previewId });
+    const id = (c.data as { entry?: { itemId: number | null } } | undefined)?.entry?.itemId;
+    if (id) ids.push(id);
+  }
+  // Two long draft stories: one under the feature (listed with it in the panel), one with none (To place).
+  await call(page, "draft.add_story", { clientKey, parentItemId: feature.id, title: "Draft: let the front desk see which intake forms are waiting for a signature this morning", size: "M" });
+  await call(page, "draft.add_story", { clientKey, parentItemId: null, title: "Draft: ask the insurer which fields their eligibility check needs before we build the intake export", size: "S" });
+  return ids;
+}
+
 /** Builds a state in this page's demo session, then reloads. */
 export async function buildState(page: Page, state: PsState): Promise<void> {
   // Every state starts from Tuesday on with nothing planned (Monday keeps its unfinished ones, so suggestions have some).
@@ -63,6 +92,7 @@ export async function buildState(page: Page, state: PsState): Promise<void> {
   const wedAm = clientOn(w, "2026-11-04", "AM");
   const wedPm = clientOn(w, "2026-11-04", "PM");
   const done: number[] = [];
+  if (am) for (const [i, itemId] of (await longItems(page, w, am)).entries()) await call(page, "pick.add", { date: PS_TODAY, half: "AM", clientKey: am, itemId, size: ["M", "S", "L"][i] });
   if (state === "ordinary") {
     if (am) done.push(...(await add(page, PS_TODAY, "AM", am, ORDINARY, ["S", "M", null])).slice(0, 1));
     if (pm) done.push(...(await add(page, PS_TODAY, "PM", pm, [...ORDINARY.slice(0, 2), "Prepare the demo for Friday", "Write up the handover"], ["M", "S"])).slice(0, 1));

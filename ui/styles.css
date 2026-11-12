@@ -6678,11 +6678,26 @@ label.tick, .checklist li label.tick, .pick-row label.tick { flex: none; display
 .tick:has(input:disabled):hover { background: transparent; }
 .app.phone .tick { margin: 0; }
 .app.phone .ph-todo > .tick { justify-self: center; }
-/* Title links in rows: two lines at most, a target's height on one. */
+/* Title links in rows: two lines at most, a target's height on one. PS-2: the height comes from a transparent border,
+   never padding or a minimum height. A clip cuts at the padding edge, inside the border, so the box is a full target
+   while what shows ends at the last whole line: no sliver of a third line, nor of a "#id" wrapped out of sight. The
+   content box is the lines alone (content-box), so a row that fixes its height (.pr-cue: one line) adds the border
+   around that line. A browser draws a border in whole pixels, so the top is half the room rounded down and the bottom
+   the rest rounded up: the box is the target or less than a pixel more (as tall as its neighbours) and the text sits
+   where padding put it. */
 :is(main.grid, .day-view, aside.block-panel) :is(a[data-card], .aw-row-title, .pf-title-link) {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
-  padding-block: max(0px, calc((var(--target) - 1lh) / 2)); min-height: var(--target); box-sizing: border-box;
+  border: 0 solid transparent; box-sizing: content-box;
+  border-top-width: round(down, max(0px, calc((var(--target) - 1lh) / 2)), 1px);
+  border-bottom-width: round(up, max(0px, calc(var(--target) - 1lh - round(down, max(0px, calc((var(--target) - 1lh) / 2)), 1px))), 1px);
 }
+/* A title wrapping a title link (a to-do's title on a card or in the panel, the panel's features and Assigned to you
+   rows): the link is the target and does the clamp; the wrapper adds no border of its own (the row would grow twice)
+   and doesn't clip the link's focus ring. */
+:is(main.grid, .day-view, aside.block-panel) :is(.pr-title, .aw-row-title, .aw-feat-name):has(> a[data-card]) {
+  display: flex; align-items: center; overflow: visible; border-block: 0; -webkit-line-clamp: none; line-clamp: none;
+}
+:is(main.grid, .day-view, aside.block-panel) :is(.pr-title, .aw-row-title, .aw-feat-name) > a[data-card] { min-width: 0; }
 /* Links that are pills or chips (a client call to review): the pill keeps its look, centred in a target-high line. */
 :is(main.grid, .day-view) a.call-mark { display: inline-flex; align-items: center; min-height: var(--target); }
 /* Due chips: the button is the target, the chip inside keeps its size. */
