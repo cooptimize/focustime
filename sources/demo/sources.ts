@@ -45,12 +45,13 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
       return { ok: true, away: away.filter((a) => a.date >= from && a.date <= to) };
     },
     // SR-3: Cooptimize's observed holidays (fictional, from the asked range's Monday): "Founders Day" observed on the
-    // first week's Thursday, and an unnamed observed day the Monday after.
+    // first week's Thursday, and an unnamed observed day the Monday after. WK-5: never today (as QF-1's PTO day), so a
+    // Thursday demo has a working today.
     holidays: async (from: string, to: string) => {
       const m = Temporal.PlainDate.from(from);
       const monday = m.subtract({ days: m.dayOfWeek - 1 });
       const days = [{ date: monday.add({ days: 3 }).toString(), name: "Founders Day" }, { date: monday.add({ days: 7 }).toString(), name: null }];
-      return { ok: true, days: days.filter((d) => d.date >= from && d.date <= to) };
+      return { ok: true, days: days.filter((d) => d.date >= from && d.date <= to && d.date !== demoToday()) };
     },
     // ADM-1: fictional levels and client leads (Admin › People in the demo).
     directory: async () => ({ ok: true, read: demoDirectory() }),
