@@ -739,3 +739,13 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Items drawn by time on Week's rail and Day's timeline (events, timeboxes, promises) are shorter than 28 px when they are short; their height is their length, so they are exempt from the target size. Give them a bigger hit area?
 - Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
 - On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?
+
+## WK-5
+
+- The day in focus takes twice a working day's share (`FOCUS_SHARE`). Too much at 1920 with every day shown? 1.6 would leave the other days a rail sooner.
+- A hidden day shows its note only when it has open to-dos or is today (the reading that shows less). Should a hidden day with a meeting, a promise due or PTO say so too?
+- Show (the note's) brings back every hidden day for the visit, not just the one with to-dos. One at a time instead?
+- A past day lists six to-dos, then "N more" (`PAST_ROWS`). Right number?
+- With every other day folded, the focus day may still be under twice a working day (1024 px with the panel and Larger text). Hide the panel's Add list sooner instead?
+- Day's past cards list their to-dos too (they share Week's card). Keep the QT-1 line on Day?
+- The demo's day off moved from Friday to Saturday on a Thursday (and the holiday is never today) so Week shows a working today. Right for demos on other days?
