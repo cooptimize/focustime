@@ -31,11 +31,11 @@ function HelpEditor({ help, onChange, label }: { help: Record<LineKey, LineHelp>
           <legend>{LINE_NAMES[k]}</legend>
           <label className="wt-field">
             <span className="set-label">Hint</span>
-            <TextBox aria-label={`${label}: ${LINE_NAMES[k]} hint`} minRows={1} maxRows={4} maxLength={LIMITS.hint} value={help[k].hint} onChange={(e) => onChange({ ...help, [k]: { ...help[k], hint: e.target.value } })} />
+            <TextBox className="fl-box" aria-label={`${label}: ${LINE_NAMES[k]} hint`} minRows={1} maxRows={4} maxLength={LIMITS.hint} value={help[k].hint} onChange={(e) => onChange({ ...help, [k]: { ...help[k], hint: e.target.value } })} />
           </label>
           <label className="wt-field">
             <span className="set-label">Example</span>
-            <TextBox aria-label={`${label}: ${LINE_NAMES[k]} example`} minRows={1} maxRows={6} maxLength={LIMITS.example} value={help[k].example} onChange={(e) => onChange({ ...help, [k]: { ...help[k], example: e.target.value } })} />
+            <TextBox className="fl-box" aria-label={`${label}: ${LINE_NAMES[k]} example`} minRows={1} maxRows={6} maxLength={LIMITS.example} value={help[k].example} onChange={(e) => onChange({ ...help, [k]: { ...help[k], example: e.target.value } })} />
           </label>
         </fieldset>
       ))}
@@ -103,7 +103,7 @@ function ListsEditor({ lists, onChange }: { lists: ChoiceLists; onChange: (l: Ch
       {(Object.keys(LIST_NAMES) as (keyof ChoiceLists)[]).map((k) => (
         <label key={k} className="wt-field">
           <span className="set-label">{LIST_NAMES[k]}</span>
-          <TextBox aria-label={`${LIST_NAMES[k]} choices`} minRows={3} maxRows={12} value={lists[k].join("\n")} onChange={(e) => onChange({ ...lists, [k]: e.target.value.split("\n").map((s) => s.replace(/\s+/g, " ").replace(/^ /, "")) })} />
+          <TextBox className="fl-box" aria-label={`${LIST_NAMES[k]} choices`} minRows={3} maxRows={12} value={lists[k].join("\n")} onChange={(e) => onChange({ ...lists, [k]: e.target.value.split("\n").map((s) => s.replace(/\s+/g, " ").replace(/^ /, "")) })} />
         </label>
       ))}
     </div>
@@ -215,7 +215,7 @@ export function AdminTemplates() {
               {LINE_KEYS.map((k) => (
                 <label key={k} className="wt-field">
                   <span className="set-label">{LINE_NAMES[k]}</span>
-                  <TextBox aria-label={`Why ${LINE_NAMES[k]} matters`} minRows={1} maxRows={4} maxLength={LIMITS.why} value={doc.why[k]} onChange={(e) => setDoc({ ...doc, why: { ...doc.why, [k]: e.target.value } })} />
+                  <TextBox className="fl-box" aria-label={`Why ${LINE_NAMES[k]} matters`} minRows={1} maxRows={4} maxLength={LIMITS.why} value={doc.why[k]} onChange={(e) => setDoc({ ...doc, why: { ...doc.why, [k]: e.target.value } })} />
                 </label>
               ))}
             </div>

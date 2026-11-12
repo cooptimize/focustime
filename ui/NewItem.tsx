@@ -370,7 +370,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         {error && <p className="set-problem" role="alert">{error}</p>}
         <div className="wd-actions">
           {canWrite && (
-            <button type="button" className="commit" disabled={!ready} onClick={() => void create()}>
+            <button type="button" className="commit" disabled={!ready} title="Ctrl+Enter" aria-keyshortcuts="Control+Enter" onClick={() => void create()}>
               {busy ? "Opening the preview…" : "Create in DevOps"}
             </button>
           )}
@@ -380,7 +380,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           <button type="button" className="mini quiet" disabled={busy} onClick={close}>
             Cancel
           </button>
-          <span className="muted">{canWrite ? "Nothing is created until you confirm the preview (Ctrl+Enter)." : "Saved in FocusTime only."}</span>
+          <span className="muted">{canWrite ? "Nothing is created until you confirm the preview." : "Saved in FocusTime only."}</span>
         </div>
       </div>
     </div>

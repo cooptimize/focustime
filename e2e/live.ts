@@ -20,6 +20,7 @@ import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { CHROMIUM } from "./harness.ts";
 import { createOrgRuntime, type OrgRuntime } from "../actions/org.ts";
+import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
 import { createAdminStore, FOCUSTIME, type AdminStore } from "../store/admin-store.ts";
 import { sqliteDb } from "../test/db.ts";
 import { createAdminCheck } from "../actions/admin.ts";
@@ -132,6 +133,8 @@ export async function liveContext(o: LiveOptions = {}): Promise<ActionContext> {
     saveSystemUserId: async () => {},
     now: () => NOW,
     plan,
+    // TP-1: the team's work templates, in their own database (seeded on the first read).
+    templates: workTemplatesStoreOn(sqliteDb().conn, () => NOW),
     ...o.extra,
   };
 }

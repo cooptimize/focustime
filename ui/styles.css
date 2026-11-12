@@ -6967,3 +6967,8 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 .sc-reqtype { font-weight: 500; }
 .sc-ready { padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 99px; font-size: var(--fs-2); color: var(--text-muted); }
 .sc-ready.ready { color: var(--text); }
+.fl-box { font: inherit; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.fl-box::placeholder { color: var(--text-muted); }
+.fl-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fl-grid .fl-head { display: block; line-height: 1.35; }
+.fl-grid .fl-head .fl-help { margin-left: 4px; vertical-align: middle; }

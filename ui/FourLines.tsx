@@ -4,7 +4,7 @@
 // on hover; the box names it for a screen reader). Wherever the answer comes from a short list there is a choice
 // instead of typing: Environment and Touches, Checked by, Done when it is, Signed off by and Not without asking, each
 // with "Other" for what the list can't cover. Everything is optional; nothing here is ever required.
-import { useId, useState, type FocusEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import { activeTypes, fullExample, helpFor, LINE_KEYS, LINE_NAMES, lineWords, typeById, type Brief, type LineKey, type WorkTemplates, type Who } from "../plan/work-templates.ts";
 import { usePeople } from "./ahead/Editors.tsx";
 import type { ListOption } from "./CellPopover.tsx";
@@ -152,7 +152,33 @@ function PeopleSelect({ label, clientKey, value, onPick }: { label: string; clie
  */
 export function FourLines({ doc, brief, onChange, clientKey, layout = "grid", readOnly = false }: { doc: WorkTemplates; brief: Brief; onChange: (b: Brief) => void; clientKey: string | null; layout?: "grid" | "stack"; readOnly?: boolean }) {
   const base = useId();
-  const [active, setActive] = useState<LineKey | null>(null);
+  const [active, setActiveNow] = useState<LineKey | null>(null);
+  // Showing or hiding an example moves what is under it. With a mouse or a finger down, the change waits until it is
+  // released, so the press that moved focus still lands on the control it started on (keyboard focus shows at once).
+  const pressing = useRef(false);
+  const pending = useRef<((a: LineKey | null) => LineKey | null) | null>(null);
+  useEffect(() => {
+    const down = () => void (pressing.current = true);
+    const up = () => {
+      pressing.current = false;
+      const f = pending.current;
+      pending.current = null;
+      if (f) setTimeout(() => setActiveNow(f), 0);
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+  }, []);
+  const setActive = (f: (a: LineKey | null) => LineKey | null) => {
+    if (!pressing.current) return setActiveNow(f);
+    const before = pending.current;
+    pending.current = before ? (a) => f(before(a)) : f;
+  };
   const help = helpFor(doc, brief.type);
   const set = (p: Partial<Brief>) => onChange({ ...brief, ...p });
   const leave = (k: LineKey) => (e: FocusEvent<HTMLElement>) => {
@@ -188,7 +214,7 @@ export function FourLines({ doc, brief, onChange, clientKey, layout = "grid", re
         const id = `${base}-${k}`;
         const ex = help[k].example;
         return (
-          <div key={k} className={`fl-line${active === k ? " active" : ""}`} data-line={k} onFocus={() => setActive(k)} onBlur={leave(k)}>
+          <div key={k} className={`fl-line${active === k ? " active" : ""}`} data-line={k} onFocus={() => setActive(() => k)} onBlur={leave(k)}>
             <span className="fl-head">
               <label className="set-label" htmlFor={id}>
                 {LINE_NAMES[k]}
