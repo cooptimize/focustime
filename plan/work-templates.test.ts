@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { aBrief } from "../test/builders/index.ts";
 import {
   acceptanceText, briefEmpty, briefFromJson, BriefError, checkTemplates, descriptionHtml, descriptionText, fullExample, LINE_KEYS, LINE_NAMES, lineWords, linesHtml, newTag, parseBrief,
-  readFilled, readiness, readinessText, readLines, SEED, slugOf, TAG_PATTERN, templateChanges, typeOfTags, typeTag, type WorkTemplates,
+  readFilled, readiness, readinessText, readLines, SEED, slugOf, TAG_PATTERN, templateChanges, typeOfTags, templateTag, type WorkTemplates,
 } from "./work-templates.ts";
 
 const clone = (t: WorkTemplates): WorkTemplates => JSON.parse(JSON.stringify(t)) as WorkTemplates;
@@ -76,8 +76,8 @@ describe("acceptance and the tag", () => {
     expect(acceptanceText(aBrief({ check: "October: 31.2%", checkedBy: { name: "Sam", email: null } }))).toBe("October: 31.2%\nChecked by: Sam.");
   });
   it("the tag only when a type is chosen", () => {
-    expect(typeTag(SEED, aBrief())).toBeNull();
-    expect(typeTag(SEED, aBrief({ type: "new-measure" }))).toBe("type:new-measure");
+    expect(templateTag(SEED, aBrief())).toBeNull();
+    expect(templateTag(SEED, aBrief({ type: "new-measure" }))).toBe("type:new-measure");
   });
 });
 

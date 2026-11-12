@@ -99,7 +99,7 @@ function TypeEditor({ t, view, tags, onChange, onRemove, onMove, first, last }: 
 function ListsEditor({ lists, onChange }: { lists: ChoiceLists; onChange: (l: ChoiceLists) => void }) {
   return (
     <div className="wt-editor">
-      <p className="muted">One choice per line, at most {LIMITS.listItems} each. People can always pick Other and type their own.</p>
+      <p className="muted">One choice per line, at most {LIMITS.listItems} each. People can always choose Other and type their own.</p>
       {(Object.keys(LIST_NAMES) as (keyof ChoiceLists)[]).map((k) => (
         <label key={k} className="wt-field">
           <span className="set-label">{LIST_NAMES[k]}</span>

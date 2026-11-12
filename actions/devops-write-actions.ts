@@ -19,7 +19,7 @@ import type { TakesStore } from "../store/devops-takes.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boundary.ts";
 import { TAGS_FIELD } from "../plan/devopswrite.ts";
-import { acceptanceText, BriefError, descriptionHtml as briefHtml, descriptionText, LINE_KEYS, parseBrief, readFilled, readLines, TAG_PREFIX, typeById, typeTag, type Brief, type WorkTemplates } from "../plan/work-templates.ts";
+import { acceptanceText, BriefError, descriptionHtml as briefHtml, descriptionText, LINE_KEYS, parseBrief, readFilled, readLines, TAG_PREFIX, typeById, templateTag, type Brief, type WorkTemplates } from "../plan/work-templates.ts";
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
@@ -1015,7 +1015,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         }
       } else if (o.brief !== undefined && o.brief !== null) throw new Refused("Work templates aren't available here. Create it without the four lines", 409);
       if (o.noTag !== undefined && typeof o.noTag !== "boolean") throw new Invalid("noTag must be true or false");
-      const tag = doc && o.noTag !== true ? typeTag(doc, brief) : null;
+      const tag = doc && o.noTag !== true ? templateTag(doc, brief) : null;
       const typedAcceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
       const acceptance = [typedAcceptance, acceptanceText(brief)].filter((x): x is string => !!x).join("\n\n") || null;
       const descHtml = brief ? briefHtml(description, brief) : null;

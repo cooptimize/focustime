@@ -180,7 +180,7 @@ export function acceptanceText(b: Brief | null): string | null {
 }
 
 /** The tag a create adds when a type is chosen ("type:new-measure"), or null. */
-export function typeTag(t: WorkTemplates, b: Brief | null): string | null {
+export function templateTag(t: WorkTemplates, b: Brief | null): string | null {
   const x = typeById(t, b?.type);
   return x && TAG_PATTERN.test(x.tag) ? `${TAG_PREFIX}${x.tag}` : null;
 }
