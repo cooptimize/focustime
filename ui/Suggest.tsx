@@ -1,10 +1,12 @@
 // SG-1: the board's suggestions as people see them. An empty block's suggested to-dos sit in its card in the dotted
-// style (type icon, title; a click or + keeps it, × clears it, a drag keeps it on the block it lands on), under one
-// small line "Suggested · Keep all · Clear". A day with any says "5 suggested · Keep all · Clear" in Day's header
-// row and in its header on Week. They are offers: they count against nothing, never nag and leave as soon as the
+// style (type icon, title; a click or + keeps it, × clears it, a drag keeps it on the block it lands on). PS-1: a block
+// with two or more has one quiet line "Suggested · Keep all · Clear" (one alone has none: its + and × are enough), and
+// a day whose suggestions are in two or more blocks says "5 suggested · Keep all · Clear" in Day's header row and in
+// its header on Week (plan/suggestlines.ts). They are offers: they count against nothing, never nag and leave as soon as the
 // block has work of its own. The rule is plan/boardsuggest.ts; keeping and clearing are in ui/Carry.tsx.
 import type { Suggestion } from "../plan/boardsuggest.ts";
 import { blockName } from "../plan/suggest.ts";
+import { blockLineShows, dayLineShows } from "../plan/suggestlines.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { useSuggest, type SuggestApi } from "./Carry.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -44,7 +46,7 @@ export function BlockSuggestions({ date, half, tabIndex = 0, where = "card" }: {
   const block = blockName({ date, half });
   return (
     <div className={`sug-block sug-${where}`} role="group" aria-label={`Suggested for ${block}`}>
-      <p className="sug-line">
+      {blockLineShows(here.length) && <p className="sug-line">
         <span className="sug-word" title="Offers from your unfinished to-dos and your backlog. Nothing is planned until you keep it">
           Suggested
         </span>
@@ -56,7 +58,7 @@ export function BlockSuggestions({ date, half, tabIndex = 0, where = "card" }: {
         <button type="button" className="link-btn sug-clear" tabIndex={tabIndex} onClick={(e) => act(e, () => void sg.clear({ scope: "block", date, half }, `suggestions for ${block}`))} aria-label={`Clear the suggestions for ${block}`} title="No suggestions on this block for the rest of the day">
           Clear
         </button>
-      </p>
+      </p>}
       <ul className="sug-list">
         {here.map((s) => (
           <SuggestRow key={s.key} s={s} sg={sg} tabIndex={tabIndex} panel={where === "panel"} />
@@ -75,7 +77,7 @@ function SuggestRow({ s, sg, tabIndex, panel }: { s: Suggestion; sg: SuggestApi;
       <button type="button" className="sug-take" tabIndex={tabIndex} title={tip} aria-label={`${s.title}, suggested. ${s.reason}. Keep it`} onClick={(e) => act(e, keep)}>
         {s.itemType && <TypeIcon clientKey={s.clientKey} type={s.itemType} decorative />}
         <span className="sug-title">{s.title}</span>
-        {s.needsBreakdown && <span className="sug-needs">Needs breakdown</span>}
+        {s.needsBreakdown && <span className="sug-needs">Needs stories</span>}
       </button>
       <button type="button" className={panel ? "mini sug-keep" : "sug-plus"} tabIndex={tabIndex} title="Keep it on this block" aria-label={`Keep ${s.title}`} onClick={(e) => act(e, keep)}>
         {panel ? "Keep" : "+"}
@@ -92,7 +94,7 @@ export function DaySuggestLine({ date, className = "", tabIndex = 0 }: { date: I
   const sg = useSuggest();
   if (!sg?.on) return null;
   const all = sg.onDay(date);
-  if (!all.length) return null;
+  if (!dayLineShows(all.map((s) => s.at))) return null;
   const day = dayWord(date);
   return (
     <p className={`sug-day ${className}`.trim()} role="group" aria-label={`Suggested for ${day}`}>
