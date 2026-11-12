@@ -10,6 +10,7 @@ import type { AheadLoad } from "../../actions/types.ts";
 import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
 import { cleared, dateWords, filterCount, notHere, PEOPLE_WORDS, peopleWord, RANGE_WORDS, RANGES, summary, type AheadModeKey } from "../../plan/ahead-view.ts";
 import { atLevel, collapseAll, expandAll, LEVELS, type Fold } from "../../plan/gantt-tree.ts";
+import { START_RULE } from "../../plan/readiness.ts";
 import { CellPopover, Segmented } from "../CellPopover.tsx";
 import { DatePicker } from "../DatePicker.tsx";
 import { MenuCtx } from "../Menus.tsx";
@@ -63,13 +64,15 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
     const wholeOff = notHere(mode, "whole", ctx);
     const auto = load.clients.filter((c) => c.scope?.automatic && !c.scope.all);
     const names = auto.map((c) => c.clientName).join(", ");
+    const scopeCounts = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("; ");
     const scopeWords = `${f.whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for ${names}`;
     const items: MenuItem[] = [
       { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll()) },
       { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll()) },
       // Callouts are the Gantt's; in the Grid the item stays, saying why (it's found where it was looked for).
-      { id: "callouts", group: "View", label: "Callouts at the end of bars", checked: view.callouts, ...(callOff ? { disabled: callOff, expected: true } : { run: () => view.setCallouts(!view.callouts) }) },
-      { id: "whole", group: "View", label: "Show the whole project", checked: !!f.whole, ...(wholeOff ? { disabled: wholeOff, expected: true } : { run: () => setWhole(!f.whole) }) },
+      { id: "callouts", group: "View", label: "Callouts at the end of bars", toggle: true, checked: view.callouts, ...(callOff ? { disabled: callOff, expected: true } : { run: () => view.setCallouts(!view.callouts) }) },
+      // The counts per client ("Northwind Foods: 14 of 19 open items are Cooptimize's work") as its hint.
+      { id: "whole", group: "View", label: "Show the whole project", toggle: true, checked: !!f.whole, ...(scopeCounts ? { hint: scopeCounts } : {}), ...(wholeOff ? { disabled: wholeOff, expected: true } : { run: () => setWhole(!f.whole) }) },
       ...(auto.length
         ? [
             admin
@@ -268,7 +271,7 @@ type KindKey = keyof typeof KIND_LABELS;
  * BL-1: Needs attention's one line, under the toolbar while it's on: "Why these?" (the rule), the counts by kind and
  * Stale (each narrows to that kind; again shows every kind), and my progress this week.
  */
-export function AttentionLine({ counts, stale, f, set, progress, staleWeeks }: { counts: Record<KindKey, number>; stale: number; f: AheadFilters; set: (f: AheadFilters) => void; progress: string | null; staleWeeks: number }) {
+export function AttentionLine({ start, counts, stale, f, set, progress, staleWeeks }: { /** AH-7: Start here, the most urgent few (on: only those). */ start: { on: boolean; n: number; toggle: () => void }; counts: Record<KindKey, number>; stale: number; f: AheadFilters; set: (f: AheadFilters) => void; progress: string | null; staleWeeks: number }) {
   const [why, setWhy] = useState(false);
   const kinds = f.kinds ?? [];
   const only = (k: KindKey | "stale") => {
@@ -294,6 +297,11 @@ export function AttentionLine({ counts, stale, f, set, progress, staleWeeks }: {
           Items you can change near the top of each backlog, dated in the next 4 weeks, or yours, that are missing stories, a target date, an owner or a size, or have had no change in DevOps for {staleWeeks} weeks. In backlog order: work from the top.
         </span>
       </span>
+      {start.n > 0 && (
+        <button type="button" className={`ah-fx-kind ah-fx-start-btn${start.on ? " on" : ""}`} aria-pressed={start.on} title={start.on ? "Show everything that needs attention again" : `Only the ${start.n} most urgent. ${START_RULE}`} onClick={start.toggle}>
+          Start here <strong>{start.n}</strong>
+        </button>
+      )}
       {(Object.keys(KIND_LABELS) as KindKey[]).map((k) => chip(k, KIND_LABELS[k], counts[k]))}
       {chip("stale", "Stale", stale)}
       {progress && <span className="muted ah-fx-progress">{progress}</span>}

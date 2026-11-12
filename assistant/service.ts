@@ -75,7 +75,7 @@ export function asksToConfirm(text: string): "day" | "week" | null {
 }
 
 /** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
-export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Ahead, Status and Inbox. Week is the week grid of blocks. Day is one day's blocks, any date. A block's panel opens beside either one from "+ Add" or a click on the block: what's on the block, its meetings, and one box to add work ("Add work", "Details", "Plan the week", "Plan today" and "the Board" are old names for it). Taking a to-do off the plan puts it back to not placed; dropping it marks it dropped. Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
+export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Backlog (called Ahead before), Status and Inbox. Week is the week grid of blocks. Day is one day's blocks, any date. A block's panel opens beside either one from "+ Add" or a click on the block: what's on the block, its meetings, and one box to add work ("Add work", "Details", "Plan the week", "Plan today" and "the Board" are old names for it). Taking a to-do off the plan puts it back to not placed; dropping it marks it dropped. Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Ahead has Grid, Gantt, Gaps (items missing stories, a target date, an owner or a size) and Backlog (each client's backlog order; Stale is an open item unchanged for weeks). "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
 
 const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 
@@ -878,7 +878,7 @@ export function createAssistant(env: AssistantEnv) {
         } else if (raw !== null && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Refusal("A date is YYYY-MM-DD");
         const label = { start: "Start date", target: "Target date", size: "Size", assignee: "Owner" }[field];
         const before = field === "start" ? f.item.start : field === "target" ? f.item.target : field === "size" ? (f.item.size === null ? null : String(f.item.size)) : (f.item.assignee?.name ?? null);
-        const preview = plain("Add to your Ahead change set", `#${f.item.id} ${f.item.title}`, [{ label, before: before ?? "None", after }], ["Nothing is written to DevOps until you save your change set in Ahead."]);
+        const preview = plain("Add to your Backlog change set", `#${f.item.id} ${f.item.title}`, [{ label, before: before ?? "None", after }], ["Nothing is written to DevOps until you save your change set in Ahead."]);
         return { view: base("ahead.stage", f.clientKey, `${label} of #${f.item.id}: ${after}`, preview, "Only you, until you save the change set"), held: { tool, args, run: { action: "ahead.stage", input: { clientKey: f.clientKey, itemId: f.item.id, field, value, half: null } } }, snapshot: { rev: f.item.rev, before } };
       }
       case "send": {
@@ -1156,7 +1156,7 @@ export function createAssistant(env: AssistantEnv) {
         if (typeof args.target === "string" && args.target) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(args.target)) throw new Refusal("A date is YYYY-MM-DD");
           rows.push({ label: "Target date", before: f.item.target ?? "None", after: args.target });
-          notes.push("The target date goes into your Ahead change set; nothing is written to DevOps for it until you save the change set.");
+          notes.push("The target date goes into your Backlog change set; nothing is written to DevOps for it until you save the change set.");
           steps.push({ action: "ahead.stage", input: { clientKey: f.clientKey, itemId: f.item.id, field: "target", value: args.target, half: null }, meta: { label: "Target date" } });
           labels.push(`a target date of ${args.target}`);
         }
@@ -1400,7 +1400,7 @@ export function createAssistant(env: AssistantEnv) {
       if (held.tool === "plan_deployment") return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: p.window ? windowText(p.window) : null, done: false, link: link(`#/week/day/${p.date}`, `Open ${dayWords(p.date)}`) }, message: "Deployment planned" };
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
-    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", add_to_week: "Added to the week", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
+    const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", add_to_week: "Added to the week", ahead_change: "In your change set. Save it in Backlog to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
     const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], add_to_week: ["#/week/add", "Open Week"], ahead_change: ["#/backlog", "Open Backlog"], send: ["#/week/add", "Open Week"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
     const [h, l] = hrefs[held.tool] ?? ["#/day", "Open Day"];
     return { ok: true, result: { kind: "note", text: messages[held.tool] ?? "Done", link: link(h, l) }, message: messages[held.tool] ?? "Done" };
@@ -1463,7 +1463,7 @@ export function createAssistant(env: AssistantEnv) {
         parts.push(res.confirmed ? { label, ok: true, message: res.message, undo: { kind: "devops", id: res.entry.id } } : { label, ok: false, message: res.message });
       } else {
         const r = await env.run(st.action, st.input);
-        parts.push(r.ok ? { label, ok: true, message: "In your Ahead change set. Save it in Ahead to write it to DevOps" } : { label, ok: false, message: r.error });
+        parts.push(r.ok ? { label, ok: true, message: "In your Backlog change set. Save it in Backlog to write it to DevOps" } : { label, ok: false, message: r.error });
       }
     }
     const ok = parts.filter((p) => p.ok);

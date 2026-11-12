@@ -44,6 +44,8 @@ export type MenuItem = {
   aka?: readonly string[];
   /** RF-1: a status dot after the label (Status in the phone's ⋯), with its reason for screen readers. */
   mark?: { tone: "amber" | "red"; text: string };
+  /** BL-1: an on/off item (Callouts, Show the whole project): a menuitemcheckbox, its `checked` read out. */
+  toggle?: boolean;
   /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
   typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */

@@ -159,6 +159,10 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
   const toggle = (r: Row, open?: boolean) => setFold((f) => setRow(f, r, open ?? !isOpenRow(f, r)));
   const foldClient = (k: string) => setFolded((xs) => (xs.includes(k) ? xs.filter((x) => x !== k) : [...xs, k]));
   const ticks = !a.readOnly;
+  // BH-1: each client's stale count, and its rows that can be ticked (all of them at once from its header).
+  const weeks = a.load.staleWeeks ?? 6;
+  const staleOf = (g: GridGroup) => g.rows.filter((r) => !r.context && isOpen(r.item) && isStale(r.item, a.load.today, weeks)).length;
+  const pickable = (g: GridGroup) => g.rows.filter((r) => !r.context);
   return (
     <div className={`ah-grid-box lay-${layout} shape-${shape}${sel.size ? " has-sel" : ""}`} onKeyDown={(e) => e.key === "Escape" && sel.size > 0 && !editing && (e.stopPropagation(), setSel(new Set()))}>
       {ticks && <BulkBar chosen={chosen} titleOf={(k, id) => byKey.get(`${k}:${id}`)?.item.title ?? ""} select={(keys) => setSel(new Set(keys))} onChanged={onChanged ?? (() => null)} />}
@@ -180,7 +184,18 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
                 <span className="muted ah-client-counts">
                   · {plural(g.count, "item", "items")}
                   {g.need > 0 && shape !== "attention" ? ` · ${g.need} need attention` : ""}
+                  {staleOf(g) > 0 ? ` · ${staleOf(g)} stale` : ""}
                 </span>
+              )}
+              {ticks && open && pickable(g).length > 1 && (
+                <label className="ah-client-all">
+                  <input type="checkbox" checked={pickable(g).every((r) => sel.has(r.key))} onChange={(e) => setSel((s) => {
+                    const n = new Set(s);
+                    for (const r of pickable(g)) e.target.checked ? n.add(r.key) : n.delete(r.key);
+                    return n;
+                  })} />
+                  <span className="sr-only">Select all {pickable(g).length} shown in {c.clientName}</span>
+                </label>
               )}
               {c.lead && <span className="muted">· you're a lead here</span>}
               {c.status === "ok" && g.rankedBy === "target" && (

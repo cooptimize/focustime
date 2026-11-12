@@ -34,7 +34,7 @@ import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-v
 import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts";
 import { isBool, usePref } from "./prefs.ts";
 import { AttentionLine, Toolbar, type AheadViewState } from "./Toolbar.tsx";
-import { kindCounts, progressText, type Skips } from "../../plan/readiness.ts";
+import { kindCounts, progressText, startHere, type Skips } from "../../plan/readiness.ts";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
@@ -69,6 +69,11 @@ export type AheadEnv = {
 };
 export const AheadCtx = createContext<AheadEnv | null>(null);
 export const useAhead = () => useContext(AheadCtx)!;
+
+/** BL-1: an old address's preset not yet applied (see Ahead). */
+let pendingPreset: AheadPreset | null = null;
+/** The filters last set in this page: a read of my saved filters that answers after a change here never undoes it. */
+let pageFilters: AheadFilters | null = null;
 
 export function Ahead({ data, mode, item, preset = null, switcher, onChanged, readOnly }: { data: WeekLoadData; mode: AheadMode; item: number | null; /** BL-1: an old address's filter (#/ahead/fix, #/ahead/backlog), applied once. */ preset?: AheadPreset | null; switcher?: React.ReactNode; onChanged: () => void; readOnly: boolean }) {
   const win = useWindowScale();
@@ -136,7 +141,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       );
     } catch (e) {
       // A quiet reread that fails keeps what's showing, without a banner (the next signal tries again).
-      if (!quiet) setError(e instanceof Error ? e.message : "Could not read Ahead");
+      if (!quiet) setError(e instanceof Error ? e.message : "Could not read the Backlog");
     } finally {
       if (!quiet) setBusy(false);
     }
@@ -167,7 +172,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
       return f;
     };
-    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink({ ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(DEFAULT_FILTERS)));
+    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(pageFilters ?? DEFAULT_FILTERS)));
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
   const flatOn = !!filters?.flat;
@@ -177,23 +182,35 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       void reload(false, true);
     }
   }, [flatOn, reload]);
-  // BL-1: an old address lands with its filter on: #/ahead/fix with Needs attention, #/ahead/backlog with stories only.
-  const presetDone = useRef<AheadPreset | null>(null);
+  // BL-1: an old address lands with its filter on: #/ahead/fix with Needs attention, #/ahead/backlog with stories only,
+  // each as its old mode was (the other off). The address is rewritten to #/backlog right away, often before my saved
+  // filters arrive, so the preset waits in a ref until they do.
+  // Once per arrival: the address keeps the preset while it stays, so it is taken only when it changes. It waits
+  // outside the component: on arrival Backlog can mount twice before the filters come, the second time without it.
+  const lastPreset = useRef<AheadPreset | null>(null);
+  if (lastPreset.current !== preset) {
+    lastPreset.current = preset;
+    if (preset) pendingPreset = preset;
+  }
   useEffect(() => {
-    if (!filters || !preset || presetDone.current === preset) return;
-    presetDone.current = preset;
-    if (preset === "attention" && !filters.gaps) setFilters({ ...filters, gaps: true });
-    if (preset === "stories" && filters.flat !== "story") setFilters({ ...filters, flat: "story" });
+    const p = pendingPreset;
+    if (!filters || !p) return;
+    pendingPreset = null;
+    const { flat: _f, ...rest } = filters;
+    if (p === "attention" && (!filters.gaps || filters.flat)) setFilters({ ...rest, gaps: true });
+    if (p === "stories" && (filters.flat !== "story" || filters.gaps)) setFilters({ ...filters, flat: "story", gaps: false, kinds: [] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset, filters]);
 
   const setFilters = (f: AheadFilters) => {
+    pageFilters = f;
     setFiltersRaw(f);
     void call("ahead.set_filters", { filters: f }).catch(() => null);
   };
   // AH-2: "Show the whole project" changes what the server reads, so it's saved first, then Ahead reads again.
   const setWhole = async (whole: boolean) => {
     const next = { ...(filters ?? DEFAULT_FILTERS), whole };
+    pageFilters = next;
     setFiltersRaw(next);
     await call("ahead.set_filters", { filters: next }).catch(() => null);
     await reload();
@@ -256,7 +273,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     if (!justMade || !load || !filters) return;
     const why = hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`);
     const there = load.clients.some((c) => c.clientKey === justMade.clientKey && c.items.some((i) => i.id === justMade.id));
-    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? `Created #${justMade.id}. Shown until you leave Ahead. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}` });
+    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? `Created #${justMade.id}. Shown until you leave Backlog. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}` });
     setJustMade(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justMade, load]);
@@ -326,6 +343,10 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const attentionN = unkinded.length;
   const needOf = useMemo(() => new Map(fix.map((x) => [x.client.clientKey, x.unkinded.filter((e) => !e.leaving).length] as const)), [fix]);
   const [moreOf, setMoreOf] = useState<ReadonlySet<string>>(new Set());
+  // AH-7, BL-1: Start here: the 5 most urgent of Needs attention across the clients shown (the rule in its tooltip).
+  const [startOn, setStartOn] = useState(false);
+  const starts = useMemo(() => new Set(startHere(fix.flatMap((x) => x.group.entries.filter((e) => !e.leaving).map((entry, rank) => ({ entry, rank, date: entry.due ?? null, mine: entry.mine === true })))).map((e) => e.key)), [fix]);
+  const startNow = startOn && attention && starts.size > 0;
   const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
   // With Needs attention on, Stale is one of its reasons (an either-or with the kinds), so the list doesn't narrow by it too.
   const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat, ...(f.gaps ? { stale: false } : {}) }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
@@ -350,8 +371,9 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       return load.clients
         .filter((c) => !f.clients.length || f.clients.includes(c.clientKey))
         .map((c) => {
-          const x = byClient.get(c.clientKey);
-          if (!x) return { client: c, rows: [], rankedBy: rankedBy(c), count: 0, need: 0 };
+          const x0 = byClient.get(c.clientKey);
+          if (!x0) return { client: c, rows: [], rankedBy: rankedBy(c), count: 0, need: 0 };
+          const x = startNow ? { ...x0, group: { ...x0.group, entries: x0.group.entries.filter((e) => starts.has(e.key)) } } : x0;
           const all = moreOf.has(c.clientKey);
           const n = x.group.entries.length;
           const byId = new Map(x.rows.map((r) => [r.item.id, r] as const));
@@ -373,7 +395,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     }
     return shown.map((g) => ({ client: g.client, rows: g.rows, rankedBy: rankedBy(g.client), count: g.rows.filter((r) => !r.context).length, need: need(g.client.clientKey) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, shape, flat, fix, shown, moreOf, needOf, attention, f.clients]);
+  }, [load, shape, flat, fix, shown, moreOf, needOf, attention, f.clients, startNow, starts]);
   /** BL-1: Needs attention on the Gantt: the same items, under their parents for context. */
   const ganttGroups: Group[] = useMemo(() => {
     if (!load || !attention) return shown;
@@ -454,7 +476,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       </div>
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
       {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} attention={attentionN} color={color} extra={mode === "gantt" ? <LegendButton /> : null} />}
-      {load && attention && <AttentionLine counts={kinds} stale={staleN} f={f} set={setFilters} progress={progressText(load.fixedWeek ?? 0, pendingFixes)} staleWeeks={staleWeeks} />}
+      {load && attention && <AttentionLine start={{ on: startNow, n: starts.size, toggle: () => setStartOn(!startOn) }} counts={kinds} stale={staleN} f={f} set={setFilters} progress={progressText(load.fixedWeek ?? 0, pendingFixes)} staleWeeks={staleWeeks} />}
       {load && <ScopeProblems load={load} />}
       {error && <p className="error" role="alert">{error}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}

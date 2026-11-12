@@ -150,7 +150,7 @@ export async function gapsRead(d: ReadDeps, client: string): Promise<ReadResult>
   const a = await data<AheadLoad>(d.run("ahead.load", {}));
   if (typeof a === "string") return fail(a);
   const c = a.clients.find((x) => x.clientKey === client && d.isMine(x.clientKey));
-  if (!c) return fail(`${d.clientName(client)} isn't in Ahead for you`);
+  if (!c) return fail(`${d.clientName(client)} isn't in Backlog for you`);
   const rows = buildRows(a, c).filter((r) => r.tier !== "story" && r.gaps.length && isOpen(r.item)).sort((x, y) => (x.eff.target ?? "9999").localeCompare(y.eff.target ?? "9999")).slice(0, 8);
   const cards: Card[] = rows.map((r) => ({ ...itemCard(d, { clientKey: c.clientKey, clientName: c.clientName, item: r.item, children: c.items.filter((i) => i.parentId === r.item.id), tier: r.tier, parent: null, editable: r.editable }), state: `${r.item.state} · ${r.gaps.map((g) => GAP_WORDS[g]).join(", ")}` }));
   if (!cards.length) cards.push({ kind: "note", text: `No readiness gaps on ${c.clientName}'s features and epics.`, link: d.link("#/ahead/fix", "Open Needs attention") });

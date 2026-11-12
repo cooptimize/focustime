@@ -265,7 +265,7 @@ function capabilities(ctx: AnswerContext, link: LinkFn): Composed {
   if (c) add(`What did I get done this week for ${c.name}?`);
   add("Which promises are late?");
   add("What's on my plate tomorrow?");
-  const reply = "I answer questions about your plan and make changes you confirm: moving to-dos, confirming a day or week, updating DevOps items, dates and owners in Ahead, sends, captures, deployments and closing the loop. Nothing changes until you press Confirm. Some things to try, from your week:";
+  const reply = "I answer questions about your plan and make changes you confirm: moving to-dos, confirming a day or week, updating DevOps items, dates and owners in Backlog, sends, captures, deployments and closing the loop. Nothing changes until you press Confirm. Some things to try, from your week:";
   return { reply, sections: [{ title: "Try asking", lines: ex.map((text) => ({ text })) }], suggestions: ex.slice(0, 6).map((s) => ({ label: s, say: s })), refs: refsOf(ctx, [], [], []), links: [link("#/commands", "Open the command menu"), link("#/guide/ask", "Read Ask in the Guide")] };
 }
 

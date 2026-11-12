@@ -6815,3 +6815,5 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .shape-attention .ah-grid .w-ready { width: 22em; }
 .shape-attention .ah-status { flex-wrap: nowrap; }
 .ah-tb-end .pa-legend-pop { left: auto; right: 0; }
+/* BL-1: a client's Select all, at the end of its header line (a 28px target). */
+.ah-client-head .ah-client-all { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; margin-inline-start: auto; cursor: pointer; }
