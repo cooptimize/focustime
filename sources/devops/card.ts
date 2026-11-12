@@ -82,6 +82,7 @@ export function parseCard(o: { raw: Raw; url: string; related: readonly Raw[]; c
     target: day(f[TARGET]),
     descriptionHtml: str(f["System.Description"]) || str(f["Microsoft.VSTS.TCM.ReproSteps"]),
     acceptanceHtml: str(f[ACCEPTANCE_FIELD]),
+    tags: str(f["System.Tags"]).split(";").map((t) => t.trim()).filter(Boolean).slice(0, 50),
     parent,
     grandparent,
     children: rel.children.map((id) => parseLink(byId.get(id))).filter((x): x is CardLink => !!x),

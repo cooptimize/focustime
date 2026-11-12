@@ -10,6 +10,8 @@ export const ME_EMAIL = "you@example.com";
 export const ME_NAME = "Alex Rivera";
 
 export type DemoItem = {
+  /** TP-1: DevOps tags (System.Tags), once written. */
+  tags?: string[];
   /** TX-1: DevOps Remaining Work, once written. */
   remainingWork?: number | null;
   clientKey: DemoClientKey;
@@ -137,6 +139,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     if (i.acceptance) f[AC] = i.acceptance;
     if (i.remainingWork != null) f["Microsoft.VSTS.Scheduling.RemainingWork"] = i.remainingWork;
     if (i.createdBy) f["System.CreatedBy"] = i.createdBy;
+    if (i.tags?.length) f["System.Tags"] = i.tags.join("; ");
     return f;
   }
   const relationsOf = (i: DemoItem) => [...(i.parent !== null ? [{ rel: "System.LinkTypes.Hierarchy-Reverse", url: apiUrl(orgOf(i.clientKey), i.parent) }] : []), ...[...items.values()].filter((c) => c.parent === i.id).map((c) => ({ rel: "System.LinkTypes.Hierarchy-Forward", url: apiUrl(orgOf(i.clientKey), c.id) })), ...i.relations];
@@ -164,6 +167,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     else if (k === S) i.start = remove ? null : day(v);
     else if (k === "Microsoft.VSTS.Scheduling.RemainingWork") i.remainingWork = remove || v === null ? null : Number(v);
     else if (k === sizeRefOf(i.clientKey)) i.size = remove || v === null || v === "" ? null : Number(v);
+    else if (k === "System.Tags") i.tags = remove ? [] : String(v ?? "").split(";").map((t) => t.trim()).filter(Boolean);
     else if (k === "System.AreaPath") i.area = String(v ?? i.area);
     else if (k === "System.IterationPath") i.iteration = String(v ?? i.iteration);
     else if (k === "System.AssignedTo") {
@@ -228,6 +232,10 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
         }
       }
       if (!it.title.trim()) return json({ message: "TF401320: Rule Error for field Title. Error code: Required" }, 400);
+      // TP-1: Harbor's demo project doesn't let the demo person add tags it hasn't seen (DevOps' Create tag definition
+      // permission), so the New form's "create it without the tag" can be tried. The whole create is refused, as DevOps does.
+      const known = new Set([...items.values()].filter((x) => x.clientKey === clientKey).flatMap((x) => x.tags ?? []).map((t) => t.toLowerCase()));
+      if (clientKey === "Harbor" && (it.tags ?? []).some((t) => !known.has(t.toLowerCase()))) return json({ message: "You don't have permission to create a new tag in this project. Ask a project administrator for Create tag definition." }, 400);
       items.set(it.id, it);
       mark(clientKey, it.id);
       return json(view(it));

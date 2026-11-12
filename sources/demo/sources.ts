@@ -162,7 +162,7 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
           assignee: i.who === ME ? ME_NAME : i.who, iteration: i.iteration || null, area: i.area || null,
           size: portfolio ? null : { label: clientKey === "Harbor" ? "Effort" : "Story Points", value: i.size },
           remainingWork: remaining ? (i.remainingWork ?? null) : null, hasRemainingWork: remaining,
-          start: i.start, target: i.target, descriptionHtml: i.description, acceptanceHtml: i.acceptance,
+          start: i.start, target: i.target, descriptionHtml: i.description, acceptanceHtml: i.acceptance, tags: i.tags ?? [],
           parent: link(parent), grandparent: link(gp),
           children: world.items(clientKey).filter((x) => x.parent === i.id).map((x) => link(x)!),
           comments, commentCount: comments.length, url: itemUrlOf(clientKey, i.id), changedAt: i.changedAt, breakDown: !!typeOf(demoProcess(clientKey, await processOverrides(clientKey)), i.type)?.needsBreakdown,

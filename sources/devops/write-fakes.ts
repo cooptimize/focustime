@@ -41,7 +41,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Scheduling.Effort", name: "Effort", type: "double" },
 ];
 
-export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: a portfolio level above Epics (Domain). */ domain?: boolean; /** QC-1: fields a type always requires, with no default (the create is refused without them). */ required?: Record<string, readonly string[]> } = {}) {
+export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: a portfolio level above Epics (Domain). */ domain?: boolean; /** QC-1: fields a type always requires, with no default (the create is refused without them). */ required?: Record<string, readonly string[]>; /** TP-1: the person may not create tags here (a create naming a tag no item has is refused whole). */ noNewTags?: boolean } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
@@ -122,6 +122,9 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
       const missing = (opts.required?.[m[1]!] ?? []).find((r) => !sent.has(r));
       if (missing) return json({ message: `TF401320: Rule Error for field ${missing.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.` }, 400);
       if (!STATES[m[1]!] && m[1] !== "Task") return json({ message: `TF401326: Invalid work item type ${m[1]}` }, 400);
+      const tagsSent = (body as { path: string; value: unknown }[]).find((o) => o.path === "/fields/System.Tags")?.value;
+      const knownTags = new Set([...items.values()].flatMap((i) => String(i.fields["System.Tags"] ?? "").split(";").map((t) => t.trim().toLowerCase()).filter(Boolean)));
+      if (opts.noNewTags && typeof tagsSent === "string" && tagsSent.split(";").some((t) => t.trim() && !knownTags.has(t.trim().toLowerCase()))) return json({ message: "TF401289: You don't have permission to create new tags." }, 400);
       const it: FakeItem = { id: nextId++, rev: 1, fields: { "System.WorkItemType": m[1], "System.State": "New", "System.CreatedBy": who.email }, relations: [] };
       for (const op of body as { op: string; path: string; value: unknown }[]) {
         if (op.path.startsWith("/fields/")) {

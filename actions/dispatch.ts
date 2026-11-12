@@ -999,6 +999,8 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
     // SR-1: a comment edit only inside the client's status report window (Kat's last send, else Monday 7:00 AM ET).
+    // TP-1: the team's templates for a create's four lines, and the count of items made with each type.
+    templates: ctx.templates ? { read: () => ctx.templates!.read(), used: (tag, complete) => ctx.templates!.used(tag, complete) } : undefined,
     reportSince: async (cfg, clientKey) => {
       const r = await katSentFor(ctx, cfg, [clientKey]).catch(() => null);
       return reportWindow(r?.ok ? (r.sent[clientKey] ?? null) : null, Temporal.Instant.from(ctx.now())).since;
@@ -1233,6 +1235,7 @@ function newItemContext(ctx: ActionContext): NewItemContext {
       return hits ? hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, url: i.url, parentId: i.parentId })) : null;
     },
     canWrite: async (key) => !!ctx.devopsWriter && !!ctx.writePats && !!(await ctx.plan?.devopsIdentity(key).catch(() => null)),
+    templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
   };
 }
 
@@ -1276,6 +1279,7 @@ function itemCardContext(ctx: ActionContext): ItemCardContext {
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     scope: ctx.plan ?? ctx,
     now: ctx.now,
+    templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
   };
 }
 

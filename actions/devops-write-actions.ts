@@ -18,6 +18,8 @@ import { dateOnly, detectTargetField, detectTypeSizeField, fieldNames, htmlToTex
 import type { TakesStore } from "../store/devops-takes.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boundary.ts";
+import { TAGS_FIELD } from "../plan/devopswrite.ts";
+import { acceptanceText, BriefError, descriptionHtml as briefHtml, descriptionText, LINE_KEYS, parseBrief, readFilled, readLines, TAG_PREFIX, typeById, typeTag, type Brief, type WorkTemplates } from "../plan/work-templates.ts";
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
@@ -87,6 +89,8 @@ export type DevOpsWriteContext = {
    * refused for a comment counted before it. Absent: comment edits aren't available here.
    */
   reportSince?: ((cfg: AppConfig, clientKey: string) => Promise<string>) | undefined;
+  /** TP-1: the team's work templates (the four lines' request types) and the count of items created with each. Absent: no four lines here. */
+  templates?: { read: () => Promise<{ doc: WorkTemplates }>; used: (tag: string, complete: boolean) => Promise<void> } | undefined;
 };
 
 /** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
@@ -238,7 +242,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string; /** QC-1: the clock, for the twin check. */ now: () => string };
+type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string; /** QC-1: the clock, for the twin check. */ now: () => string; /** TP-1 */ templates: DevOpsWriteContext["templates"] };
 
 /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
 async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, clientKey: string): Promise<Env> {
@@ -259,7 +263,7 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   } catch {
     throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
   }
-  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey), now: ctx.now };
+  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey), now: ctx.now, templates: ctx.templates };
 }
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -708,7 +712,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention", "assignTo", "size"]);
+  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention", "assignTo", "size", "brief", "noTag"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -998,7 +1002,23 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         else assignee = { email, text: email };
       }
       const description = o.description !== undefined ? str(o.description, "description", 8000, true) : (draft?.description ?? null);
-      const acceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
+      // TP-1: the four lines (the form's, else the draft's), written only here at create: under their headings in the
+      // description, "How we'll check" in the acceptance field when the type has it, and one request type tag.
+      const doc = env.templates ? (await env.templates.read()).doc : null;
+      let brief: Brief | null = null;
+      if (doc) {
+        try {
+          brief = o.brief !== undefined ? parseBrief(o.brief, doc) : draft?.brief ? parseBrief({ ...draft.brief, type: typeById(doc, draft.brief.type) ? draft.brief.type : null }, doc) : null;
+        } catch (e) {
+          if (e instanceof BriefError) throw new Invalid(e.message);
+          throw e;
+        }
+      } else if (o.brief !== undefined && o.brief !== null) throw new Refused("Work templates aren't available here. Create it without the four lines", 409);
+      if (o.noTag !== undefined && typeof o.noTag !== "boolean") throw new Invalid("noTag must be true or false");
+      const tag = doc && o.noTag !== true ? typeTag(doc, brief) : null;
+      const typedAcceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
+      const acceptance = [typedAcceptance, acceptanceText(brief)].filter((x): x is string => !!x).join("\n\n") || null;
+      const descHtml = brief ? briefHtml(description, brief) : null;
       const date = o.date !== undefined && o.date !== null && o.date !== "" ? isoDate(o.date, "date") : o.date === undefined ? (draft?.targetDate ?? null) : null;
       const startDay = draft?.startDate ?? null;
       const sizeIn = o.size === undefined || o.size === null || o.size === "" ? null : Number(o.size);
@@ -1017,7 +1037,11 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const acField = !!acceptance && typeHas.has(AC_FIELD);
       const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
       const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
-      const ops = [...createOps({ org, title, description, acceptance, acField, assignedTo: assignee?.email ?? null, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, startDate, targetDate, timeZone: tz }), ...(sizeField && sizeIn !== null ? [{ op: "add" as const, path: `/fields/${sizeField}`, value: sizeIn }] : [])];
+      const ops = [
+        ...createOps({ org, title, description: descHtml ?? description, descriptionIsHtml: descHtml !== null, acceptance, acField, assignedTo: assignee?.email ?? null, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, startDate, targetDate, timeZone: tz }),
+        ...(sizeField && sizeIn !== null ? [{ op: "add" as const, path: `/fields/${sizeField}`, value: sizeIn }] : []),
+        ...(tag ? [{ op: "add" as const, path: `/fields/${TAGS_FIELD}`, value: tag }] : []),
+      ];
       // A required field this create leaves empty, that DevOps has no default for: say so now, never half-create.
       const missing = missingRequired(info, new Set(ops.filter((x) => x.path.startsWith("/fields/")).map((x) => x.path.slice(8))));
       if (missing.length) throw new Refused(`${env.projectName}'s process needs ${missing.map((f) => f.name ?? f.ref).join(", ")} on a new ${type}, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft`, 409, "required_field");
@@ -1025,11 +1049,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const twin = await twinOf(plan, { clientKey: env.clientKey, title, type, parentId: parent?.id ?? null, draftId: draft?.id ?? null }, msOf(env.now()));
       if (twin) throw new Refused(twin.message, 409, "pending_write");
       const after: Record<string, string | null> = {
-        Type: type, Title: title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}),
+        Type: type, Title: title, Description: brief ? descriptionText(description, brief) : description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(tag ? { Tag: tag } : {}),
         "Assigned to": assignee?.text ?? "Nobody", ...(targetDate ? { "Target date": targetDate.date } : {}), ...(startDate ? { "Start date": startDate.date } : {}), ...(sizeField && sizeIn !== null ? { Size: String(sizeIn) } : {}),
         Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", Parent: parent ? `#${parent.id} ${parent.title}` : "None",
       };
-      const notes = [`Created as you: DevOps shows ${env.me.name} as who made it.`, ...(draft ? ["The draft becomes this item wherever it is placed, keeping its block, size and time."] : []), ...(assignee && assignee.email !== env.me.email ? ["DevOps tells them as it usually does; FocusTime sends no note of its own."] : [])];
+      const notes = [`Created as you: DevOps shows ${env.me.name} as who made it.`, ...(draft ? ["The draft becomes this item wherever it is placed, keeping its block, size and time."] : []), ...(assignee && assignee.email !== env.me.email ? ["DevOps tells them as it usually does; FocusTime sends no note of its own."] : []),
+        ...(brief && acceptanceText(brief) && !acField ? [`${type} has no acceptance criteria field in ${env.projectName}'s process, so "How we'll check" is only in the description.`] : []),
+        ...(tag ? [`Adds the tag ${tag} for the request type. If you may not add new tags in ${env.projectName}, DevOps refuses it and you can create the item without it.`] : [])];
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes, quick: true, aiText: !!draft?.ai && ((!!draft.ai.title && title === cleanTitleText(draft.ai.title)) || (!!draft.ai.description && description === draft.ai.description)) };
     }
     case "proposal_create": {
@@ -1572,7 +1598,18 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         id = found[0] ?? null;
       }
       if (id === null) {
-        const made = await writer.create(org, pat, project, entry.after.Type!, entry.ops as PatchOp[]);
+        let made: ItemSnapshot;
+        try {
+          made = await writer.create(org, pat, project, entry.after.Type!, entry.ops as PatchOp[]);
+        } catch (e) {
+          // TP-1: a refused create made nothing (DevOps applies a create's patch whole or not at all). When it carried
+          // the request type tag and DevOps names tags (or refuses with 403, the write PAT already checked), say so in
+          // plain words: the person can create it again without the tag.
+          const tagged = typeof (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value === "string";
+          if (tagged && e instanceof WriteFailure && ((e.kind === "rejected" && /\btags?\b/i.test(e.message)) || e.kind === "forbidden"))
+            return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tag ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag`, {}, { code: "tag_refused" });
+          throw e;
+        }
         id = made.id;
         (await plan.settleDevopsWrite(entry.id, { status: "pending", itemId: id }));
       }
@@ -1596,6 +1633,13 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (entry.conv && ctx.conversations) await ctx.conversations.created(entry.conv, { id, url, title: back.title });
       // QC-1: the read back goes straight into FocusTime's store, so every open screen shows the new item now (DV-2).
       await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
+      // TP-1: counted for Admin › Work templates (the tag and whether all four lines were filled; nothing else).
+      const typeTagOf = (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value;
+      if (typeof typeTagOf === "string" && typeTagOf.startsWith(TAG_PREFIX) && ctx.templates && !retry) {
+        const html = (entry.ops as PatchOp[]).find((p) => p.path === "/fields/System.Description")?.value;
+        const filled = readFilled(readLines(typeof html === "string" ? html : ""));
+        await ctx.templates.used(typeTagOf.slice(TAG_PREFIX.length), LINE_KEYS.every((k) => filled[k])).catch(() => {});
+      }
       forget();
       return settle("confirmed", `Created #${id} in DevOps`, { itemId: id, revAfter: back.rev, pickIds }, { itemId: id, url });
     }

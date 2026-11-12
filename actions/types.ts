@@ -377,7 +377,7 @@ export type DevOpsPreview = {
   /** GD-2: the other clients the text names: the preview flags them, with one click to replace; Confirm needs mentionsOk. */
   mentions?: string[];
 };
-export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
+export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; /** TP-1: why it didn't land, when the page can offer a way on ("tag_refused": create it again without the tag). */ code?: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
 /** FN-1: what Wrap it up offers for one item (devops.wrap_offer): its done states by category, the state a New item moves to, Remaining Work, my right to change it, its parent. */
