@@ -982,8 +982,15 @@ export function App() {
       keepDayPanel(false);
       goNav(navOf.todayOn(dayShown));
     } else goNav(closeAddNav());
-    // WK-5 review: looked up after the re-render (the columns may have folded or opened, replacing the cell).
-    requestAnimationFrame(() => requestAnimationFrame(() => cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true })));
+    // WK-5 review: looked up after the re-render (the columns may have folded or opened, replacing the cell), and only
+    // while nothing else has taken the focus meanwhile (Ctrl K right after Escape keeps its box).
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.isConnected) return;
+        cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+      }),
+    );
   };
   /** WD-2: "+ Add" in Day's header: the panel on that day's block under way (or its next), the cursor in the Add box. */
   const addOnDay = useCallback(
