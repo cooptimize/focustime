@@ -18,7 +18,8 @@ import { dayMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import type { IsoDate } from "../week/types.ts";
 import { DueBadge } from "./FollowUps.tsx";
-import { dayShare, weekFit, type Tier } from "./weekfit.ts";
+import { weekFit, type Tier } from "./weekfit.ts";
+import { focusIndex, foldOrder, longWeekday, stepShown } from "../plan/weekdays.ts";
 import { clientColor, eventRange, SampleSources, shortDate, shortRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import { type Layout } from "./viewport.ts";
@@ -31,7 +32,7 @@ import { useDropTarget } from "./WeekStories.tsx";
 import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
 import { NowLine } from "./NowLine.tsx";
 import { railNowOf, type RailNow } from "./Timeline.tsx";
-import { LiveOnCard, RulerCtx, TierCtx, TimelineCtx, type PanelFocus, type Selection } from "./weekctx.ts";
+import { LiveOnCard, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus, type Selection } from "./weekctx.ts";
 import { BlockCard, CardPick, CardPicks } from "./BlockCard.tsx";
 export type { PanelFocus, Selection } from "./weekctx.ts";
 export { CardWhen, LateChip, RulerPromises } from "./BlockCard.tsx";
@@ -67,6 +68,12 @@ type Props = {
   timeline?: boolean | undefined;
   /** WD-2: Day: only this day's column, with no day header, its blocks side by side when there's room. */
   only?: number | undefined;
+  /** WK-5: per day, whether Week shows it (the catch-up day and weekend days can be hidden); all by default. */
+  shown?: readonly boolean[] | undefined;
+  /** WK-5: what decides the day in focus: the block panel's day, a folded day opened with the panel closed (then today). */
+  focusAt?: { panel: IsoDate | null; chosen: IsoDate | null } | undefined;
+  /** WK-5: a folded day's click or Enter: it becomes the day in focus. */
+  onFoldOpen?: ((dayIndex: number) => void) | undefined;
 };
 
 export function WeekGrid(props: Props) {
@@ -100,7 +107,10 @@ export function WeekGrid(props: Props) {
       <MeetingCalls.Provider value={callMarks(mine)}>
         <LiveOnCard.Provider value={liveOn}>
           <TimelineCtx.Provider value={props.timeline ?? true}>
-            <Grid {...props} />
+            {/* WK-5: Week's cards put a to-do's time under its title; Day (one day, `only`) keeps it at the right. */}
+            <RowFormCtx.Provider value={props.only === undefined ? "stack" : "side"}>
+              <Grid {...props} />
+            </RowFormCtx.Provider>
           </TimelineCtx.Provider>
         </LiveOnCard.Provider>
       </MeetingCalls.Provider>
@@ -108,12 +118,13 @@ export function WeekGrid(props: Props) {
   );
 }
 
-function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact: compactIn, onDayHead, onAddWork, onAddHours, panelOpen, timeline = true, only }: Props) {
+function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact: compactIn, onDayHead, onAddWork, onAddHours, panelOpen, timeline = true, only, shown: shownIn, focusAt, onFoldOpen }: Props) {
   // WK-2: with the timeline hidden every layout draws compact cards (no hour timeline beside them).
   const compact = compactIn || !timeline;
   const pv = useContext(PlanCtx);
   const ref = useRef<HTMLElement>(null);
-  const box = useGridBox(ref, layout === "medium");
+  const box = useGridBox(ref, layout !== "narrow" && only === undefined);
+  const shown = shownIn ?? week.days.map(() => true);
   // U3: due badges, each follow-up once in the week (on its day, an overdue one on today).
   const badges = weekDueBadges(
     week.days.map((d) => ({
@@ -134,7 +145,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       day={day}
       dayIndex={i}
       tz={userZone(week)}
-      hasEve={week.days.some((d) => d.eve)}
+      hasEve={week.days.some((d, i) => shown[i] && d.eve)}
       colors={colors}
       minFocusWindow={minFocusWindow}
       isToday={day.date === today}
@@ -168,7 +179,13 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   if (layout === "narrow") {
     const i = selection.dayIndex;
     const swipe = { x: 0, y: 0 };
-    const go = (d: number) => onSelect({ dayIndex: Math.max(0, Math.min(week.days.length - 1, d)), half: selection.half });
+    // WK-5: hidden days have no tab and the arrows and swipes pass over them.
+    const go = (d: number) => {
+      const to = d === i ? i : stepShown(shown, i, d < i ? -1 : 1);
+      if (to >= 0) onSelect({ dayIndex: to, half: selection.half });
+    };
+    const first = shown.indexOf(true);
+    const last = shown.lastIndexOf(true);
     return (
       <main
         className={`grid narrow${timeline ? "" : " no-timeline"}`}
@@ -183,11 +200,11 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
         }}
       >
         <nav className="daybar" aria-label="Day">
-          <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous day">
+          <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i <= first} aria-label="Previous day">
             <kbd>←</kbd>
           </button>
           <div className="day-tabs">
-            {week.days.map((d, k) => (
+            {week.days.map((d, k) => !shown[k] ? null : (
               <button
                 key={d.date}
                 type="button"
@@ -200,7 +217,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
               </button>
             ))}
           </div>
-          <button type="button" className="day-step" onClick={() => go(i + 1)} disabled={i === week.days.length - 1} aria-label="Next day">
+          <button type="button" className="day-step" onClick={() => go(i + 1)} disabled={i >= last} aria-label="Next day">
             <kbd>→</kbd>
           </button>
         </nav>
@@ -208,16 +225,20 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       </main>
     );
   }
-  // Work days are full width; Friday, weekend days and PTO days lighter (WK-1: never wider than a working day). While
-  // planning, the planned day's track widens and the other days stay visible behind a dim. WK-1: in the medium layout
-  // the tier and any folding come from the grid's real width (weekfit.ts).
-  const hasEve = week.days.some((d) => d.eve);
-  const shares = week.days.map((d) => dayShare(d, false));
-  const fit = box && layout === "medium" ? weekFit({ contentPx: box.content, gapPx: box.gap, scale: box.scale, shares, selected: selection.dayIndex }) : null;
-  const tracks = fit?.tracks ?? shares.map((s) => `minmax(0, ${s}fr)`).join(" ");
-  const firstOpen = fit ? fit.open.indexOf(true) : 0;
-  // WK-2: each open column draws the tier of its own width (Friday and PTO days too); the grid's class keeps the
-  // working days' tier.
+  // WK-5: only the shown days take a column. The day in focus (the block panel's day, a folded day opened, else today)
+  // takes twice a working day's share; Friday, weekend days and PTO days are lighter (WK-1, WK-3). When a shown day
+  // can't have its narrowest readable width, days fold in a fixed order (weekfit.ts, plan/weekdays.ts). Every layout
+  // but the one-day ones.
+  const hasEve = week.days.some((d, i) => shown[i] && d.eve);
+  const idx = week.days.map((_, i) => i).filter((i) => shown[i]);
+  const focusAll = focusIndex(week.days, shown, { panel: focusAt?.panel ?? null, chosen: focusAt?.chosen ?? null, today });
+  const focus = idx.indexOf(focusAll);
+  const order = foldOrder(week.days, shown, focusAll, pv.today ?? today).map((i) => idx.indexOf(i));
+  const shownDays = idx.map((i) => week.days[i]!);
+  const fit = box ? weekFit({ contentPx: box.content, gapPx: box.gap, scale: box.scale, days: shownDays, focus, order }) : null;
+  const tracks = fit?.tracks ?? shownDays.map((d, k) => `minmax(0, ${k === focus ? 2 : d.kind === "weekend" ? 0.4 : d.kind === "work" && !d.pto ? 1 : 0.6}fr)`).join(" ");
+  // WK-2: each open column draws the tier of its own width (Friday and PTO days too); the grid's class keeps the focus
+  // day's (or a working day's) tier.
   return (
     <TierCtx.Provider value={layout === "medium" ? fit?.tier ?? "rail" : null}>
       <main
@@ -226,12 +247,13 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
         style={{ gridTemplateColumns: tracks, ...(fit ? { "--rail-w": `${fit.railPx}px` } : {}) } as CSSProperties}
         role="group"
         aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
+        data-focus-day={focusAll >= 0 ? week.days[focusAll]!.date : undefined}
       >
-        {week.days.map((d, i) =>
-          !fit || fit.open[i] ? (
-            column(d, i, fit?.days[i])
+        {idx.map((i, k) =>
+          !fit || fit.open[k] ? (
+            column(week.days[i]!, i, layout === "medium" ? fit?.days[k] : undefined)
           ) : (
-            <FoldedDay key={d.date} day={d} dayIndex={i} tz={userZone(week)} hasEve={hasEve} colors={colors} isToday={d.date === today} now={now} side={i < firstOpen ? "before" : "after"} onSelect={onSelect} />
+            <FoldedDay key={week.days[i]!.date} day={week.days[i]!} dayIndex={i} tz={userZone(week)} hasEve={hasEve} colors={colors} isToday={week.days[i]!.date === today} now={now} side={focus >= 0 && k > focus ? "after" : "before"} selected={selection.dayIndex === i} cellRefs={cellRefs} onOpen={() => (onFoldOpen ? onFoldOpen(i) : onSelect({ dayIndex: i, half: "AM" }))} />
           ),
         )}
       </main>
@@ -587,12 +609,14 @@ export function EveningBandView({ band, date, tz, dayLabel }: { band: EveningBan
 
 
 /**
- * WK-1: a folded day (the week didn't fit with every day open): a narrow strip with the weekday and date, its AM and PM
- * halves in the client's colour (each a drop target with the usual fit tip, highlighted while a story is over it), the
- * at-risk dot, PTO hatched or Catch-up dashed, and today's now line. A click (or the arrow keys) selects it, which
- * opens it and moves the window.
+ * WK-1, WK-5: a folded day (the shown days didn't all fit at their narrowest readable width): a narrow strip with the
+ * weekday and date, "Today" when it is today, and one mark per block in its client's colour with its count of open
+ * to-dos (each a drop target, as before), PTO hatched or Catch-up dashed, and today's now line. A click, or Enter on its
+ * header, makes it the day in focus (it opens; another folds if needed). Its title and screen reader name say the day,
+ * its blocks and their counts. The arrow keys stop on its header (selecting it doesn't move widths).
  */
-function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, onSelect }: { day: Day; dayIndex: number; tz: string; hasEve: boolean; colors: Record<string, string>; isToday: boolean; now: string; side: "before" | "after"; onSelect: (s: Selection) => void }) {
+function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, selected, cellRefs, onOpen }: { day: Day; dayIndex: number; tz: string; hasEve: boolean; colors: Record<string, string>; isToday: boolean; now: string; side: "before" | "after"; selected: boolean; cellRefs: Map<string, HTMLDivElement>; onOpen: () => void }) {
+  const pv = useContext(PlanCtx);
   const whole = wholeDay(day);
   const halves = cardHalves(day);
   const dayLabel = `${day.weekday} ${shortDate(day.date)}`;
@@ -601,49 +625,66 @@ function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, onSe
   const last = day.eve ? "EVE" : "PM";
   const at = (half: Half): number | null =>
     !spot ? null : spot.kind === "rail" ? (spot.half === half ? spot.at : null) : spot.kind === "before" ? (half === "AM" ? 0 : null) : spot.kind === "after" ? (half === last ? 1 : null) : null;
-  const open = (half: Half) => onSelect({ dayIndex, half });
+  const picks = (pv.week?.[day.date]?.picks ?? []).filter((p) => p.status === "planned");
+  const count = (half: Half | null) => picks.filter((p) => half === null || p.half === half).length;
   const rows: (Half | null)[] = hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
+  const marks = whole || day.kind === "weekend" ? [{ half: null as Half | null, name: foldName(day, null, whole), n: count(null) }] : halves.map((h) => ({ half: h as Half | null, name: foldName(day, h, whole), n: count(h) }));
+  const todo = (n: number) => `${n} to-do${n === 1 ? "" : "s"}`;
+  const words = `${dayLabel}${isToday ? ", today" : ""}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}: ${marks.map((m) => `${m.half ? `${m.half === "EVE" ? "evening" : m.half} ` : ""}${m.name}, ${todo(m.n)}`).join("; ")}`;
+  const ref = (el: HTMLButtonElement | null) => {
+    for (const h of ["AM", "PM", "EVE"] as Half[]) {
+      if (el) cellRefs.set(`${dayIndex}${h}`, el as unknown as HTMLDivElement);
+      else if (cellRefs.get(`${dayIndex}${h}`)?.classList.contains("fold-open")) cellRefs.delete(`${dayIndex}${h}`);
+    }
+  };
   return (
-    <section className={`day folded fold-${side}${isToday ? " today" : ""}${day.pto ? " pto-full" : ""}`} aria-label={`${dayLabel}, folded${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
+    <section className={`day folded fold-${side}${isToday ? " today" : ""}${day.pto ? " pto-full" : ""}${day.kind === "weekend" ? " weekend" : ""}${day.date < (pv.today ?? "") ? " past-day" : ""}`} aria-label={`${dayLabel}, folded`}>
       <header className="day-head fold-head">
-        <button type="button" className="fold-open" onClick={() => open("AM")} title={`Open ${dayLabel}`} aria-label={`Open ${dayLabel}`}>
+        <button ref={ref} type="button" className="fold-open" tabIndex={selected ? 0 : -1} onClick={onOpen} title={`${words}. Open ${longWeekday(day.date)}`} aria-label={`${words}. Open ${longWeekday(day.date)}`}>
           <span className="dow">{day.weekday.slice(0, 3)}</span>
           <span className="date">{Temporal.PlainDate.from(day.date).day}</span>
+          {isToday && <span className="fold-today">Today</span>}
         </button>
       </header>
       <div className="day-allday empty" />
       <div className="day-out early empty" />
-      {whole ? (
-        <FoldHalf day={day} half="AM" whole={whole} dayIndex={dayIndex} dayLabel={dayLabel} colors={colors} now={spot?.kind === "whole" ? spot.at : null} nowLabel={nowLabel} onOpen={open} />
+      {whole || day.kind === "weekend" ? (
+        <FoldHalf day={day} half="AM" whole={whole ?? "catchup"} name={marks[0]!.name} count={marks[0]!.n} colors={colors} now={spot?.kind === "whole" ? spot.at : null} nowLabel={nowLabel} onOpen={onOpen} />
       ) : (
-        rows.map((h, k) => (h === null ? <div key={`gap-${k}`} className="half-gap" aria-hidden="true" /> : <FoldHalf key={h} day={day} half={h} whole={null} dayIndex={dayIndex} dayLabel={dayLabel} colors={colors} now={at(h)} nowLabel={nowLabel} onOpen={open} />))
+        rows.map((h, k) => (h === null ? <div key={`gap-${k}`} className="half-gap" aria-hidden="true" /> : <FoldHalf key={h} day={day} half={h} whole={null} name={foldName(day, h, null)} count={count(h)} colors={colors} now={at(h)} nowLabel={nowLabel} onOpen={onOpen} />))
       )}
       <div className="day-out late empty" />
     </section>
   );
 }
 
-function FoldHalf({ day, half, whole, dayLabel, colors, now, nowLabel, onOpen }: { day: Day; half: Half; whole: Whole; dayIndex: number; dayLabel: string; colors: Record<string, string>; now: number | null; nowLabel: string; onOpen: (h: Half) => void }) {
+/** What a folded block is: its client, PTO, Catch-up, Weekend, Open or Evening. */
+function foldName(day: Day, half: Half | null, whole: Whole): string {
+  if (whole === "pto") return offWord(day.pto);
+  if (day.kind === "weekend") return "Weekend";
+  if (whole === "catchup" || half === null) return "Catch-up";
+  const slot = slotOf(day, half)!;
+  return slot.pto ? "PTO" : slot.focus[0] ? slot.focus[0].clientName : slot.off ? "No working hours" : slot.open ? "Open" : half === "EVE" ? "Evening" : "Catch-up";
+}
+
+function FoldHalf({ day, half, whole, name, count, colors, now, nowLabel, onOpen }: { day: Day; half: Half; whole: Whole; name: string; count: number; colors: Record<string, string>; now: number | null; nowLabel: string; onOpen: () => void }) {
   const slot = slotOf(day, half)!;
   const primary = whole ? undefined : slot.focus[0];
   const sev = whole ? null : worstSeverity(slot.risks);
   const drop = useDropTarget(half === "EVE" || whole === "pto" ? (whole === "pto" ? { date: day.date, half: "AM" } : null) : { date: day.date, half });
-  const name = whole === "pto" ? offWord(day.pto) : whole === "catchup" ? "Catch-up" : slot.pto ? "PTO" : primary ? primary.clientName : slot.off ? "No working hours" : slot.open ? "Open" : half === "EVE" ? "Evening" : "Catch-up";
-  const words = `${dayLabel}${whole ? "" : ` ${half === "EVE" ? "evening" : half}`}, ${name}${sev === "at_risk" ? ", at risk" : sev === "watch" ? ", watch" : ""}`;
   const state = whole ? `whole ${whole}` : slot.pto ? "pto-half" : primary ? "focus" : slot.open ? "open" : "off";
   return (
     <div
       {...drop.props}
       className={`half fold-half ${state}${sev ? ` ${sev}` : ""}${drop.cls}`}
       style={{ "--c": clientColor(primary?.clientKey, colors) } as CSSProperties}
-      role="button"
-      tabIndex={-1}
-      aria-label={`${words}. Open ${day.weekday}`}
-      title={words}
-      onClick={() => onOpen(half)}
+      aria-hidden="true"
+      title={`${name}: ${count} to-do${count === 1 ? "" : "s"}`}
+      onClick={onOpen}
     >
-      {sev && <span className={`fold-risk ${sev}`} aria-hidden="true" />}
-      {now != null && <NowLine at={now} label={nowLabel} thin onClick={() => onOpen(half)} />}
+      {sev && <span className={`fold-risk ${sev}`} />}
+      {count > 0 && <span className="fold-count">{count}</span>}
+      {now != null && <NowLine at={now} label={nowLabel} thin onClick={onOpen} />}
       {drop.tip}
     </div>
   );
