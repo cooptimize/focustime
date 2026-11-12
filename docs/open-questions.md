@@ -739,3 +739,10 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Items drawn by time on Week's rail and Day's timeline (events, timeboxes, promises) are shorter than 28 px when they are short; their height is their length, so they are exempt from the target size. Give them a bigger hit area?
 - Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
 - On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?
+
+## NL-1
+
+- After the day (and before it), Week and Day still select the afternoon (or morning) block for the keyboard, with its outline, from the server's `today.half`. It is the keyboard cursor, not a now mark, so it stays; should the selection outside hours land somewhere quieter?
+- A block's hours are its working bounds. The early flex time that joins the morning's working windows (D122) sits before the morning block's start, so it gets no mark. Right?
+- CV-3's overdue promises are still drawn "at now" on today's home block (`homeRail`), clamped to a block outside hours. That is a promise, not a now mark, so it is unchanged here. Should it move too?
+

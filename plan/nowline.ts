@@ -1,10 +1,12 @@
 // UI-B: the "now" line on today's column (Week's Board, Today's agenda, Plan today). Pure: the caller passes the
-// clock and the person's zone; the line is drawn only on today, and only when the shown week has today.
+// clock and the person's zone; the line is drawn only on today, and only when the shown week has today. NL-1: and only
+// on the block whose hours the clock is inside; nowhere before, after or between the day's blocks.
 import type { IsoDate } from "../week/types.ts";
 
 const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 type View = { start: string; end: string };
-type DayLike = { date: IsoDate; am: { view: View }; pm: { view: View }; eve: { view: View } | null; pto: unknown; kind: string };
+type Block = View & { view: View; off?: boolean };
+type DayLike = { date: IsoDate; am: Block; pm: Block; eve: Block | null; pto: unknown; kind: string };
 
 /** Where on a rail (0 at its start, up to 1 at its end) now falls; null outside it. The end belongs to the next rail. */
 export function railAt(view: View, now: string): number | null {
@@ -21,31 +23,43 @@ export function nowClock(now: string, tz: string): string {
   return Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M$/, "");
 }
 
-export type NowSpot =
-  /** On one of the day's rails, at a fraction of it. */
-  | { kind: "rail"; half: "AM" | "PM" | "EVE"; at: number }
-  /** Before the first rail or after the last: the line sits in that edge, with the time. */
-  | { kind: "before" }
-  | { kind: "after" }
-  /** A PTO or catch-up day drawn as one cell: a thinner line at a fraction of the day's range. */
-  | { kind: "whole"; at: number; edge: "before" | "after" | null };
+/** NL-1: whether the clock is inside a block's own hours (its working bounds, not the wider timeline): from its start,
+ * up to but not including its end. The one rule for every "now" mark, line, tick, edge and row. */
+export function insideHours(hours: View, now: string): boolean {
+  const t = ms(now);
+  return ms(hours.start) <= t && t < ms(hours.end);
+}
 
-/** Where today's line goes in a day column; null when the day isn't today. `whole` says the day is one cell. */
+export type NowSpot =
+  /** On the rail of the block under way, at a fraction of the rail. */
+  | { kind: "rail"; half: "AM" | "PM" | "EVE"; at: number }
+  /** A PTO or catch-up day drawn as one cell, inside the day's hours: a thinner line at a fraction of the day's range. */
+  | { kind: "whole"; at: number }
+  /** NL-1: today, but no block is under way (before the first, after the last, or between two): nothing draws a mark.
+   * Kept apart from null so a block that has ended still reads as past. */
+  | { kind: "none" };
+
+/**
+ * Where today's line goes in a day column; null when the day isn't today. `whole` says the day is one cell. NL-1: a
+ * block gets the line only while the clock is inside its own hours (start to end, the end belonging to the next block);
+ * before the first block, after the last and in a gap between two there is no line anywhere (`none`).
+ */
 export function nowSpot(day: DayLike, now: string, tz: string, whole: boolean): NowSpot | null {
   if (day.date !== dateIn(now, tz)) return null;
-  const rails = [["AM", day.am.view], ["PM", day.pm.view], ...(day.eve ? [["EVE", day.eve.view] as const] : [])] as const;
-  const first = ms(rails[0][1].start);
-  const last = ms(rails[rails.length - 1]![1].end);
-  const t = ms(now);
+  const rails = [["AM", day.am], ["PM", day.pm], ...(day.eve ? [["EVE", day.eve] as const] : [])] as const;
   if (whole) {
-    const edge = t < first ? "before" : t >= last ? "after" : null;
-    return { kind: "whole", at: edge === "before" ? 0 : edge === "after" ? 1 : (t - first) / Math.max(1, last - first), edge };
+    const hours = { start: rails[0][1].start, end: rails[rails.length - 1]![1].end };
+    if (!insideHours(hours, now)) return { kind: "none" };
+    const [first, last] = [ms(rails[0][1].view.start), ms(rails[rails.length - 1]![1].view.end)];
+    return { kind: "whole", at: Math.min(1, Math.max(0, (ms(now) - first) / Math.max(1, last - first))) };
   }
-  for (const [half, view] of rails) {
-    const at = railAt(view, now);
+  for (const [half, slot] of rails) {
+    // A half with no working hours (a workday with none) keeps nominal bounds for its shape; it is never under way.
+    if (slot.off || !insideHours(slot, now)) continue;
+    const at = railAt(slot.view, now);
     if (at !== null) return { kind: "rail", half, at };
   }
-  return t < first ? { kind: "before" } : { kind: "after" };
+  return { kind: "none" };
 }
 
 /** Where the now row goes in a time-ordered agenda (row starts as ISO times or ms): before the first row that starts at
@@ -57,9 +71,9 @@ export function agendaNowIndex(starts: readonly (string | number)[], now: string
   return i < 0 ? starts.length : i;
 }
 
-/** Whether a block's agenda gets the now row: now is on its rail, or it is the morning and the day hasn't started. */
-export function ownsNow(view: View, half: string, now: string): boolean {
-  return railAt(view, now) !== null || (half === "AM" && ms(now) < ms(view.start));
+/** Whether a block's agenda gets the now row: only the block under way (NL-1: never the morning before the day starts). */
+export function ownsNow(block: View & { off?: boolean }, now: string): boolean {
+  return !block.off && insideHours(block, now);
 }
 
 /** HK-3: a box on a rail, in pixels from its top left. */

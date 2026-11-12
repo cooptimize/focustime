@@ -1,8 +1,9 @@
 // UI-B: the "now" line on today (plan/nowline.ts says where): a thin accent line with a dot and the time at its left end,
-// on a block's hour rail (with the past part of the rail dimmed), at the edge before or after the day, thinner on a PTO
-// or catch-up day, and as a row in an agenda. It moves with the app's clock; reduced motion means it jumps, no slide.
-// Clicking the time scrolls today into view (narrow windows and the phone). HK-3: on a compact rail the time moves off
-// an hour mark's label (just above or below it, or to the rail's right end); the line stays where it is.
+// on a block's hour rail (with the past part of the rail dimmed), thinner on a PTO or catch-up day, and as a row in an
+// agenda. NL-1: only on the block under way; nothing before, after or between the day's blocks. It moves with the app's
+// clock; reduced motion means it jumps, no slide. Clicking the time scrolls today into view (narrow windows and the
+// phone). HK-3: on a compact rail the time moves off an hour mark's label (just above or below it, or to the rail's
+// right end); the line stays where it is.
 import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { pillSpot, type Box, type PillSpot } from "../plan/nowline.ts";
 
@@ -78,16 +79,6 @@ export function NowLine({ at, label, thin = false, onClick, avoid }: { at: numbe
 /** The past part of a rail on today, dimmed (1 for a block that has ended). */
 export function NowPast({ at }: { at: number }) {
   return at > 0 ? <div className="now-past" style={{ height: pct(at) }} aria-hidden="true" /> : null;
-}
-
-/** Before or after the day's blocks (or on the phone, at the top of the block under way): a line in its own row. */
-export function NowEdge({ label, thin = false, onClick }: { label: string; thin?: boolean; onClick?: () => void }) {
-  return (
-    <div className={`now-line now-edge${thin ? " thin" : ""}`}>
-      <span className="nl-dot" aria-hidden="true" />
-      <Time label={label} onClick={onClick} />
-    </div>
-  );
 }
 
 /**

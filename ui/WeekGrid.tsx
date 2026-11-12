@@ -598,9 +598,8 @@ function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, onSe
   const dayLabel = `${day.weekday} ${shortDate(day.date)}`;
   const spot: NowSpot | null = isToday ? nowSpot(day, now, tz, !!whole) : null;
   const nowLabel = spot ? nowClock(now, tz) : "";
-  const last = day.eve ? "EVE" : "PM";
-  const at = (half: Half): number | null =>
-    !spot ? null : spot.kind === "rail" ? (spot.half === half ? spot.at : null) : spot.kind === "before" ? (half === "AM" ? 0 : null) : spot.kind === "after" ? (half === last ? 1 : null) : null;
+  // NL-1: only the half under way gets the line.
+  const at = (half: Half): number | null => (spot?.kind === "rail" && spot.half === half ? spot.at : null);
   const open = (half: Half) => onSelect({ dayIndex, half });
   const rows: (Half | null)[] = hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
   return (
