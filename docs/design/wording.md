@@ -140,3 +140,12 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - **+N**: more chips than fit on a card; it opens the block.
 - **Cards**, **Timeline**: the two layouts of Day and Week (Week's single "Timeline" toggle before).
 - **Holiday**: the day header's pill on an observed holiday; the day's cell, Day's header line and the panel say its name, "Thanksgiving Day (observed)", or "Holiday" when it has none. "Dataverse: holidays weren't read" with Retry when they couldn't be read.
+
+## WK-5 words (Nov 12)
+
+- **Show Friday**, **Show weekend**: Week's ⋯, group **Days** (the catch-up day by its own weekday name). **Every weekend day** (WK-3, was Weekend) stays under them while Show weekend is on. **Days on Week**: the same two switches in Settings › Display.
+- **"Fri hidden · 2 to-dos"**, **"Fri, Sat, Sun hidden · 3 to-dos · 1 promise due"**, **"Today (Fri) is hidden"**: the one note under Week's header, only when a hidden day has open to-dos or promises due or is today; **Show** after it (read as "Show hidden days") brings them back until you leave Week.
+- **Today**: the small mark on a folded day's strip that is today.
+- **"→ Thu"**, **"→ Mon 16"**: where a past day's moved to-do went. **"N more"**: a past block's rows past six; it opens the block. **"Nothing planned"**: a past block with none.
+- **"10:30–11:30 · 1h"**, **"· Outlook"**: a to-do's line under its title on Week's cards.
+- Retired from visible copy: QT-1's past-day line ("2 done · 1 unfinished", "1 moved on") on Week and Day's cards.

@@ -102,6 +102,7 @@ export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 /** reduceMotion (step 17.5): no sweep, unroll, hop or bob; the still pose shows and open and close cut straight to the result. */
 /** showPersonal (U5.1, D408): personal (Google) events shown on Week and Today; hidden ones still count in risk and free time. */
+/** showCatchUpDay, showWeekendDays (WK-5): whether Week shows the catch-up day and weekend days, by the day's kind; the person's own, both on by default. */
 /** IB-1: the Inbox's remembered view, clients (none: all) and grouping. */
 export const INBOX_VIEW_NAMES = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const;
 export const INBOX_GROUPS = ["client", "due", "kind"] as const;
@@ -111,8 +112,8 @@ export const INBOX_GROUPINGS = ["day", "client", "due", "status"] as const;
 export const DEFAULT_INBOX_STATUSES: readonly (typeof INBOX_VIEW_NAMES)[number][] = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done"];
 export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number]; sort: (typeof INBOX_SORTS)[number]; statuses: (typeof INBOX_VIEW_NAMES)[number][]; grouping: (typeof INBOX_GROUPINGS)[number] };
 export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client", sort: "newest", statuses: [...DEFAULT_INBOX_STATUSES], grouping: "day" };
-export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; inbox: InboxPrefs };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, inbox: DEFAULT_INBOX };
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; showCatchUpDay: boolean; showWeekendDays: boolean; inbox: InboxPrefs };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, inbox: DEFAULT_INBOX };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -476,7 +477,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [], statuses: [...DEFAULT_INBOX_STATUSES] } };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "reduce_motion", "text_size", "show_personal", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "reduce_motion", "text_size", "show_personal", "show_catch_up_day", "show_weekend_days", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -524,7 +525,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       if (typeof sp !== "boolean") err("ui.show_personal", "Must be true or false");
       else ui.showPersonal = sp;
     }
-    for (const [key, field] of [["today_timeline", "todayTimeline"], ["today_timeline_phone", "todayTimelinePhone"]] as const) {
+    for (const [key, field] of [["today_timeline", "todayTimeline"], ["today_timeline_phone", "todayTimelinePhone"], ["show_catch_up_day", "showCatchUpDay"], ["show_weekend_days", "showWeekendDays"]] as const) {
       const v = t?.[key];
       if (v === undefined) continue;
       if (typeof v !== "boolean") err(`ui.${key}`, "Must be true or false");

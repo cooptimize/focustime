@@ -58,7 +58,8 @@ const sun = (page: Page) => page.locator(`main.grid [data-drop="${SUN}:AM"].week
 /** Week's ⋯ › Weekend (the Show weekend switch). */
 async function switchWeekend(page: Page): Promise<void> {
   await page.locator(".week-head .more-btn, .week-head [aria-label='More for Week'], .week-head button[aria-haspopup=menu]").first().click();
-  await page.getByRole("menuitem", { name: /Weekend/ }).click();
+  // WK-5: WK-3's switch is "Every weekend day" now, under WK-5's Show weekend.
+  await page.getByRole("menuitem", { name: /^Every weekend day/ }).click();
   await page.waitForTimeout(500);
 }
 

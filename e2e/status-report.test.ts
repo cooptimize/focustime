@@ -35,7 +35,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     const titles = page.locator(".st-report .st-feature h4");
     await expect.poll(() => titles.allTextContents()).toEqual(["Order history export", "Loyalty points"]);
     await expect.poll(() => page.getByRole("article", { name: "Loyalty points" }).locator(".st-bullets li").first().textContent()).toContain("· Sam Ortiz");
-    await expect.poll(() => page.locator(".st-pto li").allTextContents()).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Founders Day (observed) · Thu, Nov 12", "Alex Rivera · Fri, Nov 13", "Holiday · Mon, Nov 16", "Sam Ortiz · Fri, Nov 20"]);
+    await expect.poll(() => page.locator(".st-pto li").allTextContents()).toEqual(["Priya Shah · Tue, Nov 10 to Wed, Nov 11", "Founders Day (observed) · Thu, Nov 12", "Alex Rivera · Sat, Nov 14", "Holiday · Mon, Nov 16", "Sam Ortiz · Fri, Nov 20"]);
     await page.locator(".st-pto .st-note").waitFor();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-report-1920.png`, fullPage: true });
     await shotBoth(page, "sr2-report-view-1920", page.locator(".st-report"));

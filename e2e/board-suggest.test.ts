@@ -28,13 +28,14 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B, 
     await row.waitFor({ timeout: 30_000 });
     expect(await row.locator(".sug-take").getAttribute("title")).toMatch(/^Unfinished from Mon/);
     expect(await wedPm.locator(".sug-row").first().innerText()).toContain("Filter orders by date range");
-    // QT-1: the original blocks are on past days, folded to one line; the to-do is not a second unchecked item.
-    expect(await page.locator(".half .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(0);
+    // The original blocks are on past days (WK-5: listed again, read only); the to-do is not a second unchecked item
+    // on any day still to come.
+    expect(await page.locator(".half:not(.past) .checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(0);
 
-    // Keep: a normal to-do on Wednesday afternoon; the original (folded) counts it as moved on. Undo puts it back.
+    // Keep: a normal to-do on Wednesday afternoon; the original (past) row says where it went. Undo puts it back.
     await row.locator(".sug-plus").click();
     await expect.poll(() => wedPm.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(1);
-    await expect.poll(() => page.locator(".half.folded .card-folded", { hasText: /moved on/ }).count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".half.past .past-moved", { hasText: "Filter orders by date range" }).count()).toBeGreaterThan(0);
     await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => row.count()).toBe(1);
     expect(await wedPm.locator(".checklist .pr-title", { hasText: "Filter orders by date range" }).count()).toBe(0);
