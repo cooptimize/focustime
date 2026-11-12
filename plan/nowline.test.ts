@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aPto, aWeek } from "../test/builders/index.ts";
+import { aPto, aWeek, aWeekConfig } from "../test/builders/index.ts";
 import { agendaNowIndex, nowClock, nowSpot, ownsNow, pillSpot, railAt, type Box } from "./nowline.ts";
 
 const NY = "America/New_York";
@@ -8,33 +8,89 @@ const week = aWeek({ pto: [aPto({ date: "2026-11-05" })] });
 const tue = week.days.find((d) => d.date === "2026-11-03")!;
 const thu = week.days.find((d) => d.date === "2026-11-05")!;
 
-describe("now line (UI-B)", () => {
-  it("sits at a block's start, middle and end on its rail", () => {
+describe("now line (UI-B, NL-1: only on a block under way)", () => {
+  it("sits on the block under way, at a fraction of its rail", () => {
     const am = tue.am.view;
     expect(railAt(am, am.start)).toBe(0);
     expect(railAt(am, am.end)).toBeNull();
-    const s = nowSpot(tue, at("2026-11-03T10:45"), NY, false);
+    const s = nowSpot(tue, at("2026-11-03T10:03"), NY, false);
     expect(s).toMatchObject({ kind: "rail", half: "AM" });
-    expect((s as { at: number }).at).toBeCloseTo((10.75 - 9) / (12.5 - 9));
-    // The AM rail's end is the PM rail's start.
-    expect(nowSpot(tue, am.end, NY, false)).toEqual({ kind: "rail", half: "PM", at: 0 });
+    expect((s as { at: number }).at).toBeCloseTo((10.05 - 9) / (12.5 - 9));
   });
 
-  it("sits in the gap before or after the day", () => {
-    expect(nowSpot(tue, at("2026-11-03T07:10"), NY, false)).toEqual({ kind: "before" });
-    expect(nowSpot(tue, at("2026-11-03T21:30"), NY, false)).toEqual({ kind: "after" });
+  it("shows at a block's exact start, not at its exact end; the next block takes it when it starts then", () => {
+    expect(nowSpot(tue, tue.am.start, NY, false)).toEqual({ kind: "rail", half: "AM", at: 0 });
+    expect(nowSpot(tue, tue.am.end, NY, false)).toEqual({ kind: "rail", half: "PM", at: 0 });
+    expect(nowSpot(tue, at("2026-11-03T12:30"), NY, false)).toMatchObject({ kind: "rail", half: "PM" });
+    expect(nowSpot(tue, tue.pm.end, NY, false)).toEqual({ kind: "none" });
   });
 
-  it("shows on a PTO day drawn as one cell, and only on today", () => {
-    expect(nowSpot(thu, at("2026-11-05T13:00"), NY, true)).toMatchObject({ kind: "whole", edge: null });
-    expect(nowSpot(thu, at("2026-11-05T06:00"), NY, true)).toEqual({ kind: "whole", at: 0, edge: "before" });
-    expect(nowSpot(tue, at("2026-11-05T13:00"), NY, false)).toBeNull();
+  it("shows nowhere before the day's first block or after its last", () => {
+    expect(nowSpot(tue, at("2026-11-03T06:30"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(tue, at("2026-11-03T22:03"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(tue, at("2026-11-03T00:00"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(tue, at("2026-11-03T23:59"), NY, false)).toEqual({ kind: "none" });
+  });
+
+  it("shows nowhere in a gap between two blocks whose hours don't touch (a lunch)", () => {
+    const w = aWeek({ config: aWeekConfig({ hours: { ...aWeekConfig().hours, lunch: { start: "12:00", end: "13:00" } } }) });
+    const d = w.days.find((x) => x.date === "2026-11-03")!;
+    // The morning's rail runs to the afternoon's start; the morning block's hours end at the lunch.
+    expect(railAt(d.am.view, at("2026-11-03T12:30"))).not.toBeNull();
+    expect(nowSpot(d, at("2026-11-03T11:59"), NY, false)).toMatchObject({ kind: "rail", half: "AM" });
+    expect(nowSpot(d, at("2026-11-03T12:00"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(d, at("2026-11-03T12:30"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(d, at("2026-11-03T13:00"), NY, false)).toEqual({ kind: "rail", half: "PM", at: 0 });
+  });
+
+  it("goes by the block's hours, not the wider timeline range (24 hours)", () => {
+    const w = aWeek({ viewRange: "24h" });
+    const d = w.days.find((x) => x.date === "2026-11-03")!;
+    expect(nowSpot(d, at("2026-11-03T06:30"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(d, at("2026-11-03T22:03"), NY, false)).toEqual({ kind: "none" });
+  });
+
+  it("on a day with an evening block: on it inside its hours, nowhere between the afternoon and it, nowhere after", () => {
+    const base = aWeekConfig().hours;
+    const hours = { ...base, overrides: [{ date: "2026-11-03", segments: [{ start: "09:00", end: "17:00" }, { start: "20:00", end: "22:00" }] }] };
+    const d = aWeek({ config: aWeekConfig({ hours }) }).days.find((x) => x.date === "2026-11-03")!;
+    expect(d.eve).not.toBeNull();
+    expect(nowSpot(d, at("2026-11-03T18:30"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(d, at("2026-11-03T20:00"), NY, false)).toMatchObject({ kind: "rail", half: "EVE" });
+    expect(nowSpot(d, at("2026-11-03T21:59"), NY, false)).toMatchObject({ kind: "rail", half: "EVE" });
+    expect(nowSpot(d, at("2026-11-03T22:00"), NY, false)).toEqual({ kind: "none" });
+    expect(nowSpot(d, at("2026-11-03T22:03"), NY, false)).toEqual({ kind: "none" });
+  });
+
+  it("a workday with no working hours (nominal bounds only) is never under way", () => {
+    const hours = { ...aWeekConfig().hours, overrides: [{ date: "2026-11-03", segments: [] }] };
+    const d = aWeek({ config: aWeekConfig({ hours }) }).days.find((x) => x.date === "2026-11-03")!;
+    expect(d.am.off && d.pm.off).toBe(true);
+    expect(nowSpot(d, at("2026-11-03T10:03"), NY, false)).toEqual({ kind: "none" });
+    expect(ownsNow(d.am, at("2026-11-03T10:03"))).toBe(false);
+  });
+
+  it("a whole-day cell (PTO, catch-up) gets a line only inside the day's hours", () => {
+    expect(nowSpot(thu, at("2026-11-05T13:00"), NY, true)).toMatchObject({ kind: "whole" });
+    expect(nowSpot(thu, thu.am.start, NY, true)).toEqual({ kind: "whole", at: 0 });
+    expect(nowSpot(thu, at("2026-11-05T06:30"), NY, true)).toEqual({ kind: "none" });
+    expect(nowSpot(thu, at("2026-11-05T22:03"), NY, true)).toEqual({ kind: "none" });
+    expect(nowSpot(thu, thu.pm.end, NY, true)).toEqual({ kind: "none" });
+    const fri = week.days.find((d) => d.date === "2026-11-06")!;
+    expect(nowSpot(fri, at("2026-11-06T10:03"), NY, true)).toMatchObject({ kind: "whole" });
+    expect(nowSpot(fri, at("2026-11-06T22:03"), NY, true)).toEqual({ kind: "none" });
+  });
+
+  it("is null on another day and in another week", () => {
+    expect(nowSpot(tue, at("2026-11-05T10:03"), NY, false)).toBeNull();
+    expect(nowSpot(tue, at("2026-11-10T10:03"), NY, false)).toBeNull();
+    expect(nowSpot(thu, at("2026-11-12T13:00"), NY, true)).toBeNull();
   });
 
   it("uses the person's zone for today and the time", () => {
-    // 01:30 in London on Wednesday is still Tuesday 20:30 in New York.
+    // 01:30 in London on Wednesday is still Tuesday 20:30 in New York: after the day, so no line.
     const now = at("2026-11-04T01:30", "Europe/London");
-    expect(nowSpot(tue, now, NY, false)).toEqual({ kind: "after" });
+    expect(nowSpot(tue, now, NY, false)).toEqual({ kind: "none" });
     expect(nowSpot(tue, now, "Europe/London", false)).toBeNull();
     expect(nowClock(now, NY)).toBe("8:30");
   });
@@ -49,11 +105,14 @@ describe("now line (UI-B)", () => {
     expect(agendaNowIndex(rows, at("2026-11-03T10:00"), "2026-11-04", NY)).toBeNull();
   });
 
-  it("is in one block's agenda only: the one under way, or the morning before the day", () => {
-    expect(ownsNow(tue.am.view, "AM", at("2026-11-03T07:00"))).toBe(true);
-    expect(ownsNow(tue.pm.view, "PM", at("2026-11-03T07:00"))).toBe(false);
-    expect(ownsNow(tue.am.view, "AM", at("2026-11-03T14:00"))).toBe(false);
-    expect(ownsNow(tue.pm.view, "PM", at("2026-11-03T14:00"))).toBe(true);
+  it("is in one block's agenda only, the one under way; never the morning before the day starts", () => {
+    expect(ownsNow(tue.am, at("2026-11-03T06:30"))).toBe(false);
+    expect(ownsNow(tue.pm, at("2026-11-03T06:30"))).toBe(false);
+    expect(ownsNow(tue.am, at("2026-11-03T10:03"))).toBe(true);
+    expect(ownsNow(tue.am, at("2026-11-03T14:00"))).toBe(false);
+    expect(ownsNow(tue.pm, at("2026-11-03T14:00"))).toBe(true);
+    expect(ownsNow(tue.pm, tue.pm.end)).toBe(false);
+    expect(ownsNow(tue.pm, at("2026-11-03T22:03"))).toBe(false);
   });
 });
 

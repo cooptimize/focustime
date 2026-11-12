@@ -2610,6 +2610,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "patterns.set_kind":
     case "patterns.check":
     case "patterns.download":
+    case "patterns.list_change":
+    case "patterns.suggestion":
       return patternsAction(patternsContext(ctx), action as PatternsAction, req.input);
     default: {
       const unhandled: never = action;
@@ -2629,6 +2631,19 @@ export function patternsContext(ctx: ActionContext): PatternsContext {
   const aiAllowed = async (k: string) => {
     const r = await rules();
     return !!r && r.ai.on && r.ai.allowedClients.includes(k);
+  };
+  // Every client the page covers, with its names, aliases and projects (the person's own from their directory), not only
+  // the person's own: the masking directory for a classification, and WP-3's check of a request type's words.
+  const patternsDirectory = async () => {
+    const port = ctx.patterns;
+    if (!port) return [];
+    const keys = await port.clients();
+    const cfg = await configured(ctx);
+    const mine = cfg ? await aiDirectory(ctx, cfg) : [];
+    const r = await rules();
+    const projectsOf = async (k: string) => (port.projects ? await port.projects(k).catch(() => []) : []);
+    const others = keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase()));
+    return [...mine, ...(await Promise.all(others.map(async (k) => ({ key: k, names: [], projects: await projectsOf(k), itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))))];
   };
   return {
     port: ctx.patterns ?? null,
@@ -2651,19 +2666,21 @@ export function patternsContext(ctx: ActionContext): PatternsContext {
       if (a === "not_set_up") return { why: NONE };
       if (a === "off") return { why: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI." };
       const keys = await ctx.patterns.clients();
-      const cfg = await configured(ctx);
-      const mine = cfg ? await aiDirectory(ctx, cfg) : [];
-      const r = await rules();
-      // Every client the run covers is in the masking directory, with its aliases, not only the person's own.
-      const port = ctx.patterns;
-      const projectsOf = async (k: string) => (port.projects ? await port.projects(k).catch(() => []) : []);
-      const others = keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase()));
-      const directory = [...mine, ...(await Promise.all(others.map(async (k) => ({ key: k, names: [], projects: await projectsOf(k), itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))))];
+      const directory = await patternsDirectory();
       const internal = new Set<string>();
       for (const k of keys) if (await isInternalKey(ctx.org, k)) internal.add(k);
       return { deps: { ai: service, aiAllowed, directory, isInternal: (k: string) => internal.has(k) } };
     },
+    // WP-3: client names for checking a request type's words, with AI on or off.
+    directory: () => patternsDirectory(),
     now: () => ctx.now(),
+    // WP-3: who changed the request types list, by their directory name.
+    async nameOf(userId) {
+      if (!ctx.org) return null;
+      const entry = (await ctx.org.levels()).people.entry(userId);
+      const pid = entry?.dir?.personId;
+      return pid ? ((await ctx.org.store.directory()).find((d) => d.personId === pid)?.name ?? null) : null;
+    },
   };
 }
 

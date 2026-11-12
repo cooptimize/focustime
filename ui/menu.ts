@@ -1246,7 +1246,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "patterns.set_scope":
     case "patterns.set_kind":
     case "patterns.check":
-    case "patterns.download": return { disabled: "Runs from the DevOps patterns page" };
+    case "patterns.download":
+    case "patterns.list_change":
+    case "patterns.suggestion": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":

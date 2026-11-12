@@ -1,10 +1,12 @@
-// WP-1, WP-2: the DevOps patterns store, ten app tables (store/migrations/20261130T1100_devops_patterns.ts and
-// 20261201T0900_patterns_scope.ts: the layout, each project's tree, the page's scopes and kinds). Written only by
+// WP-1, WP-2, WP-3: the DevOps patterns store, eleven app tables (store/migrations/20261130T1100_devops_patterns.ts,
+// 20261201T0900_patterns_scope.ts: the layout, each project's tree, the page's scopes and kinds, and
+// 20261202T0900_patterns_owned_list.ts: a person's list versions and the ignored "other" suggestions). Written only by
 // the patterns run and the page's own actions (actions/patterns.ts), which decide who may see what. No description,
 // acceptance or comment text, no person's name: items keep ids, type, state, dates, parent, title and numbers. Every
 // write is one transaction.
 import type { Conn, Row } from "./sql/conn.ts";
 import type { Facts, Labels, PatternItem, Platform, TypeList } from "../plan/patterns/types.ts";
+import type { VersionRow } from "../plan/patterns/owned.ts";
 import type { AnalysisScope, LayoutRow, ProjectTree } from "../plan/patterns/scope.ts";
 import type { Kind } from "../plan/patterns/kinds.ts";
 
@@ -43,7 +45,11 @@ export type ClientProgress = {
   /** WP-2 classification: the kinds this run uses (fixed at its start; a change applies to the next run). */
   kinds?: Record<string, Kind>;
 };
-export type Progress = { clients: Record<string, ClientProgress>; pass?: 1 | 2; listVersion?: string; /** 2 from WP-2. */ rules?: 2; /** WP-2: the clients pass 2's agreement sample covers. */ agreeOn?: string[] };
+/**
+ * `rules`: 2 from WP-2 (inventory runs keep 2); 3 for a WP-3 classification: one pass against the list in use, fixed in
+ * `listVersion` when it starts (a change to the list mid-run applies to the next run). `pass` is WP-2's only.
+ */
+export type Progress = { clients: Record<string, ClientProgress>; pass?: 1 | 2; listVersion?: string; rules?: 2 | 3; /** The clients the agreement sample covers. */ agreeOn?: string[] };
 export type Run = { id: number; kind: RunKind; state: RunState; startedBy: string; startedAt: string; heartbeatAt: string; finishedAt: string | null; owner: string; reason: string | null; progress: Progress; estimateMicros: number; spentMicros: number };
 export type LabelRow = { itemId: number; rev: number; labels: Labels; labelsB: Labels | null };
 
@@ -79,6 +85,18 @@ const itemOf = (r: Row): PatternItem => ({
   inWindow: n(r.in_window) === 1,
 });
 
+const listOf = (r: Row): TypeList => ({
+  version: String(r.version),
+  createdAt: String(r.created_at),
+  types: JSON.parse(String(r.list)),
+  changes: JSON.parse(String(r.changes)),
+  fingerprint: String(r.fingerprint),
+  by: s(r.made_by),
+  why: s(r.why),
+  base: s(r.base),
+  relabel: r.relabel === "all" || r.relabel === "other" ? r.relabel : null,
+});
+
 /** Only the numbers of Facts go into the facts column: never text, whatever a caller passes. */
 const factsJson = (f: Facts): string =>
   JSON.stringify({ descLen: n(f.descLen), acLen: n(f.acLen), tags: n(f.tags), estimate: !!f.estimate, comments: n(f.comments), closed: !!f.closed, ...(f.history ? { history: { changedAfterStart: !!f.history.changedAfterStart, emptyAtClose: !!f.history.emptyAtClose } } : {}) });
@@ -96,6 +114,8 @@ export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
     }
   };
   const at = () => now().toString();
+  const insertList = (l: TypeList, runId: number | null) =>
+    conn.run("INSERT INTO patterns_type_lists (version, run_id, created_at, list, changes, fingerprint, made_by, why, base, relabel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [l.version.slice(0, 40), runId, l.createdAt, JSON.stringify(l.types), JSON.stringify(l.changes), l.fingerprint.slice(0, 80), l.by?.slice(0, 64) ?? null, l.why?.slice(0, 300) ?? null, l.base?.slice(0, 40) ?? null, l.relabel ?? null]);
   return {
     // ---------- runs ----------
     /** Starts a run unless one is running (one at a time for the whole deployment); null when one is. */
@@ -252,16 +272,58 @@ export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
     // ---------- the request type lists ----------
     async list(version: string): Promise<TypeList | null> {
       const r = await conn.get("SELECT * FROM patterns_type_lists WHERE version = ?", [version]);
-      return r ? { version: String(r.version), createdAt: String(r.created_at), types: JSON.parse(String(r.list)), changes: JSON.parse(String(r.changes)), fingerprint: String(r.fingerprint) } : null;
+      return r ? listOf(r) : null;
     },
     async lists(): Promise<TypeList[]> {
       const rows = await conn.all("SELECT * FROM patterns_type_lists ORDER BY created_at, version");
-      return rows.map((r) => ({ version: String(r.version), createdAt: String(r.created_at), types: JSON.parse(String(r.list)), changes: JSON.parse(String(r.changes)), fingerprint: String(r.fingerprint) }));
+      return rows.map(listOf);
     },
     async saveList(l: TypeList, runId: number | null): Promise<void> {
       await conn.tx(async () => {
         if (await conn.get("SELECT version FROM patterns_type_lists WHERE version = ?", [l.version])) return;
-        await conn.run("INSERT INTO patterns_type_lists (version, run_id, created_at, list, changes, fingerprint) VALUES (?, ?, ?, ?, ?, ?)", [l.version.slice(0, 40), runId, l.createdAt, JSON.stringify(l.types), JSON.stringify(l.changes), l.fingerprint.slice(0, 80)]);
+        await insertList(l, runId);
+      });
+    },
+    /**
+     * WP-3: a person's new version of the list in use, only when `l.base` is still the newest version a person made
+     * (`first`: the first list in use, saved with it when it isn't yet). False: someone saved another version first
+     * (two people editing at once), and nothing is written.
+     */
+    async saveOwned(l: TypeList, first: TypeList): Promise<boolean> {
+      try {
+        return await conn.tx(async () => {
+          const rows = await conn.all("SELECT version FROM patterns_type_lists WHERE version LIKE 'own-%'");
+          const newest = rows.map((r) => String(r.version)).filter((v) => /^own-\d+$/.test(v)).sort((a, b) => Number(b.slice(4)) - Number(a.slice(4)))[0] ?? first.version;
+          if (newest !== l.base) return false;
+          if (!rows.some((r) => String(r.version) === first.version)) await insertList(first, null);
+          if (await conn.get("SELECT version FROM patterns_type_lists WHERE version = ?", [l.version])) return false;
+          await insertList(l, null);
+          return true;
+        });
+      } catch (e) {
+        // The version is the key: a clash means someone else's save won.
+        if (await conn.get("SELECT version FROM patterns_type_lists WHERE version = ?", [l.version]).catch(() => null)) return false;
+        throw e;
+      }
+    },
+    /** WP-3: every label row of a client, on the version it was made on (failed answers marked, never as labels). */
+    async allLabels(clientKey: string): Promise<VersionRow[]> {
+      const rows = await conn.all("SELECT item_id, list_version, rev, labels, labels_b FROM patterns_labels WHERE client_key = ?", [clientKey]);
+      return rows.map((r) => {
+        const a = JSON.parse(String(r.labels)) as Labels & { failed?: boolean };
+        const b = r.labels_b ? (JSON.parse(String(r.labels_b)) as Labels & { failed?: boolean }) : null;
+        return { version: String(r.list_version), itemId: n(r.item_id), rev: n(r.rev), labels: a.failed ? null : a, labelsB: b && !b.failed ? b : null, failedA: !!a.failed, failedB: !!b?.failed };
+      });
+    },
+    /** WP-3: the "other" suggestions ignored (names, case folded). */
+    async ignored(): Promise<string[]> {
+      return (await conn.all("SELECT name FROM patterns_ignored ORDER BY name")).map((r) => String(r.name));
+    },
+    async setIgnored(name: string, on: boolean, by: string): Promise<void> {
+      const k = name.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 100);
+      await conn.tx(async () => {
+        await conn.run("DELETE FROM patterns_ignored WHERE name = ?", [k]);
+        if (on) await conn.run("INSERT INTO patterns_ignored (name, set_by, set_at) VALUES (?, ?, ?)", [k, by.slice(0, 64), at()]);
       });
     },
 
