@@ -6692,6 +6692,9 @@ label.tick, .checklist li label.tick, .pick-row label.tick { flex: none; display
   display: flex; align-items: center; overflow: visible; border-block: 0; -webkit-line-clamp: none; line-clamp: none;
 }
 :is(main.grid, .day-view, aside.block-panel) :is(.pr-title, .aw-row-title, .aw-feat-name) > a[data-card] { min-width: 0; }
+/* PS-2: a folded day's head ("Wed" over "4", WK-5) is taller than the week's head row at Larger text; the head would cut
+   its weekday through the letters. It has nothing to hide (a few characters, centred), so it doesn't clip. */
+.grid .day.folded > .day-head.fold-head { overflow: visible; }
 /* Links that are pills or chips (a client call to review): the pill keeps its look, centred in a target-high line. */
 :is(main.grid, .day-view) a.call-mark { display: inline-flex; align-items: center; min-height: var(--target); }
 /* Due chips: the button is the target, the chip inside keeps its size. */

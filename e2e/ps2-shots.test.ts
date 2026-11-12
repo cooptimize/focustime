@@ -52,10 +52,13 @@ async function crop(page: Page, selector: string, path: string) {
   const x = Math.max(0, b.x - 8), y = Math.max(0, b.y - 8);
   await page.screenshot({ path, clip: { x, y, width: Math.min(vp.width - x, b.width + 16), height: Math.min(vp.height - y, b.height + 16) } });
 }
-// The morning card's to-do list and the panel's ON THIS BLOCK rows.
-const CARD_ROWS = ".half.focus .checklist, .half.focus ul";
+// The morning card (the one with the long DevOps titles), the panel's ON THIS BLOCK and Assigned to you, a Timeline row.
+const CARD = "main .half.focus:has(a[data-card])";
 const TIMELINE_ROWS = ".day-view .pick-row.dens-today";
-const PANEL_ROWS = "aside.block-panel section:has(.aw-row-title)";
+const PANEL_TODOS = "aside.block-panel .bp-todos";
+const PANEL_ASSIGNED = "aside.block-panel section:has(.aw-feat-name)";
+/** Crops at 1280 (where Day's card shows the cut on main) in the light theme. */
+const CROP_AT = 1280;
 
 describe.skipIf(!CHROMIUM || !DIR)("PS-2 screenshots", () => {
   let h: Harness;
@@ -75,20 +78,21 @@ describe.skipIf(!CHROMIUM || !DIR)("PS-2 screenshots", () => {
           await go(page, "#/week");
           await closePanel(page);
           await page.screenshot({ path: name("week") });
-          if (size.width === 1440 && theme === "light") await crop(page, ".half.focus:has(a[data-card])", name("crop-week-card"));
+          if (size.width === CROP_AT && theme === "light") await crop(page, CARD, name("crop-week-card"));
           await go(page, "#/day");
           await layout(page, "Cards");
           await openPanel(page);
           await page.screenshot({ path: name("day-panel") });
-          if (size.width === 1440 && theme === "light") {
-            await crop(page, CARD_ROWS, name("crop-day-card"));
-            await crop(page, PANEL_ROWS, name("crop-panel"));
+          if (size.width === CROP_AT && theme === "light") {
+            await crop(page, CARD, name("crop-day-card"));
+            await crop(page, PANEL_TODOS, name("crop-panel-todos"));
+            await crop(page, PANEL_ASSIGNED, name("crop-panel-assigned"));
           }
           await closePanel(page);
           await page.screenshot({ path: name("day") });
           await layout(page, "Timeline");
           await page.screenshot({ path: name("timeline") });
-          if (size.width === 1440 && theme === "light") await crop(page, TIMELINE_ROWS, name("crop-timeline-row"));
+          if (size.width === CROP_AT && theme === "light") await crop(page, TIMELINE_ROWS, name("crop-timeline-row"));
           await layout(page, "Cards");
         }
         await page.close();
@@ -103,6 +107,7 @@ describe.skipIf(!CHROMIUM || !DIR)("PS-2 screenshots", () => {
         const name = (what: string) => `${DIR}/phone-${what}-${state}-390x844-${theme}.png`;
         await go(page, "#/week");
         await page.screenshot({ path: name("week"), fullPage: true });
+        if (theme === "light") await crop(page, CARD, name("crop-card"));
         await go(page, "#/day");
         await page.screenshot({ path: name("day"), fullPage: true });
       }
