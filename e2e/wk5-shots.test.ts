@@ -66,7 +66,7 @@ describe.skipIf(!CHROMIUM || !DIR)("WK-5 screenshots", () => {
         if (AFTER) {
           await layout(page, "Cards");
           // The catch-up day and the weekend hidden, with the note.
-          await call(page, "settings.save", { section: "display", values: { showCatchUp: false, showWeekend: false } });
+          await call(page, "ui.set_week_days", { catchUp: false, weekend: false });
           await page.reload();
           await page.waitForSelector(".week-head", { timeout: 60_000 });
           await themed(page, theme);
@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM || !DIR)("WK-5 screenshots", () => {
           await openToday(page);
           await shot("week-hidden-panel");
           await closePanel(page);
-          await call(page, "settings.save", { section: "display", values: { showCatchUp: true, showWeekend: true } });
+          await call(page, "ui.set_week_days", { catchUp: true, weekend: true });
           await page.reload();
           await page.waitForSelector(".week-head", { timeout: 60_000 });
           await themed(page, theme);
