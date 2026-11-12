@@ -109,11 +109,11 @@ type ChipProps = {
   left?: string | null | undefined;
 };
 
-export function SizeChip({ size, title, onSet, wide = false, disabled = false, note = null, className = "", tabIndex, left = null }: ChipProps) {
+export function SizeChip({ size, title, onSet, wide = false, disabled = false, note = null, className = "", tabIndex, left = null, asHours = false }: ChipProps & { /** WK-5: the size as hours ("1h"), for a Week row's time line. */ asHours?: boolean }) {
   const { open } = useContext(MenuCtx);
   const { sizes } = useContext(PlanCtx);
   const hours = size ? hoursText(storyMinutes(size, sizes)) : unsizedText(sizes);
-  const text = left ?? (wide ? sizeChipText(size, sizes) : (size ?? "Size?"));
+  const text = left ?? (asHours && size ? hours : wide ? sizeChipText(size, sizes) : (size ?? "Size?"));
   const hover = note ?? (size ? `${size} is ${hours}` : `Not sized: counts as ${hours}`);
   const cls = `size-chip${size ? "" : " unsized"} ${className}`;
   if (!onSet || disabled)
