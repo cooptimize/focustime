@@ -1331,9 +1331,10 @@ export type FollowUp = {
 };
 import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
 import { refJson, refOf, type PersonRef } from "../plan/person-ref.ts";
+import { briefFromJson, type Brief } from "../plan/work-templates.ts";
 import type { LoopChannel, LoopMode, LoopSend, LoopState } from "../plan/loop.ts";
 export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
-export type DraftPatch = { clientKey?: string; parentItemId?: number | null; title?: string; size?: Size; description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null; /** QC-1 */ level?: "story" | "feature"; itemType?: string | null; assignTo?: string | null };
+export type DraftPatch = { clientKey?: string; parentItemId?: number | null; title?: string; size?: Size; description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null; /** QC-1 */ level?: "story" | "feature"; itemType?: string | null; assignTo?: string | null; /** TP-1 */ brief?: Brief | null };
 export type FollowUpFields = { clientKey: string | null; who: string | null; whoRef: PersonRef | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
 export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null; origin?: FollowUpOrigin | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
@@ -1491,7 +1492,7 @@ const toWatch = (r: Row): WeekWatch => ({
   checkinPickId: (r.checkin_pick_id as number | null) ?? null,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: sizeOfRow(r) as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.item_type != null ? { itemType: r.item_type as string } : {}), ...(r.assign_to != null ? { assignTo: r.assign_to as string } : {}), ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: sizeOfRow(r) as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, updatedAt: (r.updated_at as string | null) ?? (r.created_at as string), description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.item_type != null ? { itemType: r.item_type as string } : {}), ...(r.assign_to != null ? { assignTo: r.assign_to as string } : {}), ...(r.brief != null ? { brief: briefFromJson(r.brief as string, null) } : {}), ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}), ai: toDraftAi(r) });
 const toDraftAi = (r: Row): DraftAi | null =>
   r.ai_state == null ? null : { ...(r.ai_standards ? { standards: JSON.parse(r.ai_standards as string) as StandardsUsed } : {}), state: r.ai_state as DraftAiState, title: (r.ai_title as string | null) ?? null, description: (r.ai_description as string | null) ?? null, acceptance: (r.ai_acceptance as string | null) ?? null, type: (r.ai_type as string | null) ?? null, parentId: (r.ai_parent_id as number | null) ?? null, parentReason: (r.ai_parent_reason as string | null) ?? null, note: (r.ai_note as string | null) ?? null, ranAt: (r.ai_ran_at as string | null) ?? null };
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
@@ -2075,10 +2076,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         await writeProgress(p, p.spentMinutes ?? 0, remaining);
       });
     },
-    async addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature"; /** QC-1: the New form's Save as draft. */ itemType?: string | null; assignTo?: string | null; description?: string | null; targetDate?: string | null }): Promise<DraftStory> {
+    async addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature"; /** QC-1: the New form's Save as draft. */ itemType?: string | null; assignTo?: string | null; description?: string | null; targetDate?: string | null; /** TP-1 */ brief?: Brief | null }): Promise<DraftStory> {
       return tx(async () => {
         const at = stamp();
-        const r = (await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, size_xs, level, item_type, assign_to, description, target_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d.clientKey, d.parentItemId, d.title, sizeColumn(d.size), xsFlag(d.size), d.level ?? "story", d.itemType ?? null, d.assignTo ?? null, d.description ?? null, d.targetDate ?? null, at, at));
+        const r = (await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, size_xs, level, item_type, assign_to, description, target_date, brief, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", d.clientKey, d.parentItemId, d.title, sizeColumn(d.size), xsFlag(d.size), d.level ?? "story", d.itemType ?? null, d.assignTo ?? null, d.description ?? null, d.targetDate ?? null, d.brief ? JSON.stringify(d.brief) : null, at, at));
         return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", r.lastId!)) as Row);
       });
     },
@@ -2104,7 +2105,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (moved && ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')", id)) as { n: number }).n > 0)
           throw new PlanError("A to-do uses this draft. Drop the to-do first, then change the client");
         const n = { ...d, parentItemId: moved && patch.parentItemId === undefined ? null : d.parentItemId, ...patch };
-        (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, size_xs = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, level = ?, item_type = ?, assign_to = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, sizeColumn(n.size), xsFlag(n.size), n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, n.level, n.itemType ?? null, n.assignTo ?? null, stamp(), id));
+        (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, size_xs = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, level = ?, item_type = ?, assign_to = ?, brief = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, sizeColumn(n.size), xsFlag(n.size), n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, n.level, n.itemType ?? null, n.assignTo ?? null, n.brief ? JSON.stringify(n.brief) : null, stamp(), id));
         if (moved) (await db.run("UPDATE picks SET client_key = ? WHERE draft_id = ?", n.clientKey, id));
         // A planned pick of the draft shows its new title.
         if (n.title !== d.title) (await db.run("UPDATE picks SET title = ?, updated_at = ? WHERE draft_id = ? AND status = 'planned'", n.title, stamp(), id));

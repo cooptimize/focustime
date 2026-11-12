@@ -541,3 +541,8 @@ export function aCallEvent(o: Partial<import("../../plan/cowork.ts").CallEvent> 
   const at = o.at ?? "2026-11-04T14:12:00.000Z";
   return { chatId: "19:fabrikam@thread.v2", callId: "call-1", kind: "started", at, startedAt: o.kind === "ended" ? null : at, initiatorId: "00000000-0000-4000-8000-000000000001", initiatorTenant: HOME_TENANT, ...o };
 }
+
+/** TP-1: a brief (the four lines and their choices); empty unless given. */
+export function aBrief(o: Partial<import("../../plan/work-templates.ts").Brief> = {}): import("../../plan/work-templates.ts").Brief {
+  return { type: null, where: "", env: null, touches: [], change: "", check: "", checkedBy: null, done: "", doneWhen: null, signedOffBy: null, notWithout: [], ...o };
+}

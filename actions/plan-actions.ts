@@ -1,5 +1,6 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
+import { BriefError, EMPTY_BRIEF, parseBrief, typeById, type WorkTemplates } from "../plan/work-templates.ts";
 import { markResolved, materializeCheckins } from "./carry-actions.ts";
 import { removedNotice, resizedRemaining } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
@@ -49,6 +50,8 @@ export type PlanContext = {
   storeItem?: (clientKey: string, itemId: number) => Promise<import("../week/types.ts").WorkItem | null>;
   /** DP-2: the client's data platform and its list of deployment items (Admin › Clients); absent: not set. */
   clientDeploy?: (clientKey: string) => Promise<ClientDeploy | null>;
+  /** TP-1: the team's work templates, to check a draft's four lines (absent or null: none here). */
+  templates?: () => Promise<WorkTemplates | null>;
 };
 
 /**
@@ -609,7 +612,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       }
       case "draft.update": {
         // Step 15.3: the draft editor. Local only; Create in DevOps writes these values later.
-        const o = fields(input, ["id"], ["title", "description", "acceptance", "clientKey", "parentItemId", "size", "startDate", "targetDate"]);
+        const o = fields(input, ["id"], ["title", "description", "acceptance", "clientKey", "parentItemId", "size", "startDate", "targetDate", "brief"]);
         const draft = (await plan.getDraft(id(o.id)));
         if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
         const patch: DraftPatch = {};
@@ -625,6 +628,21 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           patch.acceptance = long(o.acceptance, "acceptance");
         }
         if (o.size !== undefined) patch.size = draftSize(o.size);
+        if (o.brief !== undefined) {
+          // TP-1: the request type and the four lines. A type removed since the draft was saved stays with it.
+          const doc = (await ctx.templates?.().catch(() => null)) ?? null;
+          if (!doc) return bad("Work templates aren't available here", 409);
+          const was = draft.brief?.type ?? null;
+          const raw = o.brief as { type?: unknown } | null;
+          const keep = !!was && raw?.type === was && !typeById(doc, was);
+          try {
+            const b = parseBrief(keep ? { ...(raw as object), type: null } : o.brief, doc);
+            patch.brief = keep ? { ...(b ?? EMPTY_BRIEF), type: was } : b;
+          } catch (e) {
+            if (e instanceof BriefError) throw new Invalid(e.message);
+            throw e;
+          }
+        }
         if (o.clientKey !== undefined) patch.clientKey = clientKey(o.clientKey);
         for (const k of ["startDate", "targetDate"] as const) {
           if (o[k] === undefined) continue;

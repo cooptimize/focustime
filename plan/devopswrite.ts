@@ -11,6 +11,8 @@ export const COMMENTS_API = "7.1-preview.4";
 export const BATCH_LIMIT = 10;
 export const PARENT_REL = "System.LinkTypes.Hierarchy-Reverse";
 export const AC_FIELD = "Microsoft.VSTS.Common.AcceptanceCriteria";
+/** TP-1: tags, one string with ";" between them (a create writes only the one request type tag). */
+export const TAGS_FIELD = "System.Tags";
 /**
  * The comment an undo of Create in DevOps adds. Kept word for word from before the rename (R1): it is already posted
  * on DevOps items, and one template keeps them consistent.

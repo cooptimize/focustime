@@ -130,6 +130,8 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
               <div className="sc-facts">
                 <span className={`sc-state tone-${stateTone(card.stateCategory)}`}>{card.state}</span>
                 <span>{card.type}</span>
+                {card.requestType && <span className="sc-reqtype" title="Request type">{card.requestType}</span>}
+                {card.readiness && <span className={`sc-ready${card.readiness.ready ? " ready" : ""}`}>{card.readiness.text}</span>}
                 <span>{card.clientName}</span>
                 <span>{card.assignee ? `Assigned to ${card.assignee}` : "Unassigned"}</span>
               </div>
@@ -216,10 +218,24 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                   </ul>
                 </section>
               )}
-              <section className="sc-section" aria-label="Description">
-                <h3>Description</h3>
-                {card.description ? <div className="sc-html" dangerouslySetInnerHTML={{ __html: card.description }} /> : <p className="muted">No description.</p>}
-              </section>
+              {card.lines && (
+                <section className="sc-section sc-lines" aria-label="The four lines">
+                  <dl>
+                    {card.lines.map((l) => (
+                      <div key={l.key}>
+                        <dt>{l.name}</dt>
+                        <dd>{l.text ?? <span className="muted">Not written yet</span>}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
+              {(!card.lines || card.description) && (
+                <section className="sc-section" aria-label="Description">
+                  <h3>{card.lines ? "The rest of the description" : "Description"}</h3>
+                  {card.description ? <div className="sc-html" dangerouslySetInnerHTML={{ __html: card.description }} /> : <p className="muted">No description.</p>}
+                </section>
+              )}
               {card.acceptance && (
                 <section className="sc-section" aria-label="Acceptance criteria">
                   <h3>Acceptance criteria</h3>

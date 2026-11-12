@@ -10,7 +10,10 @@ import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
-import { createPlanStore } from "../store/plan-store.ts";
+import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
+import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
+import { aBrief } from "../test/builders/index.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { WeekLoadData } from "./types.ts";
 
@@ -20,7 +23,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
 
-function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string } = {}) {
+function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string; templates?: boolean } = {}) {
   let clock = NOW;
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
@@ -42,6 +45,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
     saveSystemUserId: async () => {},
     now: () => clock,
     ...(opts.noPlan ? {} : { plan }),
+    ...(opts.templates ? { templates: workTemplatesStoreOn(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("UTC") })), () => clock) } : {}),
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
     const r = await dispatch(c, { action, input });
@@ -472,6 +476,23 @@ describe("focused time in Plan the day (step 6d)", () => {
 });
 
 describe("draft editor (step 15.3): draft.update", () => {
+  it("TP-1: keeps the request type and the four lines, clears them with null, and refuses a type the team doesn't have", async () => {
+    const t = setup({ templates: true });
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Margin percent", size: "S" });
+    const brief = aBrief({ type: "new-measure", where: "The sales model.", doneWhen: "In test" });
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, brief })).draft.brief).toEqual(brief);
+    expect((await t.plan.getDraft(draft.id))?.brief).toEqual(brief);
+    // A save without the lines keeps them.
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, title: "Gross margin percent" })).draft.brief).toEqual(brief);
+    expect((await t.fail("draft.update", { id: draft.id, brief: { ...brief, type: "no-such-type" } })).status).toBe(400);
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, brief: null })).draft.brief).toBeUndefined();
+    // Without the templates here the lines can't be checked, so they aren't taken.
+    const bare = setup();
+    await bare.run("week.load", { weekStart: "2026-11-02" });
+    const d2 = await bare.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "x", size: "S" });
+    expect((await bare.fail("draft.update", { id: d2.draft.id, brief })).status).toBe(409);
+  });
   it("edits title, description, acceptance criteria, size and parent of a story, and keeps them", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });

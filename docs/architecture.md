@@ -927,6 +927,15 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Demo.** `sources/demo/data.ts` and `sources/demo/devops.ts`: Cooptimize's process has a Domains level above Epics.
 - **Tests.** `plan/quick-create.test.ts`, `actions/new-item-actions.test.ts`, the QC-1 part of `actions/devops-write.test.ts` (with `fakeDevOpsWrite`'s `domain` and `required` options), `plan/blockpanel.test.ts`; e2e `e2e/qc1.test.ts` (demo mode, plus a real session for no write PAT; screenshots with FOCUSTIME_SHOTS) and the updated `e2e/capture-devops.test.ts`.
 
+## TP-1: Work templates, the four lines at create (Nov 12)
+
+- **Pure.** `plan/work-templates.ts`: the four lines' names (`LINE_KEYS`, `LINE_NAMES`, `EARLIER_NAMES`), the templates' shape and `SEED`, `Brief` and `parseBrief`, what a create writes (`descriptionHtml`, `acceptanceText`, `templateTag`), reading the lines back (`readLines`, `readFilled`, `readiness`), an admin's save (`checkTemplates`, `templateChanges`) and `fullExample`.
+- **Store.** `store/work-templates-store.ts` over the app tables `work_templates` and `work_template_uses`, and `draft_stories.brief` (`store/migrations/20261203T0900_work_templates.ts`; export schema 40).
+- **Actions.** `actions/template-actions.ts` (`templates.load`, `templates.save`, admin only, with why and the version opened). `new_item` in `actions/devops-write-actions.ts` writes the lines, the acceptance text and the tag, and settles a refused tag as `tag_refused`; `draft.save`/`draft.add` (`actions/new-item-actions.ts`) and `draft.update` (`actions/plan-actions.ts`) keep a draft's `brief`; `item.card` (`actions/item-card-actions.ts`) adds `lines`, `requestType` and `readiness`.
+- **UI.** `ui/FourLines.tsx` (`TypeField`, `FourLines`, `FullExample`), `ui/templates.ts` (`useTemplates`, `templatesSaved`), the New form (`ui/NewItem.tsx`), the draft editor (`ui/DraftEditor.tsx`), the card (`ui/StoryCard.tsx`), Create it without the tag in `ui/DevOpsWrite.tsx`'s preview, Admin › Work templates and Settings' read-only view in `ui/settings/AdminTemplates.tsx`.
+- **Demo.** `sources/demo/devops.ts`: items carry tags; Harbor refuses a new tag.
+- **Tests.** `plan/work-templates.test.ts`, `actions/template-actions.test.ts` (both databases), the TP-1 parts of `actions/devops-write.test.ts`, `actions/item-card-actions.test.ts` and `actions/plan-actions.test.ts`, `e2e/tp1.test.ts` (screenshots in `docs/ux/tp1/` with `FOCUSTIME_SHOTS`).
+
 ## WP-1: DevOps patterns (Nov 11)
 
 - **Pure parts.** `plan/patterns/`: `types.ts` (levels, facts, labels, request types, platforms), `levels.ts` (top, middle and leaf from the parent links, never type names), `inventory.ts` (the field map, `itemOf` (text measured, never kept), `historyOf`, `titlePattern`, `inventoryOf`, `windowFrom`, `monthRanges`, `historySample`), `labels.ts` (the starting list, the layers, readiness and missing words, the samples, the request and its schema, `parseLabels`, the merge, agreement, `shapeOf`), `results.ts` (`resultsOf`, `sumResults`, `handCheck`), `report.ts` (the two Markdown downloads).

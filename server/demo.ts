@@ -36,6 +36,7 @@ import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
 import { createDemoFeedbackDevOps, demoFeedbackBackend, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
+import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
 import { clientScope } from "../config/org.ts";
 import { settingsEdit } from "../config/settings.ts";
 import { createStatusRegistry } from "../actions/status-rows.ts";
@@ -97,6 +98,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
+  // TP-1: the demo's own work templates, seeded on first read in its in-memory store.
+  const templates = workTemplatesStoreOn(shared, () => opts.now());
   // The demo's person is signed in, so the one person match (D599) finds them the way it does in the hosted app.
   const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()), signedIn: async () => [{ id: DEMO_PERSON.oid, email: DEMO_PERSON.email, upn: DEMO_PERSON.username }, ...DEMO_PEOPLE.slice(0, 3).map((p) => ({ id: p.aadId, email: p.email, upn: p.email }))] });
   scopeOf = scopeDepsOf(org);
@@ -255,6 +258,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     org,
     adminOps,
     standards,
+    templates,
     demo: {
       ...opts.demo,
       status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),

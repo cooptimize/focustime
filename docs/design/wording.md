@@ -111,6 +111,17 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - Backlog after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Backlog. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
+## TP-1 words (Nov 12)
+
+- **The four lines**, always these names and in this order: **What and where**, **What changes**, **How we'll check**, **How far and who signs off**. Never Target, Change, Control or Boundary (the studies' earlier names, only read).
+- **Request type** (the New form's label; "No type" when none), **Add the four lines** (without a type), **See a full example** / **Hide the full example**, and in it **"A full example: <type>"** with "Made up, to show what each line holds. Nothing here is copied into your form."
+- Under a line while it has focus: **"Example: …"**. The help mark's label: **"Why <line> matters"**.
+- Choices: **Environment**, **Touches**, **Checked by**, **Done when it is**, **Signed off by**, **Not without asking**; **Not set**, **Other…**, **A role (type it)** ("A role, like the finance lead").
+- Written to DevOps: the line names as headings, then "Environment: Test.", "Touches: Data, Model.", "Checked by: <who>.", "Done when it is: in test. Signed off by: <who>. Not without asking: deploy to production."
+- The tag: **type:<tag>**, lower case with hyphens. Refused: **"DevOps didn't let you add the tag type:<tag> in <project> (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag"**, and the button **Create it without the tag**.
+- The card: **Ready**, or **"Missing: What changes, How we'll check"**; an empty line in the block says **"Not written yet"**; the rest of the description under **"The rest of the description"**.
+- Admin › Work templates: **No type chosen**, **Why each line matters**, **Choice lists**, **+ Add a type**, **Take off the form** / **Offer it again**, **"Kept when you rename it"**, **"<n> items created · <n> with all four lines"** or **"None created yet"**, **Why (one line, for the audit)**, **Save**, **Discard changes**, **Reload theirs**. Settings: **"Set by your FocusTime admin."**
+
 ## WP-1 words (Nov 11)
 
 - **DevOps patterns**: the page's name, in the command menu and its heading. **DevOps patterns (preview)**: the switch in Admin › People.

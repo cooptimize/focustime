@@ -97,6 +97,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "level", section: "planning", label: "Your level", keywords: ["guidance", "consultant", "senior", "lead"] },
   { id: "break-down-offered", section: "planning", label: "Offer Break down", old: ["Break down", "Draft stories"] },
   { id: "readiness-nudges", section: "planning", label: "Readiness nudges", keywords: ["flags"] },
+  { id: "work-templates", section: "planning", label: "Work templates", keywords: ["request type", "four lines", "hints", "examples", "new form"] },
   { id: "count-unsized", section: "planning", label: "Count unsized work as", old: ["Unsized", "Size? hours"] },
   { id: "shortest-useful-time", section: "planning", label: "Shortest useful time per size", old: ["Shortest useful time, S", "Shortest useful time, M", "Shortest useful time, L"], keywords: ["timebox my day", "minimum"] },
   { id: "carry-over", section: "planning", label: "Carry-over (days back)", old: ["Carry-over"], keywords: ["unfinished"] },

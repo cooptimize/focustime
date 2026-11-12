@@ -41,6 +41,7 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
+import { TemplatesReadOnly } from "./settings/AdminTemplates.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
@@ -282,7 +283,7 @@ export function Settings(props: Props) {
   const client = current === "client" ? (data?.clients.find((c) => c.key === setting) ?? null) : null;
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
-  const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
+  const description = inAdmin ? (current === "admin-templates" ? "Team settings for everyone in FocusTime. Save with one line of why; each change is logged in Admin › Audit." : "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit.") : def?.description;
   const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
@@ -394,6 +395,9 @@ function SectionBody(p: BodyProps) {
       return (
         <>
           <GuidanceForm {...p} />
+          <Group title="Work templates" sid="work-templates">
+            <TemplatesReadOnly />
+          </Group>
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
           <CollabForm {...p} />
