@@ -488,7 +488,7 @@ function SectionBody(p: BodyProps) {
             <label>
               <input type="checkbox" checked={p.weekDays.weekend} onChange={(e) => p.setWeekDays({ weekend: e.target.checked })} /> Show weekend
             </label>
-            <span className="set-hint">Weekend days show only when something is on them. A hidden day with to-dos, or today, gets a note on Week with Show. Day still steps through every day.</span>
+            <span className="set-hint">With Show weekend on, weekend days show when something is on them (or always, with Every weekend day in Week's ⋯). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.</span>
           </fieldset>
           <fieldset className="set-choice" data-setting="reduce-motion">
             <legend>Motion</legend>

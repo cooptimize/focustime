@@ -35,20 +35,22 @@ export const catchUpWord = (days: readonly DayLite[]): string => {
 const short = (d: DayLite) => d.weekday.slice(0, 3);
 
 /**
- * The quiet note on Week's sub-line when a hidden day has to-dos on it or is today: "Fri hidden · 2 to-dos", "Today
- * (Fri) is hidden", "Fri, Sat hidden · 3 to-dos". Null when no hidden day has either. `open(date)`: the day's open
- * (planned) to-dos.
+ * The quiet note on Week's sub-line when a hidden day has to-dos or promises due on it, or is today: "Fri hidden · 2
+ * to-dos", "Today (Fri) is hidden", "Fri, Sat, Sun hidden · 3 to-dos · 1 promise due". Null when no hidden day has
+ * any. `open(date)`: the day's open (planned) to-dos; `due(date)`: the open promises due that day.
  */
-export function hiddenNote(days: readonly DayLite[], shown: readonly boolean[], today: IsoDate, open: (date: IsoDate) => number): string | null {
-  const hidden = days.filter((d, i) => !shown[i] && (d.date === today || open(d.date) > 0));
+export function hiddenNote(days: readonly DayLite[], shown: readonly boolean[], today: IsoDate, open: (date: IsoDate) => number, due: (date: IsoDate) => number = () => 0): string | null {
+  const hidden = days.filter((d, i) => !shown[i] && (d.date === today || open(d.date) > 0 || due(d.date) > 0));
   if (!hidden.length) return null;
   const todayDay = hidden.find((d) => d.date === today);
   const others = hidden.filter((d) => d !== todayDay);
   const count = hidden.reduce((n, d) => n + open(d.date), 0);
+  const promises = hidden.reduce((n, d) => n + due(d.date), 0);
   return [
     todayDay ? `Today (${short(todayDay)}) is hidden` : "",
     others.length ? `${others.map(short).join(", ")} hidden` : "",
     count ? `${count} to-do${count === 1 ? "" : "s"}` : "",
+    promises ? `${promises} promise${promises === 1 ? "" : "s"} due` : "",
   ].filter(Boolean).join(" · ");
 }
 

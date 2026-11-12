@@ -217,7 +217,7 @@ describe.skipIf(!CHROMIUM)("WK-5: Week makes room for today (browser, demo Thurs
     await page.locator("main.grid").waitFor({ timeout: 60_000 });
     await expect(note.innerText()).resolves.toMatch(/^Fri hidden · 2 to-dos\b/);
     // Show: Friday is back for this visit, the note gone; the setting is unchanged (hidden again after leaving Week).
-    await note.getByRole("button", { name: /Show the hidden days/ }).click();
+    await note.getByRole("button", { name: "Show hidden days" }).click();
     await expect.poll(() => friday.count()).toBeGreaterThan(0);
     await expect(note.count()).resolves.toBe(0);
     await page.keyboard.press("1");
@@ -228,6 +228,80 @@ describe.skipIf(!CHROMIUM)("WK-5: Week makes room for today (browser, demo Thurs
     await page.getByRole("button", { name: "View options for Week" }).click();
     await page.getByRole("menuitem", { name: /^Show Friday/ }).click();
     await expect.poll(() => friday.count()).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+});
+
+// WK-5 review 2: the keyboard and the phone with a hidden today, the phone's day tabs, and focus when days fold.
+describe.skipIf(!CHROMIUM)("WK-5: keyboard and phone (browser, demo Friday)", () => {
+  let h: Harness;
+  beforeAll(async () => {
+    h = await startDemo("chromium", {}, "2026-11-13T10:00:00-05:00");
+  }, T);
+  afterAll(async () => h?.stop());
+
+  it("with today (the catch-up day) hidden: the grid keeps a tab stop on a shown day, and Enter opens a shown day", async () => {
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    await call(page, "ui.set_week_days", { catchUp: false, weekend: true });
+    await page.reload();
+    await page.waitForSelector(".topbar", { timeout: 60_000 });
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator("main.grid").waitFor({ timeout: 60_000 });
+    await expect(page.locator(".hidden-days-note").innerText()).resolves.toMatch(/^Today \(Fri\) is hidden/);
+    const stop = page.locator("main.grid .half[tabindex='0']");
+    await expect.poll(() => stop.count()).toBe(1);
+    await expect(stop.getAttribute("data-drop")).resolves.not.toMatch(/^2026-11-13:/);
+    await stop.focus();
+    await page.keyboard.press("Enter");
+    await panel(page).waitFor();
+    await expect(panel(page).locator(".bp-head, header").first().innerText()).resolves.not.toMatch(/Fri/);
+    await closePanel(page);
+    // Focus comes back to the grid, not the page.
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest("main.grid"))).toBe(true);
+    await call(page, "ui.set_week_days", { catchUp: true, weekend: true });
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("the phone: a day tab goes straight to its day; a hidden today is never the day shown", async () => {
+    const { page, errors } = await freshPage(h, { width: 390, height: 844 });
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator("main.grid.narrow").waitFor({ timeout: 60_000 });
+    const tabs = page.locator(".daybar .day-tab");
+    await tabs.filter({ hasText: /^Mon/ }).click();
+    await expect.poll(() => page.locator(".daybar .day-tab.current").innerText()).toMatch(/^Mon/);
+    await tabs.filter({ hasText: /^Thu/ }).click();
+    await expect.poll(() => page.locator(".daybar .day-tab.current").innerText()).toMatch(/^Thu/);
+    await call(page, "ui.set_week_days", { catchUp: false, weekend: true });
+    await page.reload();
+    await page.locator("main.grid.narrow").waitFor({ timeout: 60_000 });
+    await expect(tabs.filter({ hasText: /^Fri/ }).count()).resolves.toBe(0);
+    await expect.poll(() => page.locator(".daybar .day-tab.current").count()).toBe(1);
+    await expect(page.locator(`main.grid.narrow [data-drop^="2026-11-13:"]`).count()).resolves.toBe(0);
+    await call(page, "ui.set_week_days", { catchUp: true, weekend: true });
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("focus stays in the grid when the arrows open a folded day and the panel closes", async () => {
+    const { page, errors } = await freshPage(h, { width: 1280, height: 720 });
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator("main.grid").waitFor({ timeout: 60_000 });
+    await larger(page, true);
+    await page.locator("main.grid .half[tabindex='0']").focus();
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press("ArrowLeft");
+      await settle(page);
+      await expect(page.evaluate(() => !!document.activeElement?.closest("main.grid"))).resolves.toBe(true);
+    }
+    await page.keyboard.press("a");
+    await panel(page).waitFor();
+    await settle(page);
+    await page.keyboard.press("Escape");
+    await panel(page).waitFor({ state: "detached" });
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest("main.grid"))).toBe(true);
+    await larger(page, false);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -249,8 +249,9 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
             await promiseClearOfNow(page);
           }
           await expect(headersWhole(page)).resolves.toEqual([]);
-          // WD-1: every block ends with "+ Add".
-          await expect(grid.locator(".add-work").first().textContent()).resolves.toBe("+ Add");
+          // WD-1: every block that takes work ends with "+ Add". WK-5: with the panel open on Monday at 1366, the days
+          // still open can all be past (Friday, today and the catch-up day, folds first), so there may be none.
+          if (await grid.locator(".add-work").count()) await expect(grid.locator(".add-work").first().textContent()).resolves.toBe("+ Add");
           expect(errors).toEqual([]);
           await page.close();
         }, T);

@@ -560,6 +560,16 @@ export function App() {
     if (nav.tab !== "week") setRevealDays(false);
     setChosenDay(null);
   }, [nav.tab, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  // WK-5 review: on Week the selection never rests on a hidden day (a hidden today, a day just hidden): it moves to the
+  // nearest shown day, so the grid keeps a tab stop and Enter never opens a day the grid doesn't show.
+  useEffect(() => {
+    const days = data?.week.days;
+    if (nav.tab !== "week" || !days) return;
+    const sh = shownDays(days, weekDays, revealDays);
+    if (sh[sel.dayIndex] !== false) return;
+    const to = stepShown(sh, sel.dayIndex, 1);
+    if (to >= 0 && to !== sel.dayIndex) setSel((s) => ({ dayIndex: to, half: s.half }));
+  }, [nav.tab, data?.week.days, weekDays, revealDays, sel.dayIndex]);
   // SG-1: "Suggest work for empty blocks" (Settings › Planning, Week's and Day's ⋯ as "Suggestions"). Saved as the person's setting.
   const [suggestOn, setSuggestOn] = useState(true);
   useEffect(() => {
@@ -972,8 +982,8 @@ export function App() {
       keepDayPanel(false);
       goNav(navOf.todayOn(dayShown));
     } else goNav(closeAddNav());
-    const el = cellRefs.current.get(`${sel.dayIndex}${sel.half}`);
-    requestAnimationFrame(() => el?.focus({ preventScroll: true }));
+    // WK-5 review: looked up after the re-render (the columns may have folded or opened, replacing the cell).
+    requestAnimationFrame(() => requestAnimationFrame(() => cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true })));
   };
   /** WD-2: "+ Add" in Day's header: the panel on that day's block under way (or its next), the cursor in the Add box. */
   const addOnDay = useCallback(
@@ -1739,7 +1749,7 @@ export function App() {
   // WK-5: the days Week shows, and the note when a hidden day has open to-dos or is today.
   const shown = shownDays(week.days, weekDays, revealDays);
   const catchUpName = catchUpWord(week.days);
-  const hiddenWords = nav.tab === "week" && nav.mode === "board" ? hiddenNote(week.days, shown, localToday, (d) => (data.plan?.[d]?.picks ?? []).filter((p) => p.status === "planned").length) : null;
+  const hiddenWords = nav.tab === "week" && nav.mode === "board" ? hiddenNote(week.days, shown, localToday, (d) => (data.plan?.[d]?.picks ?? []).filter((p) => p.status === "planned").length, (d) => (data.followUps ?? []).filter((f) => f.due === d && !f.closedAt).length) : null;
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
   // IB-1: the badge is Needs you, the server's one count (conversations, promises new or due, sends waiting).
   const inboxCount = needsYouCount ?? 0;
@@ -2219,10 +2229,10 @@ export function App() {
         <div className="week-subline">
           {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
           {hiddenWords && (
-            <p className="hidden-days-note" role="status">
-              <span>{hiddenWords}</span>
+            <p className="hidden-days-note">
+              <span role="status">{hiddenWords}</span>
               <span aria-hidden="true"> · </span>
-              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label={`Show the hidden days for now: ${hiddenWords}`} title="Shows them until you leave Week; the setting is in Week's ⋯">
+              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label="Show hidden days" title="Shows them until you leave Week; the setting is in Week's ⋯">
                 Show
               </button>
             </p>

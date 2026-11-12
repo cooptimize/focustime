@@ -35,6 +35,11 @@ describe("the hidden days' note", () => {
     expect(hiddenNote(WEEK, hidden, THU, open({ [FRI]: 2, [SAT]: 1 }))).toBe("Fri, Sat hidden · 3 to-dos");
     expect(hiddenNote(WEEK, hidden, THU, open({ [SAT]: 1 }))).toBe("Sat hidden · 1 to-do");
   });
+  it("counts the promises due on hidden days too (WK-5 review: a due promise vanished with Sunday)", () => {
+    const due = open({ "2026-11-15": 1 });
+    expect(hiddenNote(WEEK, hidden, THU, open({ [FRI]: 2, [SAT]: 1 }), due)).toBe("Fri, Sat, Sun hidden · 3 to-dos · 1 promise due");
+    expect(hiddenNote(WEEK, hidden, THU, open({}), due)).toBe("Sun hidden · 1 promise due");
+  });
   it("says when today is hidden", () => {
     expect(hiddenNote(WEEK, hidden, FRI, open({}))).toBe("Today (Fri) is hidden");
     expect(hiddenNote(WEEK, hidden, FRI, open({ [FRI]: 2 }))).toBe("Today (Fri) is hidden · 2 to-dos");

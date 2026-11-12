@@ -749,3 +749,5 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - With every other day folded, the focus day may still be under twice a working day (1024 px with the panel and Larger text). Hide the panel's Add list sooner instead?
 - Day's past cards list their to-dos too (they share Week's card). Keep the QT-1 line on Day?
 - The demo's day off moved from Friday to Saturday on a Thursday (and the holiday is never today) so Week shows a working today. Right for demos on other days?
+- With the panel open on another day, today folds like any day in the fold order; when today is the catch-up day it folds second. Keep today open whenever the week has it?
+- Past days keep their full share of the width (review 1 noticed the empty space on Monday to Wednesday). Give past days a lighter share, like Friday's?

@@ -348,7 +348,8 @@ function PastRows({ picks, label, tabIndex, onMore }: { picks: readonly Pick[]; 
           <li key={p.id} className="pick-origin past-moved" data-pick={p.id} title={`${p.title}: moved to ${blockText(p.carriedTo)}`}>
             {p.itemType && <TypeIcon clientKey={p.clientKey} type={p.itemType} decorative />}
             <span className="po-title">{p.title}</span>
-            <span className="po-note">{movedTo(p.carriedTo, weekStart)}</span>
+            <span className="po-note" aria-hidden="true">{movedTo(p.carriedTo, weekStart)}</span>
+            <span className="sr-only">, moved to {blockText(p.carriedTo)}</span>
           </li>
         ) : (
           <PickRow key={p.id} pick={p} toggle={plan.toggle} link density="week" tabIndex={tabIndex} typeIcon timeEditable={false} readOnly className="past-row" />

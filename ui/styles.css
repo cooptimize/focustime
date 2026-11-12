@@ -6786,3 +6786,7 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 .day.folded .fold-open { min-height: calc(2.2em + 6px); }
 .day.folded.past-day .fold-risk { display: none; }
 .day-head .day-addhours { white-space: nowrap; }
+/* WK-5 review: a past day's moved row reads as a line, not a ghost; a folded strip says it opens. */
+.checklist.past-rows .past-moved { opacity: 0.9; }
+.half.past .past-rows .past-moved .po-note { color: var(--text); }
+.day.folded .fold-half { cursor: pointer; }

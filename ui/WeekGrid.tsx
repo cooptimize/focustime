@@ -124,6 +124,29 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   const pv = useContext(PlanCtx);
   const ref = useRef<HTMLElement>(null);
   const box = useGridBox(ref, layout !== "narrow" && only === undefined);
+  // WK-5 review: a day folding or opening replaces the focused cell (or the strip's button); focus goes back to the
+  // selection's cell instead of falling to the page.
+  const hadFocus = useRef(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const on = () => void (hadFocus.current = true);
+    const off = (e: FocusEvent) => {
+      const t = e.target as Node;
+      queueMicrotask(() => {
+        if (t.isConnected) hadFocus.current = el.contains(document.activeElement);
+      });
+    };
+    el.addEventListener("focusin", on);
+    el.addEventListener("focusout", off);
+    return () => (el.removeEventListener("focusin", on), el.removeEventListener("focusout", off));
+  });
+  useLayoutEffect(() => {
+    if (!hadFocus.current) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.isConnected) return;
+    cellRefs.get(`${selection.dayIndex}${selection.half}`)?.focus({ preventScroll: true });
+  });
   const shown = shownIn ?? week.days.map(() => true);
   // U3: due badges, each follow-up once in the week (on its day, an overdue one on today).
   const badges = weekDueBadges(
@@ -181,7 +204,8 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
     const swipe = { x: 0, y: 0 };
     // WK-5: hidden days have no tab and the arrows and swipes pass over them.
     const go = (d: number) => {
-      const to = d === i ? i : stepShown(shown, i, d < i ? -1 : 1);
+      // A tab goes straight to its day; a swipe onto a hidden day goes on to the next shown one that way.
+      const to = d === i || shown[d] ? d : stepShown(shown, i, d < i ? -1 : 1);
       if (to >= 0) onSelect({ dayIndex: to, half: selection.half });
     };
     const first = shown.indexOf(true);
@@ -638,7 +662,7 @@ function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, sele
     }
   };
   return (
-    <section className={`day folded fold-${side}${isToday ? " today" : ""}${day.pto ? " pto-full" : ""}${day.kind === "weekend" ? " weekend" : ""}${day.date < (pv.today ?? "") ? " past-day" : ""}`} aria-label={`${dayLabel}, folded`}>
+    <section className={`day folded fold-${side}${selected ? " sel-day" : ""}${isToday ? " today" : ""}${day.pto ? " pto-full" : ""}${day.kind === "weekend" ? " weekend" : ""}${day.date < (pv.today ?? "") ? " past-day" : ""}`} aria-label={`${dayLabel}, folded`}>
       <header className="day-head fold-head">
         <button ref={ref} type="button" className="fold-open" tabIndex={selected ? 0 : -1} onClick={onOpen} title={`${words}. Open ${longWeekday(day.date)}`} aria-label={`${words}. Open ${longWeekday(day.date)}`}>
           <span className="dow">{day.weekday.slice(0, 3)}</span>
