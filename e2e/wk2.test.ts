@@ -154,14 +154,14 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     expect((await call(page, "ui.set_show_timelines", { show: false })).ok).toBe(true);
     await board(page);
     await expect.poll(() => hidden(page)).toBe(true);
-    // Full width: the card's list fills the card (no rail's margin). QT-1: Monday is past by Friday, so it is folded
-    // to one line; Friday's block, under way, is the full card.
+    // Full width: the card's list fills the card (no rail's margin). Monday is past by Friday (WK-5: its to-dos listed,
+    // read only); Friday's block, under way, is the full card.
     const widths = await page.locator(`main.grid ${FRI_AM}`).evaluate((card) => {
       const body = card.querySelector(".card-body")!.getBoundingClientRect();
       return { card: card.getBoundingClientRect().width, body: body.width };
     });
     expect(widths.body).toBeGreaterThan(widths.card - 40);
-    await expect(page.locator(`main.grid ${MON_AM}.folded .card-folded`).count()).resolves.toBe(1);
+    await expect(page.locator(`main.grid ${MON_AM}.past`).count()).resolves.toBe(1);
     // The now line on Friday's block under way.
     // PS-1 (C1): with no rail, "now" is a marker in the header of the block under way.
     await expect(page.locator(`main.grid ${FRI_AM} .card-head .now-mark`).count()).resolves.toBe(1);
