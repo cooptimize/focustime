@@ -121,6 +121,9 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await expect(line.getByRole("button", { name: "Retry" }).count()).resolves.toBe(1);
     await expect(page.locator(".attention, .att-chip.source").count()).resolves.toBe(0);
     expect(errors).toEqual([]);
+    // A request still in flight when the page closes would reject inside the handler ("Fetch response has been
+    // disposed"): stop routing and let pending handlers finish first.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   }, T);
 
