@@ -14,6 +14,7 @@ export const SECTIONS = [
   { id: "week", name: "Week", group: "tabs" },
   { id: "ahead", name: "Backlog", group: "tabs" },
   { id: "inbox", name: "Inbox", group: "tabs" },
+  { id: "writing", name: "Writing work a builder can use", group: "more" },
   { id: "capture", name: "Capture and Break down", group: "more" },
   { id: "assistant", name: "The assistant", group: "more" },
   { id: "ask", name: "Ask", group: "more" },

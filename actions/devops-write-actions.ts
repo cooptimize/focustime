@@ -1605,7 +1605,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
           // TP-1: a refused create made nothing (DevOps applies a create's patch whole or not at all). When it carried
           // the request type tag and DevOps names tags (or refuses with 403, the write PAT already checked), say so in
           // plain words: the person can create it again without the tag.
-          const tagged = typeof (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value === "string";
+          const tagValue = (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value;
+          const tagged = typeof tagValue === "string" && tagValue.split(";").some((t) => t.trim().toLowerCase().startsWith(TAG_PREFIX));
           if (tagged && e instanceof WriteFailure && ((e.kind === "rejected" && /\btags?\b/i.test(e.message)) || e.kind === "forbidden"))
             return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tags ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag`, {}, { code: "tag_refused" });
           throw e;
