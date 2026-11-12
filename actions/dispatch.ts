@@ -2592,6 +2592,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             return rule ? { dataPlatform: rule.dataPlatform, deployItems: rule.deployItems } : null;
           },
           now: ctx.now,
+          templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
           storeItem: async (clientKey, itemId) => {
             const r = await aheadAction(await aheadContext(ctx), "ahead.load", {});

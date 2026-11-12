@@ -41,6 +41,7 @@ import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
+import { TemplatesReadOnly } from "./settings/AdminTemplates.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
@@ -394,6 +395,9 @@ function SectionBody(p: BodyProps) {
       return (
         <>
           <GuidanceForm {...p} />
+          <Group title="Work templates" sid="work-templates">
+            <TemplatesReadOnly />
+          </Group>
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
           <CollabForm {...p} />

@@ -15,6 +15,9 @@ import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.ts
 import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
+import { briefEmpty, EMPTY_BRIEF, type Brief } from "../plan/work-templates.ts";
+import { FourLines, TypeField } from "./FourLines.tsx";
+import { useTemplates } from "./templates.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -48,6 +51,11 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   const [target, setTarget] = useState(draft.targetDate ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // TP-1: the request type and the four lines, as the New form keeps them.
+  const tpl = useTemplates().view;
+  const [brief, setBrief] = useState<Brief>(draft.brief ?? EMPTY_BRIEF);
+  const [showLines, setShowLines] = useState(!briefEmpty(draft.brief));
+  const briefChanged = JSON.stringify(briefEmpty(brief) ? null : brief) !== JSON.stringify(briefEmpty(draft.brief) ? null : draft.brief);
   const features = useClientFeatures(client, true);
   const choices = feature ? features?.epics : features?.features;
   const pool = useMemo(() => parentPool(choices, feature ? "epic" : "feature"), [choices, feature]);
@@ -69,7 +77,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   const startAfter = feature && start && target && start > target;
   const dirty =
     title.trim() !== draft.title || (description.trim() || null) !== (draft.description ?? null) || (acceptance.trim() || null) !== (draft.acceptance ?? null) || client !== draft.clientKey ||
-    parent.itemId !== draft.parentItemId || size !== draft.size || (start || null) !== (draft.startDate ?? null) || (target || null) !== (draft.targetDate ?? null);
+    parent.itemId !== draft.parentItemId || size !== draft.size || (start || null) !== (draft.startDate ?? null) || (target || null) !== (draft.targetDate ?? null) || briefChanged;
 
   /** Saves the edits (only what changed); the saved draft, or null when it didn't save. */
   const save = async (): Promise<DraftStory | null> => {
@@ -88,6 +96,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
       if (!feature && size !== draft.size) input.size = size;
       if (feature && (start || null) !== (draft.startDate ?? null)) input.startDate = start || null;
       if (feature && (target || null) !== (draft.targetDate ?? null)) input.targetDate = target || null;
+      if (briefChanged) input.brief = briefEmpty(brief) ? null : brief;
       const r = await call<{ draft: DraftStory }>("draft.update", input);
       onChanged();
       return r.draft;
@@ -135,6 +144,20 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             <span className="set-label">Description</span>
             <TextBox value={description} minRows={4} maxRows={14} maxLength={8000} onChange={(e) => setDescription(e.target.value)} />
           </label>
+          {tpl && (
+            <div className="set-field de-lines">
+              <span className="set-label">Request type</span>
+              <span className="nf-reqtype">
+                <TypeField doc={tpl.doc} label="Request type" value={brief.type} onChange={(t) => (setBrief({ ...brief, type: t }), t && setShowLines(true))} />
+                {!showLines && !brief.type && (
+                  <button type="button" className="link-btn" onClick={() => setShowLines(true)}>
+                    Add the four lines
+                  </button>
+                )}
+              </span>
+              {(showLines || !!brief.type) && <FourLines doc={tpl.doc} brief={brief} onChange={setBrief} clientKey={client} layout="stack" />}
+            </div>
+          )}
           {showAc && (
             <label className="set-field">
               <span className="set-label">Acceptance criteria{features?.status !== "ok" ? " (written only when the process has the field)" : ""}</span>

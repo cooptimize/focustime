@@ -6578,6 +6578,44 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .nf-more-body textarea { width: 100%; }
 .nf-ai { display: block; margin-top: 4px; font-size: var(--fs-2); }
 .nf-nopat { margin: 0; padding: 6px 10px; border-left: 3px solid var(--watch); background: color-mix(in oklab, var(--watch) 10%, var(--surface)); border-radius: 6px; }
+/* TP-1: the request type and the four lines. The dialog sits higher and grows to fit them at 1440 by 900; the full
+   example opens beside the form (below it when narrow), never over it. */
+.nf-backdrop:has(.nf-grid.with-lines, .nf-body.with-example) { padding-top: 3vh; }
+.new-form:has(.nf-grid.with-lines) { width: min(820px, 100%); max-height: 94vh; }
+.new-form:has(.nf-body.with-example) { width: min(1180px, 100%); max-height: 94vh; }
+.nf-body { display: flex; gap: 18px; align-items: flex-start; min-width: 0; }
+.nf-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 10px; }
+.nf-grid.with-lines { grid-template-columns: 9.5em minmax(0, 1fr); gap: 7px 14px; }
+.nf-reqtype { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.nf-example { flex: 0 0 330px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2, var(--surface)); }
+.nf-example h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.nf-example-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.nf-example p { margin: 4px 0 8px; font-size: var(--fs-2); }
+.nf-example dl { margin: 0; display: grid; gap: 8px; }
+.nf-example dt { font-weight: 600; font-size: var(--fs-2); }
+.nf-example dd { margin: 2px 0 0; white-space: pre-wrap; }
+@media (max-width: 1100px) { .nf-body { flex-direction: column; } .nf-example { flex-basis: auto; align-self: stretch; } }
+.fl-lines.fl-grid, .fl-grid .fl-line { display: contents; }
+.fl-stack { display: grid; gap: 10px; }
+.fl-stack .fl-line { display: grid; gap: 4px; }
+.fl-head { display: inline-flex; align-items: center; gap: 6px; align-self: start; padding-top: 5px; }
+.fl-stack .fl-head { padding-top: 0; }
+.fl-body { display: grid; gap: 4px; min-width: 0; }
+.fl-box { width: 100%; }
+.fl-example { display: none; font-size: var(--fs-2); color: var(--text-muted); }
+.fl-ex-label { font-weight: 600; }
+.fl-line.active .fl-example { display: block; }
+.fl-choices { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.fl-choice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.fl-choice-label { font-size: var(--fs-2); color: var(--text-muted); }
+.fl-chips .chip-btn { font-weight: 500; }
+.fl-chips .chip-btn[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
+.fl-other { width: 16ch; padding: 3px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); font-size: var(--fs-2); }
+.fl-read { white-space: pre-wrap; }
+.fl-help { position: relative; display: inline-flex; }
+.fl-help-btn { width: 1.45em; height: 1.45em; padding: 0; border-radius: 50%; font-size: var(--fs-1); font-weight: 600; line-height: 1; color: var(--text-muted); }
+.fl-why { display: none; position: absolute; left: 0; top: calc(100% + 4px); z-index: 5; width: max-content; max-width: 280px; padding: 6px 9px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow-dialog); font-size: var(--fs-2); font-weight: 400; color: var(--text); }
+.fl-help:hover .fl-why, .fl-help:focus-within .fl-why, .fl-help.pinned .fl-why { display: block; }
 @media (max-width: 640px) {
   .nf-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .nf-grid > .set-label { margin-top: 6px; }
@@ -6893,3 +6931,39 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 .checklist.past-rows .past-moved { opacity: 0.9; }
 .half.past .past-rows .past-moved .po-note { color: var(--text); }
 .day.folded .fold-half { cursor: pointer; }
+
+/* TP-1: Admin › Work templates: the list, the editor and the New form's preview side by side; stacked when narrow. */
+.wt-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 1300px) { .wt-layout { grid-template-columns: 200px minmax(0, 1fr); } .wt-preview { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .wt-layout { grid-template-columns: minmax(0, 1fr); } }
+.wt-list ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 2px; }
+.wt-nav { display: grid; width: 100%; text-align: left; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); gap: 1px; }
+.wt-nav .muted { font-size: var(--fs-1); }
+.wt-nav.on { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--surface)); }
+.wt-nav.gone > span:first-child { text-decoration: line-through; color: var(--text-muted); }
+.wt-editor { display: grid; gap: 10px; }
+.wt-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+.wt-field { display: grid; gap: 3px; min-width: 0; }
+.wt-field input, .wt-why input { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.wt-tag { display: grid; gap: 3px; }
+.wt-tag .muted { font-size: var(--fs-1); }
+.wt-line { margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 6px; }
+.wt-line legend { font-weight: 600; padding: 0 4px; }
+.wt-stories { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt-stories .chip-btn[aria-pressed="true"], .wt-readonly .chip-btn[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
+.wt-type-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.wt-preview { padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: 8px; display: grid; gap: 8px; position: sticky; top: 8px; }
+.wt-preview .set-sub, .wt-list .set-sub { margin: 0; }
+.wt-save { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.wt-why { flex: 1 1 320px; }
+.wt-ro-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.wt-ro-lines { margin: 4px 0 8px 18px; display: grid; gap: 4px; }
+.wt-ro-lines dt { font-weight: 600; font-size: var(--fs-2); }
+.wt-ro-lines dd { margin: 0; }
+/* TP-1: the story card's four lines, one block above the rest of the description; the type and a quiet readiness chip. */
+.sc-lines dl { margin: 0; display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.sc-lines dt { font-weight: 600; font-size: var(--fs-2); }
+.sc-lines dd { margin: 1px 0 0; white-space: pre-wrap; }
+.sc-reqtype { font-weight: 500; }
+.sc-ready { padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 99px; font-size: var(--fs-2); color: var(--text-muted); }
+.sc-ready.ready { color: var(--text); }
