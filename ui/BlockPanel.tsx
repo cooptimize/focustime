@@ -198,7 +198,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? week.days.flatMap((d) => [...d.am.focus, ...d.pm.focus]).find((f) => f.clientKey === k)?.clientName ?? k ?? "";
   const whole = !!day && (day.kind !== "work" || !!day.pto);
   // A PTO day reads PTO (its block, if any, stays in the data, read only).
-  const title = panelTitle(clientKey && !day?.pto ? name(clientKey) : null, at.date, at.half, { wholeDay: whole, open: day?.pto ? "PTO" : overflow ? "Catch-up" : slot?.off ? "No working hours" : "Open" });
+  const title = panelTitle(clientKey && !day?.pto ? name(clientKey) : null, at.date, at.half, { wholeDay: whole, open: day?.pto ? (day.pto.holiday ?? "PTO") : overflow ? "Catch-up" : slot?.off ? "No working hours" : "Open" });
   const when = slot ? panelWhen(shortRange(slot, tz), mode, freeMinutes(slot), planMinutes(blockPicks, pv.sizes, pv.timeboxes, slot)) : null;
   const weekPicks = useMemo(() => Object.values(pv.week ?? {}).flatMap((d) => d.picks), [pv.week]);
   const placed = useMemo(() => placedMap(weekPicks, at), [weekPicks, at.date, at.half]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -321,7 +321,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
       )}
       <div className="aw-scroll">
         {error && <p className="pd-error" role="alert">{error}</p>}
-        {day?.pto && <p className="bp-line">Whole day off · {day.pto.titles.join(", ")}</p>}
+        {day?.pto && <p className="bp-line">{day.pto.holiday ? `Holiday · ${day.pto.holiday}` : `Whole day off · ${day.pto.titles.join(", ")}`}</p>}
         {slot?.focus.slice(1).map((b) => (
           <p key={b.id} className="bp-line">Also booked: {b.clientName}</p>
         ))}

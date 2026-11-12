@@ -28,7 +28,16 @@ export const PTO_DETAIL_FILTER_COLUMNS = ["statecode"] as const;
 export type PtoEntry = { date: IsoDate; title: string; trackerId: string };
 
 /** A PTO day: the whole day is off, or only one half when `half` is set (S1, D453). */
-export type PtoDay = { date: IsoDate; titles: string[]; half?: "AM" | "PM" };
+export type PtoDay = {
+  date: IsoDate;
+  titles: string[];
+  half?: "AM" | "PM";
+  /**
+   * PS-1: an observed holiday (Dataverse's Working Days Calendar), as it reads: "Thanksgiving Day (observed)", or
+   * "Holiday" when the row has no name. A holiday is a whole day off, treated as PTO everywhere; it wins over PTO.
+   */
+  holiday?: string;
+};
 
 /** The title an out-of-office half-day or day shows (the event's own title is never shown as PTO). */
 export const OOF_TITLE = "Out of office";
@@ -85,5 +94,16 @@ export function ptoByDate(entries: readonly PtoEntry[], dates: readonly IsoDate[
     const here = entries.filter((e) => e.date === date);
     if (here.length) out[date] = { date, titles: [...new Set(here.map((e) => e.title))] };
   }
+  return out;
+}
+
+/**
+ * PS-1: observed holidays on the dates asked for, folded into the PTO days: each is a whole day off that reads as its
+ * label ("Thanksgiving Day (observed)", or "Holiday"), never "PTO". A day that is both PTO and a holiday shows the
+ * holiday; a half-day of PTO on a holiday becomes the whole day. Nothing else is guessed: no holidays, no change.
+ */
+export function withHolidays(pto: Readonly<Record<IsoDate, PtoDay>>, holidays: readonly { date: IsoDate; label: string }[], dates: readonly IsoDate[]): Record<IsoDate, PtoDay> {
+  const out: Record<IsoDate, PtoDay> = { ...pto };
+  for (const h of holidays) if (dates.includes(h.date)) out[h.date] = { date: h.date, titles: [h.label], holiday: h.label };
   return out;
 }

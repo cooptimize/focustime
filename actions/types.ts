@@ -9,7 +9,8 @@ import type { Capture, DraftStory, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 import type { AutoStartSettings } from "../plan/vm-autostart.ts";
 
-export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
+/** PS-1: `note`, something the source couldn't read while the rest is fine ("Holidays weren't read"). */
+export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number; note?: string };
 
 export type WeekLoadData = {
   weekStart: string;

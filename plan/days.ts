@@ -1,6 +1,7 @@
 // Which days Plan the day can open, how much of a day can be changed, and where carry-over is offered
 // ("Plan any day"). Pure: the caller passes today, PTO and commits.
 import type { IsoDate } from "../week/types.ts";
+import type { PtoDay } from "../week/pto.ts";
 import { isPlanWorkday } from "./target.ts";
 import { hoursText } from "./estimate.ts";
 
@@ -98,3 +99,11 @@ export function placeNote(date: IsoDate, o: { pto: boolean; hasHours: boolean })
  */
 export const freeNote = (date: IsoDate, half: "AM" | "PM" | "EVE", freeMinutes: number) =>
   `${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} ${half === "EVE" ? "evening" : half}: ${freeMinutes > 0 ? `${hoursText(freeMinutes)} free` : "no free time"}`;
+
+/** A day off's words: "PTO · Trip", or an observed holiday's own name ("Thanksgiving Day (observed)", "Holiday"; PS-1). */
+export function ptoLabel(p: PtoDay): string {
+  return p.holiday ?? `PTO · ${p.titles.join(", ")}`;
+}
+
+/** PS-1: a day header's chip: "Holiday" on an observed holiday (it wins over PTO), else "PTO". */
+export const offWord = (p: PtoDay | null | undefined) => (p?.holiday ? "Holiday" : "PTO");

@@ -2,13 +2,13 @@
 // weekend's quiet column, the Evening band and folded days (WK-1 to WK-3). WD-1: a day's header selects its first
 // block and opens the block panel; there is no Plan chip and no planning column any more.
 import { DaySuggestLine } from "./Suggest.tsx";
+import { offWord, ptoLabel } from "../plan/days.ts";
 import { useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { callMarks, MeetingCalls, useMine } from "./meetings/calls.ts";
 import { liveOf, useCoworkData } from "./cowork.tsx";
 import { liveCallCard, type CoworkChatView } from "../plan/cowork.ts";
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, Week } from "../week/types.ts";
-import type { PtoDay } from "../week/pto.ts";
 import type { FollowUpView } from "../actions/types.ts";
 import { weekDueBadges } from "../plan/due.ts";
 import { homeRail, lateOnCards, type CardRail } from "../plan/rail-promises.ts";
@@ -350,8 +350,8 @@ function DayColumn(props: { /** WD-2: Day draws the column with no header (Day h
         </button>
         {isToday && <span className="today-pill">Today</span>}
         {day.pto && (
-          <span className="pto-pill" title={ptoLabel(day.pto)}>
-            PTO
+          <span className={`pto-pill${day.pto.holiday ? " holiday-pill" : ""}`} title={ptoLabel(day.pto)}>
+            {offWord(day.pto)}
           </span>
         )}
         <span className="day-gap" />
@@ -464,14 +464,15 @@ export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, 
   // WK-3: every to-do of the day but the band's (a Friday deployment at 2 PM sits in the evening half: Friday has no hours of its own).
   const inBand = bandIds(band);
   const picks = kind === "catchup" ? (plan.week?.[day.date]?.picks ?? []).filter((p) => (p.status === "planned" || p.status === "done") && !inBand.has(p.id)) : [];
-  const label = kind === "pto" ? "PTO" : "Catch-up";
+  // PS-1: a holiday's cell carries its name ("Thanksgiving Day (observed)"), never "PTO".
+  const label = kind === "pto" ? (day.pto?.holiday ?? "PTO") : "Catch-up";
   // PV-1: the whole day is one drop target (PTO refuses it; catch-up takes it with no fit).
   const drop = useDropTarget({ date: day.date, half: "AM" });
   return (
     <div
       ref={(el) => (refAm(el), refPm(el))}
       {...drop.props}
-      className={`half whole ${kind}${selected ? " selected" : ""}${drop.cls}`}
+      className={`half whole ${kind}${day.pto?.holiday ? " holiday" : ""}${selected ? " selected" : ""}${drop.cls}`}
       tabIndex={selected ? 0 : -1}
       role="button"
       aria-label={`${dayLabel}, ${kind === "pto" ? ptoLabel(day.pto!) : "catch-up, no working hours"}`}
@@ -627,7 +628,7 @@ function FoldHalf({ day, half, whole, dayLabel, colors, now, nowLabel, onOpen }:
   const primary = whole ? undefined : slot.focus[0];
   const sev = whole ? null : worstSeverity(slot.risks);
   const drop = useDropTarget(half === "EVE" || whole === "pto" ? (whole === "pto" ? { date: day.date, half: "AM" } : null) : { date: day.date, half });
-  const name = whole === "pto" ? "PTO" : whole === "catchup" ? "Catch-up" : slot.pto ? "PTO" : primary ? primary.clientName : slot.off ? "No working hours" : slot.open ? "Open" : half === "EVE" ? "Evening" : "Catch-up";
+  const name = whole === "pto" ? offWord(day.pto) : whole === "catchup" ? "Catch-up" : slot.pto ? "PTO" : primary ? primary.clientName : slot.off ? "No working hours" : slot.open ? "Open" : half === "EVE" ? "Evening" : "Catch-up";
   const words = `${dayLabel}${whole ? "" : ` ${half === "EVE" ? "evening" : half}`}, ${name}${sev === "at_risk" ? ", at risk" : sev === "watch" ? ", watch" : ""}`;
   const state = whole ? `whole ${whole}` : slot.pto ? "pto-half" : primary ? "focus" : slot.open ? "open" : "off";
   return (
@@ -649,7 +650,5 @@ function FoldHalf({ day, half, whole, dayLabel, colors, now, nowLabel, onOpen }:
 }
 
 
-export function ptoLabel(p: PtoDay): string {
-  return `PTO · ${p.titles.join(", ")}`;
-}
+export { offWord, ptoLabel } from "../plan/days.ts";
 

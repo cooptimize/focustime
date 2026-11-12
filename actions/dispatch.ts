@@ -58,7 +58,8 @@ import { NO_CLIENT } from "../ai/types.ts";
 import { patternsAction, type PatternsAction, type PatternsContext, type PatternsPort } from "./patterns.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
-import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
+import { ptoByDate, withHolidays, type PtoDay, type PtoEntry } from "../week/pto.ts";
+import { holidayLabel } from "../sources/dataverse/holidays.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
@@ -477,6 +478,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   let dataverse: SourceResult<FocusPattern>;
   let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
   let aheadP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
+  // PS-1: Cooptimize's observed holidays (the Working Days Calendar) over the week shown and the look-ahead; null when
+  // they couldn't be read (never guessed), "none" when nothing could ask.
+  let holidaysP: Promise<{ date: IsoDate; label: string }[] | null | "none"> = Promise.resolve("none");
   let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
   let planClients: ClientRef[] = [];
   if (!cfg) {
@@ -512,6 +516,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       // Ahead of today for the planning target; its failure only means the target can't skip PTO.
       const aheadFrom = mondayOf(todayDate);
       aheadP = ptoSource.pto(aheadFrom, Temporal.PlainDate.from(aheadFrom).add({ days: AHEAD_DAYS }).toString(), refresh).catch(() => null);
+      if (ptoSource.holidays) {
+        const read = ptoSource.holidays;
+        const from = weekStart < aheadFrom ? weekStart : aheadFrom;
+        const ends = [Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString(), Temporal.PlainDate.from(aheadFrom).add({ days: AHEAD_DAYS + 7 }).toString()].sort();
+        holidaysP = read(from, ends[1]!).then((h) => (h.ok ? h.days.map((d) => ({ date: d.date, label: holidayLabel(d) })) : null)).catch(() => null);
+      }
       // Start DevOps as soon as the week's clients are known, alongside the calendars. Each client is isolated
       // inside the source; anything unexpected here only drops DevOps, never the week.
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
@@ -549,10 +559,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     const r = await syncWeek({ plan: ctx.plan, ow, cfg, weekStart, refresh: !!input.refresh, now: ctx.now, clients: known }).catch(() => null);
     return { canWrite: true, facts: r?.facts ?? {} };
   })();
-  const [outlook, google, devops, ptoResult, ahead, synced, linked] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP, linksP]);
+  const [outlook, google, devops, ptoResult, ahead, synced, linked, holidayRead] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP, linksP, holidaysP]);
   (await ctx.plan?.closeHelpFollowUps(Temporal.Instant.from(ctx.now())));
-  const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
-  const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
+  // PS-1: a holiday is a day off like PTO (it wins on a day that is both); unread, the week shows as it would without.
+  const holidays = Array.isArray(holidayRead) ? holidayRead : [];
+  const pto = withHolidays(ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart)), holidays, weekDates7(weekStart));
+  const ptoAhead = [...new Set([...(ahead?.items ?? []).map((e) => e.date), ...holidays.map((h) => h.date)])].sort();
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const unavailable = (await ctx.plan?.unavailableBetween(weekStart, sunday)) ?? [];
   const flex = (await ctx.plan?.flexBetween(weekStart, sunday)) ?? [];
@@ -578,7 +590,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   // focus patterns alone (no calendar), over today's week and the next, reusing the week built when it is one of them.
   const todayMon = mondayOf(todayDate);
   const followingMon = Temporal.PlainDate.from(todayMon).add({ days: 7 }).toString();
-  const patternWeek = (ws: IsoDate) => (ws === weekStart ? week.days : buildWeek({ weekStart: ws, patterns: dataverse.items, events: [], config: weekConfig, pto: ptoByDate(ahead?.items ?? [], weekDates7(ws)) }).days);
+  const patternWeek = (ws: IsoDate) => (ws === weekStart ? week.days : buildWeek({ weekStart: ws, patterns: dataverse.items, events: [], config: weekConfig, pto: withHolidays(ptoByDate(ahead?.items ?? [], weekDates7(ws)), holidays, weekDates7(ws)) }).days);
   const nextWork = cfg ? nextWorkDay([...patternWeek(todayMon), ...patternWeek(followingMon)], todayDate) : null;
   let clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
   // ADM-1: every client on the week has a team color (suggested the first time), unless the person picked their own.
@@ -645,7 +657,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, available: !!ctx.plan },
     ptoAhead,
     nextWorkDay: nextWork,
-    sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google, ...linked].map(summarize),
+    sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google, ...linked].map(summarize).map((s) => (s.source === "dataverse" && holidayRead === null ? { ...s, note: "Holidays weren't read" } : s)),
     devops,
     clients: clientColors,
     guidance: cfg?.org?.guidance ?? null,

@@ -108,3 +108,14 @@ describe("RF-1: the status bar is the one place a computer reconnects a source",
     expect(fixes).toEqual(expect.arrayContaining([{ kind: "reconnect", calendar: "google" }, { kind: "reconnect", calendar: "outlook" }, { kind: "retry" }]));
   });
 });
+
+describe("a part a source couldn't read (PS-1)", () => {
+  it('Dataverse live but its holidays unread: one line saying so, with Retry, and no "saved data" tail', () => {
+    const lines = causeLines([src("dataverse", { note: "Holidays weren't read" }), src("pto")], []);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ text: "Dataverse: holidays weren't read", since: null, missing: false, fixes: [{ kind: "retry" }] });
+  });
+  it("no note, no line", () => {
+    expect(causeLines([src("dataverse"), src("pto")], [])).toEqual([]);
+  });
+});
