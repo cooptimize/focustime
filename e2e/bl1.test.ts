@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { openFilter } from "./backlog-helpers.ts";
 
 let h: Harness;
 const T = 120_000;
@@ -143,6 +144,53 @@ describe.skipIf(!CHROMIUM)("BL-1: Backlog, measured (browser, demo mode)", () =>
     // Every entry has a reason in its Status.
     const quiet = await entries.evaluateAll((rows) => rows.filter((r) => /nothing to fix/.test(r.querySelector(".ah-col-status")?.getAttribute("aria-label") ?? "nothing to fix")).map((r) => r.getAttribute("data-key")));
     expect(quiet).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("review fixes: tree semantics, Break down in the tree, Select all takes only what's shown, one needs attention, ⋯ looks like a button, Stale only in Filter", async () => {
+    const { page, errors } = await open("#/backlog");
+    await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
+    await page.waitForTimeout(300);
+    // A tree: treegrid, each row its level, a row with children says open or closed.
+    await expect(page.locator("table.ah-grid").first().getAttribute("role")).resolves.toBe("treegrid");
+    const parent = page.locator(".ah-grid tbody .ah-row", { has: page.locator(".ah-chev") }).first();
+    await expect(parent.getAttribute("aria-level")).resolves.toMatch(/^\d+$/);
+    await expect(parent.getAttribute("aria-expanded")).resolves.toMatch(/^(true|false)$/);
+    // Break down stays on a feature missing stories in the tree, not only in Needs attention.
+    await expect(page.getByRole("button", { name: "Break down: Supplier onboarding" }).count()).resolves.toBe(1);
+    // Grammar: one needs attention.
+    for (const t of await page.locator(".ah-client-counts").allTextContents()) expect(t).not.toMatch(/\b1 need attention/);
+    // ⋯ is a button, not the dashed "+N" chip.
+    await expect(page.getByRole("button", { name: "More: rows and view" }).evaluate((b) => getComputedStyle(b).borderStyle)).resolves.not.toBe("dashed");
+    // Select all takes the rows shown: close a parent, and its children aren't selected.
+    const north = page.locator(".ah-client", { has: page.getByRole("heading", { name: /^Northwind Foods/ }) });
+    const open1 = north.locator(".ah-row", { has: page.locator(".ah-chev[aria-expanded=true]") }).first();
+    await open1.locator(".ah-chev").click();
+    const shownN = await north.locator(".ah-row:not(.context)").count();
+    await north.locator(".ah-client-all input").check();
+    await expect(page.locator(".bl-bulk strong").textContent()).resolves.toBe(`${shownN} selected`);
+    await page.locator(".bl-bulk").getByRole("button", { name: "Clear", exact: true }).click();
+    // Stale only, outside Needs attention: in Filter, counted on its button, a chip to take it off.
+    const pop = await openFilter(page);
+    await pop.getByRole("checkbox", { name: /^Stale only/ }).check();
+    await page.keyboard.press("Escape");
+    await expect.poll(() => page.locator(".ah-tb-summary .ah-tb-chip").allTextContents()).toContain("Stale×");
+    for (const l of await page.locator(".ah-grid tbody .ah-row:not(.context) .ah-col-status").evaluateAll((xs) => xs.map((x) => x.getAttribute("aria-label") ?? ""))) expect(l).toContain("Stale");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("review fixes: after a Skip the grid keeps a Tab stop; Start here isn't offered on the Gantt", async () => {
+    const { page, errors } = await open("#/backlog/attention");
+    await page.locator(".ah-att-line").waitFor({ timeout: 30_000 });
+    const skip = page.locator(".ah-client .ah-row:not(.context) .ah-fix").getByRole("button", { name: /^Skip / }).first();
+    await skip.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.locator(".ah-grid td[tabindex='0']").count()).toBeGreaterThan(0);
+    await page.evaluate(() => (location.hash = "#/backlog/gantt?nr=1"));
+    await page.locator(".pa-item").first().waitFor({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: /^Start here/ }).count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

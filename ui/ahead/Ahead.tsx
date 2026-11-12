@@ -271,9 +271,11 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   // QC-1: once the new item is read, say it was created and which filters would hide it after I leave.
   useEffect(() => {
     if (!justMade || !load || !filters) return;
-    const why = hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`);
+    // Needs attention and one level as a list don't keep a new item in view: the words say so.
+    const why = [...hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`, new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)))), ...(filters.flat ? ["One level as a list"] : [])];
+    const kept = !filters.gaps && !filters.flat;
     const there = load.clients.some((c) => c.clientKey === justMade.clientKey && c.items.some((i) => i.id === justMade.id));
-    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? `Created #${justMade.id}. Shown until you leave Backlog. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}` });
+    setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? (kept ? `Created #${justMade.id}. Shown until you leave Backlog. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}. Not shown here: ${why.join(", ")}`) : `Created #${justMade.id}` });
     setJustMade(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justMade, load]);
@@ -332,7 +334,13 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     local.current++;
     void call<{ skips: Skips }>(on ? "ahead.skip" : "ahead.unskip", { clientKey, itemId }).then((r) => (local.current++, setSkipOverride(r.skips)), (e: unknown) => {
       local.current++;
-      setSkipOverride(skips);
+      // Put back only this item's skip: others made meanwhile stay.
+      setSkipOverride((cur) => {
+        const back = { ...(cur ?? skips) };
+        if (skips[key] !== undefined) back[key] = skips[key];
+        else delete back[key];
+        return back;
+      });
       setError(e instanceof Error ? e.message : "That skip couldn't be kept");
     });
   };
@@ -346,7 +354,8 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   // AH-7, BL-1: Start here: the 5 most urgent of Needs attention across the clients shown (the rule in its tooltip).
   const [startOn, setStartOn] = useState(false);
   const starts = useMemo(() => new Set(startHere(fix.flatMap((x) => x.group.entries.filter((e) => !e.leaving).map((entry, rank) => ({ entry, rank, date: entry.due ?? null, mine: entry.mine === true })))).map((e) => e.key)), [fix]);
-  const startNow = startOn && attention && starts.size > 0;
+  // Start here narrows the Grid's list; the Gantt has no list to narrow, so it isn't offered there.
+  const startNow = startOn && attention && mode === "grid" && starts.size > 0;
   const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
   // With Needs attention on, Stale is one of its reasons (an either-or with the kinds), so the list doesn't narrow by it too.
   const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat, ...(f.gaps ? { stale: false } : {}) }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
@@ -476,7 +485,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       </div>
       {readOnly && load && <p className="muted ah-ro-note">Read only on a phone. Open FocusTime on a computer to change dates, sizes or owners.</p>}
       {load && filters && <Toolbar mode={mode} load={load} f={f} set={setFilters} setWhole={(w) => void setWhole(w)} view={view} counts={counts} attention={attentionN} color={color} extra={mode === "gantt" ? <LegendButton /> : null} />}
-      {load && attention && <AttentionLine start={{ on: startNow, n: starts.size, toggle: () => setStartOn(!startOn) }} counts={kinds} stale={staleN} f={f} set={setFilters} progress={progressText(load.fixedWeek ?? 0, pendingFixes)} staleWeeks={staleWeeks} />}
+      {load && attention && <AttentionLine start={{ on: startNow, n: mode === "grid" ? starts.size : 0, toggle: () => setStartOn(!startOn) }} counts={kinds} stale={staleN} f={f} set={setFilters} progress={progressText(load.fixedWeek ?? 0, pendingFixes)} staleWeeks={staleWeeks} />}
       {load && <ScopeProblems load={load} />}
       {error && <p className="error" role="alert">{error}</p>}
       {!load && !error && <p className="muted">Reading DevOps…</p>}

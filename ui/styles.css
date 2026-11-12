@@ -6756,7 +6756,7 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-tb-search .rm-search { max-width: none; }
 .ah-tb-end { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .ah-filter-n { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid var(--selected); border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-1); font-weight: 600; text-align: center; }
-.ah-more { min-width: calc(32px * var(--text-scale)); justify-content: center; }
+.ah-tb-more { min-width: calc(32px * var(--text-scale)); justify-content: center; }
 .ah-filter-pop .cell-pop-body { gap: 14px; min-width: 22em; }
 .ah-fp-row { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 6px 10px; }
 .ah-fp-label { font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); }
@@ -6821,3 +6821,6 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-col-status .ah-ready { flex-wrap: nowrap; }
 .ah-status .ah-fix { display: inline-flex; gap: 6px; align-items: center; }
 .ah-status .ah-fix .mini { white-space: nowrap; }
+.ah-chip-btn { font-family: inherit; line-height: inherit; cursor: pointer; }
+.ah-chip-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.ah-chip-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }

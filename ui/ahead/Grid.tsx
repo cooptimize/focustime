@@ -101,6 +101,8 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
     return out;
   }, [groups, fold, folded, shape]);
   const flat = shown.flatMap((x) => x.rows.map((y) => y.r));
+  // A row that left (skipped, fixed, folded away, searched out) gives the grid's one Tab stop back to the first row.
+  const live = focus && flat.some((x) => x.key === focus.key) ? focus : null;
   const byKey = useMemo(() => new Map(groups.flatMap((g) => g.rows.map((r) => [r.key, r] as const))), [groups]);
   // Selection: only rows still listed stay selected.
   useEffect(() => {
@@ -162,7 +164,8 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
   // BH-1: each client's stale count, and its rows that can be ticked (all of them at once from its header).
   const weeks = a.load.staleWeeks ?? 6;
   const staleOf = (g: GridGroup) => g.rows.filter((r) => !r.context && isOpen(r.item) && isStale(r.item, a.load.today, weeks)).length;
-  const pickable = (g: GridGroup) => g.rows.filter((r) => !r.context);
+  // Select all takes the rows shown: never what sits under a closed row.
+  const pickable = (rows: readonly { r: GridRow }[]) => rows.map((x) => x.r).filter((r) => !r.context);
   return (
     <div className={`ah-grid-box lay-${layout} shape-${shape}${sel.size ? " has-sel" : ""}`} onKeyDown={(e) => e.key === "Escape" && sel.size > 0 && !editing && (e.stopPropagation(), setSel(new Set()))}>
       {ticks && <BulkBar chosen={chosen} titleOf={(k, id) => byKey.get(`${k}:${id}`)?.item.title ?? ""} select={(keys) => setSel(new Set(keys))} onChanged={onChanged ?? (() => null)} />}
@@ -183,20 +186,30 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
               {c.status === "ok" && (
                 <span className="muted ah-client-counts">
                   · {plural(g.count, "item", "items")}
-                  {g.need > 0 && shape !== "attention" ? ` · ${g.need} need attention` : ""}
+                  {g.need > 0 && shape !== "attention" ? ` · ${g.need} ${g.need === 1 ? "needs" : "need"} attention` : ""}
                   {staleOf(g) > 0 ? ` · ${staleOf(g)} stale` : ""}
                 </span>
               )}
-              {ticks && open && pickable(g).length > 1 && (
-                <label className="ah-client-all">
-                  <input type="checkbox" checked={pickable(g).every((r) => sel.has(r.key))} onChange={(e) => setSel((s) => {
-                    const n = new Set(s);
-                    for (const r of pickable(g)) e.target.checked ? n.add(r.key) : n.delete(r.key);
-                    return n;
-                  })} />
-                  <span className="sr-only">Select all {pickable(g).length} shown in {c.clientName}</span>
-                </label>
-              )}
+              {ticks && open && pickable(rows).length > 1 && (() => {
+                const all = pickable(rows);
+                const n = all.filter((r) => sel.has(r.key)).length;
+                return (
+                  <label className="ah-client-all" title={`Select all ${all.length} shown in ${c.clientName}`}>
+                    <input
+                      type="checkbox"
+                      checked={n === all.length}
+                      ref={(el) => void (el && (el.indeterminate = n > 0 && n < all.length))}
+                      onChange={(e) => setSel((s) => {
+                        const next = new Set(s);
+                        for (const r of all) e.target.checked ? next.add(r.key) : next.delete(r.key);
+                        return next;
+                      })}
+                    />
+                    <span aria-hidden="true">Select all</span>
+                    <span className="sr-only">Select all {all.length} shown in {c.clientName}</span>
+                  </label>
+                );
+              })()}
               {c.lead && <span className="muted">· you're a lead here</span>}
               {c.status === "ok" && g.rankedBy === "target" && (
                 <span className="muted ah-client-order" title={`${c.project ?? c.clientName} has no backlog order field in DevOps`}>
@@ -209,7 +222,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
               <p className="muted ah-client-empty">{shape === "attention" ? "Nothing to fix near the top of this backlog or in the next 4 weeks." : "Nothing here with these filters."}</p>
             )}
             {open && rows.length > 0 && (
-              <table className="ah-grid" role="grid" aria-label={`${c.clientName} items`} aria-multiselectable={ticks || undefined}>
+              <table className="ah-grid" role={shape === "flat" ? "grid" : "treegrid"} aria-label={`${c.clientName} items`} aria-multiselectable={ticks || undefined}>
                 <colgroup>
                   {COLS.map((col) => <col key={col} className={WIDTH[col]} />)}
                 </colgroup>
@@ -231,7 +244,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
                       kids={kids}
                       open={kids && isOpenRow(fold, r)}
                       toggle={(o) => toggle(r, o)}
-                      focus={focus}
+                      focus={live}
                       first={flat[0]?.key === r.key}
                       editing={editing?.key === r.key ? editing.col : null}
                       setFocus={setFocus}
@@ -282,6 +295,8 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   const stale = isStale(r.item, a.load.today, weeks) ? ageText(ageDays(r.item.changedAt, a.load.today)).replace(/ ago$/, "") : null;
   const status: Status = statusOf({ open: !closedItem && !r.context, health: rm ? { state: rm.status.state, reason: rm.status.reason } : null, gaps: r.gaps, stale });
   const entry = shape === "attention" ? (r.entry ?? null) : null;
+  // Outside Needs attention, an item missing stories keeps its Break down (as its chip did before BL-1).
+  const treeBreak = !entry && !closedItem && !r.context && r.editable && !a.readOnly && r.tier !== "story" && r.gaps.includes("needs_stories");
   const statusTab = focus?.key === r.key && focus.col === "status";
   /** A popover closed: back to its cell, or (Tab) on to the next editable cell in the row. */
   const closed = (col: Col, step: 0 | 1 | -1) => {
@@ -312,6 +327,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     else if (e.key === "N" && e.shiftKey && col === "item" && a.newUnder && r.tier !== "story" && !a.readOnly) a.newUnder({ clientKey: c.clientKey, id: r.item.id, type: r.item.type, title: r.item.title });
     else if (e.key === "Enter" && col === "item" && kids) toggle();
     else if (e.key === "Enter" && col === "status" && entry && NEED_ACTION[entry.action]) fix(entry.action);
+    else if (e.key === "Enter" && col === "status" && treeBreak) a.breakDown(r);
     else if (e.key === "Enter" && field && canChange && can(col)) edit(col);
     else if ((e.key === "Delete" || e.key === "Backspace") && col === "dates" && canChange && (r.pending.start || r.pending.target)) void (async () => (r.pending.start && (await a.unstage(r, "start")), r.pending.target && (await a.unstage(r, "target"))))();
     else if ((e.key === "Delete" || e.key === "Backspace") && field && canChange && r.has[field] && r.pending[field]) void a.unstage(r, field);
@@ -382,7 +398,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   const action = entry ? NEED_ACTION[entry.action] : null;
   const statusCell = () => (
     <span className="ah-status">
-      {status.main && <StatusChip s={status} dots={dots} />}
+      {status.main && <StatusChip s={status} dots={dots} open={treeBreak ? { label: `Break down: ${r.item.title}`, tab: statusTab ? 0 : -1, run: () => a.breakDown(r) } : null} />}
       {entry && !entry.leaving && (
         <span className="ah-fix">
           {action && (
@@ -404,6 +420,8 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   return (
     <tr
       role="row"
+      aria-level={shape === "flat" ? undefined : r.depth + 1}
+      aria-expanded={kids ? open : undefined}
       aria-selected={pick ? selected : undefined}
       data-key={r.key}
       className={`ah-row tier-${r.tier} depth-${r.depth}${r.context ? " context" : ""}${closedItem ? " closed" : ""}${r.item.inScope === false ? " out-scope" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}${selected ? " sel" : ""}${entry?.leaving ? " leaving" : ""}`}
@@ -490,18 +508,23 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
               )}
             </Fragment>
           );
-        return <Fragment key={col}>{cell("status", statusCell(), { label: `Status: ${closedItem ? "closed" : statusWords(status)}${action ? `. Enter: ${action}` : ""}` })}</Fragment>;
+        return <Fragment key={col}>{cell("status", statusCell(), { label: `Status: ${closedItem ? "closed" : statusWords(status)}${action ? `. Enter: ${action}` : treeBreak ? ". Enter: Break down" : ""}` })}</Fragment>;
       })}
     </tr>
   );
 }
 
 /** One chip, and the other reasons as a quiet "+N" whose list shows on hover and when the cell has focus. */
-function StatusChip({ s, dots }: { s: Status; dots: boolean }) {
+function StatusChip({ s, dots, open = null }: { s: Status; dots: boolean; /** The chip opens Break down (a feature missing stories, in the tree). */ open?: { label: string; tab: number; run: () => void } | null }) {
   const m = s.main!;
   return (
     <span className="ah-ready">
-      {dots ? (
+      {open ? (
+        <button type="button" className="ah-chip ah-chip-btn" title={`${m.title}. Click to break it down`} aria-label={open.label} tabIndex={open.tab} data-status={m.key} onClick={open.run}>
+          <span className={`ah-chip-dot${m.action ? " action" : ""}`} aria-hidden="true" />
+          {m.text}
+        </button>
+      ) : dots ? (
         <span className={`ah-gapdot${m.action ? " action" : ""}`} title={m.title} data-status={m.key} aria-hidden="true" />
       ) : (
         <span className="ah-chip" title={m.title} data-status={m.key}>

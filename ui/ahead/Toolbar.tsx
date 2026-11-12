@@ -132,7 +132,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
         <span className="ah-tb-end">
           {extra}
           <FilterButton f={f} set={set} load={load} view={view} count={nFilter} epics={epics} />
-          <button ref={more} type="button" className="top-btn ah-more" aria-label="More: rows and view" aria-haspopup="menu" title="Expand all, Collapse all, Callouts, Whole project, scope" onClick={openMore}>
+          <button ref={more} type="button" className="top-btn ah-tb-more" aria-label="More: rows and view" aria-haspopup="menu" title="Expand all, Collapse all, Callouts, Whole project, scope" onClick={openMore}>
             ⋯
           </button>
         </span>
@@ -206,6 +206,12 @@ function FilterButton({ f, set, load, view, count, epics }: { f: AheadFilters; s
               <input type="checkbox" checked={!!f.flat} onChange={(e) => set(e.target.checked ? { ...f, flat: view.fold.level } : unflat)} />
               One level as a list, in each backlog's rank order
             </label>
+            {!f.gaps && (
+              <label className="ah-fp-flat">
+                <input type="checkbox" checked={!!f.stale} onChange={(e) => set(e.target.checked ? { ...f, stale: true } : (({ stale: _s, ...x }) => x)(f))} />
+                Stale only: no change in DevOps for {load.staleWeeks ?? 6} weeks
+              </label>
+            )}
           </div>
         </CellPopover>
       )}

@@ -19,6 +19,11 @@ type Skip = { clientKey: string; itemId: number; reason: string };
 type Result = { text: string; skipped: Skip[] };
 type Toast = { id: number; text: string; undo: (() => Promise<void>) | null };
 
+/** ahead.stage_bulk's most items a call. */
+export const BULK_MAX = 200;
+/** A list in parts of at most n, in order. */
+export const inParts = <T,>(xs: readonly T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
 export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[]; titleOf: (clientKey: string, itemId: number) => string; /** The rows left selected (the ones skipped), or none. */ select: (keys: string[]) => void; onChanged: () => void }) {
   const a = useAhead();
   const [busy, setBusy] = useState(false);
@@ -30,7 +35,16 @@ export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[];
   const bulk = async (op: BulkOp) => {
     setBusy(true);
     try {
-      const r = await call<{ changes: StagedChange[]; staged: { clientKey: string; itemId: number }[]; skipped: Skip[] }>("ahead.stage_bulk", { items: chosen.map((x) => ({ clientKey: x.clientKey, itemId: x.item.id })), op });
+      // The server takes 200 items a call: a larger selection goes in parts, one result.
+      type Part = { changes: StagedChange[]; staged: { clientKey: string; itemId: number }[]; skipped: Skip[] };
+      const items = chosen.map((x) => ({ clientKey: x.clientKey, itemId: x.item.id }));
+      const r: Part = { changes: [], staged: [], skipped: [] };
+      for (const part of inParts(items, BULK_MAX)) {
+        const p = await call<Part>("ahead.stage_bulk", { items: part, op });
+        r.changes = p.changes;
+        r.staged.push(...p.staged);
+        r.skipped.push(...p.skipped);
+      }
       a.setChanges(r.changes);
       setResult({ text: bulkSummary(op, r.staged.length, r.skipped.length), skipped: r.skipped });
       select(r.skipped.map((s) => `${s.clientKey}:${s.itemId}`));

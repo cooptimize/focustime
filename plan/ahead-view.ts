@@ -163,8 +163,9 @@ export function peopleWord(f: AheadFilters, shown: readonly SummaryClient[]): { 
 }
 
 /** How many of the Filter popover's choices are off their defaults: Epic, Dates, the level shown, one level as a list. */
-export function filterCount(f: Pick<AheadFilters, "epic" | "range" | "from" | "to" | "flat">, level: Tier): number {
-  return (f.epic ? 1 : 0) + (f.range || f.from || f.to ? 1 : 0) + (level !== DEFAULT_LEVEL ? 1 : 0) + (f.flat ? 1 : 0);
+export function filterCount(f: Pick<AheadFilters, "epic" | "range" | "from" | "to" | "flat"> & Partial<Pick<AheadFilters, "stale" | "gaps">>, level: Tier): number {
+  // Stale only counts here outside Needs attention (inside it, Stale is one of its kinds).
+  return (f.epic ? 1 : 0) + (f.range || f.from || f.to ? 1 : 0) + (level !== DEFAULT_LEVEL ? 1 : 0) + (f.flat ? 1 : 0) + (f.stale && !f.gaps ? 1 : 0);
 }
 
 /**
@@ -188,7 +189,8 @@ export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: {
       clear: (x) => ({ ...x, owner: Object.fromEntries(Object.entries(x.owner).filter(([k]) => !changed.some((c) => c.clientKey === k))) }),
     });
   }
-  if (f.gaps) chips.push({ id: "attention", label: "Needs attention", clear: ({ kinds: _k, ...x }) => ({ ...x, gaps: false }) });
+  // Off from its chip as from its toggle: its kinds and its Stale go with it.
+  if (f.gaps) chips.push({ id: "attention", label: "Needs attention", clear: ({ kinds: _k, stale: _s, ...x }) => ({ ...x, gaps: false }) });
   if (f.kinds?.length) chips.push({ id: "kinds", label: KINDS.filter((k) => f.kinds!.includes(k)).map((k) => KIND_WORDS[k]).join(", "), clear: ({ kinds: _k, ...x }) => x });
   if (f.stale) chips.push({ id: "stale", label: "Stale", clear: ({ stale: _s, ...x }) => x });
   if (f.epic) chips.push({ id: "epic", label: `Epic: ${o.epicLabel ?? "chosen"}`, clear: (x) => ({ ...x, epic: null }) });
