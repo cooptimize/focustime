@@ -2088,6 +2088,22 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_week_days": {
+      // WK-5: Week's ⋯ ("Show Friday", "Show weekend") and Settings › Display. Saved in [ui] show_catch_up_day and
+      // show_weekend_days, the person's own; either or both.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "catchUp" && k !== "weekend") || (i.catchUp !== undefined && typeof i.catchUp !== "boolean") || (i.weekend !== undefined && typeof i.weekend !== "boolean") || (i.catchUp === undefined && i.weekend === undefined))
+        return bad("input must be { catchUp?: boolean, weekend?: boolean }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => {
+        let t = text;
+        if (typeof i.catchUp === "boolean") t = setValue(t, "ui", "show_catch_up_day", i.catchUp, "Display (WK-5): show the catch-up day on Week.");
+        if (typeof i.weekend === "boolean") t = setValue(t, "ui", "show_weekend_days", i.weekend, "Display (WK-5): show weekend days on Week (when something is on them).");
+        return t;
+      });
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
     case "ui.set_show_timelines": {
       // WK-2: the Board's Timeline toggle (its header button, B, Week's ⋯ and the command). Saved in [ui] show_timelines,
       // the key U3 left read and ignored, so an older build reads it without complaint.

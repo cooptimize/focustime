@@ -200,6 +200,7 @@ export const ACTIONS = [
   { name: "ui.set_inbox", title: "Inbox view, clients and grouping", group: "Display", target: "none", summary: "The Inbox's view, the clients it shows and how it groups them; remembered for you" },
   { name: "ui.set_show_timelines", title: "Timeline", group: "Display", target: "none", shortcut: "B", summary: "Show or hide the hour rail beside each card on Week; hidden, cards use their full width and list their meetings; saved for you" },
   { name: "ui.set_today_timeline", title: "Timeline on Today", group: "Display", target: "none", shortcut: "B", summary: "Show or hide Today's hour timeline, where to-dos are timeboxed by dragging; off is the list; saved for you" },
+  { name: "ui.set_week_days", title: "Days on Week", group: "Display", target: "none", summary: "Show or hide the catch-up day and weekend days on Week (the person's own setting)" },
   { name: "ui.set_show_personal", title: "Personal events", group: "Display", target: "none", shortcut: "G", summary: "Show or hide personal events on Week and Today; they still count in risk and free time; saved in config" },
   { name: "hours.set_day", title: "Set working hours for a day", group: "Time", target: "day", summary: "Other hours for one day, a split day or a lunch change" },
   { name: "hours.clear_day", title: "Use usual hours for a day", group: "Time", target: "day", summary: "Remove a day's own working hours" },

@@ -77,6 +77,7 @@ import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { AfterHoursChip, clientNameFor, DeployedOffer } from "./Deploy.tsx";
 import { DEPLOYED_EVENT, readShowWeekend, TICK_REMOVED_EVENT, writeShowWeekend } from "./weekend.ts";
+import { catchUpWord, hiddenNote, SHOW_ALL, shownDays, stepShown, type ShowDays } from "../plan/weekdays.ts";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
@@ -534,6 +535,31 @@ export function App() {
     }
   }, []);
   const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
+  /**
+   * WK-5: the days Week shows: the catch-up day and weekend days, each the person's own setting (Week's ⋯ and Settings
+   * › Display, [ui] show_catch_up_day and show_weekend_days). The note's Show brings hidden days back until the person
+   * leaves Week (`revealDays`), without changing the setting. `chosenDay`: a folded day opened with the panel closed.
+   */
+  const [weekDays, setWeekDays] = useState<ShowDays>(SHOW_ALL);
+  useEffect(() => {
+    if (data) setWeekDays({ catchUp: data.ui.showCatchUpDay ?? true, weekend: data.ui.showWeekendDays ?? true });
+  }, [data?.ui.showCatchUpDay, data?.ui.showWeekendDays]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveWeekDays = useCallback(async (v: Partial<ShowDays>) => {
+    let before: ShowDays = SHOW_ALL;
+    setWeekDays((w) => ((before = w), { ...w, ...v }));
+    try {
+      await call("ui.set_week_days", v);
+    } catch (e) {
+      setWeekDays(before);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
+  const [revealDays, setRevealDays] = useState(false);
+  const [chosenDay, setChosenDay] = useState<string | null>(null);
+  useEffect(() => {
+    if (nav.tab !== "week") setRevealDays(false);
+    setChosenDay(null);
+  }, [nav.tab, data?.weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
   // SG-1: "Suggest work for empty blocks" (Settings › Planning, Week's and Day's ⋯ as "Suggestions"). Saved as the person's setting.
   const [suggestOn, setSuggestOn] = useState(true);
   useEffect(() => {
@@ -1388,10 +1414,12 @@ export function App() {
         const letterA = e.key === "a" || e.key === "A";
         if (!letterA && !from?.closest(".grid.day-only")) return;
       }
+      const weekShown = shownDays(days, weekDays, revealDays);
       const halvesOf = (i: number): Half[] => (days[i] ? cardHalves(days[i]) : ["AM", "PM"]);
       const move = (dayIndex: number, half: Half) => {
         e.preventDefault();
         // Day keeps to its own day: left and right step its blocks like up and down.
+        if (dayIndex < 0) return;
         const i = onDay ? sel.dayIndex : Math.max(0, Math.min(days.length - 1, dayIndex));
         const h = validHalf(days[i]!, half);
         setSel({ dayIndex: i, half: h });
@@ -1404,8 +1432,9 @@ export function App() {
         return move(sel.dayIndex, hs[Math.max(0, Math.min(hs.length - 1, hs.indexOf(sel.half) + dir))]!);
       };
       switch (e.key) {
-        case "ArrowLeft": return onDay ? step(-1) : move(sel.dayIndex - 1, sel.half);
-        case "ArrowRight": return onDay ? step(1) : move(sel.dayIndex + 1, sel.half);
+        // WK-5: Week's arrows pass over hidden days (a folded day's header is a stop).
+        case "ArrowLeft": return onDay ? step(-1) : move(stepShown(weekShown, sel.dayIndex, -1), sel.half);
+        case "ArrowRight": return onDay ? step(1) : move(stepShown(weekShown, sel.dayIndex, 1), sel.half);
         case "ArrowUp": return step(-1);
         case "ArrowDown": return step(1);
         case "v":
@@ -1434,7 +1463,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, patternsAt, base, captureOpen, layout, nav]);
+  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, patternsAt, base, captureOpen, layout, nav, weekDays, revealDays]);
 
   // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
   useEffect(() => {
@@ -1539,6 +1568,9 @@ export function App() {
       saveDayTimeline: (show) => void saveDayTimeline(show),
       showWeekend,
       saveShowWeekend,
+      weekDays,
+      saveWeekDays: (v) => void saveWeekDays(v),
+      catchUpName: catchUpWord(data.week.days),
       undoable: (text, undo) => setUndoToast({ id: Date.now(), text, undo }),
       planAction: async (action, input) => {
         try {
@@ -1704,6 +1736,10 @@ export function App() {
   const localToday = data.planDay.date;
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
+  // WK-5: the days Week shows, and the note when a hidden day has open to-dos or is today.
+  const shown = shownDays(week.days, weekDays, revealDays);
+  const catchUpName = catchUpWord(week.days);
+  const hiddenWords = nav.tab === "week" && nav.mode === "board" ? hiddenNote(week.days, shown, localToday, (d) => (data.plan?.[d]?.picks ?? []).filter((p) => p.status === "planned").length) : null;
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
   // IB-1: the badge is Needs you, the server's one count (conversations, promises new or due, sends waiting).
   const inboxCount = needsYouCount ?? 0;
@@ -1981,6 +2017,9 @@ export function App() {
           setReduceMotion={(on) => void saveReduceMotion(on)}
           showPersonal={showPersonal}
           setShowPersonal={(show) => void saveShowPersonal(show)}
+          weekDays={weekDays}
+          setWeekDays={(v) => void saveWeekDays(v)}
+          catchUpName={catchUpWord(data.week.days)}
           textSize={textSize}
           setTextSize={(s) => void saveTextSize(s)}
           demo={data.demo}
@@ -2175,7 +2214,21 @@ export function App() {
             </ModeArea>
           </header>
       <CarryProvider {...carryProps(nowIso)}>
-      {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
+      {(thisWeek || hiddenWords) && (
+        // WK-5: the sub-line: "N to place · Review" and, beside it, the one quiet note about hidden days.
+        <div className="week-subline">
+          {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
+          {hiddenWords && (
+            <p className="hidden-days-note" role="status">
+              <span>{hiddenWords}</span>
+              <span aria-hidden="true"> · </span>
+              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label={`Show the hidden days for now: ${hiddenWords}`} title="Shows them until you leave Week; the setting is in Week's ⋯">
+                Show
+              </button>
+            </p>
+          )}
+        </div>
+      )}
       {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
         <p className="next-empty-line" role="status">
           Next week is empty ·{" "}
@@ -2206,6 +2259,20 @@ export function App() {
         }}
         panelOpen={!!shownPanel && !phone}
         timeline={showTimelines}
+        shown={shown}
+        // WK-5: the panel's day is in focus; the panel shown only as a drag's drop area (dragAt) never moves the focus,
+        // so the columns don't jump under the pointer mid-drag.
+        focusAt={{ panel: panelAt && shownPanel && !phone ? shownPanel.date : null, chosen: chosenDay }}
+        onFoldOpen={(i) => {
+          // WK-5: a folded day becomes the day in focus: with the panel open, the panel moves to its first block.
+          const d = week.days[i];
+          if (!d) return;
+          const half = validHalf(d, "AM");
+          setSel({ dayIndex: i, half });
+          if (shownPanel && !phone) openBlock(d.date, half);
+          else setChosenDay(d.date);
+          requestAnimationFrame(() => cellRefs.current.get(`${i}${half}`)?.focus({ preventScroll: true }));
+        }}
         onSelect={(x) => {
           setSel(x);
           // WD-1, WD-2: clicking another block keeps the block panel open on it.
@@ -2370,8 +2437,11 @@ export function App() {
               { id: "suggestions", label: "Suggestions", group: "Show", checked: suggestOn, hint: suggestOn ? "on" : "off", run: () => void saveSuggest(!suggestOn) },
               // WK-2: the Board's timeline, the same toggle as the button beside the modes.
               { id: "timeline", label: "Timeline", group: "Show", checked: showTimelines, hint: "B", run: () => void saveShowTimelines(!showTimelines) },
-              // WK-3: Saturday and Sunday always (they show anyway when something lands on them).
-              { id: "weekend", label: "Weekend", group: "Show", checked: showWeekend, hint: showWeekend ? "always" : "when something's on it", run: () => saveShowWeekend(!showWeekend) },
+              // WK-5: the days Week shows, the person's own (also Settings › Display), labelled with the week's own names.
+              { id: "days-catchup", label: `Show ${catchUpName}`, group: "Days", checked: weekDays.catchUp, run: () => void saveWeekDays({ catchUp: !weekDays.catchUp }) },
+              { id: "days-weekend", label: "Show weekend", group: "Days", checked: weekDays.weekend, hint: weekDays.weekend ? "when something's on it" : "never", run: () => void saveWeekDays({ weekend: !weekDays.weekend }) },
+              // WK-3: Saturday and Sunday every week (they show anyway when something lands on them); only while Show weekend is on.
+              ...(weekDays.weekend ? [{ id: "weekend", label: "Every weekend day", group: "Days", checked: showWeekend, hint: showWeekend ? "always" : "when something's on it", run: () => saveShowWeekend(!showWeekend) }] : []),
             ],
           }}
           onClose={() => setWeekMoreAt(null)}
