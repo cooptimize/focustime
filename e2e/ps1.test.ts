@@ -37,13 +37,23 @@ const PANEL_SCOPE = "main, aside.block-panel";
 /** Opens the block under way (today's morning) in the panel, as a click on its card's head does. */
 const openBlock = async (page: Page) => {
   if (await page.locator("aside.block-panel").count()) return;
-  await page.locator("main .half.focus .card-head").first().click({ position: { x: 4, y: 4 } }).catch(() => {});
+  await page.locator("main .half.focus .card-head").first().click({ position: { x: 4, y: 4 }, timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(800);
 };
-/** Opens the panel's folds (More in <client>, To place, You sent, N done). */
+/**
+ * Opens the panel's folds (More in <client>, To place, You sent, N done) as a click would, from the page: a fold that
+ * isn't drawn (or is under something) would make a pointer click wait out its timeout.
+ */
 const openFolds = async (page: Page) => {
-  for (const f of await page.locator("aside.block-panel .pl-fold[aria-expanded=false]").all()) await f.click().catch(() => {});
-  await page.waitForTimeout(800);
+  for (let round = 0; round < 3; round++) {
+    const opened = await page.evaluate(() => {
+      const folds = [...document.querySelectorAll<HTMLButtonElement>("aside.block-panel .pl-fold[aria-expanded=false]")];
+      for (const f of folds) f.click();
+      return folds.length;
+    });
+    if (!opened) break;
+    await page.waitForTimeout(600);
+  }
 };
 
 /** The header's + Add: shown, and the only button in its header with the main action's fill. */
