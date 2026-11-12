@@ -12,7 +12,7 @@ export const SECTIONS = [
   { id: "first-day", name: "Your first day", group: "start" },
   { id: "today", name: "Today", group: "tabs" },
   { id: "week", name: "Week", group: "tabs" },
-  { id: "ahead", name: "Ahead", group: "tabs" },
+  { id: "ahead", name: "Backlog", group: "tabs" },
   { id: "inbox", name: "Inbox", group: "tabs" },
   { id: "capture", name: "Capture and Break down", group: "more" },
   { id: "assistant", name: "The assistant", group: "more" },

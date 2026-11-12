@@ -68,7 +68,10 @@ describe("the link checker", () => {
     for (const href of links) {
       const l = parseHash(href);
       expect(l, href).not.toBeNull();
-      expect(hashOf(l!), href).toBe(href);
+      // BL-1: #/backlog/attention and #/backlog/stories turn a Grid filter on once when they land; the address then
+      // reads back as the plain Grid (the filter lives in its query from there).
+      if (l!.nav.tab === "ahead" && l!.nav.preset) expect(hashOf(l!), href).toBe("#/backlog");
+      else expect(hashOf(l!), href).toBe(href);
     }
   });
   it("every Settings link names a section and setting in Settings' registry", () => {

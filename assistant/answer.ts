@@ -119,7 +119,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
     }
     for (const g of ctx.gaps.filter((g) => g.clientKey === c.key)) {
       itemRefs.push({ clientKey: g.clientKey, id: g.id, title: g.title });
-      lines.push({ text: `#${g.id} ${g.title}: ${gapText(g.gaps)}${g.target ? ` (target ${dateLabel(g.target)})` : ""}`, link: link(`#/ahead/item/${g.id}`, `Open #${g.id} in Ahead`) });
+      lines.push({ text: `#${g.id} ${g.title}: ${gapText(g.gaps)}${g.target ? ` (target ${dateLabel(g.target)})` : ""}`, link: link(`#/backlog/item/${g.id}`, `Open #${g.id} in Backlog`) });
     }
     for (const t of ctx.todos.filter((t) => t.clientKey === c.key && t.deployment)) {
       usedTodos.push(t);
@@ -142,7 +142,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
     ? `For ${ctx.period.label}, ${plural(count, "thing")} to look at${ctx.clients.length > 1 ? `, by client` : ""}.`
     : `Nothing stands out for ${ctx.period.label}: no blocks at risk, late promises, readiness gaps, deployments or missing updates${ctx.unknown.length ? ", though some of it couldn't be read" : ""}.`;
   const links = [link("#/week/add", "Open Week")];
-  if (ctx.gaps.length) links.push(link("#/ahead/fix", "Open Gaps"));
+  if (ctx.gaps.length) links.push(link("#/ahead/fix", "Open Needs attention"));
   if (ctx.statusMissing?.length) links.push(link("#/status", "Open Status"));
   return { reply, sections, suggestions: suggestions.slice(0, 3), refs: refsOf(ctx, usedTodos, itemRefs, promiseRefs), links };
 }
@@ -201,10 +201,10 @@ function waiting(ctx: AnswerContext, link: LinkFn): Composed {
 }
 
 function readiness(ctx: AnswerContext, link: LinkFn): Composed {
-  const sections = byClient(ctx, ctx.gaps, (g) => ({ text: `#${g.id} ${g.title}: ${gapText(g.gaps)}${g.target ? ` (target ${dateLabel(g.target)})` : ""}${g.why === "planned" ? ", you have to-dos under it" : ""}`, link: link(`#/ahead/item/${g.id}`, `Open #${g.id} in Ahead`) }));
+  const sections = byClient(ctx, ctx.gaps, (g) => ({ text: `#${g.id} ${g.title}: ${gapText(g.gaps)}${g.target ? ` (target ${dateLabel(g.target)})` : ""}${g.why === "planned" ? ", you have to-dos under it" : ""}`, link: link(`#/backlog/item/${g.id}`, `Open #${g.id} in Backlog`) }));
   const n = ctx.gaps.length;
   const reply = n ? `${plural(n, "item isn't", "items aren't")} ready for ${ctx.period.label}.` : `Everything dated or planned for ${ctx.period.label} has its stories, a target date, an owner and a size${ctx.unknown.some((u) => u.startsWith("Ahead")) ? ", as far as I can tell (Ahead couldn't be read)" : ""}.`;
-  return { reply, sections: [...sections, ...notKnown(ctx, "ahead")], suggestions: [], refs: refsOf(ctx, [], ctx.gaps.map((g) => ({ clientKey: g.clientKey, id: g.id, title: g.title })), []), links: [link("#/ahead/fix", "Open Gaps")] };
+  return { reply, sections: [...sections, ...notKnown(ctx, "ahead")], suggestions: [], refs: refsOf(ctx, [], ctx.gaps.map((g) => ({ clientKey: g.clientKey, id: g.id, title: g.title })), []), links: [link("#/ahead/fix", "Open Needs attention")] };
 }
 
 function deployments(ctx: AnswerContext, link: LinkFn): Composed {

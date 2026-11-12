@@ -213,7 +213,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const o = obj(input, ["clientKey"]);
     if (!o || !isKey(o.clientKey)) return bad("ahead.people takes { clientKey }");
     const c = await oneClient(o.clientKey);
-    if (!c) return bad("That client isn't one you see in Ahead", 404);
+    if (!c) return bad("That client isn't one you see in Backlog", 404);
     return { ok: true, data: { clientKey: c.clientKey, ...(await peopleOf(c)) } };
   }
 
@@ -264,7 +264,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       const ids = [...new Set(keys.filter((k) => k.clientKey === clientKey).map((k) => k.itemId))];
       const c = await oneClient(clientKey);
       if (!c) {
-        for (const itemId of ids) skipped.push({ clientKey, itemId, reason: "That client isn't one you see in Ahead" });
+        for (const itemId of ids) skipped.push({ clientKey, itemId, reason: "That client isn't one you see in Backlog" });
         continue;
       }
       const lead = await ctx.isLead(clientKey).catch(() => false);
@@ -314,7 +314,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       return bad((e as Error).message);
     }
     const c = await oneClient(o.clientKey);
-    if (!c) return bad("That client isn't one you see in Ahead", 404);
+    if (!c) return bad("That client isn't one you see in Backlog", 404);
     const item = c.items.find((i) => i.id === o.itemId);
     if (!item) return bad(`#${o.itemId} isn't in ${c.clientName}'s DevOps items here`, 404);
     const lead = await ctx.isLead(c.clientKey).catch(() => false);

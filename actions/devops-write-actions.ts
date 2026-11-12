@@ -822,7 +822,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       // changed since I started editing it is a conflict (nothing is written for the item); other changes to the item
       // don't count, so my values go on the new rev quietly (D658).
       const port = env.ahead;
-      if (!port) throw new Refused("Ahead's change set isn't available here", 503);
+      if (!port) throw new Refused("Backlog's change set isn't available here", 503);
       const itemId = posId(o.itemId, "itemId");
       const staged = await port.staged(env.clientKey, itemId);
       if (!staged.length) return `Nothing is pending for #${itemId}`;

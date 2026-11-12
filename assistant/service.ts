@@ -645,7 +645,7 @@ export function createAssistant(env: AssistantEnv) {
     const d = readDeps();
     let found = a.res.items.filter((i) => !a.client || i.clientKey === a.client);
     if (!found.length && a.prior) found = a.prior.refs.items.map((i) => ({ ...i, type: "", tier: null }));
-    if (!found.length) return finish(turnId, "ok", "I couldn't find a feature or item by that name in your clients. Try its #id, or the words of its title.", [], [], [link("#/ahead", "Open Ahead")], { memory: memoryOf({ items: [], picks: [], promises: [] }) });
+    if (!found.length) return finish(turnId, "ok", "I couldn't find a feature or item by that name in your clients. Try its #id, or the words of its title.", [], [], [link("#/backlog", "Open Backlog")], { memory: memoryOf({ items: [], picks: [], promises: [] }) });
     const cards: Card[] = [];
     const refs: Refs = { items: [], picks: [], promises: [] };
     for (const i of found.slice(0, 3)) {
@@ -1401,7 +1401,7 @@ export function createAssistant(env: AssistantEnv) {
       return { ok: true, result: { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: env.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: link(`#/week/day/${p.date}/${p.half}`, `Open ${dayWords(p.date)}`) }, message: "Moved" };
     }
     const messages: Partial<Record<ToolName, string>> = { drop_pick: "Dropped", add_to_week: "Added to the week", ahead_change: "In your change set. Save it in Ahead to write it to DevOps", send: "Sent", unlink: "Unlinked", conversation_owner: "Done. Nothing was posted to Teams", inbox_seen: "Marked seen", snooze: "Snoozed" };
-    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], add_to_week: ["#/week/add", "Open Week"], ahead_change: ["#/ahead", "Open Ahead"], send: ["#/week/add", "Open Week"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
+    const hrefs: Partial<Record<ToolName, [string, string]>> = { drop_pick: ["#/day", "Open Day"], add_to_week: ["#/week/add", "Open Week"], ahead_change: ["#/backlog", "Open Backlog"], send: ["#/week/add", "Open Week"], unlink: ["#/inbox", "Open the Inbox"], inbox_seen: ["#/inbox", "Open the Inbox"], snooze: ["#/inbox", "Open the Inbox"] };
     const [h, l] = hrefs[held.tool] ?? ["#/day", "Open Day"];
     return { ok: true, result: { kind: "note", text: messages[held.tool] ?? "Done", link: link(h, l) }, message: messages[held.tool] ?? "Done" };
   }

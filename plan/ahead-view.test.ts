@@ -1,9 +1,10 @@
-// AH-6: Ahead's one toolbar, pure: quick date ranges, the address round trip, where a control doesn't apply and why,
-// the summary line and its chips, and every filter narrowing Grid's rows, Readiness's entries and Backlog's rows.
+// AH-6, BL-1: Backlog's one toolbar, pure: quick date ranges, the address round trip, where a control doesn't apply and
+// why, the Showing line and its chips (only off the defaults), the Filter button's count, and every filter narrowing the
+// Grid's rows, Needs attention's entries and the one-level list.
 import { describe, expect, it } from "vitest";
 import { anAheadClient, anAheadItem, anAheadLoad, anAssignee } from "../test/builders/index.ts";
 import { buildRows, DEFAULT_FILTERS, filterRows, fixGroups } from "./ahead-model.ts";
-import { cleared, dateWords, fromQuery, notHere, rangeDates, summary, toQuery, withQuery, type AheadModeKey, type Control } from "./ahead-view.ts";
+import { cleared, dateWords, filterCount, fromQuery, notHere, peopleWord, rangeDates, summary, toQuery, withQuery, type AheadModeKey, type Control } from "./ahead-view.ts";
 import { backlogGroups } from "./backlog.ts";
 import type { AheadFilters } from "./ahead-edit.ts";
 
@@ -40,41 +41,68 @@ describe("AH-6: dates", () => {
   });
   it("Next 2 weeks keeps what overlaps it; Any time keeps everything", () => {
     expect(kept(all({ range: "next2" }))).toEqual([100, 120]);
-    expect(kept(all())).toEqual([100, 110, 111, 120, 121, 200]);
+    // BL-1: siblings in the backlog's order (with no order field, by target date, the undated last).
+    expect(kept(all())).toEqual([100, 120, 121, 110, 111, 200]);
   });
 });
 
-describe("AH-6: readiness and Stale narrow every mode", () => {
-  it("Not ready only, and a kind implies it", () => {
-    // 110: no target, unassigned; 200: no stories.
-    expect(kept(all({ gaps: true }))).toEqual([110, 200]);
-    expect(kept(all({ kinds: ["needs_stories"] }))).toEqual([200]);
-    expect(kept(all({ kinds: ["unsized"] }))).toEqual([]);
-    expect(kept(all({ kinds: ["unassigned"] }))).toEqual([110]);
+describe("BL-1: Needs attention, the kinds and Stale", () => {
+  const fix = (f: AheadFilters) => fixGroups(load, { readOnly: false, f, staleWeeks: 6 });
+  const ids = (f: AheadFilters) => fix(f)[0]!.group.entries.map((e) => e.itemId).sort();
+  it("Needs attention isn't a row rule: the tree keeps every row, and Needs attention is the fix list", () => {
+    expect(kept(all({ gaps: true }))).toEqual(kept(all()));
+    // 110 (no target, unassigned, stale) is a feature under my epic. 200 needs stories but is out: no backlog order
+    // to be near the top of, dated in February and not mine (Needs attention shows less, AH-3's candidates).
+    expect(ids(all({ gaps: true }))).toEqual([110]);
   });
-  it("Stale: open and untouched for the person's weeks", () => {
-    expect(kept(all({ stale: true }))).toEqual([110]);
+  it("a kind narrows to entries with that gap; Stale to stale entries; together either one", () => {
+    expect(ids(all({ gaps: true, kinds: ["needs_stories"] }))).toEqual([]);
+    expect(ids(all({ gaps: true, kinds: ["no_dates"] }))).toEqual([110]);
+    expect(ids(all({ gaps: true, kinds: ["unsized"] }))).toEqual([]);
+    expect(ids(all({ gaps: true, kinds: ["unassigned"] }))).toEqual([110]);
+    expect(ids(all({ gaps: true, stale: true }))).toEqual([110]);
+    expect(ids(all({ gaps: true, stale: true, kinds: ["needs_stories"] }))).toEqual([110]);
+    expect(fix(all({ gaps: true, kinds: ["unassigned"] }))[0]!.group.entries[0]!.action).toBe("no_dates");
   });
-  it("Readiness: clients, search and kinds narrow its entries; the total is before filters", () => {
-    const fix = (f: AheadFilters) => fixGroups(load, { readOnly: false, f, staleWeeks: 6 });
+  it("Stale is a reason of its own: open, editable and untouched for the person's weeks", () => {
+    const e = fix(all({ gaps: true }))[0]!.group.entries.find((x) => x.itemId === 110)!;
+    expect(e.stale).toBeTruthy();
+    // With a longer window it isn't stale.
+    const later = fixGroups(load, { readOnly: false, f: all({ gaps: true, stale: true }), staleWeeks: 20 })[0]!.group.entries;
+    expect(later).toEqual([]);
+  });
+  it("the count by kind is counted before the kinds narrow it; clients and search narrow it; the total is before filters", () => {
     const before = fix(all());
     expect(before.map((g) => g.client.clientKey)).toEqual(["Northwind", "Harbor"]);
-    expect(before[0]!.group.entries.map((e) => e.itemId)).toContain(110);
+    const narrowed = fix(all({ gaps: true, kinds: ["unsized"] }))[0]!;
+    expect(narrowed.unkinded.length).toBe(before[0]!.unkinded.length);
     expect(fix(all({ clients: ["Harbor"] })).map((g) => g.client.clientKey)).toEqual(["Harbor"]);
     const searched = fix(all({ q: "loyalty" }))[0]!;
     expect(searched.group.entries.map((e) => e.itemId)).toEqual([110]);
     expect(searched.total).toBe(before[0]!.group.entries.length);
-    const none = fix(all({ kinds: ["unsized"] }))[0]!;
-    expect(none.group.entries).toEqual([]);
   });
-  it("Backlog: the same filters, at the level asked", () => {
-    const rows = (f: AheadFilters) => backlogGroups(load, { ...f, tier: "feature" }, { staleWeeks: 6 })[0]!.rows.map((r) => r.item.id);
-    expect(rows(all())).toEqual(expect.arrayContaining([110, 120, 200]));
-    expect(rows(all({ q: "#200" }))).toEqual([200]);
-    expect(rows(all({ range: "next2" }))).toEqual([120]);
-    expect(rows(all({ gaps: true })).sort()).toEqual([110, 200]);
-    expect(rows(all({ epic: "Northwind:100" }))).toEqual(expect.arrayContaining([110, 120]));
-    expect(rows(all({ epic: "Northwind:100" }))).not.toContain(200);
+});
+
+describe("BL-1: one level as a list (was Ahead's Backlog mode)", () => {
+  const rows = (f: AheadFilters) => backlogGroups(load, { ...f, tier: f.flat ?? "feature" }, { staleWeeks: 6 })[0]!.rows;
+  it("one level only, flat, each row with its rank in the client's own backlog", () => {
+    const r = rows(all({ flat: "feature" }));
+    expect(r.every((x) => x.tier === "feature")).toBe(true);
+    expect(r.map((x) => x.item.id)).toEqual(expect.arrayContaining([110, 120, 200]));
+    expect(r.map((x) => x.rank)).toEqual([...r.map((x) => x.rank)].sort((a, b) => a - b));
+    expect(rows(all({ flat: "story" })).map((x) => x.item.id).sort()).toEqual([111, 121]);
+  });
+  it("every other filter narrows it: search, dates, epic", () => {
+    const ids = (f: AheadFilters) => rows(f).map((x) => x.item.id);
+    expect(ids(all({ flat: "feature", q: "#200" }))).toEqual([200]);
+    expect(ids(all({ flat: "feature", range: "next2" }))).toEqual([120]);
+    expect(ids(all({ flat: "feature", epic: "Northwind:100" }))).toEqual(expect.arrayContaining([110, 120]));
+    expect(ids(all({ flat: "feature", epic: "Northwind:100" }))).not.toContain(200);
+  });
+  it("the address carries it as fl and leaves out a level it doesn't know", () => {
+    expect(toQuery({ f: all({ flat: "story" }), level: "story", callouts: true })).toContain("fl=story");
+    expect(fromQuery("fl=story")!.f.flat).toBe("story");
+    expect(fromQuery("fl=task")!.f.flat).toBeUndefined();
   });
 });
 
@@ -99,33 +127,55 @@ describe("AH-6: the address", () => {
   });
 });
 
-describe("AH-6: where a control applies", () => {
-  const modes: AheadModeKey[] = ["grid", "gantt", "fix", "backlog"];
-  const controls: Control[] = ["clients", "people", "epic", "dates", "readiness", "kinds", "stale", "search", "level", "callouts", "whole"];
-  it("every filter applies everywhere except Not ready in Readiness; callouts only on the Gantt; the whole project not in Readiness or Backlog", () => {
+describe("AH-6, BL-1: where a control applies", () => {
+  const modes: AheadModeKey[] = ["grid", "gantt"];
+  const controls: Control[] = ["clients", "people", "epic", "dates", "attention", "search", "level", "callouts", "whole"];
+  it("every filter applies in both views; callouts only on the Gantt; the whole project only when something is out of scope", () => {
     const off = modes.flatMap((m) => controls.filter((c) => notHere(m, c, { scoped: true, whole: false })).map((c) => `${m}:${c}`));
-    expect(off).toEqual(["grid:callouts", "fix:readiness", "fix:callouts", "fix:whole", "backlog:callouts", "backlog:whole"]);
+    expect(off).toEqual(["grid:callouts"]);
     expect(notHere("grid", "whole", { scoped: false, whole: false })).toMatch(/already the whole project/);
     expect(notHere("grid", "whole", { scoped: false, whole: true })).toBeNull();
   });
 });
 
-describe("AH-6: the summary line", () => {
+describe("BL-1: the Showing line and the Filter button", () => {
   const clients = load.clients.map((c) => ({ clientKey: c.clientKey, clientName: c.clientName, lead: c.lead }));
-  it("Showing N of M · clients · people · dates; a chip per non-default filter, each clearing only itself", () => {
-    const f = all({ clients: ["Northwind"], range: "next4", kinds: ["needs_stories"] });
-    const s = summary(clients, f, { today: TODAY, shown: 3, total: 7 });
-    expect(s.text).toBe("Showing 3 of 7 · Northwind Foods · Everyone · Next 4 weeks · Not ready: Needs stories");
-    expect(s.chips.map((c) => c.label)).toEqual(["Northwind Foods", "People: Everyone", "Next 4 weeks", "Not ready: Needs stories"]);
-    const noDates = s.chips.find((c) => c.id === "dates")!.clear(f);
-    expect([noDates.range, noDates.kinds, noDates.clients]).toEqual([undefined, ["needs_stories"], ["Northwind"]]);
+  it("nothing at the defaults: no line at all", () => {
+    expect(summary(clients, DEFAULT_FILTERS, { today: TODAY, shown: 7, total: 7 })).toBeNull();
   });
-  it("defaults read All clients, Mine and Any time, with no chips", () => {
-    const s = summary(clients, DEFAULT_FILTERS, { today: TODAY, shown: 7, total: 7 });
-    expect(s.text).toBe("Showing all 7 · All clients · Mine · Any time");
-    expect(s.chips).toEqual([]);
+  it("Showing N of M with a chip per filter off its default, each clearing only itself", () => {
+    const f = all({ clients: ["Northwind"], range: "next4", gaps: true, kinds: ["needs_stories"] });
+    const s = summary(clients, f, { today: TODAY, shown: 3, total: 7 })!;
+    expect(s.text).toBe("Showing 3 of 7");
+    expect(s.chips.map((c) => c.label)).toEqual(["Northwind Foods", "People: Everyone", "Needs attention", "Needs stories", "Next 4 weeks"]);
+    const noDates = s.chips.find((c) => c.id === "dates")!.clear(f);
+    expect([noDates.range, noDates.kinds, noDates.clients, noDates.gaps]).toEqual([undefined, ["needs_stories"], ["Northwind"], true]);
+    // Clearing Needs attention clears its kinds too.
+    const noAttention = s.chips.find((c) => c.id === "attention")!.clear(f);
+    expect([noAttention.gaps, noAttention.kinds]).toEqual([false, undefined]);
+  });
+  it("one chip per meaning: Stale and the one-level list read once, and the line says all when nothing is hidden", () => {
+    const s = summary(clients, all({ stale: true, flat: "story", q: "pay" }), { today: TODAY, shown: 7, total: 7 })!;
+    expect(s.text).toBe("Showing all 7");
+    const labels = s.chips.map((c) => c.label);
+    expect(labels).toEqual(["People: Everyone", "Stale", "Stories only, in rank order", "“pay”"]);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+  it("the Filter button counts what's off its default inside it: Epic, Dates, the level, one level as a list", () => {
+    expect(filterCount(DEFAULT_FILTERS, "story")).toBe(0);
+    expect(filterCount({ ...DEFAULT_FILTERS, epic: "Northwind:100" }, "story")).toBe(1);
+    expect(filterCount({ ...DEFAULT_FILTERS, range: "next2" }, "feature")).toBe(2);
+    expect(filterCount({ ...DEFAULT_FILTERS, from: "2026-11-09", flat: "story" }, "epic")).toBe(3);
+  });
+  it("People never reads Mixed: it names who gets what", () => {
+    const f = all({ owner: { Northwind: "all", Harbor: "mine" } });
+    const p = peopleWord(f, clients);
+    expect(p.owner).toBeNull();
+    expect(p.word).not.toMatch(/mixed/i);
+    expect(p.word).toMatch(/Harbor Health|Northwind Foods/);
+    expect(peopleWord(all(), clients)).toEqual({ word: "Everyone", owner: "all" });
   });
   it("Clear filters puts back every default and keeps Show the whole project", () => {
-    expect(cleared(all({ q: "x", whole: true, stale: true }), DEFAULT_FILTERS)).toEqual({ ...DEFAULT_FILTERS, whole: true });
+    expect(cleared(all({ q: "x", whole: true, stale: true, flat: "story" }), DEFAULT_FILTERS)).toEqual({ ...DEFAULT_FILTERS, whole: true });
   });
 });

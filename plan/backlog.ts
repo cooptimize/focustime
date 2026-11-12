@@ -3,7 +3,7 @@
 // is ranked by target date and says so), within Cooptimize's scope (AH-2), with the owner filter Grid uses. Read-only
 // order: nothing here reorders anything.
 //
-// Stale: an open item with no change in DevOps for N weeks (the person's Settings › Ahead, 6 by default). "No change"
+// Stale: an open item with no change in DevOps for N weeks (the person's Settings › Backlog, 6 by default). "No change"
 // is DevOps's own System.ChangedDate, which every stored item has; DV-1's change log (30 days) only says what the last
 // change was. Done items are never stale. An item whose changed date isn't known is never stale.
 //

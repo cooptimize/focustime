@@ -1070,7 +1070,7 @@ function FocusForm(p: FormProps) {
   );
 }
 
-/** Settings > Ahead (was Roadmap, step 17): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */
+/** Settings > Backlog (was Ahead, was Roadmap; step 17, BL-1): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */
 function RoadmapForm(p: FormProps) {
   const r = p.data.roadmap;
   const a = useAutoSave({ section: "roadmap", initial: { stalledDays: r.stalledDays, watchWeeks: r.watchWeeks }, payload: (v) => v, onSaved: p.onSavedData, label: (k) => (k === "stalledDays" ? "Stalled after" : "Watch within") });

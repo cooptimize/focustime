@@ -327,7 +327,8 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const needOf = useMemo(() => new Map(fix.map((x) => [x.client.clientKey, x.unkinded.filter((e) => !e.leaving).length] as const)), [fix]);
   const [moreOf, setMoreOf] = useState<ReadonlySet<string>>(new Set());
   const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
-  const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
+  // With Needs attention on, Stale is one of its reasons (an either-or with the kinds), so the list doesn't narrow by it too.
+  const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat, ...(f.gaps ? { stale: false } : {}) }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
   const names = useMemo(() => levelNames(shown), [shown]);
   const view: AheadViewState = { fold, setFold, names, callouts, setCallouts };
   const shape: GridShape = f.flat ? "flat" : attention ? "attention" : "tree";
@@ -336,7 +337,8 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const gridGroups: GridGroup[] = useMemo(() => {
     if (!load) return [];
     const need = (k: string) => needOf.get(k) ?? 0;
-    const attentionKeys = new Set(unkinded.map((e) => e.key));
+    // The kinds and Stale narrow which rows Needs attention keeps (the chip's count stays every reason).
+    const attentionKeys = new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)));
     if (shape === "flat") {
       return flat.map((g) => {
         const rows: GridRow[] = g.rows.filter((r) => !attention || attentionKeys.has(r.key)).map((r) => ({ ...r, depth: 0, context: false, entry: null, lastWords: lastText(r.age, r.last) }));

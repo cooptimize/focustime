@@ -29,7 +29,7 @@ describe("the tours", () => {
     for (const t of TOURS) for (const s of t.steps) if (s.example) expect(drawn.has(s.example), `${t.id}: ${s.example}`).toBe(true);
   });
   it("seven tours, as approved", () => {
-    expect(TOURS.map((t) => t.title)).toEqual(["Add work to your week", "Your week and to-dos", "Day, focus and close out", "The Inbox", "Ahead", "The assistant", "Status"]);
+    expect(TOURS.map((t) => t.title)).toEqual(["Add work to your week", "Your week and to-dos", "Day, focus and close out", "The Inbox", "Backlog", "The assistant", "Status"]);
   });
   it("each has 4 to 7 steps, a start the address opens, and #/guide/tour/<id> round-trips", () => {
     for (const t of TOURS) {
