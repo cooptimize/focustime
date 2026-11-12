@@ -5,7 +5,7 @@ import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as 
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot } from "../week/types.ts";
-import type { NowSpot } from "../plan/nowline.ts";
+import { railAt, type NowSpot } from "../plan/nowline.ts";
 import { eventMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, labelHere, layoutEvents, overlappingIds } from "./layout.ts";
@@ -18,15 +18,17 @@ export type RailNow = { at: number | null; past: number; label: string; onClick:
 
 export const pct = (f: number) => `${(f * 100).toFixed(3)}%`;
 
-/** UI-B: today's line on one half of the day; before the day it sits on the first rail's top edge, after it on the last's bottom edge. */
+/** UI-B: today's line on one half of the day. NL-1: `at` only on the block under way (null before, after and between
+ * blocks); `past` still dims a block that has ended. */
 export function railNowOf(day: Day, half: Half, spot: NowSpot | null, now: string, label: string, onClick: () => void): RailNow | null {
   if (!spot) return null;
   const s = slotOf(day, half);
   if (!s) return null;
-  const last = day.eve ? "EVE" : "PM";
-  const on = spot.kind === "rail" && spot.half === half ? spot.at : spot.kind === "before" && half === "AM" ? 0 : spot.kind === "after" && half === last ? 1 : null;
-  const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(s.view.end)) >= 0;
-  return { at: on, past: ended ? 1 : spot.kind === "rail" && spot.half === half ? spot.at : 0, label, onClick };
+  const on = spot.kind === "rail" && spot.half === half ? spot.at : null;
+  // The dimming is the rail's time gone by, apart from the mark: a block whose hours are over is all past, even when
+  // its rail runs on (a lunch, the 24-hour range).
+  const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(s.end)) >= 0;
+  return { at: on, past: ended ? 1 : (railAt(s.view, now) ?? 0), label, onClick };
 }
 
 export const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;

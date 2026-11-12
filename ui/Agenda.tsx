@@ -65,8 +65,8 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
       </li>
     );
   };
-  // UI-B: the now row, in the block under way (or the morning before the day starts), in the person's zone.
-  const nowAt = ownsNow(slot.view, slot.half, now) ? agendaNowIndex(rows.map((r) => r.start), now, slot.date, tz) : null;
+  // UI-B: the now row, only in the block under way (NL-1), in the person's zone.
+  const nowAt = ownsNow(slot, now) ? agendaNowIndex(rows.map((r) => r.start), now, slot.date, tz) : null;
   return (
     <div className="pd-agenda">
       <ol aria-label={`${halfTag(slot.half)} agenda`}>
