@@ -16,6 +16,12 @@ export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number }
 export const TierCtx = createContext<Tier | null>(null);
 /** WK-2: the Timeline switch; off, cards draw no rail, strip or hour timeline and sum up their meetings in one line. */
 export const TimelineCtx = createContext(true);
+/**
+ * WK-5: where a to-do's time goes on a card row. "stack" (Week's cards, at every width): the title first with the row's
+ * full width, the time on one quiet line under it ("10:30–11:30 · 1h"). "side" (Day's cards and the panel): at the
+ * right of the row, where there is room; a Day card too narrow for the title's minimum switches to the stack in CSS.
+ */
+export const RowFormCtx = createContext<"stack" | "side">("side");
 
 /** UI-9: `late` is each card's late promises (by rail key), its chip's count when the card draws no rail; `onLate` opens several. */
 export type RulerCtxValue = { layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined; today: string; now: string; home: RailSpan | null; late: ReadonlyMap<string, RailItem[]> };

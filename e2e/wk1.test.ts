@@ -54,10 +54,12 @@ async function dragAcross(page: Page, from: Locator, to: string, toast: RegExp):
   await page.mouse.move(a.x + 10, a.y + 10, { steps: 3 });
   for (const date of DAYS) {
     const target = page.locator(`main.grid [data-drop="${date}:AM"]`);
-    const c = await center(target);
+    let c = await center(target);
     await page.mouse.move(c.x, c.y, { steps: 6 });
-    // A real browser keeps sending dragover while the pointer rests; Playwright's drag doesn't, so nudge it.
+    // A real browser keeps sending dragover while the pointer rests; Playwright's drag doesn't, so nudge it. WK-5: the
+    // columns ease to new widths (180 ms) when the panel opens or a day folds, so the target is measured again each time.
     await expect.poll(async () => {
+      c = await center(target);
       await page.mouse.move(c.x + 1, c.y + 1);
       await page.mouse.move(c.x, c.y);
       return (await target.locator(".drop-tip").count()) > 0 && /drop-(over|no)/.test((await target.getAttribute("class")) ?? "");
@@ -124,14 +126,15 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
     }, T);
   }
 
-  // Each tier, how to reach it on the demo week (Thursday is PTO, so Thursday and Friday take the light share).
-  const TIERS: { tier: string; width: number; height: number; panel: boolean; big: boolean; fold?: boolean }[] = [
-    { tier: "rail", width: 1920, height: 1080, panel: false, big: false },
-    { tier: "rail", width: 1440, height: 900, panel: false, big: false },
-    { tier: "ruler", width: 1366, height: 768, panel: false, big: false },
-    { tier: "strip", width: 1024, height: 768, panel: false, big: false },
-    { tier: "mini", width: 1280, height: 800, panel: true, big: true },
-    { tier: "mini", width: 1024, height: 768, panel: true, big: true, fold: true },
+  // Each tier, how to reach it on the demo week (Monday is today; Thursday is PTO, so Thursday and Friday take the light
+  // share). WK-5: today is the wide day in focus (always the rail tier here), so each tier is checked on the column that
+  // reaches it (`day`: Tuesday), and the grid's class is the focus day's.
+  const TIERS: { tier: string; width: number; height: number; panel: boolean; big: boolean; day: number; fold?: boolean }[] = [
+    { tier: "rail", width: 1920, height: 1080, panel: false, big: false, day: 1 },
+    { tier: "ruler", width: 1600, height: 900, panel: false, big: false, day: 1 },
+    { tier: "strip", width: 1366, height: 768, panel: false, big: false, day: 1 },
+    { tier: "mini", width: 1280, height: 800, panel: true, big: true, day: 1 },
+    { tier: "mini", width: 1024, height: 768, panel: true, big: true, day: 0, fold: true },
   ];
   for (const t of TIERS) {
     it(`the now line and the PTO day show in the ${t.fold ? "fold" : t.tier} tier (${t.width}${t.panel ? ", panel" : ""}${t.big ? ", Larger" : ""})`, async () => {
@@ -142,11 +145,13 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
       if (t.big) await larger(page, true);
       if (t.panel) await openPanel(page);
       const grid = page.locator("main.grid");
-      await expect.poll(() => grid.getAttribute("class")).toContain(`tier-${t.tier}`);
       const mon = grid.locator("> section.day").first();
       const thu = grid.locator("> section.day").nth(3);
+      const col = grid.locator("> section.day").nth(t.day);
+      if (!t.fold) await expect.poll(() => col.getAttribute("class")).toContain(`tier-${t.tier}`);
       if (t.fold) {
-        // Monday is selected: Thursday is a folded strip, hatched PTO. Then open Thursday: Monday folds, with its now line.
+        // Monday (today, the panel's day) is in focus: Thursday is a folded strip, hatched PTO. Then open Thursday: it
+        // takes the focus and Monday folds, with its now line.
         await expect.poll(() => grid.getAttribute("class")).toContain("folded");
         await expect(thu.getAttribute("class")).resolves.toContain("folded");
         await expect(thu.locator(".fold-half.whole.pto").count()).resolves.toBe(1);
@@ -160,13 +165,14 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
       } else {
         await expect(mon.locator(".now-line").count()).resolves.toBeGreaterThan(0);
         await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);
-        // The card draws exactly its tier's element.
-        const am = mon.locator(MON_AM);
+        // Today, the day in focus, keeps the rail tier and its now line.
+        await expect(mon.getAttribute("class")).resolves.toContain("tier-rail");
+        // The column draws exactly its tier's element.
+        const am = col.locator('[data-drop$=":AM"]').first();
         // WD-1: the rail tier's hour rail is the slim strip too (about 56 px), so the to-do titles keep their width.
         const expectRail = t.tier === "rail" || t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
         await expect(am.locator(expectRail).count()).resolves.toBe(1);
         if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeLessThanOrEqual(64);
-        if (t.tier === "strip" || t.tier === "mini") await expect(am.locator(".day-strip .now-tick").count()).resolves.toBe(1);
         if (t.tier === "mini") await expect(am.locator(".pill-reason").isVisible()).resolves.toBe(false);
         // The block's time is always visible.
         await expect(am.locator(".card-when").isVisible()).resolves.toBe(true);

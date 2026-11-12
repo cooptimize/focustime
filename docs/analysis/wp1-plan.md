@@ -61,7 +61,7 @@ None existed. ADM-2's "Automation account" is the one per-person Rule; "DevOps p
 
 Inventory: per client, in order: the first item date; the ids by month; the items; their parents; the history sample; the numbers, saved as that run's snapshot. Progress (the phase, the ids, how far through them) is saved after each step, so Resume carries on from there and never reads a finished client again.
 
-Classification: Estimate (per client and in total, from stored lengths and the app's prices), then Run classification. Pass 1 on a sample of about 150 items per client with the starting list; then the "other" suggestions from all clients (names and meanings only, client names replaced) merged into a second list by one request with no client; then pass 2 on everything with that list. Item text is read again from DevOps for each batch, sent, and dropped. Labels are kept per item, revision and list version, so nothing unchanged is paid for twice.
+Classification: Estimate (per client and in total, from stored lengths and the app's prices), then Run classification. Pass 1 on a sample of about 150 items per client with the starting list; then the "other" suggestions from all clients (names and meanings only, client names replaced) merged into a second list by one request with no client; then pass 2 on everything with that list (WP-3 replaced the passes and the merge with one pass against the list a person owns). Item text is read again from DevOps for each batch, sent, and dropped. Labels are kept per item, revision and list version, so nothing unchanged is paid for twice.
 
 ## Who sees what
 
@@ -120,3 +120,25 @@ About 1 second per item for classification (10 seconds per AI request of ten ite
 ### Screenshots
 
 `docs/ux/wp2/` (1440×900, light and dark, fictional data): scope, kinds, coverage, build work, classification, runs.
+
+## WP-3: trusting it (Nov 12)
+
+The second run was good enough to act on, with three soft spots: agreement on what is missing was measured too harshly to mean anything, the AI renamed the whole request types list, and the summary couldn't be read per client. WP-3 fixes those from the labels already stored, with no AI request. Decisions are under "WP-3" in `docs/decisions.md`; how to run it is `wp1-how-to-run.md`.
+
+### Step 0
+
+- **Second answers are stored whole.** `patterns_labels.labels_b` keeps the full checked answer (request type, other name and meaning, layers, readiness, missing, confidence) on the same row and list version as the first; a failed one is a `{"failed":true}` marker. So agreement per fact is worked out from the store.
+- **How a run chose its list.** Pass 1 labeled a 150-item sample per client with the starting list (`start-2`); the "other" names it gave were fingerprinted (the starting version and the set of names). A saved list with the same fingerprint was reused; otherwise one `patterns.merge` request wrote a whole new list, and pass 2 labeled everything with it. Any new "other" name changed the fingerprint, so a rerun could get a new AI list with every type renamed.
+- **Carrying without AI.** Where the AI list's stored changes (kind, from, to) show that a type came from one starting type (a rename, a keep or a split), its labels can move to the matching type on another list. A merge of several, an add, or a type made from a suggestion has no single counterpart. A type that no change explains makes the whole list unsafe to carry.
+
+### What changed
+
+- **Agreement.** Whole-item figures stay for request type, readiness and confidence. Missing and layers are read per fact: pairs with it in either answer, in both, and the share; under 20 pairs "too few to read", under 70% "not reliable yet". The disagreements line lists request type pairs with counts. The sample reads as it is ("99 of 100 (1 answer failed its check)"); the next run tops it up by skipping failed items.
+- **One pass, one list.** A run labels every item in scope against the list in use (fixed when it starts, `rules: 3`). No pass 1 sample, no merge, no AI-written list. A WP-2 classification can't be resumed under these rules.
+- **The list a person owns.** `own-1` is the brief's list. Each change is a new version (`own-2`, ...) with who, when, why and the change; a save names its base and is refused when that isn't the newest. Labels stay on the version they were made on and are carried forward by the changes between versions (`plan/patterns/owned.ts`).
+- **Per client.** Request types, readiness and layers each have a column per client, All clients and Without the largest; readiness by request type; "other" names per client.
+- **Downloads.** Unique headings in the request types download, the list in use first; the summary says which list the labels are on and the sample as it is. The chain view of shapes is gone; the ten most common sets, or "No shape appears 20 times. There is no common shape."
+
+### Screenshots
+
+`docs/ux/wp3/` (1440×900, light and dark, fictional data): agreement, the per-client tables, Request types with a suggestion, a rename's cost.

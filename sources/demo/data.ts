@@ -124,12 +124,13 @@ export function demoOrganizer(id: string): string {
 
 /**
  * QF-1: the weekdays the demo's PTO day and its afternoon out fall on, never today (so Today always has content in a
- * demo): PTO on Thursday, or the next weekday when today is Thursday; out on Wednesday afternoon, or Tuesday when today
- * is Wednesday. The same weekdays every week, from today's.
+ * demo): PTO on Thursday, or Saturday when today is Thursday (WK-5: never the catch-up day either, so a Thursday
+ * demo's Friday takes work; the seeds plan Monday to Wednesday); out on Wednesday afternoon, or Tuesday when today is Wednesday. The same weekdays every week,
+ * from today's.
  */
 export function demoDays(today: IsoDate): { pto: number; out: number } {
   const dow = Temporal.PlainDate.from(today).dayOfWeek;
-  return { pto: dow === 4 ? 5 : 4, out: dow === 3 ? 2 : 3 };
+  return { pto: dow === 4 ? 6 : 4, out: dow === 3 ? 2 : 3 };
 }
 
 /** Personal events (Google): one crosses the morning and afternoon seam on Monday; DM-1: an afternoon out (QF-1: never today). */
@@ -141,7 +142,7 @@ export function demoGoogle(monday: IsoDate, today: IsoDate): CalEvent[] {
   return [g("dentist", 0, "Dentist", "12:00", "13:00"), g("pickup", 1, "School pickup", "15:30", "16:00"), g("run", 2, "Run club", "17:30", "18:30"), g("out", demoDays(today).out - 1, "Out: school event", "13:30", "16:30")];
 }
 
-/** PTO: Thursday is a day off (QF-1: Friday when today is Thursday, so never today). */
+/** PTO: Thursday is a day off (QF-1, WK-5: Saturday when today is Thursday, so never today). */
 export function demoPto(from: IsoDate, to: IsoDate, today: IsoDate): PtoEntry[] {
   const out: PtoEntry[] = [];
   const day = demoDays(today).pto;

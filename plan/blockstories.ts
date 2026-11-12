@@ -33,10 +33,15 @@ export function blockLabel(at: { date: IsoDate; half: Half }): string {
   return `${day} ${at.half === "EVE" ? "evening" : at.half}`;
 }
 
-/** A Week card's picks under small feature headers: features in the order their first pick comes, "No feature" last. */
+/**
+ * A Week card's picks under small feature headers. WK-5: in the clock's order. Feature groups go by their earliest
+ * timebox (groups with none after them, in the order their first pick comes, "No feature" last among those), and inside
+ * a group timed to-dos go by start, untimed ones after in their own order. `startOf`: a to-do's timebox start (an ISO
+ * date-time), or null. Before WK-5 groups went in the order their first pick came, "No feature"
+ * last, and to-dos in plan order, so a 9:00 to-do could sit under a 10:30 one because its feature came second.
+ */
 export type CardGroup<P> = { feature: Pick<WorkItem, "id" | "title" | "type" | "url"> | null; picks: P[] };
-
-export function cardGroups<P extends { clientKey: string; itemId: number | null }>(picks: readonly P[], work: Pick<ClientWork, "items" | "children" | "committed" | "parents"> | undefined): CardGroup<P>[] {
+export function cardGroups<P extends { id?: number; clientKey: string; itemId: number | null }>(picks: readonly P[], work: Pick<ClientWork, "items" | "children" | "committed" | "parents"> | undefined, startOf: (p: P) => string | null = () => null): CardGroup<P>[] {
   const pool = work ? workPool(work) : [];
   const byId = new Map(pool.map((x) => [x.id, x]));
   const groups = new Map<number | null, CardGroup<P>>();
@@ -50,5 +55,11 @@ export function cardGroups<P extends { clientKey: string; itemId: number | null 
   }
   const none = groups.get(null);
   groups.delete(null);
-  return [...groups.values(), ...(none ? [none] : [])];
+  const ordered = [...groups.values(), ...(none ? [none] : [])];
+  // Stable sorts: untimed keep their order, after the timed ones.
+  const key = (p: P) => startOf(p);
+  const cmp = (a: string | null, b: string | null) => (a === b ? 0 : a === null ? 1 : b === null ? -1 : Date.parse(a) - Date.parse(b));
+  for (const g of ordered) g.picks = [...g.picks].sort((a, b) => cmp(key(a), key(b)));
+  const first = (g: CardGroup<P>) => (g.picks[0] ? key(g.picks[0]) : null);
+  return ordered.sort((a, b) => cmp(first(a), first(b)));
 }

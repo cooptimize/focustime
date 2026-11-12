@@ -18,6 +18,12 @@
 // counted, never read further and never sent to AI. The classification labels every item in scope whose kind isn't
 // Leave out, with an agreement sample of at least 100 items, and keeps the items whose answer failed its check (with the
 // labels, in one transaction) so Resume never pays for them again.
+//
+// WP-3: one pass, against the list in use (a person's; plan/patterns/owned.ts), fixed when the run starts. A run never
+// changes the list and makes no merge request: WP-2's pass 1 sample and the AI merge that wrote a second list are gone
+// (pass 1 existed only to feed the merge). An item whose label carries to the list in use (made on an earlier version,
+// renamed or merged since) is never sent again; one whose type was removed, or that is "other" or "can't tell" after an
+// add, is. The agreement sample skips items whose second answer failed its check, so the next run tops it up.
 import type { AiService } from "../ai/service.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import { maskTranscript } from "../ai/guard.ts";
@@ -26,7 +32,8 @@ import { replaceMentions } from "../plan/boundary.ts";
 import { costMicros, type Prices } from "../ai/cost.ts";
 import type { Logger } from "../log/logger.ts";
 import { F, LAYOUT_FIELDS, PARENT_FIELDS, historyOf, historySample, itemOf, monthRanges, readFields, windowFrom, type ProcessFacts, type RawUpdate, type Snapshot } from "../plan/patterns/inventory.ts";
-import { BATCH, CHILD_TITLES, CLASSIFY_SCHEMA, MERGE_INSTRUCTIONS, MERGE_SCHEMA, OTHER, STARTING_LIST, TEXT_CAP, agreementPick, classifyInput, classifyInstructions, cleanList, fingerprintOf, listFromMerge, mergeInput, parseLabels, pass1Counts, pass1Sample, plain, suggestionsOf, toClassify, type ClassifyInput } from "../plan/patterns/labels.ts";
+import { AGREE_MIN, AGREE_SHARE, BATCH, CHILD_TITLES, CLASSIFY_SCHEMA, OTHER, TEXT_CAP, agreementPick, classifyInput, classifyInstructions, cleanList, parseLabels, plain, toClassify, type ClassifyInput } from "../plan/patterns/labels.ts";
+import { failuresOf, inUseOf, resolveLabels } from "../plan/patterns/owned.ts";
 import { analysisOf } from "../plan/patterns/analysis.ts";
 import { kindFacts, kindOfType, kindsOf, type Kind } from "../plan/patterns/kinds.ts";
 import { layoutOf, matcherOf, scopeChoice, usedMatcher, type AnalysisScope, type LayoutRow, type ProjectTree } from "../plan/patterns/scope.ts";
@@ -330,25 +337,33 @@ export function createPatternsRunner(d: RunnerDeps) {
   }
 
   /**
-   * The labels this run needs for one client and list version: every item in scope whose kind isn't Leave out (pass 1:
-   * its sample), not labeled at this revision and not already failed in this run. The agreement sample's second answers
-   * (pass 2): items in `agree` without one, those labeled in this run included.
+   * The labels this run needs for one client against the list in use: every item in scope whose kind isn't Leave out
+   * with no label that carries to the list at its revision (a stale carried label counts as none), not already failed on
+   * this list. The agreement sample's second answers: items in `agree` without one.
    */
-  async function todo(k: string, list: TypeList, pass: 1 | 2, kinds: Readonly<Record<string, Kind>>, o: { agree?: ReadonlySet<string> } = {}) {
+  async function todo(k: string, list: TypeList, kinds: Readonly<Record<string, Kind>>, o: { agree?: ReadonlySet<string> } = {}) {
     const sc = await scopeNow(k);
     // Only items in the scope the newest inventory used (a later, unfinished inventory may have read a wider one); no
     // WP-2 inventory: nothing at all.
     const where = new Map((await d.store.layout(k)).map((r) => [r.id, r]));
     const all = sc ? (await d.store.currentItems(k)).filter((i) => !i.inWindow || (where.has(i.id) && sc.match(where.get(i.id)!))) : [];
     const pool = toClassify(all, (t) => kindOfType(kinds, t));
-    const items = pass === 1 ? pass1Sample(pool) : pool;
-    const [have, fails] = await Promise.all([d.store.labels(k, list.version), d.store.failures(k, list.version)]);
+    const [rows, stored] = await Promise.all([d.store.allLabels(k), d.store.lists()]);
+    // The list priced may not be saved yet (a change's preview): it joins the chain it extends.
+    const lists = stored.some((l) => l.version === list.version) ? stored : [...stored, list];
+    const { carried } = resolveLabels(rows, lists, list);
+    const fails = failuresOf(rows, lists, list);
     // An answer that failed its check at this revision was paid for: never sent again (until the item changes).
     const failed = (i: PatternItem) => (fails.a.get(i.id) ?? -1) >= i.rev;
-    const need = items.filter((i) => (have.get(i.id)?.rev ?? -1) < i.rev && !failed(i));
-    const needB = pass === 2 && o.agree ? items.filter((i) => o.agree!.has(`${k}\u0000${i.id}`) && !failed(i) && (fails.b.get(i.id) ?? -1) < i.rev && (need.includes(i) || !have.get(i.id)?.labelsB)) : [];
-    const failedHere = items.filter(failed).length;
-    return { items, need, needB, all, pool, failedHere, sc };
+    const good = (i: PatternItem) => {
+      const c = carried.get(i.id);
+      return !!c && c.rev >= i.rev && !c.stale;
+    };
+    const need = pool.filter((i) => !good(i) && !failed(i));
+    const needB = o.agree ? pool.filter((i) => o.agree!.has(`${k}\u0000${i.id}`) && !failed(i) && (fails.b.get(i.id) ?? -1) < i.rev && (need.includes(i) || !carried.get(i.id)?.labelsB)) : [];
+    // Out of the agreement sample, so the next items take their place: a second answer (or a first) that failed its check.
+    const skipB = pool.filter((i) => failed(i) || (fails.b.get(i.id) ?? -1) >= i.rev || (!!carried.get(i.id)?.failedB && !carried.get(i.id)?.labelsB)).map((i) => `${k}\u0000${i.id}`);
+    return { items: pool, need, needB, all, pool, failedHere: pool.filter(failed).length, sc, carried, skipB };
   }
 
   function inputsFor(k: string, values: { id: number; fields: Readonly<Record<string, unknown>> }[], pool: readonly PatternItem[], c: ClassifyDeps): { input: ClassifyInput; id: number; rev: number }[] {
@@ -413,9 +428,9 @@ export function createPatternsRunner(d: RunnerDeps) {
     }
   }
 
-  async function classifyClient(run: Run, k: string, cp: ClientProgress, list: TypeList, pass: 1 | 2, c: ClassifyDeps, agree?: ReadonlySet<string>) {
+  async function classifyClient(run: Run, k: string, cp: ClientProgress, list: TypeList, c: ClassifyDeps, agree: ReadonlySet<string>) {
     const kinds = cp.kinds ?? {};
-    const t = await todo(k, list, pass, kinds, agree ? { agree } : {});
+    const t = await todo(k, list, kinds, { agree });
     const sc = t.sc;
     if (!sc) throw new SkipClient(OLD_INVENTORY);
     const failed = new Set<number>();
@@ -455,11 +470,26 @@ export function createPatternsRunner(d: RunnerDeps) {
             const it = t.all.find((x) => x.id === v.id)!;
             // Keyed by the revision the inventory read (what a rerun compares), or the newer one just read.
             const rev = Math.max(it.rev, g?.rev ?? 0);
-            return g ? (second ? { itemId: v.id, rev, labelsB: g.labels } : { itemId: v.id, rev, labels: g.labels }) : null;
+            if (!g) return null;
+            if (!second) return { itemId: v.id, rev, labels: g.labels };
+            // A second answer for an item whose first is carried from an earlier list: the first goes on this list's row
+            // with it (as carried), so the pair stays together; the earlier list's row is left as it was.
+            const had = t.carried.get(v.id);
+            const onList = t.need.some((x) => x.id === v.id) || had?.from === list.version;
+            return onList || !had ? { itemId: v.id, rev, labelsB: g.labels } : { itemId: v.id, rev: Math.max(had.rev, rev), labels: had.labels, labelsB: g.labels };
           });
           // Paid for and not kept: written with the labels (one transaction), so Resume never sends them again.
           const revRead = (v: { fields: Readonly<Record<string, unknown>> }) => (typeof v.fields[F.rev] === "number" ? (v.fields[F.rev] as number) : 0);
-          const fails = vals.map((v, n) => (rows[n] ? null : { itemId: v.id, rev: Math.max(t.all.find((x) => x.id === v.id)!.rev, revRead(v)), ...(second ? { failedB: true } : { failed: true }) }));
+          const fails = vals.map((v, n) => {
+            if (rows[n]) return null;
+            const rev = Math.max(t.all.find((x) => x.id === v.id)!.rev, revRead(v));
+            if (!second) return { itemId: v.id, rev, failed: true };
+            // A failed second answer for an item whose first is carried: recorded on this list's row with the carried first
+            // answer (as a kept second answer is), so it is never asked again until the item changes.
+            const had = t.carried.get(v.id);
+            const onList = t.need.some((x) => x.id === v.id) || had?.from === list.version;
+            return onList || !had ? { itemId: v.id, rev, failedB: true } : { itemId: v.id, rev: Math.max(had.rev, rev), labels: had.labels, failedB: true };
+          });
           if (!second) for (const f of fails) if (f) failed.add(f.itemId);
           await d.store.putLabels(k, list.version, [...rows, ...fails].filter((x): x is NonNullable<typeof x> => !!x));
           if (!second) {
@@ -476,46 +506,6 @@ export function createPatternsRunner(d: RunnerDeps) {
 
   function overBudget(run: Run) {
     if (run.estimateMicros > 0 && run.spentMicros > run.estimateMicros * COST_STOP) throw new StopRun("Stopped: cost passed the estimate");
-  }
-
-  /** The newest WP-2 second list (a WP-1 list is never reused: it may name how unclear an item is). */
-  const latestList = async () => (await d.store.lists()).filter((l) => /^v2-r\d+$/.test(l.version) && l.fingerprint.startsWith("w2")).at(-1) ?? null;
-
-  /** After pass 1: the second list, from every client's "other" suggestions (names and meanings only, client names replaced). */
-  async function secondList(run: Run, clients: string[], c: ClassifyDeps): Promise<TypeList> {
-    const labels: Labels[] = [];
-    for (const k of clients) {
-      const { items } = await todo(k, STARTING_LIST, 1, run.progress.clients[k]?.kinds ?? {});
-      const have = await d.store.labels(k, STARTING_LIST.version);
-      for (const i of items) {
-        const l = have.get(i.id)?.labels;
-        if (l) labels.push(l);
-      }
-    }
-    // GD-2: these cross clients, so every client's names, aliases and projects are replaced first (none is "own" here).
-    const scrub = (t: string | null) => (t === null ? null : replaceMentions(t, "\u0000none", c.directory, { records: true, token: "another client" }).text);
-    const clean = labels.map((l) => ({ ...l, otherName: scrub(l.otherName), otherMeaning: scrub(l.otherMeaning) }));
-    const s = suggestionsOf(clean);
-    const fp = fingerprintOf(STARTING_LIST, s);
-    const reuse = (await d.store.lists()).filter((l) => /^v2-r\d+$/.test(l.version) && l.fingerprint === fp).at(-1);
-    if (reuse) return cleanList(reuse);
-    const at = d.now().toString();
-    const version = `v2-r${run.id}`;
-    if (!s.length) {
-      const same: TypeList = { version, createdAt: at, types: [...STARTING_LIST.types], changes: [], fingerprint: fp };
-      await d.store.saveList(same, run.id);
-      return same;
-    }
-    const r = await c.ai.run<unknown>({ name: "patterns.merge", client: "none", instructions: MERGE_INSTRUCTIONS, mentions: { answer: "scrub" } }, mergeInput(STARTING_LIST, s), MERGE_SCHEMA);
-    if (!r.ok) throw new StopRun(`Stopped: the second list couldn't be made (${r.error.message})`);
-    run.spentMicros += Math.round(r.costUsd * 1_000_000);
-    const made = listFromMerge(r.value, STARTING_LIST, s, pass1Counts(clean), at, version, fp);
-    if (!made) throw new StopRun("Stopped: the AI's second list wasn't usable");
-    // The answer was scrubbed by the service; once more here for names the service's directory may not hold.
-    const list: TypeList = cleanList({ ...made, types: made.types.map((t) => ({ name: scrub(t.name)!, meaning: scrub(t.meaning)!, example: scrub(t.example)! })), changes: made.changes.map((x) => ({ ...x, from: x.from.map((f) => scrub(f)!), to: x.to.map((f) => scrub(f)!), reason: scrub(x.reason)! })) });
-    await d.store.saveList(list, run.id);
-    overBudget(run);
-    return list;
   }
 
   // ---------- the loops ----------
@@ -539,10 +529,14 @@ export function createPatternsRunner(d: RunnerDeps) {
     }
   }
 
-  /** The agreement sample for pass 2, over the clients it covers (fixed when pass 2 starts, so Resume picks the same). */
+  /** The agreement sample over the clients it covers (fixed when the run starts); failed second answers give their place. */
   async function agreement(run: Run, list: TypeList): Promise<Set<string>> {
     const on = run.progress.agreeOn ?? [];
-    return agreementPick(await Promise.all(on.map(async (k) => ({ key: k, ids: (await todo(k, list, 2, run.progress.clients[k]?.kinds ?? {})).items.map((i) => i.id) }))));
+    const per = await Promise.all(on.map(async (k) => {
+      const t = await todo(k, list, run.progress.clients[k]?.kinds ?? {});
+      return { key: k, ids: t.pool.map((i) => i.id), skip: t.skipB };
+    }));
+    return agreementPick(per, AGREE_MIN, AGREE_SHARE, new Set(per.flatMap((p) => p.skip)));
   }
 
   async function classifyLoop(run: Run, c: ClassifyDeps) {
@@ -552,40 +546,19 @@ export function createPatternsRunner(d: RunnerDeps) {
       if (cp.state !== "done" && !(await c.aiAllowed(k))) Object.assign(cp, { state: "skipped", reason: "Allow AI is off for this client (Admin › AI)" });
       else if (cp.state === "skipped") Object.assign(cp, { state: "waiting", reason: null });
     }
-    await save(run, run.spentMicros);
     const on = keys.filter((k) => run.progress.clients[k]!.state !== "skipped");
-    if ((run.progress.pass ?? 1) === 1) {
-      for (const k of on) {
-        const cp = run.progress.clients[k]!;
-        if (cp.phase === "pass1" && cp.state === "done") continue;
-        Object.assign(cp, { state: "reading", phase: "pass1", reason: null });
-        await save(run, run.spentMicros);
-        try {
-          await classifyClient(run, k, cp, STARTING_LIST, 1, c);
-          cp.state = "done";
-        } catch (e) {
-          if (e instanceof Halt || e instanceof StopRun) throw e;
-          Object.assign(cp, e instanceof SkipClient ? { state: "skipped", reason: e.message } : { state: "stopped", reason: words(e) });
-        }
-        await save(run, run.spentMicros);
-      }
-      await d.store.saveList(STARTING_LIST, null);
-      const list = await secondList(run, on, c);
-      run.progress.pass = 2;
-      run.progress.listVersion = list.version;
-      run.progress.agreeOn = on;
-      for (const k of on) Object.assign(run.progress.clients[k]!, { state: "waiting", phase: "pass2", done: 0, total: 0, dropped: 0 });
-      await save(run, run.spentMicros);
-    }
-    const list = cleanList((await d.store.list(run.progress.listVersion ?? "")) ?? STARTING_LIST);
+    run.progress.agreeOn ??= on;
+    await save(run, run.spentMicros);
+    // The list fixed when the run started: a person's change since applies to the next run.
+    const list = cleanList((await d.store.list(run.progress.listVersion ?? "")) ?? inUseOf(await d.store.lists()));
     const agree = await agreement(run, list);
     for (const k of on) {
       const cp = run.progress.clients[k]!;
-      if (cp.phase === "pass2" && cp.state === "done") continue;
-      Object.assign(cp, { state: "reading", phase: "pass2", reason: null });
+      if (cp.state === "done") continue;
+      Object.assign(cp, { state: "reading", phase: "labels", reason: null });
       await save(run, run.spentMicros);
       try {
-        await classifyClient(run, k, cp, list, 2, c, agree);
+        await classifyClient(run, k, cp, list, c, agree);
         cp.state = "done";
       } catch (e) {
         if (e instanceof Halt || e instanceof StopRun) throw e;
@@ -644,9 +617,11 @@ export function createPatternsRunner(d: RunnerDeps) {
   async function startClassify(by: string, c: ClassifyDeps, estimateMicros: number, keys: string[]): Promise<{ ok: true; run: Run } | { ok: false; why: "busy" | "no_clients" }> {
     await reconcile();
     if (!keys.length) return { ok: false, why: "no_clients" };
-    // The kinds are fixed now: a kind changed while the run goes applies to the next run.
+    // The kinds and the list are fixed now: a kind or a list changed while the run goes applies to the next run.
     const kinds = Object.fromEntries(await Promise.all(keys.map(async (k) => [k, await kindsNow(k)] as const)));
-    const progress: Progress = { rules: 2, pass: 1, clients: Object.fromEntries(keys.map((k) => [k, { state: "waiting" as const, phase: "pass1", kinds: kinds[k] ?? {} }])) };
+    const list = inUseOf(await d.store.lists());
+    await d.store.saveList(list, null);
+    const progress: Progress = { rules: 3, listVersion: list.version, clients: Object.fromEntries(keys.map((k) => [k, { state: "waiting" as const, phase: "labels", kinds: kinds[k] ?? {} }])) };
     const run = await d.store.startRun({ kind: "classify", startedBy: by, owner: d.owner, progress, estimateMicros });
     if (!run) return { ok: false, why: "busy" };
     log("classify_start", { count: keys.length });
@@ -658,12 +633,16 @@ export function createPatternsRunner(d: RunnerDeps) {
    * Resume a stopped run: inventory as it was (clients waiting for a scope carry on with the one chosen since);
    * classification with a new estimate. Stopped clients are tried again. A run made before WP-2 isn't resumed.
    */
-  async function resume(id: number, by: string, c?: { deps: ClassifyDeps; estimateMicros: number }): Promise<{ ok: true; run: Run } | { ok: false; why: "busy" | "not_stopped" | "needs_estimate" | "old_rules" }> {
+  async function resume(id: number, by: string, c?: { deps: ClassifyDeps; estimateMicros: number }): Promise<{ ok: true; run: Run } | { ok: false; why: "busy" | "not_stopped" | "needs_estimate" | "old_rules" | "list_changed" }> {
     await reconcile();
     const before = await d.store.run(id);
     if (!before || before.state !== "stopped") return { ok: false, why: "not_stopped" };
-    if (before.progress.rules !== 2) return { ok: false, why: "old_rules" };
+    // Inventory under WP-2's rules; a classification only under WP-3's (one pass against the list in use).
+    if (before.kind === "inventory" ? before.progress.rules !== 2 : before.progress.rules !== 3) return { ok: false, why: "old_rules" };
     if (before.kind === "classify" && !c) return { ok: false, why: "needs_estimate" };
+    // The estimate prices the list in use: a classification started on another list isn't resumed (a new run is, and the
+    // labels it made carry over).
+    if (before.kind === "classify" && before.progress.listVersion !== inUseOf(await d.store.lists()).version) return { ok: false, why: "list_changed" };
     const run = await d.store.resumeRun(id, { owner: d.owner, startedBy: by, ...(c ? { estimateMicros: c.estimateMicros } : {}) });
     if (!run) return { ok: false, why: "busy" };
     for (const cp of Object.values(run.progress.clients)) if (cp.state === "stopped" || cp.state === "reading" || cp.state === "needs_scope") Object.assign(cp, { state: "waiting", reason: null });
@@ -673,22 +652,22 @@ export function createPatternsRunner(d: RunnerDeps) {
   }
 
   /**
-   * The estimate for a classification now: per client, the items it would send, the expected cost and a rough time.
-   * Pass 1 (a sample), pass 2 (every item in scope whose kind isn't Leave out) and the agreement sample's second answers.
+   * The estimate for a classification now, against the list in use: per client, the items it would send (those with no
+   * label on the list, or one that needs labeling again) and the agreement sample's second answers, the expected cost and
+   * a rough time.
    */
-  async function estimate(keys: string[], aiAllowed: (k: string) => Promise<boolean>): Promise<Estimate> {
+  async function estimate(keys: string[], aiAllowed: (k: string) => Promise<boolean>, o: { list?: TypeList } = {}): Promise<Estimate> {
     const prices = d.prices?.() ?? null;
-    const latest = await latestList();
-    const instr = classifyInstructions(latest ?? STARTING_LIST).length / 4;
+    // WP-3: `list` prices a change before it is saved (the same rules the run uses afterwards).
+    const list = o.list ?? inUseOf(await d.store.lists());
+    const instr = classifyInstructions(list).length / 4;
     const clients: Estimate["clients"] = {};
-    // Pass 1 with anything new may suggest a new name, and then a new second list relabels every item: when any allowed
-    // client has pass-1 work, pass 2 is priced as a full pass (the conservative guess; a reused list costs less).
     const allowed: string[] = [];
     const kinds: Record<string, Record<string, Kind>> = {};
-    let fresh = !latest;
+    const per: { key: string; ids: number[]; skip: string[] }[] = [];
     for (const k of keys) {
       kinds[k] = await kindsNow(k);
-      const p = await todo(k, STARTING_LIST, 2, kinds[k]!);
+      const p = await todo(k, list, kinds[k]!);
       if (!p.sc) {
         clients[k] = { items: 0, toClassify: 0, micros: 0, seconds: 0, skipped: OLD_INVENTORY };
         continue;
@@ -698,33 +677,28 @@ export function createPatternsRunner(d: RunnerDeps) {
         continue;
       }
       allowed.push(k);
-      if ((await todo(k, STARTING_LIST, 1, kinds[k]!)).need.length) fresh = true;
+      per.push({ key: k, ids: p.pool.map((i) => i.id), skip: p.skipB });
     }
-    const pass2 = new Map<string, PatternItem[]>();
-    for (const k of allowed) pass2.set(k, (await todo(k, latest ?? STARTING_LIST, 2, kinds[k]!)).items);
-    const agree = agreementPick(allowed.map((k) => ({ key: k, ids: pass2.get(k)!.map((i) => i.id) })));
+    const agree = agreementPick(per, AGREE_MIN, AGREE_SHARE, new Set(per.flatMap((p) => p.skip)));
     for (const k of allowed) {
-      const p1 = await todo(k, STARTING_LIST, 1, kinds[k]!);
-      const p2 = !fresh && latest ? await todo(k, latest, 2, kinds[k]!, { agree }) : { need: pass2.get(k)!, needB: pass2.get(k)!.filter((i) => agree.has(`${k}\u0000${i.id}`)) };
+      const p = await todo(k, list, kinds[k]!, { agree });
       const kids = new Map<number, number>();
-      for (const i of p1.all) if (i.parentId !== null) kids.set(i.parentId, (kids.get(i.parentId) ?? 0) + 1);
+      for (const i of p.all) if (i.parentId !== null) kids.set(i.parentId, (kids.get(i.parentId) ?? 0) + 1);
       const tokensOf = (i: PatternItem) => (i.title.length + Math.min(i.facts.descLen, TEXT_CAP) + Math.min(i.facts.acLen, TEXT_CAP) + Math.min(kids.get(i.id) ?? 0, CHILD_TITLES) * 50 + 120) / 4;
-      const sent = [...p1.need, ...p2.need, ...p2.needB];
+      const sent = [...p.need, ...p.needB];
       const n = sent.length;
       const input = sent.reduce((s, i) => s + tokensOf(i), 0) + Math.ceil(n / BATCH) * instr;
       const output = n * 90;
       const micros = prices ? costMicros({ inputTokens: Math.round(input), cachedTokens: 0, outputTokens: output }, prices) : 0;
-      const requests = Math.ceil(p1.need.length / BATCH) + Math.ceil(p2.need.length / BATCH) + Math.ceil(p2.needB.length / BATCH);
-      const reads = Math.ceil((p1.need.length + p2.need.length) / (PAGE / 2));
-      clients[k] = { items: n, toClassify: pass2.get(k)!.length, micros, seconds: requests * AI_SECONDS + reads * READ_SECONDS, skipped: null };
+      const requests = Math.ceil(p.need.length / BATCH) + Math.ceil(p.needB.length / BATCH);
+      const reads = Math.ceil((p.need.length + p.needB.filter((i) => !p.need.includes(i)).length) / (PAGE / 2));
+      clients[k] = { items: n, labels: p.need.length, toClassify: p.items.length, micros, seconds: requests * AI_SECONDS + reads * READ_SECONDS, skipped: null };
     }
-    // The merge: one request with names and meanings only.
-    const any = Object.values(clients).some((c) => c.items);
-    const merge = prices && any ? costMicros({ inputTokens: 3000, cachedTokens: 0, outputTokens: 2500 }, prices) : 0;
     const totalItems = Object.values(clients).reduce((s, c) => s + c.items, 0);
-    const totalMicros = Object.values(clients).reduce((s, c) => s + c.micros, 0) + merge;
-    const totalSeconds = Object.values(clients).reduce((s, c) => s + c.seconds, 0) + (any ? AI_SECONDS * 3 : 0);
-    return { clients, totalItems, totalMicros, totalSeconds, agreement: agree.size };
+    const totalMicros = Object.values(clients).reduce((s, c) => s + c.micros, 0);
+    const totalSeconds = Object.values(clients).reduce((s, c) => s + c.seconds, 0);
+    const totalLabels = Object.values(clients).reduce((s, c) => s + (c.labels ?? 0), 0);
+    return { clients, totalItems, totalLabels, totalMicros, totalSeconds, agreement: agree.size, list: list.version };
   }
 
   return {
@@ -743,7 +717,7 @@ export function createPatternsRunner(d: RunnerDeps) {
 }
 
 export type PatternsRunner = ReturnType<typeof createPatternsRunner>;
-/** What Estimate answers: per client, the requests' items (both passes and the agreement answers), the items in scope to classify, cost and time. */
-export type Estimate = { clients: Record<string, { items: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalMicros: number; totalSeconds: number; agreement: number };
+/** What Estimate answers: per client, the requests' items (labels and the agreement answers), the items in scope to classify, cost and time; the list in use. */
+export type Estimate = { clients: Record<string, { items: number; labels?: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalLabels: number; totalMicros: number; totalSeconds: number; agreement: number; list: string };
 export type { Level };
 export { OTHER };

@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10; WP-1's tables against `feat/wp1-devops-patterns` on Nov 11.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10; WP-1's tables against `feat/wp1-devops-patterns` on Nov 11; WP-3's against `feat/wp3-patterns-trust` on Nov 12.
 
 ## One database, two kinds of table
 
@@ -56,6 +56,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `devops_takes`, `devops_notes` | App | No | Quiet notes to someone whose item was taken or changed |
 | `patterns_runs`, `patterns_snapshots`, `patterns_items`, `patterns_labels`, `patterns_type_lists`, `patterns_platforms` | App | Yes | WP-1's DevOps patterns: runs (kind, state, the starter's user id, progress, estimate and spend), each client's numbers per run (the two newest are shown), items of the last 24 months and their parents (id, rev, type, state, dates, parent, title, and numbers about the text: lengths, empty or not, comment count, tags and estimate set or not, history booleans), labels per item, revision and list version, the request type lists, each client's platform. Never description, acceptance or comment text, never names |
 | `patterns_layout`, `patterns_projects`, `patterns_scopes`, `patterns_kinds` | App | Yes | WP-2's scope and kinds for DevOps patterns: per item in the window its project, area path, type and created date (the layout, also for items outside the scope); per project the area tree and teams (names, area paths, whether the team field is the area path; never the teams' people); each client's scope as set on the page (who and when); each type's kind when a person chose one. Never titles, text or names |
+| `patterns_ignored`; `patterns_type_lists.made_by`, `why`, `base`, `relabel` | App | Yes | WP-3's request types list a person owns: for each saved version who made it (a user id), one line of why, the version it was made from and which labels an added type asks to label again; the "other" names a person chose to ignore (the name, who and when). Never titles, text or names of people |
 | `ai_requests`, `app_ai_requests`, `ai_app_spend`, `chat_ai_days` | User and app | Yes | AI request log (counts, cost, outcome; never text), spend per month and per chat per day |
 
 ### Client chats and meetings
