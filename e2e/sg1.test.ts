@@ -80,8 +80,11 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
     const pm = block(page, TUE, "PM");
     await expect.poll(() => sugIn(pm).count()).toBe(1);
     const amBefore = await sugTitles(am);
-    await sugIn(pm).locator(".sug-clear").click();
+    // PS-1 (A1): one offer has no block line on the card; the block's panel always has it.
+    await pm.locator(".card-head").first().click({ position: { x: 4, y: 4 } });
+    await page.locator("aside.block-panel .sug-block .sug-clear").click();
     await expect.poll(() => sugIn(pm).count()).toBe(0);
+    await page.keyboard.press("Escape");
     await expect.poll(() => toast(page).innerText().catch(() => "")).toContain("Cleared");
     await page.reload();
     await day(page);
@@ -189,9 +192,10 @@ describe.skipIf(!CHROMIUM)("SG-1: today and the next working day only (browser, 
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     await emptyFrom(page, MON);
     await week(page);
-    const head = (d: string) => page.locator(`main.grid section.day:has([data-drop^="${d}:"]) .day-head .sug-day`);
-    await expect.poll(() => head(MON).count()).toBe(1);
-    await expect.poll(() => head(TUE).count()).toBe(1);
+    // PS-1 (A1): the day's line shows only when offers span two blocks, so count the offers in the day's blocks.
+    const head = (d: string) => page.locator(`main.grid section.day:has([data-drop^="${d}:"]) .sug-block`);
+    await expect.poll(() => head(MON).count()).toBeGreaterThan(0);
+    await expect.poll(() => head(TUE).count()).toBeGreaterThan(0);
     expect(await head(WED).count()).toBe(0);
     expect(await block(page, WED, "AM").locator(".sug-block").count()).toBe(0);
   }, T);

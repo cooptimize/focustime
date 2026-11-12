@@ -129,3 +129,14 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - **"3 suggestions are in your blocks."**: the morning card's line under "Nothing on today yet", with Keep all.
 - **Suggestions**: the switch in Day's and Week's ⋯; **Suggest work for empty blocks** in Settings › Planning.
 - Retired: the dashed "From Mon" cards' Keep here, "N unfinished to-dos suggested in your next blocks · Keep all · Review".
+
+## PS-1 words (Nov 11)
+
+- **Times**: `9:00–12:30` everywhere a block or event shows its hours (the panel said "9:00 to 12:30", the timeline "9–12:30"); "All day" for an all-day event.
+- **Dates**: long "Tue, Nov 3", short "Tue 3" inside a week.
+- **Needs stories**: a feature with no stories (the board's suggestion reason said "Needs breakdown").
+- **unfinished**: a past day's to-dos not done ("2 done · 1 unfinished"; the check-in's "2 unfinished. Move them, or leave them for Close out.").
+- **N done**: a busy card's folded done to-dos; a click shows them.
+- **+N**: more chips than fit on a card; it opens the block.
+- **Cards**, **Timeline**: the two layouts of Day and Week (Week's single "Timeline" toggle before).
+- **Holiday**: the day header's pill on an observed holiday; the day's cell, Day's header line and the panel say its name, "Thanksgiving Day (observed)", or "Holiday" when it has none. "Dataverse: holidays weren't read" with Retry when they couldn't be read.

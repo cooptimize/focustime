@@ -52,21 +52,18 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
 }
 
 /**
- * WK-2: the Board's Timeline toggle, beside the mode switch: one click shows or hides the hour rail beside each card's
- * to-dos (B, Week's ⋯ and the command do the same). Pressed while the timeline shows.
+ * PS-1: Cards | Timeline, the one switch for a view's two layouts, on Day and on Week (Week's single toggle button
+ * before). The pressed half is the view shown; B, the ⋯ menus and the command menu still switch it.
  */
-export function TimelineToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
-  const words = shown ? "Hide timeline" : "Show timeline";
+export function CardsTimelineSwitch({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
   return (
-    <button type="button" data-tour="wk-timeline" className={`tl-toggle${shown ? " on" : ""}`} aria-pressed={shown} onClick={onToggle} title={`${words} (B)`} aria-label={words}>
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-        <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="10" y1="2.5" x2="10" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="11.5" y1="6" x2="13.5" y2="6" stroke="currentColor" strokeWidth="1.1" />
-        <line x1="11.5" y1="9" x2="13.5" y2="9" stroke="currentColor" strokeWidth="1.1" />
-        {!shown && <line x1="2" y1="14" x2="14" y2="2" stroke="currentColor" strokeWidth="1.3" />}
-      </svg>
-      <span className="tl-word">Timeline</span>
-    </button>
+    <span className="day-switch" role="group" aria-label="Cards or timeline" data-tour="wk-timeline">
+      <button type="button" aria-pressed={!shown} onClick={() => shown && onToggle()} title="The blocks as cards (B)">
+        Cards
+      </button>
+      <button type="button" aria-pressed={shown} onClick={() => !shown && onToggle()} title="The blocks with an hour timeline (B)">
+        Timeline
+      </button>
+    </span>
   );
 }

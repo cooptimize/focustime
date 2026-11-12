@@ -24,7 +24,9 @@ async function board(page: Page): Promise<void> {
 }
 
 const hidden = (page: Page) => page.locator("main.grid").getAttribute("class").then((c) => (c ?? "").includes("no-timeline"));
-const toggle = (page: Page) => page.locator(".week-head .tl-toggle");
+// PS-1: Cards | Timeline; a click on the half not pressed switches.
+const toggle = (page: Page) => page.locator('.week-head .day-switch button[aria-pressed="false"]');
+const timelineBtn = (page: Page) => page.locator(".week-head .day-switch button", { hasText: "Timeline" });
 
 async function openPanel(page: Page): Promise<void> {
   await page.locator(`main.grid ${MON_AM}`).click({ position: { x: 14, y: 12 } });
@@ -105,16 +107,15 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     await board(page);
     // WD-1 review: off by default (Cards); one click turns it on.
     await expect(hidden(page)).resolves.toBe(true);
-    await expect(toggle(page).getAttribute("aria-pressed")).resolves.toBe("false");
+    await expect(timelineBtn(page).getAttribute("aria-pressed")).resolves.toBe("false");
     await toggle(page).click();
     await expect.poll(() => hidden(page)).toBe(false);
-    await expect(toggle(page).getAttribute("aria-pressed")).resolves.toBe("true");
-    await expect(toggle(page).getAttribute("title")).resolves.toBe("Hide timeline (B)");
+    await expect(timelineBtn(page).getAttribute("aria-pressed")).resolves.toBe("true");
 
     // The button: one click hides, one shows.
     await toggle(page).click();
     await expect.poll(() => hidden(page)).toBe(true);
-    await expect(toggle(page).getAttribute("title")).resolves.toBe("Show timeline (B)");
+    await expect(timelineBtn(page).getAttribute("aria-pressed")).resolves.toBe("false");
     await expect(page.locator("main.grid .ruler, main.grid .day-strip").count()).resolves.toBe(0);
     // Remembered after a reload.
     await page.reload();
@@ -162,8 +163,9 @@ describe.skipIf(!CHROMIUM)("WK-2: the Board's Timeline toggle and per-column tie
     expect(widths.body).toBeGreaterThan(widths.card - 40);
     await expect(page.locator(`main.grid ${MON_AM}.folded .card-folded`).count()).resolves.toBe(1);
     // The now line on Friday's block under way.
-    await expect(page.locator(`main.grid ${FRI_AM} .now-line`).count()).resolves.toBe(1);
-    await expect(page.locator(`main.grid ${FRI_AM} .now-line .nl-pill`).textContent()).resolves.toBe("10:00");
+    // PS-1 (C1): with no rail, "now" is a marker in the header of the block under way.
+    await expect(page.locator(`main.grid ${FRI_AM} .card-head .now-mark`).count()).resolves.toBe(1);
+    await expect(page.locator(`main.grid ${FRI_AM} .now-mark .nl-pill`).textContent()).resolves.toBe("10:00");
     // Drag a story from the block panel onto Friday (today), as with the timeline shown. WD-2: Monday is past by
     // Friday (its panel has no Add list), so the panel is opened on Friday's block, with Cooptimize chosen.
     await page.locator(`main.grid ${FRI_AM} .card-client`).first().click();

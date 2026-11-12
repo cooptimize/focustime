@@ -90,6 +90,20 @@ export function NowEdge({ label, thin = false, onClick }: { label: string; thin?
   );
 }
 
+/**
+ * PS-1: on a card with no rail (Day's cards, a narrow Week card, the phone), "now" is a small marker in the block's
+ * header (a dot and the time), so the card's first line stays level with its neighbours' (the line above the header
+ * pushed it down).
+ */
+export function NowMark({ label, onClick }: { label: string; onClick?: (() => void) | undefined }) {
+  return (
+    <span className="now-mark">
+      <span className="nl-dot" aria-hidden="true" />
+      <Time label={label} onClick={onClick} />
+    </span>
+  );
+}
+
 /** A row in a time-ordered agenda list. */
 export function NowRow({ label }: { label: string }) {
   return (

@@ -33,11 +33,11 @@ describe("what the panel offers on a block", () => {
     expect(panelTitle("Contoso", "2026-11-11", "AM")).toBe("Contoso · Wed AM");
     expect(panelTitle(null, "2026-11-11", "PM")).toBe("Open · Wed PM");
     expect(panelTitle(null, "2026-11-13", "AM", { wholeDay: true, open: "Catch-up" })).toBe("Catch-up · Fri");
-    expect(panelWhen("8:00–12:30", "add", 240, 180)).toEqual({ text: "8:00 to 12:30 · 1h free" });
-    expect(panelWhen("8:00–12:30", "add", 120, 150)).toEqual({ text: "8:00 to 12:30 · No free time" });
-    expect(panelWhen("8:00–12:30", "add", 120, 900)).toEqual({ text: "8:00 to 12:30 · No free time" });
-    expect(panelWhen("8:00–12:30", "past", 240, 0)).toEqual({ text: "8:00 to 12:30 · past" });
-    expect(panelWhen("8:00–12:30", "off", 0, 0)).toEqual({ text: "8:00 to 12:30" });
+    expect(panelWhen("8:00–12:30", "add", 240, 180)).toEqual({ text: "8:00–12:30 · 1h free" });
+    expect(panelWhen("8:00–12:30", "add", 120, 150)).toEqual({ text: "8:00–12:30 · No free time" });
+    expect(panelWhen("8:00–12:30", "add", 120, 900)).toEqual({ text: "8:00–12:30 · No free time" });
+    expect(panelWhen("8:00–12:30", "past", 240, 0)).toEqual({ text: "8:00–12:30 · past" });
+    expect(panelWhen("8:00–12:30", "off", 0, 0)).toEqual({ text: "8:00–12:30" });
   });
   it("the meetings line counts meetings and their time; events shown as free don't count", () => {
     expect(meetingsWords([{ minutes: 30, free: false }, { minutes: 45, free: false }])).toBe("2 meetings · 1h 15m");

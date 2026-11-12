@@ -263,7 +263,8 @@ describe("PTO and Plan the day (step 6)", () => {
     expect(w.week.days[1]!.pto).toBeNull();
     expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "ok", itemCount: 1 });
     // The tracker with no detail rows (Nov 16 to 17) counts on every weekday (D109).
-    expect(w.ptoAhead).toEqual(["2026-11-05", "2026-11-16", "2026-11-17"]);
+    // PS-1: the observed holidays ahead (Nov 26 and 27, Dec 7 here) are days off too, skipped as planning targets.
+    expect(w.ptoAhead).toEqual(["2026-11-05", "2026-11-16", "2026-11-17", "2026-11-26", "2026-11-27", "2026-12-07"]);
   });
 
   it("today on a PTO day is not a planning workday, so Plan the day doesn't open by itself (D106)", async () => {

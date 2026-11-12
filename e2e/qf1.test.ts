@@ -88,7 +88,8 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await expect(page.locator(".urgent-strip, .attention, .moment-card, .start-focus, .today-off").count()).resolves.toBe(0);
     await shots(page, "pto-day");
     await pto.getByRole("button", { name: /next working day/ }).click();
-    await expect.poll(() => hash(page)).toBe("#/day/2026-11-09");
+    // PS-1: Monday Nov 9 is the demo's observed holiday, so the next working day is Tuesday.
+    await expect.poll(() => hash(page)).toBe("#/day/2026-11-10");
     await page.close();
   }, T);
 

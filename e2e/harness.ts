@@ -148,15 +148,18 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
 }
 
 /** A fresh page in its own browser context: the sign-in page, then "Try the demo" (a new demo session, a fresh store). */
-export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }): Promise<{ page: Page; errors: string[] }> {
+export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }, /** PS-1: "default" leaves Day's panel to open on a wide window, as for a first visit. */ opts: { dayPanel?: "default" } = {}): Promise<{ page: Page; errors: string[] }> {
   const page = await h.browser.newPage({ viewport });
   const errors: string[] = [];
   // Vite's dev client reports its websocket (HMR is off in the server): not an app error.
   page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
-  await page.addInitScript(() => {
+  await page.addInitScript((keepDefault) => {
     localStorage.setItem("focustime.hint.flow", "dismissed");
     localStorage.setItem("focustime.hint.picktime", "1");
-  });
+    // PS-1: Day opens with its panel on a wide window the first time; the tests written before start with it closed,
+    // as a person who closed it once would (e2e/ps1.test.ts checks the first visit).
+    if (!keepDefault && localStorage.getItem("focustime.day.panel") === null) localStorage.setItem("focustime.day.panel", "closed");
+  }, opts.dayPanel === "default");
   if (h.gone()) throw new Error(h.gone()!);
   await page.goto(h.url);
   await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });

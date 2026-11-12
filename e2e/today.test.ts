@@ -52,7 +52,7 @@ const uiWords = (page: Page) =>
     let t: Node | null;
     while ((t = w.nextNode())) {
       const p = t.parentElement;
-      if (!p || !vis(p) || p.closest(".topbar, script, style, svg, .brand-stage") || (p.closest(TITLE) && !p.closest(".mode-switch"))) continue;
+      if (!p || !vis(p) || p.closest(".topbar, script, style, svg, .brand-stage, .sr-only") || (p.closest(TITLE) && !p.closest(".mode-switch"))) continue;
       n += (t.textContent ?? "").trim().split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length;
     }
     return n;
@@ -86,7 +86,8 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     // 81: UI-B's now line adds its time ("9:30"); 95: DM-1's late promise in the urgent strip; 98: QF-1's Timebox my day beside the plan.
     // 113: IB-1 slice 4's strip reads the Inbox, capped at 3 lines (two late promises and Priya's Must on the demo day)
     // plus "N more in Inbox"; before, it was the late promise and SW-1's one sends line.
-    // 114: TY-1's Timeline switch. 118: DV-2's "DevOps checked just now" in the status bar.
+    // 114: TY-1's Timeline switch. 118: DV-2's "DevOps checked just now" in the status bar. PS-1: words only a
+    // screen reader gets (.sr-only, the promise a due chip is about) aren't on screen.
     expect(await uiWords(page)).toBeLessThanOrEqual(118);
     expect(errors).toEqual([]);
     await page.close();

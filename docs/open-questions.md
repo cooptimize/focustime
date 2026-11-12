@@ -715,3 +715,13 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - From the review: dragging a suggestion onto its own block makes a to-do that isn't "kept", so the block's other offers go, where clicking Keep leaves them. Same rule for both?
 - From the review: cleared choices (`markers` kind `sg_clear`) are never pruned. Remove ones older than two weeks in the daily cleanup?
 - A block whose free time the calendar fills still gets one suggestion (A4's "at least one"). Offer none there?
+
+## PS-1
+
+- "to place" stays the word for unfinished to-dos with no block ("7 to place · Review"), beside "unfinished" for a past day's. One word for both?
+- The timeline's narrowest tier still says "9–1" where "9:00–1:00" doesn't fit. Kept as the fallback; fine?
+- A card folds its done to-dos at six to-dos (`HEAVY`). Right number?
+- Day opens with its panel at 1280 px and wider (`WIDE`). Right width?
+- Items drawn by time on Week's rail and Day's timeline (events, timeboxes, promises) are shorter than 28 px when they are short; their height is their length, so they are exempt from the target size. Give them a bigger hit area?
+- Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
+- On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?

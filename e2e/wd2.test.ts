@@ -118,7 +118,7 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await block(page, MON, "AM").locator(".card-client").first().click();
     await expect.poll(() => at(page)).toBe(`${MON}|AM`);
     await expect(panel(page).locator(".bp-title h2").innerText()).resolves.toBe("Cooptimize · Mon AM");
-    await expect(panel(page).locator(".bp-when").innerText()).resolves.toMatch(/^9:00 to 12:30 · /);
+    await expect(panel(page).locator(".bp-when").innerText()).resolves.toMatch(/^9:00–12:30 · /);
     await expect.poll(() => onBlock(page)).toContain(onIt);
     await expect(panel(page).locator(".bp-meet-line").innerText()).resolves.toMatch(/^▸ 3 meetings · 1h 30m$/);
     // Opened by a click, the cursor is not put in the box.
@@ -568,8 +568,8 @@ describe.skipIf(!CHROMIUM)("WD-2: a past day (browser, demo on Tuesday)", () => 
     await cards.first().waitFor();
     // No + Add anywhere on a past day (the header, the cards).
     expect(await page.locator(".day-view .add-work").count()).toBe(0);
-    // QT-1: a past day's card is folded to one line ("1 not done"); the panel has its to-dos as rows.
-    const withWork = page.locator(".day-view .half.card.folded", { has: page.locator(".card-folded", { hasText: /not done/ }) }).first();
+    // QT-1: a past day's card is folded to one line ("1 unfinished"); the panel has its to-dos as rows.
+    const withWork = page.locator(".day-view .half.card.folded", { has: page.locator(".card-folded", { hasText: /unfinished/ }) }).first();
     await withWork.locator(".card-head").click();
     await panel(page).waitFor();
     expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);

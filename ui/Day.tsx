@@ -7,7 +7,7 @@
 // flows over the same page. Was ui/Today.tsx with its own block card, "This week" chips and a 3840 day timeline.
 import { DaySuggestLine, useMorningSuggestions } from "./Suggest.tsx";
 import type { SetupStep } from "../plan/setup.ts";
-import { ModeArea } from "./ModeSwitch.tsx";
+import { CardsTimelineSwitch, ModeArea } from "./ModeSwitch.tsx";
 import { DueBadge, Fading } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
@@ -405,19 +405,14 @@ export function Day(props: Props) {
               : null
           }
         >
-          {mode === "now" && !weekendDay && props.onTimeline && (
-            <span className="day-switch" role="group" aria-label="Cards or timeline" data-tour="wk-timeline">
-              <button type="button" aria-pressed={!timelineShown} onClick={() => timelineShown && toggleTimeline()} title="The day's blocks as cards (B)">Cards</button>
-              <button type="button" aria-pressed={timelineShown} onClick={() => !timelineShown && toggleTimeline()} title="The day on an hour timeline (B)">Timeline</button>
-            </span>
-          )}
+          {mode === "now" && !weekendDay && props.onTimeline && <CardsTimelineSwitch shown={timelineShown} onToggle={toggleTimeline} />}
           {mode === "now" && canTimebox && unboxed > 0 && props.onTimebox && !proposals && (
             <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Suggest a time for every planned to-do, on the timeline, to accept or change">
               Timebox my day
             </button>
           )}
           {canAdd && (
-            <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
+            <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
               + Add
             </button>
           )}

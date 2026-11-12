@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect(page.getByText("Planned ✓").count()).resolves.toBe(0);
     // Done picks: a count on Tuesday, a visible row on today.
     await expect(day(1).locator(".pick-row.done").count()).resolves.toBe(0);
-    await expect(day(1).locator(".card-done").first().textContent()).resolves.toBe("1 done");
+    await expect(day(1).locator(".card-done").first().textContent()).resolves.toMatch(/1 done$/);
     await expect(day(0).locator(".pick-row.done").count()).resolves.toBe(1);
     // QT-1: no client chips on Week (a feature with no stories says so on its row in the block's panel).
     await expect(page.locator(".client-chips, .cc-chip").count()).resolves.toBe(0);

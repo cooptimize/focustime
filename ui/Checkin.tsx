@@ -98,7 +98,7 @@ export function CheckinBlock(b: BlockProps) {
         })}
       </ul>
       {!left.length && <p className="tb-empty">{done.length ? "All done here." : "Nothing planned here."}</p>}
-      {ended && left.length > 0 && <p className="tb-line">{left.length} not done. Move {left.length === 1 ? "it" : "them"}, or leave {left.length === 1 ? "it" : "them"} for Close out.</p>}
+      {ended && left.length > 0 && <p className="tb-line">{left.length} unfinished. Move {left.length === 1 ? "it" : "them"}, or leave {left.length === 1 ? "it" : "them"} for Close out.</p>}
     </article>
   );
 }

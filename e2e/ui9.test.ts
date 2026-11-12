@@ -52,7 +52,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     expect(await allChips(page)).toBe(2);
     await shotBoth(page, "week-timeline-shown");
 
-    await page.locator(".week-head .tl-toggle").click();
+    await page.locator('.week-head .day-switch button[aria-pressed="false"]').click();
     await expect.poll(() => allChips(page)).toBe(2);
     expect(await chipText(page, MON_AM)).toBe("1 late");
     expect(await chipText(page, MON_PM)).toBe("1 late");
@@ -72,7 +72,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     await shotBoth(page, "week-timeline-hidden");
 
     // Shown again: the slim rail, and the chips stay.
-    await page.locator(".week-head .tl-toggle").click();
+    await page.locator('.week-head .day-switch button[aria-pressed="false"]').click();
     await expect.poll(() => page.locator(`main.grid ${MON_AM} .ruler.slim`).count()).toBe(1);
     expect(await allChips(page)).toBe(2);
     expect(errors).toEqual([]);

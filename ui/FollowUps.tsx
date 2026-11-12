@@ -48,10 +48,22 @@ export async function copy(text: string, el: HTMLTextAreaElement | null): Promis
 }
 
 /** The due badge (step 13.5): always words, colored by how close it is; never small gray text. */
-export function DueBadge({ l }: { l: Pick<FollowUpView, "dueState"> }) {
+/**
+ * A promise's due date in words. PS-1: where the badge stands alone (a card's chip), `about` names the promise ("to Jordan
+ * Lee: Send the revised estimate") on hover and for a screen reader, so "Due today" never says only when.
+ */
+export function DueBadge({ l, about }: { l: Pick<FollowUpView, "dueState">; about?: string | undefined }) {
   if (!l.dueState) return null;
-  return <span className={`due-badge ${l.dueState.level}`}>{l.dueState.text}</span>;
+  return (
+    <span className={`due-badge ${l.dueState.level}`} title={about ? `${l.dueState.text}: promise ${about}` : undefined}>
+      {l.dueState.text}
+      {about && <span className="sr-only">: promise {about}</span>}
+    </span>
+  );
 }
+
+/** PS-1: what a due chip's hover and screen reader text say it is about: "to Jordan Lee: Send the estimate". */
+export const promiseAbout = (f: Pick<FollowUpView, "hasWho" | "who" | "what">) => `${f.hasWho ? `to ${f.who}` : ""}${f.hasWho ? ": " : ""}${f.what}`;
 
 /** Runs one follow-up action; the caller reloads. Returns the error text, or null. */
 async function act(action: string, input: Record<string, unknown>): Promise<string | null> {

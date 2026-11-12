@@ -46,7 +46,8 @@ export function BlockSuggestions({ date, half, tabIndex = 0, where = "card" }: {
   const block = blockName({ date, half });
   return (
     <div className={`sug-block sug-${where}`} role="group" aria-label={`Suggested for ${block}`}>
-      {blockLineShows(here.length) && <p className="sug-line">
+      {/* PS-1 (A1): on a card the line shows only with two or more offers; the panel always has it, so a block's Clear stays in reach. */}
+      {(where === "panel" || blockLineShows(here.length)) && <p className="sug-line">
         <span className="sug-word" title="Offers from your unfinished to-dos and your backlog. Nothing is planned until you keep it">
           Suggested
         </span>

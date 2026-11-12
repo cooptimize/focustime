@@ -9,7 +9,7 @@ import type { NowSpot } from "../plan/nowline.ts";
 import { eventMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, labelHere, layoutEvents, overlappingIds } from "./layout.ts";
-import { eventRange, SampleSources, showAsLabel, sourceName } from "./labels.ts";
+import { eventRange, SampleSources, shortRange, showAsLabel, sourceName } from "./labels.ts";
 import { slotOf } from "./halves.ts";
 import { NowLine, NowPast } from "./NowLine.tsx";
 
@@ -118,7 +118,7 @@ export function EventCard({ placed, tz, style, label = true, overlaps = false }:
       {...menu}
     >
       {label && <><span className="ev-line">
-        <span className="ev-time">{eventRange(e, tz)}</span>
+        <span className="ev-time">{e.allDay ? "All day" : shortRange(e, tz)}</span>
         <span className="ev-title">{e.title}</span>
         {overlaps && <span className="ev-overlap" title="Another event is booked at the same time">Overlaps</span>}
       </span>

@@ -343,9 +343,9 @@ function DayColumn(props: { /** WD-2: Day draws the column with no header (Day h
         {/* WD-2: the weekday and date open Day on that date. */}
         <button type="button" className="day-open" tabIndex={daySelected ? 0 : -1} onClick={() => props.onDayHead?.(day.date)} title={`Open ${day.weekday} in Day`} aria-label={`${dayLabel}: open in Day`}>
           <span className="dow">{day.weekday}</span>
+          {/* PS-1: one short form in a week ("Tue 3"; the title says the month); the long one is Day's ("Tue, Nov 3"). */}
           <span className="date">
-            <span className="date-long">{shortDate(day.date)}</span>
-            <span className="date-short" aria-hidden="true">{Number(day.date.slice(8))}</span>
+            <span className="date-short">{Number(day.date.slice(8))}</span>
           </span>
         </button>
         {isToday && <span className="today-pill">Today</span>}

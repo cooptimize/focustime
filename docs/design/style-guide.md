@@ -274,3 +274,20 @@ A route in the existing UI (no new dependency), reachable from the command menu 
 5. The keyboard map, generated from the action registry.
 
 It lets every theme change be checked on screen in one place, and screenshot-diffed in tests.
+
+## 10. Day and Week: rules for people (PS-1, Nov 11)
+
+The product owner (Nov 11): "What am I supposed to be looking at right now?" Design the UI and UX for human users. These rules keep Day, Week and the block panel readable at a glance; every UI step that touches them follows them, and `e2e/ps1.test.ts` measures the ones that can be measured.
+
+- **One time format.** A range is `9:00–12:30` (an en dash, no spaces, no AM or PM; `shortRange` in `ui/labels.ts`), in cards, the panel, the rail and the timeline. A single time is `9:30`. An all-day event says "All day". Words like "until 12:30" only in sentences.
+- **Two date forms.** Long: "Tue, Nov 3" (headers of one day: Day, the panel, a promise's due date). Short, inside a week: "Tue 3" (Week's day headers). Nothing else.
+- **One name per thing.** "Needs stories" (never "Needs breakdown"), "unfinished" (never "not done" for a to-do left from a past day), "to place" for unfinished to-dos with no block yet, "Holiday" for an observed holiday (its own name in its cell), "PTO" for time off, "Cards" and "Timeline" for the two layouts. `docs/design/wording.md` has the list.
+- **One control style per job.** The screen's main action is a filled button (`--action`); per-block actions (+ Add in a block, + time, Review, Keep) are quiet links that show their edge on hover and focus; a switch between two layouts is a segmented pair (Cards | Timeline) with `aria-pressed`; a status is a pill, never a button look.
+- **One main button per screen.** The header's + Add on Day and on Week, at every width, is the only filled button in the header. Start focus shows once (on Day, on the block under way's card, not in the panel too).
+- **No other repeated control.** A control that would repeat on every row shows on hover and focus (⋯, the time link on rows that have one), never hidden from the keyboard or a screen reader.
+- **Targets.** Every button, link and checkbox is at least 28 × 28 px on a computer and 44 × 44 px on the phone (`--target`); a small chip draws its pill inside the bigger box. Exempt: items drawn by time on the rail and the timeline (their height is their length), listed in `docs/open-questions.md`.
+- **Rest and hover.** At rest a card shows its client, time, status, its to-dos and at most one line of chips. On hover or focus: ⋯, the edges of quiet links, a row's other actions.
+- **Card order.** Head (swatch, client, time, the now mark on the block under way, status pill, ⋯), the chips line, the meetings line, to-dos (open first, then "N done" folded on a busy card), + Add last. The cards in a row start their first line at one height.
+- **Chips before folding.** Three chips on a card at most (late promises, due dates); the rest fold into "+N", which opens the block. A chip never touches ⋯.
+- **Folding.** A card with six or more to-dos (`HEAVY`, `plan/cardfold.ts`) folds its done ones into "N done", which opens them in place; today's card under way keeps them too. A past day folds to one line ("2 done · 1 unfinished").
+- **The phone.** Nothing sits under the raised capture button at the end of a scroll; no layout switch on the phone's Week.

@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("QT-1: a quieter board (browser, demo)", () => {
     for (const c of await mon.all()) {
       expect(await c.evaluate((e) => e.classList.contains("folded"))).toBe(true);
       expect(await c.locator(".status-pill").count()).toBe(0);
-      await expect(c.locator(".card-folded").textContent()).resolves.toMatch(/^(\d+ done|\d+ not done|\d+ moved on)( · .+)*$|^Nothing planned$/);
+      await expect(c.locator(".card-folded").textContent()).resolves.toMatch(/^(\d+ done|\d+ unfinished|\d+ moved on)( · .+)*$|^Nothing planned$/);
     }
     await mon.first().locator(".card-head").click();
     await panel(page).getByText(/A past day: tick what got done/).waitFor();

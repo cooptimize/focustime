@@ -7,6 +7,7 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { buildState, PS_CLOCK, type PsState } from "./ps1-states.ts";
 
 const DIR = process.env.PS1_SHOTS ?? null;
+const DEFAULT = { dayPanel: "default" } as const;
 const T = 600_000;
 const THEMES = ["light", "dark"] as const;
 type Theme = (typeof THEMES)[number];
@@ -53,7 +54,7 @@ describe.skipIf(!CHROMIUM || !DIR)("PS-1 screenshots", () => {
   for (const state of STATES)
     for (const size of DESKTOP)
       it(`${state} at ${size.width}x${size.height}`, async () => {
-        const { page } = await freshPage(h, size);
+        const { page } = await freshPage(h, size, DEFAULT);
         await buildState(page, state);
         for (const theme of THEMES) {
           await themed(page, theme);
@@ -79,7 +80,7 @@ describe.skipIf(!CHROMIUM || !DIR)("PS-1 screenshots", () => {
 
   for (const state of STATES)
     it(`${state} on the phone`, async () => {
-      const { page } = await freshPage(h, PHONE);
+      const { page } = await freshPage(h, PHONE, DEFAULT);
       await buildState(page, state);
       for (const theme of THEMES) {
         await themed(page, theme);

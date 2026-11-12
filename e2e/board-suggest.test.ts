@@ -51,7 +51,8 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B, 
     await expect.poll(async () => ((await fold.count()) ? Number((await fold.innerText()).match(/\((\d+)\)/)![1]) : 0)).toBe(n - 1);
 
     // The now line on today's column, with the time.
-    await expect(page.locator(".day.today .now-line").first().textContent()).resolves.toContain("1:30");
+    // PS-1 (C1): with no rail, "now" is a marker in the header of the block under way.
+    await expect(page.locator(".day.today :is(.now-line, .now-mark)").first().textContent()).resolves.toContain("1:30");
     expect(errors).toEqual([]);
   }, T);
 });
