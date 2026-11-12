@@ -1,6 +1,6 @@
 // UI-B: the screenshots for the report (demo data only), when FOCUSTIME_SHOTS names a folder: the Board with the
-// suggested cards and the summary line, the fallback list open, the now line mid-block (Wed 1:30 PM) and in the gap
-// before the day (Wed 7:30 AM), Today's agenda and Plan today with the line; at 1920×1080 (and Text size Larger),
+// suggested cards and the summary line, the fallback list open, the now line mid-block (Wed 1:30 PM) and none in the
+// gap before the day (Wed 7:30 AM, NL-1), Today's agenda and Plan today with the line; at 1920×1080 (and Text size Larger),
 // 1366×768 and a phone (390×844, a 17px root font as on iPhone; the page must not be wider than the screen).
 import { afterAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -46,12 +46,13 @@ describe.skipIf(!CHROMIUM || !SHOTS)("UI-B screenshots", () => {
     }
   }, T);
 
+  // NL-1: before the day's first block no block shows "now"; the Today pill marks today.
   it("in the gap before the day, at 1920", async () => {
     const h = await startDemo("chromium", {}, EARLY);
     hs.push(h);
     const { page } = await freshPage(h);
     await week(page);
-    await expect(page.locator(".day.today .now-line").first().textContent()).resolves.toContain("7:30");
+    await expect(page.locator(".day.today :is(.now-line, .now-mark, .now-tick)").count()).resolves.toBe(0);
     await shotBoth(page, "uib-board-early-1920");
     await page.close();
   }, T);
