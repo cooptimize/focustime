@@ -198,7 +198,8 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
             {heading && <div className="menu-group">{heading}</div>}
             <button
               type="button"
-              role="menuitem"
+              role={it.toggle ? "menuitemcheckbox" : "menuitem"}
+              aria-checked={it.toggle ? !!it.checked : undefined}
               data-i={i}
               className={`menu-item${i === active ? " active" : ""}${it.danger ? " danger" : ""}${it.checked ? " checked" : ""}`}
               aria-disabled={!!it.disabled}

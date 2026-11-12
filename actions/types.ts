@@ -164,7 +164,7 @@ export type SettingsData = {
   vm: { startWithoutAsking: boolean; autoStart: AutoStartSettings };
   /** Settings > Roadmap (step 17): state thresholds. */
   roadmap: AppConfig["roadmap"];
-  /** BH-1: Settings › Ahead: when an item is stale. */
+  /** BH-1: Settings › Backlog: when an item is stale. */
   ahead: import("../plan/backlog.ts").AheadSettings;
   /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
   asks: AppConfig["asks"];
@@ -587,7 +587,7 @@ export type AheadLoad = {
   halves: { clientKey: string; itemId: number; field: "start" | "target"; day: string; half: "AM" | "PM" }[];
   /** I'm flagged as an automation account (nothing is editable). */
   automation: boolean;
-  /** BH-1: Settings › Ahead: an open item with no change for this many weeks is stale. Missing before BH-1. */
+  /** BH-1: Settings › Backlog: an open item with no change for this many weeks is stale. Missing before BH-1. */
   staleWeeks?: number;
   /** AH-7: my Readiness skips still on ("client:id" → the day skipped; each lasts 2 weeks). Missing before AH-7. */
   skips?: import("../plan/readiness.ts").Skips;

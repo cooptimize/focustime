@@ -72,20 +72,20 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".day :is(.now-line, .now-mark)").first().waitFor();
     await shot(page, "week");
 
-    // 4. Ahead: Grid, Gantt, Fix next.
-    await go(page, "#/ahead");
+    // 4. Backlog: Grid, Gantt, Needs attention.
+    await go(page, "#/backlog");
     await page.getByText("Order history export").first().waitFor({ timeout: 30_000 });
     await page.getByText(/changes? to save/).first().waitFor();
     await shot(page, "ahead-grid");
-    await go(page, "#/ahead/gantt");
+    await go(page, "#/backlog/gantt");
     await page.waitForTimeout(800);
     await shot(page, "ahead-gantt");
-    await go(page, "#/ahead/fix");
-    await page.locator(".ah-fx-row").first().waitFor({ timeout: 30_000 });
+    await go(page, "#/backlog/attention");
+    await page.locator(".ah-grid tbody .ah-row").first().waitFor({ timeout: 30_000 });
     await shot(page, "ahead-fix-next");
 
     // 5. Break down Supplier onboarding: five cards from the samples, Preview, Create all.
-    const needs = page.locator(".ah-fx-row", { hasText: "Supplier onboarding" }).first();
+    const needs = page.locator(".ah-grid tbody .ah-row:not(.context)", { hasText: "Supplier onboarding" }).first();
     await needs.getByRole("button", { name: /Break down/ }).first().click();
     const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
     await panel.waitFor({ timeout: 15_000 });

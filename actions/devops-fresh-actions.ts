@@ -12,7 +12,8 @@ import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import type { FindAnswer, ForcedCheck, RefreshAnswer, VersionsAnswer } from "../plan/devops-fresh-types.ts";
 export type { FindAnswer, RefreshAnswer, VersionsAnswer } from "../plan/devops-fresh-types.ts";
 import { findAnswer, type AheadPresence, type FindFacts, type StatusPresence } from "../plan/find-item.ts";
-import { DEFAULT_FILTERS, groups } from "../plan/ahead-model.ts";
+import { DEFAULT_FILTERS, fixGroups, groups } from "../plan/ahead-model.ts";
+import { backlogGroups } from "../plan/backlog.ts";
 import type { AheadFilters } from "../plan/ahead-edit.ts";
 import type { ActionResponse, AheadLoad } from "./types.ts";
 
@@ -97,10 +98,20 @@ function allowFind(who: object, nowMs: number): boolean {
   return true;
 }
 
-/** Ahead's answer for one item, from Ahead's own load and filters (the Grid's rules, plan/ahead-model.ts). */
+/**
+ * Backlog's answer for one item, from its own load and filters (the Grid's rules, plan/ahead-model.ts). BL-1: Needs
+ * attention keeps only its list's items (fixGroups) and one level as a list only that level (backlogGroups).
+ */
 export function aheadPresence(load: AheadLoad, saved: AheadFilters | null, clientKey: string, id: number): AheadPresence {
   const f: AheadFilters = { ...DEFAULT_FILTERS, ...(saved ?? {}) };
-  const rowIn = (x: AheadFilters) => groups(load, x, { stories: true }).some((g) => g.client.clientKey === clientKey && g.rows.some((r) => r.item.id === id && !r.context));
+  const staleWeeks = load.staleWeeks ?? 6;
+  const rowIn = (x: AheadFilters) => {
+    const inTree = x.flat
+      ? backlogGroups(load, { ...x, tier: x.flat, ...(x.gaps ? { stale: false } : {}) }, { staleWeeks }).some((g) => g.client.clientKey === clientKey && g.rows.some((r) => r.item.id === id))
+      : groups(load, x.gaps ? { ...x, stale: false } : x, { stories: true }).some((g) => g.client.clientKey === clientKey && g.rows.some((r) => r.item.id === id && !r.context));
+    if (!inTree || !x.gaps) return inTree;
+    return fixGroups(load, { readOnly: false, f: x, staleWeeks }).some((g) => g.client.clientKey === clientKey && g.group.entries.some((e) => e.itemId === id));
+  };
   if (rowIn(f)) return { kind: "shown" };
   const none: AheadFilters = { ...DEFAULT_FILTERS, owner: Object.fromEntries(load.clients.map((c) => [c.clientKey, "all" as const])), ...(f.whole ? { whole: true } : {}) };
   if (!rowIn(none)) return { kind: "absent" };
@@ -110,6 +121,7 @@ export function aheadPresence(load: AheadLoad, saved: AheadFilters | null, clien
     ["owner", { ...f, owner: { ...f.owner, [clientKey]: "all" } }],
     ["epic", { ...f, epic: null }],
     ["ready", { ...f, gaps: false, kinds: [] }],
+    ["flat", (({ flat: _f, ...rest }) => rest)(f)],
     ["dates", (({ range: _r, ...rest }) => ({ ...rest, from: null, to: null }))(f)],
     ["stale", { ...f, stale: false }],
     ["text", { ...f, q: "" }],

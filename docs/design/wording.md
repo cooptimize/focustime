@@ -13,11 +13,11 @@ Step 15 (D270). Applies to every string a person sees: views, buttons, menus, hi
 | Tone | Use for | Examples |
 |---|---|---|
 | Neutral (muted text) | Facts, free time | "1h 45m free", "No free time", "2h 30m free this afternoon", "2 of 3 picks done" |
-| Amber (`--watch`) | Worth a look, not a problem | "Due tomorrow" (QT-2: never how much is planned, anywhere but Ahead's Gantt weeks) |
+| Amber (`--watch`) | Worth a look, not a problem | "Due tomorrow" (QT-2: never how much is planned, anywhere but Backlog's Gantt weeks) |
 | Orange (`--due`) | Due today | "Due today" |
 | Red (`--risk`) | Real problems only | "Overdue 2 days", "At risk", a source down, a write that failed |
 
-Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too much (Day, Week, the panel, the midday check-in, the assistant, Teams, notices, the Guide); they say the free time. The plan is a punch list. The one exception is Ahead's Gantt weeks ("about 2h over"), a forward-planning view and an open question.
+Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too much (Day, Week, the panel, the midday check-in, the assistant, Teams, notices, the Guide); they say the free time. The plan is a punch list. The one exception is Backlog's Gantt weeks ("about 2h over"), a forward-planning view and an open question.
 
 ## Words to avoid in visible copy
 
@@ -99,16 +99,16 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - **"What's done and what's left"**: the check-in's moment card, reminder and push (was "what still fits").
 - **"Wednesday PM: 3h free"**, **"Wednesday PM: no free time"**: the assistant's move preview note (was "Over your Wednesday PM hours by 1h").
 - **"Wed PM: at risk, <reason>, 45 min free"**: the assistant names a block only when the calendar puts it at risk. **"3h of meetings, 5h free for focus"**: a day's facts when asked about one day.
-- Retired from visible copy everywhere: fits, doesn't fit, About N hours over. Move one?, A little over, overloaded blocks, too much planned, Over your <day> hours by …. Ahead's Gantt keeps "about 2h over" per week for now (open question).
+- Retired from visible copy everywhere: fits, doesn't fit, About N hours over. Move one?, A little over, overloaded blocks, too much planned, Over your <day> hours by …. Backlog's Gantt keeps "about 2h over" per week for now (open question).
 
 ## QC-1 words (Nov 11)
 
-- **+ New** (Ahead's header), **+ New under** (a row), **New <type>** (the command menu, in the process's own word: "New feature", "New epic", "New domain"), **New work item in DevOps** (the menu's general one). Never "Create feature" or "Add item".
+- **+ New** (Backlog's header), **+ New under** (a row), **New <type>** (the command menu, in the process's own word: "New feature", "New epic", "New domain"), **New work item in DevOps** (the menu's general one). Never "Create feature" or "Add item".
 - The form's title: **New in <client>'s DevOps**, or **New work item** before a client is chosen. Labels: Client, Level, Title, Parent, Assigned to, Target date; **More: description and size**. The title's placeholder: "What is this feature?" in the chosen type.
 - **Create in DevOps** (opens the preview; nothing is created until it is confirmed: "Nothing is created until you confirm the preview."), **Save as draft** ("Saved in FocusTime only."), **Cancel**.
 - Without a write PAT: **"DevOps is read-only for <client> until you add your own write PAT. Add it in Settings"**. Never "disabled" or "not allowed".
 - The parent: "Optional. Any open feature or capability" (the types one level up), "A domain is at the top: no parent". Refusals say the rule: "A User Story doesn't go under an Epic in this process. Under an Epic go: Feature".
-- Ahead after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Ahead. Hidden by: Assigned to me"**.
+- Backlog after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Backlog. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
 ## WP-1 words (Nov 11)
@@ -149,3 +149,13 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - **"→ Thu"**, **"→ Mon 16"**: where a past day's moved to-do went. **"N more"**: a past block's rows past six; it opens the block. **"Nothing planned"**: a past block with none.
 - **"10:30–11:30 · 1h"**, **"· Outlook"**: a to-do's line under its title on Week's cards.
 - Retired from visible copy: QT-1's past-day line ("2 done · 1 unfinished", "1 moved on") on Week and Day's cards.
+
+## Backlog (BL-1)
+
+- The tab is **Backlog** (never Ahead in what a person reads; Ahead is the code name). Its views are **Grid** and **Gantt**.
+- The toolbar, left to right: the client chips, **People** (Mine, Contributing, Everyone), **Needs attention** with its count, **Search**, **Filter** with a count ("Filter · 2"), then **⋯** ("More: rows and view"). Never "Readiness", "Not ready only" or "Mixed".
+- People across clients that differ names who gets what: **"Everyone for Northwind Foods, Mine for the rest"**.
+- The line under the toolbar only off the defaults: **"Showing 33 of 583"**, then one chip per filter ("Needs attention", "Needs stories", "Stale", "Stories only, in rank order", "Next 4 weeks"), each with ×, and **Clear filters**.
+- Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
+- The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
+- The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.

@@ -143,18 +143,18 @@ const INBOX: Tour = {
 
 const AHEAD: Tour = {
   id: "ahead",
-  title: "Ahead",
-  summary: "Past this week: your features and epics, and what they're missing.",
+  title: "Backlog",
+  summary: "Every client's DevOps on one screen: edit, clean up and organize.",
   start: { tab: "ahead", mode: "grid" },
   section: "ahead",
   steps: [
-    { target: "modes-ahead", title: "Four modes", text: "Grid is a table you edit in place, Gantt the timeline, Gaps what's missing, Backlog each client's own order." },
-    { target: "ah-owner", title: "Mine, Contributing, All", text: "Choose whose items show. FocusTime remembers your choice.", phone: "skip" },
+    { target: "modes-ahead", title: "Grid and Gantt", text: "Grid is a table you edit in place, client by client in each backlog's order. Gantt is the same items on a timeline: drag a bar to move its dates. P switches." },
+    { target: "ah-owner", title: "Mine, Contributing, Everyone", text: "Choose whose items show. FocusTime remembers your choice for each client.", phone: "skip" },
+    { target: "ah-attention", title: "Needs attention", text: "Only the items with something to fix: missing stories, a target date, an owner or a size, or stale. Each has its fix beside it, and Skip. Work from the top.", phone: "skip" },
+    { target: "ah-filter", title: "Filter", text: "Epic, dates and the levels shown. One level as a list shows each client's backlog in its own rank order, with the rank number.", phone: "skip" },
     { target: "ah-pending", title: "Changes wait until you save", text: "Every edit collects here. Review shows before and after; Save writes them to DevOps, with Undo. Someone else's change since shows both.", example: "pending" },
-    { at: { tab: "ahead", mode: "fix" }, target: "ah-fix-row", title: "Readiness: one next step", text: "Items missing stories, a target date, an owner or a size, near the top of each backlog. Each row has one next step, and Skip.", example: "gaps-row" },
-    { at: { tab: "ahead", mode: "backlog" }, target: "ah-stale", title: "Backlog and Stale", text: "Each client's backlog in its own order. Stale shows open items nobody changed in DevOps for 6 weeks: push the date, give it an owner, or plan it." },
   ],
-  end: { line: "That's Ahead. A look once a week keeps the next month honest.", tryIt: "Try it yourself: Gaps' count is in the mode switch." },
+  end: { line: "That's Backlog. A look once a week keeps every client's DevOps clean.", tryIt: "Try it yourself: turn on Needs attention and fix the top row." },
 };
 
 const ASSISTANT: Tour = {

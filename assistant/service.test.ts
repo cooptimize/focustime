@@ -170,14 +170,14 @@ describe("look things up", () => {
     s.script(["item"], call(["item", { id: 4417 }]), say("Sam Tester has #4417, due Nov 20."));
     const r = await s.a.handle("Who has #4417?");
     expect(r).toMatchObject({ status: "ok", reply: "Sam Tester has #4417, due Nov 20." });
-    expect(r.cards[0]).toMatchObject({ kind: "item", id: 4417, owner: "Sam Tester", target: "2026-11-20", children: [{ id: 4418, owner: "Dana Reyes" }], link: { href: "#/ahead/item/4417" } });
+    expect(r.cards[0]).toMatchObject({ kind: "item", id: 4417, owner: "Sam Tester", target: "2026-11-20", children: [{ id: 4418, owner: "Dana Reyes" }], link: { href: "#/backlog/item/4417" } });
     expect(s.log.every((e) => e.clientKey === FAB)).toBe(true);
   });
   it("TB-3: the result is channel-neutral: an app address for the panel and for Teams alike", async () => {
     const s = setup({ channel: "teams" });
     s.script(["item"], call(["item", { id: 4417 }]), say("Sam has it."));
     const r = await s.a.handle("Who has #4417?");
-    expect(r.cards[0]).toMatchObject({ link: { href: "#/ahead/item/4417" } });
+    expect(r.cards[0]).toMatchObject({ link: { href: "#/backlog/item/4417" } });
   });
   it("what's next across clients: cards for me, and the model only hears how many were shown", async () => {
     const s = setup();

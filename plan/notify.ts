@@ -62,8 +62,8 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   send_cant_lead: "On a client you lead, when someone can't take a Must another lead sent.",
   look_ask: "When a teammate asks you, as a client lead, to look at their planned week.",
   look_reply: "When a lead you asked replies about your week.",
-  assigned: "When a teammate assigns you a DevOps item from Ahead in FocusTime.",
-  dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per save.",
+  assigned: "When a teammate assigns you a DevOps item from Backlog in FocusTime.",
+  dates_moved: "When a teammate moves the dates of a DevOps item you own from Backlog in FocusTime, once per save.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
   meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
   conversation_given: "When a teammate gives you a conversation or adds you as a helper.",
@@ -249,7 +249,7 @@ export const notices = {
     ref: weekStart,
   }),
   /** Step 17: every other Thursday after Done in Plan the week, and the first Thursday of the month (Roadmap › Plan ahead). */
-  planAhead: (key: string, at: string): Notice => ({ kind: "plan_ahead", key, title: "Look ahead 4 weeks", body: "Next week is planned. Time to look 4 weeks ahead: blocks per week and dates.\nClick to open Plan ahead.", buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
+  planAhead: (key: string, at: string): Notice => ({ kind: "plan_ahead", key, title: "Look ahead 4 weeks", body: "Next week is planned. Time to look 4 weeks ahead: blocks per week and dates.\nClick to open Backlog's Gantt.", buttons: [open("Open Gantt")], route: "ahead", at, ref: key }),
   direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Plan ahead.`, buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
   timerEnd: (breakOver: boolean, label: string, startedAt: string, at: string): Notice => ({
     kind: "timer",
@@ -302,8 +302,8 @@ export const notices = {
   /** SW-1: the lead replied to my Ask to look. */
   lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Week.`, buttons: [open("Open Week")], route: `planweek:${weekStart}`, at }),
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
-  assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
-  datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
+  assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
+  datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
   // SR-3: with features I worked on, the click opens Status on Needs your update.
   statusReport: (occasion: string, line: string, at: string, needsYou = false): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Status.`, buttons: [open(needsYou ? "Open Needs your update" : "Open Status")], route: needsYou ? "status_needs" : "status", at, ref: occasion }),

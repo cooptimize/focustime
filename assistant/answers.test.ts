@@ -27,12 +27,12 @@ const expectNoLeak = (r: HandleResult, s: ReturnType<typeof setup>) => {
   expect(sent(s)).not.toMatch(/Initech|7100|secret/i);
   expect(shown(r)).not.toMatch(CANNED);
 };
-/** Every line with a link points at a real thing of mine (a block's day, #id in Ahead, a promise, the Inbox, Status). */
+/** Every line with a link points at a real thing of mine (a block's day, #id in Backlog, a promise, the Inbox, Status). */
 const expectGrounded = (r: HandleResult) => {
   for (const sec of sections(r)) for (const l of sec.lines) {
     const id = /#(\d+)/.exec(l.text)?.[1];
     if (id) expect([8100, 8101, 8102, 8200, 8300, 8301, 9100, 9101]).toContain(Number(id));
-    if (l.link) expect(l.link.href).toMatch(/^#\/(week|ahead|inbox|status|meetings|commands|guide)/);
+    if (l.link) expect(l.link.href).toMatch(/^#\/(week|backlog|inbox|status|meetings|commands|guide)/);
   }
 };
 

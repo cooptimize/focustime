@@ -198,9 +198,9 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     await bdPanel.locator(".x-close").first().click();
     await bdPanel.waitFor({ state: "detached" });
 
-    // Ahead's Fix next: its Break down opens the same panel, with the same steps.
-    await page.evaluate(() => (location.hash = "#/ahead/fix"));
-    const fix = page.locator(".ah-fx-row:not(.ctx) .ah-fx-acts button", { hasText: /^Break down$/ }).first();
+    // Backlog's Needs attention (was Fix next): its Break down opens the same panel, with the same steps.
+    await page.evaluate(() => (location.hash = "#/backlog/attention"));
+    const fix = page.locator(".ah-row:not(.context) .ah-fix button", { hasText: /^Break down$/ }).first();
     await fix.waitFor({ timeout: 30_000 });
     await fix.click();
     await bdPanel.waitFor();

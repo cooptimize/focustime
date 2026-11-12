@@ -1,20 +1,22 @@
-// AH-6: Ahead's one toolbar, the same in Grid, Gantt, Readiness and Backlog, with the same controls in the same places.
-// Filters on the left, in labelled groups: Clients, People, Epic, Dates, Readiness, Search. The view on the right:
-// Show (levels), Callouts, Whole project. A control that can't apply in a mode is shown disabled with the reason as
-// its tooltip, never removed, so the layout never moves. Under it, one line says what's shown ("Showing 76 of 132 ·
-// Northwind Foods · Everyone · Next 4 weeks") with a removable chip per non-default filter and Clear filters.
-// No native selects or date inputs: AH-5's popover, date picker and filterable list.
+// AH-6, BL-1: the Backlog tab's one toolbar, the same in Grid and Gantt. One row under the header: Clients (chips),
+// People (Mine · Contributing · Everyone), Needs attention (a chip with its count) and Search; at its end one Filter
+// button (Epic, Dates and the levels shown, with a count when any is off its default) and ⋯ (Expand all, Collapse all,
+// Callouts, Whole project, and the note about a client's scope). Under it, only when a filter is off its default,
+// "Showing 33 of 583" with a removable chip per filter and Clear filters. No native selects or date inputs: AH-5's
+// popover, date picker and filterable list.
 import type React from "react";
-import { useRef, useState, type CSSProperties } from "react";
+import { useContext, useRef, useState, type CSSProperties } from "react";
 import type { AheadLoad } from "../../actions/types.ts";
-import type { AheadFilters, AheadGapKind, AheadOwner } from "../../plan/ahead-edit.ts";
-import { cleared, dateWords, KIND_WORDS, KINDS, notHere, notReadyOnly, PEOPLE_WORDS, peopleWord, RANGE_WORDS, RANGES, readinessWords, summary, type AheadModeKey, type Control } from "../../plan/ahead-view.ts";
-import type { Fold } from "../../plan/gantt-tree.ts";
-import { DEFAULT_AHEAD } from "../../plan/backlog.ts";
+import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
+import { cleared, dateWords, filterCount, notHere, PEOPLE_WORDS, peopleWord, RANGE_WORDS, RANGES, summary, type AheadModeKey } from "../../plan/ahead-view.ts";
+import { atLevel, collapseAll, expandAll, LEVELS, type Fold } from "../../plan/gantt-tree.ts";
+import { START_RULE } from "../../plan/readiness.ts";
 import { CellPopover, Segmented } from "../CellPopover.tsx";
 import { DatePicker } from "../DatePicker.tsx";
+import { MenuCtx } from "../Menus.tsx";
+import type { MenuItem } from "../menu.ts";
 import { SelectField } from "../SelectField.tsx";
-import { LevelControl } from "./Levels.tsx";
+import { useAdmin } from "../settings/Admin.tsx";
 import { DEFAULT_FILTERS, epicsOf, type Tier } from "./model.ts";
 
 export type AheadViewState = {
@@ -26,29 +28,9 @@ export type AheadViewState = {
 };
 
 const toggle = <T,>(list: readonly T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** One labelled group. Off: shown, but every control in it says why it doesn't apply here. */
-function Group({ label, control, off, children, className = "" }: { label: string; control: Control; off?: string | null; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`ah-tb-group ${className}${off ? " off" : ""}`} role="group" aria-label={label} data-control={control} title={off ?? undefined}>
-      <span className="ah-tb-label" aria-hidden="true">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-/** A button that says why it can't be used here instead of disappearing (aria-disabled keeps its tooltip and focus). */
-function OffButton({ off, onClick, className = "", children, ...rest }: { off: string | null; onClick: () => void; className?: string; children: React.ReactNode } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className">) {
-  return (
-    <button type="button" {...rest} className={`${className}${off ? " is-off" : ""}`} aria-disabled={off ? true : undefined} title={off ?? rest.title} onClick={() => !off && onClick()}>
-      {children}
-    </button>
-  );
-}
-
-export function Toolbar({ mode, load, f, set, setWhole, view, counts, color }: {
+export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention, color, extra = null }: {
   mode: AheadModeKey;
   load: AheadLoad;
   f: AheadFilters;
@@ -56,88 +38,108 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, color }: {
   setWhole: (whole: boolean) => void;
   view: AheadViewState;
   counts: { shown: number; total: number };
+  /** Needs attention's count (BL-1: Readiness's count plus stale items) for the clients and filters shown. */
+  attention: number;
   color: (k: string) => string;
+  /** A view's own quiet control at the row's end (the Gantt's Legend). */
+  extra?: React.ReactNode;
 }) {
+  const menus = useContext(MenuCtx);
+  const admin = useAdmin();
+  const more = useRef<HTMLButtonElement>(null);
   const scoped = load.clients.filter((c) => c.scope && !c.scope.all);
   const ctx = { scoped: scoped.length > 0, whole: !!f.whole };
-  const off = (c: Control) => notHere(mode, c, ctx);
   const shownClients = load.clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
   const people = peopleWord(f, shownClients);
   const setOwner = (o: AheadOwner) => set({ ...f, owner: { ...f.owner, ...Object.fromEntries(shownClients.map((c) => [c.clientKey, o])) } });
   const epics = epicsOf(load, f);
   const epicLabel = f.epic ? (epics.find((e) => e.key === f.epic)?.label ?? null) : null;
   const sum = summary(load.clients, f, { today: load.today, shown: counts.shown, total: counts.total, epicLabel });
-  const scopeTitle = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("\n");
-  const wholeOff = off("whole");
+  const nFilter = filterCount(f, view.fold.level);
+
+  const openMore = () => {
+    const r = more.current?.getBoundingClientRect();
+    if (!r) return;
+    const callOff = notHere(mode, "callouts", ctx);
+    const wholeOff = notHere(mode, "whole", ctx);
+    const auto = load.clients.filter((c) => c.scope?.automatic && !c.scope.all);
+    const names = auto.map((c) => c.clientName).join(", ");
+    const scopeCounts = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("; ");
+    const scopeWords = `${f.whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for ${names}`;
+    const items: MenuItem[] = [
+      { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll()) },
+      { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll()) },
+      // Callouts are the Gantt's; in the Grid the item stays, saying why (it's found where it was looked for).
+      { id: "callouts", group: "View", label: "Callouts at the end of bars", toggle: true, checked: view.callouts, ...(callOff ? { disabled: callOff, expected: true } : { run: () => view.setCallouts(!view.callouts) }) },
+      // The counts per client ("Northwind Foods: 14 of 19 open items are Cooptimize's work") as its hint.
+      { id: "whole", group: "View", label: "Show the whole project", toggle: true, checked: !!f.whole, ...(scopeCounts ? { hint: scopeCounts } : {}), ...(wholeOff ? { disabled: wholeOff, expected: true } : { run: () => setWhole(!f.whole) }) },
+      ...(auto.length
+        ? [
+            admin
+              ? { id: "scope", group: "Scope", label: scopeWords, hint: "Set it in Admin › Clients", run: () => void (location.hash = "#/settings/admin-clients") }
+              : { id: "scope", group: "Scope", label: scopeWords, disabled: "Your FocusTime admin sets each client's scope in Admin › Clients", expected: true },
+          ]
+        : []),
+    ];
+    menus.open({ x: Math.max(8, r.right - 300), y: r.bottom + 4 }, { title: "Backlog", items });
+  };
 
   return (
-    <section className="ah-toolbar" aria-label="Filters and view" data-mode={mode}>
+    <section className="ah-toolbar" aria-label="Filters" data-mode={mode}>
       <div className="ah-tb-row">
-        <div className="ah-tb-filters">
-          <Group label="Clients" control="clients">
-            <span className="rm-chips">
-              {load.clients.map((c) => (
-                <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": color(c.clientKey) } as CSSProperties} aria-pressed={f.clients.includes(c.clientKey)} onClick={() => set({ ...f, clients: toggle(f.clients, c.clientKey), epic: null })}>
-                  <span className="dl-swatch" aria-hidden="true" />
-                  {c.clientName}
-                </button>
-              ))}
-            </span>
-          </Group>
-          <Group label="People" control="people">
-            <span className="rm-seg" data-tour="ah-owner" title="Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Everyone: all of Cooptimize's work. Remembered per client.">
-              {(["mine", "contributing", "all"] as const).map((o) => (
-                <button key={o} type="button" aria-pressed={people.owner === o} onClick={() => setOwner(o)}>
-                  {PEOPLE_WORDS[o]}
-                </button>
-              ))}
-            </span>
-          </Group>
-          <Group label="Epic" control="epic" off={epics.length ? null : "No epics in the clients shown"}>
-            {epics.length ? (
-              <SelectField label="Epic" value={f.epic ?? ""} onChange={(k) => set({ ...f, epic: k || null })} options={[{ key: "", label: "Any" }, ...epics.map((x) => ({ key: x.key, label: x.label }))]} className="ah-tb-select" />
-            ) : (
-              <OffButton off="No epics in the clients shown" onClick={() => null} className="date-field select-field ah-tb-select">
-                Any
-              </OffButton>
-            )}
-          </Group>
-          <Group label="Dates" control="dates">
-            <DatesButton f={f} set={set} today={load.today} />
-          </Group>
-          <Group label="Readiness" control="readiness">
-            <ReadinessButton f={f} set={set} notReadyOff={off("readiness")} staleWeeks={load.staleWeeks ?? DEFAULT_AHEAD.staleWeeks} />
-          </Group>
-          <Group label="Search" control="search" className="ah-tb-search">
-            <span className="ah-search">
-              <input className="rm-search" type="text" placeholder="Titles or #id" aria-label="Search titles or #id" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === "Escape" && f.q && (e.stopPropagation(), set({ ...f, q: "" }))} />
-              {f.q && (
-                <button type="button" className="ah-search-clear" aria-label="Clear the search" onClick={() => set({ ...f, q: "" })}>
-                  ×
-                </button>
-              )}
-            </span>
-          </Group>
-        </div>
-        <div className="ah-tb-view" role="group" aria-label="View">
-          <Group label="Show" control="level">
-            <LevelControl fold={view.fold} setFold={view.setFold} names={view.names} />
-          </Group>
-          <Group label="Callouts" control="callouts" off={off("callouts")}>
-            <OffButton off={off("callouts")} className="rm-chip ah-callouts-toggle" aria-label="Show callouts" aria-pressed={view.callouts} onClick={() => view.setCallouts(!view.callouts)} title="The marker at the end of a bar: what needs attention, with its fix">
-              {view.callouts ? "On" : "Off"}
-            </OffButton>
-          </Group>
-          <Group label="Whole project" control="whole" off={wholeOff}>
-            <OffButton off={wholeOff} className="rm-chip ah-whole" aria-label="Show the whole project" aria-pressed={!!f.whole} onClick={() => setWhole(!f.whole)} title={scopeTitle || "Every item in the project, not only Cooptimize's work"}>
-              {f.whole ? "On" : "Off"}
-            </OffButton>
-          </Group>
-        </div>
+        <span className="rm-chips ah-tb-clients" role="group" aria-label="Clients">
+          {load.clients.map((c) => (
+            <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": color(c.clientKey) } as CSSProperties} aria-pressed={f.clients.includes(c.clientKey)} onClick={() => set({ ...f, clients: toggle(f.clients, c.clientKey), epic: null })}>
+              <span className="dl-swatch" aria-hidden="true" />
+              {c.clientName}
+            </button>
+          ))}
+        </span>
+        <span
+          className="rm-seg ah-tb-people"
+          role="group"
+          aria-label={people.owner ? "People" : `People: ${people.word}`}
+          data-tour="ah-owner"
+          title={`Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Everyone: all of Cooptimize's work. Remembered per client.${people.owner ? "" : `\nNow: ${people.word}.`}`}
+        >
+          {(["mine", "contributing", "all"] as const).map((o) => (
+            <button key={o} type="button" aria-pressed={people.owner === o} onClick={() => setOwner(o)}>
+              {PEOPLE_WORDS[o]}
+            </button>
+          ))}
+        </span>
+        <button
+          type="button"
+          className="rm-chip ah-attention"
+          data-tour="ah-attention"
+          aria-pressed={f.gaps}
+          title="Items you can change near the top of each backlog, dated in the next 4 weeks, or yours, that are missing stories, a target date, an owner or a size, or are stale"
+          onClick={() => {
+            const { kinds: _k, stale: _s, ...rest } = f;
+            set({ ...rest, gaps: !f.gaps });
+          }}
+        >
+          Needs attention <span className="ah-attention-n">{attention}</span>
+        </button>
+        <span className="ah-search ah-tb-search">
+          <input className="rm-search" type="text" placeholder="Titles or #id" aria-label="Search titles or #id" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === "Escape" && f.q && (e.stopPropagation(), set({ ...f, q: "" }))} />
+          {f.q && (
+            <button type="button" className="ah-search-clear" aria-label="Clear the search" onClick={() => set({ ...f, q: "" })}>
+              ×
+            </button>
+          )}
+        </span>
+        <span className="ah-tb-end">
+          {extra}
+          <FilterButton f={f} set={set} load={load} view={view} count={nFilter} epics={epics} />
+          <button ref={more} type="button" className="top-btn ah-tb-more" aria-label="More: rows and view" aria-haspopup="menu" title="Expand all, Collapse all, Callouts, Whole project, scope" onClick={openMore}>
+            ⋯
+          </button>
+        </span>
       </div>
-      <div className="ah-tb-summary" role="status">
-        <span className="ah-tb-sumtext">{sum.text}</span>
-        {sum.chips.length > 0 && (
+      {sum && (
+        <div className="ah-tb-summary" role="status">
+          <span className="ah-tb-sumtext">{sum.text}</span>
           <span className="ah-tb-chips">
             {sum.chips.map((c) => (
               <button key={c.id} type="button" className="ah-tb-chip" data-chip={c.id} aria-label={`Remove the filter ${c.label}`} title="Remove this filter" onClick={() => set(c.clear(f))}>
@@ -149,9 +151,71 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, color }: {
               Clear filters
             </button>
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+/** Filter: Epic, Dates and the levels shown, in one popover; its count says how many are off their defaults. */
+function FilterButton({ f, set, load, view, count, epics }: { f: AheadFilters; set: (f: AheadFilters) => void; load: AheadLoad; view: AheadViewState; count: number; epics: { key: string; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const close = () => (setOpen(false), requestAnimationFrame(() => btn.current?.focus()));
+  const touched = Object.keys(view.fold.rows).length > 0;
+  const unflat = (({ flat: _f, ...x }: AheadFilters) => x)(f);
+  return (
+    <>
+      <button ref={btn} type="button" className="top-btn ah-filter" data-tour="ah-filter" aria-haspopup="dialog" aria-expanded={open} aria-label={count ? `Filter: ${plural(count, "choice", "choices")} set` : "Filter: epic, dates, levels"} onClick={() => setOpen(!open)}>
+        Filter{count > 0 && <span className="ah-filter-n" aria-hidden="true">{count}</span>}
+      </button>
+      {open && (
+        <CellPopover anchor={btn.current} title="Filter" onSave={close} onCancel={close} saveLabel="Done" className="ah-tb-pop ah-filter-pop">
+          <div className="ah-fp-row">
+            <span className="ah-fp-label">Epic</span>
+            {epics.length ? (
+              <SelectField label="Epic" value={f.epic ?? ""} onChange={(k) => set({ ...f, epic: k || null })} options={[{ key: "", label: "Any" }, ...epics.map((x) => ({ key: x.key, label: x.label }))]} className="ah-tb-select" />
+            ) : (
+              <span className="muted ah-tb-note">No epics in the clients shown</span>
+            )}
+          </div>
+          <div className="ah-fp-row">
+            <span className="ah-fp-label">Dates</span>
+            <DatesButton f={f} set={set} today={load.today} />
+          </div>
+          <div className="ah-fp-row ah-fp-levels">
+            <span className="ah-fp-label" id="ah-fp-levels">
+              Levels
+            </span>
+            <span className="rm-seg" role="group" aria-labelledby="ah-fp-levels" title={touched && !f.flat ? "Some rows are opened or closed by hand; a level starts them over" : undefined}>
+              {LEVELS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  data-level={t}
+                  aria-pressed={f.flat ? f.flat === t : view.fold.level === t && !touched}
+                  className={!f.flat && view.fold.level === t && touched ? "partly" : undefined}
+                  onClick={() => (f.flat ? set({ ...f, flat: t }) : view.setFold(atLevel(t)))}
+                  title={f.flat ? `Only ${view.names[t].toLowerCase()}, in rank order` : `Show down to ${view.names[t].toLowerCase()}`}
+                >
+                  {view.names[t]}
+                </button>
+              ))}
+            </span>
+            <label className="ah-fp-flat">
+              <input type="checkbox" checked={!!f.flat} onChange={(e) => set(e.target.checked ? { ...f, flat: view.fold.level } : unflat)} />
+              One level as a list, in each backlog's rank order
+            </label>
+            {!f.gaps && (
+              <label className="ah-fp-flat">
+                <input type="checkbox" checked={!!f.stale} onChange={(e) => set(e.target.checked ? { ...f, stale: true } : (({ stale: _s, ...x }) => x)(f))} />
+                Stale only: no change in DevOps for {load.staleWeeks ?? 6} weeks
+              </label>
+            )}
+          </div>
+        </CellPopover>
+      )}
+    </>
   );
 }
 
@@ -206,58 +270,47 @@ function DatesButton({ f, set, today }: { f: AheadFilters; set: (f: AheadFilters
   );
 }
 
-/** Readiness: Any or Not ready only, the kinds that count, and Stale. */
-function ReadinessButton({ f, set, notReadyOff, staleWeeks }: { f: AheadFilters; set: (f: AheadFilters) => void; notReadyOff: string | null; staleWeeks: number }) {
-  const [open, setOpen] = useState(false);
-  const btn = useRef<HTMLButtonElement>(null);
-  const close = () => (setOpen(false), requestAnimationFrame(() => btn.current?.focus()));
+const KIND_LABELS = { needs_stories: "Needs stories", no_dates: "No target date", unassigned: "Unassigned", unsized: "Unsized" } as const;
+type KindKey = keyof typeof KIND_LABELS;
+
+/**
+ * BL-1: Needs attention's one line, under the toolbar while it's on: "Why these?" (the rule), the counts by kind and
+ * Stale (each narrows to that kind; again shows every kind), and my progress this week.
+ */
+export function AttentionLine({ start, counts, stale, f, set, progress, staleWeeks }: { /** AH-7: Start here, the most urgent few (on: only those). */ start: { on: boolean; n: number; toggle: () => void }; counts: Record<KindKey, number>; stale: number; f: AheadFilters; set: (f: AheadFilters) => void; progress: string | null; staleWeeks: number }) {
+  const [why, setWhy] = useState(false);
   const kinds = f.kinds ?? [];
-  const words = `${notReadyOff ? (kinds.length ? readinessWords({ gaps: true, kinds }) : "Any") : readinessWords(f)}${f.stale ? " · Stale" : ""}`;
-  const setKinds = (k: AheadGapKind[]) => {
-    const { kinds: _k, ...rest } = f;
-    set(k.length ? { ...rest, kinds: k, gaps: true } : rest);
+  const only = (k: KindKey | "stale") => {
+    const { kinds: _k, stale: _s, ...rest } = f;
+    const on = k === "stale" ? !!f.stale : kinds.length === 1 && kinds[0] === k;
+    set(on ? rest : k === "stale" ? { ...rest, stale: true } : { ...rest, kinds: [k] });
+  };
+  const chip = (k: KindKey | "stale", word: string, n: number) => {
+    const active = k === "stale" ? !!f.stale : kinds.includes(k);
+    return (
+      <button key={k} type="button" className={`ah-fx-kind${active ? " on" : ""}`} aria-pressed={active} aria-disabled={!n && !active ? true : undefined} title={active ? "Show every kind again" : n ? `Show only ${word.toLowerCase()}` : `Nothing is ${word.toLowerCase()} here`} onClick={() => (n || active) && only(k)}>
+        {word} <strong>{n}</strong>
+      </button>
+    );
   };
   return (
-    <>
-      <button ref={btn} type="button" className="date-field select-field ah-tb-select" aria-label={`Readiness: ${words}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{words}</span>
-        <span className="date-field-icon" aria-hidden="true">
-          ▾
+    <div className="ah-att-line" role="group" aria-label="Needs attention, by kind">
+      <span className="ah-fx-why">
+        <button type="button" className="mini quiet" aria-describedby="ah-why-tip" aria-expanded={why} onClick={() => setWhy(!why)} onMouseEnter={() => setWhy(true)} onMouseLeave={() => setWhy(false)} onFocus={() => setWhy(true)} onBlur={() => setWhy(false)}>
+          Why these?
+        </button>
+        <span id="ah-why-tip" role="tooltip" className="ah-fx-tip" hidden={!why}>
+          Items you can change near the top of each backlog, dated in the next 4 weeks, or yours, that are missing stories, a target date, an owner or a size, or have had no change in DevOps for {staleWeeks} weeks. In backlog order: work from the top.
         </span>
-      </button>
-      {open && (
-        <CellPopover anchor={btn.current} title="Readiness" onSave={close} onCancel={close} saveLabel="Done" className="ah-tb-pop">
-          <div className={`ah-tb-ready${notReadyOff ? " off" : ""}`} title={notReadyOff ?? undefined}>
-            {notReadyOff ? (
-              <p className="muted ah-tb-note">{notReadyOff}.</p>
-            ) : (
-              <Segmented
-                label="Readiness"
-                value={notReadyOnly(f) ? "not" : "any"}
-                onChange={(v) => {
-                  const { kinds: _k, ...rest } = f;
-                  set(v === "not" ? { ...f, gaps: true } : { ...rest, gaps: false });
-                }}
-                options={[{ value: "any", label: "Any" }, { value: "not", label: "Not ready only" }]}
-              />
-            )}
-          </div>
-          <div className="ah-tb-kinds" role="group" aria-label="Missing">
-            <span className="muted ah-tb-sub">Missing</span>
-            {KINDS.map((k) => (
-              <button key={k} type="button" className="rm-chip" aria-pressed={kinds.includes(k)} onClick={() => setKinds(toggle(kinds, k))}>
-                {KIND_WORDS[k]}
-              </button>
-            ))}
-          </div>
-          <div className="ah-tb-kinds">
-            <button type="button" className="rm-chip" data-tour="ah-stale" aria-pressed={!!f.stale} onClick={() => set({ ...f, stale: !f.stale })} title={`Open items with no change in DevOps for ${staleWeeks} weeks or more (Settings › Ahead)`}>
-              Stale
-            </button>
-            <span className="muted ah-tb-sub">No change in DevOps for {staleWeeks} weeks</span>
-          </div>
-        </CellPopover>
+      </span>
+      {start.n > 0 && (
+        <button type="button" className={`ah-fx-kind ah-fx-start-btn${start.on ? " on" : ""}`} aria-pressed={start.on} title={start.on ? "Show everything that needs attention again" : `Only the ${start.n} most urgent. ${START_RULE}`} onClick={start.toggle}>
+          Start here <strong>{start.n}</strong>
+        </button>
       )}
-    </>
+      {(Object.keys(KIND_LABELS) as KindKey[]).map((k) => chip(k, KIND_LABELS[k], counts[k]))}
+      {chip("stale", "Stale", stale)}
+      {progress && <span className="muted ah-fx-progress">{progress}</span>}
+    </div>
   );
 }

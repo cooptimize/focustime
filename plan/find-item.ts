@@ -21,7 +21,7 @@ export type FoundItem = {
 /** Ahead's answer: shown, hidden by one of my filters (which), or not in Ahead at all. */
 export type AheadPresence =
   | { kind: "shown" }
-  | { kind: "filtered"; filter: "clients" | "owner" | "epic" | "ready" | "dates" | "stale" | "text" | "several"; owner?: "mine" | "contributing" }
+  | { kind: "filtered"; filter: "clients" | "owner" | "epic" | "ready" | "flat" | "dates" | "stale" | "text" | "several"; owner?: "mine" | "contributing" }
   | { kind: "absent" }
   | { kind: "unavailable" };
 
@@ -60,7 +60,8 @@ const ago = (at: string | null, nowMs: number) => {
 const FILTER_WORDS: Record<Exclude<Extract<AheadPresence, { kind: "filtered" }>["filter"], "owner">, string> = {
   clients: "the client filter",
   epic: "the epic filter",
-  ready: "Not ready only",
+  ready: "Needs attention",
+  flat: "One level as a list",
   dates: "the Dates filter",
   stale: "the Stale filter",
   text: "the search text",
@@ -102,7 +103,7 @@ export function findAnswer(f: FindFacts, nowMs: number): FindLine[] {
     out.push(
       f.scope.inScope
         ? { part: "scope", ok: true, text: `It's in what FocusTime shows for ${f.clientName} (${f.scope.rule}).` }
-        : { part: "scope", ok: false, text: `It's in area ${item.area ?? "(none)"}, outside what FocusTime shows for ${f.clientName} (${f.scope.rule}). Ahead shows it with Show the whole project; an admin sets the scope in Admin › Clients.` },
+        : { part: "scope", ok: false, text: `It's in area ${item.area ?? "(none)"}, outside what FocusTime shows for ${f.clientName} (${f.scope.rule}). Backlog shows it with Show the whole project; an admin sets the scope in Admin › Clients.` },
     );
   }
   if (!item.tier) out.push({ part: "scope", ok: false, text: `${f.clientName}'s process doesn't place the type ${item.type} on a backlog level, so FocusTime's screens don't show it.` });
@@ -124,14 +125,14 @@ export function findAnswer(f: FindFacts, nowMs: number): FindLine[] {
 
   // Ahead
   const a = f.ahead;
-  if (a.kind === "shown") out.push({ part: "ahead", ok: true, text: "Ahead shows it." });
-  else if (a.kind === "filtered") out.push({ part: "ahead", ok: false, text: a.filter === "owner" ? `Ahead hides it: your owner filter for ${f.clientName} is ${a.owner === "contributing" ? "Contributing" : "Mine"}. Choose All to see it.` : `Ahead hides it: ${FILTER_WORDS[a.filter]} is on.` });
-  else if (a.kind === "unavailable") out.push({ part: "ahead", ok: false, text: "Ahead couldn't be read now." });
-  else if (item.closed) out.push({ part: "ahead", ok: false, text: `Ahead doesn't show it: it's ${item.state}, and Ahead shows open items.` });
-  else if (f.scope && !f.scope.inScope) out.push({ part: "ahead", ok: false, text: "Ahead shows it only with Show the whole project (it's outside the scope)." });
-  else if (item.tier === "task" || !item.tier) out.push({ part: "ahead", ok: false, text: `Ahead doesn't show it: Ahead shows epics, features and stories, not ${item.type} items.` });
-  else if (!f.store.has) out.push({ part: "ahead", ok: false, text: "Ahead shows it after the next check." });
-  else out.push({ part: "ahead", ok: false, text: "Ahead doesn't show it." });
+  if (a.kind === "shown") out.push({ part: "ahead", ok: true, text: "Backlog shows it." });
+  else if (a.kind === "filtered") out.push({ part: "ahead", ok: false, text: a.filter === "owner" ? `Backlog hides it: People for ${f.clientName} is ${a.owner === "contributing" ? "Contributing" : "Mine"}. Choose Everyone to see it.` : `Backlog hides it: ${FILTER_WORDS[a.filter]} is on.` });
+  else if (a.kind === "unavailable") out.push({ part: "ahead", ok: false, text: "Backlog couldn't be read now." });
+  else if (item.closed) out.push({ part: "ahead", ok: false, text: `Backlog doesn't show it: it's ${item.state}, and Backlog shows open items.` });
+  else if (f.scope && !f.scope.inScope) out.push({ part: "ahead", ok: false, text: "Backlog shows it only with Show the whole project (it's outside the scope)." });
+  else if (item.tier === "task" || !item.tier) out.push({ part: "ahead", ok: false, text: `Backlog doesn't show it: Backlog shows epics, features and stories, not ${item.type} items.` });
+  else if (!f.store.has) out.push({ part: "ahead", ok: false, text: "Backlog shows it after the next check." });
+  else out.push({ part: "ahead", ok: false, text: "Backlog doesn't show it." });
 
   // Status
   const s = f.status;

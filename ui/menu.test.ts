@@ -478,11 +478,12 @@ describe("duplicate picks in menus (step 15.1, D277)", () => {
   });
 });
 
-describe("AH-6: Readiness in the command menu", () => {
-  it("finds Ahead › Readiness by readiness, gaps, get ready and fix next", () => {
+describe("AH-6, BL-1: Needs attention in the command menu", () => {
+  it("finds Backlog › Needs attention by needs attention, readiness, gaps, get ready and fix next; Backlog by ahead and roadmap", () => {
     const list = commandList(env().e);
-    for (const q of ["readiness", "gaps", "get ready", "fix next"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("view.gaps");
-    expect(list.find((c) => c.id === "view.gaps")?.label).toMatch(/^Ahead › Readiness/);
+    for (const q of ["needs attention", "readiness", "gaps", "get ready", "fix next"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("view.gaps");
+    expect(list.find((c) => c.id === "view.gaps")?.label).toMatch(/^Backlog › Needs attention/);
+    for (const q of ["backlog", "ahead", "roadmap"]) expect(filterCommands(list, q).map((c) => c.id), q).toContain("view.roadmap");
   });
 });
 

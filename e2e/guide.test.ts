@@ -115,7 +115,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     const box = page.getByRole("searchbox", { name: SEARCH.label });
     await box.fill("stale");
     await page.locator(".gsr-hit").first().waitFor();
-    expect(await page.locator(".gsr-hit .gsr-in").first().textContent()).toContain("Ahead");
+    expect(await page.locator(".gsr-hit .gsr-in").first().textContent()).toContain("Backlog");
     await box.press("Enter");
     await page.locator("main.guide .guide-body[data-section='ahead']").waitFor();
     await box.fill("chat images");

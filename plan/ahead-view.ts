@@ -1,11 +1,11 @@
-// AH-6: Ahead's one toolbar, pure. One filter state for Grid, Gantt, Readiness and Backlog (the filters, the level and
-// Show callouts): the Dates filter's quick picks read against today, the address's query (so a link opens the same
-// view), which control can't apply in a mode and why (shown disabled with that reason, never removed), and the
-// summary line under the toolbar with a removable chip per non-default filter.
+// AH-6, BL-1: the Backlog tab's one toolbar, pure. One filter state for Grid and Gantt (the filters, the level and Show
+// callouts): the Dates filter's quick picks read against today, the address's query (so a link opens the same view),
+// which control can't apply in a view and why, the Filter button's count (Epic, Dates, levels), and the line under the
+// toolbar, shown only when a filter is off its default, with a removable chip per filter.
 import type { AheadFilters, AheadGapKind, AheadOwner, AheadRange } from "./ahead-edit.ts";
 import type { Tier } from "./ahead-model.ts";
 
-export type AheadModeKey = "grid" | "gantt" | "fix" | "backlog";
+export type AheadModeKey = "grid" | "gantt";
 export const RANGES: readonly AheadRange[] = ["next2", "next4", "quarter"];
 export const RANGE_WORDS: Record<AheadRange, string> = { next2: "Next 2 weeks", next4: "Next 4 weeks", quarter: "This quarter" };
 export const KINDS: readonly AheadGapKind[] = ["needs_stories", "no_dates", "unassigned", "unsized"];
@@ -39,29 +39,14 @@ export function dateWords(f: Pick<AheadFilters, "range" | "from" | "to">, today:
   return "Any time";
 }
 
-/** Not ready only: Has gaps, or a kind chosen (a kind implies it). */
-export const notReadyOnly = (f: Pick<AheadFilters, "gaps" | "kinds">) => f.gaps || (f.kinds?.length ?? 0) > 0;
-
-/** "Any", "Not ready", "Not ready: Needs stories, Unsized". */
-export function readinessWords(f: Pick<AheadFilters, "gaps" | "kinds">): string {
-  if (!notReadyOnly(f)) return "Any";
-  const k = f.kinds ?? [];
-  return k.length && k.length < KINDS.length ? `Not ready: ${KINDS.filter((x) => k.includes(x)).map((x) => KIND_WORDS[x]).join(", ")}` : "Not ready";
-}
-
 // ---- Where a control applies ----
 
-export type Control = "clients" | "people" | "epic" | "dates" | "readiness" | "kinds" | "stale" | "search" | "level" | "callouts" | "whole";
+export type Control = "clients" | "people" | "epic" | "dates" | "attention" | "search" | "level" | "callouts" | "whole";
 
-/** Why a control can't apply in a mode (it's shown disabled with this), or null where it applies. */
+/** Why a control can't apply in a view (it's shown disabled with this), or null where it applies. */
 export function notHere(mode: AheadModeKey, c: Control, o: { scoped: boolean; whole: boolean }): string | null {
   if (c === "callouts" && mode !== "gantt") return "Callouts are the markers at the end of the Gantt's bars";
-  if (c === "readiness" && mode === "fix") return "Readiness lists only items that aren't ready yet";
-  if (c === "whole") {
-    if (mode === "fix") return "Readiness lists only Cooptimize's work";
-    if (mode === "backlog") return "Backlog ranks only Cooptimize's work";
-    if (!o.scoped && !o.whole) return "Every client shown is already the whole project";
-  }
+  if (c === "whole" && !o.scoped && !o.whole) return "Every client shown is already the whole project";
   return null;
 }
 
@@ -99,6 +84,7 @@ export function toQuery(v: AheadView): string {
   if (f.stale) p.set("st", "1");
   if (f.q.trim()) p.set("q", f.q.trim());
   if (f.whole) p.set("w", "1");
+  if (f.flat) p.set("fl", f.flat);
   if (v.level !== DEFAULT_LEVEL) p.set("l", v.level);
   if (!v.callouts) p.set("co", "0");
   return p.toString();
@@ -135,6 +121,8 @@ export function fromQuery(q: string): { f: Partial<AheadFilters>; level?: Tier; 
   const text = p.get("q");
   if (text) f.q = text.slice(0, 200);
   if (p.get("w") === "1") f.whole = true;
+  const fl = p.get("fl");
+  if (fl && (TIERS as readonly string[]).includes(fl)) f.flat = fl as Tier;
   const l = p.get("l");
   const co = p.get("co");
   return { f, ...(l && (TIERS as readonly string[]).includes(l) ? { level: l as Tier } : {}), ...(co === "0" ? { callouts: false } : co === "1" ? { callouts: true } : {}) };
@@ -154,32 +142,40 @@ export function withQuery(mine: AheadFilters, defaults: AheadFilters, q: ReturnT
 export type SummaryClient = { clientKey: string; clientName: string; lead: boolean };
 export type Chip = { id: string; label: string; clear: (f: AheadFilters) => AheadFilters };
 const ownerDefault = (c: SummaryClient): AheadOwner => (c.lead ? "all" : "mine");
+const TIER_WORDS: Record<Tier, string> = { epic: "Epics", feature: "Features", story: "Stories" };
 
-/** The People word for the clients shown: one word when they agree, else "Mixed". */
+/**
+ * The People choice for the clients shown: one owner when they agree; when they differ (each client remembers its
+ * own), null and the words say who gets what ("Everyone for Northwind Foods, Mine for the rest"). BL-1: never "Mixed".
+ */
 export function peopleWord(f: AheadFilters, shown: readonly SummaryClient[]): { word: string; owner: AheadOwner | null } {
-  const set = new Set(shown.map((c) => f.owner[c.clientKey] ?? ownerDefault(c)));
-  const owner = set.size === 1 ? [...set][0]! : null;
-  return { word: owner ? PEOPLE_WORDS[owner] : "Mixed", owner };
+  const of = (c: SummaryClient) => f.owner[c.clientKey] ?? ownerDefault(c);
+  const set = new Set(shown.map(of));
+  if (set.size <= 1) {
+    const owner = set.size === 1 ? [...set][0]! : "mine";
+    return { word: PEOPLE_WORDS[owner], owner };
+  }
+  // Name the fewer side, the rest by "the rest".
+  const counts = OWNERS.map((o) => ({ o, cs: shown.filter((c) => of(c) === o) })).filter((x) => x.cs.length).sort((a, b) => a.cs.length - b.cs.length);
+  const rest = counts.at(-1)!;
+  const named = counts.slice(0, -1).map((x) => `${PEOPLE_WORDS[x.o]} for ${x.cs.map((c) => c.clientName).join(", ")}`);
+  return { word: `${named.join("; ")}, ${PEOPLE_WORDS[rest.o]} for the rest`, owner: null };
+}
+
+/** How many of the Filter popover's choices are off their defaults: Epic, Dates, the level shown, one level as a list. */
+export function filterCount(f: Pick<AheadFilters, "epic" | "range" | "from" | "to" | "flat"> & Partial<Pick<AheadFilters, "stale" | "gaps">>, level: Tier): number {
+  // Stale only counts here outside Needs attention (inside it, Stale is one of its kinds).
+  return (f.epic ? 1 : 0) + (f.range || f.from || f.to ? 1 : 0) + (level !== DEFAULT_LEVEL ? 1 : 0) + (f.flat ? 1 : 0) + (f.stale && !f.gaps ? 1 : 0);
 }
 
 /**
- * "Showing 76 of 132 · Northwind Foods · Everyone · Next 4 weeks" and a chip for each filter that isn't its default (a client
- * chosen, People not my default for a client shown, an epic, dates, readiness, Stale, a search).
+ * BL-1: the line under the toolbar. Null with every filter at its default (it isn't shown); otherwise "Showing 33 of
+ * 583" and a chip for each filter that isn't its default (a client chosen, People not my default for a client shown,
+ * Needs attention, a kind or Stale, an epic, dates, one level as a list, a search).
  */
-export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: { today: string; shown: number; total: number; epicLabel?: string | null }): { text: string; chips: Chip[] } {
+export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: { today: string; shown: number; total: number; epicLabel?: string | null }): { text: string; chips: Chip[] } | null {
   const shownClients = clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
   const people = peopleWord(f, shownClients);
-  const parts = [
-    o.shown === o.total ? `Showing all ${o.total}` : `Showing ${o.shown} of ${o.total}`,
-    f.clients.length ? shownClients.map((c) => c.clientName).join(", ") || "No clients" : "All clients",
-    people.word,
-    dateWords(f, o.today),
-  ];
-  if (f.epic) parts.push(`Epic: ${o.epicLabel ?? "chosen"}`);
-  if (notReadyOnly(f)) parts.push(readinessWords(f));
-  if (f.stale) parts.push("Stale");
-  if (f.q.trim()) parts.push(`“${f.q.trim()}”`);
-
   const chips: Chip[] = [];
   for (const k of f.clients) {
     const c = clients.find((x) => x.clientKey === k);
@@ -193,12 +189,16 @@ export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: {
       clear: (x) => ({ ...x, owner: Object.fromEntries(Object.entries(x.owner).filter(([k]) => !changed.some((c) => c.clientKey === k))) }),
     });
   }
+  // Off from its chip as from its toggle: its kinds and its Stale go with it.
+  if (f.gaps) chips.push({ id: "attention", label: "Needs attention", clear: ({ kinds: _k, stale: _s, ...x }) => ({ ...x, gaps: false }) });
+  if (f.kinds?.length) chips.push({ id: "kinds", label: KINDS.filter((k) => f.kinds!.includes(k)).map((k) => KIND_WORDS[k]).join(", "), clear: ({ kinds: _k, ...x }) => x });
+  if (f.stale) chips.push({ id: "stale", label: "Stale", clear: ({ stale: _s, ...x }) => x });
   if (f.epic) chips.push({ id: "epic", label: `Epic: ${o.epicLabel ?? "chosen"}`, clear: (x) => ({ ...x, epic: null }) });
   if (rangeDates(f, o.today)) chips.push({ id: "dates", label: dateWords(f, o.today), clear: ({ range: _r, ...x }) => ({ ...x, from: null, to: null }) });
-  if (notReadyOnly(f)) chips.push({ id: "readiness", label: readinessWords(f), clear: ({ kinds: _k, ...x }) => ({ ...x, gaps: false }) });
-  if (f.stale) chips.push({ id: "stale", label: "Stale", clear: ({ stale: _s, ...x }) => x });
+  if (f.flat) chips.push({ id: "flat", label: `${TIER_WORDS[f.flat]} only, in rank order`, clear: ({ flat: _f, ...x }) => x });
   if (f.q.trim()) chips.push({ id: "search", label: `“${f.q.trim()}”`, clear: (x) => ({ ...x, q: "" }) });
-  return { text: parts.join(" · "), chips };
+  if (!chips.length) return null;
+  return { text: o.shown === o.total ? `Showing all ${o.total}` : `Showing ${o.shown} of ${o.total}`, chips };
 }
 
 /** Clear filters: every filter back to its default; the view settings (Show the whole project, Backlog's old tier) stay. */

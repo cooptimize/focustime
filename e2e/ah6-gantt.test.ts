@@ -1,4 +1,4 @@
-// AH-6: Ahead › Gantt as a planning layout, in demo mode: type icons at every level, indentation by level only, nothing
+// AH-6, BL-1: Backlog › Gantt as a planning layout, in demo mode: type icons at every level, indentation by level only, nothing
 // but the hierarchy in the label column, each label on its bar's row (two-line titles, Larger text, after folding,
 // callouts hidden), the callout marker and its popover with fixes, Show callouts remembered, Show: Epics · Features ·
 // Stories with roll-ups and carets, arrow caps, the column resize remembered, keyboard, and no native inputs in Ahead.
@@ -7,12 +7,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { call } from "./mb1-helpers.ts";
+import { calloutsOn, levelPressed, moreItem, openFilter, pickLevel } from "./backlog-helpers.ts";
 import { SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 120_000;
 
-describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", () => {
+describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)", () => {
   beforeAll(async () => {
     h = await startDemo();
   }, 120_000);
@@ -21,12 +22,11 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
   const open = async (viewport = { width: 1440, height: 900 }, before?: (page: Page) => Promise<void>) => {
     const { page, errors } = await freshPage(h, viewport);
     await before?.(page);
-    await page.evaluate(() => (location.hash = "#/ahead/gantt"));
+    await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
     await page.waitForTimeout(400);
     return { page, errors };
   };
-  const level = (page: Page, name: string) => page.locator(".ah-toolbar .ah-levels").getByRole("button", { name, exact: true });
   const row = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
   const shot = async (page: Page, name: string) => {
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
@@ -77,7 +77,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
   it("type icons at every level, indentation by level only, nothing but the hierarchy in the label column", async () => {
     const { page, errors } = await open();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-1440.png` });
-    await level(page, "Stories").click();
+    await pickLevel(page, "Stories");
     await page.waitForTimeout(200);
     const rows = await page.locator(".pa-item").evaluateAll((els) =>
       els.map((r) => ({
@@ -108,7 +108,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     expect(rows.some((r) => r.level === 3)).toBe(true);
     // The same left edge for every icon at a level, with callouts on and off (and status in no way moving it).
     await expectSameOffsets(page, "callouts on");
-    await page.getByRole("button", { name: "Show callouts" }).click();
+    await moreItem(page, /Callouts/);
     await expectSameOffsets(page, "callouts off");
     expect(errors).toEqual([]);
     await page.close();
@@ -117,7 +117,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
   it("each label sits on its bar's row: two-line titles, Larger text, after folding, callouts hidden", async () => {
     // A narrow label column so titles wrap to two lines.
     const { page, errors } = await open({ width: 1440, height: 900 }, (p) => p.evaluate(() => localStorage.setItem("focustime.ahead.gantt.labelW", "200")));
-    await level(page, "Stories").click();
+    await pickLevel(page, "Stories");
     const g = await expectAligned(page, "2-line titles");
     const lineH = Math.min(...g.map((r) => r.title.h));
     expect(g.some((r) => r.title.h > lineH * 1.6), "some titles wrap to two lines").toBe(true);
@@ -129,18 +129,18 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     await page.waitForTimeout(300);
     await expectAligned(page, "Larger");
     await page.evaluate(() => document.documentElement.removeAttribute("data-text-size"));
-    await level(page, "Epics").click();
+    await pickLevel(page, "Epics");
     await expectAligned(page, "Epics");
-    await level(page, "Features").click();
-    await row(page, "Order history export").locator(".pa-caret").click();
+    await pickLevel(page, "Features");
+    await row(page, "Order history export").locator(".ah-chev").click();
     await expectAligned(page, "a row expanded");
-    await page.getByRole("button", { name: "Show callouts" }).click();
+    await moreItem(page, /Callouts/);
     await expectAligned(page, "callouts hidden");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("the callout marker: its count, its popover lists them, each fix opens its flow; Show callouts hides them and is remembered", async () => {
+  it("the callout marker: its count, its popover lists them, each fix opens its flow; Callouts in ⋯ hides them and is remembered", async () => {
     const { page, errors } = await open();
     const markers = page.locator(".pa-marker");
     const n = await markers.count();
@@ -193,18 +193,17 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
       await expect(page.locator(".cell-pop .cell-pop-title").textContent({ timeout: 5_000 })).resolves.toBe("Assigned to");
       await page.keyboard.press("Escape");
     }
-    // Show callouts off: no markers, remembered after a reload.
-    const toggle = page.getByRole("button", { name: "Show callouts" });
-    await expect(toggle.getAttribute("aria-pressed")).resolves.toBe("true");
-    await toggle.click();
+    // BL-1: Callouts in ⋯ (a checkbox item). Off: no markers, remembered after a reload.
+    await expect(calloutsOn(page)).resolves.toBe("true");
+    await moreItem(page, /Callouts/);
     await expect.poll(() => page.locator(".pa-marker:visible").count()).toBe(0);
     await shot(page, "callouts-off");
     await page.reload();
-    await page.evaluate(() => (location.hash = "#/ahead/gantt"));
+    await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
-    await expect(page.getByRole("button", { name: "Show callouts" }).getAttribute("aria-pressed")).resolves.toBe("false");
+    await expect(calloutsOn(page)).resolves.toBe("false");
     await expect(page.locator(".pa-marker:visible").count()).resolves.toBe(0);
-    await page.getByRole("button", { name: "Show callouts" }).click();
+    await moreItem(page, /Callouts/);
     await shot(page, "callouts-on");
     expect(errors).toEqual([]);
     await page.close();
@@ -214,16 +213,16 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     const { page, errors } = await open();
     const states = () => page.locator(".pa-item").evaluateAll((els) => els.map((e) => ({ level: Number(e.getAttribute("aria-level")), expanded: e.getAttribute("aria-expanded"), title: e.querySelector(".pa-title")!.textContent })));
     // Stories is the default (AH-6 toolbar: one level for every mode, nothing folded); Features: epics open, features closed.
-    await expect(level(page, "Stories").getAttribute("aria-pressed")).resolves.toBe("true");
-    await level(page, "Features").click();
-    await expect(level(page, "Features").getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect(levelPressed(page, "Stories")).resolves.toBe("true");
+    await pickLevel(page, "Features");
+    await expect(levelPressed(page, "Features")).resolves.toBe("true");
     let s = await states();
     for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe(r.level === 1 ? "true" : "false");
     // Stories with no feature on screen are top rows at every level.
     const loose = s.filter((r) => r.level === 3).length;
     const epic = "Customer portal redesign";
     await shot(page, "level-features");
-    await level(page, "Epics").click();
+    await pickLevel(page, "Epics");
     s = await states();
     expect(s.every((r) => r.expanded !== "true")).toBe(true);
     expect(s.filter((r) => r.level === 3).length).toBe(loose);
@@ -232,7 +231,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     const count = await roll.getAttribute("data-count");
     const rb = (await roll.boundingBox())!;
     const before = new Set(await page.locator(".pa-item .pa-title").allTextContents());
-    await row(page, epic).locator(".pa-caret").click();
+    await row(page, epic).locator(".ah-chev").click();
     const kids = await page.locator(".pa-item").evaluateAll((els, seen) => {
       const out = els.filter((e) => !seen.includes(e.querySelector(".pa-title")!.textContent ?? ""));
       const bars = out.map((e) => e.querySelector(".pa-bar:not(.rollup)")?.getBoundingClientRect()).filter((b): b is DOMRect => !!b);
@@ -242,43 +241,41 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     expect(count).toBe(`${kids.n} features`);
     expect(Math.abs(rb.x - kids.left)).toBeLessThan(1.5);
     expect(Math.abs(rb.x + rb.width - kids.right)).toBeLessThan(1.5);
-    await row(page, epic).locator(".pa-caret").click();
+    await row(page, epic).locator(".ah-chev").click();
     // Its marker combines what's under it.
     const own = Number(await row(page, epic).locator(".pa-marker").getAttribute("data-count"));
     expect(own).toBeGreaterThan(1);
     await shot(page, "level-epics");
     // A caret on top of the level.
-    await row(page, epic).locator(".pa-caret").click();
+    await row(page, epic).locator(".ah-chev").click();
     await expect(row(page, "Order history export").count()).resolves.toBe(1);
     await expect(row(page, epic).getAttribute("aria-expanded")).resolves.toBe("true");
-    await level(page, "Stories").click();
+    await pickLevel(page, "Stories");
     s = await states();
     for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe("true");
     expect(s.some((r) => r.level === 3)).toBe(true);
     await shot(page, "level-stories");
     // A collapsed feature with its own dates keeps its bar; its stories' span is the bracket under it.
-    await level(page, "Features").click();
+    await pickLevel(page, "Features");
     const bracket = row(page, "Order history export").locator(".pa-rollup-line");
     await expect(bracket.getAttribute("data-count")).resolves.toMatch(/^\d+ stor(y|ies)$/);
-    await row(page, "Order history export").locator(".pa-caret").click();
+    await row(page, "Order history export").locator(".ah-chev").click();
     await expect(row(page, "Order history export").getAttribute("aria-expanded")).resolves.toBe("true");
-    // Expand all and Collapse all in the control's menu.
-    await page.locator(".ah-toolbar .ah-levels-more").click();
-    await page.getByRole("menuitem", { name: "Collapse all" }).click();
+    // Expand all and Collapse all in ⋯.
+    await moreItem(page, "Collapse all");
     await expect.poll(async () => (await states()).every((r) => r.expanded !== "true")).toBe(true);
     // Remembered after a reload.
     await page.reload();
-    await page.evaluate(() => (location.hash = "#/ahead/gantt"));
+    await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
-    await expect(level(page, "Epics").getAttribute("aria-pressed")).resolves.toBe("true");
-    // AH-6 toolbar: the Grid has the same control and the same level (one view for every mode).
-    await page.evaluate(() => (location.hash = "#/ahead"));
+    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
+    // AH-6 toolbar: the Grid has the same control and the same level (one view for both).
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await page.locator(".ah-row").first().waitFor({ timeout: 30_000 });
-    const grid = page.locator(".ah-toolbar .ah-levels");
-    await expect(grid.getByRole("button", { name: "Epics", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
-    await grid.getByRole("button", { name: "Stories", exact: true }).click();
+    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
+    await pickLevel(page, "Stories");
     const all = await page.locator(".ah-row").count();
-    await grid.getByRole("button", { name: "Epics", exact: true }).click();
+    await pickLevel(page, "Epics");
     await expect.poll(() => page.locator(".ah-row").count()).toBeLessThan(all);
     await expect(page.locator(".ah-row.tier-story").count()).resolves.toBe(await page.locator(".ah-row.tier-story.depth-0").count());
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/grid-epics.png` });
@@ -317,23 +314,26 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
     await expect.poll(async () => (await page.locator(".pa-item .pa-label").first().boundingBox())!.width).toBeGreaterThan(w0 + 80);
     const w1 = (await page.locator(".pa-item .pa-label").first().boundingBox())!.width;
     await page.reload();
-    await page.evaluate(() => (location.hash = "#/ahead/gantt"));
+    await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
     await expect.poll(async () => Math.round((await page.locator(".pa-item .pa-label").first().boundingBox())!.width)).toBe(Math.round(w1));
     await page.close();
   }, T);
 
-  it("keyboard: Tab reaches the level control; Up and Down move between rows, Left collapses, Right expands", async () => {
+  it("keyboard: the level control in Filter; Up and Down move between rows, Left collapses, Right expands", async () => {
     const { page } = await open();
-    // The level control is in the tab order and works from the keyboard.
-    const epics = level(page, "Epics");
-    await epics.focus();
+    // BL-1: the level control is in Filter, reached by Tab and worked from the keyboard; Esc closes it.
+    const pop = await openFilter(page);
+    const levels = pop.getByRole("group", { name: "Levels" });
+    await levels.getByRole("button", { name: "Epics", exact: true }).focus();
     await page.keyboard.press("Enter");
-    await expect(epics.getAttribute("aria-pressed")).resolves.toBe("true");
-    await level(page, "Features").focus();
+    await expect(levels.getByRole("button", { name: "Epics", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await levels.getByRole("button", { name: "Features", exact: true }).focus();
     await page.keyboard.press("Space");
-    await expect(level(page, "Features").getAttribute("aria-pressed")).resolves.toBe("true");
-    // One tab stop for the tree: Tab from the level control lands on the first row after Show callouts.
+    await expect(levels.getByRole("button", { name: "Features", exact: true }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.keyboard.press("Escape");
+    await pop.waitFor({ state: "detached" });
+    // One tab stop for the tree.
     const first = page.locator(".pa-item > .pa-label").first();
     await expect(first.getAttribute("tabindex")).resolves.toBe("0");
     await expect(page.locator('.pa-item > .pa-label[tabindex="0"]').count()).resolves.toBe(1);
@@ -358,7 +358,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Ahead › Gantt layout (browser, demo mode)", 
 
   it("no native selects or date inputs anywhere in Ahead", async () => {
     const { page } = await open();
-    for (const hash of ["#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/ahead/backlog"]) {
+    for (const hash of ["#/backlog", "#/backlog/gantt", "#/backlog/attention", "#/backlog/stories"]) {
       await page.evaluate((x) => (location.hash = x), hash);
       await page.waitForTimeout(800);
       await expect(page.locator(".ahead select, .ahead input[type=date], .ahead input[type=datetime-local], .ahead input[type=month]").count(), hash).resolves.toBe(0);
