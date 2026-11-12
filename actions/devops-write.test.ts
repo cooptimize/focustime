@@ -1415,7 +1415,7 @@ describe("TP-1: the four lines and the request type tag at create", () => {
     const f = shown(p);
     expect(f.Description).toBe("From the finance review.\n\nWhat and where\nThe Sales model\nEnvironment: Test.\n\nWhat changes\nGross margin percent\n\nHow we'll check\nOctober, East: 31.2%\nChecked by: Sam Lee.\n\nHow far and who signs off\nDone when it is: in test. Signed off by: the finance lead. Not without asking: deploy to production.");
     expect(f["Acceptance criteria"]).toBe("October, East: 31.2%\nChecked by: Sam Lee.");
-    expect(f.Tag).toBe("type:new-measure");
+    expect(f.Tags).toBe("type:new-measure");
     expect(p.notes?.join(" ")).toContain("Adds the tag type:new-measure");
     const r = await s.confirm(p);
     const it = s.dv.items.get(r.entry.itemId!)!;
@@ -1437,7 +1437,7 @@ describe("TP-1: the four lines and the request type tag at create", () => {
 
   it("the tag only when a type is chosen; a line's text and no type writes no tag", async () => {
     const p = await s.preview({ kind: "new_item", title: "Generic", type: "User Story", brief: { where: "Orders report" } });
-    expect(shown(p).Tag).toBeUndefined();
+    expect(shown(p).Tags).toBeUndefined();
     await s.confirm(p);
     expect(sentPaths(s)).not.toContain("/fields/System.Tags");
     expect(sentPaths(s)).toContain("/fields/System.Description");
@@ -1452,7 +1452,7 @@ describe("TP-1: the four lines and the request type tag at create", () => {
     expect(r.entry.status).toBe("refused");
     expect([...t.dv.items.values()].some((i) => i.fields["System.Title"] === "Tagged")).toBe(false);
     const again = await t.preview({ kind: "new_item", title: "Tagged", type: "User Story", brief, noTag: true });
-    expect(shown(again).Tag).toBeUndefined();
+    expect(shown(again).Tags).toBeUndefined();
     const ok = await t.confirm(again);
     expect(ok.confirmed).toBe(true);
     expect(t.dv.items.get(ok.entry.itemId!)!.fields["System.Tags"]).toBeUndefined();
@@ -1465,7 +1465,7 @@ describe("TP-1: the four lines and the request type tag at create", () => {
     const saved = await s.run<{ draft: { brief: unknown } }>("draft.save", { id: d.draft.id, clientKey: COOP, title: "Drafted", type: "User Story" });
     expect(saved.draft.brief).toMatchObject({ type: "new-measure" });
     const p = await s.preview({ kind: "new_item", draftId: d.draft.id });
-    expect(shown(p).Tag).toBe("type:new-measure");
+    expect(shown(p).Tags).toBe("type:new-measure");
     expect(shown(p).Description).toContain("Done when it is: in test.");
   });
 
@@ -1480,7 +1480,7 @@ describe("TP-1: the four lines and the request type tag at create", () => {
     const doc = (await s.templates.read()).doc;
     await s.templates.save({ ...doc, types: doc.types.map((t) => (t.id === "deployment" ? { ...t, name: "Release", removed: true } : t)) }, 1, { id: "a", name: "Ada" }, "test", [{ target: "Release", setting: "Removed", oldValue: null, newValue: null }]);
     const p = await s.preview({ kind: "new_item", draftId: d.draft.id });
-    expect(shown(p).Tag).toBe("type:deployment");
+    expect(shown(p).Tags).toBe("type:deployment");
   });
 
   it("the client boundary covers the four lines", async () => {

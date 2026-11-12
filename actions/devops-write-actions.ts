@@ -1049,7 +1049,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const twin = await twinOf(plan, { clientKey: env.clientKey, title, type, parentId: parent?.id ?? null, draftId: draft?.id ?? null }, msOf(env.now()));
       if (twin) throw new Refused(twin.message, 409, "pending_write");
       const after: Record<string, string | null> = {
-        Type: type, Title: title, Description: brief ? descriptionText(description, brief) : description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(tag ? { Tag: tag } : {}),
+        Type: type, Title: title, Description: brief ? descriptionText(description, brief) : description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(tag ? { Tags: tag } : {}),
         "Assigned to": assignee?.text ?? "Nobody", ...(targetDate ? { "Target date": targetDate.date } : {}), ...(startDate ? { "Start date": startDate.date } : {}), ...(sizeField && sizeIn !== null ? { Size: String(sizeIn) } : {}),
         Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", Parent: parent ? `#${parent.id} ${parent.title}` : "None",
       };
@@ -1607,7 +1607,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
           // plain words: the person can create it again without the tag.
           const tagged = typeof (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value === "string";
           if (tagged && e instanceof WriteFailure && ((e.kind === "rejected" && /\btags?\b/i.test(e.message)) || e.kind === "forbidden"))
-            return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tag ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag`, {}, { code: "tag_refused" });
+            return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tags ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag`, {}, { code: "tag_refused" });
           throw e;
         }
         id = made.id;

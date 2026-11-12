@@ -21,7 +21,7 @@ export type DevOpsChange =
   | { kind: "comment"; itemId: number; text: string }
   | { kind: "create"; draftId: number; /** PV-1: the story's type (the parent type's default child), when the parent takes it. */ type?: string }
   /** QC-1: the New form's create, at any level: everything optional but the title (a draft's values fill the rest). */
-  | { kind: "new_item"; title?: string; type?: string; parentId?: number | null; assignTo?: string | null; date?: string | null; description?: string | null; size?: number | null; draftId?: number }
+  | { kind: "new_item"; title?: string; type?: string; parentId?: number | null; assignTo?: string | null; date?: string | null; description?: string | null; size?: number | null; draftId?: number; /** TP-1: the request type and the four lines. */ brief?: import("../plan/work-templates.ts").Brief | null; /** TP-1: create it without the request type tag (the project refused it). */ noTag?: boolean }
   /** PV-1: Take one: a teammate's open story assigned to me. */
   | { kind: "assign"; itemId: number }
   /** AH-1: my pending changes in Ahead for one item (dates, size, assignee), one patch. */
@@ -151,7 +151,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onWithoutTag={() => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "new_item" ? { ...c, noTag: true } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -190,7 +190,7 @@ export function Modal({ label, busy, onClose, children, wide }: { label: string;
   );
 }
 
-function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onWithoutTag, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; /** TP-1: the project refused the request type tag: preview the same create without it. */ onWithoutTag: () => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
@@ -201,6 +201,8 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
   const label = rows.length === 1 ? p0.summary : `${rows.length} DevOps changes`;
   const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
   const flagged = rows.some((r) => r.preview.mentions?.length);
+  // TP-1: nothing was created because of the tag; the same create without it is one click (never automatic).
+  const tagRefused = rows.length === 1 && flow.changes.every((c) => c.kind === "new_item") && rows.some((r) => r.result && "code" in r.result && r.result.code === "tag_refused");
   return (
     <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
       <div className="cap-dialog-head">
@@ -270,7 +272,11 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
         </p>
       )}
       <div className="wd-actions">
-        {!tried ? (
+        {tagRefused ? (
+          <button ref={first} type="button" className="commit" disabled={busy} onClick={onWithoutTag}>
+            Create it without the tag
+          </button>
+        ) : !tried ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
             {busy ? "Writing and checking…" : flagged ? "Save as written" : rows.length === 1 ? confirmLabel(p0) : `Make all ${rows.length} changes in DevOps`}
           </button>
