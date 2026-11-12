@@ -1,10 +1,11 @@
-// WP-1: DevOps patterns, the main path, in real (not demo) sessions on fake sources (the page reads every client's
+// WP-1, WP-2: DevOps patterns, the main path, in real (not demo) sessions on fake sources (the page reads every client's
 // DevOps through the app-level reader, which the demo doesn't have; open-questions.md says so). Two admins share one
 // team: Sam is on Adatum, Kim on Fabrikam. With the switch off the address opens Today, the command menu has no entry
 // and the server answers 404; Sam turns it on for Sam in Admin › People, and Kim still doesn't get it. Sam runs the
-// inventory, a rerun shows the change, a "restart" mid-run shows Stopped and Resume doesn't read finished clients again,
-// the estimate skips a client without Allow AI, the classification shows shapes, Check by hand offers only Sam's
-// client (the server refuses the other), and the downloads carry no title or person. Fictional data only. Screenshots
+// inventory, which stops for Fabrikam (two areas, no scope) until Sam chooses its area on the page; a rerun shows the
+// change, a "restart" mid-run shows Stopped and Resume doesn't read finished clients again,
+// a kind changed on the page shows in Coverage at once, the estimate skips a client without Allow AI, the classification shows shapes, Check by hand offers only Sam's
+// client (the server refuses the other), and the downloads carry no title, person or another client's area name. Fictional data only. Screenshots
 // at 1440×900, light and dark, when FOCUSTIME_SHOTS is set.
 import { readFileSync } from "node:fs";
 import type { Page } from "playwright-core";
@@ -24,7 +25,7 @@ import { SHOTS } from "./shots.ts";
 
 const KIM = "e2e00000-0000-4000-8000-0000000000bb";
 const HOME = "11111111-1111-4111-8111-111111111111";
-const TITLES = /Sales reporting|Margin report|Map the source columns|Load the table|Why is the total off|Add the orders fact|Ask Kim Person/;
+const TITLES = /Sales reporting|Margin report|Map the source columns|Load the table|Why is the total off|Add the orders fact|Ask Kim Person|Run the pay export/;
 
 /** 1440×900, light then dark, the section in view. */
 async function shot(page: Page, name: string, section?: string | import("playwright-core").Locator) {
@@ -35,7 +36,7 @@ async function shot(page: Page, name: string, section?: string | import("playwri
     await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), scheme === "light" ? "cooptimize-light" : "cooptimize-dark");
     if (section) await (typeof section === "string" ? page.getByRole("region", { name: section }) : section).scrollIntoViewIfNeeded();
     await page.waitForTimeout(150);
-    await page.screenshot({ path: `${SHOTS}/wp1-${name}-${scheme}.png` });
+    await page.screenshot({ path: `${SHOTS}/wp2-${name}-${scheme}.png` });
   }
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   if (size) await page.setViewportSize(size);
@@ -52,7 +53,7 @@ const post = (page: Page, action: string, input: unknown) =>
     [action, input] as const,
   );
 
-describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
+describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2)", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -78,7 +79,12 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
     // The fake DevOps: two fictional projects, and a hook to "stop the server" at one request.
     const projects: Record<string, RawItem[]> = {
       Adatum: [...aSmallProject(100), aRawItem({ id: 120, type: "Step", title: "Ask Kim Person about totals", created: "2026-05-01T10:00:00Z", desc: "<p>Text that is never kept.</p>" })],
-      Fabrikam: aSmallProject(300),
+      // WP-2: Fabrikam's project has two areas; only Analytics is Cooptimize's work.
+      Fabrikam: [
+        ...aSmallProject(300).map((i) => ({ ...i, fields: { ...i.fields, "System.AreaPath": "Fabrikam\\Analytics" } })),
+        aRawItem({ id: 350, type: "Step", title: "Run the pay export", created: "2026-04-01T10:00:00Z", area: "Fabrikam\\Payroll", desc: "<p>Outside text.</p>" }),
+        aRawItem({ id: 351, type: "Step", title: "Run the pay export again", created: "2026-04-02T10:00:00Z", area: "Fabrikam\\Payroll" }),
+      ],
     };
     const reader = fakePatternsReader(projects);
     const db = sqliteDb();
@@ -158,15 +164,34 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
     expect(await page.evaluate(() => location.hash)).toBe("#/patterns");
     await page.getByText("No inventory yet.").waitFor();
 
-    // Run inventory to the end.
+    // Run inventory: Adatum (one area) reads whole; Fabrikam has two areas and no scope, so the run stops for it.
     await page.getByRole("button", { name: "Run inventory" }).click();
-    const inventory = page.getByRole("region", { name: "Inventory" });
-    await inventory.locator("tr", { hasText: "Fabrikam" }).getByText("33%").first().waitFor();
+    await page.getByText(/need(s)? a scope: choose it below/).first().waitFor();
+    const scopeRegion = page.getByRole("region", { name: "Scope" });
+    await scopeRegion.locator("tr", { hasText: "Fabrikam" }).getByText(/choose the part that is Cooptimize's BI and analytics work/).waitFor();
+    // Out-of-scope items were never read in full: only the layout's fields.
+    expect(reader.calls.filter((c) => c.client === "Fabrikam" && c.op === "updates")).toEqual([]);
+    await scopeRegion.getByRole("button", { name: /Fabrikam/ }).click();
+    await scopeRegion.getByRole("checkbox", { name: "Fabrikam: area Fabrikam\\Analytics" }).check();
+    await shot(page, "scope", "Scope");
+    await scopeRegion.getByRole("button", { name: "Save scope for this page" }).click();
+    await page.getByText(/^Saved for this page only\. Admin › Clients is unchanged\./).waitFor();
+    expect((await team.org.rules()).clients.Fabrikam?.devopsScope ?? null).toBeNull();
+    await page.getByRole("region", { name: "Runs" }).getByRole("button", { name: "Resume inventory" }).click();
+    const inventory = page.getByRole("region", { name: "Build work" });
     await page.getByText(/^Inventory: done/).waitFor();
-    expect(await inventory.locator("tr", { hasText: "Adatum" }).locator("td").nth(2).textContent()).toBe("7");
+    expect(await inventory.locator("tr", { hasText: "Adatum" }).locator("td").nth(3).textContent()).toBe("7");
+    // Six items in scope: every share on them is marked rather than shown.
+    expect(await inventory.locator("tr", { hasText: "Fabrikam" }).locator("td").nth(3).textContent()).toBe("6");
+    expect(await inventory.locator("tr", { hasText: "Fabrikam" }).locator("td").nth(4).textContent()).toBe("too few to read (6)");
+    // Coverage adds up: Fabrikam read 8, 2 outside scope, 6 in scope.
+    const coverage = page.getByRole("region", { name: "Coverage" });
+    const fab = coverage.locator("tr", { hasText: "Fabrikam" }).locator("td");
+    expect([await fab.nth(1).textContent(), await fab.nth(2).textContent(), await fab.nth(3).textContent()]).toEqual(["8", "2", "6"]);
+    expect(reader.read.get("Fabrikam")?.filter((id) => id >= 350).length ?? 0).toBeGreaterThan(0);
     await inventory.getByRole("button", { name: /Adatum/ }).click();
     await inventory.getByRole("heading", { name: "Breakdown" }).waitFor();
-    await shot(page, "inventory", "Inventory");
+    await shot(page, "build-work", "Build work");
     await inventory.getByRole("button", { name: /Adatum/ }).click();
 
     // A rerun shows the change: two more items in Adatum.
@@ -208,6 +233,16 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
     expect(after.some((c) => c.client === "Fabrikam")).toBe(true);
     expect(after.some((c) => c.client === "Adatum")).toBe(false);
 
+    // ---- Kinds: Leave out a type, Coverage follows at once; then back to the guess ----
+    const kinds = page.getByRole("region", { name: "Kinds of work" });
+    await kinds.getByRole("button", { name: /Adatum/ }).click();
+    await kinds.getByRole("combobox", { name: "Adatum: Step kind" }).selectOption("leave_out");
+    const ada = page.getByRole("region", { name: "Coverage" }).locator("tr", { hasText: "Adatum" }).locator("td");
+    await expect.poll(() => ada.nth(4).textContent()).toBe("6");
+    await shot(page, "kinds", "Kinds of work");
+    await kinds.getByRole("button", { name: "Use the guess" }).click();
+    await expect.poll(() => ada.nth(4).textContent()).toBe("0");
+
     // ---- Estimate, then classification: Fabrikam (no Allow AI) skipped ----
     await runs.getByRole("button", { name: "Estimate" }).click();
     const estimate = runs.locator(".pat-estimate");
@@ -218,7 +253,10 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
     await page.getByText(/^Classification, pass 2: done/).waitFor();
     await classification.locator(".pat-shapes tbody tr").first().waitFor();
     await shot(page, "classification", "Classification");
-    expect((await page.getByRole("region", { name: "Inventory" }).textContent()) ?? "").not.toMatch(TITLES);
+    await shot(page, "coverage", "Coverage");
+    expect((await page.getByRole("region", { name: "Build work" }).textContent()) ?? "").not.toMatch(TITLES);
+    // Fabrikam's labels never came: its coverage says why.
+    expect(await page.getByRole("region", { name: "Coverage" }).locator("tr", { hasText: "Fabrikam" }).locator("td").nth(7).textContent()).toBe("6");
 
     // ---- Check by hand: only Sam's client; the server refuses the other ----
     const check = page.getByRole("region", { name: "Check by hand" });
@@ -236,7 +274,9 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1)", () => {
       const text = readFileSync((await d.path())!, "utf8");
       expect(text.length).toBeGreaterThan(50);
       expect(text).not.toMatch(TITLES);
-      expect(text).not.toMatch(/Kim Person|Sam Tester|never kept|#\d/);
+      expect(text).not.toMatch(/Kim Person|Sam Tester|never kept|Outside text|#\d/);
+      // Fabrikam is not Sam's client: its area names stay on the page.
+      expect(text).not.toMatch(/Analytics|Payroll/);
     }
 
     // Nothing ever went to DevOps but reads, and every AI request was about Adatum only.

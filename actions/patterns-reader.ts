@@ -8,9 +8,13 @@
 //   minute; a delayed response, nothing for five.
 // A refusal (429 or Retry-After) on this reader's request holds the shared limiter too: DevOps asked, and the poller
 // would only be refused. Plain words for each wait go to the page.
+//
+// WP-2: a client's projects are its target's (Dataverse names one per client); each read can name one of them, and the
+// area tree and teams come from the same source's AH-2 read (a day in memory; the teams' people are never passed on).
 import type { Limiter } from "../sources/devops/source.ts";
 import { DevOpsFailure, type DevOpsInternal } from "../sources/devops/source.ts";
 import type { DevOpsTarget } from "../sources/devops/types.ts";
+import type { ProjectTree } from "../plan/patterns/scope.ts";
 import { readRate } from "../plan/devops-pace.ts";
 import { countsAsDone, isClosed, isProposed } from "../plan/process.ts";
 import type { Freshness } from "../plan/devops-fresh-types.ts";
@@ -73,27 +77,37 @@ export function createPatternsReader(d: {
   clients: () => Promise<string[]>;
   now: () => Temporal.Instant;
 }): PatternsReader {
-  const targetOf = async (k: string) => {
+  const targetOf = async (k: string, project?: string) => {
     const t = await d.target(k);
     if (!t) throw new DevOpsFailure("error", "DevOps isn't set up for this client");
-    return t;
+    // Another of the client's projects: the same org and token, that project's paths.
+    return project && project.toLowerCase() !== (t.projectName ?? t.project ?? "").toLowerCase() ? { ...t, project, projectName: project } : t;
   };
   return {
     clients: d.clients,
-    async process(k) {
-      const m = await d.source().meta(await targetOf(k));
+    async projects(k) {
+      const t = await d.target(k);
+      const p = t?.projectName ?? t?.project;
+      return p ? [p] : [];
+    },
+    async areas(k, project): Promise<ProjectTree> {
+      const a = await d.source().areas(await targetOf(k, project));
+      return { project, root: a.root, paths: a.paths, areasProblem: a.areasProblem, teams: a.teams, teamsProblem: a.teamsProblem };
+    },
+    async process(k, project) {
+      const m = await d.source().meta(await targetOf(k, project));
       const cat = (type: string, state: string) => m.meta.categories.get(type)?.get(state.toLowerCase()) ?? null;
       const estimateFields = [...new Set([...(m.fields.size ? [m.fields.size] : []), ...Object.values(m.fields.sizes ?? {})])];
       return { closed: (t, s) => countsAsDone(cat(t, s)) || isClosed(cat(t, s)), proposed: (t, s) => isProposed(cat(t, s)), estimateFields };
     },
-    async ids(k, wiql, top) {
-      return (await d.source().ids(await targetOf(k), wiql, top)).ids;
+    async ids(k, wiql, top, project) {
+      return (await d.source().ids(await targetOf(k, project), wiql, top)).ids;
     },
-    async batch(k, ids, fields) {
-      return d.source().batch(await targetOf(k), ids, [...fields]);
+    async batch(k, ids, fields, project) {
+      return d.source().batch(await targetOf(k, project), ids, [...fields]);
     },
-    async updates(k, id) {
-      return d.source().updates(await targetOf(k), id);
+    async updates(k, id, project) {
+      return d.source().updates(await targetOf(k, project), id);
     },
     async wait(k) {
       const own = d.limiter.why(k);

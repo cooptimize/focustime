@@ -99,8 +99,8 @@ describe("DevOps patterns actions (WP-1)", () => {
     expect(await w.act(ME, "patterns.run_classification", { total })).toMatchObject({ ok: true });
     await w.settle();
 
-    const s = (await w.act(ME, "patterns.status")) as { ok: true; data: { clients: { key: string; mine: boolean; snapshot: unknown; results: { labeled: number } | null }[] } };
-    expect(s.data.clients.map((c) => [c.key, c.mine, !!c.snapshot, (c.results?.labeled ?? 0) > 0])).toEqual([["adatum", true, true, true], ["fabrikam", false, true, true]]);
+    const s = (await w.act(ME, "patterns.status")) as { ok: true; data: { clients: { key: string; mine: boolean; snapshot: unknown; results: { coverage: { labeled: number } } | null }[] } };
+    expect(s.data.clients.map((c) => [c.key, c.mine, !!c.snapshot, (c.results?.coverage.labeled ?? 0) > 0])).toEqual([["adatum", true, true, true], ["fabrikam", false, true, true]]);
     // The status carries no title, no item text and no item ids.
     const text = JSON.stringify(s.data);
     expect(text).not.toMatch(/Ask Pat Example|Long text|Sales reporting/);
@@ -149,8 +149,11 @@ describe("DevOps patterns actions (WP-1)", () => {
     expect(e.data.clients.adatum!.skipped).toBeNull();
     await w.act(ME, "patterns.run_classification", { total: e.data.totalMicros });
     await w.settle();
-    const s = (await w.act(ME, "patterns.status")) as { data: { clients: { key: string; results: unknown }[] } };
-    expect(s.data.clients.find((c) => c.key === "fabrikam")!.results).toBeNull();
+    const s = (await w.act(ME, "patterns.status")) as { data: { clients: { key: string; results: { coverage: { labeled: number; aiOff: number; toClassify: number } } }[] } };
+    // WP-2: the client still shows, with every item counted as not labeled because AI isn't allowed for it.
+    const fab = s.data.clients.find((c) => c.key === "fabrikam")!.results.coverage;
+    expect(fab).toMatchObject({ labeled: 0, aiOff: fab.toClassify });
+    expect(fab.toClassify).toBeGreaterThan(0);
   });
 
   it("bad input is refused before anything runs", async () => {
@@ -161,6 +164,60 @@ describe("DevOps patterns actions (WP-1)", () => {
     expect(await w.act(ME, "patterns.set_platform", { clientKey: "adatum", platform: "fabric" })).toMatchObject({ ok: true });
     expect(await w.act(ME, "patterns.download", { kind: "everything" })).toMatchObject({ ok: false, status: 400 });
     expect(w.reader.calls).toEqual([]);
+  });
+});
+
+describe("WP-2: scope and kinds on the page", () => {
+  const split = () => ({
+    adatum: [aRawItem({ id: 1, type: "Story", area: "adatum\\BI", title: "Our story" }), aRawItem({ id: 2, type: "Ticket", area: "adatum\\ERP", title: "Their ticket" }), aRawItem({ id: 3, type: "Ticket", area: "adatum\\ERP", title: "Their other ticket" })],
+    fabrikam: aSmallProject(300),
+  });
+
+  it("status lays out each client's projects and areas with counts and types, and says what Admin › Clients has and that a choice is needed", async () => {
+    const w = world({ reader: fakePatternsReader(split()) });
+    await w.act(ME, "patterns.run_inventory");
+    await w.settle();
+    const s = (await w.act(ME, "patterns.status")) as { data: { clients: { key: string; layout: { projects: { project: string; areas: { path: string; items: number; types: Record<string, number> }[] }[] }; scope: { next: unknown; nextWords: string; admin: string } }[]; inventory: { last: { state: string; reason: string } } } };
+    const a = s.data.clients.find((c) => c.key === "adatum")!;
+    expect(a.layout.projects[0]!.areas.map((x) => [x.path, x.items, x.types])).toEqual([["adatum", 0, {}], ["adatum\\BI", 1, { Story: 1 }], ["adatum\\ERP", 2, { Ticket: 2 }]]);
+    expect(a.scope).toMatchObject({ next: null, admin: "Automatic", nextWords: expect.stringMatching(/choose the part that is Cooptimize's BI and analytics work/) });
+    expect(s.data.inventory.last).toMatchObject({ state: "stopped", reason: expect.stringMatching(/needs a scope/) });
+    // Layout counts, never a title.
+    expect(JSON.stringify(s.data)).not.toMatch(/Our story|Their ticket/);
+  });
+
+  it("set_scope: checked against the client's layout, kept for the page only; Admin › Clients is never written", async () => {
+    const w = world({ reader: fakePatternsReader(split()) });
+    await w.act(ME, "patterns.run_inventory");
+    await w.settle();
+    expect(await w.act(ME, "patterns.set_scope", { clientKey: "adatum", scope: { kind: "areas", areas: [{ path: "elsewhere\\BI", sub: true }] } })).toMatchObject({ ok: false, code: "not_in_layout" });
+    expect(await w.act(ME, "patterns.set_scope", { clientKey: "adatum", scope: { kind: "areas", areas: [{ path: "adatum\\BI" }] } })).toMatchObject({ ok: false, status: 400 });
+    expect(await w.act(ME, "patterns.set_scope", { clientKey: "nobody", scope: null })).toMatchObject({ ok: false, status: 404 });
+    const r = await w.act(ME, "patterns.set_scope", { clientKey: "adatum", scope: { kind: "areas", areas: [{ path: "adatum\\BI", sub: true }] } });
+    expect(r).toMatchObject({ ok: true, data: { words: expect.stringMatching(/^Saved for this page only\. Admin › Clients is unchanged\./) } });
+    expect(Object.keys(await w.store.scopes())).toEqual(["adatum"]);
+    // Resume carries on with it: only the story is read in full.
+    await w.act(ME, "patterns.resume", { runId: (await w.store.latest("inventory")).last!.id });
+    await w.settle();
+    expect((await w.store.items("adatum")).map((i) => i.id)).toEqual([1]);
+    // The actions never reach Admin › Clients' settings: no writer is handed to them, and the module names none.
+    const src = readFileSync(join(root, "actions/patterns.ts"), "utf8") + readFileSync(join(root, "actions/patterns-run.ts"), "utf8");
+    expect(src).not.toMatch(/setRule|org\.set|saveOrg|devops_scope|admin-actions/);
+  });
+
+  it("set_kind: a type of the client's own, kept and applied (Leave out leaves the counts)", async () => {
+    const w = world();
+    await w.act(ME, "patterns.run_inventory");
+    await w.settle();
+    expect(await w.act(ME, "patterns.set_kind", { clientKey: "adatum", type: "Nope", kind: "build" })).toMatchObject({ ok: false, status: 404 });
+    expect(await w.act(ME, "patterns.set_kind", { clientKey: "adatum", type: "Step", kind: "sideways" })).toMatchObject({ ok: false, status: 400 });
+    expect(await w.act(ME, "patterns.set_kind", { clientKey: "adatum", type: "Step", kind: "leave_out" })).toMatchObject({ ok: true });
+    const s = (await w.act(ME, "patterns.status")) as { data: { clients: { key: string; analysis: { kinds: { type: string; kind: string; chosen: boolean }[]; leftOut: number } }[] } };
+    const a = s.data.clients.find((c) => c.key === "adatum")!.analysis;
+    expect(a.kinds.find((k) => k.type === "Step")).toMatchObject({ kind: "leave_out", chosen: true });
+    expect(a.leftOut).toBe(4);
+    const e = (await w.act(ME, "patterns.estimate")) as { data: { clients: Record<string, { toClassify: number }> } };
+    expect(e.data.clients.adatum!.toClassify).toBe(3);
   });
 });
 
