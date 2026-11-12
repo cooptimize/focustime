@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { aBrief } from "../test/builders/index.ts";
 import {
   acceptanceText, briefEmpty, briefFromJson, BriefError, checkTemplates, descriptionHtml, descriptionText, fullExample, LINE_KEYS, LINE_NAMES, lineWords, linesHtml, newTag, parseBrief,
-  readFilled, readiness, readinessText, readLines, SEED, slugOf, TAG_PATTERN, templateChanges, typeOfTags, templateTag, type WorkTemplates,
+  readFilled, readiness, readinessText, readLines, SEED, slugOf, TAG_MAX, TAG_PATTERN, templateChanges, typeOfTags, templateTag, type WorkTemplates,
 } from "./work-templates.ts";
 
 const clone = (t: WorkTemplates): WorkTemplates => JSON.parse(JSON.stringify(t)) as WorkTemplates;
@@ -206,3 +206,24 @@ describe("an admin's edit", () => {
     expect(checkTemplates(again, gone).types.find((t) => t.name === "Deployment" && !t.removed)?.tag).toBe("deployment-2");
   });
 });
+
+describe("TP-1 review fixes", () => {
+  it("an earlier name alone is an everyday word, not a line; two of them are the four lines", () => {
+    expect(readLines("<div>Target</div><div>Hit 40 orders a day</div>").found).toBe(false);
+    const two = readLines("<p><b>Target:</b></p><p>The orders table</p><p><b>Control</b></p><p>Count matches</p>");
+    expect(two).toMatchObject({ found: true, earlier: true, lines: { where: "The orders table", check: "Count matches" } });
+  });
+  it("a long name's numbered tag still matches the pattern", () => {
+    const name = "a".repeat(37) + " b";
+    const first = newTag(name, []);
+    const second = newTag(name, [first]);
+    expect(second).toMatch(TAG_PATTERN);
+    expect(second.length).toBeLessThanOrEqual(TAG_MAX);
+  });
+  it("a choice can't hold a comma or a semicolon (each goes on its own line)", () => {
+    const next = JSON.parse(JSON.stringify(SEED)) as WorkTemplates;
+    next.lists.touches = ["Data, Model"];
+    expect(() => checkTemplates(next, SEED)).toThrow(/comma or semicolon/);
+  });
+});
+

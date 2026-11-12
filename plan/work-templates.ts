@@ -73,7 +73,7 @@ export function newTag(name: string, taken: Iterable<string>): string {
   const base = slugOf(name) || "type";
   if (!used.has(base)) return base;
   for (let n = 2; ; n++) {
-    const t = `${base.slice(0, TAG_MAX - String(n).length - 1)}-${n}`;
+    const t = `${base.slice(0, TAG_MAX - String(n).length - 1).replace(/-+$/, "")}-${n}`;
     if (!used.has(t)) return t;
   }
 }
@@ -233,6 +233,10 @@ export function readLines(html: string | null | undefined): ReadLines {
     if (hit) marks.push({ start: m.index, end: m.index + m[0].length, k: hit.k, earlier: hit.earlier });
     else if (m[1]) marks.push({ start: m.index, end: m.index + m[0].length, k: null, earlier: false });
   }
+  // The earlier names are everyday words ("Target", "Change"): they count only when at least two of them head lines.
+  const earlierKeys = new Set(marks.filter((m) => m.earlier).map((m) => m.k));
+  const useEarlier = earlierKeys.size >= 2;
+  if (!useEarlier) marks.splice(0, marks.length, ...marks.filter((m) => !m.earlier));
   const lines: Partial<Record<LineKey, string>> = {};
   const cut: [number, number][] = [];
   let earlier = false;
@@ -420,6 +424,7 @@ export function checkTemplates(next: unknown, was: WorkTemplates): WorkTemplates
       const out: string[] = [];
       for (const x of v) {
         const s = need(x, `A choice in ${LIST_NAMES[k]}`, LIMITS.choice).replace(/\s+/g, " ");
+        if (/[,;]/.test(s)) throw new BriefError(`${LIST_NAMES[k]}: ${s} has a comma or semicolon. Put each choice on its own line`);
         if (out.some((y) => y.toLowerCase() === s.toLowerCase())) throw new BriefError(`${LIST_NAMES[k]} has ${s} twice`);
         out.push(s);
       }

@@ -1443,6 +1443,15 @@ describe("TP-1: the four lines and the request type tag at create", () => {
     expect(sentPaths(s)).toContain("/fields/System.Description");
   });
 
+  it("Checked by and Signed off by: only someone on the client's own project, or a role typed in", async () => {
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { ...brief, checkedBy: { name: "Someone Else", email: "stranger@example.com" } } } });
+    expect(r.error).toContain("Checked by must be someone on Cooptimize's DevOps project");
+    const r2 = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { ...brief, signedOffBy: { name: "Someone Else", email: "stranger@example.com" } } } });
+    expect(r2.error).toContain("Signed off by must be someone");
+    // A role has no email: just words.
+    expect((await s.preview({ kind: "new_item", title: "X", type: "User Story", brief })).fields.length).toBeGreaterThan(0);
+  });
+
   it("a refused tag creates nothing, says so in plain words, and the same create goes without it", async () => {
     const t = setup({ fake: { noNewTags: true } });
     await t.enable();

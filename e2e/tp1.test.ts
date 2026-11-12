@@ -102,10 +102,9 @@ describe.skipIf(!CHROMIUM)("TP-1: work templates in the New form (browser, demo 
       await f.locator("#nf-title").fill("Gross margin percent on the finance report");
       await f.locator("#nf-title").focus();
       // Keyboard: Tab from the title reaches Request type, then its link, then the first line.
-      await page.keyboard.press("Tab");
-      await page.keyboard.press("Tab");
-      await page.keyboard.press("Tab");
-      await expect.poll(() => page.evaluate(() => document.activeElement?.closest(".fl-line")?.getAttribute("data-line") ?? document.activeElement?.className)).toBe("where");
+      // Keyboard: Tab from the title reaches Request type, its link, the first line's ?, then the first line's box.
+      for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
+      await expect.poll(() => page.evaluate(() => (document.activeElement?.tagName === "TEXTAREA" ? document.activeElement.closest(".fl-line")?.getAttribute("data-line") : null))).toBe("where");
       await expect(line(f, "where").locator(".fl-example").isVisible()).resolves.toBe(true);
       await expect(line(f, "where").locator(".fl-example").textContent()).resolves.toContain("The Sales model.");
       await shot(page, "tp1-form-example-focus");
@@ -141,17 +140,20 @@ describe.skipIf(!CHROMIUM)("TP-1: work templates in the New form (browser, demo 
       });
       expect(fits.bottom).toBeLessThanOrEqual(900);
       expect(fits.scroll).toBeLessThanOrEqual(1);
+      // A user story, whose process has the acceptance field.
+      await f.getByRole("radio", { name: "User Story" }).click();
+      await f.getByRole("button", { name: "Data", exact: true }).click();
       await page.mouse.move(1, 1);
       await f.locator("#nf-title").focus();
       await shot(page, "tp1-form-filled");
-      // A user story, whose process has the acceptance field. Ctrl+Enter from a line opens the preview: the description under its headings, the acceptance and the tag.
-      await f.getByRole("radio", { name: "User Story" }).click();
+      // Ctrl+Enter from a line opens the preview: the description under its headings, the acceptance and the tag.
       await box(f, "check").press("Control+Enter");
       const p = preview(page);
       await p.waitFor();
       const text = (await p.textContent()) ?? "";
       expect(text).toContain("What and where");
       expect(text).toContain("Environment: Test.");
+      expect(text).toContain("Touches: Data.");
       expect(text).toContain("How we'll check");
       expect(text).toContain("Acceptance criteria");
       expect(text).toContain("type:new-measure");
@@ -312,6 +314,10 @@ describe.skipIf(!CHROMIUM)("TP-1: someone who isn't an admin (browser, real sess
       const ro = page.locator('[data-setting="work-templates"]');
       await ro.waitFor({ timeout: 30_000 });
       await expect(ro.textContent()).resolves.toContain("Set by your FocusTime admin");
+      // The first launch's welcome waits for a key.
+      if (await page.locator(".brand-stage").count()) await page.keyboard.press("Shift");
+      await page.locator(".brand-stage").waitFor({ state: "detached", timeout: 30_000 });
+      await ro.getByRole("button", { name: /New measure/ }).click();
       await shot(page, "tp1-settings-readonly");
     } finally {
       await app.close();

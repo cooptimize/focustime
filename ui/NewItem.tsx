@@ -18,7 +18,7 @@ import { SelectField } from "./SelectField.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { briefEmpty, EMPTY_BRIEF, type Brief } from "../plan/work-templates.ts";
-import { FourLines, FullExample, TypeField } from "./FourLines.tsx";
+import { FourLines, FullExample, TypeField, withoutPeople } from "./FourLines.tsx";
 import { useTemplates } from "./templates.ts";
 import { usePhone } from "./viewport.ts";
 
@@ -265,7 +265,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             // A draft belongs to its client.
             <span className="nf-fixed">{clientName}</span>
           ) : (
-            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null), setBrief(withoutPeople(brief)))} className="nf-select" empty="Choose a client" />
           )}
           <span className="set-label" id="nf-type">Level</span>
           <span className="nf-types">

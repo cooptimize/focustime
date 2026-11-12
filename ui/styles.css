@@ -6972,3 +6972,9 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 .fl-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fl-grid .fl-head { display: block; line-height: 1.35; }
 .fl-grid .fl-head .fl-help { margin-left: 4px; vertical-align: middle; }
+/* TP-1 review: a hint must never read as an answer; a chosen chip says so; the ? opens above, off the fields. */
+.fl-box::placeholder { color: color-mix(in oklab, var(--text-muted) 70%, transparent); font-style: italic; }
+.fl-chips .chip-btn[aria-pressed="true"]::before { content: "✓"; font-weight: 600; }
+.fl-why { top: auto; bottom: calc(100% + 4px); }
+.sc-ready:not(.ready) { border-color: var(--watch); color: var(--text); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
+.wt-preview .fl-other { width: 24ch; }

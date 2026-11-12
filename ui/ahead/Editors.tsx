@@ -111,6 +111,9 @@ export function usePeople(clientKey: string) {
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
+    // TP-1: never show one client's people while another's are read.
+    setD(null);
+    setErr(null);
     const p = peopleMemo.get(clientKey) ?? call<{ people: AssignPerson[]; problem: string | null }>("ahead.people", { clientKey });
     peopleMemo.set(clientKey, p);
     p.then((x) => live && setD(x), (e: unknown) => (peopleMemo.delete(clientKey), live && setErr(e instanceof Error ? e.message : "Couldn't read who can be assigned")));

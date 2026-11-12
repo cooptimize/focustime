@@ -12,6 +12,9 @@ import { SelectField } from "./SelectField.tsx";
 import { TextBox } from "./TextBox.tsx";
 
 const OTHER = "\u0000other";
+
+/** A client change: people chosen from the old client's project go (a role typed in stays). */
+export const withoutPeople = (b: Brief): Brief => ({ ...b, checkedBy: b.checkedBy?.email ? null : b.checkedBy, signedOffBy: b.signedOffBy?.email ? null : b.signedOffBy });
 const ROLE = "\u0000role";
 
 /** Type: one optional choice; each option shows its name and its one-line meaning, so the list explains itself. */
@@ -59,6 +62,8 @@ function HelpMark({ name, why }: { name: string; why: string }) {
 function ChoiceSelect({ label, value, options, onChange }: { label: string; value: string | null; options: readonly string[]; onChange: (v: string | null) => void }) {
   const known = !value || options.some((o) => o.toLowerCase() === value.toLowerCase());
   const [other, setOther] = useState(!known);
+  // While typing in Other, the box keeps what is typed even when it matches a choice.
+  const [typed, setTyped] = useState(known ? "" : (value ?? ""));
   const shown = other ? OTHER : (value ?? "");
   const opts: ListOption[] = [{ key: "", label: "Not set" }, ...options.map((o) => ({ key: o, label: o })), { key: OTHER, label: "Other…", search: "other something else type" }];
   return (
@@ -67,7 +72,7 @@ function ChoiceSelect({ label, value, options, onChange }: { label: string; valu
         {label}
       </span>
       <SelectField label={label} value={shown} options={opts} empty="Not set" className="nf-select" onChange={(k) => (k === OTHER ? (setOther(true), onChange(known ? null : value)) : (setOther(false), onChange(k || null)))} />
-      {other && <input className="fl-other" aria-label={`${label}, other`} placeholder="Type it" maxLength={60} value={known ? "" : (value ?? "")} onChange={(e) => onChange(e.target.value || null)} />}
+      {other && <input className="fl-other" aria-label={`${label}, other`} placeholder="Type it" maxLength={60} value={typed} onChange={(e) => (setTyped(e.target.value), onChange(e.target.value || null))} />}
     </span>
   );
 }
@@ -109,6 +114,13 @@ function ChoiceChips({ label, values, options, onChange }: { label: string; valu
             if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
               e.preventDefault();
               add();
+            } else if (e.key === "Enter") {
+              // Ctrl+Enter creates: what was typed here goes in first, then the form gets the keys once it has it.
+              e.preventDefault();
+              e.stopPropagation();
+              const dialog = e.currentTarget.closest('[role="dialog"]');
+              add();
+              setTimeout(() => dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true })), 0);
             } else if (e.key === "Escape") {
               e.stopPropagation();
               setText("");

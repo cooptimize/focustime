@@ -16,7 +16,7 @@ import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { briefEmpty, EMPTY_BRIEF, type Brief } from "../plan/work-templates.ts";
-import { FourLines, TypeField } from "./FourLines.tsx";
+import { FourLines, TypeField, withoutPeople } from "./FourLines.tsx";
 import { useTemplates } from "./templates.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -167,7 +167,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           <div className="draft-row">
             <label className="set-field">
               <span className="set-label">Client</span>
-              <select value={client} onChange={(e) => (setClient(e.target.value), setParent(NO_ITEM))}>
+              <select value={client} onChange={(e) => (setClient(e.target.value), setParent(NO_ITEM), setBrief(withoutPeople(brief)))}>
                 {!clients.some((c) => c.clientKey === client) && <option value={client}>{client}</option>}
                 {clients.map((c) => (
                   <option key={c.clientKey} value={c.clientKey}>

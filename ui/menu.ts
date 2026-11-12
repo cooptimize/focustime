@@ -1273,7 +1273,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "templates.load": return { run: () => env.openSettings("planning", "work-templates") };
-    case "templates.save": return { run: () => env.openSettings("admin-templates") };
+    case "templates.save": return env.admin ? { run: () => env.openSettings("admin-templates") } : { disabled: "Only for FocusTime admins" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };
     case "media.status": return { run: () => env.openSettings("focus", "pause-media") };

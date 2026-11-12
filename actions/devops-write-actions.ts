@@ -1004,7 +1004,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const description = o.description !== undefined ? str(o.description, "description", 8000, true) : (draft?.description ?? null);
       // TP-1: the four lines (the form's, else the draft's), written only here at create: under their headings in the
       // description, "How we'll check" in the acceptance field when the type has it, and one request type tag.
-      const doc = env.templates ? (await env.templates.read()).doc : null;
+      const doc = env.templates ? ((await env.templates.read().catch(() => null))?.doc ?? null) : null;
       let brief: Brief | null = null;
       if (doc) {
         try {
@@ -1014,6 +1014,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           throw e;
         }
       } else if (o.brief !== undefined && o.brief !== null) throw new Refused("Work templates aren't available here. Create it without the four lines", 409);
+      // Checked by and Signed off by: a person must be on this client's DevOps project (never another client's people);
+      // a role typed in has no email and is just words.
+      for (const [label, who] of [["Checked by", brief?.checkedBy], ["Signed off by", brief?.signedOffBy]] as const) {
+        const email = who?.email?.toLowerCase();
+        if (!email || email === env.me.email.toLowerCase()) continue;
+        if (!(await env.ahead?.assignable?.(env.clientKey, email).catch(() => false))) throw new Refused(`${label} must be someone on ${env.clientName}'s DevOps project, or a role typed in`, 409);
+      }
       if (o.noTag !== undefined && typeof o.noTag !== "boolean") throw new Invalid("noTag must be true or false");
       const tag = doc && o.noTag !== true ? templateTag(doc, brief) : null;
       const typedAcceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
@@ -1607,8 +1614,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
           // plain words: the person can create it again without the tag.
           const tagValue = (entry.ops as PatchOp[]).find((p) => p.path === `/fields/${TAGS_FIELD}`)?.value;
           const tagged = typeof tagValue === "string" && tagValue.split(";").some((t) => t.trim().toLowerCase().startsWith(TAG_PREFIX));
-          if (tagged && e instanceof WriteFailure && ((e.kind === "rejected" && /\btags?\b/i.test(e.message)) || e.kind === "forbidden"))
-            return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tags ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag`, {}, { code: "tag_refused" });
+          if (tagged && e instanceof WriteFailure && e.kind === "rejected" && /\btags?\b/i.test(e.message))
+            return settle("refused", `DevOps didn't let you add the tag ${entry.after.Tags ?? "for the request type"} in ${env.projectName} (adding a new tag there needs the Create tag definition permission). Nothing was created. You can create it without the tag.`, {}, { code: "tag_refused" });
           throw e;
         }
         id = made.id;
