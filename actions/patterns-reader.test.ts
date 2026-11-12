@@ -32,6 +32,8 @@ function fakeInternal(limiter: ReturnType<typeof createPatternsLimiter>, answer:
     ids: (t: DevOpsTarget, wiql: string, top: number) => through(t.clientKey, async () => ({ ids: await data.ids(t.clientKey, wiql, top), asOf: NOW })),
     batch: (t: DevOpsTarget, ids: number[], fields: string[]) => through(t.clientKey, () => data.batch(t.clientKey, ids, fields)),
     updates: (t: DevOpsTarget, id: number) => through(t.clientKey, () => data.updates(t.clientKey, id)),
+    // WP-2: the AH-2 area read (the real one also reads the teams' people; the reader never passes them on).
+    areas: (t: DevOpsTarget) => through(t.clientKey, async () => ({ root: t.project, paths: [t.project], areasProblem: null, teams: [{ name: "Sample Team", otherField: false, areas: [{ path: "Sample", sub: true }] }], teamsProblem: null, readAt: NOW, people: [{ email: "someone@example.com", name: "Some One" }] })),
   } as unknown as DevOpsInternal;
   return { internal, data };
 }
@@ -91,6 +93,14 @@ describe("DevOps patterns reader (WP-1)", () => {
     expect(await s.reader.wait("adatum")).toBeNull();
     next = at(-120_000);
     expect(await s.reader.wait("adatum")).toBeNull();
+  });
+
+  it("WP-2: a client's project and its tree come from the poller's target; the teams' people never reach the run", async () => {
+    const s = setup();
+    expect(await s.reader.projects("adatum")).toEqual(["Sample"]);
+    const tree = await s.reader.areas("adatum", "Sample");
+    expect(tree).toEqual({ project: "Sample", root: "Sample", paths: ["Sample"], areasProblem: null, teams: [{ name: "Sample Team", otherField: false, areas: [{ path: "Sample", sub: true }] }], teamsProblem: null });
+    expect(JSON.stringify(tree)).not.toMatch(/someone@example|Some One/);
   });
 
   it("a whole inventory over the real reader with a low budget: it waits between requests and still finishes", async () => {

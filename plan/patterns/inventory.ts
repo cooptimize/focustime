@@ -1,9 +1,12 @@
-// WP-1: the inventory, no AI. From one client's items (created in the last 24 months, plus their parents) it works out
-// the shape (types, levels from links, how they nest), the breakdown, how much is written, titles, timing and what was
+// WP-1, WP-2: the inventory, no AI. From one client's items in scope (created in the last 24 months, plus their parents)
+// it works out the shape (types, levels from links, how they nest), the breakdown (WP-2: one row per parent and child
+// type pair the data shows, and leaf items with no parent per type), how much is written, titles, timing and what was
 // written after the fact. Counts and shares only: no text, no person. Pure.
 import { htmlToText } from "../../sources/devops/normalize.ts";
 import { depthOf, levelsOf, typeEdges, type Nest } from "./levels.ts";
 import { LEVELS, type Facts, type Level, type PatternItem } from "./types.ts";
+import type { AnalysisScope, AreaRule } from "./scope.ts";
+import type { Kind } from "./kinds.ts";
 
 // ---------- reading an item ----------
 
@@ -22,7 +25,14 @@ export const F = {
   comments: "System.CommentCount",
   description: "System.Description",
   acceptance: "Microsoft.VSTS.Common.AcceptanceCriteria",
+  area: "System.AreaPath",
+  project: "System.TeamProject",
 } as const;
+
+/** WP-2: what the layout reads of every item in the window: never a title or text. */
+export const LAYOUT_FIELDS = [F.id, F.type, F.area, F.project, F.created] as const;
+/** WP-2: what is read of a parent outside the run's items (outside scope or older): its title and type, and its links. */
+export const PARENT_FIELDS = [F.id, F.rev, F.type, F.state, F.title, F.parent, F.created, F.area] as const;
 
 /** The fields an inventory read asks for: the standard ones and the process's estimate fields. */
 export const readFields = (estimateFields: readonly string[]): string[] => [...new Set([...Object.values(F), ...estimateFields])];
@@ -131,7 +141,12 @@ export type Spread = { n: number; min: number | null; median: number | null; p75
 export type Writing = { n: number; description: number | null; acceptance: number | null; tags: number | null; estimate: number | null; descBands: Record<string, number>; commentBands: Record<string, number> };
 export type Timing = { n: number; median: number | null; p90: number | null };
 
+/** WP-2: one parent and child type pair: how many of the parent type's items have none of the child type under them. */
+export type Pair = { parent: string; child: string; without: number; of: number; children: Spread };
+
 export type Snapshot = {
+  /** 2 from WP-2 (pairs, scope, kinds); absent on WP-1's snapshots. */
+  rules?: 2;
   /** The client's first item ever (any age), or null when it couldn't be read. */
   firstItemAt: string | null;
   windowFrom: string;
@@ -141,13 +156,23 @@ export type Snapshot = {
   types: { type: string; level: Level; count: number; states: Record<string, number> }[];
   nesting: Nest[];
   months: Record<string, number>;
-  breakdown: { children: Record<"top" | "middle", Spread>; middleNoChildren: { count: number; of: number }; leafNoParent: { count: number; of: number }; depth: Record<string, number> };
+  breakdown: {
+    children: Record<"top" | "middle", Spread>;
+    middleNoChildren: { count: number; of: number };
+    leafNoParent: { count: number; of: number };
+    depth: Record<string, number>;
+    /** WP-2: per pair the data shows, and per type that isn't top, its items with no parent. */
+    pairs?: Pair[];
+    noParent?: { type: string; count: number; of: number }[];
+  };
   writing: { all: Writing; byLevel: Record<Level, Writing>; byType: Record<string, Writing> };
   titles: { lengthBands: Record<string, number>; patterns: Record<TitlePattern, number> };
   timing: { createdToStarted: Timing; startedToClosed: Timing; sameDay: { count: number; of: number } };
   afterFact: { sampled: number; changedAfterStart: number; emptyAtClose: number };
+  /** WP-2: what the run that saved this snapshot covered: its scope, the items the layout read and those outside, the kinds. */
+  run?: { scope: AnalysisScope | null; scopeSource: string | null; read: number; outside: number; inScope: number; kinds: Record<string, Kind>; /** Teams scope: the area rules the teams stood for at the time. */ teamAreas?: AreaRule[]; /** Read in the layout, then gone (deleted) before the full read. */ gone?: number };
   /** The handful of numbers the page's row shows. */
-  headline: { items: number; description: number | null; acceptance: number | null; typicalChildren: number | null; parentsNoChildren: number | null; changedAfterStart: number | null };
+  headline: { items: number; description: number | null; acceptance: number | null; typicalChildren: number | null; /** WP-1 only. */ parentsNoChildren?: number | null; /** WP-2: the pair with the most parents. */ mainPair?: Pair | null; changedAfterStart: number | null };
 };
 
 const share = (n: number, of: number): number | null => (of ? Math.round((n / of) * 1000) / 1000 : null);
@@ -246,12 +271,15 @@ export function inventoryOf(all: readonly PatternItem[], o: { firstItemAt: strin
   const changed = sampled.filter((i) => i.facts.history!.changedAfterStart).length;
   const children = { top: spreadOf(childCounts("top")), middle: spreadOf(childCounts("middle")) };
   const typical = spreadOf(parents.map((i) => kids.get(i.id) ?? 0)).median;
+  const pairs = pairsOf(items);
+  const noParent = types.filter((t) => t.level !== "top").map((t) => ({ type: t.type, count: items.filter((i) => i.type === t.type && (i.parentId === null || !byId.has(i.parentId) || byId.get(i.parentId)!.type === t.type)).length, of: t.count }));
 
   const writing = { all: writingOf(items), byLevel: Object.fromEntries(LEVELS.map((l) => [l, writingOf(at(l))])) as Record<Level, Writing>, byType: Object.fromEntries(types.map((t) => [t.type, writingOf(items.filter((i) => i.type === t.type))])) };
   const patterns = Object.fromEntries((["verb", "as_a", "question", "bare_noun", "other"] as const).map((p) => [p, 0])) as Record<TitlePattern, number>;
   for (const i of items) patterns[titlePattern(i.title)]++;
 
   return {
+    rules: 2,
     firstItemAt: o.firstItemAt,
     windowFrom: o.windowFrom,
     items: items.length,
@@ -264,6 +292,8 @@ export function inventoryOf(all: readonly PatternItem[], o: { firstItemAt: strin
       middleNoChildren: { count: middle.filter((i) => !kids.get(i.id)).length, of: middle.length },
       leafNoParent: { count: leaves.filter((i) => i.parentId === null || !byId.has(i.parentId)).length, of: leaves.length },
       depth,
+      pairs,
+      noParent,
     },
     writing,
     titles: { lengthBands: banded(items.map((i) => i.title.trim().split(/\s+/).filter(Boolean).length), TITLE_BANDS), patterns },
@@ -274,9 +304,38 @@ export function inventoryOf(all: readonly PatternItem[], o: { firstItemAt: strin
       description: writing.all.description,
       acceptance: writing.all.acceptance,
       typicalChildren: typical,
-      parentsNoChildren: share(parents.filter((i) => !kids.get(i.id)).length, parents.length),
+      mainPair: [...pairs].sort((a, b) => b.of - a.of)[0] ?? null,
       changedAfterStart: share(changed, sampled.length),
     },
+  };
+}
+
+/**
+ * WP-2: one row per parent and child type pair the data shows (at least two links): of the parent type's items in the
+ * window, how many have no child of that type, and the spread of children of that type per parent.
+ */
+export function pairsOf(items: readonly PatternItem[]): Pair[] {
+  const edges = typeEdges(items).filter((e) => e.count >= 2);
+  return edges.map((e) => {
+    const parents = items.filter((i) => i.type === e.parent);
+    const n = new Map<number, number>();
+    for (const i of items) if (i.type === e.child && i.parentId !== null) n.set(i.parentId, (n.get(i.parentId) ?? 0) + 1);
+    const counts = parents.map((p) => n.get(p.id) ?? 0);
+    return { parent: e.parent, child: e.child, without: counts.filter((c) => !c).length, of: parents.length, children: spreadOf(counts) };
+  }).filter((p) => p.of > 0);
+}
+
+/** WP-2: Tickets and support, in short: how many, how fast they close, how much is written. */
+export type Tickets = { items: number; types: string[]; createdToClosed: Timing; sameDay: { count: number; of: number }; open: number; writing: Writing };
+export function ticketsOf(items: readonly PatternItem[]): Tickets {
+  const closed = items.filter((i) => i.facts.closed && i.createdAt && i.closedAt);
+  return {
+    items: items.length,
+    types: [...new Set(items.map((i) => i.type))].sort(),
+    createdToClosed: timingOf(closed.map((i) => days(i.createdAt!, i.closedAt!))),
+    sameDay: { count: closed.filter((i) => i.createdAt!.slice(0, 10) === i.closedAt!.slice(0, 10)).length, of: closed.length },
+    open: items.filter((i) => !i.facts.closed).length,
+    writing: writingOf(items),
   };
 }
 

@@ -1230,6 +1230,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "patterns.run_classification":
     case "patterns.resume":
     case "patterns.set_platform":
+    case "patterns.set_scope":
+    case "patterns.set_kind":
     case "patterns.check":
     case "patterns.download": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":

@@ -1285,7 +1285,10 @@ if (devopsPoller && directorySource) {
       owner: randomBytes(9).toString("base64url"),
       allowed: patternsAllowed,
       prices: () => app.ai.prices,
+      // WP-2: Admin › Clients' scope, read as the page's starting point; never written from the page.
+      adminScope: async (k) => (await org.rules()).clients[k]?.devopsScope ?? null,
     }),
+    adminScope: async (k) => (await org.rules()).clients[k]?.devopsScope ?? null,
     async projects(k) {
       const t = await poller.reads.target(k);
       return [...new Set([t?.projectName, t?.project].filter((x): x is string => !!x))];

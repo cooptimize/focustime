@@ -419,6 +419,8 @@ export const ACTIONS = [
   { name: "patterns.run_classification", title: "DevOps patterns: run classification", group: "DevOps", target: "none", summary: "Labels items with AI, one client per request, after an estimate" },
   { name: "patterns.resume", title: "DevOps patterns: resume", group: "DevOps", target: "none", summary: "Carries on a stopped run from where it was" },
   { name: "patterns.set_platform", title: "DevOps patterns: set a client's platform", group: "DevOps", target: "none", summary: "Azure, Fabric, Both or Not set, for splitting the tables" },
+  { name: "patterns.set_scope", title: "DevOps patterns: set a client's scope", group: "DevOps", target: "none", summary: "The part of a client's DevOps the page reads: whole project, teams or area paths (never changes Admin › Clients)" },
+  { name: "patterns.set_kind", title: "DevOps patterns: set a type's kind", group: "DevOps", target: "none", summary: "Build work, Tickets and support or Leave out, for one work item type of a client" },
   { name: "patterns.check", title: "DevOps patterns: check by hand", group: "DevOps", target: "none", summary: "30 labeled items of a client you're on, with links to DevOps" },
   { name: "patterns.download", title: "DevOps patterns: download", group: "DevOps", target: "none", summary: "The summary or the request types as Markdown (counts and meanings, no titles)" },
   { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },

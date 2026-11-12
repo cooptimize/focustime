@@ -3,12 +3,13 @@
 import type { PatternsReader } from "../../actions/patterns-run.ts";
 import type { ProcessFacts, RawUpdate } from "../../plan/patterns/inventory.ts";
 import type { ProviderCall, ProviderReply } from "../../ai/types.ts";
+import type { ProjectTree } from "../../plan/patterns/scope.ts";
 
 export type RawItem = { id: number; fields: Record<string, unknown>; updates?: RawUpdate[] };
 
 let seq = 1000;
 /** One raw work item as the batch call returns it. `desc` and `ac` are HTML, like DevOps's. */
-export function aRawItem(o: { id?: number; type?: string; state?: string; title?: string; parent?: number | null; created?: string; activated?: string | null; closed?: string | null; desc?: string; ac?: string; tags?: string; comments?: number; points?: number | null; rev?: number; updates?: RawUpdate[] } = {}): RawItem {
+export function aRawItem(o: { id?: number; type?: string; state?: string; title?: string; parent?: number | null; created?: string; activated?: string | null; closed?: string | null; desc?: string; ac?: string; tags?: string; comments?: number; points?: number | null; rev?: number; updates?: RawUpdate[]; /** WP-2: its area path and project (none: the client's first project, its root area). */ area?: string; project?: string } = {}): RawItem {
   const id = o.id ?? ++seq;
   const fields: Record<string, unknown> = {
     "System.Id": id,
@@ -20,6 +21,8 @@ export function aRawItem(o: { id?: number; type?: string; state?: string; title?
     "System.CommentCount": o.comments ?? 0,
   };
   if (o.parent) fields["System.Parent"] = o.parent;
+  if (o.area) fields["System.AreaPath"] = o.area;
+  if (o.project) fields["System.TeamProject"] = o.project;
   if (o.activated) fields["Microsoft.VSTS.Common.ActivatedDate"] = o.activated;
   if (o.closed) fields["Microsoft.VSTS.Common.ClosedDate"] = o.closed;
   if (o.desc) fields["System.Description"] = o.desc;
@@ -49,8 +52,14 @@ export type FakeReader = PatternsReader & {
   before?: (op: string, client: string) => void | Promise<void>;
 };
 
-/** A fake DevOps over fictional projects: WIQL by created month, the oldest item, batch reads and updates. */
-export function fakePatternsReader(projects: Record<string, RawItem[]>, o: { process?: ProcessFacts } = {}): FakeReader {
+/**
+ * A fake DevOps over fictional projects: WIQL by created month (per project), the oldest item, batch reads and updates,
+ * each client's projects (`o.projects`, else one named after the client) and their trees (`o.trees`, else the root and
+ * the areas its items use, no teams).
+ */
+export function fakePatternsReader(projects: Record<string, RawItem[]>, o: { process?: ProcessFacts; projects?: Record<string, string[]>; trees?: Record<string, Partial<ProjectTree>[]> } = {}): FakeReader {
+  const projectsOf = (k: string) => o.projects?.[k] ?? [k];
+  const projectOf = (k: string, i: RawItem) => (i.fields["System.TeamProject"] as string | undefined) ?? projectsOf(k)[0]!;
   const calls: { op: string; client: string }[] = [];
   const read = new Map<string, number[]>();
   const failWith = new Map<string, Error>();
@@ -60,13 +69,23 @@ export function fakePatternsReader(projects: Record<string, RawItem[]>, o: { pro
     failWith,
     waitWith: () => null,
     clients: async () => Object.keys(projects),
+    async projects(k) {
+      await hit("projects", k);
+      return projectsOf(k);
+    },
+    async areas(k, project) {
+      await hit("areas", k);
+      const set = o.trees?.[k]?.find((t) => t.project === project);
+      const seen = [...new Set((projects[k] ?? []).filter((i) => projectOf(k, i) === project).map((i) => i.fields["System.AreaPath"] as string | undefined).filter((a): a is string => !!a && a !== project))].sort();
+      return { project, root: project, paths: [project, ...seen], areasProblem: null, teams: [], teamsProblem: null, ...set };
+    },
     async process(k) {
       await hit("process", k);
       return o.process ?? aProcess();
     },
-    async ids(k, wiql, top) {
+    async ids(k, wiql, top, project) {
       await hit("ids", k);
-      const items = projects[k] ?? [];
+      const items = (projects[k] ?? []).filter((i) => !project || projectOf(k, i) === project);
       const created = (i: RawItem) => String(i.fields["System.CreatedDate"]);
       const range = /\[System\.CreatedDate\] >= '([^']+)' AND \[System\.CreatedDate\] < '([^']+)'/.exec(wiql);
       if (range) return items.filter((i) => created(i) >= range[1]! && created(i) < range[2]!).map((i) => i.id).slice(0, top);
