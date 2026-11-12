@@ -746,3 +746,13 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - A block's hours are its working bounds. The early flex time that joins the morning's working windows (D122) sits before the morning block's start, so it gets no mark. Right?
 - CV-3's overdue promises are still drawn "at now" on today's home block (`homeRail`), clamped to a block outside hours. That is a promise, not a now mark, so it is unchanged here. Should it move too?
 
+
+## BL-1
+
+- Stale is counted in Needs attention only for items that are already its candidates (near the top of the backlog, dated in the next 4 weeks, or mine) and that I may change. Taken as the reading that shows less. Should every stale item I may change count, wherever it sits?
+- A calm health (On track, Done) goes after the gaps in the Status chip, so a feature that is On track but unassigned reads Unassigned first. The brief said the health comes first; this reads the brief as "never lead with a reason that asks for nothing". Right?
+- Collapse all from ⋯ changes the level shown, so the Filter button's count goes up by one. Should folding count as a filter?
+- The Showing line names the level only through the one-level list ("Stories only, in rank order"), not Levels by itself (Epics, Features). The Filter button's count covers it. Enough?
+- The change set pill moved from its own row into the header row beside the title, so it no longer takes a row. Is it seen enough there?
+- One level as a list has no 40-row limit any more (the client fold and Needs attention's Show more are the limits). With 500 stories that is a long page. Bring back a per-client limit?
+- A Guide link that turns a filter on (`#/backlog/attention`, `#/backlog/stories`) reads back as `#/backlog` once the filter is on, so Back after it returns to the plain Grid with the filter still on (it lives in the query). Right?
