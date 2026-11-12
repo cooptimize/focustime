@@ -1,5 +1,5 @@
-// Step 16.2, NV-1, WD-1, RF-1, WD-2: where the window is. Five tabs (Day · Week · Ahead · Status · Inbox), a mode switch on Ahead
-// (Grid · Gantt · Gaps · Backlog), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
+// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1: where the window is. Five tabs (Day · Week · Backlog · Status · Inbox), a view switch
+// on Backlog (Grid · Gantt; the code name stays "ahead"), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
 import type { Half, IsoDate } from "../week/types.ts";
@@ -11,7 +11,8 @@ import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.
 export const TABS = ["today", "week", "ahead", "status", "inbox"] as const;
 export type Tab = (typeof TABS)[number];
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
-export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Ahead", inbox: "Inbox", status: "Status" };
+/** BL-1: the Ahead tab is called Backlog (its code name stays "ahead"). */
+export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status" };
 
 /** NV-1: Today has no modes. Its Midday check-in and Close out are flows its cards open over the same page. */
 export const TODAY_FLOWS = ["checkin", "closeout"] as const;
@@ -22,13 +23,18 @@ export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in
  * and Plan the day are gone: adding work is the block panel beside the week.
  */
 export type WeekMode = "board" | "team";
-/** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
-export type AheadMode = "grid" | "gantt" | "fix" | "backlog";
+/**
+ * AH-1 (D653): Ahead is one model in views. BL-1: two, Grid and Gantt; Readiness is the Grid's Needs attention filter
+ * and the old Backlog mode is the Grid showing one level as a list.
+ */
+export type AheadMode = "grid" | "gantt";
+/** BL-1: what an old address (#/ahead/fix, #/ahead/backlog) turns on in the Grid when it lands. */
+export type AheadPreset = "attention" | "stories";
 
-export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Readiness", backlog: "Backlog" } as const;
+export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt", "fix", "backlog"], inbox: [], status: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [] };
 
 /** IB-1: the Inbox's views in its address (#/inbox/needs-you …). */
 export const INBOX_VIEW_SLUGS: Record<InboxPlace, string> = { everything: "everything", needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
@@ -52,7 +58,7 @@ export type Nav =
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; add: AddAt | null }
   /** SR-3: Status opened on Needs your update (#/status/needs). */
   | { tab: "status"; group?: "needs" }
-  | { tab: "ahead"; mode: AheadMode; item?: number }
+  | { tab: "ahead"; mode: AheadMode; item?: number; /** BL-1: an old address's filter, applied once on arrival. */ preset?: AheadPreset }
   /**
    * IB-1: one list with views. `view` null is the bare #/inbox (IB-2: Everything);
    * `item` is the item open in the detail pane (#/inbox/item/<key>), which picks a view it's in when `view` is null.
@@ -81,7 +87,7 @@ export const navOf = {
   weekAdd: (week: IsoDate | null = null): Nav => ({ tab: "week", mode: "board", week: week === null ? null : mondayOf(week), add: { date: null, half: null } }),
   /** WD-1: the Status tab (was Week › Status). */
   status: (): Nav => ({ tab: "status" }),
-  ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),
+  ahead: (mode: AheadMode = "grid", preset?: AheadPreset): Nav => (preset ? { tab: "ahead", mode, preset } : { tab: "ahead", mode }),
   /** AH-1: one item, selected in the Grid (#/ahead/item/<id>), from a notice. */
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
   /** SR-3: Week › Status on its Needs your update group (the nudge's click). */
@@ -205,7 +211,8 @@ export function hashOf(l: Loc): string {
     if (n.add) return n.week ? `#/week/${n.week}/add` : "#/week/add";
     return ["#/week", n.week].filter(Boolean).join("/");
   }
-  if (n.tab === "ahead") return (n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.mode === "backlog" ? "#/ahead/backlog" : n.item ? `#/ahead/item/${n.item}` : "#/ahead") + (aheadQuery ? `?${aheadQuery}` : "");
+  // BL-1: the Backlog tab's addresses are #/backlog and #/backlog/gantt (#/ahead… still lands).
+  if (n.tab === "ahead") return (n.mode === "gantt" ? "#/backlog/gantt" : n.item ? `#/backlog/item/${n.item}` : "#/backlog") + (aheadQuery ? `?${aheadQuery}` : "");
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${INBOX_VIEW_SLUGS[n.view]}` : "#/inbox";
@@ -222,6 +229,8 @@ export function hashOf(l: Loc): string {
  * (a mode switch, Back, a copied link) carries them. Other tabs' addresses never do.
  */
 let aheadQuery = "";
+/** The Backlog tab's addresses (#/backlog…, and #/ahead… before BL-1): the only ones that carry a query. */
+export const AHEAD_ADDRESS = /^#\/?(ahead|backlog)(\/|$)/;
 export const setAheadQuery = (q: string) => void (aheadQuery = q);
 /** The query part of an address ("" when there is none). */
 export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
@@ -231,7 +240,7 @@ export function parseHash(full: string): Loc | null {
   // AH-6: only Ahead's addresses carry a query (its filters and view, #/ahead/gantt?c=northwind&l=epic).
   const qi = full.indexOf("?");
   const hash = qi < 0 ? full : full.slice(0, qi);
-  if (qi >= 0 && (!/^#\/?ahead(\/|$)/.test(hash) || full.length - qi > 1200)) return null;
+  if (qi >= 0 && (!AHEAD_ADDRESS.test(hash) || full.length - qi > 1200)) return null;
   if (hash.length > 160) return null;
   const parts = hash.replace(/^#\/?/, "").split("/").filter((p) => p !== "");
   const [tab, a, b, c, ...rest] = parts;
@@ -329,10 +338,18 @@ export function parseHash(full: string): Loc | null {
       if (validDate(a) && b === "add") return c === undefined ? plain(navOf.weekAdd(a)) : null;
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
+    // BL-1: #/backlog and #/backlog/gantt; every #/ahead address before it lands: #/ahead on the Grid, #/ahead/plan
+    // (Plan ahead before AH-1) on the Gantt, #/ahead/fix (Readiness) on the Grid with Needs attention on, and
+    // #/ahead/backlog (the Backlog mode) on the Grid showing stories only.
+    case "backlog":
     case "ahead":
       if (a === "item") return c === undefined && b !== undefined && ID.test(b) ? plain(navOf.aheadItem(Number(b))) : null;
-      // AH-1: #/ahead/plan (Plan ahead before AH-1) lands on the Gantt.
-      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" || a === "gaps" ? plain(navOf.ahead("fix")) : a === "backlog" ? plain(navOf.ahead("backlog")) : null;
+      if (b !== undefined) return null;
+      if (a === undefined || a === "grid") return plain(navOf.ahead());
+      if (a === "gantt" || a === "plan") return plain(navOf.ahead("gantt"));
+      if (a === "fix" || a === "gaps" || a === "readiness" || a === "attention") return plain(navOf.ahead("grid", "attention"));
+      if (a === "backlog" || a === "stories") return plain(navOf.ahead("grid", "stories"));
+      return null;
     // Before NV-1: Roadmap and Roadmap › Plan ahead.
     case "roadmap":
       return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "ahead" ? plain(navOf.ahead("gantt")) : null;
@@ -430,10 +447,9 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.ahead(), overlay: null };
     case "ahead": return { nav: navOf.ahead("gantt"), overlay: null };
-    // QF-1: Fix next is called Gaps (the mode's code name stays "fix").
-    case "gaps": return { nav: navOf.ahead("fix"), overlay: null };
-    // BH-1: the stack-ranked backlog across clients.
-    case "backlog": return { nav: navOf.ahead("backlog"), overlay: null };
+    // BL-1: Readiness (Fix next, Gaps) is the Grid's Needs attention; the Backlog mode is the Grid's stories in rank order.
+    case "gaps": return { nav: navOf.ahead("grid", "attention"), overlay: null };
+    case "backlog": return { nav: navOf.ahead("grid", "stories"), overlay: null };
     // WD-1: the old planning places are Week with the block panel.
     case "planday": return { nav: navOf.addWork(), overlay: null };
     case "planweek":

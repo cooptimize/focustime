@@ -77,11 +77,14 @@ export type FixItem = GapItem & {
   mine: boolean;
   /** AH-7: DevOps's values when `start`, `target`, `size` and the assignee show my pending changes (what it had). */
   raw?: Pick<GapItem, "start" | "target" | "size" | "assigneeEmail">;
+  /** BL-1: no change in DevOps for the person's weeks (Settings › Backlog): something to look at, like a gap. */
+  stale?: boolean;
 };
 export type FixClient = { clientKey: string; /** The process's order field; null: rank by target date. */ orderField: string | null; gaps: readonly GapKind[]; items: readonly FixItem[] };
 
 export type FixEntry = {
-  key: string; clientKey: string; itemId: number; gaps: GapKind[]; action: GapKind; /** Why it's a candidate. */ why: ("top" | "window" | "mine")[];
+  key: string; clientKey: string; itemId: number; gaps: GapKind[]; /** BL-1: "stale" when Stale is all it has. */ action: GapKind | "stale"; /** Why it's a candidate. */ why: ("top" | "window" | "mine")[];
+  /** BL-1: stale (open, mine to change, no change in DevOps for the person's weeks). */ stale?: boolean;
   /** AH-7: its target, else its start (Start here's "dated soonest"). */ due?: string | null;
   /** AH-7: assigned to me. */ mine?: boolean;
   /** AH-7: just fixed in the change set, shown fading out (its gaps are the ones it had). */ leaving?: boolean;
@@ -132,7 +135,9 @@ export function fixClient(c: FixClient, o: { today: string; topN?: number; pendi
   for (const i of c.items) {
     if (!i.inScope) continue;
     const had = gapsOf(i.raw ? { ...i, ...i.raw } : i, [], c.gaps);
-    if (!had.length) continue;
+    // BL-1: Stale counts like a gap (only on open items I may change), and stays until DevOps changes.
+    const stale = i.stale === true && i.open && i.canEdit;
+    if (!had.length && !stale) continue;
     const now = gapsOf(i, o.pending ?? [], c.gaps);
     const key = entryKey(c.clientKey, i.id);
     const why: FixEntry["why"] = [];
@@ -141,10 +146,10 @@ export function fixClient(c: FixClient, o: { today: string; topN?: number; pendi
     if ((i.tier !== "story" && i.mine) || (i.tier === "feature" && i.parentId !== null && ownEpics.has(i.parentId))) why.push("mine");
     if (!why.length) continue;
     for (const g of had) if (!now.includes(g)) pending.push({ key, gap: g });
-    const leaving = !now.length && o.leaving?.has(key) === true;
+    const leaving = !now.length && !stale && o.leaving?.has(key) === true;
     const gaps = leaving ? had : now;
-    if (!gaps.length) continue;
-    const e = { key, clientKey: c.clientKey, itemId: i.id, gaps, action: gaps[0]!, why, due: i.target ?? i.start, mine: i.mine, ...(leaving ? { leaving: true } : {}), item: i };
+    if (!gaps.length && !stale) continue;
+    const e = { key, clientKey: c.clientKey, itemId: i.id, gaps, action: gaps[0] ?? ("stale" as const), why, due: i.target ?? i.start, mine: i.mine, ...(stale ? { stale: true } : {}), ...(leaving ? { leaving: true } : {}), item: i };
     (o.skipped?.has(key) ? skipped : entries).push(e);
   }
   const sort = (xs: typeof entries) =>
@@ -193,5 +198,5 @@ export function fixRows(g: FixGroup, items: readonly Pick<FixItem, "id" | "paren
   return out;
 }
 
-/** How many entries across clients (the header's "Fix next · N"). */
+/** How many entries across clients (BL-1: the Needs attention chip's count). */
 export const fixCount = (groups: readonly FixGroup[]) => groups.reduce((n, g) => n + g.entries.filter((e) => !e.leaving).length, 0);
