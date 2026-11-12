@@ -1,15 +1,17 @@
 // WP-1, WP-2: classification, the pure parts. The starting list of request types (a hypothesis), the fixed label
 // values, which items are classified (WP-2: every item in scope whose kind isn't Leave out), the request each batch
 // sends (item text as data, under aliases), validating an answer item by item (a partly valid answer keeps its valid
-// items), the merge of "other" suggestions into a second list, the agreement sample (WP-2: at least 100 items, or all)
-// and the feature shapes (WP-2: as a set and as an ordered chain). Nothing here stores or logs text.
+// items), the "other" suggestions, the agreement sample (WP-2: at least 100 items, or all), agreement (WP-3: per missing
+// fact and per layer, and the request types the two answers disagreed on) and the feature shapes (a set; WP-3 dropped
+// the chain). Nothing here stores or logs text. WP-3: no AI request writes a list; the list in use is a person's
+// (plan/patterns/owned.ts).
 //
 // WP-2: a request type is always a best guess from the list, "other", or "can't tell". How unclear an item is goes in
 // readiness ("too thin to tell"), never in the request type: names like "needs clarification" are never a type.
 import type { JsonSchema } from "../../ai/types.ts";
 import { safeText } from "./inventory.ts";
 import type { Kind } from "./kinds.ts";
-import type { Labels, RequestType, TypeChange, TypeList } from "./types.ts";
+import type { Labels, RequestType, TypeList } from "./types.ts";
 
 // ---------- the fixed values ----------
 
@@ -76,24 +78,23 @@ export function hashUnit(id: number, salt: string): number {
   return ((h >>> 0) % 1_000_000) / 1_000_000;
 }
 
-/** Pass 1's sample: about `n` items of a client, spread across types (the same items every time). */
-export function pass1Sample<T extends { id: number; type: string }>(items: readonly T[], n = 150): T[] {
-  if (items.length <= n) return [...items];
-  return [...items].sort((a, b) => hashUnit(a.id, "pass1") - hashUnit(b.id, "pass1")).slice(0, n);
-}
-
 /** WP-2: the agreement sample is at least this many items (or every item when there are fewer), and at least 5%. */
 export const AGREE_MIN = 100;
 export const AGREE_SHARE = 0.05;
 /**
  * The agreement sample across a run's clients: the same items every time for the same items (Resume, a rerun), at
- * least AGREE_MIN of them or all, spread across clients by a stable hash. Keys are `${client}\u0000${id}`.
+ * least AGREE_MIN of them or all, spread across clients by a stable hash. Keys are `${client}\u0000${id}`. WP-3: items
+ * in `skip` (their second answer failed its check) give their place to the next ones, so the next run tops the sample
+ * up to its size.
  */
-export function agreementPick(clients: readonly { key: string; ids: readonly number[] }[], min = AGREE_MIN, share = AGREE_SHARE): Set<string> {
+export function agreementPick(clients: readonly { key: string; ids: readonly number[] }[], min = AGREE_MIN, share = AGREE_SHARE, skip: ReadonlySet<string> = new Set()): Set<string> {
   const all = clients.flatMap((c) => c.ids.map((id) => ({ k: `${c.key}\u0000${id}`, h: hashUnit(id, `agree:${c.key.toLowerCase()}`) })));
-  const n = Math.min(all.length, Math.max(min, Math.ceil(all.length * share)));
-  return new Set(all.sort((a, b) => a.h - b.h || a.k.localeCompare(b.k)).slice(0, n).map((x) => x.k));
+  const n = sampleSize(all.length, min, share);
+  return new Set(all.filter((x) => !skip.has(x.k)).sort((a, b) => a.h - b.h || a.k.localeCompare(b.k)).slice(0, n).map((x) => x.k));
 }
+
+/** How many items the agreement sample asks for, out of `total`. */
+export const sampleSize = (total: number, min = AGREE_MIN, share = AGREE_SHARE): number => Math.min(total, Math.max(min, Math.ceil(total * share)));
 
 // ---------- the request ----------
 
@@ -155,7 +156,7 @@ export const CLASSIFY_SCHEMA: JsonSchema = {
   },
 };
 
-const norm = (s: unknown) => (typeof s === "string" ? s.trim().toLowerCase().replace(/\s+/g, " ") : "");
+export const norm = (s: unknown) => (typeof s === "string" ? s.trim().toLowerCase().replace(/\s+/g, " ") : "");
 const inList = <T extends string>(list: readonly T[], v: unknown): T | null => list.find((x) => x.toLowerCase() === norm(v)) ?? null;
 const shortText = (v: unknown, max: number): string | null => {
   if (typeof v !== "string") return null;
@@ -194,11 +195,15 @@ export function parseLabels(raw: unknown, refs: readonly string[], list: TypeLis
   return { labels: out, dropped: refs.filter((r) => !out.has(r)).length };
 }
 
-// ---------- the merge of "other" suggestions ----------
+// ---------- "other" suggestions ----------
 
 export type Suggestion = { name: string; meaning: string; count: number };
 
-/** The suggestions from all clients' pass 1, grouped by name (case folded), with counts. Names and meanings only. */
+/**
+ * The names given to items labeled "other", grouped by name (case folded), with counts. Names and meanings only; a
+ * name about how unclear an item is never counts. WP-3: shown under the list in use as "Suggested for other"; nothing is
+ * added to the list without a person's press (the AI merge that wrote a second list is gone).
+ */
 export function suggestionsOf(labels: readonly Labels[]): Suggestion[] {
   const m = new Map<string, Suggestion>();
   for (const l of labels) {
@@ -211,93 +216,71 @@ export function suggestionsOf(labels: readonly Labels[]): Suggestion[] {
   return [...m.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 80);
 }
 
-/**
- * The same suggested names and list give the same fingerprint: a rerun with no new name reuses the saved second list.
- * Names only, never their counts: a few more items suggesting the same names must not make a new list (and relabel
- * every item at a cost the estimate didn't name).
- */
-export function fingerprintOf(list: TypeList, s: readonly Suggestion[]): string {
-  let h = 2166136261;
-  for (const c of JSON.stringify([list.version, [...new Set(s.map((x) => norm(x.name)))].sort()])) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  // WP-2: "w2" so a WP-1 list (which may name how unclear an item is) is never reused.
-  return `w2f${(h >>> 0).toString(16)}`;
-}
-
-export const MERGE_INSTRUCTIONS = [
-  "You maintain a list of request types for a data and analytics team's backlog. You get the current list (names and meanings) and suggestions for new types (generic names, one-line meanings and how often each was suggested). There is no item text.",
-  "Return a second version of the list: merge, split, rename or add types where the suggestions show a real gap; keep a type unchanged otherwise. Leave out \"other\" and \"can't tell\": they are always added at the end.",
-  "A type names the kind of work asked for. Never add a type that says how unclear, thin or incomplete an item is (such as needing clarification): that is readiness, not a request type.",
-  "Every type has a name (two to five plain words), a one-line meaning and a made-up example request (one short line, no real company, product, client or person names).",
-  "List each change with its kind (merge, split, rename, add), the names it came from (current types or suggestions), the names it became, and a one-line reason.",
-  "Use generic words only. Never name a client, company, product or person.",
-].join("\n");
-
-export const MERGE_SCHEMA: JsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["types", "changes"],
-  properties: {
-    types: { type: "array", maxItems: 30, items: { type: "object", additionalProperties: false, required: ["name", "meaning", "example"], properties: { name: { type: "string" }, meaning: { type: "string" }, example: { type: "string" } } } },
-    changes: { type: "array", maxItems: 30, items: { type: "object", additionalProperties: false, required: ["kind", "from", "to", "reason"], properties: { kind: { type: "string", enum: ["merge", "split", "rename", "add"] }, from: { type: "array", maxItems: 10, items: { type: "string" } }, to: { type: "array", maxItems: 10, items: { type: "string" } }, reason: { type: "string" } } } },
-  },
-};
-
-export const mergeInput = (list: TypeList, s: readonly Suggestion[]): string =>
-  JSON.stringify({ current: list.types.map((t) => ({ name: t.name, meaning: t.meaning })), suggestions: s.map((x) => ({ name: x.name, meaning: x.meaning, count: x.count })) });
-
-/**
- * The second list from the merge answer: names unique and short, "other" kept last, each change's count from what it
- * came from (pass 1 counts of those names and suggestions). Null when the answer can't make a usable list.
- */
-export function listFromMerge(raw: unknown, _base: TypeList, s: readonly Suggestion[], pass1Counts: ReadonlyMap<string, number>, at: string, version: string, fingerprint: string): TypeList | null {
-  const o = raw && typeof raw === "object" ? (raw as { types?: unknown; changes?: unknown }) : null;
-  if (!o || !Array.isArray(o.types) || !Array.isArray(o.changes)) return null;
-  const seen = new Set<string>();
-  const types: RequestType[] = [];
-  for (const t of o.types as Record<string, unknown>[]) {
-    const name = shortText(t?.name, 60);
-    const meaning = shortText(t?.meaning, 200);
-    const example = typeof t?.example === "string" ? t.example.replace(/\s+/g, " ").trim().slice(0, 200) : "";
-    if (!name || !meaning || seen.has(norm(name)) || FIXED.includes(norm(name)) || isUnclearName(name)) continue;
-    seen.add(norm(name));
-    types.push({ name, meaning, example });
-  }
-  if (types.length < 3) return null;
-  types.push(...STARTING_TYPES.filter((t) => FIXED.includes(t.name)));
-  const countOf = (n: string) => pass1Counts.get(norm(n)) ?? s.find((x) => norm(x.name) === norm(n))?.count ?? 0;
-  const changes: TypeChange[] = [];
-  for (const c of o.changes as Record<string, unknown>[]) {
-    const kind = c?.kind;
-    if (kind !== "merge" && kind !== "split" && kind !== "rename" && kind !== "add") continue;
-    const from = Array.isArray(c.from) ? (c.from as unknown[]).map((x) => shortText(x, 60)).filter((x): x is string => !!x) : [];
-    const to = Array.isArray(c.to) ? (c.to as unknown[]).map((x) => shortText(x, 60)).filter((x): x is string => !!x) : [];
-    const reason = shortText(c.reason, 300) ?? "";
-    if (!to.length || to.some(isUnclearName)) continue;
-    changes.push({ kind, from, to, reason, count: from.reduce((n, f) => n + countOf(f), 0) });
-  }
-  return { version, createdAt: at, types, changes, fingerprint };
-}
-
-/** pass 1's labels, counted by request type name (case folded) and by "other" suggestion name. */
-export function pass1Counts(labels: readonly Labels[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const l of labels) {
-    const k = norm(l.requestType === OTHER && l.otherName ? l.otherName : l.requestType);
-    m.set(k, (m.get(k) ?? 0) + 1);
-  }
-  return m;
-}
-
 // ---------- agreement and shapes ----------
 
-export type Agreement = { pairs: number; requestType: number | null; layers: number | null; readiness: number | null; missing: number | null; confidence: number | null };
+/** WP-3: for one missing fact or layer, the pairs that had it in either answer, and in both. */
+export type FactAgree = { either: number; both: number };
+export type Agreement = {
+  pairs: number;
+  /** Shares of pairs whose answers matched as a whole (layers and missing as whole lists: kept, no longer the headline). */
+  requestType: number | null;
+  layers: number | null;
+  readiness: number | null;
+  missing: number | null;
+  confidence: number | null;
+  /** WP-3: the matching pairs, counted, so clients add up exactly. */
+  same: { requestType: number; readiness: number; confidence: number };
+  /** WP-3: per missing fact and per layer ("none" left out), the pairs with it in either answer and in both. */
+  facts: { missing: Record<string, FactAgree>; layers: Record<string, FactAgree> };
+  /** WP-3: request types the two answers disagreed on, "a\u0000b" in name order, with how many pairs. */
+  typePairs: Record<string, number>;
+};
 
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 export function agreementOf(pairs: readonly [Labels, Labels][]): Agreement {
   const n = pairs.length;
-  const r = (f: (a: Labels, b: Labels) => boolean) => (n ? Math.round((pairs.filter(([a, b]) => f(a, b)).length / n) * 1000) / 1000 : null);
-  return { pairs: n, requestType: r((a, b) => a.requestType === b.requestType), layers: r((a, b) => sameSet(a.layers, b.layers)), readiness: r((a, b) => a.readiness === b.readiness), missing: r((a, b) => sameSet(a.missing, b.missing)), confidence: r((a, b) => a.confidence === b.confidence) };
+  const count = (f: (a: Labels, b: Labels) => boolean) => pairs.filter(([a, b]) => f(a, b)).length;
+  const r = (c: number) => (n ? Math.round((c / n) * 1000) / 1000 : null);
+  const facts = { missing: {} as Record<string, FactAgree>, layers: {} as Record<string, FactAgree> };
+  const typePairs: Record<string, number> = {};
+  for (const [a, b] of pairs) {
+    for (const [key, list] of [["missing", MISSING], ["layers", LAYERS]] as const) {
+      for (const f of list) {
+        if (f === "none") continue;
+        const inA = a[key].includes(f);
+        const inB = b[key].includes(f);
+        if (!inA && !inB) continue;
+        const x = (facts[key][f] ??= { either: 0, both: 0 });
+        x.either++;
+        if (inA && inB) x.both++;
+      }
+    }
+    if (a.requestType !== b.requestType) {
+      const k = [a.requestType, b.requestType].sort((x, y) => x.localeCompare(y)).join("\u0000");
+      typePairs[k] = (typePairs[k] ?? 0) + 1;
+    }
+  }
+  const same = { requestType: count((a, b) => a.requestType === b.requestType), readiness: count((a, b) => a.readiness === b.readiness), confidence: count((a, b) => a.confidence === b.confidence) };
+  return { pairs: n, requestType: r(same.requestType), layers: r(count((a, b) => sameSet(a.layers, b.layers))), readiness: r(same.readiness), missing: r(count((a, b) => sameSet(a.missing, b.missing))), confidence: r(same.confidence), same, facts, typePairs };
 }
+
+/** WP-3: a fact or layer with fewer "either" pairs than this says "too few to read". */
+export const FACT_FEW = 20;
+/** WP-3: at or above this share (both of either) a fact's agreement is good enough to act on; below it, "not reliable yet". */
+export const RELIABLE = 0.7;
+export type FactReading = FactAgree & { share: number | null; few: boolean; reliable: boolean };
+/** How to read one fact's agreement: its share, too few under 20 "either" pairs, reliable at 70% and up. */
+export function factReading(f: FactAgree | undefined): FactReading {
+  const either = f?.either ?? 0;
+  const both = f?.both ?? 0;
+  const share = either ? both / either : null;
+  const few = either < FACT_FEW;
+  return { either, both, share, few, reliable: !few && share !== null && share >= RELIABLE };
+}
+
+/** The most common request type disagreements: [a, b, pairs], most first. */
+export const disagreements = (a: Agreement, n = 8): [string, string, number][] =>
+  Object.entries(a.typePairs ?? {}).map(([k, v]) => [...(k.split("\u0000") as [string, string]), v] as [string, string, number]).sort((x, y) => y[2] - x[2] || x[0].localeCompare(y[0])).slice(0, n);
 
 /** A parent's shape as a set: the layers its classified children touch, in the layers' own order ("none" left out). */
 export function shapeOf(children: readonly Labels[]): string[] {
@@ -305,23 +288,13 @@ export function shapeOf(children: readonly Labels[]): string[] {
   return LAYERS.filter((l) => l !== "none" && touched.has(l));
 }
 
-/**
- * WP-2: a parent's shape as an ordered chain: the layers its classified children touch, in the order the children were
- * created (each layer at its first appearance; "none" left out). Two parents touching the same layers in a slightly
- * different order have the same set and different chains.
- */
-export function chainOf(children: readonly { createdAt: string | null; id: number; labels: Labels }[]): string[] {
-  const out: string[] = [];
-  const order = [...children].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.id - b.id);
-  for (const c of order) for (const l of LAYERS) if (l !== "none" && c.labels.layers.includes(l) && !out.includes(l)) out.push(l);
-  return out;
-}
-
 /** WP-2: only parents with at least this many classified children have a shape. */
 export const SHAPE_MIN_CHILDREN = 2;
+/** WP-3: only the ten most common shapes are shown (the set view; the chain view is gone). */
+export const SHAPES_SHOWN = 10;
 
-/** The most common shapes per request type of the parent: [type, shape, count], most common first. */
-export function commonShapes(parents: readonly { type: string; shape: readonly string[] }[], top = 5): { requestType: string; shape: string[]; count: number }[] {
+/** The most common shapes ([type of the parent, shape, count]), most common first, the ten most common only. */
+export function commonShapes(parents: readonly { type: string; shape: readonly string[] }[], top = SHAPES_SHOWN): { requestType: string; shape: string[]; count: number }[] {
   const m = new Map<string, { requestType: string; shape: string[]; count: number }>();
   for (const p of parents) {
     if (!p.shape.length) continue;
@@ -330,7 +303,5 @@ export function commonShapes(parents: readonly { type: string; shape: readonly s
     if (hit) hit.count++;
     else m.set(k, { requestType: p.type, shape: [...p.shape], count: 1 });
   }
-  const all = [...m.values()].sort((a, b) => b.count - a.count || a.requestType.localeCompare(b.requestType));
-  const per = new Map<string, number>();
-  return all.filter((x) => (per.set(x.requestType, (per.get(x.requestType) ?? 0) + 1).get(x.requestType)! <= top));
+  return [...m.values()].sort((a, b) => b.count - a.count || a.requestType.localeCompare(b.requestType) || a.shape.join().localeCompare(b.shape.join())).slice(0, top);
 }

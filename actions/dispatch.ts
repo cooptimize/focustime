@@ -2594,6 +2594,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "patterns.set_kind":
     case "patterns.check":
     case "patterns.download":
+    case "patterns.list_change":
+    case "patterns.suggestion":
       return patternsAction(patternsContext(ctx), action as PatternsAction, req.input);
     default: {
       const unhandled: never = action;
@@ -2648,6 +2650,13 @@ export function patternsContext(ctx: ActionContext): PatternsContext {
       return { deps: { ai: service, aiAllowed, directory, isInternal: (k: string) => internal.has(k) } };
     },
     now: () => ctx.now(),
+    // WP-3: who changed the request types list, by their directory name.
+    async nameOf(userId) {
+      if (!ctx.org) return null;
+      const entry = (await ctx.org.levels()).people.entry(userId);
+      const pid = entry?.dir?.personId;
+      return pid ? ((await ctx.org.store.directory()).find((d) => d.personId === pid)?.name ?? null) : null;
+    },
   };
 }
 

@@ -423,6 +423,8 @@ export const ACTIONS = [
   { name: "patterns.set_kind", title: "DevOps patterns: set a type's kind", group: "DevOps", target: "none", summary: "Build work, Tickets and support or Leave out, for one work item type of a client" },
   { name: "patterns.check", title: "DevOps patterns: check by hand", group: "DevOps", target: "none", summary: "30 labeled items of a client you're on, with links to DevOps" },
   { name: "patterns.download", title: "DevOps patterns: download", group: "DevOps", target: "none", summary: "The summary or the request types as Markdown (counts and meanings, no titles)" },
+  { name: "patterns.list_change", title: "DevOps patterns: change the request types list", group: "DevOps", target: "none", summary: "Add, rename, merge or remove a request type, or edit its meaning, as a new version with why (no AI)" },
+  { name: "patterns.suggestion", title: "DevOps patterns: ignore a suggestion", group: "DevOps", target: "none", summary: "Ignore a name suggested for \"other\", or bring it back" },
   { name: "meeting.rerun", title: "Propose again", group: "Meetings", target: "meeting", summary: "Runs the AI pass again on the stored transcript (reviewers only, while it's kept)" },
   { name: "link.open", title: "Open in browser", group: "Work items", target: "item", summary: "Open a work item in your browser" },
   // AS-1: the assistant. Its reads (assistant.today, lookup.day, items.get) are also on its allowlist; ask, confirm,

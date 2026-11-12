@@ -730,6 +730,18 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - From the review: a refusal before anything is sent (one item that still holds a secret or an outside address) counts as "the answer failed its check", though nothing was paid. A separate "not sent" reason?
 - From the review: the AI's "other" names go into the summary with client names and emails replaced; wording from an item could still echo in them. Show them only on the page?
 
+## WP-3
+
+- A merge carries the merged type's labels to the type it went into and asks for no relabeling (the brief said a merge "says how many items would need labeling again"; the page says the count and that none needs it). Relabel a merged type's items instead?
+- `own-1` adds "data migration". Labels carried from WP-2's list as "other" or "can't tell" aren't marked to label again for it (an add on a later version is). Mark them on the first run?
+- A carried label with no counterpart on the list in use counts as "other" and as needing a rerun; the next Estimate prices it. Fine, or leave it as "other" until someone asks?
+- WP-2's AI list added a type named differently from "data migration"; it has no counterpart, so its items count as "other" with the AI's name as a suggestion. Map it to "data migration" by hand once Tanner has read the suggestion?
+- The per-client tables are on the page for Build work only; Tickets and support has them in the summary. Add them to the page too?
+- Screenshots come from the live browser harness with fictional data (as WP-2's did), not the demo: the demo has no patterns reader. Give the demo one?
+- "Not reliable yet" is under 70% on 20 or more pairs, for every fact and layer. Right line?
+- A change to the list during a run applies to the next run; the running one keeps its list and its labels carry. Should a change wait until the run is done?
+- The sample's second answer is asked again for an item labeled again (its first answer changed). That doubles the cost of relabeling sample items. Keep the old pair instead?
+
 ## PS-1
 
 - "to place" stays the word for unfinished to-dos with no block ("7 to place · Review"), beside "unfinished" for a past day's. One word for both?

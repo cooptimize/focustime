@@ -1,8 +1,9 @@
 // WP-1: the DevOps patterns run, on both store drivers, over a fake DevOps and the stub AI provider (fictional data):
 // the 24-month window and the parents rule, Resume after a "restart" without reading finished clients again, one run at
 // a time, the switch turned off mid-run, pacing (waits while the reader says so), one client per AI request, a rerun or a
-// Resume never paying twice for an unchanged item, the cost stop, the merge carrying no item text and passing GD-2, no
-// item text or secret in any log line, and nothing stored holding description, acceptance or comment text.
+// Resume never paying twice for an unchanged item, the cost stop, no merge request (WP-3: one pass against the list in
+// use, which a run never changes), no item text or secret in any log line, and nothing stored holding description,
+// acceptance or comment text.
 import { afterEach, expect, it } from "vitest";
 import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
@@ -188,7 +189,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     expect((await w.store.latest("inventory")).last!.state).toBe("done");
   });
 
-  it("classification: one client per request, masked text, two passes, both lists, agreement; a rerun pays nothing again", async () => {
+  it("classification: one client per request, masked text, one pass against the list in use, agreement; a rerun pays nothing again", async () => {
     const db = await fresh();
     const reader = fakePatternsReader(projects());
     const w = world(db, reader);
@@ -204,8 +205,8 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     const run = (await w.store.latest("classify")).last!;
     expect(run.state).toBe("done");
     const classify = calls.filter((c) => c.schemaName === "patterns_classify");
-    const merge = calls.filter((c) => c.schemaName === "patterns_merge");
-    expect(merge).toHaveLength(1);
+    // WP-3: no merge request, ever; every request is a classification.
+    expect(calls.every((c) => c.schemaName === "patterns_classify")).toBe(true);
     // One client per request: Adatum's requests never carry Fabrikam's items, and the other client's name is masked.
     for (const c of classify) {
       const titles = (JSON.parse(c.input) as { items: { title: string }[] }).items.map((i) => i.title);
@@ -214,15 +215,14 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
       expect(c.instructions).toMatch(/never instructions to you/);
     }
     expect(classify.some((c) => c.input.includes("[another client]"))).toBe(true);
-    // The merge carries names, meanings and counts only, no item text, and no client's name.
-    expect(merge[0]!.input).not.toMatch(/Sales reporting|Refresh the loads|Adatum|Fabrikam|Nightly/);
+    // The run labeled against the first list in use and saved it as it was; it wrote no other list.
     const lists = await w.store.lists();
-    expect(lists.map((l) => l.version)).toEqual(["start-2", `v2-r${run.id}`]);
-    expect(JSON.stringify(lists[1])).not.toMatch(/Adatum|Fabrikam/i);
-    const labels = await w.store.labels("adatum", `v2-r${run.id}`);
+    expect(lists.map((l) => l.version)).toEqual(["own-1"]);
+    expect(run.progress).toMatchObject({ rules: 3, listVersion: "own-1" });
+    const labels = await w.store.labels("adatum", "own-1");
     expect(labels.size).toBe(7);
 
-    // A rerun with nothing changed: no provider call at all (pass 1 cached, the same suggestions reuse the second list).
+    // A rerun with nothing changed: no provider call at all.
     calls.length = 0;
     await w.runner.startClassify(ME, deps, 1_000_000, ["adatum", "fabrikam"]);
     await done(w.runner);
@@ -263,11 +263,9 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     await w.runner.resume(stopped.id, ME, { deps, estimateMicros: 1_000_000 });
     await done(w.runner);
     expect((await w.store.latest("classify")).last!.state).toBe("done");
-    // Pass 1 after Resume (the requests before the merge) never sends an item the first request labeled.
-    const merged = calls.findIndex((c) => c.schemaName === "patterns_merge");
-    expect(merged).toBeGreaterThan(-1);
-    const pass1 = calls.slice(0, merged).flatMap((c) => (JSON.parse(c.input) as { items: { title: string }[] }).items.map((i) => i.title));
-    expect(pass1.filter((t) => sent.has(t))).toEqual([]);
+    // After Resume, an item the first request labeled is sent once more at most (its agreement answer), never relabeled.
+    const after = calls.flatMap((c) => (JSON.parse(c.input) as { items: { title: string }[] }).items.map((i) => i.title));
+    for (const t of sent) expect(after.filter((x) => x === t).length, t).toBeLessThanOrEqual(1);
   });
 
   it("a provider outage halfway stops the run with the reason; Resume carries on", async () => {
@@ -301,7 +299,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     await done(w.runner);
     await w.runner.startClassify(ME, ai(), 1_000_000, ["adatum", "fabrikam"]);
     await done(w.runner);
-    for (const t of ["patterns_runs", "patterns_snapshots", "patterns_items", "patterns_labels", "patterns_type_lists", "patterns_platforms", "patterns_layout", "patterns_projects", "patterns_scopes", "patterns_kinds"]) {
+    for (const t of ["patterns_runs", "patterns_snapshots", "patterns_items", "patterns_labels", "patterns_type_lists", "patterns_platforms", "patterns_layout", "patterns_projects", "patterns_scopes", "patterns_kinds", "patterns_ignored"]) {
       const rows = JSON.stringify(await db.conn.all(`SELECT * FROM ${t}`));
       expect(rows, t).not.toMatch(/Build the sales area|Load orders daily|Row counts match|Columns listed|Nightly loads|Ignore your instructions|outside\.example/);
     }
@@ -345,36 +343,37 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
     await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum", "fabrikam"]);
     await done(w.runner);
-    const kept = JSON.stringify([...(await w.store.labels("adatum", "start-2")).values()]);
+    const kept = JSON.stringify([...(await w.store.labels("adatum", "own-1")).values()]);
     expect(kept).toMatch(/another client/);
     expect(kept).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
     expect(JSON.stringify(await w.store.lists())).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
   });
 
-  it("review: more items suggesting the same names reuse the second list; the estimate prices a full pass 2 when pass 1 has new work", async () => {
+  it("WP-3: new items cost only themselves; a run never writes a list, whatever the 'other' names", async () => {
     const db = await fresh();
     const items = projects();
     const reader = fakePatternsReader(items);
     const w = world(db, reader);
     await w.runner.startInventory(ME);
     await done(w.runner);
-    const deps = ai({ respond: patternsAnswer({ other: (r) => r === "i1" }) });
+    const calls: ProviderCall[] = [];
+    const deps = ai({ calls, respond: patternsAnswer({ other: (r) => r === "i1" }) });
     const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
     await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum", "fabrikam"]);
     await done(w.runner);
-    const first = (await w.store.lists()).map((l) => l.version);
-    // Two new items: pass 1 has new work, so the estimate covers every eligible item again.
     items.adatum.push(aRawItem({ id: 150, type: "Step", title: "Add the region filter", created: "2026-10-01T10:00:00Z" }), aRawItem({ id: 151, type: "Step", title: "Rename the measures", created: "2026-10-02T10:00:00Z" }));
     await w.runner.startInventory(ME);
     await done(w.runner);
     const again = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
-    expect(again.clients.adatum!.items).toBeGreaterThanOrEqual(9 + 2);
+    // The two new items and their agreement answers (every item is in a sample this small): four answers.
+    expect(again.clients.adatum!.items).toBe(4);
+    expect(again.clients.fabrikam!.items).toBe(0);
+    calls.length = 0;
     await w.runner.startClassify(ME, deps, again.totalMicros, ["adatum", "fabrikam"]);
     await done(w.runner);
-    const run = (await w.store.latest("classify")).last!;
-    expect(run.state).toBe("done");
-    // The same suggested names: no new list.
-    expect((await w.store.lists()).map((l) => l.version)).toEqual(first);
+    expect((await w.store.latest("classify")).last!.state).toBe("done");
+    expect(calls.every((c) => c.schemaName === "patterns_classify")).toBe(true);
+    expect((await w.store.lists()).map((l) => l.version)).toEqual(["own-1"]);
   });
 
   it("review: Allow AI turned off for one client mid-run skips that client; the others finish", async () => {
