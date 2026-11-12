@@ -5346,6 +5346,8 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .pat-section h3 { margin: 12px 0 0; }
 .pat-section h4 { margin: 8px 0 0; }
 .pat-buttons { flex-wrap: wrap; gap: 8px; }
+td > .pat-buttons { margin-top: 0; }
+.pat-change input:not([type="radio"]) { max-width: 420px; width: 100%; }
 .pat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
 .pat-detail { display: grid; gap: 6px; padding: 4px 0 12px 16px; border-left: 2px solid var(--border); }
 .pat-detail p { margin: 0; }

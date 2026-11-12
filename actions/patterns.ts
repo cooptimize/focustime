@@ -6,10 +6,17 @@
 // WP-2: each client's layout (projects, teams and area paths with counts and types; shown to anyone with the switch),
 // its analysis scope (the page's own, set here; Admin › Clients' scope is read as the starting point and never written),
 // each type's kind (guessed, or set here), and coverage: items in scope, labeled, and not labeled by reason.
+//
+// WP-3: the list in use is a person's. patterns.list_change previews (what it costs) and saves one change as a new
+// version (who, when, why), refused when someone saved another version since; patterns.suggestion ignores an "other"
+// suggestion or brings it back. Results are every item's newest label carried to the list in use (no AI): labels on a
+// list that can't be carried are counted "on an earlier list", or, when nothing carries at all, shown on their own list
+// with a note. Nothing here makes an AI request.
 import type { ActionResponse } from "./dispatch.ts";
 import type { ClassifyDeps, PatternsRunner } from "./patterns-run.ts";
-import { STARTING_LIST, WP1_START } from "../plan/patterns/labels.ts";
+import { STARTING_LIST, WP1_START, norm, suggestionsOf } from "../plan/patterns/labels.ts";
 import { handCheck, resultsOf, type ClientResults } from "../plan/patterns/results.ts";
+import { OWN_START, applyEdit, clientNamer, editCost, inUseOf, isAiList, isOwned, nameProblem, ownNumber, parseEdit, resolveLabels, withOwnStart, type Resolved, failuresOf } from "../plan/patterns/owned.ts";
 import { summaryMarkdown, typesMarkdown, type ReportClient } from "../plan/patterns/report.ts";
 import { levelsOf } from "../plan/patterns/levels.ts";
 import { windowFrom, type Snapshot } from "../plan/patterns/inventory.ts";
@@ -17,10 +24,10 @@ import { analysisOf, type ClientAnalysis } from "../plan/patterns/analysis.ts";
 import { KINDS, type Kind } from "../plan/patterns/kinds.ts";
 import { AnalysisScopeError, analysisScopeWords, layoutOf, matcherOf, parseAnalysisScope, sameScope, scopeChoice, type AnalysisScope, type Layout } from "../plan/patterns/scope.ts";
 import { scopeWords, type DevOpsScope } from "../plan/devops-scope.ts";
-import { PLATFORMS, type Platform } from "../plan/patterns/types.ts";
+import { PLATFORMS, type Labels, type Platform, type TypeList } from "../plan/patterns/types.ts";
 import type { ClientProgress, PatternsStore, Run } from "../store/patterns-store.ts";
 
-export const PATTERNS_ACTIONS = ["patterns.access", "patterns.status", "patterns.run_inventory", "patterns.estimate", "patterns.run_classification", "patterns.resume", "patterns.set_platform", "patterns.set_scope", "patterns.set_kind", "patterns.check", "patterns.download"] as const;
+export const PATTERNS_ACTIONS = ["patterns.access", "patterns.status", "patterns.run_inventory", "patterns.estimate", "patterns.run_classification", "patterns.resume", "patterns.set_platform", "patterns.set_scope", "patterns.set_kind", "patterns.check", "patterns.download", "patterns.list_change", "patterns.suggestion"] as const;
 export type PatternsAction = (typeof PATTERNS_ACTIONS)[number];
 
 /** The app-level parts (server/main.ts builds them where DevOps is read centrally). */
@@ -51,6 +58,10 @@ export type PatternsContext = {
   ai(): Promise<{ deps: ClassifyDeps } | { why: string }>;
   aiAllowed(clientKey: string): Promise<boolean>;
   now(): string;
+  /** WP-3: a FocusTime person's name for "who changed the list" (null: not known). */
+  nameOf?(userId: string): Promise<string | null>;
+  /** WP-3: every client the page covers (names, aliases, projects), with AI on or off, to check a request type's words. */
+  directory?(): Promise<readonly { key: string; names: readonly string[]; aliases?: readonly string[]; projects?: readonly string[]; exactCase?: boolean }[]>;
 };
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -70,37 +81,96 @@ function runView(r: Run | null) {
 }
 
 /**
- * The list version the results show: the newest second list whose classification finished (a run still labeling with a
- * new list, or stopped partway, leaves the previous results on screen), else the newest second list, else the starting one.
+ * WP-2's way, kept for a database where nothing carries to the list in use: the newest second list whose classification
+ * finished, else the newest second list, else the starting one.
  */
 async function shownVersion(store: PatternsStore): Promise<string> {
-  const second = (await store.lists()).filter((l) => l.version !== STARTING_LIST.version);
+  const second = (await store.lists()).filter((l) => isAiList(l.version));
   for (const l of [...second].reverse()) {
-    const id = /^v2-r(\d+)$/.exec(l.version)?.[1];
-    if (id && (await store.run(Number(id)))?.state === "done") return l.version;
+    if ((await store.run(Number(l.version.slice(4))))?.state === "done") return l.version;
   }
-  return second.at(-1)?.version ?? STARTING_LIST.version;
+  return second.at(-1)?.version ?? ((await store.lists()).some((l) => l.version === STARTING_LIST.version) ? STARTING_LIST.version : WP1_START);
 }
 
-/** The classify run a list version came from (v2-r<id>), or null for a starting list. */
+/** The classify run a WP-2 list version came from (v2-r<id>), or null. */
 async function runOfVersion(store: PatternsStore, version: string): Promise<Run | null> {
-  const id = /^v2-r(\d+)$/.exec(version)?.[1];
-  return id ? store.run(Number(id)) : null;
+  return isAiList(version) ? store.run(Number(version.slice(4))) : null;
+}
+
+/**
+ * WP-3: what the results are on. "in use": every item's newest label carried to the list in use (labels that can't be
+ * carried are counted "on an earlier list"). "earlier": nothing carries at all but labels exist, so they show on their
+ * own list (WP-2's way), never mixed with another list.
+ */
+type LabelView = { mode: "in use"; inUse: TypeList; lists: TypeList[] } | { mode: "earlier"; inUse: TypeList; lists: TypeList[]; version: string; run: Run | null };
+async function labelView(store: PatternsStore, keys: readonly string[]): Promise<LabelView> {
+  const lists = withOwnStart(await store.lists());
+  const inUse = inUseOf(lists);
+  let carried = 0;
+  let earlier = 0;
+  for (const k of keys) {
+    const r = resolveLabels(await store.allLabels(k), lists, inUse);
+    carried += r.carried.size;
+    earlier += r.earlier.size;
+  }
+  if (carried || !earlier) return { mode: "in use", inUse, lists };
+  const version = await shownVersion(store);
+  return { mode: "earlier", inUse, lists, version, run: await runOfVersion(store, version) };
+}
+
+/** One client's labels as the view shows them, with the items on an earlier list and the failed ones. */
+async function labelsFor(store: PatternsStore, k: string, v: LabelView): Promise<{ labels: Map<number, Resolved>; earlier: Map<number, string>; failedA: Map<number, number> }> {
+  if (v.mode === "earlier") {
+    const [labels, fails] = await Promise.all([store.labels(k, v.version), store.failures(k, v.version)]);
+    return { labels: new Map([...labels].map(([id, r]) => [id, { rev: r.rev, labels: r.labels, labelsB: r.labelsB, from: v.version, stale: null, failedB: false }])), earlier: new Map(), failedA: fails.a };
+  }
+  const rows = await store.allLabels(k);
+  const r = resolveLabels(rows, v.lists, v.inUse);
+  return { labels: r.carried, earlier: r.earlier, failedA: failuresOf(rows, v.lists, v.inUse).a };
 }
 
 /** Everything the page and the summary show for one client, worked out now. */
-type ClientView = { key: string; snapshot: Snapshot | null; analysis: ClientAnalysis | null; results: ClientResults | null; layout: Layout | null; scope: AnalysisScope | null };
-async function clientView(store: PatternsStore, k: string, o: { version: string; run: Run | null; snaps: Record<string, { runId: number; at: string; numbers: unknown }[]>; kinds: Record<string, Record<string, Kind>>; aiAllowed: boolean; now: string }): Promise<ClientView> {
+type ClientView = { key: string; snapshot: Snapshot | null; analysis: ClientAnalysis | null; results: ClientResults | null; layout: Layout | null; scope: AnalysisScope | null; labels: Map<number, Resolved> };
+async function clientView(store: PatternsStore, k: string, o: { view: LabelView; run: Run | null; snaps: Record<string, { runId: number; at: string; numbers: unknown }[]>; kinds: Record<string, Record<string, Kind>>; aiAllowed: boolean; now: string }): Promise<ClientView> {
   const snapshot = (o.snaps[k]?.[0]?.numbers as Snapshot | undefined) ?? null;
-  const [items, labels, fails, rows, trees] = await Promise.all([store.currentItems(k), store.labels(k, o.version), store.failures(k, o.version), store.layout(k), store.trees(k)]);
+  const [items, got, rows, trees] = await Promise.all([store.currentItems(k), labelsFor(store, k, o.view), store.layout(k), store.trees(k)]);
+  const labels = got.labels;
   const layout = trees.length || rows.length ? layoutOf(rows, trees) : null;
-  if (!snapshot) return { key: k, snapshot, analysis: null, results: null, layout, scope: null };
+  if (!snapshot) return { key: k, snapshot, analysis: null, results: null, layout, scope: null, labels };
   const analysis = analysisOf(items, o.kinds[k] ?? {}, { firstItemAt: snapshot.firstItemAt, windowFrom: snapshot.windowFrom ?? windowFrom(Temporal.Instant.from(o.now)) });
   const cp = o.run?.progress.clients[k];
-  const results = labels.size || fails.a.size || snapshot.run
-    ? resultsOf(items, labels, analysis.kindsMap, { read: snapshot.run?.read ?? null, outside: snapshot.run?.outside ?? null, skippedForAi: (cp?.state === "skipped" && /Allow AI/.test(cp.reason ?? "")) || (!labels.size && !o.aiAllowed), failed: new Set(items.filter((x) => (fails.a.get(x.id) ?? -1) >= x.rev).map((x) => x.id)), movedOut: new Set(cp?.outsideNow ?? []) })
+  const results = labels.size || got.failedA.size || got.earlier.size || snapshot.run
+    ? resultsOf(items, labels, analysis.kindsMap, { read: snapshot.run?.read ?? null, outside: snapshot.run?.outside ?? null, skippedForAi: (cp?.state === "skipped" && /Allow AI/.test(cp.reason ?? "")) || (!labels.size && !o.aiAllowed), failed: new Set(items.filter((x) => (got.failedA.get(x.id) ?? -1) >= x.rev).map((x) => x.id)), movedOut: new Set(cp?.outsideNow ?? []), earlier: new Set(got.earlier.keys()) })
     : null;
-  return { key: k, snapshot, analysis, results, layout, scope: snapshot.run?.scope ?? null };
+  return { key: k, snapshot, analysis, results, layout, scope: snapshot.run?.scope ?? null, labels };
+}
+
+/** The "other" suggestions across clients and per client, without ignored ones or any that names a client or how unclear an item is. */
+function suggestionsView(views: readonly ClientView[], ignored: readonly string[], namesClient: (t: string) => boolean, inUse: TypeList) {
+  // Not a name already on the list in use (it was added, or is a type already).
+  const usable = (n: string) => !ignored.includes(norm(n)) && !nameProblem(n, namesClient) && !inUse.types.some((t) => norm(t.name) === norm(n));
+  const others = (v: ClientView): Labels[] => [...v.labels.values()].map((r) => r.labels).filter((l) => l.otherName && usable(l.otherName));
+  const all = suggestionsOf(views.flatMap(others)).slice(0, 30);
+  const per = Object.fromEntries(views.map((v) => [v.key, Object.fromEntries(suggestionsOf(others(v)).map((x) => [norm(x.name), x.count]))]));
+  return all.map((x) => ({ name: x.name, meaning: x.meaning, count: x.count, clients: Object.fromEntries(Object.entries(per).filter(([, m]) => m[norm(x.name)]).map(([k, m]) => [k, m[norm(x.name)]!])) }));
+}
+
+/** Who made a version, as the page says it: "you", their name, or "someone with the page". */
+async function whoWords(pc: PatternsContext, me: string, by: string | null | undefined): Promise<string | null> {
+  if (!by) return null;
+  if (by.toLowerCase() === me.toLowerCase()) return "you";
+  return (await pc.nameOf?.(by).catch(() => null)) ?? "someone with the page";
+}
+
+/** Whether a text names any client the page covers (keys, and the names and aliases the person's AI directory knows). */
+async function namerFor(pc: PatternsContext, keys: readonly string[]): Promise<(t: string) => boolean> {
+  // The directory with AI on or off; without it (a context that has none), the AI's.
+  const fromAi = async () => {
+    const ai = await pc.ai().catch(() => null);
+    return ai && "deps" in ai ? ai.deps.directory : [];
+  };
+  const dir = pc.directory ? await pc.directory().catch(fromAi) : await fromAi();
+  return clientNamer([...keys.map((k) => ({ key: k, names: [] })), ...dir]);
 }
 
 const sortedKeys = (m: Record<string, string>) => Object.keys(m).sort().map((k) => [k, m[k]]);
@@ -122,14 +192,16 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
     case "patterns.status": {
       if (Object.keys(i).length) return bad("patterns.status takes {}");
       await runner.reconcile();
-      const [keys, mine, snaps, platforms, lists, inv, cls, scopes, kinds] = await Promise.all([pc.port.clients(), pc.myClients(), store.snapshots(), store.platforms(), store.lists(), store.latest("inventory"), store.latest("classify"), store.scopes(), store.kinds()]);
-      const version = await shownVersion(store);
-      const shownRun = await runOfVersion(store, version);
+      const [keys, mine, snaps, platforms, inv, cls, scopes, kinds, ignored] = await Promise.all([pc.port.clients(), pc.myClients(), store.snapshots(), store.platforms(), store.latest("inventory"), store.latest("classify"), store.scopes(), store.kinds(), store.ignored()]);
       const all = [...new Set([...keys, ...Object.keys(snaps)])].sort((a, b) => a.localeCompare(b));
+      const view = await labelView(store, all);
+      const shownRun = view.mode === "earlier" ? view.run : null;
+      const views: ClientView[] = [];
       const clients = await Promise.all(
         all.map(async (k) => {
           const [now, prev] = snaps[k] ?? [];
-          const v = await clientView(store, k, { version, run: shownRun, snaps, kinds, aiAllowed: await pc.aiAllowed(k).catch(() => false), now: pc.now() });
+          const v = await clientView(store, k, { view, run: shownRun ?? cls.last, snaps, kinds, aiAllowed: await pc.aiAllowed(k).catch(() => false), now: pc.now() });
+          views.push(v);
           const admin = (await pc.port!.adminScope?.(k).catch(() => null)) ?? null;
           const page = scopes[k]?.scope ?? null;
           const mainProject = (await pc.port!.projects?.(k).catch(() => []))?.[0] ?? v.layout?.projects[0]?.project ?? null;
@@ -163,6 +235,8 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
           };
         }),
       );
+      const namesClient = await namerFor(pc, all);
+      const versions = await Promise.all(view.lists.filter((l) => isOwned(l.version)).sort((a, b) => ownNumber(b.version) - ownNumber(a.version)).map(async (l) => ({ version: l.version, number: ownNumber(l.version), at: l.createdAt, by: await whoWords(pc, me, l.by), why: l.why ?? null, change: l.version === "own-1" ? null : (l.changes[0] ?? null) })));
       const ai = await pc.ai();
       return {
         ok: true,
@@ -170,9 +244,14 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
           clients,
           inventory: { last: runView(inv.last), lastDone: inv.done?.finishedAt ?? null },
           classify: { last: runView(cls.last), lastDone: cls.done?.finishedAt ?? null },
-          lists,
-          shownVersion: version,
-          shownRules: shownRun?.progress.rules ?? (version === WP1_START ? 1 : version === STARTING_LIST.version ? 2 : 1),
+          lists: view.lists,
+          inUse: view.inUse,
+          versions,
+          labelsOn: view.mode === "in use" ? { mode: "in use", version: view.inUse.version } : { mode: "earlier", version: view.version, wp1: view.version === WP1_START || (!!view.run && view.run.progress.rules !== 2) },
+          suggestions: suggestionsView(views, ignored, namesClient, view.inUse),
+          ignored,
+          shownVersion: view.mode === "in use" ? view.inUse.version : view.version,
+          shownRules: view.mode === "in use" ? 3 : view.version === WP1_START || (!!view.run && view.run.progress.rules !== 2) ? 1 : 2,
           ai: "why" in ai ? { ready: false, words: ai.why } : { ready: true, words: null },
         },
       };
@@ -200,7 +279,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const run = resumeId !== null ? await store.run(resumeId as number) : null;
       if (action === "patterns.resume" && run?.kind === "inventory") {
         const r = await runner.resume(run.id, me);
-        return r.ok ? { ok: true, data: { run: runView(r.run) } } : bad(r.why === "busy" ? "A run is going already" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : "That run can't be resumed", 409, r.why);
+        return r.ok ? { ok: true, data: { run: runView(r.run) } } : bad(r.why === "busy" ? "A run is going already" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : r.why === "list_changed" ? "The request types list changed since that run started. Run classification instead: the labels it made carry over." : "That run can't be resumed", 409, r.why);
       }
       // Classification: only after an estimate, and only for the total it named (a fresh estimate here must agree).
       if (typeof i.total !== "number" || !Number.isFinite(i.total) || i.total < 0) return bad("Estimate first: Run classification names the estimate's total", 422, "needs_estimate");
@@ -210,7 +289,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const e = await runner.estimate(keys, (k) => pc.aiAllowed(k));
       if (Math.abs(e.totalMicros - i.total) > Math.max(10_000, e.totalMicros * 0.05)) return bad("The estimate changed. Estimate again.", 409, "estimate_changed");
       const r = run ? await runner.resume(run.id, me, { deps: ai.deps, estimateMicros: e.totalMicros }) : await runner.startClassify(me, ai.deps, e.totalMicros, keys);
-      if (!r.ok) return bad(r.why === "busy" ? "A run is going already. Wait for it to finish." : r.why === "no_clients" ? "No client has DevOps set up here" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : "That run can't be resumed", 409, r.why);
+      if (!r.ok) return bad(r.why === "busy" ? "A run is going already. Wait for it to finish." : r.why === "no_clients" ? "No client has DevOps set up here" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : r.why === "list_changed" ? "The request types list changed since that run started. Run classification instead: the labels it made carry over." : "That run can't be resumed", 409, r.why);
       return { ok: true, data: { run: runView(r.run) } };
     }
     case "patterns.set_platform": {
@@ -267,8 +346,10 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const mine = await pc.myClients();
       const k = mine.find((m) => m.toLowerCase() === (i.clientKey as string).toLowerCase());
       if (!k) return bad("Check by hand is only for clients you're on", 403, "not_yours");
-      const version = await shownVersion(store);
-      const [items, labels] = await Promise.all([store.currentItems(k), store.labels(k, version)]);
+      const view = await labelView(store, [k]);
+      const [items, got] = await Promise.all([store.currentItems(k), labelsFor(store, k, view)]);
+      const labels = got.labels;
+      const version = view.mode === "in use" ? view.inUse.version : view.version;
       const levels = levelsOf(items);
       const rows = await Promise.all(
         handCheck(items.filter((x) => x.inWindow), labels).map(async (it) => ({ id: it.id, url: await pc.port!.itemUrl(k, it.id).catch(() => null), title: it.title, type: it.type, level: levels.get(it.type) ?? "other", labels: labels.get(it.id)!.labels })),
@@ -279,20 +360,60 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const extra = only(i, ["kind"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (i.kind !== "summary" && i.kind !== "types") return bad("kind is summary or types");
-      const lists = await store.lists();
-      if (i.kind === "types") return { ok: true, data: { filename: "devops-request-types.md", text: typesMarkdown(lists.length ? lists : [STARTING_LIST]) } };
-      const [keys, mine, snaps, platforms, kinds] = await Promise.all([pc.port.clients(), pc.myClients(), store.snapshots(), store.platforms(), store.kinds()]);
-      const version = await shownVersion(store);
-      const shownRun = await runOfVersion(store, version);
+      const lists = withOwnStart(await store.lists());
+      if (i.kind === "types") return { ok: true, data: { filename: "devops-request-types.md", text: typesMarkdown(lists, inUseOf(lists).version) } };
+      const [keys, mine, snaps, platforms, kinds, cls] = await Promise.all([pc.port.clients(), pc.myClients(), store.snapshots(), store.platforms(), store.kinds(), store.latest("classify")]);
       const all = [...new Set([...keys, ...Object.keys(snaps)])].sort((a, b) => a.localeCompare(b));
+      const view = await labelView(store, all);
+      const shownRun = view.mode === "earlier" ? view.run : null;
       const rows: ReportClient[] = await Promise.all(
         all.map(async (k) => {
-          const v = await clientView(store, k, { version, run: shownRun, snaps, kinds, aiAllowed: await pc.aiAllowed(k).catch(() => false), now: pc.now() });
+          const v = await clientView(store, k, { view, run: shownRun ?? cls.last, snaps, kinds, aiAllowed: await pc.aiAllowed(k).catch(() => false), now: pc.now() });
           // Team, area and project names only in the scope line of a client the person is on.
           return { key: k, mine: mine.some((m) => m.toLowerCase() === k.toLowerCase()), platform: platforms[k] ?? null, scope: v.scope, analysis: v.analysis, snapshot: v.snapshot, results: v.results };
         }),
       );
-      return { ok: true, data: { filename: "devops-patterns-summary.md", text: summaryMarkdown(rows, pc.now(), { listVersion: version, wp1Labels: !!shownRun && shownRun.progress.rules !== 2 }) } };
+      const on = view.mode === "in use" ? { mode: "in use" as const, version: view.inUse.version } : { mode: "earlier" as const, version: view.version };
+      return { ok: true, data: { filename: "devops-patterns-summary.md", text: summaryMarkdown(rows, pc.now(), { listVersion: on.version, labelsOn: on.mode, wp1Labels: view.mode === "earlier" && (view.version === WP1_START || (!!view.run && view.run.progress.rules !== 2)) }) } };
+    }
+    case "patterns.list_change": {
+      const extra = only(i, ["edit", "base", "why", "preview"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      const edit = parseEdit(i.edit);
+      if (typeof edit === "string") return bad(edit);
+      if (typeof i.base !== "string" || i.base.length > 40) return bad("base names the version you changed");
+      if (i.why !== undefined && typeof i.why !== "string") return bad("why is one line");
+      if (i.preview !== undefined && typeof i.preview !== "boolean") return bad("preview is true or false");
+      const keys = [...new Set([...(await pc.port.clients()), ...Object.keys(await store.snapshots())])];
+      const lists = withOwnStart(await store.lists());
+      const inUse = inUseOf(lists);
+      if (i.base !== inUse.version) return bad("The list changed since you opened it. Look at the new version, then change it again.", 409, "list_changed");
+      const namesClient = await namerFor(pc, keys);
+      const next = applyEdit(inUse, edit, { why: typeof i.why === "string" && i.why.trim() ? i.why : "(preview)", by: me, at: pc.now(), namesClient });
+      if (typeof next === "string") return bad(next, 422, "refused");
+      // What it costs, from the labels on the list in use now (every client's: counts only).
+      const labels: Resolved[] = [];
+      for (const k of keys) labels.push(...resolveLabels(await store.allLabels(k), lists, inUse).carried.values());
+      // Priced the way Estimate prices it: what the change adds to what would be labeled now.
+      const allowed = (k: string) => pc.aiAllowed(k).catch(() => false);
+      const labelsWith = async (l: TypeList) => (await runner.estimate(keys, allowed, { list: l })).totalLabels;
+      const now = await labelsWith(inUse);
+      const added = async (l: TypeList) => Math.max(0, (await labelsWith(l)) - now);
+      const priced = edit.kind === "add"
+        ? { relabel: 0, small: await added({ ...next, relabel: "other" }), all: await added({ ...next, relabel: "all" }) }
+        : edit.kind === "remove" ? { relabel: await added(next) } : undefined;
+      const cost = editCost(edit, labels, priced);
+      if (i.preview) return { ok: true, data: { preview: true, cost, version: next.version } };
+      if (typeof i.why !== "string" || i.why.trim().length < 3) return bad("Say why in one line", 422, "needs_why");
+      if (!(await store.saveOwned(next, OWN_START))) return bad("The list changed since you opened it. Look at the new version, then change it again.", 409, "list_changed");
+      return { ok: true, data: { saved: true, version: next.version, cost } };
+    }
+    case "patterns.suggestion": {
+      const extra = only(i, ["name", "ignore"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.name !== "string" || !i.name.trim() || i.name.length > 100 || typeof i.ignore !== "boolean") return bad("patterns.suggestion takes { name, ignore }");
+      await store.setIgnored(i.name, i.ignore, me);
+      return { ok: true, data: { name: norm(i.name), ignored: i.ignore } };
     }
   }
 }

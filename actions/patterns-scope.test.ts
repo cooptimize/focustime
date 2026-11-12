@@ -202,20 +202,18 @@ await forEachDriver("DevOps patterns within a scope (WP-2)", ({ open: openDb }) 
     let w = world(db, reader);
     await w.runner.startInventory(ME);
     await w.done();
-    // One "other" a request, so pass 1 suggests a name and the merge marks where pass 2 starts.
+    // WP-3: one pass against the list in use, no merge.
     const base = patternsAnswer({ other: (r) => r === "i2" });
     const sent = new Map<string, number>();
-    let pass2 = false;
     let n = 0;
     let stopAt = 2;
     const respond = (c: ProviderCall): string | ProviderReply => {
-      if (c.schemaName === "patterns_merge") pass2 = true;
+      expect(c.schemaName).toBe("patterns_classify");
       const out = JSON.parse(base(c) as string) as { items?: { ref: string }[] };
-      if (c.schemaName !== "patterns_classify") return JSON.stringify(out);
       const input = JSON.parse(c.input) as { items: { ref: string; title: string }[] };
-      if (pass2) for (const it of input.items) sent.set(it.title, (sent.get(it.title) ?? 0) + 1);
-      // The "server" goes away after a few pass 2 requests (the answer is kept first).
-      if (pass2 && ++n === stopAt) w.runner.halt();
+      for (const it of input.items) sent.set(it.title, (sent.get(it.title) ?? 0) + 1);
+      // The "server" goes away after a few requests (the answer is kept first).
+      if (++n === stopAt) w.runner.halt();
       // Thin items get no valid answer: dropped by the check.
       const thin = new Set(input.items.filter((i) => i.title.startsWith("Thin")).map((i) => i.ref));
       return JSON.stringify({ items: out.items!.filter((i) => !thin.has(i.ref)) });
@@ -237,7 +235,7 @@ await forEachDriver("DevOps patterns within a scope (WP-2)", ({ open: openDb }) 
     }
     const run = (await w.store.latest("classify")).last!;
     expect(run.state).toBe("done");
-    // Pass 2: each item at most twice (its answer and the agreement sample's), a failed one once.
+    // Each item at most twice (its answer and the agreement sample's), a failed one once.
     for (const [title, k] of sent) expect(k, title).toBeLessThanOrEqual(title.startsWith("Thin") ? 1 : 2);
     expect((await w.store.failures("adatum", run.progress.listVersion!)).a.size).toBe(15);
     expect(run.progress.clients.adatum).toMatchObject({ total: 60, done: 45, dropped: 15 });
