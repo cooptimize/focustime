@@ -25,15 +25,15 @@ export const EXPORT_FORMAT = "focustime-export-1";
 /**
  * The schema version of the user tables an export holds: SQLite's migration 28, SQL Server's migration 30 (27 and 28
  * add only app tables), then one more for each timestamped migration that adds a user table the export holds: 29 is
- * IB-1's inbox_marks, 30 is AS-2's assistant_turns.pending_json, 31 is LP-1's loop_sends, 32 is AH-5's ahead_state_changes, 33 is WK-3's picks.todo_kind, window and links, 34 is DP-2's picks.deploy_items, 35 is IB-2's follow_ups.changed_at, 36 is KB-1's draft_stories.ai_standards, 37 is TX-1's size_xs, picks' spent and remaining and timeboxes' settled columns. 38 is TX-1c's picks.done_removed, 39 is QC-1's draft_stories.item_type and assign_to. A migration that changes a user table raises it, and the import learns to read the older one
+ * IB-1's inbox_marks, 30 is AS-2's assistant_turns.pending_json, 31 is LP-1's loop_sends, 32 is AH-5's ahead_state_changes, 33 is WK-3's picks.todo_kind, window and links, 34 is DP-2's picks.deploy_items, 35 is IB-2's follow_ups.changed_at, 36 is KB-1's draft_stories.ai_standards, 37 is TX-1's size_xs, picks' spent and remaining and timeboxes' settled columns. 38 is TX-1c's picks.done_removed, 39 is QC-1's draft_stories.item_type and assign_to, 40 is TP-1's draft_stories.brief. A migration that changes a user table raises it, and the import learns to read the older one
  * (an older export simply has no rows for the newer tables). store/import.test.ts checks it against both.
  */
-export const USER_SCHEMA_VERSION = 39;
+export const USER_SCHEMA_VERSION = 40;
 /**
  * Older exports the import still reads: 26 (whole feature blocks) and 27 (half blocks) hold week_features.blocks, which
  * the import turns into estimate minutes at 1 block = 4h (E2).
  */
-export const READABLE_SCHEMA_VERSIONS: readonly number[] = [26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+export const READABLE_SCHEMA_VERSIONS: readonly number[] = [26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40];
 
 /**
  * The user tables in an order where every table comes after the ones it references (picks after day_plans, draft
