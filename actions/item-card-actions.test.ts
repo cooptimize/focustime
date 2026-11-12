@@ -112,6 +112,6 @@ describe("item.card", () => {
     const c = await cardOf({ tags: ["type:unknown-one"] });
     expect(c.readiness).toBeNull();
     expect(c.lines).toBeNull();
-    expect(c.description).toContain("Export <b>all</b> rows");
+    expect(c.description).toContain("Export <strong>all</strong> rows");
   });
 });
