@@ -53,10 +53,10 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
   }, T);
 
   it("Ahead: a teammate's change shows in place within a poll, the scroll and the selection held; a new feature under an epic appears", async () => {
-    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
     await row(page, "Map of stores").scrollIntoViewIfNeeded();
-    await row(page, "Map of stores").locator(".ah-col-target").click();
+    await row(page, "Map of stores").locator(".ah-col-dates").click();
     await page.keyboard.press("Escape");
     const scrollBefore = await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
 
@@ -72,7 +72,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes to save");
     // A new feature nobody owns yet, under the epic: in Ahead with the owner filter on All.
     expect(id).toBeGreaterThan(0);
-    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Northwind Foods", exact: true }).click();
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     await row(page, "Gift cards").waitFor({ timeout: 10_000 });
     expect(errors).toEqual([]);
@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await changed.getByRole("button", { name: "Show the new values" }).click();
     await expect(changed.locator(".ah-changed-vals").textContent()).resolves.toMatch(/Start: DevOps has no value, yours .*Nov 16/);
     // Mine stays staged.
-    await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
+    await expect(row(page, "Store locator").locator(".ah-col-dates").getAttribute("class")).resolves.toContain("ah-pend");
     await shot(page, "dv2-ahead-changed");
   }, T);
 
@@ -103,7 +103,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await stories.getByText("Filter orders by a date range").waitFor({ timeout: 10_000 });
     await expect(page.locator(".block-panel").count()).resolves.toBe(1);
     await page.keyboard.press("Escape");
-    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
   }, T);
 
@@ -158,7 +158,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     const fine = await find("1111");
     expect(fine).toMatch(/DevOps has #1111/);
     expect(fine).toMatch(/FocusTime has it/);
-    expect(fine).toMatch(/Ahead shows it/);
+    expect(fine).toMatch(/Backlog shows it/);
     await shot(page, "dv2-find-fine");
     const none = await find("999999");
     expect(none).toMatch(/found no #999999\. If you just made it, Refresh checks now/);

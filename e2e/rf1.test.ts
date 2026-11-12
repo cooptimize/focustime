@@ -1,4 +1,4 @@
-// RF-1: the tabs in their new order (Day · Week · Ahead · Status · Inbox, 4 and 5), Status's dot instead of a count
+// RF-1: the tabs in their new order (Day · Week · Backlog · Status · Inbox, 4 and 5), Status's dot instead of a count
 // (the demo's Thursday is a day off, so Tuesday is amber and Wednesday red; none when nothing is owed), the top of Day
 // with no source strip while the status bar still reconnects, and a day ahead with Add work instead of Plan.
 // Demo mode (fictional data); each clock is its own throwaway server.
@@ -46,10 +46,10 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
     }, T);
     afterAll(async () => h?.stop());
 
-    it("the tabs read Day · Week · Ahead · Status · Inbox; 4 opens Status and 5 the Inbox", async () => {
+    it("the tabs read Day · Week · Backlog · Status · Inbox; 4 opens Status and 5 the Inbox", async () => {
       const { page, errors } = await freshPage(h);
       const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-      expect(tabs).toEqual(["Day", "Week", "Ahead", "Status", "Inbox"]);
+      expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
       await page.keyboard.press("4");
       await expect.poll(() => hash(page)).toBe("#/status");
       await page.keyboard.press("5");

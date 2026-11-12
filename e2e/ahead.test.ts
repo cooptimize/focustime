@@ -1,16 +1,17 @@
-// AH-1: Ahead (Grid · Gantt · Fix next) in demo mode: the shared model, my change set (three pending from the demo,
+// AH-1, BL-1: Backlog (Grid · Gantt, Needs attention; was Ahead) in demo mode: the shared model, my change set (three pending from the demo,
 // one a conflict), inline edits that survive a reload, the review, the Gantt's half-day drag with the drag bug's fix
-// under a slow reload, Fix next, the notice link, and the phone's read-only view. Nothing is written to DevOps in the
+// under a slow reload, Needs attention, the notice link, and the phone's read-only view. Nothing is written to DevOps in the
 // demo (it has no write PAT): Commit says how to enable writes.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
+import { pickLevel } from "./backlog-helpers.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 90_000;
 
-describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
+describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
   beforeAll(async () => {
     h = await startDemo();
   }, 120_000);
@@ -28,27 +29,39 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   const row = (page: Page, title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) });
   const bar = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
 
-  it("Grid: every level grouped by client, gaps only as quiet chips, missing fields a dash that says what's missing, my changes to save; items I can't change say who can", async () => {
-    const { page, errors } = await open("#/ahead");
+  it("Grid: every level grouped by client, one status chip per row, an empty cell empty (+ date on hover where I may fill it), my changes to save; items I can't change say who can", async () => {
+    const { page, errors } = await open("#/backlog");
     await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes to save");
     await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
-    // Pending values show in place: Store locator starts Nov 16 PM (AH-3: the weekday in the tooltip).
-    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Nov 16 PM");
-    await expect(row(page, "Store locator").locator(".ah-col-start [title]").first().getAttribute("title")).resolves.toContain("Monday, November 16");
-    await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
-    await expect(row(page, "Loyalty points").locator(".ah-col-target").getAttribute("class")).resolves.toContain("ah-conf");
+    // BL-1: start and target are one Dates cell. Pending values show in place: Store locator starts Nov 16 PM (the
+    // weekday in the tooltip).
+    await expect(row(page, "Store locator").locator(".ah-col-dates").textContent()).resolves.toContain("Nov 16 PM");
+    await expect(row(page, "Store locator").locator(".ah-col-dates [title]").first().getAttribute("title")).resolves.toContain("Monday, November 16");
+    await expect(row(page, "Store locator").locator(".ah-col-dates").getAttribute("class")).resolves.toContain("ah-pend");
+    await expect(row(page, "Loyalty points").locator(".ah-col-dates").getAttribute("class")).resolves.toContain("ah-conf");
     // A story's size in its process's own field on one line (AH-3: "3 SP"), the field's name and FocusTime's size in
     // its tooltip; a feature has none in this process.
     await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/^3\s*SP$/);
     await expect(row(page, "Export orders to CSV").locator(".ah-col-size .ah-size").getAttribute("title")).resolves.toMatch(/3 Story Points\s+FocusTime: L, about 4h/);
-    // AH-2: a field the type doesn't have, and a missing value, are a muted dash; the tooltip says which.
-    await expect(row(page, "Order history export").locator(".ah-col-size .ah-none").getAttribute("title")).resolves.toBe("Not in Portal's process");
-    await expect(row(page, "Supplier onboarding").locator(".ah-col-start .ah-none").getAttribute("title")).resolves.toBe("No start date");
-    // Gaps only in Readiness, as chips: two, then +N with the rest in its tooltip. No cell is filled for a gap.
-    const ready = row(page, "Supplier onboarding").locator(".ah-col-ready");
-    await expect(ready.locator(".ah-chip:not(.ah-more)").allTextContents()).resolves.toEqual(["Not scoped", "Needs stories"]);
-    await expect(ready.locator(".ah-more").textContent()).resolves.toBe("+1");
-    await expect(ready.locator(".ah-more").getAttribute("title")).resolves.toBe("No target date");
+    // BL-1: a field the type doesn't have is an empty cell with the reason on hover; a missing value I may fill reads
+    // "+ date" only on hover or focus. Never a dash.
+    await expect(row(page, "Order history export").locator(".ah-col-size").getAttribute("title")).resolves.toBe("Not in Portal's process");
+    const supplierDates = row(page, "Supplier onboarding").locator(".ah-col-dates");
+    await expect(supplierDates.locator(".ah-add").textContent()).resolves.toBe("+ date");
+    const shown = () => supplierDates.locator(".ah-add").evaluate((e) => getComputedStyle(e).opacity);
+    await page.mouse.move(2, 2);
+    await expect.poll(shown).toBe("0");
+    await supplierDates.hover();
+    await expect.poll(shown).toBe("1");
+    const dashes = await page.locator(".ah-grid td").evaluateAll((els) => els.filter((e) => /^\s*[-–—]\s*$/.test(e.textContent ?? "")).length);
+    expect(dashes).toBe(0);
+    // BL-1: one Status chip: the health that asks for something (Not scoped), Needs stories folded into it (they say
+    // one thing), the rest as +N with each reason in its list.
+    const status = row(page, "Supplier onboarding").locator(".ah-col-status");
+    await expect(status.locator(".ah-chip:not(.ah-more)").allTextContents()).resolves.toEqual(["Not scoped"]);
+    await expect(status.locator(".ah-more").textContent()).resolves.toMatch(/^\+1/);
+    await expect(status.locator(".ah-more-list").textContent()).resolves.toContain("No target date");
+    await expect(status.getAttribute("aria-label")).resolves.toMatch(/^Status: Not scoped: .*; No target date/);
     const fills = await page.locator(".ah-cell:not(.ah-pend)").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
     expect(fills).toEqual(["rgba(0, 0, 0, 0)"]);
     // No orange text: every cell's text is the normal or a muted color, never the amber.
@@ -64,19 +77,19 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     }, amber);
     expect(colors).not.toContain(probe);
     // Harbor: I'm not a lead there; All shows a teammate's story, read only with the note.
-    await page.getByRole("button", { name: "Harbor Health", exact: true }).click();
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Harbor Health", exact: true }).click();
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     const theirs = page.locator(".ah-row.ro:not(.context)").first();
     await theirs.waitFor();
     await expect(theirs.getAttribute("title")).resolves.toBe("Only Harbor Health's leads and the owner can change this.");
-    await theirs.locator(".ah-col-target").focus();
+    await theirs.locator(".ah-col-dates").focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".cell-pop").count()).resolves.toBe(0);
     await shotBoth(page, "ahead-readonly", theirs);
     // Filters are remembered for me: reopening keeps them.
     const ctx2 = await sameSession(h, page);
     const again = await ctx2.newPage();
-    await again.goto(`${h.url}/#/ahead`);
+    await again.goto(`${h.url}/#/backlog`);
     await again.locator(".ah-client-head").first().waitFor({ timeout: 30_000 });
     await expect(again.locator(".ah-client-head").allTextContents()).resolves.toEqual([expect.stringContaining("Harbor Health")]);
     await again.getByRole("button", { name: "Clear filters" }).click();
@@ -86,8 +99,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   }, T);
 
   it("cell edits (AH-5 popovers): Enter opens, Enter saves, Esc cancels, arrows move; the change is pending and survives a reload", async () => {
-    const { page } = await open("#/ahead");
-    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    const { page } = await open("#/backlog");
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const size = row(page, "Export button on the order page").locator(".ah-col-size");
     await size.focus();
     await page.keyboard.press("Enter");
@@ -116,8 +129,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   }, T);
 
   it("QF-1: one click opens each picker (start, target, assigned to, size) and stages a change; hover marks the cells I can change", async () => {
-    const { page } = await open("#/ahead");
-    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    const { page } = await open("#/backlog");
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const story = row(page, "Export button on the order page");
     const staged = (cell: ReturnType<Page["locator"]>) => expect.poll(() => cell.getAttribute("class"), { timeout: 10_000 }).toContain("ah-pend");
     // Size: a click, a number, Save.
@@ -135,16 +148,18 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.getByRole("option", { name: /Sam Ortiz/ }).click();
     await expect.poll(() => who.getAttribute("aria-label"), { timeout: 10_000 }).toContain("Sam Ortiz");
     await staged(who);
-    // Target, then start on a feature that has one: a typed date, Save.
-    const target = story.locator(".ah-col-target");
+    // BL-1: one Dates cell. A story has only a target: a typed date, Save. Then a feature's start (the editor opens on
+    // Start; Which date switches).
+    const target = story.locator(".ah-col-dates");
     await target.click();
     await page.getByRole("textbox", { name: "Target date" }).fill("2026-11-20");
     await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await staged(target);
-    const title = await page.locator(".ah-row.tier-feature:not(.ro)", { has: page.locator(".ah-col-start.ah-edit") }).first().locator(".ah-title a").first().textContent();
+    const title = await page.locator(".ah-row.tier-feature:not(.ro)", { has: page.locator(".ah-col-dates.ah-edit") }).first().locator(".ah-title a").first().textContent();
     const feature = row(page, title!.trim());
-    const start = feature.locator(".ah-col-start");
+    const start = feature.locator(".ah-col-dates");
     await start.click();
+    await page.locator(".cell-pop").getByRole("radio", { name: /^Start/ }).click();
     await page.getByRole("textbox", { name: "Start date" }).fill("nov 9");
     await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await staged(start);
@@ -155,14 +170,14 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   }, T);
 
   it("AH-5: each editor is a popover anchored to its cell and on screen; keyboard; dates; state from the process; assignees from the client's project; nothing written before Save to DevOps", async () => {
-    const { page, errors } = await open("#/ahead", { width: 1440, height: 900 });
+    const { page, errors } = await open("#/backlog", { width: 1440, height: 900 });
     // Nothing goes to DevOps while editing: no preview or confirm call until "Save N items to DevOps".
     const writes: string[] = [];
     page.on("request", (r) => {
       const b = r.postData() ?? "";
       if (/"action":"devops\.(preview|confirm)"/.test(b)) writes.push(b);
     });
-    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Northwind Foods", exact: true }).click();
     const inView = async (cellLoc: ReturnType<Page["locator"]>) => {
       const pop = page.locator(".cell-pop");
       await pop.waitFor();
@@ -172,12 +187,12 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
       expect(p.x + p.width).toBeLessThanOrEqual(1440);
       expect(p.y + p.height).toBeLessThanOrEqual(900);
       // Anchored: it touches the cell's column or sits just above or below it.
-      expect(Math.abs(p.x - c.x) < 330 && (Math.abs(p.y - (c.y + c.height)) < 12 || Math.abs(p.y + p.height - c.y) < 12 || (p.y <= c.y && p.y + p.height >= c.y))).toBe(true);
+      expect(Math.abs(p.x - c.x) < 330 && (Math.abs(p.y - (c.y + c.height)) < 12 || Math.abs(p.y + p.height - c.y) < 12 || (p.y <= c.y + 1 && p.y + p.height >= c.y)), `popover ${JSON.stringify(p)} by cell ${JSON.stringify(c)}`).toBe(true);
       return pop;
     };
     const story = row(page, "Export button on the order page");
-    // Keyboard: Enter opens, Esc cancels with focus back on the cell.
-    const target = story.locator(".ah-col-target");
+    // Keyboard: Enter opens, Esc cancels with focus back on the cell (BL-1: the one Dates cell; a story has a target only).
+    const target = story.locator(".ah-col-dates");
     await target.focus();
     await page.keyboard.press("Enter");
     let pop = await inView(target);
@@ -185,7 +200,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(pop.locator(".cell-pop-head").textContent()).resolves.toContain("#1113 Export button on the order page");
     await page.keyboard.press("Escape");
     await expect(page.locator(".cell-pop").count()).resolves.toBe(0);
-    await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-target");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-dates");
     // Quick picks: Next Monday (Nov 9 from Fri Nov 6), PM, then Tab saves and moves on to the next editable cell.
     await page.keyboard.press("Enter");
     pop = await inView(target);
@@ -202,9 +217,10 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect.poll(() => target.getAttribute("class")).not.toContain("ah-pend");
     // A feature: Target before Start shows a warning and doesn't save.
     const feat = row(page, "Store locator");
-    const fTarget = feat.locator(".ah-col-target");
+    const fTarget = feat.locator(".ah-col-dates");
     await fTarget.click();
     pop = await inView(fTarget);
+    await pop.getByRole("radio", { name: /^Target/ }).click();
     await pop.getByRole("textbox", { name: "Target date" }).fill("11/10");
     await expect(pop.getByRole("alert").textContent()).resolves.toContain("The target is before the start");
     await expect(pop.getByRole("button", { name: "Save" }).isDisabled()).resolves.toBe(true);
@@ -256,7 +272,9 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     if (lb.y > 600) {
       await low.click();
       const p = await inView(low);
-      expect(await p.getAttribute("data-above")).not.toBeNull();
+      // Below or above when it fits; too tall for either side, over the cell, all on screen (inView checks that).
+      const [pb, cb] = [(await p.boundingBox())!, (await low.boundingBox())!];
+      expect((await p.getAttribute("data-above")) !== null || pb.y >= cb.y + cb.height - 1 || pb.y <= cb.y + 1, `popover ${JSON.stringify(pb)} by cell ${JSON.stringify(cb)}`).toBe(true);
       await page.keyboard.press("Escape");
     }
     expect(writes).toEqual([]);
@@ -264,19 +282,19 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("AH-5: no native select or date input anywhere in Ahead; no horizontal scroll at 1280 and 1440; readiness chips stay in their cells", async () => {
+  it("AH-5: no native select or date input anywhere in Ahead; no horizontal scroll at 1280 and 1440; status chips stay in their cells", async () => {
     for (const width of [1280, 1440]) {
-      const { page } = await open("#/ahead", { width, height: 900 });
+      const { page } = await open("#/backlog", { width, height: 900 });
       await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).first().click();
-      for (const hash of ["#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/ahead/backlog"]) {
+      for (const hash of ["#/backlog", "#/backlog/gantt", "#/backlog/attention", "#/backlog/stories"]) {
         await page.evaluate((x) => (location.hash = x), hash);
         await page.waitForTimeout(400);
         await expect(page.locator(".ahead select, .ahead input[type=date], .ahead input[type=datetime-local], .ahead input[type=month]").count(), hash).resolves.toBe(0);
       }
-      await page.evaluate(() => (location.hash = "#/ahead"));
+      await page.evaluate(() => (location.hash = "#/backlog"));
       await page.locator(".ah-grid").first().waitFor();
       await expect(page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `width ${width}`).resolves.toBeLessThanOrEqual(0);
-      const spill = await page.locator(".ah-col-ready").evaluateAll((cells) =>
+      const spill = await page.locator(".ah-col-status").evaluateAll((cells) =>
         cells.flatMap((c) => {
           const box = c.getBoundingClientRect();
           return [...c.querySelectorAll(".ah-chip, .ah-gapdot")].filter((x) => x.getBoundingClientRect().right > box.right + 0.5).map((x) => x.textContent);
@@ -297,7 +315,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm", async () => {
     const { page, errors } = await sameSessionFresh();
     // A second change on one item (its size, beside the conflicting target), so a card holds two rows.
-    const loyal = row(page, "Loyalty points").locator(".ah-col-start");
+    // BL-1: the Dates cell opens on Start.
+    const loyal = row(page, "Loyalty points").locator(".ah-col-dates");
     await loyal.waitFor({ timeout: 30_000 });
     await loyal.focus();
     await page.keyboard.press("Enter");
@@ -340,26 +359,31 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("AH-2: Cooptimize's scope: the client's own area left out with a note, Show the whole project brings it back marked, Fix next never has it, and an admin's scope applies", async () => {
-    const { page, errors } = await open("#/ahead");
-    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+  it("AH-2, BL-1: Cooptimize's scope: the client's own area left out, said in ⋯; Show the whole project brings it back marked, Needs attention never has it, and an admin's scope applies", async () => {
+    const { page, errors } = await open("#/backlog");
+    await page.locator(".ah-toolbar").getByRole("button", { name: "Northwind Foods", exact: true }).click();
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
-    await expect(page.locator(".ah-scope-note").textContent()).resolves.toContain("Showing Cooptimize's work (automatic) for Northwind Foods. Set the scope in Admin › Clients.");
     await expect(row(page, "Finance close automation").count()).resolves.toBe(0);
     await expect(row(page, "Order history export").count()).resolves.toBe(1);
-    const whole = page.getByRole("button", { name: "Show the whole project" });
-    await expect(whole.getAttribute("title")).resolves.toBe("Northwind Foods: 14 of 19 open items are Cooptimize's work");
+    // BL-1: the scope's words are in ⋯ (an admin's item opens Admin › Clients), with the counts on Show the whole project.
+    const more = page.getByRole("button", { name: "More: rows and view" });
+    await more.click();
+    await expect(page.getByRole("menuitem", { name: /Showing Cooptimize's work \(automatic\) for Northwind Foods/ }).count()).resolves.toBe(1);
+    const whole = page.getByRole("menuitemcheckbox", { name: /Show the whole project/ });
+    await expect(whole.textContent()).resolves.toContain("Northwind Foods: 14 of 19 open items are Cooptimize's work");
     await whole.click();
     await row(page, "Finance close automation").waitFor();
     await expect(row(page, "Month-end journal import").locator(".ah-ro").allTextContents()).resolves.toContain("Outside scope");
-    // Fix next never offers the client's own work (Journal approval step is unassigned and unsized).
-    const fix = await call(page, "#/ahead/fix");
-    await expect(fix.locator(".ah-fx-row:not(.ctx)").count()).resolves.toBeGreaterThan(0);
-    await expect(fix.getByText("Journal approval step").count()).resolves.toBe(0);
+    // Needs attention never offers the client's own work (Journal approval step is unassigned and unsized).
+    await page.getByRole("button", { name: /^Needs attention/ }).click();
+    await page.locator(".ah-row .ah-fix").first().waitFor({ timeout: 30_000 });
+    await expect(page.locator(".ah-row:not(.context)", { hasText: "Journal approval step" }).count()).resolves.toBe(0);
+    await page.getByRole("button", { name: /^Needs attention/ }).click();
     // Remembered: still on after a reload.
-    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await page.reload();
     await row(page, "Finance close automation").waitFor({ timeout: 30_000 });
+    await more.click();
     await whole.click();
     await expect.poll(() => row(page, "Finance close automation").count()).toBe(0);
     // An admin sets By area path to Finance only: Northwind shows only that (and my own items).
@@ -374,26 +398,23 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await shotBoth(page, "admin-scope", scope);
     await scope.getByRole("button", { name: "Save scope" }).click();
     await expect.poll(() => scope.textContent()).toContain("Now: Area Portal\\Finance and sub-areas.");
-    await page.evaluate(() => (location.hash = "#/ahead"));
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await row(page, "Finance close automation").waitFor({ timeout: 30_000 });
     // Priya's story under my feature is in Web, so out; my own items stay wherever they are.
     await expect(row(page, "Export button on the order page").count()).resolves.toBe(0);
     await expect(row(page, "Supplier onboarding").count()).resolves.toBe(1);
-    await expect(page.locator(".ah-scope-note").count()).resolves.toBe(0);
+    await more.click();
+    await expect(page.getByRole("menuitem", { name: /Showing Cooptimize's work/ }).count()).resolves.toBe(0);
+    await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
-  const call = async (page: Page, hash: string) => {
-    await page.evaluate((x) => (location.hash = x), hash);
-    await page.locator(".ah-fix-mode, .ah-fix-empty").first().waitFor({ timeout: 30_000 });
-    return page.locator(".ah-fix-mode, .ah-fix-empty").first();
-  };
 
   /** A new person each time (the demo seeds three pending changes per session). */
-  const sameSessionFresh = () => open("#/ahead");
+  const sameSessionFresh = () => open("#/backlog");
 
   it("Gantt: bars grouped client › epic › feature, a dashed edge where a date is missing, an item with no dates on its own row, one callout marker per bar", async () => {
-    const { page, errors } = await open("#/ahead/gantt");
+    const { page, errors } = await open("#/backlog/gantt");
     await bar(page, "Store locator").waitFor({ timeout: 30_000 });
     // Store locator: a pending start (solid), its target from DevOps.
     await expect(bar(page, "Store locator").locator(".pa-bar").getAttribute("class")).resolves.toContain(" changed");
@@ -409,14 +430,14 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(page.locator(".pa-marker").count()).resolves.toBeGreaterThan(0);
     // AH-6 toolbar: Stories by default; at Features the stories fold away.
     await expect(page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).resolves.toBe(1);
-    await page.locator(".ah-toolbar .ah-levels").getByRole("button", { name: "Features", exact: true }).click();
+    await pickLevel(page, "Features");
     await expect.poll(() => page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
   it("the drag bug: with a slow reload, a second drag right after a drop keeps its row under the pointer; drops snap to half-days", async () => {
-    const { page } = await open("#/ahead/gantt");
+    const { page } = await open("#/backlog/gantt");
     const target = bar(page, "Knowledge base search");
     await target.waitFor({ timeout: 30_000 });
     // Every reload and stage answers 1.2 s late, as on a slow link.
@@ -456,7 +477,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   }, T);
 
   it("a click on a bar opens Break down's side panel, whose action list has Send to… (SW-1's dialog)", async () => {
-    const { page } = await open("#/ahead/gantt");
+    const { page } = await open("#/backlog/gantt");
     const b = bar(page, "Supplier onboarding").or(bar(page, "Order history export")).first();
     await b.waitFor({ timeout: 30_000 });
     await b.locator(".pa-bar").click();
@@ -471,54 +492,56 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("AH-3: Fix next ranked by each client's backlog, grouped client › epic › feature, one row per item with its gaps and one action; Size goes into the change set; a project with no backlog order says so; an admin turns a gap off", async () => {
-    const { page, errors } = await open("#/ahead/fix");
-    const sections = page.locator(".ah-fx-client");
-    await sections.first().waitFor();
-    // The count is in the mode switch and the header, the same number.
-    const head = await page.locator(".follow-ups-head h2").textContent();
-    const n = Number(/(\d+) not ready yet/.exec(head ?? "")?.[1]);
+  it("AH-3, BL-1: Needs attention ranked by each client's backlog, grouped client › epic › feature, one row per item with its status and one fix; Size goes into the change set; a project with no backlog order says so; an admin turns a gap off", async () => {
+    const { page, errors } = await open("#/backlog/attention");
+    const entries = page.locator(".ah-client .ah-row:not(.context)");
+    await entries.first().waitFor({ timeout: 30_000 });
+    // The count is on the chip and in the header, the same number.
+    const n = Number(await page.locator(".ah-toolbar .ah-attention-n").textContent());
     expect(n).toBeGreaterThan(0);
-    await expect(page.getByRole("navigation", { name: "Ahead modes" }).getByRole("button", { name: /Readiness/ }).textContent()).resolves.toBe(`Readiness · ${n}`);
-    // One row per item (AH-1 listed an item once per gap).
-    const ids = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx) .ah-id").allTextContents();
+    await expect(page.locator(".follow-ups-head h2").textContent()).resolves.toContain(`${n} need attention`);
+    await expect(page.getByRole("button", { name: /^Needs attention/ }).getAttribute("aria-pressed")).resolves.toBe("true");
+    // One row per item (AH-1 listed an item once per gap), each with one fix or only its status (Stale).
+    const ids = await entries.locator(".ah-id").allTextContents();
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.length).toBe(n);
-    // Grouped: a story sits under its feature, shown as a header when the feature itself has nothing to fix.
-    const nw = sections.filter({ has: page.getByRole("heading", { name: /Northwind Foods/ }) });
-    const depths = await nw.locator(".ah-fx-row").evaluateAll((els) => els.map((e) => Number((e as HTMLElement).style.getPropertyValue("--ah-depth"))));
+    // Grouped: a story sits under its feature, shown for context when the feature itself has nothing to fix.
+    const nw = page.locator(".ah-client", { has: page.getByRole("heading", { name: /Northwind Foods/ }) });
+    const depths = await nw.locator(".ah-row").evaluateAll((els) => els.map((e) => Number((e as HTMLElement).style.getPropertyValue("--ah-depth"))));
     expect(depths[0]).toBe(0);
     expect(Math.max(...depths)).toBeGreaterThan(0);
-    // Harbor Health's demo project has no backlog order field.
-    const harbor = sections.filter({ has: page.getByRole("heading", { name: /Harbor Health/ }) });
-    await expect(harbor.locator(".ah-fx-note").textContent()).resolves.toContain("has no backlog order, so these are ranked by target date.");
-    await expect(nw.locator(".ah-fx-note").count()).resolves.toBe(0);
-    await shotBoth(page, "ahead-fix-next", sections.first());
+    // Harbor Health's demo project has no backlog order field: said once, in its header.
+    const harbor = page.locator(".ah-client", { has: page.getByRole("heading", { name: /Harbor Health/ }) });
+    await expect(harbor.locator(".ah-client-order").textContent()).resolves.toContain("by target date (no backlog order)");
+    await expect(nw.locator(".ah-client-order").count()).resolves.toBe(0);
+    await shotBoth(page, "ahead-fix-next", nw);
     // Size one: it goes into the change set and leaves the list.
-    const title = await nw.locator(".ah-fx-row", { has: page.getByRole("button", { name: /^Size: / }) }).first().locator(".ah-title a").textContent();
-    const sizeRow = nw.locator(".ah-fx-row", { has: page.getByRole("link", { name: title ?? "", exact: true }) });
-    await sizeRow.getByRole("button", { name: /^Size: / }).click();
+    const sizeBtn = nw.getByRole("button", { name: /^Size: / }).first();
+    const title = ((await sizeBtn.getAttribute("aria-label")) ?? "").replace(/^Size: /, "");
+    await sizeBtn.click();
     await page.locator(".cell-pop").getByRole("textbox").first().fill("2");
     await page.locator(".cell-pop").getByRole("button", { name: "Save" }).click();
     await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
-    await expect.poll(() => page.locator(".ah-fx-client .ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
-    // Skip puts one aside for the session.
-    const before = await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count();
-    await page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").first().getByRole("button", { name: /^Skip/ }).click();
-    await expect.poll(() => page.locator(".ah-fx-client .ah-fx-row:not(.ctx)").count()).toBe(before - 1);
-    // An admin turns Needs stories off for Northwind: its rows lose it; Atlas's keep it.
-    const unsized = () => nw.locator(".ah-chip", { hasText: "Needs stories" }).count();
-    expect(await unsized()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".ah-client .ah-row:not(.context):not(.leaving)", { hasText: title }).count(), { timeout: 10_000 }).toBe(0);
+    // Skip puts one aside for two weeks.
+    const before = await entries.count();
+    await entries.first().locator(".ah-col-status").focus();
+    await entries.first().getByRole("button", { name: /^Skip/ }).click();
+    await expect.poll(() => entries.count()).toBe(before - 1);
+    // An admin turns Needs stories off for Northwind: its Break down fixes go; Atlas's stay.
+    const breakDowns = (where: typeof nw) => where.getByRole("button", { name: /^Break down: / }).count();
+    expect(await breakDowns(nw)).toBeGreaterThan(0);
     await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
     const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
     const sw = card.getByRole("switch", { name: "Northwind: count Needs stories" });
     await sw.waitFor({ timeout: 30_000 });
     await sw.uncheck();
     await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
-    await page.evaluate(() => (location.hash = "#/ahead/fix"));
+    await page.evaluate(() => (location.hash = "#/backlog"));
     await nw.waitFor({ timeout: 30_000 });
-    await expect.poll(unsized).toBe(0);
-    await expect(sections.filter({ has: page.getByRole("heading", { name: /Atlas Freight/ }) }).locator(".ah-chip", { hasText: "Needs stories" }).count()).resolves.toBeGreaterThan(0);
+    await expect.poll(() => breakDowns(nw)).toBe(0);
+    const atlas = page.locator(".ah-client", { has: page.getByRole("heading", { name: /Atlas Freight/ }) });
+    await expect(breakDowns(atlas)).resolves.toBeGreaterThan(0);
     // Back on, for the tests after this one.
     await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
     await sw.waitFor({ timeout: 30_000 });
@@ -531,7 +554,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   it("AH-3: the Grid at every window size: Item never under its minimum, no page scroll; Dates under 1400, dots under 1200, cards under 900 and on the phone", async () => {
     const sizes = [[1920, "wide"], [1600, "wide"], [1366, "dates"], [1200, "dates"], [1199, "dots"], [900, "dots"], [899, "cards"], [390, "cards"]] as const;
     for (const [w, lay] of sizes) {
-      const { page, errors } = await open("#/ahead", { width: w, height: w < 500 ? 844 : 900 });
+      const { page, errors } = await open("#/backlog", { width: w, height: w < 500 ? 844 : 900 });
       // As on an iPhone: a 17px root font (the app's own sizes don't follow it, but the page must still fit).
       if (w < 500) await page.evaluate(() => (document.documentElement.style.fontSize = "17px"));
       await page.locator(".ah-row").first().waitFor();
@@ -549,33 +572,33 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
           expect(m.lay, `${w}`).toContain(`lay-${lay}`);
           expect(m.item, `${w}: the Item column`).toBeGreaterThanOrEqual(lay === "cards" ? 300 : 320);
         } else expect(m.item, `${w} larger: the Item column`).toBeGreaterThanOrEqual(lay === "cards" || m.lay.includes("cards") ? 300 : 320);
-        if (size === "default" && lay === "wide") expect(m.heads).toEqual(["Item", "State", "Start", "Target", "Assigned to", "Size", "Readiness"]);
-        if (size === "default" && (lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Item", "State", "Dates", "Assigned to", "Size", "Readiness"]);
+        // BL-1: one Dates column and one Status column at every size.
+        if (size === "default" && (lay === "wide" || lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Item", "State", "Dates", "Assigned to", "Size", "Status"]);
         if (size === "default" && lay === "cards") expect(m.heads).toEqual([]);
       }
       // The merged Dates column reads "Oct 19 → Nov 13"; dots carry their words for screen readers.
       if (lay === "dates") await expect(row(page, "Order history export").locator(".ah-col-dates").textContent()).resolves.toMatch(/Oct 19\s*→\s*Nov 13/);
-      if (lay === "dots") await expect(row(page, "Supplier onboarding").locator(".ah-col-ready .sr-only").textContent()).resolves.toContain("Needs stories");
+      if (lay === "dots") await expect(row(page, "Supplier onboarding").locator(".ah-col-status").getAttribute("aria-label")).resolves.toContain("Not scoped");
       expect(errors).toEqual([]);
       await page.close();
     }
   }, 240_000);
 
   it("a notice's link opens the item in the Grid, focused", async () => {
-    const { page } = await open("#/ahead/item/1113");
+    const { page } = await open("#/backlog/item/1113");
     await expect.poll(() => page.evaluate(() => document.activeElement?.closest("tr")?.className ?? "")).toContain("highlighted");
     await page.close();
   }, T);
 
   it("phone and 1366: read only on a phone (D476); the pane folds under at 1366", async () => {
-    const { page, errors } = await open("#/ahead", { width: 390, height: 844 });
+    const { page, errors } = await open("#/backlog", { width: 390, height: 844 });
     await expect(page.locator(".ah-ro-note").textContent()).resolves.toContain("Read only on a phone");
     await expect(page.getByRole("button", { name: "Review" }).isDisabled()).resolves.toBe(true);
     await expect(page.locator(".ah-pane").count()).resolves.toBe(0);
     await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).resolves.toBe(true);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/ahead-phone.png`, fullPage: false });
     await page.close();
-    const wide = await open("#/ahead/gantt", { width: 1366, height: 768 });
+    const wide = await open("#/backlog/gantt", { width: 1366, height: 768 });
     await wide.page.locator(".pa-item").first().waitFor({ timeout: 30_000 });
     if (SHOTS) await wide.page.screenshot({ path: `${SHOTS}/ahead-gantt-1366.png` });
     await wide.page.close();

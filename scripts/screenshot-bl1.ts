@@ -99,6 +99,9 @@ try {
         await shot(page, `gantt-${tag}`);
         await go("#/ahead/fix", ".ah-grid tbody .ah-row");
         await shot(page, `attention-${tag}`);
+        // Filters are remembered: start the stories list from the defaults.
+        await page.getByRole("button", { name: "Clear filters" }).click();
+        await page.waitForTimeout(300);
         await go("#/ahead/backlog", ".ah-grid tbody .ah-row");
         await shot(page, `stories-${tag}`);
         await go("#/backlog", ".ah-grid tbody .ah-row");
