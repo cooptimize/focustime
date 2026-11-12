@@ -23,7 +23,7 @@ export const OTHER = "other";
 /** WP-2: the request type for an item too thin to read (its readiness is "too thin to tell"). */
 export const CANT_TELL = "can't tell";
 /** Words that describe how unclear an item is, not what it asks for: never a request type, never a new list's name. */
-const UNCLEAR = /\b(clarif\w*|unclear|vague|ambiguous|underspecified|under-specified|insufficient|incomplete|not enough|too thin|thin|more (info|information|detail|details)|needs? (info|information|detail|details|input)|missing (info|information|detail|details)|unknown|tbd|to be defined|can'?t tell|cannot tell|not sure|unsure|placeholder)\b/i;
+const UNCLEAR = /\b(clarif\w*|unclear|vague|ambiguous|underspecified|under-specified|insufficient|incomplete|not enough|too thin|thin|more (info|information|detail|details)|needs? (info|information|detail|details|input)|missing (info|information|detail|details)|unknown|tbd|to be defined|can['\u2018\u2019\u02bc]?t tell|cannot tell|not sure|unsure|placeholder)\b/i;
 export const isUnclearName = (name: string): boolean => UNCLEAR.test(name);
 
 /** The starting list (version 1): a hypothesis, expected to change. Examples are made up. */
@@ -156,7 +156,8 @@ export const CLASSIFY_SCHEMA: JsonSchema = {
   },
 };
 
-export const norm = (s: unknown) => (typeof s === "string" ? s.trim().toLowerCase().replace(/\s+/g, " ") : "");
+/** A name compared: trimmed, lower case, one space, and a curly or modifier apostrophe as a straight one (phones type ’). */
+export const norm = (s: unknown) => (typeof s === "string" ? s.trim().toLowerCase().replace(/\s+/g, " ").replace(/[\u2018\u2019\u02bc]/g, "'") : "");
 const inList = <T extends string>(list: readonly T[], v: unknown): T | null => list.find((x) => x.toLowerCase() === norm(v)) ?? null;
 const shortText = (v: unknown, max: number): string | null => {
   if (typeof v !== "string") return null;

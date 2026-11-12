@@ -5,7 +5,8 @@
 // missing most with each fact's agreement, and the ten most common feature shapes. Counts only, for every client.
 import { FEW, FEW_WORDS, countWords, shareWords, tooFew } from "../../plan/patterns/analysis.ts";
 import { FACT_FEW, LAYERS, MISSING, READINESS, disagreements, factReading, type Agreement } from "../../plan/patterns/labels.ts";
-import { cellWords, clientTable, readinessByType, sampleWords, sumResults, type Results } from "../../plan/patterns/results.ts";
+import { cellWords, clientTable, readinessByType, sumResults, type Results } from "../../plan/patterns/results.ts";
+import { fromWords } from "../../plan/patterns/owned.ts";
 import { NO_COMMON_SHAPE, factMeaning, factNote } from "../../plan/patterns/report.ts";
 
 const sorted = (m: Record<string, number>) => Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -41,7 +42,7 @@ function ClientTable({ title, t }: { title: string; t: ReturnType<typeof clientT
   );
 }
 
-export function Classification({ title, label, clients, labelsOn }: { title: string; label: string; clients: { key: string; r: Results }[]; labelsOn: { mode: "in use" | "earlier"; version: string; wp1?: boolean } }) {
+export function Classification({ title, label, clients, labelsOn, sample }: { title: string; label: string; clients: { key: string; r: Results }[]; labelsOn: { mode: "in use" | "earlier"; version: string; wp1?: boolean }; sample: string }) {
   const total = sumResults(clients.map((c) => c.r));
   if (!total.labeled) return (
     <section aria-label={label} className="pat-section">
@@ -60,10 +61,11 @@ export function Classification({ title, label, clients, labelsOn }: { title: str
       <h3>{title}</h3>
       <p className="muted">{total.labeled} items labeled, across {clients.length} client{clients.length === 1 ? "" : "s"}. Coverage above says what wasn't, and why.</p>
       {labelsOn.mode === "earlier" && <p className="field-problem">These labels are on an earlier list ({labelsOn.version}), not the list in use: nothing on it could be carried safely. Kept as they were. Run classification to label against the list in use.{labelsOn.wp1 ? " They were made before WP-2's rules." : ""}</p>}
+      {labelsOn.mode === "in use" && <p className="set-hint">{fromWords(total.from ?? {}, labelsOn.version)}</p>}
       {labelsOn.mode === "in use" && rerun > 0 && <p className="set-hint">{rerun} of these labels need labeling again (a type removed or added since, or no counterpart on the list in use). They show under their carried type until a classification run labels them.</p>}
 
       <h4>Agreement: which findings to trust</h4>
-      <p>Agreement sample: {sampleWords(total)}. Each item was labeled twice, in separate requests.</p>
+      <p>Agreement sample, across every client and kind: {sample}. Each item was labeled twice, in separate requests. The figures here are its {a.pairs} Build work pair{a.pairs === 1 ? "" : "s"}.</p>
       {a.pairs > 0 && (
         <>
           <p>Whole items: request type {shareWords(a.requestType, a.pairs)}, readiness {shareWords(a.readiness, a.pairs)}, confidence {shareWords(a.confidence, a.pairs)}.</p>

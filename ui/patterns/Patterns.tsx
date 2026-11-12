@@ -18,14 +18,14 @@ import type { Pair, Snapshot, Spread, Tickets, Writing } from "../../plan/patter
 import { FEW, FEW_WORDS, shareWords, tooFew, type ClientAnalysis } from "../../plan/patterns/analysis.ts";
 import { KIND_WORDS, KINDS, TICKET_RULE_WORDS, guessWords, type Kind } from "../../plan/patterns/kinds.ts";
 import { PARENT_SHARE_WORDS } from "../../plan/patterns/levels.ts";
-import { sumCoverage, sumResults, type ClientResults, type Coverage } from "../../plan/patterns/results.ts";
+import { sampleWords, sumCoverage, sumResults, type ClientResults, type Coverage } from "../../plan/patterns/results.ts";
 import { Classification } from "./Classification.tsx";
 import { RequestTypes } from "./RequestTypes.tsx";
 import { analysisScopeWords, type AnalysisScope, type Layout, type ProjectLayout } from "../../plan/patterns/scope.ts";
 import type { Labels, Platform, TypeChange, TypeList } from "../../plan/patterns/types.ts";
 
 type ClientProgress = { state: "waiting" | "reading" | "done" | "stopped" | "skipped" | "needs_scope"; reason?: string | null; phase?: string; month?: number; next?: number; total?: number; done?: number; dropped?: number; capped?: boolean; project?: number; projects?: string[]; read?: number; outside?: number };
-type RunView = { id: number; kind: "inventory" | "classify"; state: "running" | "stopped" | "done"; rules: number; reason: string | null; startedAt: string; finishedAt: string | null; pass: 1 | 2 | null; estimateMicros: number; spentMicros: number; clients: Record<string, ClientProgress> };
+type RunView = { id: number; kind: "inventory" | "classify"; state: "running" | "stopped" | "done"; rules: number; reason: string | null; startedAt: string; finishedAt: string | null; pass: 1 | 2 | null; listVersion: string | null; estimateMicros: number; spentMicros: number; clients: Record<string, ClientProgress> };
 type ScopeView = { page: AnalysisScope | null; admin: string; adminKind: string; next: AnalysisScope | null; nextWords: string; nextSource: string | null; problems: string[]; used: AnalysisScope | null; usedWords: string | null; changed: boolean };
 type ClientRow = { key: string; mine: boolean; platform: Platform | null; platformHint: string | null; snapshot: Snapshot | null; snapshotAt: string | null; previous: Snapshot | null; previousAt: string | null; analysis: ClientAnalysis | null; results: ClientResults | null; layout: Layout | null; scope: ScopeView; kindsChanged: boolean };
 type Version = { version: string; number: number; at: string; by: string | null; why: string | null; change: TypeChange | null };
@@ -129,7 +129,7 @@ export function Patterns({ onClose }: { onClose: () => void }) {
           </section>
           <CoverageSection clients={shown} />
           <Inventory clients={shown} onPlatform={(k, p) => void act("patterns.set_platform", { clientKey: k, platform: p })} />
-          <Classification title="Build work: classification" label="Classification" clients={shown.flatMap((c) => (c.results?.build.labeled ? [{ key: c.key, r: c.results.build }] : []))} labelsOn={data.labelsOn} />
+          <Classification title="Build work: classification" label="Classification" clients={shown.flatMap((c) => (c.results?.build.labeled ? [{ key: c.key, r: c.results.build }] : []))} labelsOn={data.labelsOn} sample={sampleWords(sumResults(data.clients.flatMap((c) => (c.results ? [c.results.build, c.results.tickets] : []))))} />
           <TicketsSection clients={shown} />
           <RequestTypes data={data} busy={busy} results={sumResults(data.clients.flatMap((c) => (c.results ? [c.results.build, c.results.tickets] : [])))} act={act} />
           <CheckByHand clients={data.clients.filter((c) => c.mine && c.results?.coverage.labeled)} />
@@ -176,7 +176,8 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
   const running = inv?.state === "running" || cls?.state === "running";
   const current = [inv, cls].filter((r): r is RunView => !!r).sort((a, b) => b.id - a.id)[0] ?? null;
   // Inventory under WP-2's rules; classification only under WP-3's (one pass against the list in use).
-  const canResume = (r: RunView | null | undefined) => r?.state === "stopped" && r.rules === (r.kind === "inventory" ? 2 : 3);
+  // A classification only on the list still in use (the estimate prices that list).
+  const canResume = (r: RunView | null | undefined) => r?.state === "stopped" && r.rules === (r.kind === "inventory" ? 2 : 3) && (r.kind === "inventory" || r.listVersion === data.inUse.version);
   return (
     <section aria-label="Runs" className="pat-section">
       <h3>Runs</h3>
@@ -197,7 +198,7 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
         )}
       </div>
       {!data.ai.ready && <p className="set-hint">{data.ai.words} The inventory works without it.</p>}
-      {cls?.state === "stopped" && !estimate && <p className="set-hint">Classification stopped. Estimate again to resume it.</p>}
+      {cls?.state === "stopped" && !estimate && <p className="set-hint">{canResume(cls) ? "Classification stopped. Estimate again to resume it." : cls.rules === 3 ? "Classification stopped, and the request types list changed since it started. Estimate, then Run classification: the labels it made carry over." : "Classification stopped."}</p>}
       <p className="set-hint">A run lives in the server, not in this page. On dev keep the page open: dev scales to zero a few minutes after the last visit, and a new deploy restarts it. Either leaves the run Stopped; Resume carries on where it stopped and never pays for an item twice.</p>
       {msg && <p className="set-hint" role="status">{msg}</p>}
       {estimate && (

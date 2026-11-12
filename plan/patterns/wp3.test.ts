@@ -9,7 +9,7 @@ import { aProcess, aRawItem } from "../../test/builders/patterns.ts";
 import { analysisOf } from "./analysis.ts";
 import { itemOf } from "./inventory.ts";
 import { agreementOf, disagreements, factReading, RELIABLE, STARTING_LIST } from "./labels.ts";
-import { applyEdit, carryMapOf, clientNamer, editCost, inUseOf, OWN_START, resolveLabels, withOwnStart, type ListEdit, type Resolved, type VersionRow } from "./owned.ts";
+import { applyEdit, carryMapOf, clientNamer, editCost, failuresOf, fromWords, inUseOf, OWN_START, resolveLabels, withOwnStart, type ListEdit, type Resolved, type VersionRow } from "./owned.ts";
 import { factNote, NO_COMMON_SHAPE, summaryMarkdown, typesMarkdown, type ReportClient } from "./report.ts";
 import { cellWords, clientTable, readinessByType, resultsOf, sampleWords, sumResults, type Results } from "./results.ts";
 import type { Labels, PatternItem, TypeList } from "./types.ts";
@@ -258,5 +258,60 @@ describe("WP-3: downloads", () => {
     expect(md).toMatch(/\| grain \| 20 \| 20 \| 100% \|/);
     expect(md).toMatch(/#### Request types\n\n\| \| adatum \| fabrikam \| All clients \| Without adatum \|/);
     expect(md).not.toMatch(/Rebuild the invoices|Morgan|Pasted text|call me|Load table/);
+  });
+});
+
+describe("WP-3: review fixes", () => {
+  it("a curly apostrophe can't make a second can't tell, and an unclear name typed on a phone is refused", () => {
+    expect(typeof applyEdit(OWN_START, { kind: "add", name: "can’t tell", meaning: "x", example: "", relabel: "other" }, { why: "w", by: ME, at: AT, namesClient: noClient })).toBe("string");
+    expect(typeof applyEdit(OWN_START, { kind: "rename", from: "can’t tell", to: "thin" }, { why: "w", by: ME, at: AT, namesClient: noClient })).toBe("string");
+    expect(typeof applyEdit(OWN_START, { kind: "add", name: "we can’t tell yet", meaning: "x", example: "", relabel: "other" }, { why: "w", by: ME, at: AT, namesClient: noClient })).toBe("string");
+  });
+
+  it("a client's project name counts as naming the client", () => {
+    const named = clientNamer([{ key: "adatum", names: [], projects: ["Northwind Reporting"] }]);
+    expect(named("northwind reporting fixes")).toBe(true);
+    expect(typeof applyEdit(OWN_START, { kind: "add", name: "Northwind Reporting work", meaning: "x", example: "", relabel: "other" }, { why: "w", by: ME, at: AT, namesClient: named })).toBe("string");
+  });
+
+  it("a merge, like a remove, keeps at least two real types", () => {
+    let l = OWN_START;
+    const real = () => l.types.filter((t) => t.name !== "can't tell" && t.name !== "other");
+    while (real().length > 2) l = edit(l, { kind: "remove", name: real()[0]!.name });
+    expect(typeof applyEdit(l, { kind: "merge", from: real()[0]!.name, into: real()[1]!.name }, { why: "w", by: ME, at: AT, namesClient: noClient })).toBe("string");
+  });
+
+  it("a removed type's labels stay removed when a later type reuses its name and is renamed or merged", () => {
+    const v2 = edit(OWN_START, { kind: "remove", name: "exploration" });
+    const v3 = edit(v2, { kind: "add", name: "exploration", meaning: "A new meaning", example: "", relabel: "other" });
+    const v4 = edit(v3, { kind: "rename", from: "exploration", to: "discovery work" });
+    const { carried } = resolveLabels([row(1, "own-1", L({ requestType: "exploration" }))], [OWN_START, v2, v3, v4], v4);
+    expect(carried.get(1)).toMatchObject({ labels: { requestType: "exploration (removed)" }, stale: "removed" });
+    // A label marked for an add still follows a rename of its type.
+    const v5 = edit(v4, { kind: "add", name: "spreadsheet", meaning: "Spreadsheets", example: "", relabel: "all" });
+    const v6 = edit(v5, { kind: "rename", from: "new report", to: "report build" });
+    expect(resolveLabels([row(2, "own-4", L({ requestType: "new report" }))], [OWN_START, v2, v3, v4, v5, v6], v6).carried.get(2)).toMatchObject({ labels: { requestType: "report build" }, stale: "added" });
+  });
+
+  it("a failure on an earlier list that carries counts on the list in use; one on a list that can't carry doesn't", () => {
+    const v2 = edit(OWN_START, { kind: "rename", from: "new report", to: "report build" });
+    const v1: TypeList = { ...STARTING_LIST, version: "v1" };
+    const f = failuresOf([row(1, "own-1", null, { rev: 3 }), row(2, "own-1", L(), { failedB: true, rev: 2 }), row(3, "v1", null)], [OWN_START, v2, v1], v2);
+    expect([...f.a]).toEqual([[1, 3]]);
+    expect([...f.b]).toEqual([[2, 2]]);
+  });
+
+  it("says which list the labels were made on, and how many were carried from where", () => {
+    expect(fromWords({ "own-2": 40 }, "own-2")).toBe("Every label was made on the list in use (version 2).");
+    const w = fromWords({ "own-2": 40, "own-1": 10, "v2-r7": 300 }, "own-2");
+    expect(w).toMatch(/^Labels made on the list in use: 40\. Carried to it from earlier lists/);
+    expect(w).toMatch(/300 from the list written by AI, 10 from version 1/);
+  });
+
+  it("a per-client table ignores a named largest client that has no column (no 'Without' equal to All clients)", () => {
+    const r = (n: number): Results => ({ ...sumResults([]), labeled: n, requestTypes: { "new report": n } });
+    const t = clientTable([{ key: "adatum", r: r(30) }, { key: "fabrikam", r: r(25) }], (x) => x.requestTypes, { largest: "contoso" });
+    expect(t.columns).toEqual(["adatum", "fabrikam", "All clients", "Without adatum"]);
+    expect(clientTable([{ key: "adatum", r: r(30) }], (x) => x.requestTypes, { largest: null }).columns).toEqual(["adatum", "All clients"]);
   });
 });

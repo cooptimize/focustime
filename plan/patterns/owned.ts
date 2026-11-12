@@ -90,9 +90,9 @@ const clean = (v: unknown, max: number): string | null => {
 const has = (list: TypeList, name: string) => list.types.some((t) => norm(t.name) === norm(name));
 
 /** Whether a text names a client: any client's key, names or aliases as whole words (an ordinary-word name only as written). */
-export function clientNamer(entries: readonly { key: string; names: readonly string[]; aliases?: readonly string[]; exactCase?: boolean }[]): (text: string) => boolean {
+export function clientNamer(entries: readonly { key: string; names: readonly string[]; aliases?: readonly string[]; projects?: readonly string[]; exactCase?: boolean }[]): (text: string) => boolean {
   const words = (t: string, exact: boolean) => ` ${(exact ? t : t.toLowerCase()).replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
-  const list = entries.flatMap((e) => [e.key, ...e.names, ...(e.aliases ?? [])].map((w) => ({ w: words(w, !!e.exactCase).trim(), exact: !!e.exactCase }))).filter((x) => x.w.length >= 2);
+  const list = entries.flatMap((e) => [e.key, ...e.names, ...(e.aliases ?? []), ...(e.projects ?? [])].map((w) => ({ w: words(w, !!e.exactCase).trim(), exact: !!e.exactCase }))).filter((x) => x.w.length >= 2);
   return (text: string) => list.some((x) => words(text, x.exact).includes(` ${x.w} `));
 }
 
@@ -185,7 +185,7 @@ export function applyEdit(list: TypeList, e: ListEdit, o: { why: string; by: str
       break;
     }
     case "merge": {
-      const p = fixedRefused(e.from) ?? fixedRefused(e.into) ?? missing(e.from) ?? missing(e.into) ?? (norm(e.from) === norm(e.into) ? "Choose two different types" : null);
+      const p = fixedRefused(e.from) ?? fixedRefused(e.into) ?? missing(e.from) ?? missing(e.into) ?? (norm(e.from) === norm(e.into) ? "Choose two different types" : null) ?? (real.length <= 2 ? "The list keeps at least two types besides can't tell and other" : null);
       if (p) return p;
       types = list.types.filter((t) => norm(t.name) !== norm(e.from));
       change = { kind: "merge", from: [list.types.find((t) => norm(t.name) === norm(e.from))!.name], to: [list.types.find((t) => norm(t.name) === norm(e.into))!.name], reason: why, count: 0 };
@@ -259,8 +259,10 @@ function step(m: CarryMap, v: TypeList): void {
   for (const c of v.changes) {
     for (const s of m.values()) {
       const at = norm(s.to);
+      // A removed type's labels stay where they were: a later type that reuses the name is another type.
+      if (s.stale === "removed") continue;
       if ((c.kind === "rename" || c.kind === "merge") && at === norm(c.from[0])) s.to = c.to[0]!;
-      else if (c.kind === "remove" && at === norm(c.from[0]) && !s.stale) s.stale = "removed";
+      else if (c.kind === "remove" && at === norm(c.from[0])) s.stale = "removed";
       else if (c.kind === "add" && !s.stale && (v.relabel === "all" || at === OTHER || at === CANT_TELL)) s.stale = "added";
     }
   }
@@ -347,8 +349,14 @@ export function listWords(l: Pick<TypeList, "version" | "createdAt">, inUse: str
 }
 
 /** What one change would cost, from the labels on the list in use now (every client's). */
-export function editCost(e: ListEdit, labels: readonly Resolved[]): { relabel: number; relabelSmall: number | null; words: string } {
+/**
+ * What one change would cost. `labels` (the labels on the list in use now) give the counts a rename or a merge moves;
+ * `priced`, when given, is what Estimate would label again with the change (items in scope of clients with Allow AI on,
+ * the same rules the run uses), so the preview and Estimate never disagree.
+ */
+export function editCost(e: ListEdit, labels: readonly Resolved[], priced?: { relabel: number; small?: number; all?: number }): { relabel: number; relabelSmall: number | null; words: string } {
   const n = (f: (r: Resolved) => boolean) => labels.filter(f).length;
+  const ON_TOP = priced ? " The agreement sample's second answers for those in it come on top." : "";
   const is = (r: Resolved, name: string) => norm(r.labels.requestType) === norm(name);
   const items = (k: number) => (k === 1 ? "1 item" : `${k} items`);
   switch (e.kind) {
@@ -362,13 +370,48 @@ export function editCost(e: ListEdit, labels: readonly Resolved[]): { relabel: n
     case "merge":
       return { relabel: 0, relabelSmall: null, words: `${items(n((r) => is(r, e.from)))} labeled "${e.from}" will count as "${e.into}". Their labels follow, so none needs labeling again and Estimate has nothing new to price.` };
     case "remove": {
-      const k = n((r) => is(r, e.name));
-      return { relabel: k, relabelSmall: null, words: `${items(k)} labeled "${e.name}" would need labeling again. Until then they show as "${e.name} (removed)". Estimate will price them.` };
+      const k = priced?.relabel ?? n((r) => is(r, e.name));
+      return { relabel: k, relabelSmall: null, words: `${items(k)} labeled "${e.name}" would need labeling again. Until then they show as "${e.name} (removed)". Estimate will price them.${ON_TOP}` };
     }
     case "add": {
-      const all = labels.length;
-      const small = n((r) => is(r, OTHER) || is(r, CANT_TELL));
-      return { relabel: e.relabel === "all" ? all : small, relabelSmall: small, words: e.relabel === "all" ? `Every labeled item (${items(all)}) would need labeling again. Estimate will price it.` : `Only the items now labeled other or can't tell (${items(small)}) would need labeling again. Estimate will price it.` };
+      const all = priced?.all ?? labels.length;
+      const small = priced?.small ?? n((r) => is(r, OTHER) || is(r, CANT_TELL));
+      return { relabel: e.relabel === "all" ? all : small, relabelSmall: small, words: (e.relabel === "all" ? `Every labeled item (${items(all)}) would need labeling again. Estimate will price it.` : `Only the items now labeled other or can't tell (${items(small)}) would need labeling again. Estimate will price it.`) + ON_TOP };
     }
   }
+}
+
+/**
+ * The answers that failed their check, per item: the newest revision a first (a) or second (b) answer failed at, on the
+ * list in use or any list whose labels carry to it (a rename or an edit never asks for them again). Paid for once.
+ */
+export function failuresOf(rows: readonly VersionRow[], lists: readonly TypeList[], inUse: TypeList): { a: Map<number, number>; b: Map<number, number> } {
+  const all = withOwnStart(lists);
+  const carries = new Map<string, boolean>();
+  const ok = (v: string) => {
+    if (v === inUse.version) return true;
+    if (!carries.has(v)) {
+      const l = all.find((x) => x.version === v);
+      carries.set(v, !!l && carryMapOf(l, inUse, all) !== null);
+    }
+    return carries.get(v)!;
+  };
+  const a = new Map<number, number>();
+  const b = new Map<number, number>();
+  for (const r of rows) {
+    if (!(r.failedA || r.failedB) || !ok(r.version)) continue;
+    if (r.failedA) a.set(r.itemId, Math.max(a.get(r.itemId) ?? -1, r.rev));
+    if (r.failedB) b.set(r.itemId, Math.max(b.get(r.itemId) ?? -1, r.rev));
+  }
+  return { a, b };
+}
+
+/** Which list the labels were made on, so no figure mixes lists without saying so. */
+export function fromWords(from: Record<string, number>, inUse: string): string {
+  const name = (v: string) => (isOwned(v) ? `version ${ownNumber(v)}` : isAiList(v) ? "the list written by AI" : "a starting list");
+  const rows = Object.entries(from).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const here = from[inUse] ?? 0;
+  const carried = rows.filter(([v]) => v !== inUse);
+  if (!carried.length) return `Every label was made on the list in use (version ${ownNumber(inUse)}).`;
+  return `Labels made on the list in use: ${here}. Carried to it from earlier lists (each type matched by its recorded changes): ${carried.map(([v, n]) => `${n} from ${name(v)}`).join(", ")}. The figures and the agreement pairs below count them on the list in use.`;
 }

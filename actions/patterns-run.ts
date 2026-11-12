@@ -33,7 +33,7 @@ import { costMicros, type Prices } from "../ai/cost.ts";
 import type { Logger } from "../log/logger.ts";
 import { F, LAYOUT_FIELDS, PARENT_FIELDS, historyOf, historySample, itemOf, monthRanges, readFields, windowFrom, type ProcessFacts, type RawUpdate, type Snapshot } from "../plan/patterns/inventory.ts";
 import { AGREE_MIN, AGREE_SHARE, BATCH, CHILD_TITLES, CLASSIFY_SCHEMA, OTHER, TEXT_CAP, agreementPick, classifyInput, classifyInstructions, cleanList, parseLabels, plain, toClassify, type ClassifyInput } from "../plan/patterns/labels.ts";
-import { inUseOf, resolveLabels } from "../plan/patterns/owned.ts";
+import { failuresOf, inUseOf, resolveLabels } from "../plan/patterns/owned.ts";
 import { analysisOf } from "../plan/patterns/analysis.ts";
 import { kindFacts, kindOfType, kindsOf, type Kind } from "../plan/patterns/kinds.ts";
 import { layoutOf, matcherOf, scopeChoice, usedMatcher, type AnalysisScope, type LayoutRow, type ProjectTree } from "../plan/patterns/scope.ts";
@@ -348,8 +348,11 @@ export function createPatternsRunner(d: RunnerDeps) {
     const where = new Map((await d.store.layout(k)).map((r) => [r.id, r]));
     const all = sc ? (await d.store.currentItems(k)).filter((i) => !i.inWindow || (where.has(i.id) && sc.match(where.get(i.id)!))) : [];
     const pool = toClassify(all, (t) => kindOfType(kinds, t));
-    const [rows, lists, fails] = await Promise.all([d.store.allLabels(k), d.store.lists(), d.store.failures(k, list.version)]);
+    const [rows, stored] = await Promise.all([d.store.allLabels(k), d.store.lists()]);
+    // The list priced may not be saved yet (a change's preview): it joins the chain it extends.
+    const lists = stored.some((l) => l.version === list.version) ? stored : [...stored, list];
     const { carried } = resolveLabels(rows, lists, list);
+    const fails = failuresOf(rows, lists, list);
     // An answer that failed its check at this revision was paid for: never sent again (until the item changes).
     const failed = (i: PatternItem) => (fails.a.get(i.id) ?? -1) >= i.rev;
     const good = (i: PatternItem) => {
@@ -477,7 +480,16 @@ export function createPatternsRunner(d: RunnerDeps) {
           });
           // Paid for and not kept: written with the labels (one transaction), so Resume never sends them again.
           const revRead = (v: { fields: Readonly<Record<string, unknown>> }) => (typeof v.fields[F.rev] === "number" ? (v.fields[F.rev] as number) : 0);
-          const fails = vals.map((v, n) => (rows[n] ? null : { itemId: v.id, rev: Math.max(t.all.find((x) => x.id === v.id)!.rev, revRead(v)), ...(second ? { failedB: true } : { failed: true }) }));
+          const fails = vals.map((v, n) => {
+            if (rows[n]) return null;
+            const rev = Math.max(t.all.find((x) => x.id === v.id)!.rev, revRead(v));
+            if (!second) return { itemId: v.id, rev, failed: true };
+            // A failed second answer for an item whose first is carried: recorded on this list's row with the carried first
+            // answer (as a kept second answer is), so it is never asked again until the item changes.
+            const had = t.carried.get(v.id);
+            const onList = t.need.some((x) => x.id === v.id) || had?.from === list.version;
+            return onList || !had ? { itemId: v.id, rev, failedB: true } : { itemId: v.id, rev: Math.max(had.rev, rev), labels: had.labels, failedB: true };
+          });
           if (!second) for (const f of fails) if (f) failed.add(f.itemId);
           await d.store.putLabels(k, list.version, [...rows, ...fails].filter((x): x is NonNullable<typeof x> => !!x));
           if (!second) {
@@ -621,13 +633,16 @@ export function createPatternsRunner(d: RunnerDeps) {
    * Resume a stopped run: inventory as it was (clients waiting for a scope carry on with the one chosen since);
    * classification with a new estimate. Stopped clients are tried again. A run made before WP-2 isn't resumed.
    */
-  async function resume(id: number, by: string, c?: { deps: ClassifyDeps; estimateMicros: number }): Promise<{ ok: true; run: Run } | { ok: false; why: "busy" | "not_stopped" | "needs_estimate" | "old_rules" }> {
+  async function resume(id: number, by: string, c?: { deps: ClassifyDeps; estimateMicros: number }): Promise<{ ok: true; run: Run } | { ok: false; why: "busy" | "not_stopped" | "needs_estimate" | "old_rules" | "list_changed" }> {
     await reconcile();
     const before = await d.store.run(id);
     if (!before || before.state !== "stopped") return { ok: false, why: "not_stopped" };
     // Inventory under WP-2's rules; a classification only under WP-3's (one pass against the list in use).
     if (before.kind === "inventory" ? before.progress.rules !== 2 : before.progress.rules !== 3) return { ok: false, why: "old_rules" };
     if (before.kind === "classify" && !c) return { ok: false, why: "needs_estimate" };
+    // The estimate prices the list in use: a classification started on another list isn't resumed (a new run is, and the
+    // labels it made carry over).
+    if (before.kind === "classify" && before.progress.listVersion !== inUseOf(await d.store.lists()).version) return { ok: false, why: "list_changed" };
     const run = await d.store.resumeRun(id, { owner: d.owner, startedBy: by, ...(c ? { estimateMicros: c.estimateMicros } : {}) });
     if (!run) return { ok: false, why: "busy" };
     for (const cp of Object.values(run.progress.clients)) if (cp.state === "stopped" || cp.state === "reading" || cp.state === "needs_scope") Object.assign(cp, { state: "waiting", reason: null });
@@ -641,9 +656,10 @@ export function createPatternsRunner(d: RunnerDeps) {
    * label on the list, or one that needs labeling again) and the agreement sample's second answers, the expected cost and
    * a rough time.
    */
-  async function estimate(keys: string[], aiAllowed: (k: string) => Promise<boolean>): Promise<Estimate> {
+  async function estimate(keys: string[], aiAllowed: (k: string) => Promise<boolean>, o: { list?: TypeList } = {}): Promise<Estimate> {
     const prices = d.prices?.() ?? null;
-    const list = inUseOf(await d.store.lists());
+    // WP-3: `list` prices a change before it is saved (the same rules the run uses afterwards).
+    const list = o.list ?? inUseOf(await d.store.lists());
     const instr = classifyInstructions(list).length / 4;
     const clients: Estimate["clients"] = {};
     const allowed: string[] = [];
@@ -676,12 +692,13 @@ export function createPatternsRunner(d: RunnerDeps) {
       const micros = prices ? costMicros({ inputTokens: Math.round(input), cachedTokens: 0, outputTokens: output }, prices) : 0;
       const requests = Math.ceil(p.need.length / BATCH) + Math.ceil(p.needB.length / BATCH);
       const reads = Math.ceil((p.need.length + p.needB.filter((i) => !p.need.includes(i)).length) / (PAGE / 2));
-      clients[k] = { items: n, toClassify: p.items.length, micros, seconds: requests * AI_SECONDS + reads * READ_SECONDS, skipped: null };
+      clients[k] = { items: n, labels: p.need.length, toClassify: p.items.length, micros, seconds: requests * AI_SECONDS + reads * READ_SECONDS, skipped: null };
     }
     const totalItems = Object.values(clients).reduce((s, c) => s + c.items, 0);
     const totalMicros = Object.values(clients).reduce((s, c) => s + c.micros, 0);
     const totalSeconds = Object.values(clients).reduce((s, c) => s + c.seconds, 0);
-    return { clients, totalItems, totalMicros, totalSeconds, agreement: agree.size, list: list.version };
+    const totalLabels = Object.values(clients).reduce((s, c) => s + (c.labels ?? 0), 0);
+    return { clients, totalItems, totalLabels, totalMicros, totalSeconds, agreement: agree.size, list: list.version };
   }
 
   return {
@@ -701,6 +718,6 @@ export function createPatternsRunner(d: RunnerDeps) {
 
 export type PatternsRunner = ReturnType<typeof createPatternsRunner>;
 /** What Estimate answers: per client, the requests' items (labels and the agreement answers), the items in scope to classify, cost and time; the list in use. */
-export type Estimate = { clients: Record<string, { items: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalMicros: number; totalSeconds: number; agreement: number; list: string };
+export type Estimate = { clients: Record<string, { items: number; labels?: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalLabels: number; totalMicros: number; totalSeconds: number; agreement: number; list: string };
 export type { Level };
 export { OTHER };

@@ -28,7 +28,7 @@ const projects = () => ({
   fabrikam: aSmallProject(300),
 });
 
-function world(o: { db?: ReturnType<typeof sqliteDb>; respond?: (c: ProviderCall) => string | ProviderReply } = {}) {
+function world(o: { db?: ReturnType<typeof sqliteDb>; respond?: (c: ProviderCall) => string | ProviderReply; aiOff?: boolean } = {}) {
   const db = o.db ?? sqliteDb();
   let clock = Temporal.Instant.from(NOW);
   const reader = fakePatternsReader(projects());
@@ -55,7 +55,8 @@ function world(o: { db?: ReturnType<typeof sqliteDb>; respond?: (c: ProviderCall
     allowed: async () => true,
     myClients: async () => mine.get(who) ?? [],
     dataPlatform: async () => null,
-    ai: async () => ({ deps }),
+    ai: async () => (o.aiOff ? { why: "AI is off for FocusTime." } : { deps }),
+    directory: async () => [...directory, { key: "contoso", names: ["Northwind Traders"], projects: ["Tailspin Reporting"] }],
     aiAllowed: async () => true,
     now: () => clock.toString(),
     nameOf: async (id) => (id === KIM ? "Kim Example" : null),
@@ -102,6 +103,9 @@ describe("DevOps patterns: trust the analysis (WP-3)", () => {
     const after = data(await w.act(ME, "patterns.status"));
     expect(after.inUse.version).toBe("own-2");
     expect(after.ignored).toEqual(["housekeeping"]);
+    // A name now on the list is no longer suggested, ignored or not.
+    await w.act(ME, "patterns.suggestion", { name: "housekeeping", ignore: false });
+    expect(data(await w.act(ME, "patterns.status")).suggestions.map((x: Data) => x.name)).not.toContain("housekeeping");
     expect(after.versions[0]).toMatchObject({ version: "own-2", by: "you", why: "Suggested often for other", change: { kind: "add", to: ["housekeeping"] } });
     // Kim sees who made it by name.
     expect(data(await w.act(KIM, "patterns.status")).versions[0].by).toBe("someone with the page");
@@ -261,6 +265,86 @@ describe("DevOps patterns: trust the analysis (WP-3)", () => {
     expect(JSON.stringify(s.clients)).not.toMatch(/Sales reporting|Check the totals/);
     expect(await w.act(ME, "patterns.check", { clientKey: "fabrikam" })).toMatchObject({ ok: false, status: 403 });
     expect((await w.act(ME, "patterns.check", { clientKey: "adatum" })).ok).toBe(true);
+  });
+});
+
+describe("DevOps patterns: review fixes (WP-3)", () => {
+  /** Inventory, then every item in scope given a first answer on own-1 (no second), as an earlier run left them. */
+  async function labeledOnOwn1(w: ReturnType<typeof world>) {
+    await w.runner.startInventory(ME);
+    await w.settle();
+    await w.store.saveList(OWN_START, null);
+    for (const k of ["adatum", "fabrikam"]) {
+      const items = (await w.store.currentItems(k)).filter((i) => i.inWindow);
+      await w.store.putLabels(k, "own-1", items.map((i) => ({ itemId: i.id, rev: i.rev, labels: L() })));
+    }
+  }
+
+  it("a failed second answer for a carried label is recorded, never asked again, and counted; a rename later keeps it so", async () => {
+    let fail = true;
+    const base = patternsAnswer();
+    const w = world({ respond: (c) => (fail && c.schemaName === "patterns_classify" ? JSON.stringify({ items: [] }) : (base(c) as string)) });
+    await labeledOnOwn1(w);
+    await w.act(ME, "patterns.list_change", { edit: { kind: "rename", from: "small change", to: "minor change" }, base: "own-1", why: "Clearer" });
+    const before = await w.runner.estimate(["adatum", "fabrikam"], async () => true);
+    expect(before.totalLabels).toBe(0);
+    expect(before.totalItems).toBeGreaterThan(0);
+    await w.classify();
+    // Every second answer failed: recorded on own-2's rows with the carried first answer, so nothing is priced again.
+    expect((await w.runner.estimate(["adatum", "fabrikam"], async () => true)).totalItems).toBe(0);
+    const s = data(await w.act(ME, "patterns.status"));
+    expect(s.clients.reduce((t: number, c: Data) => t + c.results.build.agreeFailed + c.results.tickets.agreeFailed, 0)).toBe(before.totalItems);
+    // Another rename: the failures still count, and no first answer is asked for again.
+    await w.act(ME, "patterns.list_change", { edit: { kind: "rename", from: "minor change", to: "tiny change" }, base: "own-2", why: "Shorter" });
+    w.calls.length = 0;
+    expect((await w.runner.estimate(["adatum", "fabrikam"], async () => true)).totalItems).toBe(0);
+    fail = false;
+  });
+
+  it("a first answer that failed on an earlier list isn't priced again after a rename", async () => {
+    const w = world({ respond: () => JSON.stringify({ items: [] }) });
+    await w.runner.startInventory(ME);
+    await w.settle();
+    await w.classify();
+    const failedThen = data(await w.act(ME, "patterns.status")).clients.reduce((t: number, c: Data) => t + c.results.coverage.failed, 0);
+    expect(failedThen).toBeGreaterThan(0);
+    await w.act(ME, "patterns.list_change", { edit: { kind: "rename", from: "new report", to: "report build" }, base: "own-1", why: "Clearer" });
+    expect((await w.runner.estimate(["adatum", "fabrikam"], async () => true)).totalItems).toBe(0);
+    expect(data(await w.act(ME, "patterns.status")).clients.reduce((t: number, c: Data) => t + c.results.coverage.failed, 0)).toBe(failedThen);
+  });
+
+  it("the cost preview and Estimate agree: only items Estimate would send, from clients with Allow AI on", async () => {
+    const w = world();
+    await labeledOnOwn1(w);
+    const preview = data(await w.act(ME, "patterns.list_change", { edit: { kind: "remove", name: "new report" }, base: "own-1", preview: true }));
+    await w.act(ME, "patterns.list_change", { edit: { kind: "remove", name: "new report" }, base: "own-1", why: "Too broad" });
+    const est = await w.runner.estimate(["adatum", "fabrikam"], async () => true);
+    expect(preview.cost.relabel).toBe(est.totalLabels);
+    expect(preview.cost.relabel).toBeGreaterThan(0);
+    // An add, both ways, priced the same as Estimate would after saving it.
+    const add = { kind: "add", name: "spreadsheet", meaning: "Spreadsheet work", example: "Fix the budget sheet", relabel: "all" };
+    const p2 = data(await w.act(ME, "patterns.list_change", { edit: add, base: "own-2", preview: true }));
+    await w.act(ME, "patterns.list_change", { edit: add, base: "own-2", why: "Seen often" });
+    expect(p2.cost.relabel).toBe((await w.runner.estimate(["adatum", "fabrikam"], async () => true)).totalLabels - est.totalLabels);
+  });
+
+  it("a stopped classification isn't resumed once the list changed: Run classification instead", async () => {
+    const w = world();
+    await w.runner.startInventory(ME);
+    await w.settle();
+    await w.store.saveList(OWN_START, null);
+    const old = await w.store.startRun({ kind: "classify", startedBy: ME, owner: "proc-0", progress: { rules: 3, listVersion: "own-1", clients: {} } });
+    await w.store.finish(old!.id, "proc-0", "stopped", "Stopped: the server restarted or scaled down");
+    await w.act(ME, "patterns.list_change", { edit: { kind: "remove", name: "exploration" }, base: "own-1", why: "Not used" });
+    expect(await w.act(ME, "patterns.resume", { runId: old!.id, total: 1000 })).toMatchObject({ ok: false, code: "list_changed" });
+  });
+
+  it("with AI off, a type naming a client by its name or project is still refused", async () => {
+    const w = world({ aiOff: true });
+    const add = (name: string) => w.act(ME, "patterns.list_change", { edit: { kind: "add", name, meaning: "x", example: "", relabel: "other" }, base: "own-1", why: "Seen" });
+    expect(await add("Northwind Traders work")).toMatchObject({ ok: false, status: 422 });
+    expect(await add("Tailspin Reporting fixes")).toMatchObject({ ok: false, status: 422 });
+    expect(w.calls).toEqual([]);
   });
 });
 

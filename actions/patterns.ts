@@ -16,7 +16,7 @@ import type { ActionResponse } from "./dispatch.ts";
 import type { ClassifyDeps, PatternsRunner } from "./patterns-run.ts";
 import { STARTING_LIST, WP1_START, norm, suggestionsOf } from "../plan/patterns/labels.ts";
 import { handCheck, resultsOf, type ClientResults } from "../plan/patterns/results.ts";
-import { OWN_START, applyEdit, clientNamer, editCost, inUseOf, isAiList, isOwned, nameProblem, ownNumber, parseEdit, resolveLabels, withOwnStart, type Resolved } from "../plan/patterns/owned.ts";
+import { OWN_START, applyEdit, clientNamer, editCost, inUseOf, isAiList, isOwned, nameProblem, ownNumber, parseEdit, resolveLabels, withOwnStart, type Resolved, failuresOf } from "../plan/patterns/owned.ts";
 import { summaryMarkdown, typesMarkdown, type ReportClient } from "../plan/patterns/report.ts";
 import { levelsOf } from "../plan/patterns/levels.ts";
 import { windowFrom, type Snapshot } from "../plan/patterns/inventory.ts";
@@ -60,6 +60,8 @@ export type PatternsContext = {
   now(): string;
   /** WP-3: a FocusTime person's name for "who changed the list" (null: not known). */
   nameOf?(userId: string): Promise<string | null>;
+  /** WP-3: every client the page covers (names, aliases, projects), with AI on or off, to check a request type's words. */
+  directory?(): Promise<readonly { key: string; names: readonly string[]; aliases?: readonly string[]; projects?: readonly string[]; exactCase?: boolean }[]>;
 };
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -122,9 +124,9 @@ async function labelsFor(store: PatternsStore, k: string, v: LabelView): Promise
     const [labels, fails] = await Promise.all([store.labels(k, v.version), store.failures(k, v.version)]);
     return { labels: new Map([...labels].map(([id, r]) => [id, { rev: r.rev, labels: r.labels, labelsB: r.labelsB, from: v.version, stale: null, failedB: false }])), earlier: new Map(), failedA: fails.a };
   }
-  const [rows, fails] = await Promise.all([store.allLabels(k), store.failures(k, v.inUse.version)]);
+  const rows = await store.allLabels(k);
   const r = resolveLabels(rows, v.lists, v.inUse);
-  return { labels: r.carried, earlier: r.earlier, failedA: fails.a };
+  return { labels: r.carried, earlier: r.earlier, failedA: failuresOf(rows, v.lists, v.inUse).a };
 }
 
 /** Everything the page and the summary show for one client, worked out now. */
@@ -144,8 +146,9 @@ async function clientView(store: PatternsStore, k: string, o: { view: LabelView;
 }
 
 /** The "other" suggestions across clients and per client, without ignored ones or any that names a client or how unclear an item is. */
-function suggestionsView(views: readonly ClientView[], ignored: readonly string[], namesClient: (t: string) => boolean) {
-  const usable = (n: string) => !ignored.includes(norm(n)) && !nameProblem(n, namesClient);
+function suggestionsView(views: readonly ClientView[], ignored: readonly string[], namesClient: (t: string) => boolean, inUse: TypeList) {
+  // Not a name already on the list in use (it was added, or is a type already).
+  const usable = (n: string) => !ignored.includes(norm(n)) && !nameProblem(n, namesClient) && !inUse.types.some((t) => norm(t.name) === norm(n));
   const others = (v: ClientView): Labels[] => [...v.labels.values()].map((r) => r.labels).filter((l) => l.otherName && usable(l.otherName));
   const all = suggestionsOf(views.flatMap(others)).slice(0, 30);
   const per = Object.fromEntries(views.map((v) => [v.key, Object.fromEntries(suggestionsOf(others(v)).map((x) => [norm(x.name), x.count]))]));
@@ -161,8 +164,12 @@ async function whoWords(pc: PatternsContext, me: string, by: string | null | und
 
 /** Whether a text names any client the page covers (keys, and the names and aliases the person's AI directory knows). */
 async function namerFor(pc: PatternsContext, keys: readonly string[]): Promise<(t: string) => boolean> {
-  const ai = await pc.ai().catch(() => null);
-  const dir = ai && "deps" in ai ? ai.deps.directory : [];
+  // The directory with AI on or off; without it (a context that has none), the AI's.
+  const fromAi = async () => {
+    const ai = await pc.ai().catch(() => null);
+    return ai && "deps" in ai ? ai.deps.directory : [];
+  };
+  const dir = pc.directory ? await pc.directory().catch(fromAi) : await fromAi();
   return clientNamer([...keys.map((k) => ({ key: k, names: [] })), ...dir]);
 }
 
@@ -241,7 +248,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
           inUse: view.inUse,
           versions,
           labelsOn: view.mode === "in use" ? { mode: "in use", version: view.inUse.version } : { mode: "earlier", version: view.version, wp1: view.version === WP1_START || (!!view.run && view.run.progress.rules !== 2) },
-          suggestions: suggestionsView(views, ignored, namesClient),
+          suggestions: suggestionsView(views, ignored, namesClient, view.inUse),
           ignored,
           shownVersion: view.mode === "in use" ? view.inUse.version : view.version,
           shownRules: view.mode === "in use" ? 3 : view.version === WP1_START || (!!view.run && view.run.progress.rules !== 2) ? 1 : 2,
@@ -272,7 +279,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const run = resumeId !== null ? await store.run(resumeId as number) : null;
       if (action === "patterns.resume" && run?.kind === "inventory") {
         const r = await runner.resume(run.id, me);
-        return r.ok ? { ok: true, data: { run: runView(r.run) } } : bad(r.why === "busy" ? "A run is going already" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : "That run can't be resumed", 409, r.why);
+        return r.ok ? { ok: true, data: { run: runView(r.run) } } : bad(r.why === "busy" ? "A run is going already" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : r.why === "list_changed" ? "The request types list changed since that run started. Run classification instead: the labels it made carry over." : "That run can't be resumed", 409, r.why);
       }
       // Classification: only after an estimate, and only for the total it named (a fresh estimate here must agree).
       if (typeof i.total !== "number" || !Number.isFinite(i.total) || i.total < 0) return bad("Estimate first: Run classification names the estimate's total", 422, "needs_estimate");
@@ -282,7 +289,7 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       const e = await runner.estimate(keys, (k) => pc.aiAllowed(k));
       if (Math.abs(e.totalMicros - i.total) > Math.max(10_000, e.totalMicros * 0.05)) return bad("The estimate changed. Estimate again.", 409, "estimate_changed");
       const r = run ? await runner.resume(run.id, me, { deps: ai.deps, estimateMicros: e.totalMicros }) : await runner.startClassify(me, ai.deps, e.totalMicros, keys);
-      if (!r.ok) return bad(r.why === "busy" ? "A run is going already. Wait for it to finish." : r.why === "no_clients" ? "No client has DevOps set up here" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : "That run can't be resumed", 409, r.why);
+      if (!r.ok) return bad(r.why === "busy" ? "A run is going already. Wait for it to finish." : r.why === "no_clients" ? "No client has DevOps set up here" : r.why === "old_rules" ? "That run was made before scopes and kinds. Run it again." : r.why === "list_changed" ? "The request types list changed since that run started. Run classification instead: the labels it made carry over." : "That run can't be resumed", 409, r.why);
       return { ok: true, data: { run: runView(r.run) } };
     }
     case "patterns.set_platform": {
@@ -387,7 +394,15 @@ export async function patternsAction(pc: PatternsContext, action: PatternsAction
       // What it costs, from the labels on the list in use now (every client's: counts only).
       const labels: Resolved[] = [];
       for (const k of keys) labels.push(...resolveLabels(await store.allLabels(k), lists, inUse).carried.values());
-      const cost = editCost(edit, labels);
+      // Priced the way Estimate prices it: what the change adds to what would be labeled now.
+      const allowed = (k: string) => pc.aiAllowed(k).catch(() => false);
+      const labelsWith = async (l: TypeList) => (await runner.estimate(keys, allowed, { list: l })).totalLabels;
+      const now = await labelsWith(inUse);
+      const added = async (l: TypeList) => Math.max(0, (await labelsWith(l)) - now);
+      const priced = edit.kind === "add"
+        ? { relabel: 0, small: await added({ ...next, relabel: "other" }), all: await added({ ...next, relabel: "all" }) }
+        : edit.kind === "remove" ? { relabel: await added(next) } : undefined;
+      const cost = editCost(edit, labels, priced);
       if (i.preview) return { ok: true, data: { preview: true, cost, version: next.version } };
       if (typeof i.why !== "string" || i.why.trim().length < 3) return bad("Say why in one line", 422, "needs_why");
       if (!(await store.saveOwned(next, OWN_START))) return bad("The list changed since you opened it. Look at the new version, then change it again.", 409, "list_changed");

@@ -256,7 +256,7 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2, WP-3)", () => {
     await shot(page, "classification", "Classification");
     // WP-3: agreement comes first, with the sample as it is; then a table per fact with a column per client.
     await classification.getByRole("heading", { name: "Agreement: which findings to trust" }).waitFor();
-    await classification.getByText(/^Agreement sample: \d+ of \d+/).waitFor();
+    await classification.getByText(/^Agreement sample, across every client and kind: \d+ of \d+/).waitFor();
     await shot(page, "wp3-agreement", classification.getByRole("heading", { name: "Agreement: which findings to trust" }));
     const byClient = classification.getByRole("table", { name: "Request type" });
     expect(await byClient.locator("thead th").allTextContents()).toContain("All clients");

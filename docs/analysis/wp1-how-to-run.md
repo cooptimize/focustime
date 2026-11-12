@@ -57,7 +57,7 @@ Each change asks for one line of why, then **What it costs**, then **Save as a n
 - *Remove*: its items need labeling again; until then they show as "<type> (removed)". Estimate prices them.
 - *Add*: choose "only the items now labeled other or can't tell" (the smaller number, shown) or every labeled item. Those need labeling again; Estimate prices them.
 
-If someone else saved first, the page says the list changed; look again and redo yours. A change during a run applies to the next run; the running one keeps the list it started with, and its labels carry over.
+If someone else saved first, the page says the list changed; look again and redo yours. A change during a run applies to the next run; the running one keeps the list it started with, and its labels carry over. A stopped classification can't be resumed once the list changed: Estimate, then Run classification (nothing already labeled is paid for again).
 
 **Suggested for "other"**: the names the AI gave items it labeled "other", with counts overall and per client. **Add as a type** opens Add with the name filled in; **Ignore** hides a name (Show again brings it back). Nothing changes without the press.
 

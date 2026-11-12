@@ -36,7 +36,8 @@ function ChangeForm({ list, draft, set, busy, act, onDone }: { list: TypeList; d
   const [cost, setCost] = useState<Cost | null>(null);
   const [error, setError] = useState<string | null>(null);
   const real = list.types.filter((t) => !FIXED.includes(t.name));
-  const field = (k: keyof Draft) => (e: { target: { value: string } }) => (set({ ...draft, [k]: e.target.value }), setCost(null));
+  // The why doesn't change the cost, so typing it keeps the cost shown.
+  const field = (k: keyof Draft) => (e: { target: { value: string } }) => (set({ ...draft, [k]: e.target.value }), k === "why" ? undefined : setCost(null));
   const preview = async () => {
     setError(null);
     const r = (await act("patterns.list_change", { edit: editOf(draft), base: list.version, preview: true })) as { cost: Cost } | null;

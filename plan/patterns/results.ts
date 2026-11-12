@@ -102,7 +102,7 @@ function resultsFor(items: readonly PatternItem[], labels: LabelMap): Results {
     if (l && i.parentId !== null) (kids.get(i.parentId) ?? kids.set(i.parentId, []).get(i.parentId)!).push(l);
   }
   const parents = items.filter((i) => labels.has(i.id) && (kids.get(i.id)?.length ?? 0) >= SHAPE_MIN_CHILDREN);
-  r.shapes = { parents: parents.length, sets: commonShapes(parents.map((p) => ({ type: labels.get(p.id)!.labels.requestType, shape: shapeOf(kids.get(p.id)!) })), 50) };
+  r.shapes = { parents: parents.length, sets: commonShapes(parents.map((p) => ({ type: labels.get(p.id)!.labels.requestType, shape: shapeOf(kids.get(p.id)!) })), Infinity) };
   return r;
 }
 
@@ -215,7 +215,9 @@ export const cellWords = (c: Cell): string => (tooFew(c.base) ? `${c.count} (${F
  */
 export function clientTable(clients: readonly { key: string; r: Results }[], pick: (r: Results) => Record<string, number>, o: { rows?: readonly string[]; largest?: string | null } = {}): { columns: string[]; largest: string | null; rows: { value: string; cells: Cell[] }[] } {
   const all = sumResults(clients.map((c) => c.r));
-  const largest = o.largest !== undefined ? o.largest : clients.length > 1 ? ([...clients].sort((a, b) => b.r.labeled - a.r.labeled || a.key.localeCompare(b.key))[0]?.key ?? null) : null;
+  // A named largest client that has no column here (no labels of this kind) is ignored: "Without" it would be All clients.
+  const named = o.largest === null || (o.largest !== undefined && clients.some((c) => c.key === o.largest)) ? o.largest : undefined;
+  const largest = named !== undefined ? named : clients.length > 1 ? ([...clients].sort((a, b) => b.r.labeled - a.r.labeled || a.key.localeCompare(b.key))[0]?.key ?? null) : null;
   const rest = largest ? sumResults(clients.filter((c) => c.key !== largest).map((c) => c.r)) : null;
   const cols = [...clients.map((c) => c.r), all, ...(rest ? [rest] : [])];
   const values = o.rows ?? Object.entries(pick(all)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
