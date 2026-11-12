@@ -104,6 +104,8 @@ export function causeLines(sources: readonly SourceSummary[], devops: readonly C
     if (s.cause) add(s.cause, s.cause, name, s.fetchedAt, s.fromCache, null, fix);
     else add(`msg:${s.link ? `${s.link.id}:` : ""}${s.message ?? `${name} ${s.status}`}`, null, name, s.fetchedAt, s.fromCache, { text: s.link ? `${name}: ${ownText(s)}` : ownText(s), step: null }, fix);
   }
+  // PS-1: a source that is fine but couldn't read one part says which ("Dataverse: holidays weren't read"), with Retry.
+  for (const s of sources) if (s.note && s.status === "ok" && !s.sample) add(`note:${s.source}:${s.note}`, null, sourceLabel(s), null, true, { text: `${sourceLabel(s)}: ${s.note.charAt(0).toLowerCase()}${s.note.slice(1)}`, step: null }, { kind: "retry" });
   const shared = (devops ?? []).filter((c) => c.status !== "ok" && c.cause);
   for (const cause of new Set(shared.map((c) => c.cause!))) {
     const mine = shared.filter((c) => c.cause === cause);

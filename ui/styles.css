@@ -6452,12 +6452,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .cc-rest { width: auto; max-width: 260px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .week-head.wd1-head .ph-title { flex: 1 1 auto; }
 .week-head.wd1-head .client-chips { flex: 1 1 0; }
-.date-short { display: none; }
-/* WD-1 review: a card's status chip stays on the header row: the time takes its short form ("9–12:30") first. */
-@container cardbody (max-width: 24em) {
-  .card-when .cw-full { display: none; }
-  .card-when .cw-short { display: inline; white-space: nowrap; }
-}
+/* PS-1: one time format on the cards ("9:00–12:30"); the hours alone ("9–1") only in a card under 4.5em (above). */
 /* WD-1 review: the phone's Week header is one row: the week title (wrapping in its own column), then + Add and ⋯. */
 .app.phone .week-head.wd1-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
 .app.phone .week-head.wd1-head .mode-area { grid-column: auto; flex: none; justify-self: end; flex-wrap: nowrap; overflow: visible; }
@@ -6601,3 +6596,147 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ah-row:is(:hover, :focus-within) .ah-new-under, .pa-row:is(:hover, :focus-within) .ah-new-under, .bl-row:is(:hover, :focus-within) .ah-new-under, .ah-new-under:focus-visible { visibility: visible; }
 @media (hover: none) { .ah-new-under { visibility: visible; } }
 .bd-by-hand { margin-right: auto; }
+
+/* ==========================================================================================================
+   PS-1: Day, Week and the block panel, calmer and consistent. The rules are in docs/design/style-guide.md
+   ("Day and Week: rules for people"); this block is where they are applied, last so it wins.
+   ========================================================================================================== */
+:root { --target: 28px; }
+.app.phone { --target: 44px; }
+
+/* A2: the header's + Add is the one main button on Day and on Week: the only filled, accent button in the header, just
+   left of ⋯, doing what it did. Pressed (its panel open) it stays filled, with an inner ring. */
+.mode-area .add-work-head {
+  display: inline-flex; align-items: center; justify-content: center; min-height: max(var(--target), calc(30px * var(--text-scale)));
+  min-width: var(--target); margin-left: 0; padding: 0 14px; border: 1px solid var(--action); border-radius: 8px;
+  background: var(--action); color: var(--on-action); font: inherit; font-size: var(--fs-3); font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.mode-area .add-work-head:hover { filter: brightness(1.08); }
+.mode-area .add-work-head[aria-pressed="true"] { background: var(--action); border-color: var(--action); box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--on-action) 40%, transparent); }
+/* Nothing else in the header competes: Timebox my day is a quiet text button. */
+.mode-area .today-timebox { min-height: var(--target); padding: 0 8px; border-color: transparent; background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; }
+.mode-area .today-timebox:hover, .mode-area .today-timebox:focus-visible { color: var(--text); background: var(--raised); }
+.mode-area .day-switch button { min-height: var(--target); }
+
+/* A3: a block's own + Add is the quiet copy: plain, secondary text, a full-width target, always visible, so a
+   suggestion is the only dashed thing on a card. An empty block (nothing on it, nothing suggested) keeps the dashed
+   box: there it is the only thing in the block, an open invitation. */
+.half .add-work.add-row {
+  visibility: visible; display: flex; align-items: center; align-self: stretch; width: 100%; min-height: var(--target);
+  margin-top: 2px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; text-align: left;
+}
+.half .add-work.add-row:hover, .half .add-work.add-row:focus-visible { background: var(--raised); color: var(--text); border-color: transparent; }
+.half .card-body:not(:has(.checklist, .sug-list, .placed-features, .checkin-chips)) .add-work.add-row,
+.tt-block:not(:has(.checklist li, .sug-list)) .add-work.add-row { border: 1px dashed var(--border-strong); }
+
+/* C3: action links on these screens (Keep all, Clear, Review, Break down, N more in Inbox) are quiet: the text's own
+   colour, underlined only on hover and focus. */
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title) {
+  color: var(--text-muted); font-weight: 500; text-decoration: underline; text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+}
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title):hover,
+:is(.day-view, .week-head, .to-place-line, .next-empty-line, main.grid, aside.block-panel, .ph-week) .link-btn:not(.draft-title):focus-visible {
+  color: var(--text); text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* C1: "now" on a card with no rail is a small marker in the block's header (dot and time), so every card's first line
+   sits on the same line. */
+.now-mark { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.now-mark { --nl: var(--accent); }
+.now-mark .nl-dot { position: static; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--nl); }
+.now-mark .nl-time { position: static; transform: none; display: inline-flex; align-items: center; justify-content: center; min-height: var(--target); min-width: var(--target); margin: calc((var(--target) - 1lh) / -2) 0; padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.now-mark .nl-pill { padding: 0 4px; border-radius: 4px; background: var(--nl); color: var(--surface); font-size: var(--fs-1); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
+/* The now time on a rail is a target too; the pill keeps its size inside it. */
+
+/* D2: a past day's folded card reads as folded: a quieter fill and a hairline, so the eye skips it. */
+.half.folded, .half.card.folded { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
+.half.folded .card-client { color: var(--text-muted); font-weight: 500; }
+.half.folded .card-head .swatch { opacity: 0.6; }
+
+/* C2, C4: the card's ⋯ is a full target and the header keeps room for it, so a chip never touches it. */
+.card-head { min-height: max(var(--target), calc(20px * var(--text-scale))); padding-right: calc(var(--target) + 4px); }
+.card-head .card-more { top: 0; height: var(--target); align-items: center; }
+.card-head .card-more .more-btn { min-width: var(--target); height: var(--target); }
+
+/* E: a to-do title on a card is at most two lines, the full title on hover (PickRow's title attribute). */
+.half .checklist .pick-title, .half .checklist .pr-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+
+/* C2: every clickable thing on Day, Week and the panel is at least --target both ways (28px; 44px on the phone), with
+   the hover and focus states it already has. The look stays the same size where it was a chip: the button around it
+   grows, not the chip (the due chips, the size chip's pill). */
+:is(.day-view, .page-head.week-head, main.grid, aside.block-panel, .to-place-line, .next-empty-line, .ph-week)
+  :is(button, [role="button"]):not(.half, .whole, .fold-half, .tbox, .tbox *, .tt-ph-acts *, .r-ev, .r-promise, .event, .nl-time) {
+  min-height: var(--target); min-width: var(--target);
+}
+:is(.day-view, .page-head.week-head, main.grid, aside.block-panel, .to-place-line, .next-empty-line, .ph-week) .link-btn { display: inline-flex; align-items: center; }
+/* A checkbox's target is its label: a square of --target around the box. */
+label.tick, .checklist li label.tick, .pick-row label.tick { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--target); height: var(--target); margin: calc((1lh - var(--target)) / 2) -4px 0 -7px; align-self: flex-start; cursor: pointer; border-radius: 6px; }
+.tick:hover { background: var(--raised); }
+.tick:has(input:disabled) { cursor: default; }
+.tick:has(input:disabled):hover { background: transparent; }
+.app.phone .tick { margin: 0; }
+.app.phone .ph-todo > .tick { justify-self: center; }
+/* Title links in rows: two lines at most, a target's height on one. */
+:is(main.grid, .day-view, aside.block-panel) :is(a[data-card], .aw-row-title, .pf-title-link) {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2)); min-height: var(--target); box-sizing: border-box;
+}
+/* Links that are pills or chips (a client call to review): the pill keeps its look, centred in a target-high line. */
+:is(main.grid, .day-view) a.call-mark { display: inline-flex; align-items: center; min-height: var(--target); }
+/* Due chips: the button is the target, the chip inside keeps its size. */
+.due-open { display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent; }
+
+/* The day header's chips (Today, PTO, Holiday) sit on the weekday's line now that its button is a full target. */
+.day-head { align-items: center; }
+/* The size chip is a full target; its pill is drawn inside it at the size it was. */
+:is(main.grid, .day-view, aside.block-panel) .size-chip { position: relative; min-height: var(--target); min-width: var(--target); border-color: transparent; background: transparent; line-height: calc(18px * var(--text-scale)); }
+:is(main.grid, .day-view, aside.block-panel) .size-chip::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: calc(18px * var(--text-scale) + 2px); transform: translateY(-50%);
+  border: 1px solid var(--border-strong); border-radius: 99px; pointer-events: none;
+}
+:is(main.grid, .day-view, aside.block-panel) .size-chip.unsized::before { border-style: dashed; }
+:is(main.grid, .day-view, aside.block-panel) .size-chip:hover::before { border-color: var(--text-muted); }
+:is(main.grid, .day-view, aside.block-panel) .size-chip:hover { border-color: transparent; }
+
+/* B4: one label style per level in the panel. Level 1, a section: small capitals (ON THIS BLOCK, ADD, ASSIGNED TO
+   YOU, PROMISES). Level 2, a group inside a section: sentence case, the meta size, muted (Suggested, No feature). */
+aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+.day-head .day-open { align-items: center; }
+/* E: a panel row stays one row: title (two lines at most), then size, time and ⋯; nothing wraps under it. */
+
+/* PS-1 (C5): the raised capture button stands 21px above the bottom bar; the page ends that much higher, so at the end
+   of a scroll nothing sits under it. */
+@media (max-width: 599.98px) {
+  .app.phone:has(.bb-capture) { padding-bottom: calc(var(--bb-h) + 28px); }
+}
+/* PS-1: the phone's Week has no timeline (as before: the old toggle was hidden there too). */
+.app.phone .week-head .day-switch { display: none; }
+/* PS-1 (E): a card's chips on one line, three at most; "+N" opens the block for the rest. */
+.card-status.card-due { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.card-status.card-due .late-chip { margin-left: 0; }
+.chip-more { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target); min-height: var(--target); padding: 0 6px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; border-radius: 6px; }
+.chip-more:hover { color: var(--text); background: var(--raised); }
+.chip-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The phone's day tabs share the row: with the weekend shown (seven tabs at 360) they can't each be 44 wide; they keep
+   the 44 height and share the width (docs/open-questions.md, PS-1). */
+.app.phone .day-tabs .day-tab { min-width: 0; }
+/* WD-1's first block within 200 px at 1440×900 still holds: the notice line's links keep their 28 px target by
+   reaching into the line's padding, not by making the line taller. */
+.app:not(.phone) :is(.to-place-line, .next-empty-line) { padding-block: 0; }
+.app:not(.phone) :is(.to-place-line, .next-empty-line) .link-btn { margin-block: calc((var(--target) - 1lh) / -2); }
+/* PS-1 (F): a holiday's name wraps in a narrow cell instead of being cut ("Thanksgiving Day (observed)"). */
+.half.whole.holiday .whole-label { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: break-word; }
+
+/* From the PS-1 review: the late chip is a pill like the due chips beside it; a checkbox's box sits on its title's first
+   line; the phone's Day header keeps Cards | Timeline, Timebox my day and + Add on one row, as before. */
+.card-status.card-due .late-chip { border-radius: 99px; border-left-width: 1px; }
+.app.phone .mode-area .add-work-head { padding: 0 10px; }
+.app.phone .mode-area .today-timebox { padding: 0 4px; font-size: var(--fs-2); }
+/* The panel's rows stay on one line (title, size, + time, ⋯), so ⋯ never drops below its row. */
+.bp-todos .pick-row { flex-wrap: nowrap; align-items: center; }
+.bp-todos .pick-row .pr-title { flex: 1 1 auto; min-width: 0; }
+/* The late chip draws at the due chips' height; its 28px target reaches around it (the phone's own ::after is 44). */
+.app:not(.phone) .card-status.card-due .late-chip { min-height: 0; }
+.app:not(.phone) .card-status.card-due .late-chip::after { content: ""; position: absolute; inset: -5px -2px; }

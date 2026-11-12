@@ -6,7 +6,7 @@
 // What, for the block's client, in order: its unfinished to-dos from earlier days that aren't placed anywhere now;
 // then my open stories in the block panel's "Assigned to you" order, a story whose target date (or its feature's)
 // falls in that week or earlier lifted to the front; a feature of mine with no stories offered once as itself
-// ("Needs breakdown"). Never: anything on a block that week, done or closed, cleared, or another client's.
+// ("Needs stories", PS-1; was "Needs breakdown"). Never: anything on a block that week, done or closed, cleared, or another client's.
 // How many: what fits the block's free time by size (unsized as the person's assumption, SZ-1), at least one when
 // there is anything, at most four. The same thing is never suggested on two blocks; earlier blocks choose first.
 //
@@ -166,7 +166,7 @@ function candidates(i: SuggestInput, clientKey: string, at: { date: IsoDate }): 
         c: {
           key: `i${clientKey}:${x.id}`, clientKey, kind: feature ? "feature" : "story", title: x.title, itemType: x.type, url: x.url, itemId: x.id, pickId: null, size: null,
           minutes: storyMinutes(null, i.sizes),
-          reason: due ? `Target date ${monday(due) === monday(at.date) ? weekday(due) : monthDay(due)}` : feature ? "Needs breakdown" : `Next in ${name}'s backlog`,
+          reason: due ? `Target date ${monday(due) === monday(at.date) ? weekday(due) : monthDay(due)}` : feature ? "Needs stories" : `Next in ${name}'s backlog`,
           needsBreakdown: feature,
         },
       });

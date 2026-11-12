@@ -52,7 +52,7 @@ import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
-import { ModeArea, ModeSwitch, TimelineToggle } from "./ModeSwitch.tsx";
+import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
@@ -1692,7 +1692,8 @@ export function App() {
       placeOpen={placeOpen}
       focusAdd={panelAt ? focusAdd : 0}
       focus={panelFocus}
-      onStart={startFocus}
+      // PS-1: on Day's cards the next to-do carries the one Start focus; the panel keeps it on Week and on Day's Timeline.
+      onStart={dayOn && !dayTimeline ? undefined : startFocus}
       onTimebox={(d) => void timeboxDay(d)}
       onClose={closePanel}
       onChanged={reloadQuiet}
@@ -2158,9 +2159,9 @@ export function App() {
               <AfterHoursChip after={data.afterHours} />
             </div>
             <ModeArea>
-              <TimelineToggle shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
+              <CardsTimelineSwitch shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
               {!past && (
-                <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? closePanel() : addWork())} title="Add to a block (A)">
+                <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? closePanel() : addWork())} title="Add to a block (A)">
                   + Add
                 </button>
               )}

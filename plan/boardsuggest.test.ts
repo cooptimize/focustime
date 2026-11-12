@@ -107,12 +107,12 @@ describe("what, in order", () => {
     expect(list[0]!.itemId).toBe(502);
     expect(list[0]!.reason).toBe("Target date Oct 30");
   });
-  it("a feature of mine with no stories is offered once, as itself, marked Needs breakdown", () => {
+  it("a feature of mine with no stories is offered once, as itself, marked Needs stories", () => {
     const f = aFeature({ id: 10, order: 1, title: "Loyalty points" });
     const list = boardSuggestions(input({ work: [aClientWork({ clientKey: "adatum", clientName: "Adatum", items: [f] })] }));
     const mine = list.filter((s) => s.itemId === 10);
     expect(mine).toHaveLength(1);
-    expect(mine[0]).toMatchObject({ kind: "feature", needsBreakdown: true, reason: "Needs breakdown" });
+    expect(mine[0]).toMatchObject({ kind: "feature", needsBreakdown: true, reason: "Needs stories" });
   });
   it("a clear key keeps a client key with spaces", () => {
     expect(validClearKey(clearKey({ scope: "item", date: TUE, key: "iContoso Ltd:501" }))).toBe(true);

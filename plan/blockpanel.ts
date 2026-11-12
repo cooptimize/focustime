@@ -57,9 +57,12 @@ export function panelTitle(clientName: string | null, date: IsoDate, half: Half,
   return `${clientName ?? o.open ?? "Open"} · ${blockWord(date, half, !!o.wholeDay)}`;
 }
 
-/** The header's second line: "8:00 to 12:30 · 1h free", "… · No free time" (QT-1: never over); no room on a past day or a day off. */
+/**
+ * The header's second line: "8:00–12:30 · 1h free", "… · No free time" (QT-1: never over); no room on a past day or a
+ * day off. PS-1: the range is written as on the cards ("8:00–12:30", was "8:00 to 12:30").
+ */
 export function panelWhen(range: string, mode: PanelMode, freeMinutes: number, plannedMinutes: number): { text: string } {
-  const span = range.replace("–", " to ");
+  const span = range;
   if (mode !== "add") return { text: mode === "past" ? `${span} · past` : span };
   return { text: `${span} · ${roomWords(freeMinutes, plannedMinutes).text}` };
 }

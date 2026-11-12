@@ -7,7 +7,7 @@
 // flows over the same page. Was ui/Today.tsx with its own block card, "This week" chips and a 3840 day timeline.
 import { DaySuggestLine, useMorningSuggestions } from "./Suggest.tsx";
 import type { SetupStep } from "../plan/setup.ts";
-import { ModeArea } from "./ModeSwitch.tsx";
+import { CardsTimelineSwitch, ModeArea } from "./ModeSwitch.tsx";
 import { DueBadge, Fading } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
@@ -43,7 +43,7 @@ import { PhoneFollowUps } from "./Phone.tsx";
 import { PhoneNextUp, PhoneNowCard, PhoneTodos, phoneNowOf } from "./PhoneDay.tsx";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
-import { WeekGrid } from "./WeekGrid.tsx";
+import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
@@ -379,6 +379,12 @@ export function Day(props: Props) {
                   </button>
                 )
               )}
+              {/* PS-1: a day off is marked in the header as Week marks it: "Holiday" or "PTO". */}
+              {mode === "now" && day?.pto && (
+                <span className={`pto-pill${day.pto.holiday ? " holiday-pill" : ""}`} title={ptoLabel(day.pto)}>
+                  {offWord(day.pto)}
+                </span>
+              )}
               {!isToday && <span className="muted day-when">{head.when}</span>}
               {/* SG-1: the day's suggestions, in the header row. */}
               {mode === "now" && !weekendDay && <DaySuggestLine date={date} className="sug-day-head" />}
@@ -399,19 +405,14 @@ export function Day(props: Props) {
               : null
           }
         >
-          {mode === "now" && !weekendDay && props.onTimeline && (
-            <span className="day-switch" role="group" aria-label="Cards or timeline" data-tour="wk-timeline">
-              <button type="button" aria-pressed={!timelineShown} onClick={() => timelineShown && toggleTimeline()} title="The day's blocks as cards (B)">Cards</button>
-              <button type="button" aria-pressed={timelineShown} onClick={() => !timelineShown && toggleTimeline()} title="The day on an hour timeline (B)">Timeline</button>
-            </span>
-          )}
+          {mode === "now" && !weekendDay && props.onTimeline && <CardsTimelineSwitch shown={timelineShown} onToggle={toggleTimeline} />}
           {mode === "now" && canTimebox && unboxed > 0 && props.onTimebox && !proposals && (
             <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Suggest a time for every planned to-do, on the timeline, to accept or change">
               Timebox my day
             </button>
           )}
           {canAdd && (
-            <button type="button" className="mini add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
+            <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
               + Add
             </button>
           )}
@@ -465,7 +466,7 @@ export function Day(props: Props) {
 
       {mode === "now" && ptoDay && (
         <p className="today-pto" role="status">
-          <strong>You're off {dayWord}.</strong>{" "}
+          {day?.pto?.holiday ? <strong>{day.pto.holiday}. You're off {dayWord}.</strong> : <strong>You're off {dayWord}.</strong>}{" "}
           {picks.some(live) ? "What was planned is below, read only." : "Nothing is planned."}{" "}
           {nextWorkday && props.onDay && (
             <button type="button" className="link-btn" onClick={() => props.onDay!(nextWorkday === realToday ? null : nextWorkday)}>

@@ -132,7 +132,7 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
               <ul className="ph-todo-list">
                 {mine.map((p) => (
                   <li key={p.id} className={`ph-todo ${p.status}`}>
-                    <input type="checkbox" checked={p.status === "done"} disabled={!tickable && p.status !== "done"} onChange={(e) => onTick(p, e.target.checked)} aria-label={`Done: ${p.title}`} />
+                    <label className="tick"><input type="checkbox" checked={p.status === "done"} disabled={!tickable && p.status !== "done"} onChange={(e) => onTick(p, e.target.checked)} aria-label={`Done: ${p.title}`} /></label>
                     <button type="button" className="ph-todo-main" aria-haspopup="dialog" onClick={() => sheet?.(p)} aria-label={`${p.title}. ${todoLine(p, data, { client: false })}. Actions`}>
                       <span className="ph-todo-title">{p.title}</span>
                       <span className="ph-todo-line">{todoLine(p, data)}</span>

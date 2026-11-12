@@ -69,7 +69,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await go(page, "#/week");
     await page.getByText(/\d+ to place · .*from last week/).first().waitFor({ timeout: 30_000 });
     await page.locator('.status-pill.at_risk[title^="At risk: Out: school event 1:30"]').first().waitFor();
-    await page.locator(".day .now-line").first().waitFor();
+    await page.locator(".day :is(.now-line, .now-mark)").first().waitFor();
     await shot(page, "week");
 
     // 4. Ahead: Grid, Gantt, Fix next.

@@ -115,7 +115,8 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await panel(page).locator(".aw-row:not(.placed)", { hasText: title }).first().locator("button.aw-plus").click();
     await expect.poll(() => placedHere(title)).toBeGreaterThan(0);
     expect(await header()).not.toMatch(words);
-    expect(await page.getByRole("button", { name: /Confirm/ }).count()).toBe(0);
+    // PS-1: a due chip names its promise, whose words may say "confirm"; no button starts with Confirm.
+    expect(await page.getByRole("button", { name: /^Confirm/ }).count()).toBe(0);
     await page.close();
   }, T);
 
@@ -392,7 +393,8 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     // A PTO day's address opens that day, read only.
     await page.evaluate(() => (location.hash = "#/week/day/2026-11-05/AM"));
     await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-05|AM");
-    await expect(panelTitle(page)).resolves.toMatch(/^PTO · Thu$/);
+    // PS-1: the demo's Thursday is PTO and an observed holiday too; the holiday's name wins.
+    await expect(panelTitle(page)).resolves.toMatch(/^Founders Day \(observed\) · Thu$/);
     expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);
     await page.keyboard.press("Escape");
     await panel(page).waitFor({ state: "detached" });

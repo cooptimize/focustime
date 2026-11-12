@@ -729,3 +729,13 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - From the review: the agreement sample is drawn across the clients pass 1 started with; a client skipped later (Allow AI turned off), and items that moved out or failed, take places without giving a pair, so the pairs can come out under 100. Draw it again after pass 1?
 - From the review: a refusal before anything is sent (one item that still holds a secret or an outside address) counts as "the answer failed its check", though nothing was paid. A separate "not sent" reason?
 - From the review: the AI's "other" names go into the summary with client names and emails replaced; wording from an item could still echo in them. Show them only on the page?
+
+## PS-1
+
+- "to place" stays the word for unfinished to-dos with no block ("7 to place · Review"), beside "unfinished" for a past day's. One word for both?
+- The timeline's narrowest tier still says "9–1" where "9:00–1:00" doesn't fit. Kept as the fallback; fine?
+- A card folds its done to-dos at six to-dos (`HEAVY`). Right number?
+- Day opens with its panel at 1280 px and wider (`WIDE`). Right width?
+- Items drawn by time on Week's rail and Day's timeline (events, timeboxes, promises) are shorter than 28 px when they are short; their height is their length, so they are exempt from the target size. Give them a bigger hit area?
+- Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
+- On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?

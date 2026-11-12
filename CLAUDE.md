@@ -252,6 +252,7 @@ Run: `focustime-open` (the service), `npm run dev`, `npm test` (with `npm run db
 - Small end-to-end steps. Define behavior first; failing test where it matters (normalization, risk rules, secret handling, failure isolation, persistence); implement; refactor.
 - No tests for trivial styling or that mirror implementation.
 - Type-check before calling a step done. Inspect the real UI (screenshot) for UI changes.
+- UI steps that touch Day, Week or the block panel follow `docs/design/style-guide.md` section 10 (Day and Week: rules for people, PS-1): one time and date format, one name per thing, one main button, minimum targets.
 - Verify current official docs before version-specific integration code.
 - Record decisions in `docs/decisions.md` and open questions in `docs/open-questions.md` as they come up.
 - Plain language in UI copy. No em dashes.

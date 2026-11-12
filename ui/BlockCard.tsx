@@ -11,6 +11,7 @@ import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { freeMinutes } from "../week/free.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
+import { chipFold, foldDone } from "../plan/cardfold.ts";
 import type { CalEvent, Slot } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
@@ -21,7 +22,7 @@ import { MenuRow, useMenu } from "./Menus.tsx";
 import { EyeIcon } from "./Watching.tsx";
 import type { IsoDate } from "../week/types.ts";
 import { PickRow } from "./PickRow.tsx";
-import { DueBadge } from "./FollowUps.tsx";
+import { DueBadge, promiseAbout } from "./FollowUps.tsx";
 import { hourMarks, layoutEvents, railFor, rulerSpan } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, SampleSources, shortRange, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
@@ -36,7 +37,7 @@ import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, useIsOrigin } from "./Carry.tsx";
 import { BlockSuggestions } from "./Suggest.tsx";
-import { NowEdge, NowLine, NowPast, NowTick } from "./NowLine.tsx";
+import { NowLine, NowMark, NowPast, NowTick } from "./NowLine.tsx";
 import { Timeline, ms, offHours, pct, useEventMenu, type RailNow } from "./Timeline.tsx";
 import { AddPanelCtx, LiveOnCard, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
 import { PlacedFeatures } from "./BlockPanel.tsx";
@@ -96,11 +97,12 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now, plan.sizes, plan.timeboxes);
   // Step 13.6 (D238): Friday's catch-up work shows on its card even though Friday is never committed.
   const ticks = overflow && !eve && !cp.picks.length ? catchUp(plan.week, slot) : cp.picks;
-  // U3: on days other than today, done picks collapse to "N done".
-  const doneHidden = isToday ? [] : ticks.filter((p) => p.status === "done");
+  // U3, PS-1: done picks fold to "N done" (a click opens them): always on other days, on today in a heavy block.
+  const [doneAtStart] = useState(() => new Set(ticks.filter((p) => p.status === "done").map((p) => p.id)));
+  const fold = foldDone(ticks, { isToday, stays: (p) => !doneAtStart.has(p.id) });
   // UI-B: on a day that has passed, a pick kept or moved on from here stays as a dimmed "→ moved to Mon AM" line.
   const movedOn = slot.date < (plan.today ?? "") ? (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && p.status === "moved" && p.carriedTo) : [];
-  const shown = [...(isToday ? ticks : ticks.filter((p) => p.status !== "done")), ...movedOn];
+  const shown = [...fold.shown, ...movedOn];
   // P1: on the phone a card lists its meetings in words; no rail.
   const phone = usePhone();
   // WK-1: exactly the tier's element: the rail with titles, a slim ruler, or the day strip (strip and mini).
@@ -112,6 +114,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // WK-2: with no time rail (the phone, or the timeline hidden) the card lists its meetings and events as lines.
   const listEvents = phone || !timeline;
   const [agendaOpen, setAgendaOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const panel = useContext(AddPanelCtx);
   const adding = panel.at?.date === slot.date && panel.at.half === slot.half;
   const ruler = rail === "slim";
@@ -134,9 +137,19 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   const folded = slot.date < (plan.today ?? "");
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev && !folded ? ", at risk" : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
+  const chipLine = chipFold([
+    ...(lateChip ? [<Fragment key="late">{lateChip}</Fragment>] : []),
+    ...badges.map((f) => (
+      <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))}>
+        <DueBadge l={f} about={promiseAbout(f)} />
+      </button>
+    )),
+  ]);
   // MB-1b (Q-MB1-7): on the phone a card with no status pill shows the late chip at the end of its title line, so the
   // chip adds no line; beside a status pill it stays on the chips line.
   const chipInHead = phone && status.kind === "none" && !!lateChip;
+  // On the phone the late chip may sit in the head (MB-1b); it still counts toward the three.
+  if (chipInHead) chipLine.shown.shift();
   // WD-1: one chip in the header that never wraps: the worst state alone; its reason and the rest in its tooltip.
   const pill = status.label;
   // Its tooltip: the at-risk reason, then the other reasons (Watch ones included).
@@ -163,8 +176,6 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
 
   const body = (
     <div className="card-body">
-      {/* UI-B: with no rail (the phone, a card too narrow for one), the now line sits at the top of the block under way. */}
-      {compact && !rail && railNow?.at != null && <NowEdge label={railNow.label} onClick={railNow.onClick} />}
       <div className="card-head" title={!folded && status.kind === "none" ? (watch ?? undefined) : undefined}>
         <span className="swatch" aria-hidden="true" />
         <span className={`card-client${primary ? "" : " open-label"}${name.includes(" ") ? "" : " one-word"}`} title={name}>
@@ -178,6 +189,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
           )}
         </span>
         <CardWhen slot={slot} tz={tz} />
+        {/* UI-B, PS-1: with no rail (the phone, a card too narrow for one), "now" is a marker in the block under way's header. */}
+        {compact && !rail && railNow?.at != null && <NowMark label={railNow.label} onClick={railNow.onClick} />}
         {status.kind !== "none" && !folded && (
           <span className={`status-pill head-chip ${status.kind}`} id={reasonsId} title={chipTip}>
             {pill}
@@ -207,20 +220,21 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         <>
       {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
       {drop.tip}
-      {lateChip && !chipInHead && <div className="card-status">{lateChip}</div>}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
           <span className="swatch small" />
           Also booked: {b.clientName}
         </div>
       ))}
-      {badges.length > 0 && (
-        <div className="card-due">
-          {badges.map((f) => (
-            <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))} title={`Promise${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
-              <DueBadge l={f} />
+      {chipLine.shown.length > 0 && (
+        // PS-1: one line of chips (late promises, then due dates), three at most; the rest fold to "+N", which opens the block.
+        <div className="card-status card-due">
+          {chipLine.shown}
+          {chipLine.more > 0 && (
+            <button type="button" className="chip-more" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen())} aria-label={`${chipLine.more} more promises due: open the block`} title={`${chipLine.more} more promises due: open the block`}>
+              +{chipLine.more}
             </button>
-          ))}
+          )}
         </div>
       )}
       <LiveCalls chats={liveCalls} zone={tz} tabIndex={selected ? 0 : -1} className="card-live" />
@@ -237,7 +251,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {flexList}
       {listEvents && slot.events.length > 0 && (
         // MB-1, WD-1: with no rail the card's meetings are one line ("3 meetings · 2h 30m · 1h 45m free"); it opens into the list.
-        <FoldLine className="card-agenda-fold" open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label={meetingsLine(slot)} />
+        <FoldLine className="card-agenda-fold" tabIndex={selected ? 0 : -1} open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label={meetingsLine(slot)} />
       )}
       {listEvents && slot.events.length > 0 && agendaOpen && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
@@ -253,7 +267,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {!eve && primary && <PlacedFeatures clientKey={primary.clientKey} date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
       {!eve && <BlockSuggestions date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} where={phone ? "phone" : "card"} />}
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
-      {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
+      {fold.done.length > 0 && <FoldLine className="card-done" tabIndex={selected ? 0 : -1} open={doneOpen} onToggle={() => setDoneOpen(!doneOpen)} label={`${fold.done.length} done`} title={doneOpen ? "Fold the done to-dos" : "Show the done to-dos"} />}
+      {doneOpen && fold.done.length > 0 && <CardPicks picks={fold.done} label={`Done on ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
       {addWork && (
         // WD-1, WD-2: "+ Add" is the last row of every block that can take work, always visible: it selects the block
         // and opens the block panel on it (a bottom sheet on the phone).
@@ -317,13 +332,13 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
 }
 
 /**
- * QT-1: a past day's block in one line: "2 done · 1 not done", "1 moved on", or "Nothing planned". What's on it and
+ * QT-1: a past day's block in one line: "2 done · 1 unfinished", "1 moved on", or "Nothing planned". What's on it and
  * every action are in its panel.
  */
 export function foldedLine(picks: readonly { status: string }[], movedOn: readonly unknown[] = []): string {
   const done = picks.filter((p) => p.status === "done").length;
   const open = picks.filter((p) => p.status === "planned").length;
-  const parts = [done ? `${done} done` : "", open ? `${open} not done` : "", movedOn.length ? `${movedOn.length} moved on` : ""].filter(Boolean);
+  const parts = [done ? `${done} done` : "", open ? `${open} unfinished` : "", movedOn.length ? `${movedOn.length} moved on` : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : "Nothing planned";
 }
 
