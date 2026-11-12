@@ -87,3 +87,36 @@ As planned, with these details settled while building:
 - The reader's freshness check uses the poller's own `freshness` (its next check per client).
 - The skipped-client words name where to change it: "Allow AI is off for this client (Admin › AI)".
 - Screenshots: `docs/ux/wp1/` (1440×900, light and dark, fictional data).
+
+## WP-2: making it trustworthy (Nov 11)
+
+The first real run read five clients' whole projects (about 4,100 items) and labeled 314. WP-2 scopes each client to Cooptimize's BI and analytics work, classifies every item in scope, and says where every item went. Decisions are under "WP-2" in `docs/decisions.md`; how to run it is `wp1-how-to-run.md`.
+
+### Step 0: why only 314 were labeled
+
+- **What was eligible.** WP-1 classified only "eligible" items: top and middle items in the window, and leaves with no parent or with a parent at the top or middle (`eligible()` in `plan/patterns/labels.ts`). Pass 1 took 150 per client under the starting list (v1); pass 2 took every eligible item under list 2. Those pass 1 labels were never shown (the page shows one list's labels). The agreement sample was 5% of pass 2 (about 15 pairs).
+- **Skips.** A client without Allow AI was skipped, named in the run table, and the run still finished "done"; the run table was hidden once a run was done, so the skip disappeared from the page.
+- **Early stops.** A run stops at 1.5 times its estimate, at the person's or the app's monthly AI cap, after the provider failed twice, or when the process went away (a redeploy or dev scaling to zero, shown Stopped with Resume). Each stop left items unlabeled with nothing on the page counting them.
+- **Dropped answers.** A malformed batch was retried one item at a time; an item whose answer still failed its check (or named another client) was dropped and counted only in the running table.
+- **What the page showed.** "X of Y labeled" with Y the eligible items, and the last run's reason. It hid skipped clients and dropped answers once a run was done, and never said how many items in the project weren't eligible at all.
+- **The level rule.** A type was a parent if any one of its items had a child, so one story with one task made every story a "middle" item and changed what was eligible. WP-2 uses a share (1 in 10).
+
+### Step 0: how the page chose what to read
+
+WP-1 read every item of the client's project: WIQL with `[System.TeamProject] = @project` and a created date range, nothing else. Ahead and Week use `plan/devops-scope.ts` (`scopeOf`): Admin › Clients' `devops_scope` (whole project, teams or area paths), else automatic (items assigned to Cooptimizers, epics and features they own, and those items' exact areas, never the root when there are sub-areas). Automatic is not used for the patterns page: it follows who is assigned, and work entered by the client and never assigned would be left out, which is exactly what a story template must describe.
+
+### What WP-2 reads
+
+1. Per project: the area tree and teams (AH-2's `source.areas`; the teams' people are never passed on).
+2. The layout: every item in the 24-month window, only id, project, area path, type and created date (`patterns_layout`).
+3. The scope: the page's, else Admin › Clients' when it names teams or area paths, else the whole project when it has one area; otherwise the client waits at "Choose its scope".
+4. Only items in scope: full fields, parents (with every parent read for structure, inside or outside scope), the history sample.
+5. Kinds per type (guessed from the data, changeable), then the snapshot with the scope, kinds and counts it used.
+
+### Full-run time
+
+About 1 second per item for classification (10 seconds per AI request of ten items, 3 seconds per DevOps read of 50): for about 4,000 items in scope, pass 2 takes about 70 minutes, pass 1 (150 per client) about 12, the agreement sample (100 or more) about 2, so 80 to 90 minutes. The inventory for five clients takes 30 to 45 minutes, mostly the history sample (200 reads per client, 2 seconds apart, waiting for the poller). The estimate shows the time per client.
+
+### Screenshots
+
+`docs/ux/wp2/` (1440×900, light and dark, fictional data): scope, kinds, coverage, build work, classification, runs.

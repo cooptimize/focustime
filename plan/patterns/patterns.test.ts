@@ -1,10 +1,10 @@
-// WP-1: the pure parts of DevOps patterns: levels from links (two processes with their own type names), every inventory
+// WP-1 (kept, updated for WP-2's rules): the pure parts of DevOps patterns: levels from links (two processes with their own type names), every inventory
 // number on a small known set, the window, title patterns, the history rule, label validation (malformed and partly
 // valid answers), the merge, agreement and shapes. Fictional data from test/builders/patterns.ts.
 import { describe, expect, it } from "vitest";
 import { aProcess, aRawItem, aSmallProject } from "../../test/builders/patterns.ts";
 import { historyOf, inventoryOf, itemOf, monthRanges, titlePattern, windowFrom } from "./inventory.ts";
-import { agreementOf, commonShapes, eligible, listFromMerge, parseLabels, pass1Sample, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
+import { agreementOf, commonShapes, toClassify, listFromMerge, parseLabels, pass1Sample, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
 import { levelsOf, typeEdges } from "./levels.ts";
 import { handCheck, resultsOf } from "./results.ts";
 import type { Labels } from "./types.ts";
@@ -60,7 +60,9 @@ describe("the inventory", () => {
     expect(s.timing.createdToStarted).toEqual({ n: 2, median: 1, p90: 1 });
     expect(s.timing.sameDay).toEqual({ count: 1, of: 2 });
     expect(s.afterFact).toEqual({ sampled: 2, changedAfterStart: 1, emptyAtClose: 1 });
-    expect(s.headline).toEqual({ items: 6, description: 0.333, acceptance: 0.167, typicalChildren: 2, parentsNoChildren: 0.333, changedAfterStart: 0.5 });
+    expect(s.headline).toMatchObject({ items: 6, description: 0.333, acceptance: 0.167, typicalChildren: 2, changedAfterStart: 0.5, mainPair: { parent: "Piece", child: "Step", without: 1, of: 2 } });
+    expect(s.breakdown.pairs!.map((p) => `${p.parent}>${p.child}: ${p.without} of ${p.of}`)).toEqual(["Initiative>Piece: 0 of 1", "Piece>Step: 1 of 2"]);
+    expect(s.breakdown.noParent).toEqual([{ type: "Piece", count: 0, of: 2 }, { type: "Step", count: 1, of: 3 }]);
   });
 
   it("parents from before the window count for the structure, not the windowed numbers", () => {
@@ -135,11 +137,10 @@ describe("labels", () => {
     expect(r.labels.get("i1")).toMatchObject({ requestType: "other", otherName: "housekeeping" });
   });
 
-  it("which items: tops, middles, loose leaves, leaves under a classified parent, flat items; in the window only", () => {
-    const list = items([aRawItem({ id: 1, type: "A" }), aRawItem({ id: 2, type: "B", parent: 1 }), aRawItem({ id: 3, type: "C", parent: 2 }), aRawItem({ id: 4, type: "C" }), aRawItem({ id: 5, type: "Flat" })]);
-    const lv = levelsOf(list);
-    expect(eligible(list, (t) => lv.get(t) ?? "other").map((i) => i.id)).toEqual([1, 2, 3, 4, 5]);
-    expect(eligible([{ ...list[0]!, inWindow: false }, ...list.slice(1)], (t) => lv.get(t) ?? "other").map((i) => i.id)).toEqual([2, 3, 4, 5]);
+  it("WP-2: which items: every item in scope at every level, with a parent or without, unless its kind is Leave out", () => {
+    const list = items([aRawItem({ id: 1, type: "A" }), aRawItem({ id: 2, type: "B", parent: 1 }), aRawItem({ id: 3, type: "C", parent: 2 }), aRawItem({ id: 4, type: "C", parent: 3 }), aRawItem({ id: 5, type: "Flat" })]);
+    expect(toClassify(list, () => "build").map((i) => i.id)).toEqual([1, 2, 3, 4, 5]);
+    expect(toClassify([{ ...list[0]!, inWindow: false }, ...list.slice(1)], (t) => (t === "Flat" ? "leave_out" : "tickets")).map((i) => i.id)).toEqual([2, 3, 4]);
   });
 
   it("pass 1's sample is stable and capped", () => {
@@ -152,7 +153,7 @@ describe("labels", () => {
     const s = suggestionsOf([L({ requestType: "other", otherName: "housekeeping", otherMeaning: "Tidying" }), L({ requestType: "other", otherName: "Housekeeping", otherMeaning: "Tidying" }), L()]);
     expect(s).toEqual([{ name: "housekeeping", meaning: "Tidying", count: 2 }]);
     const list = listFromMerge({ types: [{ name: "new report", meaning: "m", example: "e" }, { name: "small change", meaning: "m", example: "e" }, { name: "housekeeping", meaning: "Tidying", example: "Tidy folders" }, { name: "other", meaning: "x", example: "" }], changes: [{ kind: "add", from: ["housekeeping"], to: ["housekeeping"], reason: "Seen twice" }, { kind: "weird", from: [], to: ["x"], reason: "" }] }, STARTING_LIST, s, new Map([["housekeeping", 2]]), "2026-11-11T00:00:00Z", "v2-r1", "f1");
-    expect(list!.types.map((t) => t.name)).toEqual(["new report", "small change", "housekeeping", "other"]);
+    expect(list!.types.map((t) => t.name)).toEqual(["new report", "small change", "housekeeping", "can't tell", "other"]);
     expect(list!.changes).toEqual([{ kind: "add", from: ["housekeeping"], to: ["housekeeping"], reason: "Seen twice", count: 2 }]);
     expect(listFromMerge({ types: [], changes: [] }, STARTING_LIST, s, new Map(), "x", "v", "f")).toBeNull();
   });
@@ -166,9 +167,12 @@ describe("labels", () => {
   it("results and the hand check: counts per label, shapes from classified children, 30 across type and confidence", () => {
     const list = items([aRawItem({ id: 1, type: "A" }), aRawItem({ id: 2, type: "B", parent: 1 }), aRawItem({ id: 3, type: "B", parent: 1 })]);
     const labels = new Map([[1, { labels: L({ requestType: "foundation build" }), labelsB: null }], [2, { labels: L({ layers: ["ingestion"] }), labelsB: L({ layers: ["ingestion"] }) }], [3, { labels: L({ layers: ["fact"], confidence: "low" }), labelsB: null }]]);
-    const r = resultsOf(list, labels);
-    expect(r).toMatchObject({ eligible: 3, labeled: 3, requestTypes: { "foundation build": 1, "new report": 2 }, confidence: { high: 2, low: 1 } });
-    expect(r.shapes).toEqual([{ requestType: "foundation build", shape: ["ingestion", "fact"], count: 1 }]);
+    const all = resultsOf(list, labels, {}, { read: null, outside: null, skippedForAi: false, failed: new Set() });
+    const r = all.build;
+    expect(all.coverage).toMatchObject({ inScope: 3, toClassify: 3, labeled: 3 });
+    expect(r).toMatchObject({ labeled: 3, requestTypes: { "foundation build": 1, "new report": 2 }, confidence: { high: 2, low: 1 } });
+    expect(r.shapes.sets).toEqual([{ requestType: "foundation build", shape: ["ingestion", "fact"], count: 1 }]);
+    expect(r.shapes.parents).toBe(1);
     expect(r.agreement.pairs).toBe(1);
     expect(handCheck(list, labels).map((i) => i.id)).toEqual([1, 2, 3]);
   });

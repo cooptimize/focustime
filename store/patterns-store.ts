@@ -1,15 +1,19 @@
-// WP-1: the DevOps patterns store, six app tables (store/migrations/20261130T1100_devops_patterns.ts). Written only by
+// WP-1, WP-2: the DevOps patterns store, ten app tables (store/migrations/20261130T1100_devops_patterns.ts and
+// 20261201T0900_patterns_scope.ts: the layout, each project's tree, the page's scopes and kinds). Written only by
 // the patterns run and the page's own actions (actions/patterns.ts), which decide who may see what. No description,
 // acceptance or comment text, no person's name: items keep ids, type, state, dates, parent, title and numbers. Every
 // write is one transaction.
 import type { Conn, Row } from "./sql/conn.ts";
 import type { Facts, Labels, PatternItem, Platform, TypeList } from "../plan/patterns/types.ts";
+import type { AnalysisScope, LayoutRow, ProjectTree } from "../plan/patterns/scope.ts";
+import type { Kind } from "../plan/patterns/kinds.ts";
 
 export type RunKind = "inventory" | "classify";
 export type RunState = "running" | "stopped" | "done";
 /** One client's place in a run. */
 export type ClientProgress = {
-  state: "waiting" | "reading" | "done" | "stopped" | "skipped";
+  /** WP-2: needs_scope, the layout is read and the person must choose the client's scope before Resume reads the rest. */
+  state: "waiting" | "reading" | "done" | "stopped" | "skipped" | "needs_scope";
   /** Plain words: why it stopped or was skipped, or what it waits for while reading. */
   reason?: string | null;
   /** Inventory: first, months, items, parents, history, numbers. Classification: pass1, pass2. */
@@ -26,8 +30,20 @@ export type ClientProgress = {
   done?: number;
   dropped?: number;
   capped?: boolean;
+  /** WP-2 inventory: the client's projects, the one being read, and the scope this run uses (fixed when chosen). */
+  projects?: string[];
+  project?: number;
+  scope?: AnalysisScope | null;
+  scopeSource?: string | null;
+  /** WP-2 inventory: items the layout read, and those it left outside the scope (moved out mid-run included). */
+  read?: number;
+  outside?: number;
+  /** WP-2 classification: items found outside the scope when their text was read (moved since the inventory): never sent. */
+  outsideNow?: number[];
+  /** WP-2 classification: the kinds this run uses (fixed at its start; a change applies to the next run). */
+  kinds?: Record<string, Kind>;
 };
-export type Progress = { clients: Record<string, ClientProgress>; pass?: 1 | 2; listVersion?: string };
+export type Progress = { clients: Record<string, ClientProgress>; pass?: 1 | 2; listVersion?: string; /** 2 from WP-2. */ rules?: 2; /** WP-2: the clients pass 2's agreement sample covers. */ agreeOn?: string[] };
 export type Run = { id: number; kind: RunKind; state: RunState; startedBy: string; startedAt: string; heartbeatAt: string; finishedAt: string | null; owner: string; reason: string | null; progress: Progress; estimateMicros: number; spentMicros: number };
 export type LabelRow = { itemId: number; rev: number; labels: Labels; labelsB: Labels | null };
 
@@ -191,17 +207,44 @@ export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
     },
 
     // ---------- labels ----------
+    /** The labels kept for a client and list version (an answer that failed its check is not a label; see failures). */
     async labels(clientKey: string, version: string): Promise<Map<number, LabelRow>> {
       const rows = await conn.all("SELECT item_id, rev, labels, labels_b FROM patterns_labels WHERE client_key = ? AND list_version = ?", [clientKey, version]);
-      return new Map(rows.map((r) => [n(r.item_id), { itemId: n(r.item_id), rev: n(r.rev), labels: JSON.parse(String(r.labels)) as Labels, labelsB: r.labels_b ? (JSON.parse(String(r.labels_b)) as Labels) : null }]));
+      const out = new Map<number, LabelRow>();
+      for (const r of rows) {
+        const a = JSON.parse(String(r.labels)) as Labels & { failed?: boolean };
+        if (a.failed) continue;
+        const b = r.labels_b ? (JSON.parse(String(r.labels_b)) as Labels & { failed?: boolean }) : null;
+        out.set(n(r.item_id), { itemId: n(r.item_id), rev: n(r.rev), labels: a, labelsB: b && !b.failed ? b : null });
+      }
+      return out;
     },
-    async putLabels(clientKey: string, version: string, rows: readonly { itemId: number; rev: number; labels?: Labels; labelsB?: Labels }[]): Promise<void> {
+    /**
+     * WP-2: the items whose answer failed its check (paid for, nothing kept), with the revision asked about, per list
+     * version: first answers and the agreement sample's second ones. Kept with the labels, in the same transaction, so
+     * Resume never pays for them again whatever stopped the run.
+     */
+    async failures(clientKey: string, version: string): Promise<{ a: Map<number, number>; b: Map<number, number> }> {
+      const rows = await conn.all("SELECT item_id, rev, labels, labels_b FROM patterns_labels WHERE client_key = ? AND list_version = ?", [clientKey, version]);
+      const a = new Map<number, number>();
+      const b = new Map<number, number>();
+      for (const r of rows) {
+        if ((JSON.parse(String(r.labels)) as { failed?: boolean }).failed) a.set(n(r.item_id), n(r.rev));
+        if (r.labels_b && (JSON.parse(String(r.labels_b)) as { failed?: boolean }).failed) b.set(n(r.item_id), n(r.rev));
+      }
+      return { a, b };
+    },
+    async putLabels(clientKey: string, version: string, rows: readonly { itemId: number; rev: number; labels?: Labels; labelsB?: Labels; failed?: boolean; failedB?: boolean }[]): Promise<void> {
       if (!rows.length) return;
+      const FAILED = JSON.stringify({ failed: true });
       await conn.tx(async () => {
         for (const r of rows) {
-          if (r.labels)
-            await conn.run("INSERT INTO patterns_labels (client_key, item_id, list_version, rev, labels, labels_b, at) VALUES (?, ?, ?, ?, ?, NULL, ?) ON CONFLICT (client_key, item_id, list_version) DO UPDATE SET rev = excluded.rev, labels = excluded.labels, labels_b = NULL, at = excluded.at", [clientKey.slice(0, 100), r.itemId, version.slice(0, 40), r.rev, labelsJson(r.labels), at()]);
-          if (r.labelsB) await conn.run("UPDATE patterns_labels SET labels_b = ? WHERE client_key = ? AND item_id = ? AND list_version = ? AND rev = ?", [labelsJson(r.labelsB), clientKey, r.itemId, version, r.rev]);
+          const a = r.labels ? labelsJson(r.labels) : r.failed ? FAILED : null;
+          if (a)
+            await conn.run("INSERT INTO patterns_labels (client_key, item_id, list_version, rev, labels, labels_b, at) VALUES (?, ?, ?, ?, ?, NULL, ?) ON CONFLICT (client_key, item_id, list_version) DO UPDATE SET rev = excluded.rev, labels = excluded.labels, labels_b = NULL, at = excluded.at", [clientKey.slice(0, 100), r.itemId, version.slice(0, 40), r.rev, a, at()]);
+          const b = r.labelsB ? labelsJson(r.labelsB) : r.failedB ? FAILED : null;
+          // The second answer goes with whatever first answer the item has (a newer first answer clears it again).
+          if (b) await conn.run("UPDATE patterns_labels SET labels_b = ? WHERE client_key = ? AND item_id = ? AND list_version = ?", [b, clientKey, r.itemId, version]);
         }
       });
     },
@@ -219,6 +262,65 @@ export function createPatternsStore(conn: Conn, now: () => Temporal.Instant) {
       await conn.tx(async () => {
         if (await conn.get("SELECT version FROM patterns_type_lists WHERE version = ?", [l.version])) return;
         await conn.run("INSERT INTO patterns_type_lists (version, run_id, created_at, list, changes, fingerprint) VALUES (?, ?, ?, ?, ?, ?)", [l.version.slice(0, 40), runId, l.createdAt, JSON.stringify(l.types), JSON.stringify(l.changes), l.fingerprint.slice(0, 80)]);
+      });
+    },
+
+    // ---------- WP-2: the layout ----------
+    async putTree(clientKey: string, runId: number, tree: ProjectTree): Promise<void> {
+      const clean: ProjectTree = { project: tree.project, root: tree.root, paths: tree.paths.slice(0, 2000), areasProblem: tree.areasProblem, teams: tree.teams?.map((t) => ({ name: t.name, otherField: t.otherField, areas: t.areas.map((a) => ({ path: a.path, sub: a.sub })) })) ?? null, teamsProblem: tree.teamsProblem };
+      await conn.tx(async () => {
+        await conn.run("DELETE FROM patterns_projects WHERE client_key = ? AND project = ?", [clientKey, tree.project]);
+        await conn.run("INSERT INTO patterns_projects (client_key, project, run_id, at, tree) VALUES (?, ?, ?, ?, ?)", [clientKey.slice(0, 100), tree.project.slice(0, 256), runId, at(), JSON.stringify(clean)]);
+      });
+    },
+    /** A client's projects as the newest layout read them (projects an older run read and the newest didn't are left out). */
+    async trees(clientKey: string): Promise<(ProjectTree & { runId: number })[]> {
+      const rows = await conn.all("SELECT project, run_id, tree FROM patterns_projects WHERE client_key = ? ORDER BY project", [clientKey]);
+      const newest = Math.max(0, ...rows.map((r) => n(r.run_id)));
+      return rows.filter((r) => n(r.run_id) === newest).map((r) => ({ ...(JSON.parse(String(r.tree)) as ProjectTree), runId: n(r.run_id) }));
+    },
+    async putLayout(clientKey: string, runId: number, rows: readonly LayoutRow[]): Promise<void> {
+      if (!rows.length) return;
+      await conn.tx(async () => {
+        for (const r of rows)
+          await conn.run(
+            "INSERT INTO patterns_layout (client_key, item_id, project, area, type, created_at, run_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET project = excluded.project, area = excluded.area, type = excluded.type, created_at = excluded.created_at, run_id = excluded.run_id",
+            [clientKey.slice(0, 100), r.id, r.project.slice(0, 256), r.area?.slice(0, 1000) ?? null, r.type.slice(0, 200), r.createdAt, runId],
+          );
+      });
+    },
+    /** One item's area as the full read found it (it moved since the layout read). */
+    async moveLayout(clientKey: string, id: number, area: string | null): Promise<void> {
+      await conn.tx(() => conn.run("UPDATE patterns_layout SET area = ? WHERE client_key = ? AND item_id = ?", [area?.slice(0, 1000) ?? null, clientKey, id]));
+    },
+    /** The layout rows of a client's newest layout read (rows of items it didn't find again are left out). */
+    async layout(clientKey: string, runId?: number): Promise<LayoutRow[]> {
+      const newest = runId ?? n((await conn.get("SELECT MAX(run_id) AS run_id FROM patterns_projects WHERE client_key = ?", [clientKey]))?.run_id);
+      const rows = await conn.all("SELECT item_id, project, area, type, created_at FROM patterns_layout WHERE client_key = ? AND run_id = ? ORDER BY item_id", [clientKey, newest]);
+      return rows.map((r) => ({ id: n(r.item_id), project: String(r.project), area: s(r.area), type: String(r.type), createdAt: s(r.created_at) }));
+    },
+
+    // ---------- WP-2: the page's scopes and kinds (never Admin › Clients') ----------
+    async scopes(): Promise<Record<string, { scope: AnalysisScope; setAt: string }>> {
+      const rows = await conn.all("SELECT client_key, scope, set_at FROM patterns_scopes");
+      return Object.fromEntries(rows.map((r) => [String(r.client_key), { scope: JSON.parse(String(r.scope)) as AnalysisScope, setAt: String(r.set_at) }]));
+    },
+    async setScope(clientKey: string, scope: AnalysisScope | null, by: string): Promise<void> {
+      await conn.tx(async () => {
+        await conn.run("DELETE FROM patterns_scopes WHERE client_key = ?", [clientKey]);
+        if (scope) await conn.run("INSERT INTO patterns_scopes (client_key, scope, set_by, set_at) VALUES (?, ?, ?, ?)", [clientKey.slice(0, 100), JSON.stringify(scope), by.slice(0, 64), at()]);
+      });
+    },
+    async kinds(): Promise<Record<string, Record<string, Kind>>> {
+      const rows = await conn.all("SELECT client_key, type, kind FROM patterns_kinds");
+      const out: Record<string, Record<string, Kind>> = {};
+      for (const r of rows) (out[String(r.client_key)] ??= {})[String(r.type)] = String(r.kind) as Kind;
+      return out;
+    },
+    async setKind(clientKey: string, type: string, kind: Kind | null, by: string): Promise<void> {
+      await conn.tx(async () => {
+        await conn.run("DELETE FROM patterns_kinds WHERE client_key = ? AND type = ?", [clientKey, type]);
+        if (kind) await conn.run("INSERT INTO patterns_kinds (client_key, type, kind, set_by, set_at) VALUES (?, ?, ?, ?, ?)", [clientKey.slice(0, 100), type.slice(0, 200), kind, by.slice(0, 64), at()]);
       });
     },
 

@@ -55,6 +55,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `devops_items`, `devops_changes`, `devops_poll` | App | Yes | Central DevOps reads, the change log, the poll's watermarks |
 | `devops_takes`, `devops_notes` | App | No | Quiet notes to someone whose item was taken or changed |
 | `patterns_runs`, `patterns_snapshots`, `patterns_items`, `patterns_labels`, `patterns_type_lists`, `patterns_platforms` | App | Yes | WP-1's DevOps patterns: runs (kind, state, the starter's user id, progress, estimate and spend), each client's numbers per run (the two newest are shown), items of the last 24 months and their parents (id, rev, type, state, dates, parent, title, and numbers about the text: lengths, empty or not, comment count, tags and estimate set or not, history booleans), labels per item, revision and list version, the request type lists, each client's platform. Never description, acceptance or comment text, never names |
+| `patterns_layout`, `patterns_projects`, `patterns_scopes`, `patterns_kinds` | App | Yes | WP-2's scope and kinds for DevOps patterns: per item in the window its project, area path, type and created date (the layout, also for items outside the scope); per project the area tree and teams (names, area paths, whether the team field is the area path; never the teams' people); each client's scope as set on the page (who and when); each type's kind when a person chose one. Never titles, text or names |
 | `ai_requests`, `app_ai_requests`, `ai_app_spend`, `chat_ai_days` | User and app | Yes | AI request log (counts, cost, outcome; never text), spend per month and per chat per day |
 
 ### Client chats and meetings
@@ -128,7 +129,7 @@ Kept elsewhere:
 - **Meeting transcripts and proposals** show only to the call's reviewers and attendees (`store/meeting-store.ts`).
 - **Team views** (Team, sends, priorities) show a commit snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
-- **DevOps patterns (WP-1)** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing.
+- **DevOps patterns (WP-1)** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing. Team and area names (WP-2) show on the page to people with the switch; in the summary download only in the scope line of a client the person is on.
 - **Diagnostics** (Settings › Data › Diagnostics) is counts only, for a person's own chats, with no admin view.
 
 ## Deployment items (DP-2)

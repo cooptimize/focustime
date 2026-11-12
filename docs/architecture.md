@@ -936,6 +936,16 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **UI.** `ui/patterns/Patterns.tsx` (`#/patterns` over Today, `ui/nav.ts`; App asks `patterns.access` and opens Today when it is off), the command menu's "DevOps patterns" only with the switch (`ui/menu.ts`), styles `.pat-*`.
 - **Tests.** `plan/patterns/patterns.test.ts`, `actions/patterns-run.test.ts`, `actions/patterns-reader.test.ts`, `actions/patterns.test.ts`; e2e `e2e/patterns.test.ts` (screenshots into `docs/ux/wp1/` with `FOCUSTIME_SHOTS`).
 
+
+## WP-2: A trustworthy DevOps analysis (Nov 11)
+
+- **Pure parts.** `plan/patterns/scope.ts` (the analysis scope: whole projects, teams or area paths; the layout per project with counts and types; `matcherOf` with its problems; `scopeChoice`: the page's, Admin › Clients' teams or areas, or one area), `kinds.ts` (Build work, Tickets and support, Leave out; the guess from the data and its words), `analysis.ts` (what the page shows now from items and kinds; the "too few to read" rule, 20), `levels.ts` (levels by share, 1 in 10), `inventory.ts` (parent and child pairs, no parent per type, tickets in short, the run's scope and counts in the snapshot), `labels.ts` (`start-2` with "can't tell", every in-scope item to classify, agreement on 100 or more, chains), `results.ts` (coverage adding up; Build work and tickets apart; shapes as sets and chains), `report.ts` (the summary: what it covers, Build work, Tickets and support, with and without the largest client).
+- **Store.** Four app tables (`20261201T0900_patterns_scope`): `patterns_layout`, `patterns_projects`, `patterns_scopes`, `patterns_kinds`; failed answers as marker rows in `patterns_labels`.
+- **Run.** `actions/patterns-run.ts`: inventory phases first, tree, months and rows per project (the layout), scope (stops the client at `needs_scope`), items in scope, parents, history, numbers; classification checks the scope again before each request and records failed answers; runs carry `rules: 2`; old runs aren't resumed.
+- **Actions.** `patterns.set_scope` (validated against the layout; the page's own) and `patterns.set_kind`; `patterns.status` adds each client's layout, scope (page, Admin › Clients, next, used, problems), kinds, analysis and coverage.
+- **UI.** `ui/patterns/Patterns.tsx`: Runs (estimate with items and time; the run table always shown), Scope (layout chooser), Kinds of work, Coverage, Build work (inventory and classification), Tickets and support, Request types, Check by hand, Downloads.
+- **Tests.** `plan/patterns/wp2.test.ts`, `actions/patterns-scope.test.ts` (both store drivers), the WP-1 tests updated; e2e `e2e/patterns.test.ts` covers choosing a scope and a kind (screenshots into `docs/ux/wp2/`). How to run it: `docs/analysis/wp1-how-to-run.md`.
+
 ## SG-1: the board suggests (Nov 11)
 
 - **The rule.** `plan/boardsuggest.ts` (pure): `boardSuggestions(input)` gives today's and the next working day's empty blocks their offers (unfinished to-dos, then `assignedList`'s stories in backlog order with target dates lifted, a feature with no stories as itself), counted against `freeMinutes`, at most `MAX_PER_BLOCK` (4); `nextWorkDay`, `suggestable`, `todoKey`, `clearKey` and `validClearKey` (the three clear scopes), `byBlock`. Tests: `plan/boardsuggest.test.ts`.

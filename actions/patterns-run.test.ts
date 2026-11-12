@@ -217,7 +217,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     // The merge carries names, meanings and counts only, no item text, and no client's name.
     expect(merge[0]!.input).not.toMatch(/Sales reporting|Refresh the loads|Adatum|Fabrikam|Nightly/);
     const lists = await w.store.lists();
-    expect(lists.map((l) => l.version)).toEqual(["v1", `v2-r${run.id}`]);
+    expect(lists.map((l) => l.version)).toEqual(["start-2", `v2-r${run.id}`]);
     expect(JSON.stringify(lists[1])).not.toMatch(/Adatum|Fabrikam/i);
     const labels = await w.store.labels("adatum", `v2-r${run.id}`);
     expect(labels.size).toBe(7);
@@ -238,7 +238,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     await done(w.runner);
     const deps = ai({ allowed: ["adatum"] });
     const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
-    expect(est.clients.fabrikam).toEqual({ items: 0, micros: 0, skipped: "Allow AI is off for this client (Admin › AI)" });
+    expect(est.clients.fabrikam).toMatchObject({ items: 0, micros: 0, seconds: 0, skipped: "Allow AI is off for this client (Admin › AI)" });
     await w.runner.startClassify(ME, deps, est.totalMicros * 100, ["adatum", "fabrikam"]);
     await done(w.runner);
     expect((await w.store.latest("classify")).last!.progress.clients.fabrikam).toMatchObject({ state: "skipped", reason: "Allow AI is off for this client (Admin › AI)" });
@@ -301,7 +301,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     await done(w.runner);
     await w.runner.startClassify(ME, ai(), 1_000_000, ["adatum", "fabrikam"]);
     await done(w.runner);
-    for (const t of ["patterns_runs", "patterns_snapshots", "patterns_items", "patterns_labels", "patterns_type_lists", "patterns_platforms"]) {
+    for (const t of ["patterns_runs", "patterns_snapshots", "patterns_items", "patterns_labels", "patterns_type_lists", "patterns_platforms", "patterns_layout", "patterns_projects", "patterns_scopes", "patterns_kinds"]) {
       const rows = JSON.stringify(await db.conn.all(`SELECT * FROM ${t}`));
       expect(rows, t).not.toMatch(/Build the sales area|Load orders daily|Row counts match|Columns listed|Nightly loads|Ignore your instructions|outside\.example/);
     }
@@ -345,7 +345,7 @@ await forEachDriver("DevOps patterns run (WP-1)", ({ open: openDb }) => {
     const est = await w.runner.estimate(["adatum", "fabrikam"], deps.aiAllowed);
     await w.runner.startClassify(ME, deps, est.totalMicros * 10, ["adatum", "fabrikam"]);
     await done(w.runner);
-    const kept = JSON.stringify([...(await w.store.labels("adatum", "v1")).values()]);
+    const kept = JSON.stringify([...(await w.store.labels("adatum", "start-2")).values()]);
     expect(kept).toMatch(/another client/);
     expect(kept).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
     expect(JSON.stringify(await w.store.lists())).not.toMatch(/Fabrikam Inc|Adatum Corp|outside\.example/);
