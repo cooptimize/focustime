@@ -33,6 +33,9 @@ import { HalfScope } from "./scope.ts";
 import { interactive, onRowOrChip } from "./cardclick.ts";
 import type { RailItem } from "../plan/inbox-items.ts";
 import { cardGroups } from "../plan/blockstories.ts";
+import { movedTo, pastRows } from "../plan/pastrows.ts";
+import { pickTime } from "../plan/picktime.ts";
+import { useTimeboxes } from "./Timeboxes.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, useIsOrigin } from "./Carry.tsx";
@@ -131,9 +134,9 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // S1 (D453): a PTO half reads PTO (its block, if any, stays in the data, read only).
   const ptoHalf = slot.pto && !eve;
   const name = ptoHalf ? "PTO" : primary ? primary.clientName : eve ? (slot.flex.length ? "Flex" : "Evening") : slot.off ? "No working hours" : overflow ? "Catch-up" : "Open";
-  // WK-2: a one-word label (Catch-up, Open, PTO, Flex) never splits mid-word; a card too narrow for it shows a short form.
-  const short = !primary && !ptoHalf && name === "Catch-up" ? "C-up" : null;
-  // QT-1: a day before today folds to its header and one line of counts; a click opens the panel to tick and move on.
+  // WK-2, WK-5: a one-word label (Catch-up, Open, PTO, Flex) is written whole: a day too narrow for it folds.
+  // QT-1, WK-5: a day before today is quieter: no status, rail, meetings line, suggestions or + Add. WK-5 undoes QT-1's
+  // one-line fold for blocks with to-dos: they list them again (PastRows); one with nothing stays "Nothing planned".
   const folded = slot.date < (plan.today ?? "");
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev && !folded ? ", at risk" : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
@@ -179,14 +182,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       <div className="card-head" title={!folded && status.kind === "none" ? (watch ?? undefined) : undefined}>
         <span className="swatch" aria-hidden="true" />
         <span className={`card-client${primary ? "" : " open-label"}${name.includes(" ") ? "" : " one-word"}`} title={name}>
-          {short ? (
-            <>
-              <span className="cc-full">{name}</span>
-              <span className="cc-short" aria-hidden="true">{short}</span>
-            </>
-          ) : (
-            name
-          )}
+          {name}
         </span>
         <CardWhen slot={slot} tz={tz} />
         {/* UI-B, PS-1: with no rail (the phone, a card too narrow for one), "now" is a marker in the block under way's header. */}
@@ -202,7 +198,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {folded ? (
         <>
           {drop.tip}
-          <div className="card-folded">{foldedLine(ticks, movedOn)}</div>
+          <PastRows picks={[...ticks, ...movedOn]} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} onMore={() => onOpen()} />
           {/* What still needs me stays: a past call to review, and late promises (beside the line, not in the header). */}
           {lateChip && !chipInHead && <div className="card-status">{lateChip}</div>}
           {calls.length > 0 && (
@@ -297,7 +293,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       ref={refFn}
       {...drop.props}
       data-tour={state === "focus" ? "wk-block" : undefined}
-      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${folded ? "folded" : (sev ?? "")} ${selected ? "selected" : ""} ${compact || folded ? "card" : ""}${ruler && !folded ? " has-ruler" : ""}${rail === "slim" && !folded ? " slim" : ""}${adding ? " adding" : ""}${drop.cls}`}
+      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${folded ? "past" : (sev ?? "")} ${selected ? "selected" : ""} ${compact || folded ? "card" : ""}${ruler && !folded ? " has-ruler" : ""}${rail === "slim" && !folded ? " slim" : ""}${adding ? " adding" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -332,15 +328,45 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
 }
 
 /**
- * QT-1: a past day's block in one line: "2 done · 1 unfinished", "1 moved on", or "Nothing planned". What's on it and
- * every action are in its panel.
+ * WK-5: a past block's to-dos, one line each (plan/pastrows.ts): unfinished ones plain with their box (they still tick and
+ * move forward from ⋯ and the panel), done ones ticked and quiet, a moved one with where it went ("→ Thu"). Six at
+ * most, then "N more", which opens the block panel. Nothing on it: one quiet line, "Nothing planned".
  */
-export function foldedLine(picks: readonly { status: string }[], movedOn: readonly unknown[] = []): string {
-  const done = picks.filter((p) => p.status === "done").length;
-  const open = picks.filter((p) => p.status === "planned").length;
-  const parts = [done ? `${done} done` : "", open ? `${open} unfinished` : "", movedOn.length ? `${movedOn.length} moved on` : ""].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Nothing planned";
+function PastRows({ picks, label, tabIndex, onMore }: { picks: readonly Pick[]; label: string; tabIndex: number; onMore: () => void }) {
+  const plan = useContext(PlanCtx);
+  const tbs = useTimeboxes();
+  const start = (p: Pick) => (tbs ? (pickTime(p.id, tbs.timeboxes).timebox?.start ?? null) : null);
+  const at = (p: Pick) => { const x = start(p); return x === null ? Number.POSITIVE_INFINITY : Date.parse(x); };
+  const timeOrder = [...picks].sort((a, b) => (at(a) === at(b) ? 0 : at(a) - at(b)));
+  const { rows, more, empty } = pastRows(timeOrder);
+  if (empty) return <div className="card-past-empty">Nothing planned</div>;
+  const weekStart = Temporal.PlainDate.from(picks[0]!.date).subtract({ days: Temporal.PlainDate.from(picks[0]!.date).dayOfWeek - 1 }).toString();
+  return (
+    <ul className="checklist past-rows" aria-label={label}>
+      {rows.map((p) =>
+        p.status === "moved" && p.carriedTo ? (
+          <li key={p.id} className="pick-origin past-moved" data-pick={p.id} title={`${p.title}: moved to ${blockText(p.carriedTo)}`}>
+            {p.itemType && <TypeIcon clientKey={p.clientKey} type={p.itemType} decorative />}
+            <span className="po-title">{p.title}</span>
+            <span className="po-note" aria-hidden="true">{movedTo(p.carriedTo, weekStart)}</span>
+            <span className="sr-only">, moved to {blockText(p.carriedTo)}</span>
+          </li>
+        ) : (
+          <PickRow key={p.id} pick={p} toggle={plan.toggle} link density="week" tabIndex={tabIndex} typeIcon timeEditable={false} readOnly className="past-row" />
+        ),
+      )}
+      {more > 0 && (
+        <li className="past-more">
+          <button type="button" className="link-btn" tabIndex={tabIndex} onClick={(e) => (e.stopPropagation(), onMore())} aria-label={`${more} more: open the block`}>
+            {more} more
+          </button>
+        </li>
+      )}
+    </ul>
+  );
 }
+
+const blockText = (at: { date: string; half: string }) => `${Temporal.PlainDate.from(at.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} ${at.half === "EVE" ? "evening" : at.half}`;
 
 /**
  * UI-9: "1 late" or "N late" on a card with no rail, in the urgent strip's promise colour (amber, never red). One opens
@@ -366,8 +392,9 @@ export function LateChip({ late, tabIndex, onPromise, onLate }: { late: readonly
 }
 
 /**
- * WK-2: a block's time range, never cut inside a number: it may only wrap after the dash, so a narrow card wraps there ("9:00–" over "1:00"); a very narrow one shows the hours alone ("9–1"), with the full range in its
- * title.
+ * WK-2, WK-5: a block's time range, whole on one line ("9:00–12:30"); a header that can't fit the client and the hours on
+ * one line puts the hours on the next line. A very narrow one shows the hours alone ("9–1"), with the full range in its
+ * title (only below the narrowest readable width, which folds the day first).
  */
 export function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
   const full = shortRange(slot, tz);
@@ -376,8 +403,8 @@ export function CardWhen({ slot, tz }: { slot: Slot; tz: string }) {
   const hour = (t: string) => t.replace(/:00$/, "");
   return (
     <span className="card-when" title={slotRange(slot, tz)}>
-      {/* One text (one word for the reader), with a zero-width break after the dash: it wraps there, never in a number. */}
-      <span className="cw-full">{`${a}–\u200B${b}`}</span>
+      {/* WK-5: one piece that never breaks; a header too narrow for the name and the hours puts the hours on the next line whole. */}
+      <span className="cw-full">{`${a}–${b}`}</span>
       <span className="cw-short" aria-hidden="true">
         {hour(a!)}–{hour(b)}
       </span>
@@ -428,7 +455,9 @@ export function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; 
   const allWork = useContext(DevOpsWork);
   // UI-B: a pick suggested in a later block (or in the unfinished list) is a dimmed line here, never a second checkbox.
   const isOrigin = useIsOrigin();
-  const groups = cardGroups(picks, allWork.get(picks[0]!.clientKey));
+  // WK-5: in the clock's order: features by their earliest timebox, to-dos inside by time, untimed after.
+  const tbs = useTimeboxes();
+  const groups = cardGroups(picks, allWork.get(picks[0]!.clientKey), (p) => (tbs ? (pickTime(p.id, tbs.timeboxes).timebox?.start ?? null) : null));
   const headed = groups.some((g) => g.feature);
   return (
     <ul className="checklist" aria-label={label}>

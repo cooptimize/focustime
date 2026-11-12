@@ -190,6 +190,10 @@ export type MenuEnv = {
   /** WK-3: Saturday and Sunday on Week always (remembered per viewer in this browser), not only when something is there. */
   showWeekend?: boolean;
   saveShowWeekend?: (show: boolean) => void;
+  /** WK-5: the days Week shows (the person's own) and the catch-up day's name in this week ("Friday"). */
+  weekDays?: { catchUp: boolean; weekend: boolean };
+  saveWeekDays?: (v: { catchUp?: boolean; weekend?: boolean }) => void;
+  catchUpName?: string;
   /** WK-3: a change to my plan with an Undo toast (a menu move, a deployment added or changed). */
   undoable?: (text: string, undo: () => Promise<unknown>) => void;
   hours: TimeModel;
@@ -1218,6 +1222,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
+    case "ui.set_week_days": {
+      const w = env.weekDays;
+      const save = env.saveWeekDays;
+      if (!w || !save) return { disabled: "Open Week to choose its days" };
+      return { next: () => ({ title: "Days on Week", items: [
+        { id: "catchup", label: `Show ${env.catchUpName ?? "catch-up day"}`, checked: w.catchUp, action: "ui.set_week_days", run: () => save({ catchUp: !w.catchUp }) },
+        { id: "weekend", label: "Show weekend", checked: w.weekend, action: "ui.set_week_days", run: () => save({ weekend: !w.weekend }) },
+      ] }) };
+    }
     case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
@@ -1233,7 +1246,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "patterns.set_scope":
     case "patterns.set_kind":
     case "patterns.check":
-    case "patterns.download": return { disabled: "Runs from the DevOps patterns page" };
+    case "patterns.download":
+    case "patterns.list_change":
+    case "patterns.suggestion": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":

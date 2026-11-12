@@ -5,24 +5,33 @@
 // item went, adding up), Build work (the default view: inventory and classification), Tickets and support, Request
 // types, Check by hand (clients I'm on only) and two Markdown downloads. Any figure built on fewer than 20 items says
 // "too few to read". Existing classes only, plus a few pat-* ones.
+//
+// WP-3: classification shows agreement first, per missing fact and per layer, so it is clear which findings to trust;
+// request types, readiness and layers have a column per client; the Request types section is the list in use, which a
+// person changes here (add, rename, merge, remove, edit), each change saying what it costs before Save, with the names
+// the AI suggested for "other". Nothing on this page makes an AI request but Run classification and Resume.
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ActionRefusal, call } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { fmtUsd } from "../../ai/cost.ts";
 import type { Pair, Snapshot, Spread, Tickets, Writing } from "../../plan/patterns/inventory.ts";
-import { countWords, FEW, FEW_WORDS, shareWords, tooFew, type ClientAnalysis } from "../../plan/patterns/analysis.ts";
+import { FEW, FEW_WORDS, shareWords, tooFew, type ClientAnalysis } from "../../plan/patterns/analysis.ts";
 import { KIND_WORDS, KINDS, TICKET_RULE_WORDS, guessWords, type Kind } from "../../plan/patterns/kinds.ts";
 import { PARENT_SHARE_WORDS } from "../../plan/patterns/levels.ts";
-import { sumCoverage, sumResults, topOtherNames, type ClientResults, type Coverage, type Results } from "../../plan/patterns/results.ts";
+import { sampleWords, sumCoverage, sumResults, type ClientResults, type Coverage } from "../../plan/patterns/results.ts";
+import { Classification } from "./Classification.tsx";
+import { RequestTypes } from "./RequestTypes.tsx";
 import { analysisScopeWords, type AnalysisScope, type Layout, type ProjectLayout } from "../../plan/patterns/scope.ts";
-import type { Labels, Platform, TypeList } from "../../plan/patterns/types.ts";
+import type { Labels, Platform, TypeChange, TypeList } from "../../plan/patterns/types.ts";
 
 type ClientProgress = { state: "waiting" | "reading" | "done" | "stopped" | "skipped" | "needs_scope"; reason?: string | null; phase?: string; month?: number; next?: number; total?: number; done?: number; dropped?: number; capped?: boolean; project?: number; projects?: string[]; read?: number; outside?: number };
-type RunView = { id: number; kind: "inventory" | "classify"; state: "running" | "stopped" | "done"; rules: number; reason: string | null; startedAt: string; finishedAt: string | null; pass: 1 | 2 | null; estimateMicros: number; spentMicros: number; clients: Record<string, ClientProgress> };
+type RunView = { id: number; kind: "inventory" | "classify"; state: "running" | "stopped" | "done"; rules: number; reason: string | null; startedAt: string; finishedAt: string | null; pass: 1 | 2 | null; listVersion: string | null; estimateMicros: number; spentMicros: number; clients: Record<string, ClientProgress> };
 type ScopeView = { page: AnalysisScope | null; admin: string; adminKind: string; next: AnalysisScope | null; nextWords: string; nextSource: string | null; problems: string[]; used: AnalysisScope | null; usedWords: string | null; changed: boolean };
 type ClientRow = { key: string; mine: boolean; platform: Platform | null; platformHint: string | null; snapshot: Snapshot | null; snapshotAt: string | null; previous: Snapshot | null; previousAt: string | null; analysis: ClientAnalysis | null; results: ClientResults | null; layout: Layout | null; scope: ScopeView; kindsChanged: boolean };
-type Status = { clients: ClientRow[]; inventory: { last: RunView | null; lastDone: string | null }; classify: { last: RunView | null; lastDone: string | null }; lists: TypeList[]; shownVersion: string; shownRules: number; ai: { ready: boolean; words: string | null } };
-type Estimate = { clients: Record<string, { items: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalMicros: number; totalSeconds: number; agreement: number };
+type Version = { version: string; number: number; at: string; by: string | null; why: string | null; change: TypeChange | null };
+type SuggestionRow = { name: string; meaning: string; count: number; clients: Record<string, number> };
+type Status = { clients: ClientRow[]; inventory: { last: RunView | null; lastDone: string | null }; classify: { last: RunView | null; lastDone: string | null }; lists: TypeList[]; inUse: TypeList; versions: Version[]; labelsOn: { mode: "in use" | "earlier"; version: string; wp1?: boolean }; suggestions: SuggestionRow[]; ignored: string[]; shownVersion: string; shownRules: number; ai: { ready: boolean; words: string | null } };
+type Estimate = { clients: Record<string, { items: number; toClassify: number; micros: number; seconds: number; skipped: string | null }>; totalItems: number; totalMicros: number; totalSeconds: number; agreement: number; list: string };
 type CheckRow = { id: number; url: string | null; title: string; type: string; level: string; labels: Labels };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
@@ -33,7 +42,7 @@ const PLATFORM: Record<Platform, string> = { azure: "Azure", fabric: "Fabric", b
 type Filter = "all" | Platform | "unset";
 const FILTERS: [Filter, string][] = [["all", "All clients"], ["azure", "Azure"], ["fabric", "Fabric"], ["both", "Both"], ["unset", "Not set"]];
 const STATE_WORDS: Record<ClientProgress["state"], string> = { waiting: "Waiting", reading: "Reading", done: "Done", stopped: "Stopped", skipped: "Skipped", needs_scope: "Choose its scope" };
-const PHASE_WORDS: Record<string, string> = { first: "first item", tree: "reading areas and teams", months: "finding items", rows: "reading the layout", scope: "choosing the scope", items: "reading items in scope", parents: "reading parents", history: "reading history", numbers: "counting", pass1: "pass 1", pass2: "pass 2", done: "" };
+const PHASE_WORDS: Record<string, string> = { first: "first item", tree: "reading areas and teams", months: "finding items", rows: "reading the layout", scope: "choosing the scope", items: "reading items in scope", parents: "reading parents", history: "reading history", numbers: "counting", pass1: "pass 1", pass2: "pass 2", labels: "labeling", done: "" };
 const SOURCE_WORDS: Record<string, string> = { page: "set on this page", admin: "from Admin › Clients", "one area": "the project has one area" };
 const sorted = (m: Record<string, number>) => Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 const types = (m: Record<string, number>) => sorted(m).map(([k, v]) => `${k} ${v}`).join(", ");
@@ -120,9 +129,9 @@ export function Patterns({ onClose }: { onClose: () => void }) {
           </section>
           <CoverageSection clients={shown} />
           <Inventory clients={shown} onPlatform={(k, p) => void act("patterns.set_platform", { clientKey: k, platform: p })} />
-          <Classification title="Build work: classification" label="Classification" results={sumResults(shown.flatMap((c) => (c.results ? [c.results.build] : [])))} clientsShown={shown.length} oldRules={data.shownRules !== 2} />
+          <Classification title="Build work: classification" label="Classification" clients={shown.flatMap((c) => (c.results?.build.labeled ? [{ key: c.key, r: c.results.build }] : []))} labelsOn={data.labelsOn} sample={sampleWords(sumResults(data.clients.flatMap((c) => (c.results ? [c.results.build, c.results.tickets] : []))))} />
           <TicketsSection clients={shown} />
-          <TypesList lists={data.lists} shown={data.shownVersion} results={sumResults(shown.flatMap((c) => (c.results ? [c.results.build, c.results.tickets] : [])))} />
+          <RequestTypes data={data} busy={busy} results={sumResults(data.clients.flatMap((c) => (c.results ? [c.results.build, c.results.tickets] : [])))} act={act} />
           <CheckByHand clients={data.clients.filter((c) => c.mine && c.results?.coverage.labeled)} />
           <Downloads />
         </>
@@ -166,7 +175,9 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
   const cls = data.classify.last;
   const running = inv?.state === "running" || cls?.state === "running";
   const current = [inv, cls].filter((r): r is RunView => !!r).sort((a, b) => b.id - a.id)[0] ?? null;
-  const canResume = (r: RunView | null | undefined) => r?.state === "stopped" && r.rules === 2;
+  // Inventory under WP-2's rules; classification only under WP-3's (one pass against the list in use).
+  // A classification only on the list still in use (the estimate prices that list).
+  const canResume = (r: RunView | null | undefined) => r?.state === "stopped" && r.rules === (r.kind === "inventory" ? 2 : 3) && (r.kind === "inventory" || r.listVersion === data.inUse.version);
   return (
     <section aria-label="Runs" className="pat-section">
       <h3>Runs</h3>
@@ -187,7 +198,7 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
         )}
       </div>
       {!data.ai.ready && <p className="set-hint">{data.ai.words} The inventory works without it.</p>}
-      {cls?.state === "stopped" && !estimate && <p className="set-hint">Classification stopped. Estimate again to resume it.</p>}
+      {cls?.state === "stopped" && !estimate && <p className="set-hint">{canResume(cls) ? "Classification stopped. Estimate again to resume it." : cls.rules === 3 ? "Classification stopped, and the request types list changed since it started. Estimate, then Run classification: the labels it made carry over." : "Classification stopped."}</p>}
       <p className="set-hint">A run lives in the server, not in this page. On dev keep the page open: dev scales to zero a few minutes after the last visit, and a new deploy restarts it. Either leaves the run Stopped; Resume carries on where it stopped and never pays for an item twice.</p>
       {msg && <p className="set-hint" role="status">{msg}</p>}
       {estimate && (
@@ -201,13 +212,13 @@ function Runs({ data, busy, estimate, msg, onInventory, onResume, onEstimate, on
           </tbody>
         </table>
       )}
-      {estimate && <p className="set-hint">Answers cover pass 1 (a sample that settles the request types), pass 2 (every item in scope whose kind isn't Leave out) and a second answer for the agreement sample ({estimate.agreement} items). A run stops if it spends more than 1.5 times the estimate.</p>}
+      {estimate && <p className="set-hint">Against the list in use (version {estimate.list.replace("own-", "")}). Answers cover every item in scope whose kind isn't Leave out and that has no label on the list in use (or one that needs labeling again), and a second answer for the agreement sample ({estimate.agreement} items). A run never changes the list. It stops if it spends more than 1.5 times the estimate.</p>}
       {current && (
         <>
           <p className={current.state === "stopped" ? "field-problem" : "muted"}>
-            {current.kind === "inventory" ? "Inventory" : `Classification${current.pass ? `, pass ${current.pass}` : ""}`}: {current.state === "running" ? "running" : current.state === "done" ? `done ${when(current.finishedAt)}` : (current.reason ?? "Stopped")}
+            {current.kind === "inventory" ? "Inventory" : `Classification${current.pass && current.rules === 2 ? `, pass ${current.pass}` : ""}`}: {current.state === "running" ? "running" : current.state === "done" ? `done ${when(current.finishedAt)}` : (current.reason ?? "Stopped")}
             {current.kind === "classify" && current.estimateMicros ? ` · spent ${fmtUsd(current.spentMicros)} of about ${fmtUsd(current.estimateMicros)}` : ""}
-            {current.rules !== 2 ? " · made before scopes and kinds (WP-2), kept as it was" : ""}
+            {current.rules < 2 ? " · made before scopes and kinds (WP-2), kept as it was" : current.kind === "classify" && current.rules === 2 ? " · made before the list in use (WP-3), kept as it was" : ""}
           </p>
           <RunTable run={current} />
         </>
@@ -376,7 +387,7 @@ function KindsSection({ clients, busy, onKind }: { clients: ClientRow[]; busy: b
 function coverageCells(c: Coverage) {
   return (
     <>
-      <td>{num(c.read)}</td><td>{num(c.outside)}</td><td>{c.inScope}</td><td>{c.leftOut}</td><td>{c.toClassify}</td><td>{c.labeled}</td><td>{c.aiOff}</td><td>{c.failed}</td><td>{c.notReached}</td>
+      <td>{num(c.read)}</td><td>{num(c.outside)}</td><td>{c.inScope}</td><td>{c.leftOut}</td><td>{c.toClassify}</td><td>{c.labeled}</td><td>{c.aiOff}</td><td>{c.failed}</td><td>{c.earlier ?? 0}</td><td>{c.notReached}</td>
     </>
   );
 }
@@ -386,17 +397,17 @@ function CoverageSection({ clients }: { clients: ClientRow[] }) {
   return (
     <section aria-label="Coverage" className="pat-section">
       <h3>Coverage</h3>
-      <p className="set-hint">Where every item from the last 24 months went. Read = outside scope + in scope; in scope = left out by kind + to classify; to classify = labeled + not labeled, by reason.</p>
+      <p className="set-hint">Where every item from the last 24 months went. Read = outside scope + in scope; in scope = left out by kind + to classify; to classify = labeled (on the list in use) + not labeled, by reason.</p>
       {!rows.length ? <p className="muted">After an inventory in scope.</p> : (
         <table className="adm-table pat-coverage">
-          <thead><tr><th>Client</th><th>Scope</th><th>Read</th><th>Outside scope</th><th>In scope</th><th>Left out by kind</th><th>To classify</th><th>Labeled</th><th>AI not allowed</th><th>Answer failed its check</th><th>Not reached</th></tr></thead>
+          <thead><tr><th>Client</th><th>Scope</th><th>Read</th><th>Outside scope</th><th>In scope</th><th>Left out by kind</th><th>To classify</th><th>Labeled</th><th>AI not allowed</th><th>Answer failed its check</th><th>On an earlier list</th><th>Not reached</th></tr></thead>
           <tbody>
             {rows.map((c) => <tr key={c.key}><th scope="row">{c.key}</th><td>{c.scope.usedWords ?? <span className="muted">Whole project (before scopes)</span>}</td>{coverageCells(c.results!.coverage)}</tr>)}
             {rows.length > 1 && <tr><th scope="row">All</th><td></td>{coverageCells(sumCoverage(rows.map((c) => c.results!.coverage)))}</tr>}
           </tbody>
         </table>
       )}
-      <p className="set-hint">Not reached: the run stopped (at its cost limit, a restart, an AI outage or cap) or hasn't run since the inventory.</p>
+      <p className="set-hint">On an earlier list: labeled only on a list that can't be carried to the list in use; a classification run labels them again. Not reached: the run stopped (at its cost limit, a restart, an AI outage or cap) or hasn't run since the inventory.</p>
     </section>
   );
 }
@@ -502,67 +513,6 @@ function Detail({ s }: { s: Snapshot }) {
   );
 }
 
-// ---------- classification ----------
-
-function Classification({ title, label, results: total, clientsShown, oldRules }: { title: string; label: string; results: Results; clientsShown: number; oldRules: boolean }) {
-  if (!total.labeled) return (
-    <section aria-label={label} className="pat-section">
-      <h3>{title}</h3>
-      <p className="muted">No classification yet. Estimate, then Run classification.</p>
-    </section>
-  );
-  const share = (v: number) => shareWords(v / total.labeled, total.labeled, { base: false });
-  const a = total.agreement;
-  const shapeRows = (list: Results["shapes"]["sets"], join: string) => (list.length ? list.map((s) => <tr key={`${s.requestType}|${s.shape.join("|")}`}><th scope="row">{s.requestType}</th><td>{s.shape.join(join)}</td><td>{countWords(s.count)}</td></tr>) : <tr><td colSpan={3} className="muted">None yet.</td></tr>);
-  return (
-    <section aria-label={label} className="pat-section">
-      <h3>{title}</h3>
-      <p className="muted">{total.labeled} items labeled, across {clientsShown} client{clientsShown === 1 ? "" : "s"}. Coverage above says what wasn't, and why.</p>
-      {oldRules && <p className="field-problem">These labels were made before scopes and kinds (WP-2): a whole project, and a request type for unclear items. Kept as they were. Run classification again for the new rules.</p>}
-      <h4>Common feature shapes</h4>
-      <p className="set-hint">For each classified parent with at least two classified children ({countWords(total.shapes.parents)} parents), the layers its children touch. As a set, small differences in order don't split the counts; as a chain, in the order the children were created. A shape counted fewer than {FEW} times is too few to read.</p>
-      <div className="pat-grid">
-        <table className="adm-table pat-shapes">
-          <thead><tr><th>Request type</th><th>Layers touched (set)</th><th>Parents</th></tr></thead>
-          <tbody>{shapeRows(total.shapes.sets, ", ")}</tbody>
-        </table>
-        <table className="adm-table">
-          <thead><tr><th>Request type</th><th>In order (chain)</th><th>Parents</th></tr></thead>
-          <tbody>{shapeRows(total.shapes.chains, " › ")}</tbody>
-        </table>
-      </div>
-      <div className="pat-grid">
-        <table className="adm-table">
-          <thead><tr><th>Request type</th><th>Items</th><th>Share</th></tr></thead>
-          <tbody>{sorted(total.requestTypes).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{countWords(v)}</td><td>{share(v)}</td></tr>)}</tbody>
-        </table>
-        <table className="adm-table">
-          <thead><tr><th>Layer</th><th>Items</th></tr></thead>
-          <tbody>{sorted(total.layers).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{countWords(v)}</td></tr>)}</tbody>
-        </table>
-        <table className="adm-table">
-          <thead><tr><th>Readiness as written</th><th>Share</th></tr></thead>
-          <tbody>{sorted(total.readiness).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{share(v)}</td></tr>)}</tbody>
-        </table>
-        <table className="adm-table">
-          <thead><tr><th>Confidence</th><th>Share</th></tr></thead>
-          <tbody>{sorted(total.confidence).map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{share(v)}</td></tr>)}</tbody>
-        </table>
-      </div>
-      <h4>What is missing most, by request type</h4>
-      <table className="adm-table">
-        <thead><tr><th>Request type</th><th>Missing most</th></tr></thead>
-        <tbody>{Object.entries(total.missing).sort(([x], [y]) => x.localeCompare(y)).map(([t, m]) => {
-          const n = total.requestTypes[t] ?? 0;
-          return <tr key={t}><th scope="row">{t} <span className="set-hint">({n})</span></th><td>{tooFew(n) ? <span className="muted">{FEW_WORDS}</span> : sorted(m).filter(([k]) => k !== "none").slice(0, 3).map(([k, v]) => `${k} (${v})`).join(", ") || <span className="muted">nothing</span>}</td></tr>;
-        })}</tbody>
-      </table>
-      <h4>Agreement</h4>
-      <p>{a.pairs ? `On ${a.pairs} items classified twice, the answers matched: request type ${shareWords(a.requestType, a.pairs)}, layers ${shareWords(a.layers, a.pairs)}, readiness ${shareWords(a.readiness, a.pairs)}, missing ${shareWords(a.missing, a.pairs)}, confidence ${shareWords(a.confidence, a.pairs)}.` : "No item has been classified twice yet."}</p>
-    </section>
-  );
-}
-
 // ---------- tickets and support ----------
 
 function TicketsSection({ clients }: { clients: ClientRow[] }) {
@@ -581,33 +531,6 @@ function TicketsSection({ clients }: { clients: ClientRow[] }) {
         </table>
       )}
       {labeled.labeled > 0 && <p>{labeled.labeled} labeled: {sorted(labeled.requestTypes).slice(0, 5).map(([k, v]) => `${k} ${shareWords(v / labeled.labeled, labeled.labeled, { base: false })}`).join(", ")}.</p>}
-    </section>
-  );
-}
-
-// ---------- request types ----------
-
-function TypesList({ lists, shown, results }: { lists: TypeList[]; shown: string; results: Results }) {
-  const list = lists.find((l) => l.version === shown) ?? lists.at(-1);
-  if (!list) return null;
-  const start = list.version === "v1" || list.version === "start-2";
-  const others = topOtherNames(results);
-  return (
-    <section aria-label="Request types" className="pat-section">
-      <h3>Request types</h3>
-      <p className="muted">{start ? "The starting list, a hypothesis." : `Version 2, made ${when(list.createdAt)} from the first pass's suggestions.`} A request type is always a best guess from the list, "other", or "can't tell" (an item too thin to read). How clear an item is goes in readiness, never in the type.</p>
-      <table className="adm-table">
-        <thead><tr><th>Request type</th><th>Meaning</th><th>Made-up example</th></tr></thead>
-        <tbody>{list.types.map((t) => <tr key={t.name}><th scope="row">{t.name}</th><td>{t.meaning}</td><td>{t.example}</td></tr>)}</tbody>
-      </table>
-      {!start && (
-        <>
-          <h4>What changed from the starting list</h4>
-          {list.changes.length ? <ul>{list.changes.map((c, n) => <li key={n}>{c.kind}: {c.from.join(", ") || "new"} › {c.to.join(", ")} ({c.count} items in pass 1). {c.reason}</li>)}</ul> : <p className="muted">Nothing changed.</p>}
-        </>
-      )}
-      <h4>Most suggested names for "other"</h4>
-      {others.length ? <ul>{others.map(([k, v]) => <li key={k}>{k} ({countWords(v)})</li>)}</ul> : <p className="muted">None yet.</p>}
     </section>
   );
 }
@@ -672,7 +595,7 @@ function Downloads() {
   return (
     <section aria-label="Downloads" className="pat-section">
       <h3>Downloads</h3>
-      <p className="set-hint">The summary opens with what was covered (each client's scope and kinds, items in scope and labeled, the agreement sample), then Build work, then Tickets and support, with numbers across clients given with and without the largest. Counts, shares, shapes and meanings, as Markdown. No titles, item text or people; team and area names only in the scope line of clients you're on.</p>
+      <p className="set-hint">The summary opens with what was covered (each client's scope and kinds, items in scope and labeled, which list the labels are on, the agreement sample), then Build work, then Tickets and support, with a column per client beside all clients and without the largest. Counts, shares, shapes and meanings, as Markdown. No titles, item text or people; team and area names only in the scope line of clients you're on. The request types download lists the list in use first, then every earlier list.</p>
       <span className="set-inline">
         <button type="button" className="mini" onClick={() => get("summary")}>Download summary</button>
         <button type="button" className="mini" onClick={() => get("types")}>Download request types</button>

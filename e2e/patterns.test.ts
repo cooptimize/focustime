@@ -34,9 +34,11 @@ async function shot(page: Page, name: string, section?: string | import("playwri
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const scheme of ["light", "dark"] as const) {
     await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), scheme === "light" ? "cooptimize-light" : "cooptimize-dark");
-    if (section) await (typeof section === "string" ? page.getByRole("region", { name: section }) : section).scrollIntoViewIfNeeded();
+    if (typeof section === "string") await page.getByRole("region", { name: section }).scrollIntoViewIfNeeded();
+    // A locator goes to the top of the view (under the top bar), so what follows it shows too.
+    else if (section) await section.evaluate((e) => (e.scrollIntoView({ block: "start" }), window.scrollBy(0, -72)));
     await page.waitForTimeout(150);
-    await page.screenshot({ path: `${SHOTS}/wp2-${name}-${scheme}.png` });
+    await page.screenshot({ path: `${SHOTS}/${name.startsWith("wp3-") ? name : `wp2-${name}`}-${scheme}.png` });
   }
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
   if (size) await page.setViewportSize(size);
@@ -53,7 +55,7 @@ const post = (page: Page, action: string, input: unknown) =>
     [action, input] as const,
   );
 
-describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2)", () => {
+describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2, WP-3)", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -99,7 +101,7 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2)", () => {
         userId: id,
         extra: {
           patterns: port,
-          ai: { app: anAiApp({ provider: "openai", model: "gpt-6-luna", prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 } }), provider: async () => stubProvider({ respond: patternsAnswer() }), appSpend: { get: async () => 0, add: async () => {} } },
+          ai: { app: anAiApp({ provider: "openai", model: "gpt-6-luna", prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 } }), provider: async () => stubProvider({ respond: patternsAnswer({ other: (r) => r === "i1" || r === "i3", otherName: "housekeeping", otherMeaning: "Tidying folders and names" }) }), appSpend: { get: async () => 0, add: async () => {} } },
         },
       });
       await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: id, tid: HOME, name, username: email, email, signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
@@ -250,9 +252,37 @@ describe.skipIf(!CHROMIUM)("DevOps patterns (WP-1, WP-2)", () => {
     await runs.getByRole("button", { name: /^Run classification \(\d+ items, about / }).click();
     const classification = page.getByRole("region", { name: "Classification" });
     await classification.getByRole("heading", { name: "Common feature shapes" }).waitFor();
-    await page.getByText(/^Classification, pass 2: done/).waitFor();
-    await classification.locator(".pat-shapes tbody tr").first().waitFor();
+    await page.getByText(/^Classification: done/).waitFor();
     await shot(page, "classification", "Classification");
+    // WP-3: agreement comes first, with the sample as it is; then a table per fact with a column per client.
+    await classification.getByRole("heading", { name: "Agreement: which findings to trust" }).waitFor();
+    await classification.getByText(/^Agreement sample, across every client and kind: \d+ of \d+/).waitFor();
+    await shot(page, "wp3-agreement", classification.getByRole("heading", { name: "Agreement: which findings to trust" }));
+    const byClient = classification.getByRole("table", { name: "Request type" });
+    expect(await byClient.locator("thead th").allTextContents()).toContain("All clients");
+    await shot(page, "wp3-per-client", classification.getByRole("heading", { name: "By client" }));
+
+    // ---- WP-3: the request types list a person owns ----
+    const typesRegion = page.getByRole("region", { name: "Request types" });
+    await typesRegion.getByText(/^Version 1, in use/).waitFor();
+    const suggested = typesRegion.locator(".pat-suggest tr", { hasText: "housekeeping" });
+    await suggested.waitFor();
+    await shot(page, "wp3-request-types", typesRegion.getByRole("heading", { name: 'Suggested for "other"' }));
+    // A rename: its cost first (nothing), then Save as a new version with one line of why.
+    await typesRegion.getByRole("button", { name: "Rename: small change" }).click();
+    const form = typesRegion.getByRole("group", { name: "Rename" });
+    await form.getByRole("textbox", { name: "New name" }).fill("minor change");
+    await form.getByRole("textbox", { name: "Why" }).fill("Clearer for the team");
+    await form.getByRole("button", { name: "What it costs" }).click();
+    await form.getByRole("status").getByText(/A rename costs nothing/).waitFor();
+    await shot(page, "wp3-rename-cost", form);
+    await form.getByRole("button", { name: "Save as a new version" }).click();
+    await typesRegion.getByText(/^Version 2, in use/).waitFor();
+    await typesRegion.locator(".pat-versions li", { hasText: "renamed small change to minor change" }).waitFor();
+    // Ignore a suggestion: it goes from the list, and Show again brings it back.
+    await suggested.getByRole("button", { name: "Ignore: housekeeping" }).click();
+    await typesRegion.getByText("1 ignored.").waitFor();
+    expect(await typesRegion.locator(".pat-suggest tr", { hasText: "housekeeping" }).count()).toBe(0);
     await shot(page, "coverage", "Coverage");
     expect((await page.getByRole("region", { name: "Build work" }).textContent()) ?? "").not.toMatch(TITLES);
     // Fabrikam's labels never came: its coverage says why.

@@ -3,13 +3,17 @@
 // line of a client the person is on. WP-2: the summary opens with what the run covered (clients, each one's scope and
 // kinds, items in scope and labeled, the agreement sample), then Build work, then Tickets and support; numbers across
 // clients come with and without the largest client, and any figure built on fewer than 20 items says "too few to read".
-// Pure.
+// WP-3: the summary then says which list the labels are on and the agreement sample as it is ("99 of 100 (1 answer
+// failed its check)"); request types, readiness and layers get a column per client; agreement is per missing fact and
+// per layer, with the request types the answers disagreed on; the chain view of shapes is gone. The request types
+// download lists the list in use first, then earlier lists newest first, each under its own heading. Pure.
 import { FEW, FEW_WORDS, countWords, shareWords, tooFew, type ClientAnalysis } from "./analysis.ts";
 import { KIND_WORDS, type Kind } from "./kinds.ts";
 import { analysisScopeWords, type AnalysisScope } from "./scope.ts";
-import { STARTING_LIST, WP1_START } from "./labels.ts";
+import { FACT_FEW, MISSING, LAYERS, READINESS, STARTING_LIST, WP1_START, disagreements, factReading, type Agreement } from "./labels.ts";
 import { PARENT_SHARE_WORDS } from "./levels.ts";
-import { sumCoverage, sumResults, topOtherNames, type ClientResults, type Coverage, type Results } from "./results.ts";
+import { isAiList, isOwned, listWords, ownNumber, rankOf } from "./owned.ts";
+import { cellWords, clientTable, readinessByType, sampleWords, sumCoverage, sumResults, topOtherNames, type ClientResults, type Coverage, type Results } from "./results.ts";
 import type { Snapshot } from "./inventory.ts";
 import type { Platform, TypeList } from "./types.ts";
 
@@ -38,7 +42,50 @@ function kindsLine(a: ClientAnalysis | null): string {
 }
 
 function coverageRow(label: string, c: Coverage): string {
-  return `| ${label} | ${num(c.read)} | ${num(c.outside)} | ${c.inScope} | ${c.leftOut} | ${c.toClassify} | ${c.labeled} | ${c.aiOff} | ${c.failed} | ${c.notReached} |`;
+  return `| ${label} | ${num(c.read)} | ${num(c.outside)} | ${c.inScope} | ${c.leftOut} | ${c.toClassify} | ${c.labeled} | ${c.aiOff} | ${c.failed} | ${c.earlier ?? 0} | ${c.notReached} |`;
+}
+
+/** WP-3: "not reliable yet" or "too few to read" beside a fact, or its agreement share. */
+export function factNote(a: Agreement, kind: "missing" | "layers", fact: string): string {
+  const f = factReading(a.facts?.[kind]?.[fact]);
+  if (f.few) return `agreement ${FEW_WORDS} (${f.either})`;
+  return `agreement ${Math.round((f.share ?? 0) * 100)}%${f.reliable ? "" : ", not reliable yet"}`;
+}
+
+/** WP-3: the one line that says what a fact's agreement means, from the fact seen in the most pairs. */
+export function factMeaning(a: Agreement): string | null {
+  const top = Object.entries(a.facts?.missing ?? {}).filter(([, v]) => v.either >= FACT_FEW).sort((x, y) => y[1].either - x[1].either)[0];
+  if (!top) return null;
+  return `When one answer said "${top[0]}" was missing, the other said so too ${Math.round((top[1].both / top[1].either) * 100)}% of the time (${top[1].both} of ${top[1].either} pairs).`;
+}
+
+/** WP-3: no shape reaches 20 parents. */
+export const NO_COMMON_SHAPE = "No shape appears 20 times. There is no common shape.";
+
+function agreementLines(out: string[], a: Agreement) {
+  if (!a.pairs) {
+    out.push("", "No item has been classified twice yet.");
+    return;
+  }
+  out.push("", `Whole items, on ${a.pairs} items classified twice: request type ${shareWords(a.requestType, a.pairs)}, readiness ${shareWords(a.readiness, a.pairs)}, confidence ${shareWords(a.confidence, a.pairs)}.`);
+  const meaning = factMeaning(a);
+  if (meaning) out.push("", meaning);
+  for (const [kind, list, title] of [["missing", MISSING, "What is missing"], ["layers", LAYERS, "Layers"]] as const) {
+    out.push("", `| ${title} | In either answer | In both | Agreement |`, "|---|---|---|---|");
+    for (const f of list) {
+      if (f === "none") continue;
+      const r = factReading(a.facts?.[kind]?.[f]);
+      if (!r.either) continue;
+      out.push(`| ${f} | ${r.either} | ${r.both} | ${r.few ? FEW_WORDS : `${Math.round((r.share ?? 0) * 100)}%${r.reliable ? "" : ", not reliable yet"}`} |`);
+    }
+  }
+  const d = disagreements(a);
+  out.push("", `Request types the two answers disagreed on: ${d.length ? d.map(([x, y, n]) => `${cell(x)} and ${cell(y)}: ${n}`).join("; ") : "none"}.`);
+}
+
+function tableLines(out: string[], title: string, t: ReturnType<typeof clientTable>) {
+  out.push("", `#### ${title}`, "", `| | ${t.columns.map(cell).join(" | ")} |`, `|---|${t.columns.map(() => "---").join("|")}|`);
+  for (const r of t.rows) out.push(`| ${cell(r.value)} | ${r.cells.map(cellWords).join(" | ")} |`);
 }
 
 /** Pools clients' writing shares, weighting each by its items. */
@@ -56,32 +103,34 @@ function pooled(clients: readonly ReportClient[], f: (s: Snapshot) => number | n
   return shareWords(w ? t / w : null, w);
 }
 
-function resultsTables(out: string[], all: Results, rest: Results | null, restName: string | null) {
-  const head = rest ? `| | All clients | Without ${cell(restName!)} |` : "| | All clients |";
-  const line = rest ? "|---|---|---|" : "|---|---|";
-  const row = (k: string, a: number, b: number | null, base: number, baseB: number | null) => `| ${cell(k)} | ${a} (${shareWords(a / (base || 1), base, { base: false })}) |${rest ? ` ${b ?? 0} (${shareWords((b ?? 0) / (baseB || 1), baseB, { base: false })}) |` : ""}`;
-  out.push("", "#### Request types", "", head.replace("| |", "| Request type |"), line);
-  for (const [k, v] of sorted(all.requestTypes)) out.push(row(k, v, rest ? (rest.requestTypes[k] ?? 0) : null, all.labeled, rest?.labeled ?? null));
-  out.push("", "#### Layers", "", head.replace("| |", "| Layer |"), line);
-  for (const [k, v] of sorted(all.layers, 20)) out.push(row(k, v, rest ? (rest.layers[k] ?? 0) : null, all.labeled, rest?.labeled ?? null));
-  out.push("", "#### Readiness as written", "", head.replace("| |", "| Readiness |"), line);
-  for (const [k, v] of sorted(all.readiness, 5)) out.push(row(k, v, rest ? (rest.readiness[k] ?? 0) : null, all.labeled, rest?.labeled ?? null));
-  out.push("", "#### What is missing most, by request type", "");
+function resultsTables(out: string[], clients: readonly { key: string; r: Results }[], largest: string | null) {
+  const all = sumResults(clients.map((c) => c.r));
+  const o = { largest: clients.length > 1 ? largest : null };
+  out.push("", `Shares are of each column's labeled items. Any cell whose base is under ${FEW} says "${FEW_WORDS}".`);
+  tableLines(out, "Request types", clientTable(clients, (r) => r.requestTypes, o));
+  tableLines(out, "Readiness as written", clientTable(clients, (r) => r.readiness, { ...o, rows: READINESS.filter((x) => all.readiness[x]) }));
+  tableLines(out, "Layers", clientTable(clients, (r) => r.layers, o));
+  out.push("", "#### Readiness by request type, across clients", "", `| Request type | Items | ${READINESS.join(" | ")} |`, `|---|---|${READINESS.map(() => "---").join("|")}|`);
+  for (const r of readinessByType(all, READINESS)) out.push(`| ${cell(r.type)} | ${r.items} | ${r.cells.map(cellWords).join(" | ")} |`);
+  out.push("", "#### What is missing most, by request type", "", "Each fact with its agreement (the two answers on the agreement sample); under 70% it is not reliable yet.", "");
   for (const [t, m] of Object.entries(all.missing).sort(([a], [b]) => a.localeCompare(b))) {
     const n = all.requestTypes[t] ?? 0;
-    out.push(`- ${cell(t)} (${countWords(n)}): ${tooFew(n) ? FEW_WORDS : sorted(m, 4).filter(([k]) => k !== "none").slice(0, 3).map(([k, v]) => `${k} (${v})`).join(", ") || "nothing"}`);
+    out.push(`- ${cell(t)} (${countWords(n)}): ${tooFew(n) ? FEW_WORDS : sorted(m, 4).filter(([k]) => k !== "none").slice(0, 3).map(([k, v]) => `${k} (${v}; ${factNote(all.agreement, "missing", k)})`).join(", ") || "nothing"}`);
   }
   const others = topOtherNames(all);
   out.push("", "#### Most suggested names for \"other\"", "", others.length ? others.map(([k, v]) => `- ${cell(k)} (${countWords(v)})`).join("\n") : "None.");
-  out.push("", "#### Common feature shapes", "", `${countWords(all.shapes.parents)} parents with at least two classified children. A shape counted fewer than ${FEW} times is too few to read.`, "", "As a set (the layers touched):", "");
-  for (const s of all.shapes.sets) out.push(`- ${cell(s.requestType)}: ${s.shape.join(", ")} (${countWords(s.count)})`);
-  out.push("", "As a chain (in the order the children were created):", "");
-  for (const s of all.shapes.chains) out.push(`- ${cell(s.requestType)}: ${s.shape.join(" > ")} (${countWords(s.count)})`);
-  const a = all.agreement;
-  out.push("", `Agreement, on ${a.pairs} items classified twice: request type ${shareWords(a.requestType, a.pairs)}, layers ${shareWords(a.layers, a.pairs)}, readiness ${shareWords(a.readiness, a.pairs)}, missing ${shareWords(a.missing, a.pairs)}, confidence ${shareWords(a.confidence, a.pairs)}.`);
+  for (const c of clients) {
+    const top = topOtherNames(c.r, 3);
+    if (top.length) out.push(`- ${cell(c.key)}: ${top.map(([k, v]) => `${cell(k)} (${v})`).join(", ")}`);
+  }
+  out.push("", "#### Common feature shapes", "", `${countWords(all.shapes.parents)} parents with at least two classified children; the layers their children touch, as a set. The ten most common.`, "");
+  if (!all.shapes.sets.some((x) => x.count >= FEW)) out.push(NO_COMMON_SHAPE);
+  else for (const x of all.shapes.sets) out.push(`- ${cell(x.requestType)}: ${x.shape.join(", ")} (${countWords(x.count)})`);
+  out.push("", "#### Agreement");
+  agreementLines(out, all.agreement);
 }
 
-export function summaryMarkdown(clients: readonly ReportClient[], at: string, o: { listVersion?: string | null; wp1Labels?: boolean } = {}): string {
+export function summaryMarkdown(clients: readonly ReportClient[], at: string, o: { listVersion?: string | null; labelsOn?: "in use" | "earlier"; wp1Labels?: boolean } = {}): string {
   const out: string[] = [
     "# What is in DevOps",
     "",
@@ -93,13 +142,19 @@ export function summaryMarkdown(clients: readonly ReportClient[], at: string, o:
     "|---|---|---|---|",
   ];
   for (const c of clients) out.push(`| ${cell(c.key)} | ${c.platform ? PLATFORM_WORDS[c.platform] : "Not set"} | ${cell(analysisScopeWords(c.scope, { names: c.mine }))} | ${kindsLine(c.analysis)} |`);
-  out.push("", "| Client | Read (24 months) | Outside scope | In scope | Left out by kind | To classify | Labeled | AI not allowed | Answer failed its check | Not reached |", "|---|---|---|---|---|---|---|---|---|---|");
+  out.push("", "| Client | Read (24 months) | Outside scope | In scope | Left out by kind | To classify | Labeled | AI not allowed | Answer failed its check | On an earlier list | Not reached |", "|---|---|---|---|---|---|---|---|---|---|---|");
   const covs = clients.filter((c) => c.results).map((c) => ({ key: c.key, c: c.results!.coverage }));
   for (const x of covs) out.push(coverageRow(cell(x.key), x.c));
   if (covs.length > 1) out.push(coverageRow("All clients", sumCoverage(covs.map((x) => x.c))));
   const withResults = clients.filter((c) => c.results);
-  const agree = sumResults(withResults.flatMap((c) => [c.results!.build, c.results!.tickets])).agreement;
-  out.push("", `Agreement sample: ${agree.pairs} items classified twice.${o.listVersion ? ` Request type list: ${o.listVersion === STARTING_LIST.version || o.listVersion === WP1_START ? "the starting list" : `version 2 (${cell(o.listVersion)})`}.` : ""}${o.wp1Labels ? " These labels were made before WP-2's rules (a whole project, no kinds, a type for unclear items): run classification again." : ""}`);
+  const labeledAll = sumResults(withResults.flatMap((c) => [c.results!.build, c.results!.tickets]));
+  const v = o.listVersion ?? null;
+  const listLine = !v ? "" : o.labelsOn === "earlier" ? `Labels are on ${listWords({ version: v, createdAt: "" }, "").replace(/ \(v2-r\d+\), not in use/, " (not in use)")}, not the list in use: nothing on it could be carried safely. Run classification to label against the list in use.` : `Labels are on the request type list in use, ${listWords({ version: v, createdAt: "" }, v)}.`;
+  const fromLines = Object.entries(labeledAll.from ?? {}).filter(([k]) => k !== v).map(([k, n]) => `${n} made on ${isOwned(k) ? `version ${ownNumber(k)}` : isAiList(k) ? "the list written by AI" : k === STARTING_LIST.version || k === WP1_START ? "a starting list" : k}`);
+  const rerun = Object.values(labeledAll.rerun ?? {}).reduce((t, n) => t + (n ?? 0), 0);
+  const earlier = covs.reduce((t, x) => t + (x.c.earlier ?? 0), 0);
+  out.push("", [listLine, o.labelsOn !== "earlier" && fromLines.length ? `Carried to it without AI: ${fromLines.join(", ")}.` : "", rerun ? `${rerun} need labeling again (a type removed or added since, or no counterpart on the list in use); they show under their carried type.` : "", earlier ? `${earlier} items have labels only on an earlier list that can't be carried: a classification run is needed for them.` : ""].filter(Boolean).join(" "));
+  out.push("", `Agreement sample: ${sampleWords(labeledAll)}.${o.wp1Labels ? " These labels were made before WP-2's rules (a whole project, no kinds, a type for unclear items): run classification again." : ""}`);
 
   // The largest client by items in scope: numbers across clients come with and without it.
   const largest = [...withResults].sort((a, b) => b.results!.coverage.inScope - a.results!.coverage.inScope)[0] ?? null;
@@ -137,7 +192,7 @@ export function summaryMarkdown(clients: readonly ReportClient[], at: string, o:
   const build = sumResults(withResults.map((c) => c.results!.build));
   if (build.labeled) {
     out.push("", "### Classification", "", `${build.labeled} Build work items labeled${largest && rest ? `; the largest client by items in scope is ${cell(largest.key)}` : ""}.`);
-    resultsTables(out, build, rest ? sumResults(rest.map((c) => c.results!.build)) : null, largest?.key ?? null);
+    resultsTables(out, withResults.filter((c) => c.results!.build.labeled).map((c) => ({ key: c.key, r: c.results!.build })), largest?.key ?? null);
   }
 
   out.push("", "## Tickets and support", "");
@@ -151,24 +206,42 @@ export function summaryMarkdown(clients: readonly ReportClient[], at: string, o:
     }
     const tickets = sumResults(withResults.map((c) => c.results!.tickets));
     if (tickets.labeled) {
-      const tr = rest ? sumResults(rest.map((c) => c.results!.tickets)) : null;
-      out.push("", `${tickets.labeled} Tickets and support items labeled.`, "", "| Request type | All clients |" + (tr ? ` Without ${cell(largest!.key)} |` : ""), tr ? "|---|---|---|" : "|---|---|");
-      for (const [k, v] of sorted(tickets.requestTypes, 10)) out.push(`| ${cell(k)} | ${v} (${shareWords(v / tickets.labeled, tickets.labeled, { base: false })}) |${tr ? ` ${tr.requestTypes[k] ?? 0} |` : ""}`);
+      out.push("", `${tickets.labeled} Tickets and support items labeled.`);
+      const tc = withResults.filter((c) => c.results!.tickets.labeled).map((c) => ({ key: c.key, r: c.results!.tickets }));
+      tableLines(out, "Request types (Tickets and support)", clientTable(tc, (r) => r.requestTypes, { largest: tc.length > 1 ? (largest?.key ?? null) : null }));
     }
   }
   return out.join("\n") + "\n";
 }
 
-export function typesMarkdown(lists: readonly TypeList[]): string {
+/**
+ * The request types download: the list in use first, marked "In use", then every earlier list newest first, each under
+ * a heading with its own version and date (no two alike). An AI-written list says so and that it isn't in use.
+ */
+export function typesMarkdown(lists: readonly TypeList[], inUse: string): string {
   const out: string[] = ["# Request types", ""];
-  for (const l of [...lists].reverse()) {
-    const start = l.version === STARTING_LIST.version || l.version === WP1_START;
-    out.push(`## ${start ? `Starting list (${l.version === WP1_START ? "WP-1" : "WP-2"})` : `Version 2 (${l.createdAt.slice(0, 10)})`}`, "", "| Request type | Meaning | Made-up example |", "|---|---|---|");
+  const order = [...lists].sort((a, b) => (a.version === inUse ? -1 : b.version === inUse ? 1 : rankOf(b.version) - rankOf(a.version) || b.createdAt.localeCompare(a.createdAt)));
+  for (const l of order) {
+    const date = l.createdAt.slice(0, 10);
+    const head = l.version === inUse
+      ? `In use: version ${ownNumber(l.version)} (${l.version}, ${date})`
+      : isOwned(l.version)
+        ? `Version ${ownNumber(l.version)} (${l.version}, ${date}), no longer in use`
+        : isAiList(l.version)
+          ? `Written by AI, not in use (${l.version}, ${date})`
+          : l.version === WP1_START
+            ? `WP-1's starting list (${l.version}, ${date})`
+            : l.version === STARTING_LIST.version
+              ? `WP-2's starting list (${l.version}, ${date})`
+              : `List ${l.version} (${date})`;
+    out.push(`## ${cell(head)}`, "");
+    if (l.why) out.push(`Why: ${cell(l.why)}`, "");
+    out.push("| Request type | Meaning | Made-up example |", "|---|---|---|");
     for (const t of l.types) out.push(`| ${cell(t.name)} | ${cell(t.meaning)} | ${cell(t.example)} |`);
     if (l.changes.length) {
-      out.push("", "Changes from the starting list:", "");
-      for (const c of l.changes) out.push(`- ${c.kind}: ${c.from.map(cell).join(", ") || "(new)"} > ${c.to.map(cell).join(", ")}, ${c.count} items in pass 1. ${cell(c.reason)}`);
-    } else if (!start) out.push("", "No changes from the starting list.");
+      out.push("", isOwned(l.version) ? `Changes from ${l.base ? (isOwned(l.base) ? `version ${ownNumber(l.base)}` : "WP-2's starting list") : "the version before"}:` : "Changes from the starting list:", "");
+      for (const c of l.changes) out.push(`- ${c.kind}: ${c.from.map(cell).join(", ") || "(new)"} > ${c.to.map(cell).join(", ") || "(removed)"}${isAiList(l.version) ? `, ${c.count} items in pass 1` : ""}. ${cell(c.reason)}`);
+    } else if (isAiList(l.version)) out.push("", "No changes from the starting list.");
     out.push("");
   }
   return out.join("\n");

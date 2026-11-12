@@ -51,8 +51,14 @@ export type Labels = {
 
 /** One request type in a list version. */
 export type RequestType = { name: string; meaning: string; example: string };
-export type TypeChange = { kind: "merge" | "split" | "rename" | "add" | "keep"; from: string[]; to: string[]; reason: string; count: number };
-export type TypeList = { version: string; createdAt: string; types: RequestType[]; changes: TypeChange[]; fingerprint: string };
+/** WP-3 adds "remove" and "edit" (a person's changes to the list in use). */
+export type TypeChange = { kind: "merge" | "split" | "rename" | "add" | "keep" | "remove" | "edit"; from: string[]; to: string[]; reason: string; count: number };
+/**
+ * A request type list version. WP-3: a person's version ("own-<n>") also keeps who made it (a FocusTime user id), the one
+ * line of why, the version it was made from, and for an add which items need labeling again ("all", or only "other"
+ * and "can't tell"). Lists before WP-3 have none of these.
+ */
+export type TypeList = { version: string; createdAt: string; types: RequestType[]; changes: TypeChange[]; fingerprint: string; by?: string | null; why?: string | null; base?: string | null; relabel?: "all" | "other" | null };
 
 export type Platform = "azure" | "fabric" | "both";
 export const PLATFORMS: readonly Platform[] = ["azure", "fabric", "both"];

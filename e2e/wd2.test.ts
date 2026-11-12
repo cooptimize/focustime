@@ -568,8 +568,8 @@ describe.skipIf(!CHROMIUM)("WD-2: a past day (browser, demo on Tuesday)", () => 
     await cards.first().waitFor();
     // No + Add anywhere on a past day (the header, the cards).
     expect(await page.locator(".day-view .add-work").count()).toBe(0);
-    // QT-1: a past day's card is folded to one line ("1 unfinished"); the panel has its to-dos as rows.
-    const withWork = page.locator(".day-view .half.card.folded", { has: page.locator(".card-folded", { hasText: /unfinished/ }) }).first();
+    // WK-5: a past day's card lists its to-dos again (QT-1's one-line fold undone); the panel has them as rows too.
+    const withWork = page.locator(".day-view .half.card.past", { has: page.locator(".past-rows li.pick-row.planned") }).first();
     await withWork.locator(".card-head").click();
     await panel(page).waitFor();
     expect(await panel(page).locator(".bp-add, input.bp-box").count()).toBe(0);

@@ -2883,9 +2883,9 @@ button.att-chip { cursor: pointer; }
 .pick-row.dens-week:hover .pr-hover, .pick-row.dens-week:focus-within .pr-hover, .pick-row.dens-week .pr-hover:has([aria-expanded="true"]) { display: inline-flex; }
 @media (hover: none) { .pick-row.dens-week .pr-hover { display: inline-flex; } }
 .card-done { font-size: var(--fs-2); color: var(--text-faint); padding-left: 4px; }
-/* QT-1: a day before today folds to its header and one line of counts; the panel holds the rest. */
-.half.folded { flex-grow: 0; min-height: 0; opacity: 0.85; }
-.half.folded .card-folded { font-size: var(--fs-2); color: var(--text-muted); padding: 0 4px 2px; }
+/* QT-1, WK-5: a day before today is quieter; it lists its to-dos again (WK-5), "Nothing planned" when it has none. */
+.half.past { flex-grow: 0; min-height: 0; }
+.half.past .card-past-empty { font-size: var(--fs-2); color: var(--text-muted); padding: 0 4px 2px; }
 .half .add-work { font-size: var(--fs-2); font-weight: 500; }
 .card-feats { margin-top: auto; align-self: flex-start; border: 0; background: none; padding: 2px 0 0; font: inherit; font-size: var(--fs-2); color: var(--text-muted); cursor: pointer; text-align: left; }
 .card-feats:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
@@ -4642,11 +4642,10 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .now-line .nl-time { position: absolute; left: 6px; top: 0; transform: translateY(-50%); display: inline-flex; align-items: center; pointer-events: auto; border: 0; padding: 0; background: none; font: inherit; cursor: pointer; }
 .now-line .nl-pill { padding: 0 4px; border-radius: 4px; background: var(--nl); color: var(--surface); font-size: var(--fs-1); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
 .now-past { position: absolute; top: 0; left: 0; right: 0; background: color-mix(in oklab, var(--surface) 38%, transparent); pointer-events: none; z-index: 3; transition: height 0.6s ease; }
-.now-edge, .now-row { position: relative; display: flex; align-items: center; gap: 6px; margin: 4px 0; min-height: 14px; }
-.now-edge::after, .now-row::after { content: ""; flex: 1; border-top: 2px solid var(--nl); }
-.now-edge.thin::after { border-top-width: 1px; }
-.now-edge .nl-dot, .now-row .nl-dot { position: static; flex: none; }
-.now-edge .nl-time, .now-row .nl-time { position: static; transform: none; }
+.now-row { position: relative; display: flex; align-items: center; gap: 6px; margin: 4px 0; min-height: 14px; }
+.now-row::after { content: ""; flex: 1; border-top: 2px solid var(--nl); }
+.now-row .nl-dot { position: static; flex: none; }
+.now-row .nl-time { position: static; transform: none; }
 .now-row { list-style: none; }
 :root[data-reduce-motion] .now-line, :root[data-reduce-motion] .now-past { transition: none; }
 @media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }
@@ -5007,14 +5006,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* ---------- WK-1: Week fits laptops and smaller windows (ui/weekfit.ts) ---------- */
 /* The status pill wraps to two lines before its reason is cut; mini cards show "At risk" alone. */
 .card-status .status-pill { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.grid.tier-mini .pill-reason { display: none; }
 /* Mini: the header stacks (client up to two lines, then the time on its own line); no size chips; tighter padding. */
-.grid.tier-mini .card-when { flex-basis: 100%; order: 3; }
-.grid.tier-mini .half .card-body { padding: 8px 8px 8px 10px; }
-.grid.tier-mini .pick-row.dens-week .size-chip { display: none; }
-.grid.tier-mini .day-head .date-long { display: none; } .grid.tier-mini .day-head .date-short { display: inline; }
-.grid.tier-mini .day-head { gap: 4px; }
-.grid.tier-mini .day-head .day-plan { padding: 0 6px; }
 
 /* The day strip (strip and mini tiers): one thin bar for the block's hours, with today's now tick. */
 .day-strip { position: relative; margin: 2px 0 2px; }
@@ -5082,7 +5074,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .grid.medium .day-head { min-width: 0; overflow: hidden; container-type: inline-size; }
 /* WD-1 review: the date gives way to its short form ("Tue 3"), and the Today marker stays; only a very narrow column drops them. */
 @container (max-width: 17em) { .day-head .date-long { display: none; } .day-head .date-short { display: inline; } }
-@container (max-width: 7em) { .day-head .date, .day-head .today-pill { display: none; } }
+@container (max-width: 7em) { .day-head:not(.fold-head) .date, .day-head .today-pill { display: none; } }
 /* On a narrow PTO column the hatched cell already says PTO. */
 @container (max-width: 9em) { .day-head .pto-pill { display: none; } }
 /* SR-1: Week › Status, the preview of Monday's status report and the boxes that feed it. */
@@ -5347,6 +5339,8 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .pat-section h3 { margin: 12px 0 0; }
 .pat-section h4 { margin: 8px 0 0; }
 .pat-buttons { flex-wrap: wrap; gap: 8px; }
+td > .pat-buttons { margin-top: 0; }
+.pat-change input:not([type="radio"]) { max-width: 420px; width: 100%; }
 .pat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
 .pat-detail { display: grid; gap: 6px; padding: 4px 0 12px 16px; border-left: 2px solid var(--border); }
 .pat-detail p { margin: 0; }
@@ -6651,9 +6645,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 /* The now time on a rail is a target too; the pill keeps its size inside it. */
 
 /* D2: a past day's folded card reads as folded: a quieter fill and a hairline, so the eye skips it. */
-.half.folded, .half.card.folded { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
-.half.folded .card-client { color: var(--text-muted); font-weight: 500; }
-.half.folded .card-head .swatch { opacity: 0.6; }
+.half.past, .half.card.past { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
+.half.past .card-client { color: var(--text-muted); font-weight: 500; }
+.half.past .card-head .swatch { opacity: 0.6; }
 
 /* C2, C4: the card's ⋯ is a full target and the header keeps room for it, so a chip never touches it. */
 .card-head { min-height: max(var(--target), calc(20px * var(--text-scale))); padding-right: calc(var(--target) + 4px); }
@@ -6755,3 +6749,60 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 /* The late chip draws at the due chips' height; its 28px target reaches around it (the phone's own ::after is 44). */
 .app:not(.phone) .card-status.card-due .late-chip { min-height: 0; }
 .app:not(.phone) .card-status.card-due .late-chip::after { content: ""; position: absolute; inset: -5px -2px; }
+
+/* WK-5: Week makes room for today (docs/design/style-guide.md section 10).
+   Widths move with the app's usual motion when the focus day changes; none under Reduce motion. */
+main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms ease; }
+:root[data-reduce-motion] main.grid { transition: none; }
+@media (prefers-reduced-motion: reduce) { main.grid { transition: none; } }
+/* A to-do on Week's cards: the title first, the row's full width, two lines at most, cut only at a word's or a
+   character's end (never "Cr e.."); the time on one quiet line under it; ⋯, + time and the size over the row's end on
+   hover and focus, so nothing moves. */
+.pick-row.dens-week.form-stack { position: relative; align-items: flex-start; }
+.pick-row.form-stack .pr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pick-row.form-stack .pr-title { flex: none; overflow-wrap: break-word; word-break: normal; }
+.half .checklist .pick-row.form-stack .pr-title { overflow-wrap: break-word; }
+.pick-row.form-stack .pr-meta { display: flex; align-items: center; flex-wrap: wrap; column-gap: 4px; min-width: 0; margin-top: calc((var(--target) - 1lh) / -2); margin-bottom: calc((var(--target) - 1lh) / -2); font-size: var(--fs-2); color: var(--text-muted); }
+.pick-row.form-stack .pr-meta .pt-time { border-color: transparent; background: transparent; padding: 0; min-height: var(--target); font-size: var(--fs-2); font-weight: 400; color: var(--text-muted); text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 30%, transparent); text-underline-offset: 2px; }
+.pick-row.form-stack .pr-meta .pt-time:hover:not(:disabled), .pick-row.form-stack .pr-meta .pt-time:focus-visible { color: var(--text); text-decoration-color: currentColor; border-color: transparent; }
+.pick-row.form-stack .pr-meta .pt-time:disabled { border-style: none; text-decoration: none; }
+.pick-row.form-stack .pr-meta .pt-ol { white-space: nowrap; }
+.pick-row.form-stack .pr-meta .size-chip { min-width: 0; padding: 0; font-size: var(--fs-2); font-weight: 400; color: var(--text-muted); }
+.pick-row.form-stack .pr-meta .size-chip::before { display: none; }
+.pick-row.form-stack .pr-dot { color: var(--text-faint); }
+.pick-row.form-stack .pr-extra { display: flex; flex-wrap: wrap; gap: 4px; }
+.pick-row.dens-week.form-stack .pr-hover { position: absolute; top: 0; right: 0; align-items: center; gap: 2px; padding-left: 10px; background: linear-gradient(to right, transparent, var(--surface) 10px); }
+.half.past .pick-row.dens-week.form-stack .pr-hover { background: linear-gradient(to right, transparent, var(--sunken) 10px); }
+@media (hover: none) { .pick-row.dens-week.form-stack .pr-hover { position: static; background: none; padding-left: 0; } }
+/* A time range never breaks across lines; a header too narrow for the name and the hours puts the hours on the next
+   line whole. */
+.pt-when, .card-head .card-when, .card-when .cw-full, .ce-time, .flex-time, .out-time { white-space: nowrap; }
+.card-head { flex-wrap: wrap; }
+.card-head .card-client { flex: 0 1 auto; min-width: 0; }
+/* Day's cards keep the time at the right; one too narrow for a title's minimum puts it under the title. */
+.grid.day-only .pick-row.dens-week:not(.form-stack) { flex-wrap: wrap; }
+.grid.day-only .pick-row.dens-week:not(.form-stack) .pr-title { flex: 1 1 12ch; min-width: min(12ch, 100%); overflow-wrap: break-word; }
+/* A past block's to-dos: done ones ticked and quiet, a moved one with where it went, "N more" opening the panel. */
+.half.past .past-rows .pick-row.done .pr-title { color: var(--text-muted); text-decoration: line-through; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); }
+.half.past .past-rows .past-moved { display: flex; gap: 6px; align-items: baseline; padding: 2px 2px 2px 22px; color: var(--text-muted); font-size: var(--fs-2); }
+.half.past .past-rows .past-moved .po-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.half.past .past-rows .past-moved .po-note { flex: none; white-space: nowrap; }
+.half.past .past-more { padding-left: 4px; font-size: var(--fs-2); }
+/* A folded day: the weekday and date, Today, and one mark per block with its count of open to-dos. */
+.day.folded .fold-open { flex-direction: column; gap: 2px; }
+.day.folded .fold-today { font-size: var(--fs-1); font-weight: 600; color: var(--accent); line-height: 1; }
+.fold-half .fold-count { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); min-width: 1.6em; padding: 1px 4px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border-strong); font-size: var(--fs-1); font-weight: 600; color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+.day.folded.weekend .fold-half { border-style: dashed; }
+/* Week's sub-line: "N to place · Review" and the hidden days' note. */
+.week-subline { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; }
+.week-subline > .to-place-line { margin-right: 0; }
+.hidden-days-note { margin: 0 0 6px; padding: 3px 10px; font-size: var(--fs-2); color: var(--text-muted); }
+.app:not(.phone) .hidden-days-note .link-btn { margin-block: calc((var(--target) - 1lh) / -2); min-height: var(--target); }
+/* The folded strip always shows its date (a day header's container rules hide the date in narrow columns). */
+.day.folded .fold-open { min-height: calc(2.2em + 6px); }
+.day.folded.past-day .fold-risk { display: none; }
+.day-head .day-addhours { white-space: nowrap; }
+/* WK-5 review: a past day's moved row reads as a line, not a ghost; a folded strip says it opens. */
+.checklist.past-rows .past-moved { opacity: 0.9; }
+.half.past .past-rows .past-moved .po-note { color: var(--text); }
+.day.folded .fold-half { cursor: pointer; }

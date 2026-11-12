@@ -2,14 +2,14 @@
 // (both edges of the threshold), one breakdown row per type pair in two processes, the kind guess for a ticket queue and
 // for build work, the layout's counts and each scope kind (with and without sub-areas, two projects, a team on another
 // field, a deleted area, the default from Admin › Clients, a whole project with several areas needing a choice),
-// "can't tell" in place of any unclear type, the agreement sample's size, shapes as sets and chains with the
+// "can't tell" in place of any unclear type, the agreement sample's size, shapes as sets (WP-3: no chains) with the
 // two-children rule, coverage adding up, "too few to read" under 20, and the summary's text.
 import { describe, expect, it } from "vitest";
 import { aProcess, aRawItem } from "../../test/builders/patterns.ts";
 import { analysisOf, FEW, shareWords } from "./analysis.ts";
 import { inventoryOf, itemOf } from "./inventory.ts";
 import { kindFacts } from "./kinds.ts";
-import { agreementPick, CANT_TELL, chainOf, cleanList, listFromMerge, parseLabels, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
+import { agreementPick, CANT_TELL, cleanList, parseLabels, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
 import { levelsOf, PARENT_SHARE } from "./levels.ts";
 import { summaryMarkdown, type ReportClient } from "./report.ts";
 import { resultsOf } from "./results.ts";
@@ -166,12 +166,9 @@ describe("WP-2: classification rules", () => {
     expect(cleanList(old).types.slice(-2).map((t) => t.name)).toEqual([CANT_TELL, "other"]);
   });
 
-  it("the second list never adds a name about how unclear an item is, and suggestions drop them", () => {
+  it("suggestions drop names about how unclear an item is", () => {
     const s = suggestionsOf([L({ requestType: "other", otherName: "needs clarification", otherMeaning: "x" }), L({ requestType: "other", otherName: "housekeeping", otherMeaning: "Tidy" })]);
     expect(s.map((x) => x.name)).toEqual(["housekeeping"]);
-    const list = listFromMerge({ types: [{ name: "new report", meaning: "m", example: "e" }, { name: "small change", meaning: "m", example: "e" }, { name: "housekeeping", meaning: "m", example: "e" }, { name: "Needs clarification", meaning: "m", example: "e" }, { name: "Too thin to tell", meaning: "m", example: "e" }], changes: [{ kind: "add", from: ["x"], to: ["Needs clarification"], reason: "r" }] }, STARTING_LIST, s, new Map(), "2026-11-11T00:00:00Z", "v2-r1", "w2f1");
-    expect(list!.types.map((t) => t.name)).toEqual(["new report", "small change", "housekeeping", CANT_TELL, "other"]);
-    expect(list!.changes).toEqual([]);
   });
 
   it("agreement: at least 100 items or all of them, the same items every time, across clients", () => {
@@ -185,11 +182,9 @@ describe("WP-2: classification rules", () => {
     expect(agreementPick([{ key: "a", ids: Array.from({ length: 4000 }, (_, k) => k + 1) }]).size).toBe(200);
   });
 
-  it("shapes as a set and as a chain; only parents with at least two classified children count", () => {
+  it("shapes as a set; only parents with at least two classified children count", () => {
     const kids = [{ id: 2, createdAt: "2026-03-02", labels: L({ layers: ["report"] }) }, { id: 1, createdAt: "2026-03-01", labels: L({ layers: ["ingestion", "fact"] }) }];
     expect(shapeOf(kids.map((k) => k.labels))).toEqual(["ingestion", "fact", "report"]);
-    expect(chainOf(kids)).toEqual(["ingestion", "fact", "report"]);
-    expect(chainOf([{ ...kids[0]!, createdAt: "2026-02-01" }, kids[1]!])).toEqual(["report", "ingestion", "fact"]);
     const items = [item({ id: 1, type: "Feature" }), item({ id: 2, type: "Story", parent: 1 }), item({ id: 3, type: "Story", parent: 1 }), item({ id: 4, type: "Feature" }), item({ id: 5, type: "Story", parent: 4 })];
     const labels = new Map(items.map((i) => [i.id, { labels: L({ layers: i.id === 3 ? ["fact"] : ["report"] }), labelsB: null }]));
     const r = resultsOf(items, labels, {}, { read: null, outside: null, skippedForAi: false, failed: new Set() }).build;
@@ -201,7 +196,7 @@ describe("WP-2: classification rules", () => {
     const items = Array.from({ length: 12 }, (_, k) => item({ id: k + 1, type: k < 2 ? "Chore" : "Story" }));
     const labels = new Map([3, 4, 5].map((id) => [id, { labels: L(), labelsB: null }]));
     const c = resultsOf(items, labels, { Chore: "leave_out" }, { read: 20, outside: 8, skippedForAi: false, failed: new Set([6, 7]), movedOut: new Set([12]) }).coverage;
-    expect(c).toEqual({ read: 20, outside: 9, inScope: 11, leftOut: 2, toClassify: 9, labeled: 3, aiOff: 0, failed: 2, notReached: 4 });
+    expect(c).toEqual({ read: 20, outside: 9, inScope: 11, leftOut: 2, toClassify: 9, labeled: 3, aiOff: 0, failed: 2, notReached: 4, earlier: 0 });
     expect(c.outside! + c.inScope).toBe(c.read);
     expect(c.leftOut + c.toClassify).toBe(c.inScope);
     expect(c.labeled + c.aiOff + c.failed + c.notReached).toBe(c.toClassify);
@@ -229,8 +224,9 @@ describe("WP-2: the summary", () => {
     const md = summaryMarkdown([client("adatum", true), client("fabrikam", false)], "2026-11-11T17:00:00Z", { listVersion: "v2-r4" });
     const heads = md.split("\n").filter((l) => /^## /.test(l));
     expect(heads).toEqual(["## What this covers", "## Build work", "## Tickets and support"]);
-    expect(md).toMatch(/\| adatum \| 40 \| 9 \| 31 \| 0 \| 31 \| 31 \| 0 \| 0 \| 0 \|/);
-    expect(md).toMatch(/Agreement sample: 20 items classified twice/);
+    expect(md).toMatch(/\| adatum \| 40 \| 9 \| 31 \| 0 \| 31 \| 31 \| 0 \| 0 \| 0 \| 0 \|/);
+    // WP-3: the sample as it is (20 pairs of the 100 asked for over 62 labeled items: all 62).
+    expect(md).toMatch(/Agreement sample: 20 of 62 \(42 not asked yet\)/);
     // The team's name only in the scope line of the client the person is on.
     expect(md.match(/Secret Team Name/g)).toHaveLength(1);
     expect(md).toMatch(/\| fabrikam \| Not set \| 1 team \|/);

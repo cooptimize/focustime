@@ -730,6 +730,22 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - From the review: a refusal before anything is sent (one item that still holds a secret or an outside address) counts as "the answer failed its check", though nothing was paid. A separate "not sent" reason?
 - From the review: the AI's "other" names go into the summary with client names and emails replaced; wording from an item could still echo in them. Show them only on the page?
 
+## WP-3
+
+- A merge carries the merged type's labels to the type it went into and asks for no relabeling (the brief said a merge "says how many items would need labeling again"; the page says the count and that none needs it). Relabel a merged type's items instead?
+- `own-1` adds "data migration". Labels carried from WP-2's list as "other" or "can't tell" aren't marked to label again for it (an add on a later version is). Mark them on the first run?
+- A carried label with no counterpart on the list in use counts as "other" and as needing a rerun; the next Estimate prices it. Fine, or leave it as "other" until someone asks?
+- WP-2's AI list added a type named differently from "data migration"; it has no counterpart, so its items count as "other" with the AI's name as a suggestion. Map it to "data migration" by hand once the suggestion has been read?
+- The per-client tables are on the page for Build work only; Tickets and support has them in the summary. Add them to the page too?
+- Screenshots come from the live browser harness with fictional data (as WP-2's did), not the demo: the demo has no patterns reader. Give the demo one?
+- "Not reliable yet" is under 70% on 20 or more pairs, for every fact and layer. Right line?
+- A change to the list during a run applies to the next run; the running one keeps its list and its labels carry. Should a change wait until the run is done?
+- The sample's second answer is asked again for an item labeled again (its first answer changed). That doubles the cost of relabeling sample items. Keep the old pair instead?
+- From the review: carrying from WP-2's AI list treats a "split" as the same type (its labels go to the type it was split from). A split's labels might belong to either half. Label them again instead?
+- From the review: an AI type with the same name as an own-1 type maps by name, even if the AI's changes said it was a merge. Follow the changes instead?
+- From the review: agreement pairs on carried labels are compared after carrying, so two AI types with no counterpart both become "other" and count as agreeing; a carried first answer can sit beside a second answer made on a newer list. Leave carried pairs out of agreement?
+- From the review: when AI is off and the page can't read the directory either, only client keys are checked in a type's words. Fine for a page only a few people have?
+
 ## PS-1
 
 - "to place" stays the word for unfinished to-dos with no block ("7 to place · Review"), beside "unfinished" for a past day's. One word for both?
@@ -740,9 +756,26 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - Holidays come from the Working Days Calendar's observed flag only. A company holiday not marked observed shows nothing. Right?
 - On the phone with the weekend shown, Week's seven day tabs share the row and are narrower than 44 px (they keep the 44 px height). A scrolling row instead?
 
+## NL-1
+
+- After the day (and before it), Week and Day still select the afternoon (or morning) block for the keyboard, with its outline, from the server's `today.half`. It is the keyboard cursor, not a now mark, so it stays; should the selection outside hours land somewhere quieter?
+- A block's hours are its working bounds. The early flex time that joins the morning's working windows (D122) sits before the morning block's start, so it gets no mark. Right?
+- CV-3's overdue promises are still drawn "at now" on today's home block (`homeRail`), clamped to a block outside hours. That is a promise, not a now mark, so it is unchanged here. Should it move too?
+
+## WK-5
+
+- The day in focus takes twice a working day's share (`FOCUS_SHARE`). Too much at 1920 with every day shown? 1.6 would leave the other days a rail sooner.
+- A hidden day shows its note only when it has open to-dos or is today (the reading that shows less). Should a hidden day with a meeting, a promise due or PTO say so too?
+- Show (the note's) brings back every hidden day for the visit, not just the one with to-dos. One at a time instead?
+- A past day lists six to-dos, then "N more" (`PAST_ROWS`). Right number?
+- With every other day folded, the focus day may still be under twice a working day (1024 px with the panel and Larger text). Hide the panel's Add list sooner instead?
+- Day's past cards list their to-dos too (they share Week's card). Keep the QT-1 line on Day?
+- The demo's day off moved from Friday to Saturday on a Thursday (and the holiday is never today) so Week shows a working today. Right for demos on other days?
+- With the panel open on another day, today folds like any day in the fold order; when today is the catch-up day it folds second. Keep today open whenever the week has it?
+- Past days keep their full share of the width (review 1 noticed the empty space on Monday to Wednesday). Give past days a lighter share, like Friday's?
+
 ## PS-2
 
 - The check leaves out text cut at a scroll edge (a scroll container, the page's frame and the fixed status bar), which is scrolling, not clipping. Count the status bar too?
 - From the review, seen before and after PS-2 and left alone (outside this step): on Day's Cards at 1280 one row's gap is a few pixels larger than the others; in a block's feature group a title's first line sits a few pixels below its checkbox; the phone's Week keeps an empty second line on one-line to-dos.
 - The Timeline's "#id" sliver measured 3 px but showed no ink at 1x (the top of the digits' box is empty space). Fixed anyway; the check counts the box, so a font with taller digits would show it.
-

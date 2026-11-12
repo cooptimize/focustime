@@ -1,10 +1,10 @@
 // WP-1 (kept, updated for WP-2's rules): the pure parts of DevOps patterns: levels from links (two processes with their own type names), every inventory
 // number on a small known set, the window, title patterns, the history rule, label validation (malformed and partly
-// valid answers), the merge, agreement and shapes. Fictional data from test/builders/patterns.ts.
+// valid answers), the "other" suggestions, agreement and shapes (WP-3: no merge, no pass 1 sample). Fictional data from test/builders/patterns.ts.
 import { describe, expect, it } from "vitest";
 import { aProcess, aRawItem, aSmallProject } from "../../test/builders/patterns.ts";
 import { historyOf, inventoryOf, itemOf, monthRanges, titlePattern, windowFrom } from "./inventory.ts";
-import { agreementOf, commonShapes, toClassify, listFromMerge, parseLabels, pass1Sample, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
+import { agreementOf, commonShapes, toClassify, parseLabels, shapeOf, STARTING_LIST, suggestionsOf } from "./labels.ts";
 import { levelsOf, typeEdges } from "./levels.ts";
 import { handCheck, resultsOf } from "./results.ts";
 import type { Labels } from "./types.ts";
@@ -143,23 +143,13 @@ describe("labels", () => {
     expect(toClassify([{ ...list[0]!, inWindow: false }, ...list.slice(1)], (t) => (t === "Flat" ? "leave_out" : "tickets")).map((i) => i.id)).toEqual([2, 3, 4]);
   });
 
-  it("pass 1's sample is stable and capped", () => {
-    const many = Array.from({ length: 400 }, (_, k) => ({ id: k + 1, type: "A" }));
-    expect(pass1Sample(many)).toHaveLength(150);
-    expect(pass1Sample(many).map((x) => x.id)).toEqual(pass1Sample([...many].reverse()).map((x) => x.id));
-  });
-
-  it("the merge: suggestions carry names, meanings and counts only; the second list keeps other last and counts changes", () => {
+  it("suggestions carry names, meanings and counts only", () => {
     const s = suggestionsOf([L({ requestType: "other", otherName: "housekeeping", otherMeaning: "Tidying" }), L({ requestType: "other", otherName: "Housekeeping", otherMeaning: "Tidying" }), L()]);
     expect(s).toEqual([{ name: "housekeeping", meaning: "Tidying", count: 2 }]);
-    const list = listFromMerge({ types: [{ name: "new report", meaning: "m", example: "e" }, { name: "small change", meaning: "m", example: "e" }, { name: "housekeeping", meaning: "Tidying", example: "Tidy folders" }, { name: "other", meaning: "x", example: "" }], changes: [{ kind: "add", from: ["housekeeping"], to: ["housekeeping"], reason: "Seen twice" }, { kind: "weird", from: [], to: ["x"], reason: "" }] }, STARTING_LIST, s, new Map([["housekeeping", 2]]), "2026-11-11T00:00:00Z", "v2-r1", "f1");
-    expect(list!.types.map((t) => t.name)).toEqual(["new report", "small change", "housekeeping", "can't tell", "other"]);
-    expect(list!.changes).toEqual([{ kind: "add", from: ["housekeeping"], to: ["housekeeping"], reason: "Seen twice", count: 2 }]);
-    expect(listFromMerge({ types: [], changes: [] }, STARTING_LIST, s, new Map(), "x", "v", "f")).toBeNull();
   });
 
   it("agreement per label, shapes in the layers' order", () => {
-    expect(agreementOf([[L(), L()], [L(), L({ requestType: "exploration", missing: ["none"] })]])).toEqual({ pairs: 2, requestType: 0.5, layers: 1, readiness: 1, missing: 0.5, confidence: 1 });
+    expect(agreementOf([[L(), L()], [L(), L({ requestType: "exploration", missing: ["none"] })]])).toMatchObject({ pairs: 2, requestType: 0.5, layers: 1, readiness: 1, missing: 0.5, confidence: 1 });
     expect(shapeOf([L({ layers: ["report"] }), L({ layers: ["ingestion", "fact"] }), L({ layers: ["none"] })])).toEqual(["ingestion", "fact", "report"]);
     expect(commonShapes([{ type: "a", shape: ["fact"] }, { type: "a", shape: ["fact"] }, { type: "a", shape: ["report"] }, { type: "b", shape: [] }])).toEqual([{ requestType: "a", shape: ["fact"], count: 2 }, { requestType: "a", shape: ["report"], count: 1 }]);
   });

@@ -84,6 +84,10 @@ type Props = {
   /** U5.1 (D408): personal events shown on Week and Today. */
   showPersonal: boolean;
   setShowPersonal: (show: boolean) => void;
+  /** WK-5: the days Week shows, and the catch-up day's name in the loaded week ("Friday"). */
+  weekDays: { catchUp: boolean; weekend: boolean };
+  setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;
+  catchUpName: string;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
@@ -475,6 +479,16 @@ function SectionBody(p: BodyProps) {
               <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Today
             </label>
             <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
+          </fieldset>
+          <fieldset className="set-choice" data-setting="week-days">
+            <legend>Days on Week</legend>
+            <label>
+              <input type="checkbox" checked={p.weekDays.catchUp} onChange={(e) => p.setWeekDays({ catchUp: e.target.checked })} /> Show {p.catchUpName}
+            </label>
+            <label>
+              <input type="checkbox" checked={p.weekDays.weekend} onChange={(e) => p.setWeekDays({ weekend: e.target.checked })} /> Show weekend
+            </label>
+            <span className="set-hint">With Show weekend on, weekend days show when something is on them (or always, with Every weekend day in Week's ⋯). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.</span>
           </fieldset>
           <fieldset className="set-choice" data-setting="reduce-motion">
             <legend>Motion</legend>

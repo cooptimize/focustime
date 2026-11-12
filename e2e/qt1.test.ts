@@ -1,7 +1,7 @@
 // QT-1: a quieter board, on the demo at Wednesday Nov 4, 2:30 PM (Monday and Tuesday past, Wednesday's morning over).
 // Week has no client chips and never says over; a block over-planned says only that it has no free time; At risk
-// comes from the calendar only; a block that ended this morning takes work; past days fold to one line each and
-// still open their panel.
+// comes from the calendar only; a block that ended this morning takes work; past days list their to-dos again (WK-5
+// undid QT-1's one-line fold) and still open their panel.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -21,7 +21,7 @@ describe.skipIf(!CHROMIUM)("QT-1: a quieter board (browser, demo)", () => {
   }, T);
   afterAll(async () => h?.stop());
 
-  it("free time only, no chips; an ended block takes work; past days fold and still open", async () => {
+  it("free time only, no chips; an ended block takes work; past days list their to-dos and still open", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     // Wednesday afternoon planned well past its free time.
     for (const [title, size] of [["Draft the cutover checklist", "L"], ["Answer the pricing questions", "L"], ["Walk through the import errors", "L"]] as const) {
@@ -59,13 +59,14 @@ describe.skipIf(!CHROMIUM)("QT-1: a quieter board (browser, demo)", () => {
     await expect(page.locator(".undo-toast").first().textContent()).resolves.not.toMatch(/ended|Can't/);
     await page.keyboard.press("Escape");
 
-    // Monday is past: its cards are one line each, with no status chip, and a click opens the panel to tick and move on.
+    // Monday is past: its cards list their to-dos (WK-5) or say "Nothing planned", with no status chip, and a click opens
+    // the panel to tick and move on.
     const mon = page.locator('main.grid [data-drop^="2026-11-02:"]');
     expect(await mon.count()).toBeGreaterThan(0);
     for (const c of await mon.all()) {
-      expect(await c.evaluate((e) => e.classList.contains("folded"))).toBe(true);
+      expect(await c.evaluate((e) => e.classList.contains("past"))).toBe(true);
       expect(await c.locator(".status-pill").count()).toBe(0);
-      await expect(c.locator(".card-folded").textContent()).resolves.toMatch(/^(\d+ done|\d+ unfinished|\d+ moved on)( · .+)*$|^Nothing planned$/);
+      expect(await c.locator(".past-rows li, .card-past-empty").count()).toBeGreaterThan(0);
     }
     await mon.first().locator(".card-head").click();
     await panel(page).getByText(/A past day: tick what got done/).waitFor();
