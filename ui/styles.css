@@ -432,7 +432,7 @@
     --pto: var(--p-sky-300);
     --oof: var(--p-purple-300);
     --event-surface: var(--p-graphite-850);
-    --client-tint: 14%;
+    --client-tint: 13%; /* RS-2: 14% left faint text at 4.47:1 on the palette's light earth; lowered, not the text */
     --brand-am: var(--p-brand-am-d);
     --brand-pm: var(--p-brand-pm-d);
     --brand-accent: var(--p-brand-accent-d);
@@ -946,7 +946,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .half.card { flex-direction: column; min-height: 0; }
 .card-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; min-width: 0; flex: 1; }
 .half.card.open { background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--border) 50%, transparent) 10px 11px), var(--raised); }
-.half.card.focus { background: color-mix(in oklab, var(--c) 5%, var(--surface)); }
+/* RS-2: a client's card is filled in its color at the timeline bands' strength, so Cards and Timeline match. */
+.half.card.focus { background: color-mix(in oklab, var(--c) var(--client-tint), var(--surface)); }
 .half.card .client { font-size: var(--fs-4); margin-top: 2px; }
 .half.card .also { margin-top: 2px; padding: 2px 6px; font-size: var(--fs-2); }
 .half.card .stats { margin-top: 2px; flex-wrap: wrap; gap: 0 10px; }
@@ -6815,6 +6816,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .half.past, .half.card.past { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
 .half.past .card-client { color: var(--text-muted); font-weight: 500; }
 .half.past .card-head .swatch { opacity: 0.6; }
+/* RS-2: a past client card keeps its color: the full edge and a fill at 60% of the client tint (still not the plain
+   surface); the muted title and text say it is past. A PTO half keeps its own hatch. */
+.half.past.focus:not(.pto-half), .half.card.past.focus:not(.pto-half) { background: color-mix(in oklab, var(--c) calc(var(--client-tint) * 0.6), var(--surface)); border-left-width: 5px; border-left-color: var(--c); }
 
 /* C2, C4: the card's ⋯ is a full target and the header keeps room for it, so a chip never touches it. */
 .card-head { min-height: max(var(--target), calc(20px * var(--text-scale))); padding-right: calc(var(--target) + 4px); }
