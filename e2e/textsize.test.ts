@@ -183,7 +183,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.close();
   }, T);
 
-  it("Inbox (IB-1): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips", async () => {
+  it("Inbox (IB-4): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, "#/inbox/promises");
     await page.locator("li.ib4-row").first().waitFor();
@@ -193,11 +193,11 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     for (const n of rows) expect(n).toBeLessThanOrEqual(2);
     await page.locator("li.ib4-row").first().click();
     await expect(page.locator("li.ib4-row.open .ib-acts .ib-act.primary").count()).resolves.toBe(1);
-    const text = (await page.locator("main.ib").textContent()) ?? "";
+    const text = (await page.locator("main.ib4").textContent()) ?? "";
     expect(text).not.toMatch(/new today|added by me/i);
     // A capture: Sort opens the kind chips.
     await go(page, "#/inbox/captures");
-    await page.locator("li.ib4-row", { has: page.locator(".ib-tag", { hasText: "To sort" }) }).first().click();
+    await page.locator('li.ib4-row[data-key^="k"] .ib4-row-head').first().click();
     await page.locator("li.ib4-row.open").getByRole("button", { name: "Sort" }).click();
     await expect(page.locator("li.ib4-row.open .cap-sort [role=radio]").count()).resolves.toBe(4);
     expect(errors).toEqual([]);

@@ -123,23 +123,20 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Not work-related: one click on a conversation moves it to Chatter; Undo brings it back", async () => {
+  it("This isn't work: from a suggestion's ⋯ it leaves From chats; Undo brings it back", async () => {
     const { page } = await freshPage(h);
-    const list = await openInboxView(page, "needs-you");
-    const first = list.locator("li.ib4-row", { has: page.locator(".kind-conversation") }).first();
+    const list = await openInboxView(page, "chats");
+    const first = list.locator("li.ib4-row").first();
+    await first.waitFor();
     const name = (await first.locator(".ib4-row-title").textContent())!;
-    await first.click();
+    await first.locator(".ib4-row-head").click();
     await shots(page, "conversation");
-    await page.locator(".ib-acts").first().getByRole("button", { name: "Not work-related" }).click();
-    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).not.toContain(name);
-    await page.getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).toContain(name);
-    // The row's ⋯ has it too.
-    const row = page.locator(".ib-rows > li", { has: page.locator(".ib4-row-title", { hasText: name }) }).first();
-    await row.hover();
-    await row.getByRole("button", { name: `More for ${name}` }).click();
-    await row.getByRole("menuitem", { name: "Not work-related" }).click();
-    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).not.toContain(name);
+    const open = list.locator("li.ib4-row.open");
+    await open.getByRole("button", { name: /^More for / }).click();
+    await open.getByRole("menuitem", { name: "This isn't work" }).click();
+    await expect.poll(() => list.locator(".ib4-row-title").allTextContents()).not.toContain(name);
+    await list.locator(".ib4-notice").getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => list.locator(".ib4-row-title").allTextContents()).toContain(name);
     await page.close();
   }, T);
 });

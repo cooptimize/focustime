@@ -1,12 +1,12 @@
 // CV-2 Conversations and My promises fixes, the main path, in a real (not demo) session on a fake Graph and a fake AI
-// behind the real ai/ service. A client chat with a pasted chart (two hosted images), reactions and a quoted reply:
-// Show messages shows them like Teams, the thumbnails come only from FocusTime's /media/chat-images/<id> (stripped,
-// never a Graph URL), the viewer opens with Next and Esc. A teammate's topic is merged into mine and undone. My
-// promises: Make it a follow-up with Who prefilled through the PersonPicker; an overdue loose promise ("I'll log a
-// ticket") is amber "Was due" with Create DevOps item, which opens the draft. Today's urgent strip: an
-// urgent line opens its conversation (#/inbox/conversation/<id>). Edge cases are unit tests (actions/chat-images,
-// actions/promise-fixes, actions/people-picker, actions/conversation-merge, ui/PersonPicker). Fictional names. Screenshots
-// at 1920, Text size Larger and the phone (390 wide, a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
+// behind the real ai/ service. A client chat with a pasted chart (two hosted images), reactions and a quoted reply; the
+// sorting answer judges it needs an item (IB-4), so once quiet it is a suggestion in From chats, and its open row shows
+// the messages like Teams, the thumbnails only from FocusTime's /media/chat-images/<id> (stripped, never a Graph URL),
+// and the viewer with Next and Esc. Promises: Who prefilled through the PersonPicker; an overdue loose promise ("I'll
+// log a ticket") is amber "late" with Create DevOps item, which opens the draft. Day: the late promise in the strip and
+// "From chats · 1". Edge cases are unit tests (actions/chat-images, actions/promise-fixes, actions/people-picker,
+// actions/slim-inbox, ui/PersonPicker). Fictional names. Screenshots at 1920, Text size Larger and the phone (390 wide,
+// a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
 import type { Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../actions/account.ts";
@@ -95,6 +95,8 @@ function fakeGraph() {
 }
 const img = (chat: string, hosted: string, w: number) => `<p><img src="https://graph.microsoft.com/v1.0/chats/${chat}/messages/{msg}/hostedContents/${hosted}/$value" width="${w}" height="300" alt="image" itemtype="http://schema.skype.com/AMSImage"></p>`;
 
+/** IB-4: the sorting step's judgment on the totals conversation (it rides in the same request). */
+const FIX = "Fix the date filter that drops the 31st on the Movement Dashboard";
 /** The fake provider: the Alliance chat is two topics (my totals, Lena's refresh); the Delivery chat is work, unplaced. */
 function answer(inputText: string): string {
   const input = JSON.parse(inputText) as { people: { ref: string; name: string }[]; messages: { ref: string; from: string; text: string }[] };
@@ -105,7 +107,7 @@ function answer(inputText: string): string {
   const a: UpdateAnswer = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: lena.includes(m.ref) ? "n2" : "n1", confident_new_topic: lena.includes(m.ref) })),
     conversations: [
-      { ref: "n1", title: "October totals on the Movement Dashboard", summary: "Blake sees October totals about 4% lower than the finance report and pasted the chart.\nEvan traced it to the date filter.\nSam will send corrected totals tomorrow.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will send corrected totals tomorrow", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
+      { ref: "n1", title: "October totals on the Movement Dashboard", summary: "Blake sees October totals about 4% lower than the finance report and pasted the chart.\nEvan traced it to the date filter.\nSam will send corrected totals tomorrow.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will send corrected totals tomorrow", item_change: null, scope_changed: false, likely_item: null, item_needed: { why: "The date filter drops the last day of the month", title: FIX, level: "child" },
         commitments: [{ who: ref("Sam Tester")!, what: "Send Blake the corrected October totals", due: "2026-11-03", to: ref("Blake Novak"), implies_item: false, messages: mine, status_only: false }] },
       { ref: "n2", title: "Dashboard refresh time", summary: "Blake asks whether the refresh can move to 6 AM.\nLena is moving it.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is moving it", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Lena Hart")!, what: "Move the refresh to 6 AM", due: null, to: ref("Blake Novak"), implies_item: false, messages: lena.filter((r) => input.messages.find((m) => m.ref === r)?.from === ref("Lena Hart")), status_only: false }] },
@@ -140,7 +142,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
     await lb?.close();
   }, T);
 
-  it("Teams-style messages with images and the viewer, a merge with Undo, the PersonPicker, an overdue loose promise with the DevOps offer, an urgent line to its conversation", async () => {
+  it("a suggestion with Teams-style messages, images and the viewer, the PersonPicker, an overdue loose promise with the DevOps offer, Day's From chats chip", async () => {
     const graph = fakeGraph();
     const chats = createChatsClient({ fetch: graph.fetch, token: async () => "fake-graph-token", invalidate: () => {}, log: () => {} });
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: HOME, name: "Sam Tester", email: "me@contoso.example" } } });
@@ -233,18 +235,23 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       graph.say(DELIVERY, EVAN, "<p>The filter bug needs to be tracked somewhere.</p>", 12);
       const ticket = graph.say(DELIVERY, ME, "<p>I'll log a ticket for the filter.</p>", 13);
 
-      // The Inbox (IB-1): Refresh reads the chats; the conversation opens in the detail pane.
-      // CV-4: the poll never reads images; they are read from Teams when shown, with the viewer's token. The Inbox opens a
-      // view's first item at once, so Refresh runs from Captures and drafts, where no conversation is open.
+      // The Inbox (IB-4): Refresh on From chats reads the chats. A conversation shows as a suggestion only once it has
+      // been quiet 4 working hours; the clock here is fixed, so its last work message is moved to last Thursday.
+      // CV-4: the poll never reads images; they are read from Teams when shown, with the viewer's token.
       await page.keyboard.press("5");
-      const caps = await openInboxView(page, "captures");
-      await caps.getByRole("button", { name: "Refresh conversations" }).click();
-      await page.getByText("Chats read").first().waitFor();
+      const main = await openInboxView(page, "chats");
+      await main.getByRole("button", { name: "Refresh", exact: true }).click();
+      await main.getByText("Checked your chats").first().waitFor();
       expect(graph.hostedCalls).toEqual([]);
-      const main = await openInboxView(page, "needs-you");
-      const totals = await openInboxItem(page, "October totals on the Movement Dashboard");
+      const totalsConv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("October"))!;
+      expect(totalsConv.itemNeeded).toMatchObject({ title: FIX });
+      await convs.updateConversation(totalsConv.id, { lastWorkAt: "2026-10-29T15:00:00Z" });
+      await main.getByRole("button", { name: "Refresh", exact: true }).click();
+      const totals = await openInboxItem(page, FIX);
+      // Never the one about Lena's refresh: it asks for no item.
+      expect(await main.locator(".ib4-row-title", { hasText: "refresh" }).count()).toBe(0);
 
-      // The messages, in the pane: grouped like Teams, the quote, the reactions, and the two thumbnails from FocusTime's own address.
+      // The messages, in the open row: grouped like Teams, the quote, the reactions, and the two thumbnails from FocusTime's own address.
       const thread = totals.getByRole("list", { name: "The messages" });
       await thread.getByText(/date filter stops at the 30th/).waitFor();
       await thread.getByLabel("👍 2, 👀 1").waitFor();
@@ -270,31 +277,6 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await shotAll(page, "cv2-image-viewer");
       await page.keyboard.press("Escape");
       await page.getByRole("dialog", { name: /^Image \d of 2/ }).waitFor({ state: "detached" });
-
-      // Merge: Lena's topic (nobody has claimed it, so it's Up for grabs in Needs you) into mine, then Undo.
-      await openInboxView(page, "needs-you");
-      const refresh = await openInboxItem(page, "Dashboard refresh time");
-      await refresh.getByRole("button", { name: "More for Dashboard refresh time" }).click();
-      await refresh.getByRole("menuitem", { name: "Merge into…" }).click();
-      // IB-1 slice 4: the only other open one is picked, so the pane shows the before → after straight away.
-      const mergeForm = refresh.getByRole("group", { name: "Merge preview" });
-      const before = mergeForm.getByLabel("Before");
-      await before.locator(".mg-side.mg-gone", { hasText: "Dashboard refresh time" }).waitFor();
-      await before.locator(".mg-side:not(.mg-gone)", { hasText: "October totals on the Movement Dashboard" }).waitFor();
-      await mergeForm.getByText(/move into "October totals on the Movement Dashboard"/).waitFor();
-      await mergeForm.getByText("The summary is written again").waitFor();
-      await shotAll(page, "ib1-merge-preview", mergeForm);
-      // Swap turns it round, and back.
-      await mergeForm.getByRole("button", { name: /^Swap: keep "Dashboard refresh time"/ }).click();
-      await before.locator(".mg-side.mg-gone", { hasText: "October totals on the Movement Dashboard" }).waitFor();
-      await mergeForm.getByRole("button", { name: /^Swap: keep "October totals/ }).click();
-      await before.locator(".mg-side.mg-gone", { hasText: "Dashboard refresh time" }).waitFor();
-      await mergeForm.getByRole("button", { name: "Merge", exact: true }).click();
-      await main.getByText(/Merged into "October totals on the Movement Dashboard" for everyone on the chat/).waitFor();
-      await expect.poll(async () => (await convs.conversations([ALLIANCE])).filter((c) => !c.mergedInto).length).toBe(1);
-      await main.getByRole("button", { name: "Undo" }).click();
-      await main.getByText("Merge undone").first().waitFor();
-      await expect.poll(async () => (await convs.conversations([ALLIANCE])).filter((c) => !c.mergedInto).length).toBe(2);
 
       // A loose promise from the Delivery chat (rules found it there; nothing grouped it), due last Friday: overdue.
       await convs.addCommitment({ conversationId: null, chatId: DELIVERY, clientKey: "Adatum", whoId: ME, whoName: "Sam Tester", toId: EVAN, toName: "Evan Ford", what: "Log a ticket for the filter bug", dueAt: null, dueDate: "2026-10-30", impliesItem: true, messageIds: [ticket], reason: "You said you'd log a ticket" });
@@ -322,11 +304,13 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await sendTotals.getByRole("button", { name: "Cancel" }).click();
 
       // The overdue loose promise: amber "3 days late", Close the loop leads (it's late), Create DevOps item opens the draft.
-      // It was added behind the page's back: Refresh reads the Inbox again.
-      await myp.getByRole("button", { name: "Refresh conversations" }).click();
+      // It was added behind the page's back: reading Promises again shows it.
+      await page.reload();
+      await openInboxView(page, "promises");
+      const lateTag = myp.locator("li.ib4-row", { hasText: "Log a ticket for the filter bug" }).locator(".ib-tag.tone-late");
+      await lateTag.filter({ hasText: /late$/ }).waitFor();
+      expect(await lateTag.evaluate((e) => getComputedStyle(e).color)).not.toMatch(/rgb\((2[0-5]\d|1[5-9]\d), (\d|[1-5]\d), (\d|[1-5]\d)\)/);
       const loose = await openInboxItem(page, "Log a ticket for the filter bug");
-      await loose.locator(".ib-pill.late", { hasText: /days? late/ }).waitFor();
-      expect(await loose.locator(".ib-pill.late").evaluate((e) => getComputedStyle(e).color)).not.toMatch(/rgb\((2[0-5]\d|1[5-9]\d), (\d|[1-5]\d), (\d|[1-5]\d)\)/);
       await loose.getByRole("button", { name: /^Create DevOps item/ }).waitFor();
       await shotAll(page, "cv2-my-promises-overdue", myp);
       await loose.getByRole("button", { name: /^Create DevOps item/ }).click();
@@ -334,23 +318,16 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       expect((await convs.commitmentsInChat(DELIVERY))[0]!.conversationId).not.toBeNull();
       await loose.getByRole("button", { name: "Cancel" }).first().click();
 
-      // Today's urgent strip: an urgent request from the totals conversation opens it; the overdue promise is amber "was due".
-      await teams.addRequest({ chatId: ALLIANCE, messageId: ask, clientKey: "Adatum", rule: "question", ruleDetail: null, at: "2026-11-02T14:31:00Z" });
-      await teams.setSort(ALLIANCE, ask, "sorted", { kind: "question", urgency: "now", itemType: null, title: "October totals look 4% low", description: "", likely: null, reason: "A client question about today's numbers" }, "ai");
-      // Today's data is read when it opens.
+      // Day (IB-4): the strip has my late promise, and the From chats chip counts the suggestion and opens it.
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
       const strip = page.getByRole("region", { name: "Urgent" });
-      await strip.getByText("October totals look 4% low").waitFor();
-      await strip.getByText(/Promise · was due Fri, Oct 30/).waitFor();
+      await strip.getByText("Log a ticket for the filter bug").waitFor();
       await shotAll(page, "cv2-urgent-strip", strip);
-      await strip.getByRole("button", { name: /October totals look 4% low/ }).click();
-      const conv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("October"))!;
-      await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/inbox/item/v${conv.id}`);
-      const opened = page.locator("li.ib4-row.open");
-      await opened.locator(".ib4-row-title", { hasText: "October totals on the Movement Dashboard" }).waitFor();
-      await expect(page.locator(`li.ib4-row[data-key="v${conv.id}"]`).getAttribute("aria-current")).resolves.toBe("true");
-      await shotAll(page, "cv2-urgent-opens-conversation", opened);
+      const chip = page.locator("a.att-chip.from-chats");
+      await expect(chip.textContent()).resolves.toMatch(/From chats · 1/);
+      await chip.click();
+      await page.getByRole("main", { name: "Inbox" }).locator(".ib4-row-title", { hasText: FIX }).waitFor();
 
       expect(graphRequests).toEqual([]);
       expect(errors).toEqual([]);

@@ -18,7 +18,7 @@ import { markSeen } from "../inboxcount.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { ASK_KEY_EVENT } from "../menu.ts";
 import { clientColor } from "../labels.ts";
-import { INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type Nav } from "../nav.ts";
+import { INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type LateFilter, type Nav } from "../nav.ts";
 import { Stamp } from "../Stamp.tsx";
 import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
@@ -78,7 +78,13 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const [sForm, setSForm] = useState<SuggestionForm>(null);
   const [keysOpen, setKeysOpen] = useState(false);
   const [clearedOpen, setClearedOpen] = useState(false);
-  const late = nav.late ?? null;
+  // UI-9's late filter stays while I open and close its rows (their addresses carry no filter); choosing a list ends it.
+  const [kept, setKept] = useState<LateFilter | null>(nav.late ?? null);
+  useEffect(() => {
+    if (nav.late) setKept(nav.late);
+    else if (nav.view !== "promises" || !nav.item) setKept(null);
+  }, [nav.late?.client, nav.view, nav.item]); // eslint-disable-line react-hooks/exhaustive-deps
+  const late = nav.late ?? (nav.view === "promises" && nav.item ? kept : null);
 
   // The list I chose is remembered (my Inbox setting); an address with a list wins while it's there.
   useEffect(() => {
@@ -87,7 +93,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     chosenThisSession = nav.view;
     void call("ui.set_inbox", { view: LIST_PREF[nav.view] }, { background: true }).catch(() => undefined);
   }, [nav.view, lastList]);
-  const chooseList = (l: InboxList) => onNav({ tab: "inbox", view: l, item: null });
+  const chooseList = (l: InboxList) => (setKept(null), onNav({ tab: "inbox", view: l, item: null }));
   const toggleClient = (k: string | null) => {
     const next = k === null ? [] : clients.includes(k) ? clients.filter((x) => x !== k) : [...clients, k];
     setClients(next);
@@ -132,7 +138,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     setForm(nav.loop && openRow?.kind === "promise" ? "close" : null);
     setSForm(null);
   }, [openKey, nav.loop, openRow?.kind]);
-  const open = useCallback((key: string | null) => onNav(key ? { tab: "inbox", view: listOfKey(key) ?? list, item: key } : { tab: "inbox", view: list, item: null }), [onNav, list]);
+  const open = useCallback((key: string | null) => onNav(key ? { tab: "inbox", view: listOfKey(key) ?? list, item: key } : late && list === "promises" ? navOf.inboxLate(late.client) : { tab: "inbox", view: list, item: null }), [onNav, list, late]);
   // Seen when opened (a promise stops being new).
   const changedRef = useRef(onChanged);
   changedRef.current = onChanged;

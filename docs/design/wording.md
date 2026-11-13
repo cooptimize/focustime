@@ -179,3 +179,16 @@ The words below are no longer shown: the New form, the draft editor and the card
 - Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
 - The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
 - The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.
+
+## IB-4 words (Nov 12)
+
+- The Inbox's lists: **From chats**, **Promises**, **Captures**, each with its count. Never "Needs you", "Waiting on", "In progress", "Handled by teammates", "Chatter" or "Everything" in what a person reads now.
+- A suggestion's actions: **Create item**, **Already covered**, **Dismiss** (toast **"Dismissed for you"** with **Undo**); under ⋯ **Add as my promise**, **This isn't work** (toast "Not work: closed for everyone on the chat", with Undo), **Open in Teams**. Its line: **"Why it needs an item: …"** and **"Suggested as a story: “…”"** (the client's own type name).
+- The foot of From chats: **"Chats last checked 9:25 AM. A conversation shows here once it has been quiet for 4 working hours."** with **Refresh**; **"Northwind can't get suggestions now: AI is off for FocusTime."** with its fix.
+- A conversation that isn't a suggestion: **"This conversation isn't waiting for anything."** with Open in Teams.
+- Promises' foot: **"Cleared on their own · 2"**; each line says why: **"#2216 was finished"**, **"Not touched for 7 days"**, with **Put back** (toast "Put back: it stays until you close it"). The first look: **"3 older promises from chats were cleared."** with **Show**.
+- The late filter from Week: **"Late promises for Northwind only."** with **Show all promises**.
+- Captures' sections: **To sort** and **Drafts**.
+- Empty states: **"Nothing from your chats needs an item."**, **"No promises open."**, **"Nothing to sort."**
+- Day's chip: **"From chats · 2"**.
+- Retired from visible copy: "N more in Inbox", "Up for grabs", "Asked you", "You're on it", "Teammate has it", "I'll take it", "Give to…", "Add helper", "Release", "Take it over", "Waiting on <Name>", "Unclaimed", "Snooze…", "Wake it now", "Hide for me", "Not a request", "Not work-related", "Merge into…", "N messages held back", "Sort unsorted", "Filtered as chatter (N)", "Post comment or Skip".

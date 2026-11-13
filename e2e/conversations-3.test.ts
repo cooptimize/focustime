@@ -1,7 +1,7 @@
 // CV-3 follow-ups, the main path, in a real (not demo) session on a fake Graph, with AI off for the client (Allow AI
 // off, so no AI request runs). Admin › AI shows the client's "Group messages without AI" switch, on. The chat's messages
 // group by rules: Blake's request mentioning Evan starts a conversation, Evan (mentioned) and my reply to Blake join it,
-// titled by its first message with no summary. A loose promise in the Delivery chat: Link to item… lists likely items
+// titled by its first message with no summary; nothing is judged, so From chats stays empty (IB-4). A loose promise in the Delivery chat: Link to item… lists likely items
 // with reasons. Today: a promise due within 2 hours and one overdue in the urgent strip, one later only in the agenda.
 // Week's Board rail: the overdue one amber "was due …" at now. Capture: Who through the PersonPicker with the link offer.
 // Edge cases are unit tests (actions/conversations-rules-only, plan/promise-items, plan/urgent, plan/rail-promises,
@@ -223,14 +223,17 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       graph.say(DELIVERY, ME, "<p>I'll log a ticket for the unassigned feature.</p>", 13);
 
       await page.keyboard.press("5");
-      const main = await openInboxView(page, "needs-you");
-      await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const conv = await openInboxItem(page, /^Evan Ford the October totals on the Movement Dashboard look 4% low/);
-      await conv.getByText("Grouped without AI, so there's no summary. The messages are below.").waitFor();
+      // IB-4: Refresh on From chats reads them. Grouped by rules (no AI), nothing is judged to need an item, so From chats
+      // stays empty; the grouping itself is in the store.
+      const main = await openInboxView(page, "chats");
+      await main.getByRole("button", { name: "Refresh", exact: true }).click();
+      await main.getByText("Checked your chats").first().waitFor();
+      await main.getByText("Nothing from your chats needs an item.").waitFor();
       const [c] = (await convs.conversations([ALLIANCE]));
+      expect(c!.title).toMatch(/^Evan Ford the October totals on the Movement Dashboard look 4% low/);
       expect((await convs.placesIn([c!.id])).filter((p) => p.role === "work")).toHaveLength(3);
       expect(aiCalls).toBe(0);
-      await shotAll(page, "cv3-rules-only-conversation", conv);
+      await shotAll(page, "cv3-rules-only-empty", main);
 
       // Promises: the loose one (no conversation) suggests likely items with reasons.
       await openInboxView(page, "promises");
