@@ -1,5 +1,7 @@
-// The Guide's copy with its {key:…}, {size:…} and {b:…} marks drawn (keys from ui/keys.ts, so they can't drift).
-import { Fragment } from "react";
+// The Guide's copy with its {key:…}, {size:…}, {b:…} and {icon:…} marks drawn (keys from ui/keys.ts and icons from
+// ui/icons.tsx, so they can't drift from the app's).
+import { Fragment, type ReactNode } from "react";
+import { Icon, type IconName } from "../icons.tsx";
 import { caps, richParts } from "./shortcuts.ts";
 
 export function Keys({ keys }: { keys: readonly string[] }) {
@@ -17,14 +19,38 @@ export function Keys({ keys }: { keys: readonly string[] }) {
 }
 
 export function Rich({ text }: { text: string }) {
-  return (
-    <>
-      {richParts(text).map((p, i) =>
-        p.kind === "text" ? <Fragment key={i}>{p.text}</Fragment> : p.kind === "keys" ? <Keys key={i} keys={p.keys} /> : p.kind === "size" ? <span key={i} className="guide-tag">{p.text}</span> : <b key={i}>{p.text}</b>,
-      )}
-    </>
-  );
+  const parts = richParts(text).map((p) => ({ ...p }));
+  const out: ReactNode[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]!;
+    if (p.kind === "text") out.push(<Fragment key={i}>{p.text}</Fragment>);
+    else if (p.kind === "keys") {
+      // A key alone in brackets, "Timeline (B)", is one piece, so the phone (which shows no keys) drops the brackets too.
+      const before = parts[i - 1];
+      const after = parts[i + 1];
+      if (before?.kind === "text" && before.text.endsWith(" (") && after?.kind === "text" && after.text.startsWith(")")) {
+        out.pop();
+        out.push(<Fragment key={`${i}b`}>{before.text.slice(0, -2)}</Fragment>);
+        out.push(<span key={i} className="guide-keyp"> (<Keys keys={p.keys} />)</span>);
+        after.text = after.text.slice(1);
+      } else out.push(<Keys key={i} keys={p.keys} />);
+    }
+    else if (p.kind === "size") out.push(<span key={i} className="guide-tag">{p.text}</span>);
+    else if (p.kind === "b") out.push(<b key={i}>{p.text}</b>);
+    else {
+      // An icon stays on the line with the first word of the control's name ("+ Add" never breaks between the two).
+      const next = parts[i + 1];
+      const word = next?.kind === "text" ? /^ (\S+)/.exec(next.text) : null;
+      const icon = <Icon name={p.name as IconName} className="guide-icon" />;
+      if (word && next?.kind === "text") {
+        out.push(<span key={i} className="guide-ctl">{icon} {word[1]}</span>);
+        out.push(<Fragment key={`${i}w`}>{next.text.slice(word[0].length)}</Fragment>);
+        i++;
+      } else out.push(<Fragment key={i}>{icon}</Fragment>);
+    }
+  }
+  return <>{out}</>;
 }
 
 /** The words a reader sees, with the marks resolved (for search and the word budgets). */
-export const plainText = (text: string) => richParts(text).map((p) => (p.kind === "keys" ? p.keys.join(" ") : p.text)).join("");
+export const plainText = (text: string) => richParts(text).map((p) => (p.kind === "keys" ? p.keys.join(" ") : p.kind === "icon" ? "" : p.text)).join("").replace(/ {2,}/g, " ");

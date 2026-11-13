@@ -22,17 +22,21 @@ export const caps = (key: string): string[] => key.split(" ").filter(Boolean);
 /** "{key:capture.add}" or "{key:Ctrl K}" as a reference (a dot means a command). */
 export const refOf = (s: string): KeyRef => (s.includes(".") ? { command: s } : { key: s });
 
-export type RichPart = { kind: "text"; text: string } | { kind: "keys"; keys: string[] } | { kind: "size"; text: string } | { kind: "b"; text: string };
+export type RichPart = { kind: "text"; text: string } | { kind: "keys"; keys: string[] } | { kind: "size"; text: string } | { kind: "b"; text: string } | { kind: "icon"; name: string };
 
-/** The Guide's copy, with {key:…}, {size:…} and {b:…} marks, as parts to draw. */
+/**
+ * The Guide's copy, with {key:…}, {size:…}, {b:…} and {icon:…} marks, as parts to draw. GU-1: {icon:more} draws one of
+ * the app's own icons by its name in ui/icons.tsx, beside the control's name ("{icon:more} More"); a name the family
+ * doesn't have fails ui/guide/app-names.test.ts.
+ */
 export function richParts(text: string): RichPart[] {
   const out: RichPart[] = [];
-  const re = /\{(key|size|b):([^}]+)\}/g;
+  const re = /\{(key|size|b|icon):([^}]+)\}/g;
   let at = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > at) out.push({ kind: "text", text: text.slice(at, m.index) });
-    const [, kind, v] = m as unknown as [string, "key" | "size" | "b", string];
-    out.push(kind === "key" ? { kind: "keys", keys: keysFor([refOf(v)]) } : { kind, text: v });
+    const [, kind, v] = m as unknown as [string, "key" | "size" | "b" | "icon", string];
+    out.push(kind === "key" ? { kind: "keys", keys: keysFor([refOf(v)]) } : kind === "icon" ? { kind, name: v } : { kind, text: v });
     at = m.index! + m[0].length;
   }
   if (at < text.length) out.push({ kind: "text", text: text.slice(at) });

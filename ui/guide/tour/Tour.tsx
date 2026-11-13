@@ -9,6 +9,7 @@ import { CloseButton } from "../../CloseButton.tsx";
 import { Lumen } from "../../brand/Brand.tsx";
 import { useReducedMotion } from "../../brand/motion.ts";
 import { TOUR_UI } from "../content.ts";
+import { plainText, Rich } from "../Rich.tsx";
 import type { Nav } from "../../nav.ts";
 import type { Tour as TourData, TourStep } from "../tours.ts";
 import { Illustration } from "./Illustrations.tsx";
@@ -220,7 +221,7 @@ export default function Tour({ tour, phone, onEnd, onNav }: {
   // Counted over the steps that show (and those not looked at yet), so the count holds steady as screens load.
   const total = plan.length - res.filter((r) => r === null).length;
   const num = plan.slice(0, i).filter((_, n) => res[n] !== null).length;
-  const live = useMemo(() => (atEnd ? `${TOUR_UI.endTitle}. ${tour.end.line}` : cur ? `${TOUR_UI.stepOf(num + 1, total)}. ${cur.step.title}. ${cur.text}` : TOUR_UI.loading), [atEnd, cur, num, total, tour]);
+  const live = useMemo(() => (atEnd ? `${TOUR_UI.endTitle}. ${tour.end.line}` : cur ? `${TOUR_UI.stepOf(num + 1, total)}. ${cur.step.title}. ${plainText(cur.text)}` : TOUR_UI.loading), [atEnd, cur, num, total, tour]);
   const titleId = `tour-${tour.id}-title`;
 
   return (
@@ -266,7 +267,9 @@ export default function Tour({ tour, phone, onEnd, onNav }: {
               <h2 ref={head} id={titleId} tabIndex={-1} className="tour-title">
                 {cur.step.title}
               </h2>
-              <p className="tour-text">{cur.text}</p>
+              <p className="tour-text">
+                <Rich text={cur.text} />
+              </p>
               {cur.kind === "example" && cur.step.example && <Illustration id={cur.step.example} />}
               <div className="tour-dots" aria-hidden="true">
                 {plan.map((_, n) =>
