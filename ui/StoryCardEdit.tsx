@@ -6,7 +6,7 @@
 // pool), or No parent. The server checks everything again; these are only the boxes.
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { EditFieldOffer, EditOffer } from "../actions/types.ts";
-import { applyMark, lookHtml } from "../plan/light-format.ts";
+import { applyMark, lookHtml, LOSSY_TEXT } from "../plan/light-format.ts";
 import type { NewOptions, NewParent } from "../plan/quick-create.ts";
 import { call } from "./api.ts";
 import { TextBox } from "./TextBox.tsx";
@@ -36,7 +36,7 @@ const MARKS = [
 ] as const;
 
 /** One description or acceptance box: format buttons, the box, and how it will read in DevOps. */
-export function LightEditor({ label, value, onChange, placeholder, onSave, boxRef, markdown }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; onSave: () => void; boxRef?: (el: HTMLTextAreaElement | null) => void; markdown?: boolean }) {
+export function LightEditor({ label, value, onChange, placeholder, onSave, boxRef, markdown, lossy }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; onSave: () => void; boxRef?: (el: HTMLTextAreaElement | null) => void; markdown?: boolean; /** The stored text had fonts or colors this drops: said before Save, and again in the preview. */ lossy?: boolean }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const lookId = useId();
   const mark = (m: (typeof MARKS)[number]["mark"]) => {
@@ -66,6 +66,7 @@ export function LightEditor({ label, value, onChange, placeholder, onSave, boxRe
         ))}
         {markdown && <span className="muted sc-tools-note">Kept as Markdown, as DevOps stores it</span>}
       </div>
+      {lossy && <p className="sc-lossy">{LOSSY_TEXT}</p>}
       <TextBox
         aria-label={label}
         aria-describedby={lookId}

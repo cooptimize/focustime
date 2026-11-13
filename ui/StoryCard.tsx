@@ -104,8 +104,11 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
   }, [clientKey, itemId]);
   const canWrite = !!card?.canWrite;
   const readAt = card?.readAt;
+  // While Edit is open the offer it read stays the base (its revision guards the save); a newer one waits for Save.
+  const editing = useRef(false);
+  editing.current = !!draft;
   useEffect(() => {
-    if (canWrite) void loadOffer();
+    if (canWrite && !editing.current) void loadOffer();
   }, [canWrite, readAt, loadOffer]);
   const dirty = isDirty(offer, draft);
   const startEdit = (acceptance = false) => {
@@ -121,7 +124,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
     if (focusAc.current) {
       focusAc.current = false;
       acBox.current?.focus();
-    } else if (document.activeElement === editBtn.current || !document.activeElement || document.activeElement === document.body) titleBox.current?.focus();
+    } else titleBox.current?.focus();
     // Only when the edit opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!draft]);
@@ -138,14 +141,16 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
   const cancelEdit = () => (dirty ? setDiscard("cancel") : endEdit());
   const requestClose = () => (dirty ? setDiscard("close") : onClose());
   /** Save: one preview of the parts that changed, guarded by the revision Edit read. */
-  const saveEdit = () => {
-    if (!offer || !draft || !writes) return;
-    const parts = changedParts(offer, draft);
+  const saveEdit = (against?: EditOffer) => {
+    const base = against ?? offer;
+    if (!base || !draft || !writes) return;
+    const rev = against ? against.rev : draft.rev;
+    const parts = changedParts(base, draft);
     if (!Object.keys(parts).length) return endEdit();
     setEditError(null);
     void writes.begin(
       clientKey,
-      [{ kind: "item_edit", itemId: offer.itemId, rev: draft.rev, ...parts }],
+      [{ kind: "item_edit", itemId: base.itemId, rev, ...parts }],
       async (r) => {
         if (r.confirmed) {
           endEdit();
@@ -156,7 +161,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
         // A newer version in DevOps: show what it is now and keep my words.
         if (r.code === "changed" || r.sent) {
           const now = await loadOffer();
-          if (now && now.rev !== draft.rev) return void setStale(now);
+          if (now && now.rev !== rev) return void setStale(now);
         }
         if (r.error) setEditError(r.error);
       },
@@ -350,7 +355,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                 <CardMore items={[...(canMove ? [{ label: "Move…", run: () => (endEdit(), setEdit("move")) }] : []), { label: "Copy DevOps link", run: () => void copyWorkLink(card.url) }]} />
               </div>
               {edit === "move" && offer && <MoveEditor offer={offer} clientKey={clientKey} onCancel={() => setEdit(null)} onPreview={(parentId) => writeAt({ kind: "reparent", itemId: offer.itemId, rev: offer.rev, parentId })} />}
-              {stale && draft && <ChangedSince now={stale} onUse={() => (setDraft({ ...draft, rev: stale.rev }), setOffer(stale), setStale(null), titleBox.current?.focus())} />}
+              {stale && draft && <ChangedSince now={stale} onUse={() => (setDraft({ ...draft, rev: stale.rev }), setOffer(stale), setStale(null), saveEdit(stale))} />}
               {editError && <p className="wrap-error" role="alert">{editError}</p>}
               {edit === "comment" && <CommentEditor onCancel={() => setEdit(null)} onPreview={(text) => write([{ kind: "comment", itemId: card.id, text }])} />}
               {edit === "state" && <StateEditor card={card} onCancel={() => setEdit(null)} onPreview={(state) => write([{ kind: "state", itemId: card.id, state }])} />}
@@ -381,7 +386,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
               <section className="sc-section" aria-label="Description">
                 <h3>Description</h3>
                 {draft && offer?.description?.editable ? (
-                  <LightEditor label="Description" value={draft.description} markdown={offer.description.format === "markdown"} onChange={(v) => setDraft({ ...draft, description: v })} onSave={saveEdit} />
+                  <LightEditor label="Description" value={draft.description} markdown={offer.description.format === "markdown"} lossy={offer.description.lossy} onChange={(v) => setDraft({ ...draft, description: v })} onSave={() => saveEdit()} />
                 ) : (
                   <>
                     {shownDescription ? <div className="sc-html" dangerouslySetInnerHTML={{ __html: shownDescription }} /> : <p className="muted">No description.</p>}
@@ -393,7 +398,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                 <section className="sc-section" aria-label="Acceptance criteria">
                   <h3>Acceptance criteria</h3>
                   {draft && offer?.acceptance?.editable ? (
-                    <LightEditor label="Acceptance criteria" value={draft.acceptance} placeholder="One example and the answer it should give" markdown={offer.acceptance.format === "markdown"} onChange={(v) => setDraft({ ...draft, acceptance: v })} onSave={saveEdit} boxRef={(el) => (acBox.current = el)} />
+                    <LightEditor label="Acceptance criteria" value={draft.acceptance} placeholder="One example and the answer it should give" markdown={offer.acceptance.format === "markdown"} lossy={offer.acceptance.lossy} onChange={(v) => setDraft({ ...draft, acceptance: v })} onSave={() => saveEdit()} boxRef={(el) => (acBox.current = el)} />
                   ) : (
                     <>
                       <div className="sc-html" dangerouslySetInnerHTML={{ __html: shownAcceptance }} />
@@ -425,7 +430,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                       <button type="button" className="mini" onClick={cancelEdit}>
                         Cancel
                       </button>
-                      <button type="button" className="mini primary" disabled={!draft.title.trim()} onClick={saveEdit}>
+                      <button type="button" className="mini primary" disabled={!draft.title.trim()} onClick={() => saveEdit()}>
                         Save
                       </button>
                     </>
