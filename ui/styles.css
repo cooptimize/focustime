@@ -25,6 +25,19 @@
   --fs-3: var(--text-base); /* body: picks, rows, buttons */
   --fs-4: calc(var(--text-base) + 2px); /* titles: page, panel and dialog titles */
 
+  /* RS-1: control sizes, radii and spacing (style guide section 11). Heights and the icon scale with the text. */
+  --h-control: calc(32px * var(--text-scale)); /* buttons, tabs, inputs, menu rows, list rows */
+  --h-small: calc(28px * var(--text-scale)); /* buttons inside cards and rows */
+  --icon: calc(16px * var(--text-scale));
+  --radius-control: 999px; /* buttons, tabs, pills, chips */
+  --radius-input: 8px; /* inputs, selects, list rows, a switch's track */
+  --radius-menu: 12px;
+  --radius-dialog: 16px;
+  --space-section: 24px; /* between sections, page side gutters */
+  --space-card: 16px; /* between cards */
+  --space-control: 8px; /* between controls in a row */
+  --space-row: 2px; /* between rows in a list */
+
   /* 1. Primitives: Cooptimize (brand, style guide section 3.1) */
   --p-navy-900: #00416b;
   --p-navy-300: #6fb0e3;
@@ -169,6 +182,16 @@
   --risk: var(--p-co-red-300);
   --watch: var(--p-co-amber-300);
   --ok: var(--p-co-green-300);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  /* Strengths are per theme: the strongest that keep muted and faint text at AA on the page, a card and a menu
+     (ui/rs1-contrast.test.ts). */
+  --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 13%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-300);
   --code-string: var(--p-co-green-300);
@@ -246,6 +269,14 @@
   --risk: var(--p-co-red-700);
   --watch: var(--p-co-amber-700);
   --ok: var(--p-co-green-700);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 9%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-700);
   --code-string: var(--p-co-green-700);
@@ -311,6 +342,14 @@
   --risk: var(--p-red-700);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  --wash-1: color-mix(in oklab, var(--text) 2%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 3%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 4%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-700);
   --code-string: var(--p-co-green-700);
@@ -369,6 +408,9 @@
     --risk: var(--p-red-300);
     --watch: var(--p-amber-300);
     --ok: var(--p-green-300);
+    --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+    --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+    --wash-accent: color-mix(in oklab, var(--accent) 14%, transparent);
     /* RB-1: Code's syntax colors (ui/code/code.css). */
     --code-keyword: var(--p-co-sky-300);
     --code-string: var(--p-co-green-300);

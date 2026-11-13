@@ -25,8 +25,10 @@ const root = block(":root {");
 const light = block(':root[data-theme="cooptimize-light"]');
 const neutral = block(':root[data-theme="neutral"] {');
 const neutralDark = block("@media (prefers-color-scheme: dark)");
-/** Tokens every theme assigns: semantic and domain, not primitives, the font, the type scale (U3) or the fallback mapping. */
-const themeTokens = [...declared(root)].filter((v) => !v.startsWith("--p-") && !v.startsWith("--font") && !v.startsWith("--fs-") && v !== "--text-base" && v !== "--text-scale" && !v.startsWith("--client-fallback-"));
+/** RS-1: control sizes, radii and spacing are the same in every theme, like the type scale. */
+const sizeToken = (v: string) => v.startsWith("--h-") || v.startsWith("--radius-") || v.startsWith("--space-") || v === "--icon";
+/** Tokens every theme assigns: semantic and domain, not primitives, the font, the type scale (U3), the control sizes (RS-1) or the fallback mapping. */
+const themeTokens = [...declared(root)].filter((v) => !v.startsWith("--p-") && !v.startsWith("--font") && !v.startsWith("--fs-") && v !== "--text-base" && v !== "--text-scale" && !sizeToken(v) && !v.startsWith("--client-fallback-"));
 
 describe("design tokens", () => {
   it("components use no raw colors and no primitives", () => {
