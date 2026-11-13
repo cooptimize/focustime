@@ -1,50 +1,53 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `4088995` on Nov 7, 2026 (SR-2 parts against its own branch; Status's SR-3 parts against `feat/report-finish` on Nov 8); the assistant against `1e74410` with AS-3 (`feat/assistant-answers`); Deployment items against `feat/deployment-items` on Nov 8; the Inbox against `feat/inbox-everything` on Nov 8; Today's timeline against `feat/today-timeline` on Nov 8. Cooptimize's standards (KB-1) against `feat/coop-standards` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8. The story card and Wrap it up (FN-1) against `feat/story-card-wrap-up` on Nov 10. One Week (WD-1) against `feat/wd1-week` on Nov 10. The block panel and Day (WD-2) against `feat/wd2-one-panel` on Nov 11. Backlog (BL-1) against `feat/bl1-backlog-tab` on Nov 12.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `2f4c0ea` on Nov 13, 2026.
 
-FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, Azure Resource Manager and OpenAI. The per-folder detail is in [docs/architecture.md](../architecture.md); this page is the overview.
+FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI and public GitHub. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
 ## The parts
 
 | Part | What it is | Where |
 |---|---|---|
-| Web app | React 19, built by Vite into static files; one page with tabs (Day, Week, Backlog, Status, Inbox; WD-1, RF-1; Backlog's code name is `ahead`) and full-window panels (Settings, the Guide, these docs). Heavy panels load only when opened | `ui/`, `vite.config.ts` |
+| Web app | React 19, built by Vite into static files: five tabs (Day, Week, Backlog, Status, Inbox), the block panel, the story card over any screen, and full-window panels (Settings, Admin, Code, Client calls, the Guide, these docs). Heavy panels load only when opened | `ui/`, `vite.config.ts` |
 | Server | Node.js `http` server: sign-in, sessions, the action API, a few upload and media routes, the Teams bot endpoint, the built UI | `server/app.ts`, `server/main.ts` |
-| Actions | Every operation the UI, the command menu, the assistant and the bot can run: named in one registry, validated, dispatched | `actions/registry.ts`, `actions/dispatch.ts` |
-| Pure rules | The week from patterns and events, risks, fit, planning, notifications; no I/O | `week/`, `plan/` |
-| Sources | Adapters for each outside system | `sources/` |
-| Plan store | Azure SQL (dev and prod), every statement scoped to the signed-in person | `store/` |
+| Actions | Every operation the UI, the command menu, the assistant and the bot can run (396 of them): named in one registry, validated, dispatched | `actions/registry.ts`, `actions/dispatch.ts` |
+| Pure rules | The week from patterns and events, risks, free time, planning, the Inbox's rules, notifications; no I/O | `week/`, `plan/` |
+| Sources | One adapter per outside system, and the demo's fakes | `sources/` |
+| Plan store | Azure SQL in dev and prod, the SQL Server container or a SQLite file in the developer loop, SQLite for the demo and tests; every statement scoped to the signed-in person | `store/` |
 | Host | The only code that touches the machine (secrets, keys, caches, notifications): `host/azure` hosted, `host/local` for the developer loop; picked by `FOCUSTIME_HOST` | `host/` |
-| Scheduler and jobs | One in-process scheduler: per-person ticks (timer ends, reminders, notifications) and app jobs (polling, purge) | `server/scheduler.ts`, `server/ticks.ts` |
+| Scheduler | One in-process scheduler: app jobs (polling, the purge), each person's ticks (timer ends, reminders, Teams messages) and start-up work | `server/scheduler.ts`, `server/ticks.ts`, `config/background-policy.ts` |
 | Teams bot | An Azure Bot whose identity is a managed identity, calling `/teams/messages` on the same app; 1:1 chats only | `server/teams/`, `infra/modules/bot.bicep` |
 | Assistant | One service, two renderers: the in-app panel and the bot draw the same result; reaches only the actions on its allowlist | `assistant/`, `ui/Assistant.tsx`, `server/teams/render.ts` |
-| AI provider | Every AI request goes through `ai/` (guard, budget, request log) to OpenAI; a stub in the developer loop | `ai/` |
+| AI provider | Every AI request goes through `ai/` (guard, budget, request log) to OpenAI; a stub when no key is set | `ai/` |
 | Infrastructure | Bicep for the Container Apps environment and app, Azure SQL, Key Vault, the registry, monitoring, the bot, budgets | `infra/` |
 
 ### Running in Azure
 
-- **Container Apps.** One Container App per environment (`ft-dev-app`, `ft-prod-app`), 0.5 vCPU and 1 GiB, HTTPS-only external ingress on port 8080, health probe on `/healthz` (no database call), single revision mode, at most one replica (`infra/modules/app.bicep`). Prod keeps one replica always; dev scales to zero after 300 seconds without a request (`infra/dev.bicepparam`).
+- **Container Apps.** One Container App per environment (`ft-dev-app`, `ft-prod-app`), 0.5 vCPU and 1 GiB, HTTPS-only external ingress on port 8080, liveness and startup probes on `/healthz` (no database call), single revision mode, at most one replica (`infra/modules/app.bicep`). Prod keeps one replica always; dev scales to zero (`minReplicas` 0 in `infra/dev.bicepparam`). **Not verified:** how long dev stays awake after the last request; `infra/` doesn't set it, so it is Container Apps' default (300 seconds when this was written).
 - **Azure SQL.** Entra-only authentication: the app signs in with its system-assigned managed identity. Fixed-price DTU tiers: dev S0, prod S1 (`infra/modules/sql.bicep`, `infra/prod.bicepparam`).
 - **Key Vault.** RBAC mode, soft delete and purge protection on. Holds the app secrets and the key that wraps the app's data key (see [Security](security.md#secrets)).
-- **Image.** Built once per commit by `deploy-dev.yml` into dev's container registry; prod runs the same image by digest (see [Operations](operations.md#deploys)).
+- **Image.** Built once per commit by `.github/workflows/deploy-dev.yml` into dev's container registry; prod runs the same image by digest (see [Operations](operations.md#deploys)).
 - **Monitoring.** Log Analytics (30 days) and workspace-based Application Insights (`infra/modules/monitoring.bicep`).
 
-### Background jobs and job_claims
+### Background work
 
 The scheduler (`server/scheduler.ts`) runs a fast pass every 5 seconds and a slow pass every 30 seconds, but only while someone has used FocusTime in the last 15 minutes. Otherwise it sleeps until the next stored due time (`scheduler_state`), making no database call, so the database can rest.
 
-App jobs run at the start of each slow pass, each with its own next-due time (`server/main.ts`):
+Every piece of background work has a name in `BACKGROUND` (`config/background-policy.ts`), which also says what it does outside production ([Operations](operations.md#what-runs-on-its-own)). The app jobs run at the start of each slow pass, each with its own next-due time (`server/main.ts`):
 
 | Job | What it does |
 |---|---|
-| `people_refresh` | Reads people and client leads from Dataverse into the directory; ends sessions of anyone now known as a guest |
-| `retention` | The daily purge (see [Data](data.md#retention)) |
-| `meeting_capture` | Registered client calls: occurrences, transcripts after each call, the AI pass |
-| `devops_poll` | Central DevOps reads: changed items per client, the change log |
-| `standards_sync` | KB-1: Cooptimize's standards from GitHub: at startup, then hourly while FocusTime is in use; never wakes an idle server |
-| `requests_poll` | Shared polling of registered client chats, every 5 minutes in followers' working hours; also records their co-working calls (CW-1, `chat_calls`) |
+| `requests_poll` | Reads every registered client chat with a follower's own sign-in, every 5 minutes in followers' working hours, then sorts new messages with AI; records co-working calls (`chat_calls`) |
+| `conversations_upkeep` | Runs after each chat read and does nothing: no escalation, reminder or follow-through draft is made |
+| `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass |
+| `devops_poll` | Central DevOps reads: each client's changed items, once for everyone, with a change log |
+| `people_refresh` | People, levels and client leads from Dataverse into the directory, once a day; ends sessions of anyone now known as a guest |
+| `standards_sync` | Cooptimize's standards from public GitHub: at start, then hourly while FocusTime is in use |
+| `retention_purge` | The daily purge (see [Data](data.md#retention)) |
+| `maintenance` | Hourly: hard deletes of accounts past their 30 days, ended sessions |
+| `conversation_ownership_backfill` | A one-time move of conversations to shared owners; does nothing once done |
 
-A job that must run once per period claims it with a unique insert in `job_claims` (`store/retention.ts` `claimPeriod`), so a restart or a second replica can't run it twice; a failed run gives its claim back. Hourly maintenance hard-deletes accounts past their 30 days and sweeps expired sessions.
+A job that must run once per period claims it with a unique insert in `job_claims` (`claimPeriod` in `store/retention.ts`), so a restart or a second replica can't run it twice; a failed run gives its claim back. Each person's ticks (the timer, reminders, Web Push, the Teams bot's messages, Teams status, the VM's automatic start, calendar refresh while focus runs) run in the fast and slow passes for the people using FocusTime (`server/ticks.ts`).
 
 ## Module map
 
@@ -65,133 +68,96 @@ flowchart LR
 
 The host boundary is enforced: `host/boundary.test.ts` fails when a core module (`week/`, `plan/`, `actions/`, `sources/`, `store/`, `ai/`) touches files, processes, sockets or the keyring. Demo data is wired in one place (`server/main.ts` to `server/demo.ts` to `sources/demo/`), and `host/no-demo-leak.test.ts` fails if anything else imports it.
 
+## The screens
+
+Where each screen lives and what it reads. Every read is one action, so the assistant and the tests reach the same data.
+
+| Screen | UI | Reads | Rules |
+|---|---|---|---|
+| Day | `ui/Day.tsx`, `ui/DayTimeline.tsx`, `ui/PhoneDay.tsx` | `week.load`, `inbox.today` | `plan/blockpanel.ts`, `plan/timeline.ts`, `plan/cardfold.ts` |
+| Week | `ui/WeekGrid.tsx`, `ui/BlockCard.tsx` | `week.load` | `week/`, `plan/weekdays.ts`, `plan/evening.ts`, `plan/boardsuggest.ts` |
+| Block panel | `ui/BlockPanel.tsx` | `week.load`, its Add box's searches | `plan/blockpanel.ts`, `plan/addwork.ts` |
+| Backlog | `ui/ahead/` (`Ahead.tsx`, `Grid.tsx`, `Gantt.tsx`, `Toolbar.tsx`, `Bulk.tsx`) | `ahead.load`, `ahead.people` | `plan/gantt-tree.ts`, `plan/ahead-view.ts`, `plan/backlog-status.ts`, `plan/readiness.ts`, `plan/fixnext.ts` |
+| Status | `ui/Status.tsx`, `ui/StatusMark.tsx` | `status.load`, `status.report` | `plan/status-report.ts`, `plan/status-dot.ts` |
+| Inbox | `ui/inbox/` | `conversations.suggestions`, `inbox.list`, `capture.load` | `plan/slim-inbox.ts`, `plan/inbox-items.ts` |
+| Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
+| New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx` | `new.*`, `devops.preview` | `actions/new-item-actions.ts` |
+| Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file` | `plan/code.ts` |
+| Client calls | `ui/meetings/` | `meeting.mine`, `meeting.review` | `plan/meetings.ts`, `plan/meeting-views.ts` |
+| Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
+| Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |
+| Settings, Admin | `ui/Settings.tsx`, `ui/settings/` | `settings.load`, `admin.load` | `config/` |
+| DevOps patterns | `ui/patterns/` (`#/patterns`, only for people an admin turned on) | `patterns.status` | `plan/patterns/` |
+| The Guide, these docs | `ui/guide/`, `ui/docs/` | `guide.*`, `docs.access` | `scripts/tech-docs.ts` (at build time) |
+
+Where the window is (tab, date, open panel, filters) is one pure model in `ui/nav.ts`, mirrored in the address (`#/day/<date>/<half>`, `#/week/day/<date>/<half>`, `#/backlog?…`, `#/inbox/<list>`, `#/item/<client>/<id>`, `#/code/<client>/<repo>/<path>`), so Back and a copied link land in the same place. Older addresses still land on the nearest screen.
+
 ## The planning rules
 
-The week, risks, free time, budgets and estimates are pure code in `week/` and `plan/`: no I/O, deterministic, unit tested. The words for each idea are in the [glossary](../../CLAUDE.md#glossary-use-these-words-in-code-ui-and-chat).
+The week, risks, free time and estimates are pure code in `week/` and `plan/`: no I/O, deterministic, unit tested. The words for each idea are in the [glossary](../../CLAUDE.md#glossary-use-these-words-in-code-ui-and-chat).
 
 - **Half-days.** A person's working hours (`[hours]`, their own setting, read with `userZone()` in `week/zone.ts`) split each day into AM and PM at lunch (`week/hours.ts`). The hours only place meetings into AM or PM and estimate free time; a half-day is a unit of commitment, not a clock window.
-- **Focus blocks.** Dataverse Focus Time rows are weekly patterns (Mon to Thu, AM, PM or All Day, a start and an optional end), expanded into the week's blocks (`week/patterns.ts`). Standing blocks are the person's own setting, none by default. A Mon to Thu half-day with no block is Open.
+- **Focus blocks.** Dataverse Focus Time rows are weekly patterns (Monday to Thursday, AM, PM or All Day, a start and an optional end), expanded into the week's blocks (`week/patterns.ts`). Standing blocks are the person's own setting, none by default. A Monday to Thursday half-day with no block is Open. Friday is the catch-up day.
 - **PTO.** Every PTO day is a whole day off: no risks, no to-dos, no free time (`week/pto.ts`, `week/free.ts`). Teammates' PTO shows only as "away".
-- **Risks.** Checked per half-day that has a focus block (`week/risks.ts` `evaluateRisks`); events shown as free or working elsewhere don't count, tentative and missing show-as count as busy. The thresholds start from the team's Default (Admin) or the built-in values below.
+- **Risks.** Checked per half-day that has a focus block (`evaluateRisks` in `week/risks.ts`); events shown as free or working elsewhere don't count, tentative and missing show-as count as busy. The thresholds start from the team's Default (Admin) or the built-in values below (`config/starter.ts`).
 
 | Rule | When | Shows as |
 |---|---|---|
 | Meeting load | Busy meeting minutes inside the block reach 90 (`meeting_watch_minutes`) | Watch |
 | Meeting load | They reach 150 (`meeting_at_risk_minutes`) | At risk |
-| Personal conflict | A busy personal (Google) event overlaps the block | At risk |
+| Personal conflict | A busy personal event overlaps the block | At risk |
 | Personal conflict | An all-day personal event that day | Watch |
 | Out of office | An Outlook out-of-office event overlaps or covers the block | At risk |
 | All-day busy | An all-day Outlook event that is busy or has no show-as | Watch |
 | No focus window | The longest free stretch is under 90 minutes (`min_focus_window_minutes`) | At risk |
 | Double-booked | More than one focus block in the half-day | At risk |
 
-- **Week's weekend columns and Evening band (WK-3).** Week is Monday to Friday; `week.load` adds Saturday or Sunday (`week/build.ts`, `weekendPlanned` in `actions/dispatch.ts`) when a timed or all-day calendar item, a planned or done to-do, a FocusTime timebox, a flex session or a promise due falls there, or always with the viewer's Show weekend (`ui/weekend.ts`, this browser's storage, sent as `weekend: true`). A weekend day is `kind: "weekend"`: no blocks, Open half-days, capacity or risks; the Board draws it as one quiet cell (`WeekendDay` in `ui/WeekGrid.tsx`, rows from `weekendRows` in `plan/evening.ts`), Today as a Weekend day, the phone as one more day chip. Items after a weekday's day shape go in the Evening band under PM (`eveningBand`), hidden when empty. Moves onto a weekend are allowed by drag, menu and assistant with the day's note (D947) and Undo.
-- **Day's timeline and the shared timeline (TY-1).** `ui/Timeline.tsx` is the one hour grid: `Timeline` (hours, events side by side through `layoutEvents`, free gaps, the now line), `EventCard`, `useEventMenu`, `railNowOf`. Week's cards (`ui/WeekGrid.tsx`) and Day's timeline (`ui/DayTimeline.tsx`) both draw it, and `ui/ty1.test.ts` holds that to one copy. With the Timeline switch on (`ui.set_today_timeline`, `[ui] today_timeline`, the phone's own `today_timeline_phone`), Today shows each block as a client-coloured band with Week's header and its hours, with the block's checklist beside them (TY-2: the list view's `PickRow`, timed to-dos in time order, then "Not timeboxed yet"; above the hours and foldable under 1100 px), then the Evening band. The phone keeps a "Not timeboxed yet" tray above the hours instead. A timebox changes here with `timebox.add`, `update` and `remove`, at once with Undo; the arithmetic is pure in `plan/timeline.ts` (15-minute drop, clamp, nudge, next free stretch, the phone's list of times, whether a placeholder fits). `useBandDrag` in `ui/Timeboxes.tsx` is the one band drag, and `BandEditCtx` is what Today adds to it. Timebox my day runs `planMyDay` as before and holds the result in Today's state as placeholders; nothing is saved until ✓ or Accept all (`timebox.add_many`). The only way out of FocusTime is the existing Outlook path: a timebox marked for Outlook, through the existing preview and confirm.
-- **One Week, one Day and the block panel (WD-1, WD-2).** Week has no modes: `ui/WeekGrid.tsx` draws `ui/BlockCard.tsx` per block. Day (`ui/Day.tsx`) shows any date with the same cards (`WeekGrid` with one day), under one header row, the urgent strip, a line of chips and the moment card. `ui/BlockPanel.tsx` is the one side panel for a block on both (a sheet on the phone), over the pure rules in `plan/blockpanel.ts` and `plan/addwork.ts`: what's on the block, its meetings, and one Add box that searches the client's DevOps work and my promises. It opens from "+ Add", a click on the block, or A and Enter, at `#/week/day/<date>/<half>` or `#/day/<date>/<half>`. A to-do dragged from a block onto the panel comes off the plan (`pick.take_off`, my plan store only, with Undo; `docs/ux/wd2/inventory.md` says what each kind of to-do does). Placing a story adds its feature to the week on the server (`afterPick` in `actions/dispatch.ts`, from the cached DevOps read only). Plan the week and Plan the day were removed; `docs/ux/wd1/inventory.md` says where each of their parts went.
-- **No confirm, no musts (CF-1).** Nothing confirms a day or a week, and every feature on the week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed (`weeksWithWork` in the plan store); the morning card and the reminders read those. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for Team and the status report, never for a past week. The old Confirm and tier actions stay registered and answer plainly without changing anything (`plan/no-confirm.ts`). The stored confirm times and tiers stay in the database, unread. `docs/ux/cf1/inventory.md` lists every part.
-- **Deployment items (DP-2).** What a deployment moves, by the client's data platform. The seeded catalog is `config/deploy-catalog.ts`; `plan/deploy-items.ts` is pure (a client's list over the catalog, defaults, what a client switch keeps, matching spoken names); `actions/deploy-item-actions.ts` is `deploy.items` and `deploy.config_save` (a FocusTime admin or the client's lead). `ui/DeployItems.tsx` holds the checkboxes (Quick capture and Deployment details), the row's "4 items" chip and the settings editor, shown in Admin › Clients and on a lead's client page in Settings. `ui/TimeField.tsx` is the time twin of AH-5's `DateField`. The assistant's `plan_deployment` matches the items named against the client's own list on the server. See [Data](data.md#deployment-items-dp-2).
-- **Deployment to-dos and after-hours time (WK-3, DP-0).** A Deployment is a to-do (`picks.todo_kind = 'deployment'`) with a window (`window_start`, `window_end`, local times) and optional links (`links`) and note; `deploy.add` and `pick.set_kind` make one, and the window decides its half (`windowHalf` in `plan/deploy.ts`). `afterHours` in `plan/deploy.ts` adds up the week's time outside the day shape (a Deployment's window outside the person's hours, all of it on a weekend or PTO day; other to-dos placed in an evening or on a weekend; timeboxes after the day's end), returned by `week.load` as `afterHours` and shown as "3h after hours this week". Done on a Deployment offers Tell <client> through LP-1's Close the loop (`DeployedOffer` in `ui/Deploy.tsx`). The assistant's `plan_deployment` proposes `deploy.add`, run only on Confirm.
-- **Backlog's tree (AH-6, BL-1).** Backlog was Ahead until BL-1; its code name (files, actions, settings) stays `ahead`. Grid and Gantt fold the same tree (`plan/gantt-tree.ts`): a level for the whole tree (Show: Epics · Features · Stories, names from the process model) with per-row chevrons on top (BL-1: one `ui/ahead/Chevron.tsx`, 16 px, 28 px wide, the row's full height), the rows on screen, and a collapsed row's roll-up (its children's earliest start to latest end). The Gantt (`ui/ahead/Gantt.tsx`) draws one row height for label and bar, status as the bar's look (`barTreatment` in `plan/gantt.ts`), one callout marker per row with its popover and fixes, and arrow caps past the edges (`capText`). View choices (level, carets, Show callouts, column width) are per browser (`ui/ahead/prefs.ts`).
-- **Backlog's toolbar (AH-6, BL-1).** One row (`ui/ahead/Toolbar.tsx`) for Grid and Gantt: Clients, People, Needs attention, Search, Filter (Epic, Dates, Levels, one level as a list, with a count from `filterCount`) and ⋯ (Expand all, Collapse all, Callouts, Show the whole project). One filter state: the filters in the plan store (`ahead.filters`, now with `flat`), the level, chevrons and Show callouts in this browser, all mirrored in the address query (`#/backlog…?c=…&fl=story`). `plan/ahead-view.ts` is the pure part: the Dates quick picks, the query (`toQuery`, `fromQuery`, `withQuery`), where a control can't apply (`notHere`), People's words (`peopleWord`, never Mixed) and the Showing line (`summary`, null at the defaults). The Grid (`ui/ahead/Grid.tsx`) has three shapes over the same rows and editors: the tree (`filterRows`), one level as a list (`backlogGroups` in `plan/backlog.ts`, was the Backlog mode) and Needs attention (`fixGroups` with the filters, was Readiness, Gaps and Fix next; the code name stays `fix`). Its one Status chip per row is `plan/backlog-status.ts`; the bulk bar over ticked rows is `ui/ahead/Bulk.tsx` (`ahead.stage_bulk`). Old addresses (`#/ahead/fix`, `#/ahead/backlog`) land with a `preset` that turns the filter on once (`ui/nav.ts`).
-- **Needs attention you can finish (AH-7, was Readiness).** `plan/readiness.ts` is the pure part: Start here's urgency rule (`startHere`, `START_RULE`), the counts by kind (`kindCounts`, `toggleKind`), skips that last 14 days (`liveSkips`) and progress (`fills`, `addFixed`, `fixedSince`). `fixClient` (`plan/fixnext.ts`) also returns the skipped entries, the pieces my change set fills (`pending`) and a just-fixed entry kept to fade out (`leaving`). Skips are `ahead.skip` and `ahead.unskip`, kept in the plan store's `kv` (`ahead_skips`); the write framework records each saved fix after a `fields` write lands (`aheadLanded` → `ahead_fixed`); `ahead.load` returns the live skips and this week's count. BL-1: the Grid draws the fix per missing piece and Skip in the Status cell, and `AttentionLine` (`ui/ahead/Toolbar.tsx`) the counts by kind, Stale, "Why these?" and the progress; `ui/ahead/Ahead.tsx` keeps the skips, the fade, the Undo toast and the Skipped list (FixNext.tsx and Backlog.tsx were removed). Stale is one of the reasons (`FixItem.stale`).
-- **Status and the client report (SR-1, SR-2).** The Status tab (Week › Status before WD-1) reads `status.load` (My features: my planned or touched features per client) and `status.report` (one client's whole report), both in `actions/status-actions.ts` over the pure rules in `plan/status-report.ts`. Kat's watermark is Dataverse `accounts.coop_statuslastsenton`, read with the app's access (`statusSent`); a comment counts by its modified date (else created). The client report keeps the watermark as it is and treats an empty one as 1900-01-01 (`clientReportWindow`); My features falls back to Monday 7:00 AM ET when it's missing or older than 35 days (`reportWindow`). The report's body is every feature with a comment in the window, in backlog stack-rank order, comments oldest first (`reportBody`); comments are read live from DevOps (at most 60 features a client, `reportCandidates`) and never stored. No update yet (`noUpdateYet`) is the features active this week (Week › Team's `week_commitments`, my week plan, DevOps' change log) without a comment. Upcoming PTO is the client team's days away from Dataverse's Time Off Tracker (`teamPto`, dates only; `ptoRuns`). Writes are SR-1's `comment` and `comment_edit` and SR-3's `comment_delete` (my own comment in the window; undo posts it again) through the write framework.
-- **Finishing the report (SR-3).** Upcoming PTO and Holidays is the next 14 days: the team's Time Off Tracker days and Dataverse's Working Days Calendar rows with Holiday Observed = Yes (`sources/dataverse/holidays.ts`), each source failing on its own with a note (`ptoSection`, `upcomingRows`). "You worked on this" is `contributions` in `plan/status-report.ts`: since the watermark, a story under the feature assigned to me and changed, my state change or comment from DV-1's change log, a story I created through FocusTime (the write log), my to-do or timebox, or my comment on the feature; no new DevOps read. Such features with no comment of mine are Needs your update (`needsYou` on `status.load` and `status.report`) and get a suggested line from `status.suggest`: one standard-tier AI request per client through `ai/` (GD-2 scrub, Internal exempt, held in memory 6 hours), or the template "Worked on: …" with AI off. The client report takes `added` feature ids (Add a feature over `catalog`, the client's feature tier in backlog order). Lines are typed and kept in the browser (`ui/status-lines.ts`, `localStorage`) until Push all. The nudge counts Needs your update first and opens `#/week/status/needs`.
-- **Status's dot (RF-1).** The Status tab shows no number: a dot while SR-3's Needs your update isn't empty. `plan/status-dot.ts` is the rule, pure: `dotDays` reads a built week (`week/build.ts`) as days with their working start, `working` (a work day, not the catch-up day, not a weekend, not a whole PTO day) and `scheduled` (working with a focus block on a half that isn't PTO); `dotSchedule` takes the days whose working hours end between the last send and the next (a day still under way at the send is the next report's) (`lastKatRun`, `nextKatRun`: Monday 7:00 AM New York) and makes the last scheduled one red from its start and the one before it amber, until the send; with no scheduled day it uses the working days, and with none at all there is no dot. `status.load` adds `dot`, `sendsAt`, `zone` and `serverNow` (`dotFor` in `actions/status-actions.ts`; the days come from `workdaysFor` in `actions/dispatch.ts`: Dataverse focus blocks and PTO through the sources' caches, standing blocks and working hours, no calendars). The tab (`ui/StatusMark.tsx`) turns on the server's clock (`serverNow` gives the skew), reads again every 30 minutes while shown, on coming back into view after 10 minutes, and a minute after the send, and is a ring for amber and a filled dot for red, with its reason as the tooltip and label (`dotText`). The phone's ⋯ shows it beside Status.
+- **One status.** A card shows At risk with its short reason only when the calendar cuts into the block; how much is planned never makes a status (`plan/blockstatus.ts`). Watch shows only on hover. The block panel says the free time left ("1h free", "No free time").
+- **Hours, never blocks.** Sizes and estimates are hours (`plan/estimate.ts`, `plan/weekplan.ts`): XS 30 minutes, S 1h, M 2h, L 4h, and unsized work counts as the person's own Count unsized work as. A to-do's time left starts at its size and moves only with a check-in answer or a new size (`pickNeed` in `plan/types.ts`).
+- **No confirm.** Nothing confirms a day or a week, and every feature on a week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for the team view and the status report, never for a past week. The old confirm and tier actions answer plainly and change nothing (`plan/no-confirm.ts`).
 
-- **The board suggests (SG-1).** An empty block today or on the next working day offers work: that client's unfinished to-dos, then my open stories in backlog order (target dates this week first), a feature with no stories as itself, as many as fit the free time, at most four. `plan/boardsuggest.ts` is the rule, pure; it reads only my plan store and the DevOps work already loaded, never AI and never a DevOps request. Keeping one runs the existing add, move or place; Clear (row for the week, block for the day, a day) is a `markers` row of kind `sg_clear`. Suggestions are not to-dos: no free time, status or reminder changes.
+## Week and Day
 
-A card shows one status, At risk with its short reason, only when the calendar cuts into the block; how much is planned never makes a status (QT-1, `plan/blockstatus.ts`). The panel says the free time left ("1h free", "No free time"). Budgets and estimates are in hours (`plan/weekplan.ts`, `plan/estimate.ts`).
+- **One card per block.** `ui/WeekGrid.tsx` draws `ui/BlockCard.tsx` per block on Week and, with one day, on Day. Day shows any date under one header row (Previous, the date, Today, Cards or Timeline, Timebox my day, + Add, More), with the urgent strip, one line of chips and the moment card above the blocks.
+- **Which days show.** Monday to Thursday always, Friday as the catch-up day unless hidden (`[ui] show_catch_up_day`), and Saturday or Sunday when a calendar item, a to-do, a timebox, a flex session or a promise falls there, or always with the person's Show weekend (`[ui] show_weekend_days`). The day in focus takes about twice a working day's width; when the grid is too narrow, days fold to strips in a fixed order (weekend, catch-up day, past days, then farthest from the focus) (`plan/weekdays.ts`). Items after a weekday's working hours sit in the Evening band under PM (`plan/evening.ts`).
+- **The block panel.** `ui/BlockPanel.tsx` is the one side panel for a block on both screens (a sheet on the phone), over `plan/blockpanel.ts` and `plan/addwork.ts`: what's on the block, its meetings, and one Add box that searches the client's DevOps work and my promises. Placing a story adds its feature to the week (`afterPick` in `actions/dispatch.ts`, from the cached DevOps read only). A to-do dragged onto the panel comes off the plan (`pick.take_off`, with Undo).
+- **The timeline.** `ui/Timeline.tsx` is the one hour grid, drawn by Week's cards and Day's Timeline view (`ui/DayTimeline.tsx`). A timebox changes with `timebox.add`, `update` and `remove`, at once with Undo; the arithmetic is pure in `plan/timeline.ts`. Timebox my day places every untimed to-do into free gaps as placeholders, saved only with Accept all (`timebox.add_many`). Only a timebox marked for Outlook leaves FocusTime, through the Outlook write's preview.
+- **Suggestions on empty blocks.** An empty block today or on the next working day offers that client's unfinished to-dos, then my open stories in backlog order, at most four (`plan/boardsuggest.ts`), from the plan store and the DevOps read already loaded: no AI and no DevOps request. Keeping one runs the usual add or move; Clear is a `markers` row of kind `sg_clear`.
+- **Deployments and after-hours time.** A Deployment is a to-do with a window, linked items and ticked deployment items (`picks.todo_kind = 'deployment'`; `plan/deploy.ts`, `plan/deploy-items.ts`, the catalog in `config/deploy-catalog.ts`). `afterHours` in `plan/deploy.ts` adds up the week's time outside working hours ("3h after hours this week"). Done on a Deployment offers to tell the client through Close the loop.
 
-## Cooptimize's standards in the AI (KB-1)
+## Backlog
 
-`server/standards-job.ts` runs the sync (`sources/github/standards.ts`, GET only) into `standards_articles` (`store/standards-store.ts`). `plan/standards.ts` is the pure part: the contract, retrieval, what goes with a request, and what happens to the answer. `actions/standards.ts` gives the draft paths one lookup, with the client's data platform and source systems from its Rules.
+- **One tree, two views.** Grid and Gantt fold the same tree (`plan/gantt-tree.ts`): a level for the whole tree (Epics, Features, Stories, named from the process), per-row chevrons, and a collapsed row's roll-up. The Gantt (`ui/ahead/Gantt.tsx`) draws status as the bar's look (`barTreatment` in `plan/gantt.ts`) and one callout per row.
+- **One row of filters.** `ui/ahead/Toolbar.tsx`: Clients, People, Needs attention, Search, Filter (Epic, Dates, Levels, one level as a list) and More. The filters are in the plan store (`ahead.filters`), the level and chevrons in the browser, all mirrored in the address (`plan/ahead-view.ts`).
+- **Needs attention.** Items I may change that miss stories, a target date, an owner or a size, or are stale, near the top of each backlog, each with its fix and Skip (`plan/fixnext.ts`, `plan/readiness.ts`). Skips last 14 days (`ahead_skips` in `kv`); fixes saved this week are counted (`ahead_fixed`).
+- **The change set.** Edits (start, target, size, assignee, state) wait in `ahead_changes` and `ahead_state_changes` until Save, which writes one DevOps `fields` patch per item through the write framework. Review shows conflicts only for fields changed in DevOps since they were staged. The bulk bar over ticked rows stages the same changes (`ahead.stage_bulk`). Backlog never reorders DevOps.
 
-**Retrieval** (`retrieveStandards`). Match keys are exact, in snake_case: the text's words and runs of up to three words against each article's `layer`, `artifact` and `technology`, plus title words. A domain joins only through a specific key, so ordinary words don't bring one in. In a domain that's in play, an article matches by artifact or a title word, then layer, then technology; the domain's layer-agnostic articles are its general ones. The client's platform adds that platform's articles. `domain: source` articles ride on any SQL or Power BI work when the client's Source systems name them (`d365` serves both; None excludes them). The title index of every active article always goes. Matched articles go whole up to 6,000 tokens, narrowest scope first; the rest are listed as left out.
+## Status
 
-**Drafts.** `stories.draft`, `capture.prepare` and `conversations.draft_item` get `standards` in their input and the rules in their instructions. In code afterwards (`shapeItem`): "Follows <title>: ..." acceptance lines get the article's link at the synced commit, citations of anything not sent are dropped, and hand-written Bronze or Silver SQL is reworded as configure or regenerate. The draft keeps `standards` (`StandardsUsed`: commit, titles and links, left out, overrides, notes), shown by `ui/StandardsNote.tsx`.
-
-**Ask.** The intent round's `standards` topic goes to `standardsAnswer` in `assistant/service.ts`: the matching articles only, no client, one `assistant.standards` request. The answer is shown only if its quote is really in the article it names; otherwise "Not in the standards".
-
-## A normal request
-
-1. The browser calls `POST /api/action` with `{ action, input }`, its session cookie and the `X-CSRF` header.
-2. `server/guard.ts` checks the Host and Origin against the public URL and that the call comes from FocusTime's own page (fetch metadata). Anything else gets 403.
-3. `server/app.ts` finds the session (`store/accounts.ts`: 12 hours idle, 7 days at most) and checks the CSRF token for any state change.
-4. `actions/dispatch.ts` looks the action up in the registry, validates its input and builds the person's context: their settings, their scoped plan store, their sources.
-5. Every plan store statement goes through `store/scope.ts`, which adds the session's `user_id`; a user id never comes from the browser.
-6. The answer is JSON. Source failures come back as a status with a plain message and a fix, never as another source's data.
-
-## An external write
-
-Every write to Outlook, DevOps, Teams presence or Azure is a named action through the write framework. Outlook and DevOps follow this shape:
-
-```mermaid
-sequenceDiagram
-  participant P as Person
-  participant A as FocusTime
-  participant X as Outlook or DevOps
-  P->>A: preview (named write)
-  A->>X: read the target now
-  A-->>P: before and after, who sees it
-  P->>A: confirm (the preview id)
-  A->>X: write (DevOps: test /rev first)
-  A->>X: read back
-  A-->>P: done, with Undo
-  Note over A: every attempt in the audit log
-```
-
-- **Preview.** The server reads the target and holds a preview (every field before and after, the account, who will see it) for 5 minutes under an id (`PREVIEW_MS` in `actions/timebox-actions.ts`, `actions/devops-write-actions.ts` and `actions/vm-actions.ts`).
-- **Confirm** sends only the preview id. A preview that expired or whose target changed is refused.
-- **Write.** DevOps patches start with a `test` on `/rev`, so a change someone made since the preview fails instead of being overwritten. Outlook updates re-read the event and refuse it unless FocusTime's marker is on it.
-- **Read back.** The target is read again and compared with what was meant before the write counts as done.
-- **Audit log.** Every attempt with when, where, before and after, and its result (`write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`), shown in Settings › Activity with Undo and Retry where they apply.
-- **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
-
-Exceptions are listed in [Security](security.md#external-writes-and-the-audit-log): Teams presence during focus has no preview, the VM start has no undo, and plan store changes from the bot's buttons run at once with Undo.
+- **My features and a client's report.** `status.load` (my planned or touched features per client) and `status.report` (one client's whole Monday report), both in `actions/status-actions.ts` over `plan/status-report.ts`.
+- **The window.** The report goes out Mondays at 7:00 AM New York time. Its window starts at the report's last send for that client (Dataverse `accounts.coop_statuslastsenton`, read with the app's access); My features falls back to Monday 7:00 AM when that is missing or older than 35 days.
+- **The report.** Every feature with a comment in the window, in backlog order, comments oldest first; comments are read live from DevOps (at most 60 features a client) and never stored. No update yet lists the features active this week without a comment. Upcoming PTO and Holidays covers the next 14 days from the Time Off Tracker and the Working Days Calendar (dates only).
+- **Needs your update.** Features I worked on since the window opened (a story of mine changed, my state change or comment, a story I created through FocusTime, my to-do or timebox) without a comment of mine. `status.suggest` drafts a line with one AI request per client, held in server memory 6 hours, or the template "Worked on: …" with AI off. Lines are kept in the browser until Push all.
+- **The dot.** The Status tab shows a dot while Needs your update isn't empty: amber, then red on the last scheduled working day before the send (`plan/status-dot.ts`). It reads again every 30 minutes while shown and on coming back into view after 10 minutes.
 
 ## The Inbox
 
-Three lists (IB-4, `ui/inbox/InboxPage.tsx`): **From chats**, **Promises**, **Captures**, one switch with a count each, client chips, rows grouped by client that open in place. The list I used last is a settings row (`[ui] inbox_view`: `needs_you` stands for From chats, then `promises` or `captures`, so an older build reads it); the IB-1 and IB-2 addresses map to their nearest list (`ui/nav.ts`).
+Three lists (`ui/inbox/InboxPage.tsx`), each with a count, client chips, rows grouped by client that open in place. The list used last is a settings row (`[ui] inbox_view`).
 
-- **From chats** is `conversations.suggestions` (`suggestionsList` in `actions/conversation-actions.ts`): the conversations in the chats I may see (member now, client followed; D521) that pass `isSuggestion` in `plan/slim-inbox.ts`: the sorting step's `item_needed` is set, no linked or likely item, not wound down, closed or merged, the last work message at least 4 working hours old in my own hours and at most 7 days, and not dismissed by me. `item_needed` comes from the same `conversations.update` request the pipeline already makes (one more schema field, checked by `checkItemNeeded`); there is no other AI request. Showing a row writes `inbox_marks.suggested_at` once; Dismiss and This isn't work, Create and Link write `outcome`. The foot reads the chats' last poll and, once per client, the unsorted reasons (`unsortedLine`).
-- **Promises** is `inbox.list`'s promise rows, late first. Reading them (`my_promises.list`, `inbox.list`, Day's and Week's reads) first runs `settlePromises`: for each open chat promise of mine, `clearsAs` decides done (its linked item finished, from the items' live state) or expired (never touched, 7 days after its due day or after it was found), and the commitment's state and an `inbox_marks.cleared` row are written. No job runs it and no AI is asked. `clearedPromises` lists the last 14 days for Cleared on their own; `my_promises.put_back` reopens one and sets `put_back_at`, which keeps it from clearing by date again.
+- **From chats** is `conversations.suggestions`: conversations in chats I may see (member now, client followed) that the sorting step judged to need a DevOps item, with no linked or likely item, quiet at least 4 working hours in my own hours and at most 7 days, and not dismissed by me (`isSuggestion` in `plan/slim-inbox.ts`). The judgment comes from the same `conversations.update` request that sorts the messages; there is no other AI request. Showing a row writes `inbox_marks.suggested_at` once; Dismiss, Create and Link write its outcome.
+- **Promises** is `inbox.list`'s promise rows, late first. Reading them first settles my open chat promises (`settlePromises`): one clears as done when its linked item is finished, or as expired when I never touched it, 7 days after its due day or after it was found. No job runs it and no AI is asked. Cleared ones show 14 days under Cleared on their own; Put back reopens one for good.
 - **Captures** is `capture.load`: captures with no kind (To sort) and drafts not in DevOps, by client.
-- **The count** (the tab, the topbar badge, `inbox.today`'s `needsYou`) is suggestions plus late or due-today promises (`needsYou` in `plan/inbox-items.ts` and `suggestionCount`), so it agrees with the lists. `inbox.today` also carries the rows for Day's urgent strip (`todayLines`: late or soon promises, sends waiting; no conversations) and the From chats chip.
-- **Out of view, kept.** IB-1's views, ownership, snooze, merge, the held list, Unsorted and Chatter are no longer drawn; their actions and rows stay. Conversation upkeep (`actions/conversation-upkeep.ts`) returns zeros, so no escalation, waiting reminder or follow-through draft is made.
-- **Timestamps.** `ui/stamp.ts` is the one formatter ("Today 4:07 PM", "Yesterday 6:58 PM", "Fri, Nov 6, 4:07 PM"), always in the person's zone; `ui/Stamp.tsx` adds the full time on hover.
+- **The count** (the tab and `inbox.today`) is suggestions plus late or due-today promises, so it agrees with the lists. `inbox.today` also carries Day's urgent strip and the From chats chip.
+- **Kept, not shown.** Conversation ownership, snooze, merges, held messages, Unsorted and Chatter stay in the database with their actions; no screen draws them.
 
-## The assistant
+## The story card, Edit and Wrap it up
 
-One service (`assistant/service.ts`) answers the in-app panel and the Teams bot; it reaches only the actions on its allowlist (`assistant/allowlist.ts`), through the person's own dispatch. A message goes:
+A work item's title anywhere opens FocusTime's story card, never DevOps.
 
-1. **The server reads my words first** (`assistant/resolve.ts`): to-dos, items and features of my clients by `#id`, whole title, "the story for …" or (AS-3) part of a feature's title ("the Data Staleness items", "the feature name they're under is data staleness"). Matches in two clients, or two items that fit equally, are a question with choices (AS-2); nothing of any client goes to the AI before I choose.
-2. **The intent round** (`assistant.intent`) sees only my words, the screen and, for a follow-up, my earlier request with client names and ids hidden. It names the tools a change needs, or (AS-3) says it is a question: a topic (`plan_check`, `capabilities`, `agenda`, `promises`, `waiting`, `readiness`, `deployments`, `status_updates`, `done`, `calls`, `items`, `general`), a period, and whether it follows up the last request.
-3. **A change** goes to the answer round (`assistant.answer`) with one client's matches as quoted data; each write becomes a proposal with the button's own preview, run only on Confirm (AS-1, AS-2).
-4. **A question** (AS-3) is answered from my own data. `assistant/context.ts` reads the period (one `week.load` per week it touches, and only what the topic needs of `ahead.load`, `status.load`, `inbox.list` and `meeting.mine`), keeps only my clients (`isMine`), and bounds it: at most 14 days, 40 to-dos, 12 promises, 10 waiting, 12 gaps, 12 features without an update, 6 calls and 10 after-hours parts (`CONTEXT_LIMITS`). `assistant/answer.ts` composes the answer on the server, grouped by client: each line names a real block, to-do, `#id` or promise with its link, and what couldn't be read is said ("Not known"). Up to 3 suggested steps are FocusTime plan proposals (`SUGGEST_TOOLS`: `move_plan`, `confirm_week`); a tap builds the proposal with its preview and still needs Confirm. Only a `general` question about one client sends that client's context to the AI (`assistant.question`), as quoted JSON of at most 16,000 characters; a general question across clients asks which client first.
-5. **Memory.** The answer's turn keeps what a follow-up needs (`assistant_turns.pending_json`: my words, the client, the topic and period, the items, to-dos and promises it referred to) for 2 hours (`CONVERSATION_MINUTES`), with its suggestions; a question's choices still wait 10 minutes (AS-2). It is my history: in Export, removed by Clear, pruned at 30 days, never shown to admins.
-
-With AI off, not set up or over a cap, any message gets one line saying so and the command menu; there is no canned list of what the assistant can do. "What can you help me with?" is a question like any other (`capabilities`): what it does, with up to 6 example questions built from my own week, each a tap. "help" and "open FocusTime" always answer without AI, and "what's next" and "today" do while AI is unavailable, in both channels (`assistant/quick.ts`). `scripts/assistant-eval.ts --url <host>` asks the golden set in a demo session and prints the answers (not in CI).
-
-### One Assistant, two renderers
-
-There is one Assistant. The in-app panel and the Teams bot are two renderers of the same result, and the rule is that nothing else differs:
-
-- **One path.** A Teams 1:1 message reaches `assistant.handle` like the panel's, as the same person, under the same allowlist, client boundary and AI settings. Only two things happen before it, and both only make sense in Teams: `capture:` (TB-2: saved at once, no AI) and the reply to the Close out prompt.
-- **A neutral result.** The Assistant returns the words, cards, links, proposals and choices, with links as app addresses. It knows nothing about a channel's layout.
-- **A renderer per channel.** `ui/Assistant.tsx` for the panel; `server/teams/render.ts` and `server/teams/cards.ts` (Adaptive Cards) for Teams. A renderer draws and adds no logic. Its switch over card kinds is exhaustive, so a new kind doesn't compile until it is drawn.
-- **Same actions.** Confirm, Undo and a refreshed preview call the same service methods from both. Follow-ups share one 2-hour memory across channels.
-- **Where a card can't hold it** (over 24 KB or 9 cards, or a preview over 20 rows or 12,000 characters), Teams shows the first part and "Open in FocusTime", a link to the same answer (`#/ask/<turn>`). A DevOps change that can't be shown whole has no Confirm in Teams.
-
-**The parity test is the rule** (`assistant/parity.test.ts`, in CI). Every Ask topic, every assistant tool, every golden question in `assistant/answers.test.ts` and AS-2's flows run through the panel's entry and through the real bot core on fakes, and must return the same result, draw all of it as cards, and make the same writes. A new capability without a case there fails the build; add the case, and the drawing if it is a new kind of card.
-
-## The story card and Wrap it up (FN-1)
-
-A work item's title anywhere opens FocusTime's story card, never DevOps. Finishing work on a story goes through one sheet, Wrap it up, from every place that ticks a to-do.
-
-- **One link.** `ui/WorkLink.tsx` turns a DevOps edit URL into the card's address, `#/item/<client>/<id>`, an overlay over the place underneath. Item menus copy the DevOps link instead of opening it.
-- **One read.** `item.card` checks the client is one the person can see before reading anything, reads the item, its parent and epic, its children and its latest 50 comments with the company read PAT, sanitizes the HTML on the server and keeps the result a minute per person. FocusTime's own context (my to-dos, timeboxes and promises on the item) comes from the plan store.
-- **One wrap-up flow.** A tick lands at once (TX-1c, with Undo). On a client with my write PAT, for an item I can change that isn't done yet, Wrap it up opens over it: Finished (the type's done state by category, the one I use most chosen) or Made progress (state kept, New moves to In Progress, the time left), a comment with Suggest, and the optional line on the feature for Monday's status. `wrapup.preview` asks the write framework for one preview of every write; `wrapup.confirm` writes them in order, each with its own result and Retry. The card's own changes use the same writes: `comment`, `state`, and Ahead's change set as one `fields` write.
-- **The same in Teams.** The bot's Done and Partly propose `wrap_up`, which runs `wrapup.apply` on Confirm: the same writes, previewed again.
+- **One link.** `ui/WorkLink.tsx` turns a DevOps edit URL into the card's address. Item menus copy the DevOps link instead of opening it.
+- **One read.** `item.card` checks the client is one the person can see, then reads the item, its parent and epic, its children and its latest 50 comments with the company read PAT, sanitizes the HTML on the server and keeps the result a minute per person. My to-dos, timeboxes and promises on the item come from the plan store.
+- **Edit.** Title, description and acceptance criteria with light formatting, and Move to another parent, each one DevOps patch behind a revision test (`item_edit`, `reparent`), written in the field's own format (`devops.edit_offer`, `actions/devops-write-actions.ts`; [Integrations](integrations.md#azure-devops)).
+- **Wrap it up.** A tick lands at once with Undo. On a client with my write PAT, for an item I can change that isn't done, Wrap it up offers Finished or Made progress, a comment and the feature's status line; `wrapup.preview` asks the write framework for one preview of every write and `wrapup.confirm` writes them in order. In Teams, Done and Partly propose the same writes.
 
 ```mermaid
 sequenceDiagram
@@ -209,11 +175,112 @@ sequenceDiagram
   A-->>P: a result per write, Retry, Undo
 ```
 
-## The rhythm's check-ins (TX-1)
+## Creating work
 
-A check-in about timeboxes has no schedule, badge or reminder of its own. It rides on the two moments the day already has: the top of Day's Midday check-in and of Close out, and in Teams the rhythm's check-in and close out cards when that person has them on.
+- **Capture** (`ui/Capture.tsx`, `capture.add`): one line saved at once to the plan store with Undo; its kind chips make it a promise, a draft story, a draft feature, or leave it To sort. A draft gets an AI-prepared DevOps version in the background when AI is on.
+- **The New form** (`ui/NewItem.tsx`, `actions/new-item-actions.ts`): any level the client's process has, with client, level, title, parent, assignee, target date, and three optional questions (Where is it?, What should change?, How will we know it's right?, `ui/ThreeQuestions.tsx`). Enter opens the write preview; Save as draft keeps it local. Before the preview the type's fields are read, so a required field without a default is refused there.
+- **Break down** (`ui/BreakDownPanel.tsx`, `stories.*`): AI proposes child items from the parent and the same client's past items; nothing is written until Create all after one batch preview.
 
-- `plan/progress.ts` (pure): which timeboxes qualify (`sessionRows`), what each answer does (`outcomeOf`, `planOutcome`) and the words.
-- `actions/progress-actions.ts`: `checkin.sessions`, `checkin.answer`, `checkin.all_to_plan`, `checkin.undo` and `checkin.offer_close`. Only the plan store changes. All went to plan reads the rows afresh and settles them in one transaction (`settleAll`).
-- `ui/TimeboxCheckin.tsx` and `server/teams/rhythm.ts` (`sessionCards`, `sessionTap`) call those same actions.
-- `devops.progress_offer` (read only) builds the end of day offer. Writes go through the write framework as `remaining_work` or `comment`, each previewed and confirmed in Close out. A Teams card only points there.
+## Code
+
+A read-only view of any client's repos for every Cooptimizer (`ui/code/`, `actions/code-actions.ts`, `actions/code-git.ts`, `sources/devops/git.ts`). Each read checks who is asking and the client's Rule, writes the view log row for a file before returning its text, and keeps folder lists and file text in server memory at most 5 minutes. Files are colored by Prism in its manual mode, each piece drawn as text, so nothing in a file runs. No AI, no background work. The rules are on [Security](security.md#client-code).
+
+## Check-ins about timeboxes
+
+A check-in about timeboxes has no schedule, badge or reminder of its own. It rides on the Midday check-in and Close out, and in Teams on the rhythm's check-in and close out cards when that person has them on.
+
+- `plan/progress.ts` (pure): which timeboxes qualify, what each answer does, and the words.
+- `actions/progress-actions.ts`: `checkin.sessions`, `checkin.answer`, `checkin.all_to_plan`, `checkin.undo` and `checkin.offer_close`. Only the plan store changes.
+- `devops.progress_offer` (read only) builds the end of day offer. Its writes (`remaining_work` or a comment) go through the write framework, previewed and confirmed in Close out.
+
+## Cooptimize's standards in the AI
+
+`server/standards-job.ts` syncs Cooptimize's standards repo (`sources/github/standards.ts`, GET only) into `standards_articles` (`store/standards-store.ts`). `plan/standards.ts` is the pure part: retrieval, what goes with a request, and what happens to the answer.
+
+- **Retrieval** (`retrieveStandards`): exact keys from the text's words against each article's layer, artifact and technology, plus title words and the client's data platform and source systems. Matched articles go whole up to 6,000 tokens; the title index always goes.
+- **Drafts.** `stories.draft`, `capture.prepare` and `conversations.draft_item` get the standards in their input. Afterwards, in code (`shapeItem`), cited acceptance lines get the article's link, and citations of anything not sent are dropped.
+- **Ask.** A standards question gets only the matching articles and no client; the answer shows only when its quote is really in the article, otherwise "Not in the standards".
+
+## The assistant
+
+One service (`assistant/service.ts`) answers the in-app panel and the Teams bot; it reaches only the actions on its allowlist (`assistant/allowlist.ts`), through the person's own dispatch.
+
+1. **The server reads my words first** (`assistant/resolve.ts`): to-dos, items and features of my clients by `#id`, title or part of a title. Matches in two clients, or two items that fit equally, become a question with choices; nothing of any client goes to the AI before I choose.
+2. **The intent round** (`assistant.intent`) sees only my words, the screen and, for a follow-up, my earlier request with client names and ids hidden. It names the tools a change needs, or says it is a question with a topic and a period.
+3. **A change** goes to the answer round (`assistant.answer`) with one client's matches as quoted data; each write becomes a proposal with the button's own preview, run only on Confirm.
+4. **A question** is answered from my own data, read through the same actions as the screens and bounded (`CONTEXT_LIMITS` in `assistant/context.ts`: 14 days, 40 to-dos, 12 promises and so on). `assistant/answer.ts` composes the answer on the server, grouped by client. Only a general question about one client sends that client's context to the AI (`assistant.question`), at most 16,000 characters.
+5. **Memory.** A follow-up's context is kept 2 hours on my own history row (`assistant_turns.pending_json`); my history is in Export, removed by Clear, pruned at 30 days, never shown to admins.
+
+With AI off, not set up or over a cap, a message gets one line saying so and the command menu. "help" and "open FocusTime" always answer without AI, and "what's next" and "today" do while AI is unavailable (`assistant/quick.ts`).
+
+### One Assistant, two renderers
+
+- **One path.** A Teams 1:1 message reaches `assistant.handle` like the panel's, as the same person, under the same allowlist, client boundary and AI settings. Only `capture:` and the reply to the Close out prompt are handled before it, in Teams.
+- **A neutral result.** The Assistant returns words, cards, links, proposals and choices, with links as app addresses.
+- **A renderer per channel.** `ui/Assistant.tsx` for the panel; `server/teams/render.ts` and `server/teams/cards.ts` (Adaptive Cards) for Teams. A renderer draws and adds no logic; its switch over card kinds is exhaustive.
+- **Where a card can't hold it** (over 24 KB or 9 cards, or a preview over 20 rows or 12,000 characters), Teams shows the first part and Open in FocusTime (`#/ask/<turn>`). A DevOps change that can't be shown whole has no Confirm in Teams.
+- **The parity test is the rule** (`assistant/parity.test.ts`, in CI): every topic, tool and golden question runs through the panel's entry and the real bot core, and must return the same result, draw all of it as cards and make the same writes.
+
+## Where each source is read and written
+
+One adapter per outside system in `sources/`; [Integrations](integrations.md) says what each reads and writes and with which permission.
+
+| System | Read | Written |
+|---|---|---|
+| Outlook (Graph) | `sources/graph/source.ts` (the person's calendar view, through the shared calendar shell `sources/calendar/source.ts`), reached from `week.load` in `actions/dispatch.ts` | `sources/graph/write.ts` (events), `sources/graph/send.ts` (Close the loop) |
+| Teams and people (Graph) | `sources/graph/chats.ts`, `meetings.ts`, `schedule.ts`, `people.ts`, `presence.ts`, `photos.ts`, `groups.ts` | Teams status from `actions/presence-actions.ts` |
+| Google Calendar | `sources/google/source.ts` | Never |
+| Calendars added by link | `sources/ics/source.ts` (the link rules in `sources/ics/link.ts`, the guarded fetch in `server/ics-fetch.ts`) | Never |
+| Dataverse | `sources/dataverse/source.ts`, `directory.ts`, `holidays.ts` | Never |
+| Azure DevOps | `sources/devops/source.ts`, `git.ts` (Code), `changes.ts` | `sources/devops/write.ts` |
+| Azure (the VM) | `sources/azure/client.ts` | The same client: start and deallocate only |
+| GitHub (standards) | `sources/github/standards.ts` | Never |
+
+Some reads, such as `week.load`, are handled in `actions/dispatch.ts` itself rather than in an `*-actions.ts` file.
+
+## A normal request
+
+1. The browser calls `POST /api/action` with `{ action, input }`, its session cookie and the `X-CSRF` header.
+2. `server/guard.ts` checks the Host and Origin against the public URL and that the call comes from FocusTime's own page (fetch metadata). Anything else gets 403.
+3. `server/app.ts` finds the session (`store/accounts.ts`: 12 hours idle, 7 days at most) and checks the CSRF token for any state change.
+4. `actions/dispatch.ts` looks the action up in the registry, validates its input and builds the person's context: their settings, their scoped plan store, their sources.
+5. Every plan store statement goes through `store/scope.ts`, which adds the session's `user_id`; a user id never comes from the browser.
+6. The answer is JSON. Source failures come back as a status with a plain message and a fix, never as another source's data.
+
+## An external write
+
+Every write to Outlook, DevOps, Teams, email or Azure is a named action through the write framework. Outlook and DevOps follow this shape:
+
+```mermaid
+sequenceDiagram
+  participant P as Person
+  participant A as FocusTime
+  participant X as Outlook or DevOps
+  P->>A: preview (named write)
+  A->>X: read the target now
+  A-->>P: before and after, who sees it
+  P->>A: confirm (the preview id)
+  A->>X: write (DevOps: test /rev first)
+  A->>X: read back
+  A-->>P: done, with Undo
+  Note over A: every attempt in the audit log
+```
+
+- **Preview.** The server reads the target and holds a preview (every field before and after, the account, who will see it) under an id: 5 minutes for Outlook, DevOps, the VM, Close the loop and invites (`PREVIEW_MS` in `actions/timebox-actions.ts`, `actions/devops-write-actions.ts`, `actions/vm-actions.ts`; `LOOP_PREVIEW_MS`, `INVITE_PREVIEW_MS`), 10 minutes for Send feedback (`actions/feedback-actions.ts`).
+- **Confirm** sends only the preview id. A preview that expired or whose target changed is refused.
+- **Write.** DevOps patches start with a `test` on `/rev`, so a change someone made since the preview fails instead of being overwritten. Outlook updates re-read the event and refuse it unless FocusTime's marker is on it.
+- **Read back.** The target is read again and compared with what was meant before the write counts as done.
+- **Audit log.** Every attempt with when, where, before and after, and its result (`write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`, `loop_sends`), shown in Settings › Activity with Undo and Retry where they apply.
+- **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
+
+One write end to end, a DevOps state change: the button in `ui/DevOpsWrite.tsx` calls `devops.preview`, which `actions/dispatch.ts` hands to `actions/devops-write-actions.ts`; the patch (with its `test /rev`) is built by `stateOps` in `plan/devopswrite.ts`; `devops.confirm` sends it as a PATCH from `sources/devops/write.ts` with the person's write PAT (`sources/devops/pat.ts`). An Outlook write goes the same way through `actions/timebox-actions.ts` and `sources/graph/write.ts`.
+
+The exceptions are listed in [Security](security.md#external-writes-and-the-audit-log): Teams presence during focus has no preview, the VM has no undo and its automatic start no preview, and plan store changes from the bot's buttons run at once with Undo.
+
+## Look and style
+
+- **Icons.** One family (Lucide, through `lucide-react`), named by what the thing is in `ui/icons.tsx`: the only place the app's controls and marks get an icon. 16 px at the Default text size and scaled with it, a 1.5 px stroke, the color of the text beside it. The DevOps type icons (`ui/TypeIcon.tsx`), the brand marks (`ui/brand/`) and photos are not icons.
+- **Type and spacing.** Four sizes off one base (`--fs-1` to `--fs-4`) and three weights; no literal font sizes. Text size (Default, Large, Larger) scales them and the spacing that pairs with text.
+- **The rules' home.** [docs/design/style-guide.md](../design/style-guide.md): colors, type, components, contrast and themes, and in section 11 the controls, icons and rows (pill controls, tabs as an icon and a word, one-line rows). `ui/StyleGuide.tsx` shows the parts.
+
+History: how each part got here is in [docs/decisions.md](../decisions.md).
