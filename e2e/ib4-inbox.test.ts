@@ -55,6 +55,7 @@ describe.skipIf(!CHROMIUM)("the slim Inbox (IB-4)", () => {
     // Already covered (L) searches the client's items.
     await row.getByRole("button", { name: /^Already covered/ }).click();
     await row.locator(".ib-form").waitFor();
+    await row.locator(".ib-form").getByRole("button", { name: "Cancel" }).click();
     // Dismiss (X): gone for me, the numbers drop together, and Undo brings it back.
     await row.locator(".ib4-row-head").focus();
     await page.keyboard.press("x");
@@ -126,9 +127,18 @@ describe.skipIf(!CHROMIUM)("the slim Inbox (IB-4)", () => {
     await main.locator(".ib-form input").first().focus();
     await page.keyboard.type("x d j");
     await expect(main.locator(".ib4-row-title").allTextContents()).resolves.toEqual([SPANISH, FEE]);
-    await page.keyboard.press("Escape");
+    // Review 2: with a form open and focus off the text box, X, C and J do nothing (nothing typed is lost); Escape closes it.
+    await main.locator(".ib-form input").first().fill("delivery");
+    await main.locator(".ib4-row.open .ib-act").first().focus();
+    for (const k of ["x", "c", "j"]) await page.keyboard.press(k);
+    await expect(main.locator(".ib-form input").first().inputValue()).resolves.toBe("delivery");
+    await expect(main.locator(".ib4-row-title").allTextContents()).resolves.toEqual([SPANISH, FEE]);
+    await main.locator(".ib-form input").first().press("Escape");
+    await expect.poll(() => main.locator(".ib-form").count()).toBe(0);
     // Day: the chip beside the strip.
+    await page.locator("body").click({ position: { x: 5, y: 300 } });
     await page.keyboard.press("1");
+    await page.locator("main.today-view").waitFor();
     const chip = page.locator("button.att-chip.from-chats");
     await expect(chip.textContent()).resolves.toMatch(/From chats · 2/);
     await chip.click();

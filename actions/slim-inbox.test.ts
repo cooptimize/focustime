@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import type { MyPromisesData, SuggestionsData } from "../plan/conversation-views.ts";
 import { aCommitmentAnswer, aConversationUpdate } from "../test/builders/index.ts";
 import { BLAKE, CHAT, EVAN, LENA, SAM, world } from "../test/conversations.ts";
-import { OUTSIDER, people, type W } from "../test/conversation-people.ts";
+import { cfg, OUTSIDER, people, type W } from "../test/conversation-people.ts";
+import { itemKey } from "../plan/inbox-items.ts";
+import { suggestionCount } from "./conversation-actions.ts";
 import type { ProviderCall } from "../ai/types.ts";
 
 /** Blake asks for a change; the sorting step says it needs an item (the judgment rides in the same request). */
@@ -79,6 +81,19 @@ describe("From chats", () => {
     expect(titles(await p.as(LENA).run<SuggestionsData>("conversations.suggestions"))).toEqual([]);
   });
 
+  it("review: a snooze from before IB-4 keeps it out of the list and the count alike until it ends", async () => {
+    const w = world({ respond: asksForWork });
+    const c = await ask(w);
+    w.setNow("2026-11-05T21:00:00Z");
+    const evan = (await people(w)).as(EVAN);
+    await evan.ctx.plan!.markInbox([itemKey("conversation", c.id)], { snoozedUntil: "2026-11-06T15:00:00Z" });
+    expect(titles(await evan.run<SuggestionsData>("conversations.suggestions"))).toEqual([]);
+    expect(await suggestionCount(evan.ctx, cfg)).toBe(0);
+    w.setNow("2026-11-06T16:00:00Z");
+    expect(titles(await evan.run<SuggestionsData>("conversations.suggestions"))).toHaveLength(1);
+    expect(await suggestionCount(evan.ctx, cfg)).toBe(1);
+  });
+
   it("with AI off nothing is judged, and nothing is suggested", async () => {
     const w = world({ respond: asksForWork, use: false });
     await w.run(CHAT, [await w.say(CHAT, BLAKE, "2026-11-04T19:02:00Z", "Could the order export show the delivery fee as its own column?")]);
@@ -109,5 +124,18 @@ describe("promises that clear themselves", () => {
     expect(back.promises.find((x) => x.id === k.id)).toMatchObject({ state: "open" });
     // Someone else can't put back my promise.
     expect((await (await people(w)).as(EVAN).fail("my_promises.put_back", { id: k.id })).ok).toBe(false);
+  });
+
+  it("review: Done then Undo is a touch, so the reopened promise never expires", async () => {
+    const w = world({ respond: asksForWork });
+    await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T20:30:00Z", "I'll send Blake the sample export")]);
+    const sam = (await people(w)).as(SAM);
+    const k = (await sam.run<MyPromisesData>("my_promises.list")).promises[0]!;
+    await sam.run("my_promises.done", { id: k.id });
+    await sam.run("my_promises.reopen", { id: k.id });
+    w.setNow("2026-11-20T21:00:00Z");
+    const later = await sam.run<MyPromisesData>("my_promises.list");
+    expect(later.promises.find((x) => x.id === k.id)).toMatchObject({ state: "open" });
+    expect(later.cleared ?? []).toEqual([]);
   });
 });

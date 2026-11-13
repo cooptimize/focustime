@@ -547,6 +547,8 @@ async function after(ctx: LoopContext, plan: PlanStore, p: LoopPromise, h: Held,
 }
 
 async function runSend(ctx: LoopContext, plan: PlanStore, p: LoopPromise, h: Held): Promise<LoopResultView> {
+  // IB-4: sending counts as touching a promise found in a chat, so it never expires while its send is unconfirmed.
+  if (p.kind === "chatPromise") await plan.markInbox([p.key], { touched: true });
   const base = { promiseKey: p.key, clientKey: p.clientKey, channel: h.channel, destination: h.destination, recipient: h.recipient, insideCount: h.audience?.inside ?? null, outsideCount: h.audience?.outside ?? null, body: h.text };
   const fail = async (s: LoopSend, e: unknown): Promise<LoopResultView> => {
     const msg = plainError(e);

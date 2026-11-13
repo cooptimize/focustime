@@ -226,6 +226,16 @@ describe("Teams", () => {
   });
 });
 
+describe("IB-4: a send is a touch", () => {
+  it("sending on a promise found in a chat marks it touched, so an unconfirmed send never lets it expire", async () => {
+    const s = await setup({ promise: { key: "c77", kind: "chatPromise", id: 77 }, sender: { readBack: false } });
+    const p = await s.run<LoopPreviewView>("loop.preview", { key: s.key, channel: "teams", text: "Hi Dana" });
+    const r = await s.run<LoopResultView>("loop.send", { previewId: p.previewId });
+    expect(r.send.state).toBe("unconfirmed");
+    expect((await s.plan.inboxMarks()).get("c77")?.touchedAt).toBeTruthy();
+  });
+});
+
 describe("Email", () => {
   it("a draft (the default) leaves the loop open until I sent it", async () => {
     const s = await setup();

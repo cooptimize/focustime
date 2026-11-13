@@ -23,7 +23,7 @@ import { chatAudience, highlightMatches, mentionedClients, nameList, HELD_LINE, 
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_SCHEMA_STANDARDS, DRAFT_TASK, draftFrom, draftInput, emptyDraft, withStandards, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { STANDARDS_DRAFT } from "../plan/standards.ts";
 import type { StandardsLookup } from "./standards.ts";
-import { isClosed } from "../plan/process.ts";
+import { isClosed, isCompleted } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard, type ClearedPromise, type SuggestionRow, type SuggestionsData, type SuggestionsFoot } from "../plan/conversation-views.ts";
 import { HELD_REASONS, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import { followersOf, type ClientChat, type FocusUser } from "../plan/requests.ts";
@@ -569,7 +569,7 @@ export async function settlePromises(ctx: ConversationContext, v: Seen, cfg: App
       const key = itemKey("chatPromise", k.id);
       const m = marks.get(key);
       const hit = k.itemId ? live.get(`${k.clientKey}:${k.itemId}`) : undefined;
-      const how = clearsAs({ fromChat: true, dueDate: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, zone) : null), createdAt: k.createdAt, item: hit ? { closed: isClosed(hit.stateCategory), changedAt: hit.changedAt } : null, touched: touchedOf(k, m), putBackAt: m?.putBackAt ?? null }, now, zone);
+      const how = clearsAs({ fromChat: true, dueDate: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, zone) : null), createdAt: k.createdAt, item: hit ? { closed: isCompleted(hit.stateCategory), changedAt: hit.changedAt } : null, touched: touchedOf(k, m), putBackAt: m?.putBackAt ?? null }, now, zone);
       if (!how) continue;
       await v.convs.updateCommitment(k.id, { state: how === "item" ? "done" : "not_needed" });
       await ctx.plan.markInbox([key], { cleared: { how, at: now } });
@@ -579,7 +579,10 @@ export async function settlePromises(ctx: ConversationContext, v: Seen, cfg: App
     }
     if (byItem || expired) ctx.log({ source: "plan", op: "promises_cleared", count: byItem + expired, kind: `item ${byItem}, expired ${expired}` });
   }
-  if (firstLook) await ctx.plan.setAccountState(FIRST_CLEARED, { count: byItem + expired, at: now, seen: byItem + expired === 0 });
+  // The first look's note: a read that cleared some always writes it; one that cleared none writes only if nothing has
+  // been written since (Day and the Inbox can settle at the same moment), so a count is never overwritten with 0.
+  if (firstLook && byItem + expired > 0) await ctx.plan.setAccountState(FIRST_CLEARED, { count: byItem + expired, at: now, seen: false });
+  else if (firstLook && (await ctx.plan.accountState(FIRST_CLEARED)) === null) await ctx.plan.setAccountState(FIRST_CLEARED, { count: 0, at: now, seen: true });
 }
 
 /** IB-4: my promises that cleared on their own in the last 14 days, newest first, and the first look's count. */
@@ -616,6 +619,8 @@ async function suggestionCandidates(ctx: ConversationContext, v: Seen, cfg: AppC
     if (!c.itemNeeded) continue;
     const mark = marks.get(itemKey("conversation", c.id));
     const hidden = views.get(c.id)?.hidden ? now : null;
+    // A snooze from before IB-4 still holds until it ends, here as in the tab's count (viewsOf).
+    if (mark?.snoozedUntil && Date.parse(mark.snoozedUntil) > Date.parse(now)) continue;
     if (isSuggestion(c, { now, hours, mark: { outcome: mark?.outcome ?? null, hiddenAt: mark?.hiddenAt ?? hidden } })) out.push({ c, mark });
   }
   return out;
@@ -1284,7 +1289,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     if (!v) return promisesNow();
     /** IB-4: a touch (due, who, my week, an item, Close the loop) keeps a promise found in a chat from expiring. */
     const touch = (id: number) => (ctx.plan ? ctx.plan.markInbox([itemKey("chatPromise", id)], { touched: true }) : Promise.resolve(0));
-    if (["my_promises.today", "my_promises.due", "my_promises.who", "my_promises.link", "my_promises.start_draft", "my_promises.close"].includes(action)) {
+    if (["my_promises.today", "my_promises.due", "my_promises.who", "my_promises.link", "my_promises.start_draft", "my_promises.close", "my_promises.done", "my_promises.not_needed", "my_promises.reopen"].includes(action)) {
       const k = await mine(only(input, [], ["id", "on", "due", "who", "whoRef", "itemId", "how", "note"])?.id);
       if (k) await touch(k.id);
     }

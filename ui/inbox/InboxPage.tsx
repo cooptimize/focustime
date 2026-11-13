@@ -103,7 +103,15 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
 
   // ---- the three lists ----
   const items = useMemo(() => src.list?.items ?? [], [src.list]);
-  const suggestions = useMemo(() => (src.chats?.suggestions ?? []).filter((s) => inClients(s.clientKey)), [src.chats, inClients]);
+  // The open suggestion stays while its form is open, even if a reread would drop it (a new message, a teammate's
+  // link): what I typed there is never taken away under me. It goes when the form closes.
+  const openKey = nav.item && listOfKey(nav.item) === list ? nav.item : null;
+  const keptRef = useRef<SuggestionRow | null>(null);
+  const suggestions = useMemo(() => {
+    const now = (src.chats?.suggestions ?? []).filter((s) => inClients(s.clientKey));
+    const held = keptRef.current;
+    return sForm && held && openKey === `v${held.id}` && !now.some((s) => s.id === held.id) ? [...now, held] : now;
+  }, [src.chats, inClients, sForm, openKey]);
   const promiseRows = useMemo(
     () => items.filter((r) => r.kind === "promise" && !r.done && r.views.length > 0 && inClients(r.clientKey) && (!late || (r.late && (late.client === null || r.clientKey === late.client)))).sort(promiseOrder),
     [items, inClients, late],
@@ -130,8 +138,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   );
 
   // ---- the open row ----
-  const openKey = nav.item && listOfKey(nav.item) === list ? nav.item : null;
-  const openSuggestion = openKey?.startsWith("v") ? (src.chats?.suggestions.find((s) => `v${s.id}` === openKey) ?? null) : null;
+  const openSuggestion = openKey?.startsWith("v") ? (suggestions.find((s) => `v${s.id}` === openKey) ?? null) : null;
+  keptRef.current = openSuggestion;
   const openRow = openKey && !openKey.startsWith("v") ? (items.find((r) => r.key === openKey) ?? null) : null;
   const entry: Entry | null = openRow ? entryOf(openRow, src) : null;
   useEffect(() => {
@@ -276,6 +284,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       const done = () => (e.preventDefault(), e.stopImmediatePropagation());
       if (e.key === "?") return void (setKeysOpen((v) => !v), done());
       if (e.key === "Escape" && (k.form || k.sForm)) return void (setForm(null), setSForm(null));
+      // While a form is open the other keys do nothing, so nothing typed there is lost to a key press (Escape closes it).
+      if (k.form || k.sForm) return;
       if (key === "J" || key === "K") {
         if (!k.order.length) return;
         const i = k.openKey ? k.order.indexOf(k.openKey) : -1;

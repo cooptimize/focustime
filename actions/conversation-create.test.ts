@@ -158,6 +158,19 @@ describe("a promise with an item stays actionable", () => {
     await sam.run("my_promises.link", { id: k.id, itemId: 4101 });
   });
 
+  it("IB-4 review: an item removed in DevOps isn't finished, so its promise stays open", async () => {
+    const w = world({ allowed: [] });
+    const k = await promise(w);
+    let state = DASHBOARD;
+    const sam = (await people(w, { more: { searchItems: async () => [DASHBOARD], linkedItems: async () => [state] } })).as(SAM);
+    await sam.run<MyPromisesData>("my_promises.link", { id: k.id, itemId: 4101 });
+    state = { ...DASHBOARD, stateCategory: "Removed", state: "Removed" };
+    const after = await sam.run<MyPromisesData>("my_promises.list");
+    expect(after.promises.map((x) => x.id)).toEqual([k.id]);
+    expect(after.cleared ?? []).toEqual([]);
+    expect((await w.convs.commitment(k.id))!.state).toBe("open");
+  });
+
   it("the one-time move: Kept by an open item becomes open with it; a closed item's stays kept; once only", async () => {
     const w = world({ allowed: [] });
     await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T20:30:00Z", "I'll sort out the date formats this week")]);

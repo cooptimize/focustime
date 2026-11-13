@@ -859,3 +859,6 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - "Add to my week" on a promise from a chat still puts it on Today, as before.
 - IB-4 touched a few lines of RB-1's files (the action list, the Inbox lists in nav, the keys in the menu, the demo seeds). Merge order: whichever lands second takes both sides.
 - The first look's note ("N older promises from chats were cleared") shows nothing in the demo, whose promises are seeded fresh each session.
+- A promise linked to an item that is Resolved (done, awaiting verification) stays open until the item is Completed. Should Resolved count as finished for this?
+- From review 1, seen but left: on the phone at the largest text size the switch's labels wrap with their counts; at 1440 the Inbox is a narrow centered column (960 px); the demo has two promises titled "Confirm the intake form go-live date" (one found in a chat, one I added), which reads like a duplicate.
+- There is no key to switch between the three lists (Tab and Enter reach them). Add one?
