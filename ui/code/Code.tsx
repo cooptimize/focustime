@@ -33,7 +33,7 @@ const TEXT = {
   pickRepo: "Choose a repo.",
   pickFile: "Choose a file in the tree, or find one by name.",
   noRepos: (c: string) => `${c}'s DevOps project has no repos.`,
-  empty: "This repo is empty: it has no commits yet.",
+  empty: "This repo is empty: nothing has been pushed to it yet.",
   disabled: "This repo is disabled in DevOps, so it can't be read.",
   cut: "This folder has more entries than FocusTime shows. Find a file by name to reach the rest.",
   find: "Find a file",
