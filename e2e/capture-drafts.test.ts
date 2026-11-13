@@ -19,7 +19,7 @@ async function chooseClient(page: Page, name: string) {
   await page.locator(".cap-choose .chip-btn", { hasText: name }).click();
 }
 async function drafts(page: Page) {
-  return (await api<{ drafts: { id: number; title: string; level: string; size: string; parentItemId: number | null; targetDate?: string | null; description?: string | null; acceptance?: string | null }[] }>(page, "capture.load", {})).data.drafts;
+  return (await api<{ drafts: { id: number; title: string; level: string; size: string; parentItemId: number | null; targetDate?: string | null; description?: string | null; acceptance?: string | null; answers?: { where: string; change: string; check: string } }[] }>(page, "capture.load", {})).data.drafts;
 }
 
 /** IB-1: a draft is a row in Captures and drafts; Edit draft in its detail pane opens the draft editor. */
@@ -157,8 +157,9 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const ed = page.locator(".draft-editor");
     await ed.getByLabel("Title").fill("Editor draft, edited");
     await ed.getByLabel("Description").fill("Line one\nLine two");
-    await expect.poll(() => ed.getByLabel(/Acceptance criteria/).count()).toBe(1); // the demo process has the field
-    await ed.getByLabel(/Acceptance criteria/).fill("Given a file, it imports");
+    // TP-1b: "How will we know it's right?" is the acceptance; no separate box for a draft that has none.
+    await expect(ed.getByLabel(/^Acceptance criteria/).count()).resolves.toBe(0);
+    await ed.getByLabel("How will we know it's right?").fill("Given a file, it imports");
     await ed.getByRole("button", { name: "S", exact: true }).click();
     const look = ed.locator(".item-lookup input");
     await expect.poll(() => look.getAttribute("placeholder")).toMatch(/open features/);
@@ -168,7 +169,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await ed.getByRole("button", { name: "Save" }).click();
     await expect.poll(() => ed.count()).toBe(0);
     const d = (await drafts(page)).find((x) => x.title === "Editor draft, edited")!;
-    expect(d).toMatchObject({ description: "Line one\nLine two", acceptance: "Given a file, it imports", size: "S" });
+    expect(d).toMatchObject({ description: "Line one\nLine two", answers: { where: "", change: "", check: "Given a file, it imports" }, size: "S" });
     expect(d.parentItemId).not.toBeNull();
     // Reopened, it shows the saved values.
     await openDraft(page, "Editor draft, edited");
