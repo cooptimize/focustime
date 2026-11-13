@@ -355,7 +355,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
                 key,
                 s.title,
                 <>
-                  <span className="ib4-summary">{s.summary.split("\n").slice(0, 2).join(" ") || s.conversationTitle}</span>
+                  {/* Open, the summary shows in full below; never twice. */}
+                  {!isOpen && <span className="ib4-summary">{s.summary.split("\n").slice(0, 2).join(" ") || s.conversationTitle}</span>}
                   <span className="ib4-who">
                     {s.people.length ? `${s.people.join(", ")} · ` : ""}
                     <Stamp at={s.lastWorkAt} tz={tz} today={today} />

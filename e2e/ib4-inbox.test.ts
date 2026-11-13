@@ -43,6 +43,8 @@ describe.skipIf(!CHROMIUM)("the slim Inbox (IB-4)", () => {
     // Open in place: why, the summary, the three actions and the messages with Open in Teams.
     const row = await openInboxItem(page, FEE);
     await row.getByText(/Why it needs an item/).waitFor();
+    // The summary shows once: in full below, not again in the row's head.
+    expect(await row.locator(".ib4-summary").count()).toBe(0);
     for (const a of ["Create item", "Already covered", "Dismiss"]) await row.getByRole("button", { name: new RegExp(`^${a}`) }).waitFor();
     await row.getByRole("region", { name: "Messages" }).getByText(/delivery fee as its own column/).first().waitFor();
     await row.getByRole("link", { name: "Open in Teams" }).first().waitFor();
