@@ -7,7 +7,7 @@ import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "status_report", "meeting_review", "conversation_given", "conversation_activity"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review", "conversation_given", "conversation_activity"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -35,6 +35,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   look_reply: "A lead's reply about your week",
   assigned: "Someone assigned you an item",
   dates_moved: "Someone moved your dates",
+  item_edited: "Someone edited your item",
   status_report: "Monday's status report",
   meeting_review: "Client calls to review",
   conversation_given: "A conversation handed to you",
@@ -64,13 +65,14 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   look_reply: "When a lead you asked replies about your week.",
   assigned: "When a teammate assigns you a DevOps item from Backlog in FocusTime.",
   dates_moved: "When a teammate moves the dates of a DevOps item you own from Backlog in FocusTime, once per save.",
+  item_edited: "When a teammate changes the title, description or acceptance criteria of a DevOps item you own on its story card in FocusTime, once a day per item.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
   meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
   conversation_given: "When a teammate gives you a conversation or adds you as a helper.",
   conversation_activity: "When someone writes in a conversation you have, or asks again on one you closed.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
-export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
+export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved", "item_edited"]);
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
@@ -303,6 +305,7 @@ export const notices = {
   lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Week.`, buttons: [open("Open Week")], route: `planweek:${weekStart}`, at }),
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
+  itemEdited: (key: string, byName: string, itemId: number, at: string): Notice => ({ kind: "item_edited", key, title: `${byName} edited #${itemId}`, body: `The title, description or acceptance criteria of #${itemId} changed in DevOps.\nClick to see it in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemId}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
   // SR-3: with features I worked on, the click opens Status on Needs your update.

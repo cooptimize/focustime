@@ -7,6 +7,8 @@ import { NEUTRAL_ZONE } from "../week/zone.ts";
 /** Azure DevOps REST, checked Nov 1, 2026: work items GA at 7.1; comments only as 7.1-preview.4. */
 export const WIT_API = "7.1";
 export const COMMENTS_API = "7.1-preview.4";
+/** ED-1: the only version with multilineFieldsFormat (a field stored as Markdown), checked on Learn Nov 12, 2026. */
+export const FORMAT_API = "7.2-preview.3";
 /** At most this many changes in one preview or one confirm. */
 export const BATCH_LIMIT = 10;
 export const PARENT_REL = "System.LinkTypes.Hierarchy-Reverse";
@@ -36,8 +38,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit" | "comment_delete" | "remaining_work";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "undo_comment_delete" | "undo_remaining_work" | "feedback";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields" | "comment_edit" | "comment_delete" | "remaining_work" | "item_edit" | "reparent";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "undo_comment_edit" | "undo_comment_delete" | "undo_remaining_work" | "undo_item_edit" | "undo_reparent" | "feedback";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -57,7 +59,7 @@ export function identityMatches(found: DevOpsIdentity | null, mine: string | nul
 }
 
 /** A work item as a write needs it: rev, the fields read, parent and relation urls. */
-export type ItemSnapshot = { id: number; rev: number; type: string; title: string; state: string; fields: Record<string, unknown>; parentId: number | null; relations: { rel: string; url: string }[] };
+export type ItemSnapshot = { id: number; rev: number; type: string; title: string; state: string; fields: Record<string, unknown>; parentId: number | null; relations: { rel: string; url: string }[]; /** ED-1: multilineFieldsFormat, lowercased ("markdown"); a field not named is HTML. */ formats?: Record<string, string> };
 export type StateInfo = { name: string; category: string };
 
 const test = (rev: number): PatchOp => ({ op: "test", path: "/rev", value: rev });
@@ -245,3 +247,63 @@ export function fieldsOps(rev: number, specs: readonly FieldSpec[], timeZone: st
 }
 /** The fields a fields write touches (reference names), from its ops. */
 export const fieldRefsOf = (ops: unknown): string[] => (Array.isArray(ops) ? (ops as PatchOp[]).filter((p) => p.op !== "test" && p.path.startsWith("/fields/")).map((p) => p.path.slice(8)) : []);
+
+// ---- ED-1: edit an item on its story card ----
+
+/** The labels an item_edit shows and logs. */
+export const EDIT_LABEL = { title: "Title", description: "Description", acceptance: "Acceptance criteria" } as const;
+export type EditPart = { label: string; field: string; value: string; markdown: boolean };
+/**
+ * ED-1 item_edit (and its undo): title, description and acceptance criteria in one patch behind the rev the card read.
+ * Only the parts that change are in it. A Markdown field is written as Markdown, with its format named again so it
+ * stays Markdown (FocusTime never converts a field). An empty description or acceptance is removed when it had one.
+ */
+export function itemEditOps(rev: number, parts: readonly EditPart[], had: (field: string) => boolean): PatchOp[] {
+  const ops: PatchOp[] = [test(rev)];
+  for (const p of parts) {
+    const path = `/fields/${p.field}`;
+    if (!p.value && p.field !== "System.Title") {
+      if (had(p.field)) ops.push({ op: "remove", path });
+      continue;
+    }
+    ops.push({ op: "add", path, value: p.value });
+    if (p.markdown) ops.push({ op: "add", path: `/multilineFieldsFormat/${p.field}`, value: "markdown" });
+  }
+  return ops;
+}
+/** The fields an item_edit's ops touch, by label (from their paths). */
+export function editRefs(ops: unknown): Record<string, { field: string; markdown: boolean }> {
+  const list = Array.isArray(ops) ? (ops as PatchOp[]) : [];
+  const md = new Set(list.filter((p) => p.path.startsWith("/multilineFieldsFormat/")).map((p) => p.path.slice("/multilineFieldsFormat/".length)));
+  const out: Record<string, { field: string; markdown: boolean }> = {};
+  for (const p of list) {
+    if (p.op === "test" || !p.path.startsWith("/fields/")) continue;
+    const field = p.path.slice(8);
+    const label = field === "System.Title" ? EDIT_LABEL.title : field === AC_FIELD ? EDIT_LABEL.acceptance : EDIT_LABEL.description;
+    out[label] = { field, markdown: md.has(field) };
+  }
+  return out;
+}
+
+/**
+ * ED-1 reparent (and its undo): the parent link only. The old link is removed by its index in the relations read at
+ * that rev and the new one added, in one patch behind the rev test, so DevOps applies both or neither (the item is
+ * never left with two parents, or none unless that was chosen). Nothing else: area, iteration, state, dates,
+ * assignee and backlog order stay as they are.
+ */
+export function reparentOps(org: string, rev: number, relations: readonly { rel: string }[], parentId: number | null): PatchOp[] {
+  const ops: PatchOp[] = [test(rev)];
+  // Highest index first, so removing one never moves another.
+  const at = relations.flatMap((r, i) => (r.rel === PARENT_REL ? [i] : [])).sort((a, b) => b - a);
+  for (const i of at) ops.push({ op: "remove", path: `/relations/${i}` });
+  if (parentId !== null) ops.push({ op: "add", path: "/relations/-", value: { rel: PARENT_REL, url: itemApiUrl(org, parentId) } });
+  return ops;
+}
+/** "#1140 Loyalty points" or "No parent", and the id back out of it. */
+export const parentText = (p: { id: number; title: string } | null) => (p ? `#${p.id} ${p.title}` : "No parent");
+export const parentIdOf = (text: string | null | undefined): number | null => {
+  const m = /^#(\d+)\b/.exec(text ?? "");
+  return m ? Number(m[1]) : null;
+};
+/** How many parent links an item has (a move is confirmed only with exactly the one asked for). */
+export const parentLinks = (relations: readonly { rel: string; url: string }[]): number[] => relations.filter((r) => r.rel === PARENT_REL).map((r) => Number(/workItems\/(\d+)$/i.exec(r.url)?.[1] ?? NaN)).filter((n) => Number.isSafeInteger(n));
