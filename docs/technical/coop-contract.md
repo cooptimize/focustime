@@ -1,6 +1,6 @@
 # The FocusTime and Coop comment contract, v1
 
-For engineers on FocusTime and on Coop. Checked against `c667e9e` on Nov 9, 2026. **Proposed, not built.** Neither side reads or posts these comments yet. This page, the schemas and the fixtures are what both sides agree to before either builds it. Decisions are under "CX-0" in [decisions](../decisions.md) and open points under "CX-0" in [open questions](../open-questions.md).
+For engineers on FocusTime and on Coop. Checked against `2f4c0ea` on Nov 13, 2026. **Proposed, not built.** Neither side reads or posts these comments yet. This page, the schemas and the fixtures are what both sides agree to before either builds it. Open points are in [open questions](../open-questions.md).
 
 Azure DevOps is the mailbox. FocusTime and Coop never call each other: each reads and writes comments on the feature, with plain DevOps access.
 
@@ -291,8 +291,8 @@ Rules for the footer:
 No comment, in any field, contains **SQL, code, file paths, server names, secrets or another client's name**. Comments sit on the client's own feature, where the client's people can read them. Coop's detail stays in the client environment. Evidence is a reference, never a copy.
 
 - **Writing, each side:** check before posting. Coop's output is its own to check.
-- **FocusTime posting:** applies the GD-2 replacement (`replaceMentions` in `plan/boundary.ts`, with `records`) to each string value before the JSON is built, never to the JSON text, so ids and field names can't be changed. The brief is checked at preview like any exit to a client's eyes.
-- **FocusTime reading:** flags another client's name (the same `exitCheck`) and shows the flag on the card. It doesn't change Coop's words in its own record. Text from Coop counts as AI text under GD-2 point 5, so if it is published, names are replaced and the draft is marked "Another client's name was removed", rather than only flagged.
+- **FocusTime posting:** applies the client boundary's replacement (CLAUDE.md) (`replaceMentions` in `plan/boundary.ts`, with `records`) to each string value before the JSON is built, never to the JSON text, so ids and field names can't be changed. The brief is checked at preview like any exit to a client's eyes.
+- **FocusTime reading:** flags another client's name (the same `exitCheck`) and shows the flag on the card. It doesn't change Coop's words in its own record. Text from Coop counts as AI text under the client boundary's point 5, so if it is published, names are replaced and the draft is marked "Another client's name was removed", rather than only flagged.
 - **A secret-shaped value** (`SECRET_SHAPES` in `ai/guard.ts`) on reading: the field isn't shown, and the comment is flagged by its id only.
 - Internal (Cooptimize) work may name clients as usual, and the other rules still apply.
 
@@ -329,4 +329,7 @@ The current status is the update for the highest brief revision with the latest 
 - **FocusTime's existing readers** recognize only `brief` and `update` (`COOP_BLOCK` in `plan/stories.ts` and `plan/status-report.ts`). `answer` needs adding before FocusTime posts one, or it reaches AI signals and the status report in full.
 - **FocusTime's comment write** doesn't send `format=markdown` today, and `htmlToText` stops at 4,000 characters, so neither can be used as is.
 - **Rendering hasn't been tested on a real comment.** The HTML fixture is a plausible shape, not a capture.
-- A direct service channel (Phase 2) needs event ids and sequence numbers. Those are added optional fields, not a v2.
+- A direct service channel (a later phase) needs event ids and sequence numbers. Those are added optional fields, not a v2.
+- On FocusTime's side today, only those readers exist: they fold a brief or update into one labelled line. Nothing posts or parses these comments, and the reserved background name `coop_mailbox` (`config/background-policy.ts`) never runs.
+
+History: the contract's decisions and open points are recorded under its step in [docs/decisions.md](../decisions.md) and [docs/open-questions.md](../open-questions.md).
