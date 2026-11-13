@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { Patterns } from "./patterns/Patterns.tsx";
-import { addWeeks, mondayOf } from "../week/dates.ts";
+import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { SignInAgainButton } from "./Reopen.tsx";
@@ -46,6 +46,8 @@ import { dayRolledOver } from "./planday.ts";
 import { clientNames, PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
+import { dayDrawn, weekRead } from "./weekread.ts";
+import { ReadLine } from "./ReadLine.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
@@ -451,6 +453,9 @@ export function App() {
   // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
+  /** RS-2: the week whose read last failed (its header says so, with Retry), and the week asked for now (kept current each render). */
+  const [failedWeek, setFailedWeek] = useState<string | null>(null);
+  const askedRef = useRef<string | null>(null);
   const data = state.kind === "ready" ? state.data : null;
   // RB-1: Code's client list, once, a few seconds after the week has loaded, so the opening's own reads go first.
   const haveData = !!data;
@@ -734,6 +739,7 @@ export function App() {
       const id = ++seq.current;
       if (input.weekStart) weekRef.current = input.weekStart;
       if (!opts.quiet) setLoading(true);
+      if (input.weekStart) setFailedWeek((f) => (f === input.weekStart ? null : f));
       try {
         const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}), ...(weekendRef.current ? { weekend: true } : {}) }, { background: !!opts.background });
         if (id !== seq.current) return undefined;
@@ -743,6 +749,7 @@ export function App() {
         return d;
       } catch (e) {
         if (id !== seq.current) return undefined;
+        if (input.weekStart && !(e instanceof SessionError)) setFailedWeek(input.weekStart);
         setState((prev) => afterLoad(prev, e instanceof SessionError ? { kind: "session" } : { kind: "error" }));
         return undefined;
       } finally {
@@ -859,7 +866,9 @@ export function App() {
     (n: number) => {
       if (!data) return;
       // WD-1: the block panel stays open on the other week (on its first open block).
-      const w = addWeeks(data.weekStart, n);
+      // RS-2: from the week asked for, not the one on screen, so presses in a row while it loads end n weeks on.
+      const w = addWeeks(askedRef.current ?? data.weekStart, n);
+      askedRef.current = w;
       goNav(addAt ? navOf.weekAdd(w) : navOf.week("board", w));
     },
     [data, addAt, goNav],
@@ -1076,11 +1085,24 @@ export function App() {
   );
 
   // The week each place shows: Week its week (this week by default; the block panel's block's week), Day and its flows the day's.
-  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
+  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ? mondayOf(nav.week) : (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
+  askedRef.current = wantWeek;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
-  }, [wantWeek]); // eslint-disable-line react-hooks/exhaustive-deps
+    // RS-2 (review 2): also after any other load (the day's rollover) took over from the asked one, so the asked week is
+    // read again rather than staying dimmed. weekRef is the week last asked of the server: while the asked week is read,
+    // after it drew and after it failed it equals wantWeek, so this neither repeats a read nor loops.
+  }, [wantWeek, data]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** RS-2: where the read of the asked week stands (Week's and Day's headers say it), and its Retry. */
+  const read = weekRead({ asked: wantWeek, shown: data?.weekStart ?? null, failed: failedWeek });
+  const retryRead = useCallback(() => void (wantWeek && load({ weekStart: wantWeek })), [wantWeek, load]);
+  // RS-2: Day asked for a day whose week isn't here yet draws the last day it drew, dimmed, under the asked day's header.
+  const lastDayRef = useRef<IsoDate | null>(null);
+  const dayAsked = data ? (dayShown ?? data.planDay.date) : null;
+  const dayLoaded = data ? data.week.days.map((d) => d.date) : [];
+  const dayDraw = dayAsked ? dayDrawn(dayAsked, dayLoaded, lastDayRef.current) : null;
+  if (dayAsked && dayLoaded.includes(dayAsked) && !read) lastDayRef.current = dayAsked;
 
   /** Step 15 (D272): demo mode on or off; the server swaps every source and the plan store, then the week reloads. */
   // A2: the demo is its own session. Turning it on starts a demo session in place of this one (sign in again for your own
@@ -2167,7 +2189,10 @@ export function App() {
         <CarryProvider {...carryProps(now ?? new Date(clock).toISOString())}>
         <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => openBlock(d, h, { add: true }) }}>
         <Day
-          viewDate={dayShown}
+          viewDate={dayDraw && data && dayDraw !== dayAsked ? (dayDraw === data.planDay.date ? null : dayDraw) : dayShown}
+          asked={dayDraw !== dayAsked ? dayAsked : null}
+          read={nav.tab === "today" && !nav.flow ? read : null}
+          onRetryRead={retryRead}
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
           onTimebox={(d) => void timeboxDay(d)}
@@ -2230,6 +2255,8 @@ export function App() {
           const nowIso = now ?? new Date(clock).toISOString();
           const thisWeek = data.weekStart === data.today.weekStart;
           const past = data.weekStart < data.today.weekStart;
+          // RS-2: the header names the week asked for at once; its blocks follow when its read is in.
+          const askedWeek = read ? wantWeek! : data.weekStart;
           return (
         <>
           <header className="page-head week-head wd1-head">
@@ -2238,8 +2265,9 @@ export function App() {
                 <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)"><Icon name="back" /></button>
                 <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])"><Icon name="next" /></button>
               </span>
-              <h2><span className="wk-of">Week of </span>{weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
-              {!thisWeek && (
+              <h2><span className="wk-of">Week of </span>{read ? weekLabel(askedWeek, weekDates(askedWeek)[4]!) : weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
+              <ReadLine read={read} what="week" onRetry={retryRead} />
+              {askedWeek !== data.today.weekStart && (
                 <button type="button" className="mini today-btn" onClick={goToday} title="Back to this week">
                   This week
                 </button>
@@ -2300,7 +2328,7 @@ export function App() {
           </button>
         </p>
       )}
-      <div className={`wd1-body${shownPanel ? " with-panel" : ""}`}>
+      <div className={`wd1-body${shownPanel ? " with-panel" : ""}${read ? " reading" : ""}`} aria-busy={read === "loading"} inert={!!read}>
       <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => addWork(d, h) }}>
       <WeekGrid
         week={week}
@@ -2368,6 +2396,7 @@ export function App() {
         devops={data.devops}
         hours={data.hours}
         loading={loading}
+        sayLoading={read !== "loading"}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
         extra={personalHiddenChip}

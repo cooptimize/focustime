@@ -63,7 +63,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 - **Close the loop**, only after its preview and Send, as you: one Teams message in the chat the promise came from or a 1:1 chat with someone at Cooptimize (`POST /chats`, `POST /chats/{id}/messages`, read back with `Chat.Read` when granted), or one email in your own mailbox (`POST /me/messages` as a draft, `POST /me/messages/{id}/send` only for Send now, read back by its immutable id). Never reactions, read marks, edits or deletes, and never a message you didn't preview (`sources/graph/send.ts`; setup in `docs/setup/close-the-loop.md`).
 - **An admin's invite** from Admin › People: the same requests and the same per-person consents, one 1:1 Teams message per person, or an Outlook draft or email, only to Cooptimizers who haven't signed in, after the invite's preview and Send, each read back (`actions/invite-send.ts`).
 
-**Failure.** A missing consent shows in Settings › Accounts and calendars as needs consent or needs an admin, with where to allow it. An expired sign-in shows Reconnect. A failed calendar read shows the last good data and its age.
+**Failure.** A missing consent shows in Settings › Accounts and calendars as needs consent or needs an admin, with where to allow it. An expired sign-in shows Reconnect. A failed calendar read shows the last good data and its age. A read still going after 3 s answers from that last good copy, marked unreachable with its time, and finishes in the background to refresh the copy (Outlook and Google, not calendar links or Dataverse).
 
 ## Azure DevOps
 

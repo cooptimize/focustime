@@ -111,7 +111,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Pattern | A Focus Time row: recurring weekly AM, PM or All Day per weekday between a start and an optional end date |
 | Standing block | A focus block the person defines in Settings › Working hours, e.g. Monday AM Internal; none by default |
 | Open | A Monday to Thursday half-day with no focus block; free for client or internal work (offered clients: those followed) |
-| Overflow day | Friday: not scheduled, for catch-up. On Week, the dashed Catch-up day; it and the weekend can each be hidden (Show Friday, `[ui] show_catch_up_day`, `show_weekend_days`) |
+| Overflow day | Friday: not scheduled, for catch-up. On Week, the dashed Catch-up day, or with working hours two Catch-up blocks, the same on Day (`plan/dayblocks.ts`); it and the weekend can each be hidden (Show Friday, `[ui] show_catch_up_day`, `show_weekend_days`) |
 | PTO | Time off from Dataverse Time Off Tracker rows (the person's only). Every PTO day is a whole day off: no risks, no to-dos, skipped as a planning target, Day says "You're off". Hours are not used |
 | At-risk block | A focus block the calendar cuts into (meetings, personal events, out of office, too little free time, a double-booked block), with a stated reason |
 | Status (card) | The one status a block shows: At risk with its short reason ("At risk · Dentist 12:00"), only when the calendar cuts into it. How much is planned never makes a status; the block panel says the free time ("1h free", "No free time") |

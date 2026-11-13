@@ -55,6 +55,8 @@ import { CheckinBlock, CheckinFoot, checkLeft } from "./Checkin.tsx";
 import { CloseOutBlock, CloseOutPanel } from "./CloseOut.tsx";
 import { WeekendDay } from "./DayWeekend.tsx";
 import { Icon } from "./icons.tsx";
+import { ReadLine } from "./ReadLine.tsx";
+import type { WeekRead } from "./weekread.ts";
 
 export type DayMode = "now" | "checkin" | "closeout";
 
@@ -63,6 +65,10 @@ type Props = {
   viewDate?: IsoDate | null;
   /** QF-1: ‹ › and Today (null: today). */
   onDay?: (date: IsoDate | null) => void;
+  /** RS-2: the day asked for while its week is being read (`viewDate` is then the last day drawn, dimmed); its read state and Retry. */
+  asked?: IsoDate | null;
+  read?: WeekRead;
+  onRetryRead?: () => void;
   /** WK-3: Show weekend (‹ › step onto Saturday and Sunday always, not only when something is on them). */
   showWeekend?: boolean;
   /** QF-1: Timebox my day. */
@@ -176,7 +182,9 @@ export function Day(props: Props) {
   const nameOf = clientNames(data);
   // QF-1 (plan/todayday.ts): a PTO day shows only the blocks that still hold a to-do; nothing nags on it or on any day but today.
   const shape = todayShape(day, { date, today: realToday, todayWorkday: data.planDay.workday, picked: new Set(picks.filter(live).map((p) => p.half)) });
-  const { ptoDay, workday, nudges, readOnly } = shape;
+  const { ptoDay, workday, nudges, readOnly, whole } = shape;
+  // RS-2: a catch-up day with no working hours is Week's one "Catch-up" cell, here too.
+  const catchUpCell = whole === "catchup";
   const blocks = shape.blocks.map((b) => b.slot);
   const cal = day ? dayCalendar(day, now) : null;
   const onPromise = props.onPromises ?? props.onInbox;
@@ -320,7 +328,7 @@ export function Day(props: Props) {
   const canAdd = mode === "now" && !!day && !weekendDay && !ptoDay && workday && blocks.some((s) => canAddWork({ date, today: realToday, pto: !!day.pto || s.pto, off: s.off }));
 
   // TY-1: the timeline shows on a day with blocks or PTO (a weekend day stays its plain list; so do the flows).
-  const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay);
+  const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay || catchUpCell);
   const startTimebox = () => {
     if (!day || !canTimebox) return;
     const slots: Partial<Record<Half, Slot>> = {};
@@ -352,12 +360,22 @@ export function Day(props: Props) {
   };
   const openBlock = (half: Half, o?: { add?: boolean; focus?: PanelFocus | null }) => props.onOpenBlock(date, half, o);
   const panelHere = props.panelAt?.date === date ? props.panelAt : null;
-  const head = dayHeadline(date, realToday);
+  // RS-2: the header is the day asked for at once; the blocks under it follow when its week is in.
+  const headDate = props.asked ?? date;
+  const head = dayHeadline(headDate, realToday);
+  const headIsToday = headDate === realToday;
   // SG-1: the morning card says when suggestions wait in today's blocks, with Keep all beside + Add.
   const morning = useMorningSuggestions(date);
 
+  // RS-2 (review 2): while the asked day is read (or its read failed), what's drawn under the header can't be reached by
+  // keyboard either: everything in main but the header is inert.
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    for (const el of mainRef.current?.children ?? []) if (!el.classList.contains("day-bar")) (el as HTMLElement).inert = !!props.read;
+  });
+
   return (
-    <main className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}`} aria-label="Day">
+    <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
       <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
@@ -368,12 +386,12 @@ export function Day(props: Props) {
             <>
               {mode === "now" && props.onDay && (
                 <span className="pd-step today-step" data-tour="today-days" role="group" aria-label="Day">
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1, stops))} aria-label="Previous day" title="Previous day ([)"><Icon name="back" /></button>
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1, stops))} aria-label="Next day" title="Next day (])"><Icon name="next" /></button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(headDate, -1, stops))} aria-label="Previous day" title="Previous day ([)"><Icon name="back" /></button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(headDate, 1, stops))} aria-label="Next day" title="Next day (])"><Icon name="next" /></button>
                 </span>
               )}
-              <h1 title={longDate(date)}>{head.date}</h1>
-              {isToday ? (
+              <h1 title={longDate(headDate)}>{head.date}</h1>
+              {headIsToday ? (
                 <span className="today-pill day-today">Today</span>
               ) : (
                 mode === "now" && props.onDay && (
@@ -383,14 +401,16 @@ export function Day(props: Props) {
                 )
               )}
               {/* PS-1: a day off is marked in the header as Week marks it: "Holiday" or "PTO". */}
-              {mode === "now" && day?.pto && (
+              {mode === "now" && day?.pto && !props.asked && (
                 <span className={`pto-pill${day.pto.holiday ? " holiday-pill" : ""}`} title={ptoLabel(day.pto)}>
                   {offWord(day.pto)}
                 </span>
               )}
-              {!isToday && <span className="muted day-when">{head.when}</span>}
+              {!headIsToday && <span className="muted day-when">{head.when}</span>}
+              {/* With nothing drawn yet the body says "Opening <date>…", so the header says only a failure. */}
+              {mode === "now" && props.onRetryRead && (day || props.read === "failed") && <ReadLine read={props.read ?? null} what="day" onRetry={props.onRetryRead} />}
               {/* SG-1: the day's suggestions, in the header row. */}
-              {mode === "now" && !weekendDay && <DaySuggestLine date={date} className="sug-day-head" />}
+              {mode === "now" && !weekendDay && !props.asked && <DaySuggestLine date={date} className="sug-day-head" />}
             </>
           )}
         </div>
@@ -409,12 +429,12 @@ export function Day(props: Props) {
           }
         >
           {mode === "now" && !weekendDay && props.onTimeline && <CardsTimelineSwitch shown={timelineShown} onToggle={toggleTimeline} />}
-          {mode === "now" && canTimebox && unboxed > 0 && props.onTimebox && !proposals && (
+          {mode === "now" && canTimebox && unboxed > 0 && props.onTimebox && !proposals && !props.asked && (
             <button type="button" className="mini today-timebox" onClick={() => props.onTimebox!(date)} title="Suggest a time for every planned to-do, on the timeline, to accept or change">
               Timebox my day
             </button>
           )}
-          {canAdd && (
+          {canAdd && !props.asked && (
             <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
               <Icon name="add" /> Add
             </button>
@@ -435,7 +455,7 @@ export function Day(props: Props) {
             { id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) },
             ...(props.onSuggest ? [{ id: "suggestions", label: "Suggestions", group: "Show", checked: props.suggestOn !== false, hint: props.suggestOn !== false ? "on" : "off", run: () => props.onSuggest!(props.suggestOn === false) }] : []),
             ...(mode === "now" && !weekendDay && props.onTimeline ? [{ id: "timeline", label: "Timeline", group: "Show", checked: timelineShown, hint: "B", run: () => toggleTimeline() }] : []),
-            ...(mode === "now" && past && props.onCloseOutOn ? [{ id: "closeout", label: `Close out ${dayWord}`, run: () => props.onCloseOutOn!(date) }] : []),
+            ...(mode === "now" && past && props.onCloseOutOn && !props.asked ? [{ id: "closeout", label: `Close out ${dayWord}`, run: () => props.onCloseOutOn!(date) }] : []),
           ] }}
           onClose={() => setMoreAt(null)}
         />
@@ -482,7 +502,7 @@ export function Day(props: Props) {
         <WeekendDay day={day} date={date} past={past} data={data} picks={picks} />
       ) : !day ? (
         <p className="muted today-loading">Opening {longDate(date)}…</p>
-      ) : ptoDay && !blocks.length && !timelineShown ? null : !workday && !ptoDay ? (
+      ) : ptoDay && !blocks.length && !timelineShown ? null : (!workday && !ptoDay && !catchUpCell) || (workday && !blocks.length) ? (
         <p className="today-off">
           {!isToday ? `Nothing scheduled ${dayWord}.` : target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
           {(isToday || !past) && (
@@ -491,7 +511,7 @@ export function Day(props: Props) {
             </button>
           )}
         </p>
-      ) : phoneToday && !timelineShown ? (
+      ) : phoneToday && !timelineShown && !catchUpCell ? (
         <div className="today-body ph-today">
           <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
           <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />

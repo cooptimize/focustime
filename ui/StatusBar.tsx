@@ -15,6 +15,8 @@ type Props = {
   devops: ClientWork[] | null;
   hours: TimeModel;
   loading: boolean;
+  /** RS-2: false while the page header already says "Loading…" for the asked week or day; Refresh stays off but keeps its word. */
+  sayLoading?: boolean;
   busy: Calendar | null;
   notice: string | null;
   /** U5.1: more chips for the bar's row (the "2 personal hidden" switch). */
@@ -30,7 +32,7 @@ type Props = {
 
 const when = (iso: string, tz: string): string => stampText(iso, tz);
 
-export function StatusBar({ sources, devops, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect, onReplaceLink }: Props) {
+export function StatusBar({ sources, devops, hours, loading, sayLoading = true, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect, onReplaceLink }: Props) {
   const shape = { timeZone: userZone({ hours }) };
   const lines = causeLines(sources, devops);
   // Step 10: one quiet line when everything is live; it opens on a click and on its own when something needs attention.
@@ -73,7 +75,7 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
           <DevOpsFreshness clock={clock} />
           {chips}
           <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Check DevOps now and refresh every source (R)">
-            {loading ? "Loading…" : "Refresh"}
+            {loading && sayLoading ? "Loading…" : "Refresh"}
           </button>
         </div>
       </footer>
@@ -135,7 +137,7 @@ export function StatusBar({ sources, devops, hours, loading, busy, notice, extra
           {hoursSummary(hours)}
         </span>
         <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources">
-          {loading ? "Loading…" : "Refresh"}
+          {loading && sayLoading ? "Loading…" : "Refresh"}
         </button>
       </div>
       {lines.map((l) => (
