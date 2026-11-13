@@ -5,9 +5,7 @@ import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { CardRead, ItemCard } from "../plan/item-card.ts";
 import { createPlanStore } from "../store/plan-store.ts";
-import { itemCardAction, NO_ACCESS, type ItemCardContext } from "./item-card-actions.ts";
-import { aBrief } from "../test/builders/index.ts";
-import { descriptionHtml, SEED } from "../plan/work-templates.ts";
+import { cardHtml, itemCardAction, NO_ACCESS, type ItemCardContext } from "./item-card-actions.ts";
 
 const NOW = "2026-11-02T17:30:00Z";
 const read = (id: number, o: Partial<CardRead> = {}): CardRead => ({
@@ -30,7 +28,6 @@ function setup(o: { visible?: string[]; writes?: string[]; read?: Partial<CardRe
       return c.config;
     },
     devops: () => ({ itemCard: async (k: string, id: number) => (calls.push([k, id]), { ok: true as const, value: read(id, o.read) }) }),
-    templates: async () => SEED,
     clients: async () => (o.visible ?? ["fabrikam"]).map((k) => ({ clientKey: k, clientName: k === "fabrikam" ? "Fabrikam" : k })),
     writeClients: async () => o.writes ?? [],
     scope,
@@ -90,28 +87,16 @@ describe("item.card", () => {
     await expect(t.card("fabrikam", -1)).rejects.toThrow(/work item id/);
   });
 
-  // TP-1: the four lines as one block above the rest, the type's name from its tag, and the quiet chip.
-  const cardOf = async (r: Partial<CardRead>) => {
-    const x = await setup({ read: r }).card("fabrikam", 9);
+  // TP-1b: no four-lines block, chip or request type. A description TP-1 wrote (its headings and text) is the
+  // description, shown as DevOps has it after the usual sanitizing.
+  it("TP-1b: a description with the old four headings is shown untouched, with no chip or type", async () => {
+    const html = "<div>Context</div><h3>What and where</h3><p>The Sales model</p><h3>What changes</h3><p>Gross margin percent</p><h3>How we'll check</h3><p>October: 31.2%</p><h3>How far and who signs off</h3><p>Done when it is: in test.</p>";
+    const x = await setup({ read: { descriptionHtml: html } }).card("fabrikam", 9);
     if (!x.access) throw new Error("no access");
-    return x.card;
-  };
-  it("TP-1: the four lines above the rest, the type's name, and Missing naming the empty lines", async () => {
-    const c = await cardOf({ descriptionHtml: descriptionHtml("Context", aBrief({ where: "Sales model", check: "Oct: 31.2%" })) ?? "", tags: ["Blocked", "type:new-measure"] });
-    expect(c.requestType).toBe("New measure");
-    expect(c.lines?.map((l) => [l.name, l.text])).toEqual([["What and where", "Sales model"], ["What changes", null], ["How we'll check", "Oct: 31.2%"], ["How far and who signs off", null]]);
-    expect(c.description).toBe("<div>Context</div>");
-    expect(c.readiness).toEqual({ ready: false, text: "Missing: What changes, How far and who signs off" });
-  });
-  it("TP-1: Ready when all four are there, read under the earlier names too", async () => {
-    const c = await cardOf({ descriptionHtml: "<h3>Target</h3><p>a</p><h3>Change</h3><p>b</p><h3>Control</h3><p>c</p><h3>Boundary</h3><p>d</p>" });
-    expect(c.readiness).toEqual({ ready: true, text: "Ready" });
-    expect(c.requestType).toBeNull();
-  });
-  it("TP-1: an item with neither headings nor a known tag shows no chip and no block", async () => {
-    const c = await cardOf({ tags: ["type:unknown-one"] });
-    expect(c.readiness).toBeNull();
-    expect(c.lines).toBeNull();
-    expect(c.description).toContain("Export <strong>all</strong> rows");
+    expect(x.card.description).toBe(cardHtml(html));
+    for (const h of ["What and where", "What changes", "How we'll check", "How far and who signs off"]) expect(x.card.description).toContain(h);
+    expect(Object.keys(x.card)).not.toEqual(expect.arrayContaining(["lines"]));
+    expect(Object.keys(x.card)).not.toEqual(expect.arrayContaining(["readiness"]));
+    expect(Object.keys(x.card)).not.toEqual(expect.arrayContaining(["requestType"]));
   });
 });
