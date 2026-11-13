@@ -79,8 +79,14 @@ try {
     const page = await ctx.newPage();
     page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(`${run.tag}: ${e.message}`));
     await signIn(page);
+    // The app's own theme wins over the browser's scheme: set it, as the other screenshot scripts do.
+    await page.evaluate(async (theme) => {
+      const csrf = document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "";
+      await fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": csrf }, body: JSON.stringify({ action: "ui.set_theme", input: { theme } }) });
+    }, run.scheme === "dark" ? "cooptimize-dark" : "cooptimize-light");
     for (const s of mode === "before" ? BEFORE : AFTER) {
       await page.goto(`${harness.url.split("#")[0]}${s.at}`);
+      await page.reload();
       await page.waitForSelector("main", { timeout: 30_000 });
       if (run.phone) await page.addStyleTag({ content: "html{font-size:17px}" });
       await page.waitForTimeout(1200);
@@ -106,6 +112,7 @@ try {
       });
       for (const [name, at] of [["09-empty-from-chats", "#/inbox/chats"], ["10-empty-promises", "#/inbox/promises"], ["11-empty-captures", "#/inbox/captures"]] as const) {
         await page.goto(`${harness.url.split("#")[0]}${at}`);
+        await page.reload();
         await page.waitForSelector("main.ib4", { timeout: 30_000 });
         await page.waitForTimeout(1200);
         await page.screenshot({ path: `${out}/${name}-${run.tag}.png` });

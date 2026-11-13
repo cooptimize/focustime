@@ -29,15 +29,15 @@
   },
   "09-empty-from-chats-1440-dark": {
     "rows": 0,
-    "controls": 5
+    "controls": 4
   },
   "10-empty-promises-1440-dark": {
     "rows": 0,
-    "controls": 5
+    "controls": 4
   },
   "11-empty-captures-1440-dark": {
     "rows": 0,
-    "controls": 13
+    "controls": 12
   },
   "01-from-chats-1440-light": {
     "rows": 2,
@@ -69,15 +69,15 @@
   },
   "09-empty-from-chats-1440-light": {
     "rows": 0,
-    "controls": 5
+    "controls": 4
   },
   "10-empty-promises-1440-light": {
     "rows": 0,
-    "controls": 5
+    "controls": 4
   },
   "11-empty-captures-1440-light": {
     "rows": 0,
-    "controls": 13
+    "controls": 12
   },
   "01-from-chats-phone-dark": {
     "rows": 2,

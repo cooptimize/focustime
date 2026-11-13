@@ -456,9 +456,12 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
               <span className="ib4-swatch" aria-hidden="true" style={{ "--c": color(c.clientKey) } as CSSProperties} />
               <span className="ib4-row-main">
                 <span className="ib4-row-title">{c.what}</span>
-                <span className="ib4-row-sub muted">
-                  {c.reason} · {c.clientName}
-                  {c.toName ? ` · for ${c.toName}` : ""} · <Stamp at={c.clearedAt} tz={tz} today={today} />
+                <span className="ib4-row-sub ib4-cleared-sub muted">
+                  <span>{c.reason}</span>
+                  <span>
+                    {c.clientName}
+                    {c.toName ? ` · for ${c.toName}` : ""} · <Stamp at={c.clearedAt} tz={tz} today={today} />
+                  </span>
                 </span>
               </span>
               <button type="button" className="mini" onClick={() => void run("my_promises.put_back", { id: c.id }, "Put back: it stays until you close it")}>
@@ -543,7 +546,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       </div>
       {loaded && list === "chats" && chatsFoot}
       {loaded && list === "promises" && promisesFoot}
-      {!phone && (
+      {!phone && !(list === "chats" ? !chatGroups.length : list === "promises" ? !promiseGroups.length : !captureRows.length) && (
         <p className="ib4-keys muted" data-tour="ib-keys">
           <kbd>J</kbd> <kbd>K</kbd> move · <kbd>Enter</kbd> open
           {list === "chats" ? (

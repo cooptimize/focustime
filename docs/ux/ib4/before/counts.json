@@ -1,7 +1,7 @@
 {
   "01-everything-1440-dark": {
     "rows": 22,
-    "controls": 61
+    "controls": 66
   },
   "02-needs-you-1440-dark": {
     "rows": 11,
@@ -13,7 +13,7 @@
   },
   "04-promises-1440-dark": {
     "rows": 7,
-    "controls": 45
+    "controls": 44
   },
   "05-captures-1440-dark": {
     "rows": 2,
@@ -21,7 +21,7 @@
   },
   "01-everything-1440-light": {
     "rows": 22,
-    "controls": 66
+    "controls": 61
   },
   "02-needs-you-1440-light": {
     "rows": 11,
@@ -33,7 +33,7 @@
   },
   "04-promises-1440-light": {
     "rows": 7,
-    "controls": 44
+    "controls": 45
   },
   "05-captures-1440-light": {
     "rows": 2,
