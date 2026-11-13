@@ -107,6 +107,9 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
 
+  // Where code can't be read at all (no code source wired in), the list is empty before anything else is asked.
+  if (action === "code.clients" && !ctx.git) return { ok: true, data: { clients: [], available: false, logLine: CODE_TEXT.logLine } };
+
   // 1. A Cooptimizer, on every request.
   const me = await ctx.me().catch(() => null);
   if (!me) return bad(CODE_TEXT.notCooptimizer, 403, "signed_out");

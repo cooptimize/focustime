@@ -349,8 +349,9 @@ export function App() {
   const openDocs = useCallback((page: string | null = null, heading: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "docs", page, heading } })), [go]);
   const docsAccess = useCallback(() => call<DocsAccess>("docs.access", {}), []);
   const openCode = useCallback((clientKey: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey, repoId: null, path: null } })), [go]);
-  // RB-1: the clients Code can open, read when a menu first opens (names only; the server checks every read again).
-  // Unset until then and empty for anyone Code isn't for (a guest or an automation account): no menu entry.
+  // RB-1: the clients Code can open, for the command menu's "Code: <client>", read a few seconds after start or when the
+  // command menu first opens (names only, never DevOps). Empty for anyone Code isn't for (an automation account): then no Code
+  // entry anywhere. Until it's read, ⋯ › Code shows, and the panel says why when it can't open.
   const [codeList, setCodeList] = useState<readonly { clientKey: string; name: string }[] | null>(null);
   const codeAsked = useRef(false);
   const askCode = useCallback(() => {
@@ -361,7 +362,8 @@ export function App() {
       () => setCodeList([]),
     );
   }, []);
-  const codeItem = codeList && codeList.length ? [{ id: "code", label: "Code", run: () => openCode() }] : [];
+  const codeItem = codeList && !codeList.length ? [] : [{ id: "code", label: "Code", run: () => openCode() }];
+  useEffect(() => void (cmdOpen && askCode()), [cmdOpen, askCode]);
   // P1: opening the list marks every notice read (the dot goes).
   const readAllNotices = notices.readAll;
   const openNotices = useCallback(() => setNoticesOpen(readAllNotices()), [readAllNotices]);
@@ -447,9 +449,13 @@ export function App() {
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
-  // Once per page, after the week has loaded: one read of names from FocusTime's own client list, never DevOps.
+  // RB-1: Code's client list, once, a few seconds after the week has loaded, so the opening's own reads go first.
   const haveData = !!data;
-  useEffect(() => void (haveData && askCode()), [haveData, askCode]);
+  useEffect(() => {
+    if (!haveData) return;
+    const t = window.setTimeout(askCode, 3000);
+    return () => window.clearTimeout(t);
+  }, [haveData, askCode]);
   // IB-1 slice 4: the badge, Today's urgent strip and Week's rail read the same rows (inbox.today).
   const inboxToday = useInboxToday(captureVersion, data);
   const needsYouCount = inboxToday?.needsYou ?? null;
@@ -1588,7 +1594,7 @@ export function App() {
       showKeys: () => setKeysOpen(true),
       showGuide: (section) => openGuide(section ?? null),
       showDocs: (page, heading) => openDocs(page ?? null, heading ?? null),
-      ...(codeList && codeList.length ? { showCode: (k: string | null) => openCode(k), codeClients: codeList } : {}),
+      ...(codeList && !codeList.length ? {} : { showCode: (k: string | null) => openCode(k), codeClients: codeList ?? [] }),
       startTour: (id) => {
         const t = tourById(id);
         if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));

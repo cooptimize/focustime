@@ -144,9 +144,16 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     const errors = fresh.errors;
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await theme(page, "light");
-    await page.keyboard.press("Control+k");
-    await page.keyboard.type("Code: Atlas");
-    await page.getByRole("menuitem", { name: /Code: Atlas/ }).first().click();
+    // The client list arrives a few seconds after start (or with the first open of the menu): open again until it's there.
+    const atlas = page.getByRole("menuitem", { name: /Code: Atlas/ }).first();
+    for (let i = 0; ; i++) {
+      await page.keyboard.press("Control+k");
+      await page.keyboard.type("Code: Atlas");
+      if (await atlas.waitFor({ timeout: 2000 }).then(() => true, () => false)) break;
+      if (i > 5) throw new Error("Code: Atlas never showed in the command menu");
+      await page.keyboard.press("Escape");
+    }
+    await atlas.click();
     await panel(page).waitFor();
     // One repo opens on its own.
     await row(page, "/adf").waitFor();
