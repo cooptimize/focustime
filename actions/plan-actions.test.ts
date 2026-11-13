@@ -10,10 +10,8 @@ import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
-import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
-import { sqliteConn } from "../store/sql/sqlite.ts";
-import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
-import { aBrief } from "../test/builders/index.ts";
+import { aTp1Brief } from "../test/builders/index.ts";
+import { planWithRaw, TP1_CARRIED } from "../test/tp1-drafts.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { WeekLoadData } from "./types.ts";
 
@@ -23,14 +21,14 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
 
-function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string; templates?: boolean } = {}) {
+function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string } = {}) {
   let clock = NOW;
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
   const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
-  const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("America/New_York") });
+  const { plan, plantBrief, briefOf } = planWithRaw(() => Temporal.Instant.from(clock).toZonedDateTimeISO("America/New_York"), join(dir, "plan.db"));
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? text) }),
     makeDataverse,
@@ -45,7 +43,6 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
     saveSystemUserId: async () => {},
     now: () => clock,
     ...(opts.noPlan ? {} : { plan }),
-    ...(opts.templates ? { templates: workTemplatesStoreOn(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("UTC") })), () => clock) } : {}),
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
     const r = await dispatch(c, { action, input });
@@ -59,7 +56,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
   };
   /** Move the real clock (the server's), e.g. to make a day past. */
   const at = (instant: string) => void (clock = instant);
-  return { c, run, fail, dv, ado, plan, at };
+  return { c, run, fail, dv, ado, plan, at, plantBrief, briefOf };
 }
 
 const D = "2026-11-03";
@@ -476,22 +473,52 @@ describe("focused time in Plan the day (step 6d)", () => {
 });
 
 describe("draft editor (step 15.3): draft.update", () => {
-  it("TP-1: keeps the request type and the four lines, clears them with null, and refuses a type the team doesn't have", async () => {
-    const t = setup({ templates: true });
+  it("TP-1b: keeps the three answers, a save without them keeps them, null clears them, nothing else is taken", async () => {
+    const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Margin percent", size: "S" });
-    const brief = aBrief({ type: "new-measure", where: "The sales model.", doneWhen: "In test" });
-    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, brief })).draft.brief).toEqual(brief);
-    expect((await t.plan.getDraft(draft.id))?.brief).toEqual(brief);
-    // A save without the lines keeps them.
-    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, title: "Gross margin percent" })).draft.brief).toEqual(brief);
-    expect((await t.fail("draft.update", { id: draft.id, brief: { ...brief, type: "no-such-type" } })).status).toBe(400);
-    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, brief: null })).draft.brief).toBeUndefined();
-    // Without the templates here the lines can't be checked, so they aren't taken.
-    const bare = setup();
-    await bare.run("week.load", { weekStart: "2026-11-02" });
-    const d2 = await bare.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "x", size: "S" });
-    expect((await bare.fail("draft.update", { id: d2.draft.id, brief })).status).toBe(409);
+    const answers = { where: "The sales model", change: "", check: "October: 31.2%" };
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, answers })).draft.answers).toEqual(answers);
+    expect((await t.plan.getDraft(draft.id))?.answers).toEqual(answers);
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, title: "Gross margin percent" })).draft.answers).toEqual(answers);
+    expect((await t.fail("draft.update", { id: draft.id, answers: { ...answers, type: "new-measure" } })).status).toBe(400);
+    expect((await t.fail("draft.update", { id: draft.id, brief: { where: "x" } })).status).toBe(400);
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, answers: null })).draft.answers).toBeUndefined();
+    expect(t.briefOf(draft.id)).toBeNull();
+  });
+  it("TP-1b: a TP-1 draft keeps every word, and nothing changes until the person saves", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const add = async (title: string) => (await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title, size: "S" })).draft.id;
+    const json = JSON.stringify(aTp1Brief());
+    const a = await add("Old draft");
+    await t.run("draft.update", { id: a, description: "Context." });
+    t.plantBrief(a, json);
+    // Read: the first three lines are the answers, the rest is carried; the column is as TP-1 left it.
+    const read = await t.plan.getDraft(a);
+    expect(read).toMatchObject({ description: "Context.", answers: { where: "The Sales model", change: "Gross margin percent", check: "October, East: 31.2%" }, carried: TP1_CARRIED });
+    expect(t.briefOf(a)).toBe(json);
+    // A save that doesn't touch the answers leaves the column, so the carried words still show next time.
+    await t.run("draft.update", { id: a, title: "Old draft, renamed" });
+    expect(t.briefOf(a)).toBe(json);
+    expect((await t.plan.getDraft(a))?.carried).toBe(TP1_CARRIED);
+    // A save of the answers alone keeps the carried words at the end of the description, once.
+    const saved = (await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: a, answers: read!.answers })).draft;
+    expect(saved).toMatchObject({ description: `Context.\n\n${TP1_CARRIED}`, answers: read!.answers });
+    expect(saved.carried).toBeUndefined();
+    expect(JSON.parse(t.briefOf(a)!)).toEqual(read!.answers);
+    // The person deleted the carried words in the editor: what they sent is what's kept.
+    const b = await add("Other old draft");
+    t.plantBrief(b, json);
+    const b2 = (await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: b, description: "Only mine", answers: { where: "x", change: "", check: "" } })).draft;
+    expect(b2).toMatchObject({ description: "Only mine", answers: { where: "x", change: "", check: "" } });
+    expect(b2.carried).toBeUndefined();
+    // An unreadable column is no answers and nothing carried; a type alone carries nothing.
+    const c = await add("Broken");
+    t.plantBrief(c, "{not json");
+    expect(await t.plan.getDraft(c)).not.toHaveProperty("answers");
+    t.plantBrief(c, JSON.stringify({ type: "new-measure" }));
+    expect(await t.plan.getDraft(c)).not.toHaveProperty("carried");
   });
   it("edits title, description, acceptance criteria, size and parent of a story, and keeps them", async () => {
     const t = setup();
