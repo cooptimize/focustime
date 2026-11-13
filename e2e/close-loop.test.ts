@@ -57,16 +57,16 @@ async function openAndCheck(page: Page, scope: string, text: string, container: 
 /** IB-1: the same check in the Inbox: the row opens the item, Close the loop is its pane's main button. */
 async function inboxCheck(page: Page, text: string) {
   await go(page, "#/inbox/promises");
-  const row = page.locator(".ib-row", { hasText: text }).first();
+  const row = page.locator("li.ib4-row", { hasText: text }).first();
   await row.waitFor({ timeout: 20_000 });
   await row.click();
-  const pane = page.locator(".ib-pane");
+  const pane = page.locator("li.ib4-row.open");
   await pane.getByRole("button", { name: /^Close the loop/ }).first().click();
   await pane.locator("form.send-loop").getByRole("radio", { name: /^Teams/ }).waitFor({ timeout: 20_000 });
-  expect(await overflow(page, ".ib-pane")).toEqual({ found: true, container: 0, page: 0 });
+  expect(await overflow(page, "li.ib4-row.open")).toEqual({ found: true, container: 0, page: 0 });
   const form = await withoutSending(pane);
-  expect(await overflow(page, ".ib-pane")).toEqual({ found: true, container: 0, page: 0 });
-  expect(await overflow(page, "main.ib")).toEqual({ found: true, container: 0, page: 0 });
+  expect(await overflow(page, "li.ib4-row.open")).toEqual({ found: true, container: 0, page: 0 });
+  expect(await overflow(page, "main.ib4")).toEqual({ found: true, container: 0, page: 0 });
   return { pane, form };
 }
 
@@ -101,7 +101,7 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       expect(await overflow(page, ".block-panel")).toEqual({ found: true, container: 0, page: 0 });
       await promise.locator("a.bp-promise").click();
       await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/f\d+$/);
-      await page.locator(".ib-pane").getByRole("button", { name: /^Close the loop/ }).first().waitFor({ timeout: 20_000 });
+      await page.locator("li.ib4-row.open").getByRole("button", { name: /^Close the loop/ }).first().waitFor({ timeout: 20_000 });
       await go(page, "#/today/closeout");
       await openAndCheck(page, ".closeout-panel", "Reply about the proposal timeline", ".closeout-panel");
       expect(errors).toEqual([]);
@@ -126,11 +126,11 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
     // is the Inbox item's main button there.
     await page.locator(".urgent-strip").waitFor({ timeout: 20_000 });
     await go(page, "#/inbox/promises");
-    await page.locator(".ib-row", { hasText: "Send the export spec" }).first().click();
-    const sheet = page.locator(".ib-sheet.tall");
+    await page.locator("li.ib4-row", { hasText: "Send the export spec" }).first().click();
+    const sheet = page.locator("li.ib4-row.open");
     await sheet.getByRole("button", { name: /^Close the loop/ }).first().click();
     await withoutSending(sheet);
-    expect(await overflow(page, ".ib-sheet.tall")).toEqual({ found: true, container: 0, page: 0 });
+    expect(await overflow(page, "li.ib4-row.open")).toEqual({ found: true, container: 0, page: 0 });
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/ib1-close-loop-phone.png`, fullPage: true });
     await page.close();
   }, T);
@@ -167,12 +167,13 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
     expect(await form.getByRole("button", { name: "Teams", exact: true }).getAttribute("aria-pressed")).toBe("true");
     await form.locator("textarea").fill("Told them in the project chat");
     await form.locator("textarea").press("Enter");
-    // The open item stays in view (it says Loop closed) until I move on; it's in Done, not Promises, after that.
-    await expect.poll(() => page.locator(".ib-pane").textContent(), { timeout: 10_000 }).toContain("Loop closed");
-    const list = (await call(page, "followups.list", { includeClosed: true })).data as { followUps: { what: string; closeHow: string | null; closeNote: string | null }[] };
-    expect(list.followUps.find((f) => f.what.startsWith("Confirm the intake form"))).toMatchObject({ closeHow: "teams", closeNote: "Told them in the project chat" });
+    // IB-4: closed, it leaves Promises.
+    await expect.poll(async () => {
+      const list = (await call(page, "followups.list", { includeClosed: true })).data as { followUps: { what: string; closeHow: string | null; closeNote: string | null }[] };
+      return list.followUps.find((f) => f.what.startsWith("Confirm the intake form"));
+    }, { timeout: 10_000 }).toMatchObject({ closeHow: "teams", closeNote: "Told them in the project chat" });
     await go(page, "#/inbox/promises");
-    await expect.poll(() => page.locator(".ib-row", { hasText: "For Chris Park" }).count(), { timeout: 10_000 }).toBe(0);
+    await expect.poll(() => page.locator("li.ib4-row", { hasText: "For Chris Park" }).count(), { timeout: 10_000 }).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

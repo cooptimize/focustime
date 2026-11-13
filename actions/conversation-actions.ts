@@ -1094,6 +1094,8 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const k = ks.find((x) => x.id === posInt(o.commitmentId)) ?? ks.find((x) => x.state === "open" && x.impliesItem && same(x.whoId, v.me)) ?? ks.find((x) => x.state === "open" && x.impliesItem);
         if (k && !k.itemId) await v.convs.updateCommitment(k.id, { itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        // IB-4: Already covered, counted in Diagnostics (a create through the write framework counts as created).
+        if (ctx.plan) await ctx.plan.markInbox([itemKey("conversation", c.id)], { outcome: "linked" });
         ctx.log({ source: "plan", op: "conversation_linked" });
         return respond();
       }
@@ -1437,6 +1439,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
         if (c && !c.itemId) {
           await v.convs.updateConversation(c.id, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
+          if (ctx.plan) await ctx.plan.markInbox([itemKey("conversation", c.id)], { outcome: "linked" });
           await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         }
         ctx.log({ source: "plan", op: "promise_linked" });

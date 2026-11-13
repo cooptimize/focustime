@@ -8,10 +8,10 @@ import type { AppConfig } from "../config/schema.ts";
 import { userZone } from "../week/zone.ts";
 import { localToday } from "../week/dates.ts";
 import { promisePhrase } from "../plan/conversations.ts";
-import { parseKey, viewsOf } from "../plan/inbox-items.ts";
+import { itemKey, parseKey, viewsOf, type InboxMark } from "../plan/inbox-items.ts";
 import {
   chatOutcomes, extractionReason, extractionRetry, isPromiseGap, promiseReason, zeroReasons, zeroStatuses,
-  type Diagnostics, type ExtractionRow, type PromiseRow,
+  type Diagnostics, type ExtractionRow, type PromiseRow, inboxCounts, type PromiseFact, type SuggestionFact,
 } from "../plan/diagnostics.ts";
 import { inboxFacts, seen, type ConversationContext } from "./conversation-actions.ts";
 
@@ -100,5 +100,19 @@ export async function diagnostics(ctx: ConversationContext, cfg: AppConfig): Pro
     chats.push({ chatName: chat.displayName, clientName: clientName(chat.clientKey), kind: chat.kind, social: !!chat.social, total: stored.length, outcomes, marks: mine });
   }
 
-  return { at: now, days: DIAGNOSTICS_DAYS, promises: { byStatus, committed: committed.length, byReason, rows, extraction }, chats };
+  // 3. IB-4: the slim Inbox's counts (my marks and my own chat promises; no text).
+  const byConv = new Map(convs.map((c) => [c.id, c]));
+  const sFacts: SuggestionFact[] = [];
+  for (const [key, m] of marks as Map<string, InboxMark>) {
+    const k = parseKey(key);
+    const c = k?.source === "conversation" ? byConv.get(k.id) : undefined;
+    if (c && m.suggestedAt) sFacts.push({ suggestedAt: m.suggestedAt, outcome: m.outcome, itemId: c.itemId, windDown: c.windDown, closedAt: c.closedAt, lastWorkAt: c.lastWorkAt });
+  }
+  const pFacts: PromiseFact[] = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => same(k.whoId, v.me)).map((k) => {
+    const m = (marks as Map<string, InboxMark>).get(itemKey("chatPromise", k.id));
+    return { createdAt: k.createdAt, state: k.state, cleared: m?.cleared ?? null, clearedAt: m?.clearedAt ?? null, putBackAt: m?.putBackAt ?? null };
+  });
+  const inbox = inboxCounts(sFacts, pFacts, since, now);
+
+  return { at: now, days: DIAGNOSTICS_DAYS, promises: { byStatus, committed: committed.length, byReason, rows, extraction }, chats, inbox };
 }

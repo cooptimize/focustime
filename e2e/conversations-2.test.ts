@@ -307,7 +307,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       // Promises (IB-1: no Make it a follow-up): Who on mine to Blake, prefilled through the PersonPicker.
       const myp = await openInboxView(page, "promises");
       const sendTotals = await openInboxItem(page, "Send Blake the corrected October totals");
-      await expect(page.locator(".ib-row", { hasText: "Send Blake the corrected October totals" }).first().textContent()).resolves.toContain("For Blake Novak");
+      await expect(page.locator("li.ib4-row", { hasText: "Send Blake the corrected October totals" }).first().textContent()).resolves.toContain("For Blake Novak");
       await sendTotals.getByRole("button", { name: "Who", exact: true }).click();
       const who = sendTotals.getByRole("combobox", { name: "Who" });
       await expect.poll(() => who.inputValue()).toBe("Blake Novak");
@@ -347,9 +347,9 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await strip.getByRole("button", { name: /October totals look 4% low/ }).click();
       const conv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("October"))!;
       await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/inbox/item/v${conv.id}`);
-      const opened = page.locator(".ib-pane");
-      await opened.locator(".ib-detail-title", { hasText: "October totals on the Movement Dashboard" }).waitFor();
-      await expect(page.locator(`.ib-row[data-key="v${conv.id}"]`).getAttribute("aria-current")).resolves.toBe("true");
+      const opened = page.locator("li.ib4-row.open");
+      await opened.locator(".ib4-row-title", { hasText: "October totals on the Movement Dashboard" }).waitFor();
+      await expect(page.locator(`li.ib4-row[data-key="v${conv.id}"]`).getAttribute("aria-current")).resolves.toBe("true");
       await shotAll(page, "cv2-urgent-opens-conversation", opened);
 
       expect(graphRequests).toEqual([]);

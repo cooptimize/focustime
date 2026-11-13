@@ -104,7 +104,7 @@ describe.skipIf(!CHROMIUM)("the slim Inbox (IB-4)", () => {
     await expect.poll(async () => tab(page, /^Captures/).getAttribute("aria-selected")).toBe("true");
     for (const [slug, list] of [["needs-you", /^From chats/], ["waiting", /^From chats/], ["chatter", /^From chats/], ["in-progress", /^Promises/], ["my-promises", /^Promises/]] as const) {
       await page.evaluate((s) => (location.hash = `#/inbox/${s}`), slug);
-      await expect.poll(async () => tab(page, list).getAttribute("aria-selected"), slug).toBe("true");
+      await expect.poll(async () => tab(page, list).getAttribute("aria-selected"), { message: slug }).toBe("true");
     }
     // One conversation that isn't a suggestion (which story is next): it says so, with its chat in Teams.
     const convs = await call<{ needsYou: { id: number; title: string }[]; inProgress: { id: number; title: string }[]; teammates: { id: number; title: string }[] }>(page, "conversations.list", {});

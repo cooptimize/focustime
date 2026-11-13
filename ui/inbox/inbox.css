@@ -1,5 +1,5 @@
 /* IB-4: the slim Inbox. One column: the switch, the client chips, rows grouped by client that open in place. */
-main.ib4 { display: grid; gap: 12px; align-content: start; max-width: 960px; margin: 0 auto; padding: 16px 24px 32px; min-width: 0; }
+main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; align-content: start; width: 100%; box-sizing: border-box; padding: 16px max(24px, calc((100% - 960px) / 2)) 40px; min-width: 0; }
 .ib4-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
 .ib4-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
 .ib4-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
@@ -50,7 +50,8 @@ main.ib4 { display: grid; gap: 12px; align-content: start; max-width: 960px; mar
 
 @media (max-width: 640px) {
   main.ib4 { padding: 12px 16px 96px; }
-  .ib4-switch { width: 100%; }
-  .ib4-tab { flex: 1; justify-content: center; padding: 6px 4px; }
+  .ib4-head { gap: 8px; }
+  .ib4-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; box-sizing: border-box; }
+  .ib4-tab { justify-content: center; flex-wrap: wrap; gap: 2px 6px; min-width: 0; min-height: 44px; padding: 4px; text-align: center; overflow-wrap: anywhere; }
   .ib4-row > .ib4-open, .ib4-row > .ib-detail { padding: 0 12px 12px; }
 }

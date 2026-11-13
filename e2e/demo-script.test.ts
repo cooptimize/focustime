@@ -42,13 +42,14 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".day-view .half.card").first().waitFor({ timeout: 30_000 });
     await page.getByText(/Promise · was due/).first().waitFor();
     await page.getByText("Send Marcus the updated export spec").first().waitFor();
-    // IB-1 slice 4: the strip is the Inbox's own items, 3 at most, the most urgent first; the rest are "N more in Inbox".
+    // IB-4: the strip is my late or soon promises and sends waiting, 3 at most; From chats · 2 opens the suggestions.
     const strip = page.getByRole("region", { name: "Urgent" });
-    await expect.poll(() => strip.locator(".us-item").count()).toBe(3);
-    const badge = Number(await page.locator("nav.views .view-tab .count").first().textContent());
-    await expect(strip.locator(".us-all").textContent()).resolves.toBe(`${badge - 3} more in Inbox`);
-    await strip.locator(".us-all").click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/needs-you");
+    await expect.poll(() => strip.locator(".us-item").count()).toBeGreaterThan(0);
+    expect(await strip.locator(".us-item").count()).toBeLessThanOrEqual(3);
+    const chip = page.locator("a.att-chip.from-chats");
+    await expect(chip.textContent()).resolves.toMatch(/From chats · 2/);
+    await chip.click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/chats");
     await go(page, "#/today");
     await page.locator(".day-view .half.card").first().waitFor({ timeout: 30_000 });
     await shot(page, "today");
@@ -98,12 +99,13 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "break-down-created", panel);
     await panel.getByRole("button", { name: "Done" }).click();
 
-    // 6. Inbox › Needs you: the delivery fee question needs me; Create DevOps item from it.
-    await go(page, "#/inbox/needs-you");
+    // 6. Inbox › From chats: the delivery fee question needs an item; Create item from it.
+    await go(page, "#/inbox/chats");
     const main = page.getByRole("main", { name: "Inbox" });
-    const card = await openInboxItem(page, "Delivery fee missing from the order export");
-    await shot(page, "inbox-needs-you", main);
-    await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
+    const FEE = "Show the delivery fee as its own column in the order export";
+    const card = await openInboxItem(page, FEE);
+    await shot(page, "inbox-from-chats", main);
+    await card.getByRole("button", { name: /^Create item/ }).first().click();
     const draft = card.getByRole("form", { name: "Create DevOps item" });
     await expect.poll(() => draft.getByRole("textbox", { name: /^Title/ }).inputValue(), { timeout: 30_000 }).toContain("delivery fee");
     await shot(page, "inbox-create-form", draft);
@@ -115,22 +117,19 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "inbox-create-preview", preview);
     await preview.getByRole("button", { name: "Create in DevOps" }).click();
     await preview.waitFor({ state: "detached" });
-    await openInboxView(page, "in-progress");
-    await main.locator(".ib-row", { hasText: "Delivery fee missing from the order export" }).waitFor({ timeout: 30_000 });
-    await shot(page, "inbox-tracked");
+    // It has an item now: it leaves From chats.
+    await expect.poll(() => main.locator("li.ib4-row", { hasText: FEE }).count(), { timeout: 30_000 }).toBe(0);
+    await shot(page, "inbox-created");
 
-    // 7. Inbox › Promises: the late one and the one due Friday.
+    // 7. Inbox › Promises: the late one and the one due Friday, and the two that cleared on their own.
     const myp = await openInboxView(page, "promises");
-    await myp.locator(".ib-row", { hasText: "Send Marcus the updated export spec" }).waitFor({ timeout: 30_000 });
-    await myp.locator(".ib-row", { hasText: "Confirm the intake form go-live date" }).first().waitFor();
+    await myp.locator("li.ib4-row", { hasText: "Send Marcus the updated export spec" }).waitFor({ timeout: 30_000 });
+    await myp.locator("li.ib4-row", { hasText: "Confirm the intake form go-live date" }).first().waitFor();
     await shot(page, "inbox-promises");
-    const waiting = await openInboxView(page, "waiting");
-    await waiting.locator(".ib-row", { hasText: "Send Alex three test accounts with points balances" }).waitFor({ timeout: 30_000 });
-    await shot(page, "inbox-waiting");
-    const done = await openInboxView(page, "done");
-    await done.locator(".ib-row", { hasText: "Reminder text wording" }).waitFor({ timeout: 30_000 });
-    await done.locator(".ib-row", { hasText: "Send Lena the new reminder text" }).waitFor();
-    await shot(page, "inbox-done");
+    // Cleared on their own: the finished item's and the untouched one's.
+    await myp.locator(".ib4-cleared-toggle").click();
+    await myp.locator("ul.ib4-cleared").getByText(/#2216 was finished/).waitFor();
+    await shot(page, "inbox-cleared");
 
     // 8. Capture: N on Today, a line for Northwind, Enter. Then Captures: the seeded draft story's AI-prepared version.
     await go(page, "#/today");
@@ -147,7 +146,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await go(page, "#/inbox/captures");
     const draftPane = await openInboxItem(page, "Reorder from a past order");
     await draftPane.getByRole("button", { name: "Create in DevOps" }).click();
-    await page.getByText(/AI|prepared/i).first().waitFor({ timeout: 15_000 });
+    await page.getByRole("dialog", { name: "Create a DevOps item" }).waitFor({ timeout: 15_000 });
     await shot(page, "capture-ai-version");
     await page.getByRole("button", { name: "Not now" }).click();
     await page.getByText("Ask Dana which columns the export needs").first().waitFor({ timeout: 10_000 });

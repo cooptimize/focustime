@@ -182,7 +182,7 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       dv.items.get(438)!.fields["System.State"] = "Closed";
       await page.reload();
       await page.locator(".topbar").waitFor();
-      await promise.locator(".ib-detail-title", { hasText: "Sort out the date formats this week" }).waitFor();
+      await promise.locator(".ib4-row-title", { hasText: "Sort out the date formats this week" }).waitFor();
       await promise.getByText("Item closed").first().waitFor();
       await promise.locator(".ib-act.primary", { hasText: /^Mark done/ }).waitFor();
       expect((await convs.commitment(k.id))!.state).toBe("open");

@@ -126,20 +126,20 @@ describe.skipIf(!CHROMIUM)("QF-1 (browser, demo mode)", () => {
   it("Not work-related: one click on a conversation moves it to Chatter; Undo brings it back", async () => {
     const { page } = await freshPage(h);
     const list = await openInboxView(page, "needs-you");
-    const first = list.locator(".ib-row", { has: page.locator(".kind-conversation") }).first();
-    const name = (await first.locator(".ib-row-title").textContent())!;
+    const first = list.locator("li.ib4-row", { has: page.locator(".kind-conversation") }).first();
+    const name = (await first.locator(".ib4-row-title").textContent())!;
     await first.click();
     await shots(page, "conversation");
     await page.locator(".ib-acts").first().getByRole("button", { name: "Not work-related" }).click();
-    await expect.poll(() => page.locator(".ib-row-title").allTextContents()).not.toContain(name);
+    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).not.toContain(name);
     await page.getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => page.locator(".ib-row-title").allTextContents()).toContain(name);
+    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).toContain(name);
     // The row's ⋯ has it too.
-    const row = page.locator(".ib-rows > li", { has: page.locator(".ib-row-title", { hasText: name }) }).first();
+    const row = page.locator(".ib-rows > li", { has: page.locator(".ib4-row-title", { hasText: name }) }).first();
     await row.hover();
     await row.getByRole("button", { name: `More for ${name}` }).click();
     await row.getByRole("menuitem", { name: "Not work-related" }).click();
-    await expect.poll(() => page.locator(".ib-row-title").allTextContents()).not.toContain(name);
+    await expect.poll(() => page.locator(".ib4-row-title").allTextContents()).not.toContain(name);
     await page.close();
   }, T);
 });

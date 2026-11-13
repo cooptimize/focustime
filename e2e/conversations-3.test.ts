@@ -272,7 +272,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       // IB-1 slice 4: the mark opens that promise in the Inbox's detail pane, then back to the Board.
       await mark.click();
       await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/c\d+$/);
-      await page.locator(".ib-pane .ib-detail-title", { hasText: "Send Evan the October export" }).waitFor();
+      await page.locator("li.ib4-row.open .ib4-row-title", { hasText: "Send Evan the October export" }).waitFor();
       await page.keyboard.press("2");
 
       // Capture: Who through the PersonPicker, with the link offer for an exact name.

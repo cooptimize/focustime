@@ -61,7 +61,7 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await expect(page.locator(".urgent-strip .us-all").textContent()).resolves.toMatch(/^\d+ more in Inbox$/);
     await lines.filter({ hasText: "Loyalty points" }).locator(".us-line").click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/s\d+$/);
-    await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();
+    await page.locator("li.ib4-row.open .ib4-row-title", { hasText: "Loyalty points" }).waitFor();
     await commit(page);
     // WD-1 review: sends to answer are under To place, You sent in the folded group at the bottom; both unfolded.
     await page.locator("aside.block-panel .aw-sends section.team-group").waitFor({ timeout: 30_000 });
