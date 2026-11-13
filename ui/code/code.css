@@ -15,8 +15,10 @@
 .cv-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .cv-note { margin: 4px 0; color: var(--text-muted); font-size: var(--fs-2); }
 .cv-note.problem, .cv-tree-note.problem { color: var(--watch); }
-.cv-log-line { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: var(--fs-1); }
+.cv-log-line { margin: 0; color: var(--text-muted); font-size: var(--fs-1); }
+.cv-next { margin: 8px 0 0; color: var(--text-muted); }
 .cv-lead { margin: 0 0 12px; color: var(--text-muted); }
+.cv-state-text { margin: 0; }
 .cv-state { margin: 24px 0; padding: 16px; max-width: 70ch; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-muted); }
 
 /* The client picker */
@@ -31,7 +33,7 @@
 .cv-group-head { padding: 4px 8px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
 .cv-client-opt { width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .cv-client-opt:hover { background: var(--sunken); }
-.cv-client-opt[aria-selected="true"] { background: var(--raised); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.cv-client-opt[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
 .cv-client-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .cv-client-name { flex: 1; min-width: 0; }
 .cv-client-opt.locked { color: var(--text-faint); cursor: default; }
@@ -47,7 +49,7 @@
 .cv-find-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .cv-find-list li { display: flex; flex-direction: column; padding: 5px 10px; cursor: pointer; min-width: 0; }
 .cv-find-list li:hover { background: var(--sunken); }
-.cv-find-list li.on { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+.cv-find-list li.on { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 .cv-hit-name { font-family: var(--font-mono); font-size: var(--fs-2); overflow-wrap: anywhere; }
 .cv-hit-path { font-size: var(--fs-1); color: var(--text-faint); overflow-wrap: anywhere; }
 
@@ -55,7 +57,7 @@
 .cv-tree { list-style: none; margin: 0; padding: 0; min-width: 0; }
 .cv-tree-row { display: flex; align-items: center; gap: 2px; padding: 2px 6px 2px 0; border-radius: 6px; cursor: pointer; font-size: var(--fs-3); min-width: 0; }
 .cv-tree-row:hover { background: var(--sunken); }
-.cv-tree-row.selected { background: var(--raised); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.cv-tree-row.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
 .cv-tree-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .cv-tree-row .ah-chev { margin-block: 0; min-height: calc(24px * var(--text-scale)); pointer-events: none; }
 .cv-folder, .cv-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

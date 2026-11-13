@@ -487,6 +487,8 @@ const REPOS: Record<string, DemoRepo[] | "needs_code_read"> = {
   Atlas: [{ id: "a1b2c3d4-0003-4000-8000-00000000a003", name: "freight-ingest", files: ingest() }],
   Cooptimize: [{ id: "a1b2c3d4-0004-4000-8000-00000000a004", name: "delivery-toolkit", files: internal() }],
   Fabrikam: [{ id: "a1b2c3d4-0005-4000-8000-00000000a005", name: "fiber-reporting", files: sales() }],
+  // A customer the demo's person isn't on, readable by the whole company: the case Code is for.
+  Tailspin: [{ id: "a1b2c3d4-0007-4000-8000-00000000a007", name: "flight-data", files: ingest() }],
   Harbor: "needs_code_read",
 };
 const ORGS: Record<string, { org: string; project: string }> = {
@@ -494,6 +496,7 @@ const ORGS: Record<string, { org: string; project: string }> = {
   Atlas: { org: "atlas-demo", project: "Logistics" },
   Cooptimize: { org: "cooptimize-demo", project: "Internal" },
   Fabrikam: { org: "fabrikam-demo", project: "Fiber" },
+  Tailspin: { org: "tailspin-demo", project: "Flights" },
 };
 
 const enc = new TextEncoder();

@@ -323,8 +323,9 @@ function Lines({ lines, wrap }: { lines: Line[]; wrap: boolean }) {
   );
 }
 
-function FileView({ file, repo, onFolder, clientName }: { file: CodeFileView; repo: CodeRepoView; onFolder: (path: string) => void; clientName: string }) {
-  const [wrap, setWrap] = useState(false);
+function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileView; repo: CodeRepoView; onFolder: (path: string) => void; clientName: string; phone: boolean }) {
+  // A phone wraps by default: sideways scrolling a narrow box is the harder way to read.
+  const [wrap, setWrap] = useState(phone);
   const [formatOn, setFormatOn] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => (setFormatOn(false), setToast(null)), [file.path]);
@@ -536,6 +537,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       ) : (
         <>
           <ClientPicker clients={list} current={client} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
+          <p className="cv-log-line" data-code-log-line="">{logLine}</p>
           {client && !client.locked && Array.isArray(repoList) && repoList.length > 1 && (
             <label className="cv-repo">
               <span className="sr-only">Repo</span>
@@ -561,7 +563,6 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
               })()}
             </>
           )}
-          <p className="cv-log-line" data-code-log-line="">{logLine}</p>
         </>
       )}
     </div>
@@ -578,9 +579,21 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     </div>
   );
   else if (!client) body = <p className="cv-state" data-code-state="no_client">That client isn't in FocusTime.</p>;
-  else if (client.locked) body = <p className="cv-state" data-code-state="team_only">Only {client.name}'s team can open this.</p>;
+  else if (client.locked)
+    body = (
+      <div className="cv-state">
+        <p className="cv-state-text" data-code-state="team_only">Only {client.name}'s team can open this.</p>
+        <p className="cv-next">A FocusTime admin set it that way. If you need something from it, ask someone on {client.name}'s team.</p>
+      </div>
+    );
   else if (repoList === undefined || repoList === "loading") body = <p className="cv-note" role="status">Loading…</p>;
-  else if (!Array.isArray(repoList)) body = <p className="cv-state" data-code-state={repoList.code ?? "error"}>{repoList.message}</p>;
+  else if (!Array.isArray(repoList))
+    body = (
+      <div className="cv-state">
+        <p className="cv-state-text" data-code-state={repoList.code ?? "error"}>{repoList.message}</p>
+        {repoList.code === "needs_code_read" && <p className="cv-next">A FocusTime admin can ask for Code (read) to be added. Its work items show as before.</p>}
+      </div>
+    );
   else if (!repoList.length) body = <p className="cv-state">{TEXT.noRepos(client.name)}</p>;
   else if (!at.repoId) body = <p className="cv-note">{TEXT.pickRepo}</p>;
   else if (!repo) body = <p className="cv-state" data-code-state="no_repo">That repo isn't one of {client.name}'s.</p>;
@@ -589,7 +602,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   else if (!at.path) body = <p className="cv-note">{TEXT.pickFile}</p>;
   else if (!fileState || fileState.state === "loading") body = <p className="cv-note" role="status">Loading…</p>;
   else if (fileState.state === "failed") body = <p className="cv-state" data-code-state={fileState.failure.code ?? "error"}>{fileState.failure.message}</p>;
-  else body = <FileView file={fileState.file} repo={repo} clientName={client.name} onFolder={openFolder} />;
+  else body = <FileView file={fileState.file} repo={repo} clientName={client.name} onFolder={openFolder} phone={phone} />;
 
   const title = (
     <span className="cv-title" data-code-title={client?.clientKey ?? ""}>

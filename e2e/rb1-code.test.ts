@@ -68,6 +68,8 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     const start = panel(page).locator(".cv-start");
     await start.waitFor();
     expect(await start.locator(".cv-group-head").allTextContents()).toEqual(["Your clients", "Other clients"]);
+    // A client I'm not on opens like my own (the case Code is for).
+    expect(await start.locator("[role=group][aria-label='Other clients'] .cv-client-opt", { hasText: "Tailspin" }).getAttribute("aria-disabled")).toBeNull();
     const fab = start.locator(".cv-client-opt", { hasText: "Fabrikam" });
     expect(await fab.getAttribute("aria-disabled")).toBe("true");
     expect(await fab.textContent()).toContain("Only Fabrikam's team can open this");
