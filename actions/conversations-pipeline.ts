@@ -427,7 +427,7 @@ async function sortBatch(d: PipelineDeps, chat: ClientChat, batchIn: readonly Te
     await d.convs.updateConversation(
       id,
       {
-        ...(u ? { title: u.title || c.title, summary: u.summary || c.summary, changeNote: reopened ? reopenNote : u.change || null, likelyItem: u.likelyItem ?? c.likelyItem } : { changeNote: reopened ? reopenNote : "New messages" }),
+        ...(u ? { title: u.title || c.title, summary: u.summary || c.summary, changeNote: reopened ? reopenNote : u.change || null, likelyItem: u.likelyItem ?? c.likelyItem, itemNeeded: c.itemId ? null : u.itemNeeded } : { changeNote: reopened ? reopenNote : "New messages" }),
         participants, ownerId: owner, lastAt: Date.parse(last) > Date.parse(c.lastAt) ? last : c.lastAt, lastWorkAt: last, windDown: !!u?.wrappedUp || (acked.has(id) && Date.parse(acked.get(id)!) > Date.parse(last)), itemChange,
       },
       { bump: true },

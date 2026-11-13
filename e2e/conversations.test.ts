@@ -78,7 +78,7 @@ function answer(inputText: string): string {
   if (input.messages.some((m) => /CRM_Silver/.test(m.text))) {
     const a: UpdateAnswer = {
       messages: work("n1"),
-      conversations: [{ ref: "n1", title: "Rerun the Salesforce data from CRM_Silver", summary: "Evan asked for a rerun today.\nSam will do it tonight.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will rerun it tonight", item_change: null, scope_changed: false, likely_item: null,
+      conversations: [{ ref: "n1", title: "Rerun the Salesforce data from CRM_Silver", summary: "Evan asked for a rerun today.\nSam will do it tonight.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will rerun it tonight", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Sam Tester")!, what: "Rerun the Salesforce data from CRM_Silver", due: "2026-11-02T19:30", to: ref("Evan Ford"), implies_item: false, messages: by("Sam Tester"), status_only: false }] }],
     };
     return JSON.stringify(a);
@@ -87,9 +87,9 @@ function answer(inputText: string): string {
   const a: UpdateAnswer = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: lena.includes(m.ref) ? "n2" : "n1", confident_new_topic: lena.includes(m.ref) })),
     conversations: [
-      { ref: "n1", title: "Movement Dashboard quantity gap on 4417001", summary: "Blake sees about 7.7k lb less on the Movement Dashboard than the BOM report for 4417001.\nEvan and Lena traced it to BOM bridging.\nSam will add the fix to the development queue.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will add the fix to the development queue", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n1", title: "Movement Dashboard quantity gap on 4417001", summary: "Blake sees about 7.7k lb less on the Movement Dashboard than the BOM report for 4417001.\nEvan and Lena traced it to BOM bridging.\nSam will add the fix to the development queue.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will add the fix to the development queue", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Sam Tester")!, what: "Add the BOM bridging fix to the development queue", due: null, to: ref("Blake Novak"), implies_item: true, messages: by("Sam Tester"), status_only: false }] },
-      { ref: "n2", title: "Dashboard refresh schedule", summary: "Blake asks whether the dashboard can refresh at 6 AM.\nLena is changing the schedule.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is changing the schedule", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n2", title: "Dashboard refresh schedule", summary: "Blake asks whether the dashboard can refresh at 6 AM.\nLena is changing the schedule.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is changing the schedule", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Lena Hart")!, what: "Move the refresh to 6 AM", due: null, to: ref("Blake Novak"), implies_item: false, messages: lena.filter((r) => input.messages.find((m) => m.ref === r)?.from === ref("Lena Hart")), status_only: false }] },
     ],
   };

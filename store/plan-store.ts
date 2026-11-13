@@ -16,6 +16,7 @@ import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel } from "../plan/weeklist.ts";
 import { DEFAULT_SIZE_SCALE, MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type SizeScale, type StorySize } from "../plan/estimate.ts";
 import type { DeployItem } from "../plan/deploy-items.ts";
+import type { InboxMark, InboxMarkPatch } from "../plan/inbox-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
@@ -3350,32 +3351,44 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       });
     },
     // ---- IB-1: my marks on Inbox items (seen, snoozed until, hidden), by item key (plan/inbox-items.ts) ----
-    async inboxMarks(): Promise<Map<string, { seenAt: string | null; snoozedUntil: string | null; hiddenAt: string | null }>> {
-      const rows = (await db.all("SELECT item_key, seen_at, snoozed_until, hidden_at FROM inbox_marks")) as Row[];
-      return new Map(rows.map((r) => [String(r.item_key), { seenAt: (r.seen_at as string | null) ?? null, snoozedUntil: (r.snoozed_until as string | null) ?? null, hiddenAt: (r.hidden_at as string | null) ?? null }]));
+    // IB-4 adds: when a conversation first showed as a suggestion, what I did with it, when I last touched a promise,
+    // how a promise cleared on its own and when I put it back.
+    async inboxMarks(): Promise<Map<string, InboxMark>> {
+      const rows = (await db.all("SELECT * FROM inbox_marks")) as Row[];
+      const t = (v: unknown) => (v as string | null) ?? null;
+      return new Map(rows.map((r) => [String(r.item_key), {
+        seenAt: t(r.seen_at), snoozedUntil: t(r.snoozed_until), hiddenAt: t(r.hidden_at),
+        suggestedAt: t(r.suggested_at), outcome: (t(r.outcome) as InboxMark["outcome"]) ?? null, outcomeAt: t(r.outcome_at),
+        touchedAt: t(r.touched_at), cleared: (t(r.cleared) as InboxMark["cleared"]) ?? null, clearedAt: t(r.cleared_at), putBackAt: t(r.put_back_at),
+      }]));
     },
-    /** Sets some of an item's marks (the others kept); null clears one. Seen is only ever set once. How many were newly seen. */
-    async markInbox(keys: readonly string[], p: { seen?: true; snoozedUntil?: string | null; hidden?: boolean }): Promise<number> {
+    /**
+     * Sets some of an item's marks (the others kept); null clears one. Seen and suggested are only ever set once. How
+     * many were newly seen.
+     */
+    async markInbox(keys: readonly string[], p: InboxMarkPatch): Promise<number> {
       if (!keys.length) return 0;
       return tx(async () => {
         const now = opts.now().toInstant().toString();
         let newlySeen = 0;
         for (const key of keys) {
-          const had = (await db.get("SELECT seen_at FROM inbox_marks WHERE item_key = ?", key)) as Row | undefined;
+          const had = (await db.get("SELECT seen_at, suggested_at FROM inbox_marks WHERE item_key = ?", key)) as Row | undefined;
           if (!had) {
-            await db.run(
-              "INSERT INTO inbox_marks (item_key, seen_at, snoozed_until, hidden_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-              key, p.seen ? now : null, p.snoozedUntil ?? null, p.hidden ? now : null, now,
-            );
+            await db.run("INSERT INTO inbox_marks (item_key, seen_at, snoozed_until, hidden_at, updated_at) VALUES (?, ?, ?, ?, ?)", key, p.seen ? now : null, p.snoozedUntil ?? null, p.hidden ? now : null, now);
             if (p.seen) newlySeen++;
-            continue;
+          } else {
+            if (p.seen && !had.seen_at) {
+              await db.run("UPDATE inbox_marks SET seen_at = ?, updated_at = ? WHERE item_key = ?", now, now, key);
+              newlySeen++;
+            }
+            if (p.snoozedUntil !== undefined) await db.run("UPDATE inbox_marks SET snoozed_until = ?, updated_at = ? WHERE item_key = ?", p.snoozedUntil, now, key);
+            if (p.hidden !== undefined) await db.run("UPDATE inbox_marks SET hidden_at = ?, updated_at = ? WHERE item_key = ?", p.hidden ? now : null, now, key);
           }
-          if (p.seen && !had.seen_at) {
-            await db.run("UPDATE inbox_marks SET seen_at = ?, updated_at = ? WHERE item_key = ?", now, now, key);
-            newlySeen++;
-          }
-          if (p.snoozedUntil !== undefined) await db.run("UPDATE inbox_marks SET snoozed_until = ?, updated_at = ? WHERE item_key = ?", p.snoozedUntil, now, key);
-          if (p.hidden !== undefined) await db.run("UPDATE inbox_marks SET hidden_at = ?, updated_at = ? WHERE item_key = ?", p.hidden ? now : null, now, key);
+          if (p.suggested && !had?.suggested_at) await db.run("UPDATE inbox_marks SET suggested_at = ?, updated_at = ? WHERE item_key = ?", now, now, key);
+          if (p.outcome !== undefined) await db.run("UPDATE inbox_marks SET outcome = ?, outcome_at = ?, updated_at = ? WHERE item_key = ?", p.outcome, p.outcome ? now : null, now, key);
+          if (p.touched) await db.run("UPDATE inbox_marks SET touched_at = ?, updated_at = ? WHERE item_key = ?", now, now, key);
+          if (p.cleared !== undefined) await db.run("UPDATE inbox_marks SET cleared = ?, cleared_at = ?, updated_at = ? WHERE item_key = ?", p.cleared?.how ?? null, p.cleared?.at ?? null, now, key);
+          if (p.putBack) await db.run("UPDATE inbox_marks SET cleared = NULL, cleared_at = NULL, put_back_at = ?, touched_at = ?, updated_at = ? WHERE item_key = ?", now, now, now, key);
         }
         return newlySeen;
       });

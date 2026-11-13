@@ -105,9 +105,9 @@ function answer(inputText: string): string {
   const a: UpdateAnswer = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: lena.includes(m.ref) ? "n2" : "n1", confident_new_topic: lena.includes(m.ref) })),
     conversations: [
-      { ref: "n1", title: "October totals on the Movement Dashboard", summary: "Blake sees October totals about 4% lower than the finance report and pasted the chart.\nEvan traced it to the date filter.\nSam will send corrected totals tomorrow.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will send corrected totals tomorrow", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n1", title: "October totals on the Movement Dashboard", summary: "Blake sees October totals about 4% lower than the finance report and pasted the chart.\nEvan traced it to the date filter.\nSam will send corrected totals tomorrow.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will send corrected totals tomorrow", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Sam Tester")!, what: "Send Blake the corrected October totals", due: "2026-11-03", to: ref("Blake Novak"), implies_item: false, messages: mine, status_only: false }] },
-      { ref: "n2", title: "Dashboard refresh time", summary: "Blake asks whether the refresh can move to 6 AM.\nLena is moving it.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is moving it", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n2", title: "Dashboard refresh time", summary: "Blake asks whether the refresh can move to 6 AM.\nLena is moving it.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is moving it", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Lena Hart")!, what: "Move the refresh to 6 AM", due: null, to: ref("Blake Novak"), implies_item: false, messages: lena.filter((r) => input.messages.find((m) => m.ref === r)?.from === ref("Lena Hart")), status_only: false }] },
     ],
   };

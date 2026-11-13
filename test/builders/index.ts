@@ -289,7 +289,7 @@ export function aClientChat(o: Partial<import("../../plan/requests.ts").ClientCh
 type UpdateAnswer = import("../../plan/conversations.ts").UpdateAnswer;
 /** One conversation in a "conversations.update" answer (a new one, n1, by default). */
 export function aConversationUpdate(o: Partial<UpdateAnswer["conversations"][number]> = {}): UpdateAnswer["conversations"][number] {
-  return { ref: "n1", title: "Weekly report totals", summary: "The client asks about the weekly report.", owner: null, wrapped_up: false, change: "New question", item_change: null, scope_changed: false, likely_item: null, commitments: [], ...o };
+  return { ref: "n1", title: "Weekly report totals", summary: "The client asks about the weekly report.", owner: null, wrapped_up: false, change: "New question", item_change: null, scope_changed: false, likely_item: null, item_needed: null, commitments: [], ...o };
 }
 /** A commitment in a "conversations.update" answer. */
 export function aCommitmentAnswer(o: Partial<UpdateAnswer["conversations"][number]["commitments"][number]> = {}): UpdateAnswer["conversations"][number]["commitments"][number] {

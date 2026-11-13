@@ -75,7 +75,7 @@ function answer(c: ProviderCall): string {
   const me = input.people.find((p) => p.name === "Sam Tester")?.ref ?? "p1";
   const a: UpdateAnswer & { images?: { ref: string; description: string }[] } = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: "n1", confident_new_topic: false })),
-    conversations: [{ ref: "n1", title: "Dashboard refresh fails overnight", summary: "Blake pasted the totals chart and the refresh error.\nSam will log a bug.", owner: me, wrapped_up: false, change: "Sam will log a bug", item_change: null, scope_changed: false, likely_item: null,
+    conversations: [{ ref: "n1", title: "Dashboard refresh fails overnight", summary: "Blake pasted the totals chart and the refresh error.\nSam will log a bug.", owner: me, wrapped_up: false, change: "Sam will log a bug", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
       commitments: [{ who: me, what: "Log a bug for the overnight refresh", due: null, to: null, implies_item: true, messages: input.messages.filter((m) => m.from === me).map((m) => m.ref), status_only: false }] }],
   };
   if (c.images) a.images = c.images.map((i) => /^Image (i\d+),/.exec(i.label)![1]!).map((ref) => ({ ref, description: DESCRIPTIONS[ref] ?? "An image" }));

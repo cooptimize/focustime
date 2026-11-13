@@ -41,6 +41,12 @@ export function parseKey(key: string): { source: KeySource; id: number } | null 
 
 /** My marks on an item (inbox_marks): seen, snoozed until an instant, hidden. Absent: none. */
 export type Mark = { seenAt: string | null; snoozedUntil: string | null; hiddenAt: string | null };
+/** IB-4: what I did with a suggestion; how a promise cleared on its own. */
+export type SuggestionOutcome = "created" | "linked" | "dismissed";
+export type ClearedHow = "item" | "expired";
+/** The whole row of my marks (IB-1's three plus IB-4's). */
+export type InboxMark = Mark & { suggestedAt: string | null; outcome: SuggestionOutcome | null; outcomeAt: string | null; touchedAt: string | null; cleared: ClearedHow | null; clearedAt: string | null; putBackAt: string | null };
+export type InboxMarkPatch = { seen?: true; snoozedUntil?: string | null; hidden?: boolean; suggested?: true; outcome?: SuggestionOutcome | null; touched?: true; cleared?: { how: ClearedHow; at: string } | null; putBack?: true };
 
 /** What the rules need to know about one item; the server fills it from each source. */
 export type InboxFacts = {
