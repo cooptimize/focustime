@@ -23,6 +23,7 @@ import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown,
 import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 type Size = "XS" | "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
@@ -751,7 +752,7 @@ function Acceptance({ items, disabled, onChange }: { items: string[]; disabled: 
       )}
       {!disabled && (
         <button type="button" className="link-btn bd-ac-add" onClick={() => (onChange([...items, ""]), setFocusAt(items.length))}>
-          + Add a criterion
+          <Icon name="add" /> Add a criterion
         </button>
       )}
     </div>

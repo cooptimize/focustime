@@ -36,6 +36,7 @@ import { useAhead } from "./Ahead.tsx";
 import { CellEditor, type EditKind } from "./Editors.tsx";
 import { isNum, usePref } from "./prefs.ts";
 import { isOpen, type Group, type Row } from "./model.ts";
+import { Icon } from "../icons.tsx";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
@@ -748,7 +749,7 @@ function Marker({ r, innerRef, x, callouts, planned, env, tab, collapsed, onFix 
           }
         }}
       >
-        <span aria-hidden="true">{n ? "⚑" : "◷"}</span>
+        <Icon name={n ? "flag" : "time"} />
         {n > 1 && <span className="pa-marker-n">{n}</span>}
       </button>
       {open && (

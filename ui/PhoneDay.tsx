@@ -15,6 +15,7 @@ import { countdown, timerLeft } from "./NowStrip.tsx";
 import { todoLine, useTodoSheet } from "./TodoSheet.tsx";
 import { userZone } from "../week/zone.ts";
 import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
+import { Icon } from "./icons.tsx";
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -147,7 +148,7 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
             {!mine.length && <BlockSuggestions date={s.date} half={s.half} where="phone" />}
             {onAdd && !over && !s.off && !s.pto && (
               <button type="button" className="add-work add-row ph-add" onClick={() => onAdd(s.half)} aria-label={`Add to ${client ? nameOf(client) : "this block"}`}>
-                + Add
+                <Icon name="add" /> Add
               </button>
             )}
           </div>

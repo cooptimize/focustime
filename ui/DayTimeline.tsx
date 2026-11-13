@@ -31,6 +31,7 @@ import { BandEditCtx, timeboxRun, useBandDrag, useTimeboxes, type BandEdit, type
 import { ms, pct, railNowOf, Timeline } from "./Timeline.tsx";
 import { WeekDnd } from "./WeekStories.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 /** Timebox my day's suggestions, until each is accepted or dropped. */
 export type Proposals = { date: IsoDate; items: DayPlacement[]; unplaced: Unplaced[]; outlook: boolean };
@@ -564,7 +565,7 @@ function TimelineBlock(b: BlockProps) {
       )}
       {b.phone && b.onAdd && !slot.pto && !slot.off && (
         <button type="button" className="add-work add-row tt-add" onClick={b.onAdd} aria-label={`Add to ${name}, ${halfName(slot.half)}`}>
-          + Add
+          <Icon name="add" /> Add
         </button>
       )}
     </article>
@@ -586,7 +587,7 @@ function TodoChecklist({ b }: { b: BlockProps }) {
   return (
     <aside ref={b.trayRef} className={`tt-check${folded ? " folded" : ""}`} aria-label={`To-dos, ${halfName(slot.half)}`}>
       <button type="button" className="tt-check-toggle" aria-expanded={!folded} onClick={() => setFolded((f) => !f)}>
-        <span aria-hidden="true">{folded ? "▸" : "▾"}</span> To-dos · {count}
+        <Icon name={folded ? "closed" : "open"} /> To-dos · {count}
       </button>
       <div className="tt-check-body">
         {timed.length > 0 && <ul className="today-picks tt-check-timed">{timed.map((t) => row(t.pick, "timed"))}</ul>}
@@ -598,7 +599,7 @@ function TodoChecklist({ b }: { b: BlockProps }) {
         {count === 0 && <BlockSuggestions date={slot.date} half={slot.half} where="timeline" />}
         {b.onAdd && !slot.pto && !slot.off && (
           <button type="button" className="add-work add-row tt-add" onClick={b.onAdd} title="Add to this block (A)" aria-label={`Add to ${b.name}, ${halfName(slot.half)}`}>
-            + Add
+            <Icon name="add" /> Add
           </button>
         )}
       </div>
@@ -681,8 +682,8 @@ function Placeholder({ p, slot, tz, pos, span, phone, client, colors, selected, 
         <span className="tbox-time">{words}{p.trimmed ? " · shortened to fit" : ""}</span>
       </span>
       <span className="tt-ph-acts">
-        <button type="button" onPointerDown={noDrag} onClick={onAccept} aria-label={`Accept ${p.title}`} title="Accept">✓</button>
-        <button type="button" onPointerDown={noDrag} onClick={onDrop} aria-label={`Drop ${p.title}`} title="Drop">✕</button>
+        <button type="button" onPointerDown={noDrag} onClick={onAccept} aria-label={`Accept ${p.title}`} title="Accept"><Icon name="done" /></button>
+        <button type="button" onPointerDown={noDrag} onClick={onDrop} aria-label={`Drop ${p.title}`} title="Drop"><Icon name="close" /></button>
       </span>
       <span className="tbox-edge" onPointerDown={(ev) => down(ev, "end")} aria-hidden="true" />
     </div>

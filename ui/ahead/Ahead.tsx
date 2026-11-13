@@ -35,6 +35,7 @@ import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts
 import { isBool, usePref } from "./prefs.ts";
 import { AttentionLine, Toolbar, type AheadViewState } from "./Toolbar.tsx";
 import { kindCounts, progressText, startHere, type Skips } from "../../plan/readiness.ts";
+import { Icon } from "../icons.tsx";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const BATCH = 10;
@@ -458,7 +459,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
         </button>
         {openNew && !readOnly && (
           <button type="button" className="top-btn ah-new" onClick={newHere} title="A new story, feature, epic or any level, straight to DevOps (Shift N)">
-            + New
+            <Icon name="add" /> New
           </button>
         )}
         {load && n > 0 && (

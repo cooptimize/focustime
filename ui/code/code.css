@@ -111,3 +111,15 @@
 .panel-shell.phone.code-panel .cv-file-head { position: static; }
 .panel-shell.phone.code-panel .cv-code { max-height: none; }
 .panel-shell.phone.code-panel .cv-lines { font-size: var(--fs-2); }
+
+/* RS-1: the tree's rows are the app's rows: 8 radius, the faint wash on hover, the accent wash when selected, no edge. */
+.cv-tree-row { min-height: var(--h-small); border-radius: var(--radius-input); }
+.cv-tree-row:hover { background: var(--wash-1); }
+.cv-tree-row.selected { background: var(--wash-accent); border-radius: var(--radius-input); box-shadow: none; font-weight: 500; }
+.cv-kind { color: var(--text-muted); margin-right: 4px; }
+.cv-tree-row.selected .cv-kind { color: inherit; }
+/* Read only is a status: a wash, no line. */
+.cv-ro { border: 0; background: var(--wash-2); color: var(--text-muted); }
+/* No wrap | Wrap: the switch's two sides; the ring shows on the track when the keyboard is on it. */
+.cv-wrap-switch { margin-left: 4px; cursor: pointer; }
+.cv-wrap-switch:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }

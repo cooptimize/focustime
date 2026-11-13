@@ -18,6 +18,7 @@ import type { MenuItem } from "../menu.ts";
 import { SelectField } from "../SelectField.tsx";
 import { useAdmin } from "../settings/Admin.tsx";
 import { DEFAULT_FILTERS, epicsOf, type Tier } from "./model.ts";
+import { Icon } from "../icons.tsx";
 
 export type AheadViewState = {
   fold: Fold;
@@ -125,7 +126,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
           <input className="rm-search" type="text" placeholder="Titles or #id" aria-label="Search titles or #id" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === "Escape" && f.q && (e.stopPropagation(), set({ ...f, q: "" }))} />
           {f.q && (
             <button type="button" className="ah-search-clear" aria-label="Clear the search" onClick={() => set({ ...f, q: "" })}>
-              ×
+              <Icon name="close" />
             </button>
           )}
         </span>
@@ -133,7 +134,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
           {extra}
           <FilterButton f={f} set={set} load={load} view={view} count={nFilter} epics={epics} />
           <button ref={more} type="button" className="top-btn ah-tb-more" aria-label="More: rows and view" aria-haspopup="menu" title="Expand all, Collapse all, Callouts, Whole project, scope" onClick={openMore}>
-            ⋯
+            <Icon name="more" />
           </button>
         </span>
       </div>
@@ -144,7 +145,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
             {sum.chips.map((c) => (
               <button key={c.id} type="button" className="ah-tb-chip" data-chip={c.id} aria-label={`Remove the filter ${c.label}`} title="Remove this filter" onClick={() => set(c.clear(f))}>
                 {c.label}
-                <span aria-hidden="true">×</span>
+                <Icon name="close" />
               </button>
             ))}
             <button type="button" className="mini quiet ah-tb-clear" onClick={() => set(cleared(f, DEFAULT_FILTERS))}>
@@ -236,7 +237,7 @@ function DatesButton({ f, set, today }: { f: AheadFilters; set: (f: AheadFilters
       <button ref={btn} type="button" className="date-field select-field ah-tb-select" aria-label={`Dates: ${words}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span>{words}</span>
         <span className="date-field-icon" aria-hidden="true">
-          ▾
+          <Icon name="open" />
         </span>
       </button>
       {open && (

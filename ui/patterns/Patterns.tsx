@@ -23,6 +23,7 @@ import { Classification } from "./Classification.tsx";
 import { RequestTypes } from "./RequestTypes.tsx";
 import { analysisScopeWords, type AnalysisScope, type Layout, type ProjectLayout } from "../../plan/patterns/scope.ts";
 import type { Labels, Platform, TypeChange, TypeList } from "../../plan/patterns/types.ts";
+import { Icon } from "../icons.tsx";
 
 type ClientProgress = { state: "waiting" | "reading" | "done" | "stopped" | "skipped" | "needs_scope"; reason?: string | null; phase?: string; month?: number; next?: number; total?: number; done?: number; dropped?: number; capped?: boolean; project?: number; projects?: string[]; read?: number; outside?: number };
 type RunView = { id: number; kind: "inventory" | "classify"; state: "running" | "stopped" | "done"; rules: number; reason: string | null; startedAt: string; finishedAt: string | null; pass: 1 | 2 | null; listVersion: string | null; estimateMicros: number; spentMicros: number; clients: Record<string, ClientProgress> };
@@ -242,7 +243,7 @@ function ScopeSection({ clients, busy, onSave }: { clients: ClientRow[]; busy: b
             <Fragment key={c.key}>
               <tr>
                 <th scope="row">
-                  {c.layout ? <button type="button" className="pl-fold" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}>{open === c.key ? "▾" : "▸"} {c.key}</button> : c.key}
+                  {c.layout ? <button type="button" className="pl-fold" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}><Icon name={open === c.key ? "open" : "closed"} /> {c.key}</button> : c.key}
                 </th>
                 <td className={c.scope.next ? undefined : "field-problem"}>
                   {c.scope.next ? <>{analysisScopeWords(c.scope.next)}<span className="set-hint adm-block">{SOURCE_WORDS[c.scope.nextSource ?? ""] ?? ""}</span></> : c.scope.nextWords}
@@ -356,7 +357,7 @@ function KindsSection({ clients, busy, onKind }: { clients: ClientRow[]; busy: b
       {withKinds.map((c) => (
         <Fragment key={c.key}>
           <button type="button" className="pl-fold" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}>
-            {open === c.key ? "▾" : "▸"} {c.key} · {(["build", "tickets", "leave_out"] as const).map((k) => [k, c.analysis!.kinds.filter((r) => r.kind === k).length] as const).filter(([, n]) => n).map(([k, n]) => `${KIND_WORDS[k]} ${n}`).join(" · ")}{c.kindsChanged ? " · changed since the last inventory" : ""}
+            <Icon name={open === c.key ? "open" : "closed"} /> {c.key} · {(["build", "tickets", "leave_out"] as const).map((k) => [k, c.analysis!.kinds.filter((r) => r.kind === k).length] as const).filter(([, n]) => n).map(([k, n]) => `${KIND_WORDS[k]} ${n}`).join(" · ")}{c.kindsChanged ? " · changed since the last inventory" : ""}
           </button>
           {open === c.key && (
             <table className="adm-table pat-kinds">
@@ -437,7 +438,7 @@ function Inventory({ clients, onPlatform }: { clients: ClientRow[]; onPlatform: 
               <Fragment key={c.key}>
                 <tr>
                   <th scope="row">
-                    {s ? <button type="button" className="pl-fold" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}>{open === c.key ? "▾" : "▸"} {c.key}</button> : c.key}
+                    {s ? <button type="button" className="pl-fold" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}><Icon name={open === c.key ? "open" : "closed"} /> {c.key}</button> : c.key}
                     {c.snapshotAt && <span className="set-hint adm-block">{when(c.snapshotAt)}</span>}
                   </th>
                   <td>

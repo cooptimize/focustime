@@ -27,6 +27,7 @@ import { actsFor, ITEM_KEYS, type FormId } from "./ItemActions.tsx";
 import { dueWords, lateText } from "./model.ts";
 import { SuggestionOpen, type SuggestionForm } from "./Suggestion.tsx";
 import "./inbox.css";
+import { Icon } from "../icons.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 /** The remembered list is the person's Inbox setting (ui.set_inbox's view): From chats is stored as Needs you. */
@@ -343,7 +344,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
         <span className="ib4-row-sub muted">{sub}</span>
       </span>
       {tag && <span className={`ib-tag tone-${tag.tone}`}>{tag.text}</span>}
-      <span className="ib4-chev" aria-hidden="true">{openKey === key ? "⌃" : "›"}</span>
+      <span className="ib4-chev"><Icon name={openKey === key ? "up" : "next"} /></span>
     </button>
   );
   const groupHead = (name: string, n: number) => (
@@ -457,7 +458,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const promisesFoot = cleared.length ? (
     <footer className="ib4-foot" aria-label="Cleared on their own">
       <button type="button" className="link-btn ib4-cleared-toggle" aria-expanded={clearedOpen} onClick={() => (clearedOpen ? setClearedOpen(false) : showCleared())}>
-        Cleared on their own · {cleared.length} {clearedOpen ? "⌃" : "›"}
+        Cleared on their own · {cleared.length} <Icon name={clearedOpen ? "up" : "next"} />
       </button>
       {clearedOpen && (
         <ul className="ib4-cleared" aria-label="Cleared on their own">
@@ -491,6 +492,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
         <div className="ib4-switch" role="tablist" aria-label="Lists" data-tour="ib-rail">
           {INBOX_LISTS.map((l) => (
             <button key={l} type="button" role="tab" aria-selected={list === l} className={`ib4-tab${list === l ? " on" : ""}`} onClick={() => chooseList(l)}>
+              <Icon name={l === "chats" ? "chats" : l === "promises" ? "promise" : "to-sort"} />
               {INBOX_LIST_NAMES[l]} <span className="ib4-count">{counts[l]}</span>
             </button>
           ))}

@@ -8,6 +8,7 @@ import { useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseE
 import { aboutText, hoursText, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS, parseHours, sizeChipText, stepHours, storyMinutes, STORY_SIZES, unsizedText, type SizeScale, type StorySize } from "../../plan/estimate.ts";
 import { MenuCtx } from "../Menus.tsx";
 import type { MenuStep } from "../menu.ts";
+import { Icon } from "../icons.tsx";
 
 type StepperProps = {
   /** The estimate in minutes (whole hours). */
@@ -39,9 +40,9 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
   if (derived || !onSet)
     return (
       <span className={`hours-stepper derived ${className}`} role="group" aria-label={`Hours for ${label}${derived ? ", from its stories" : ""}`}>
-        <span className="hs-step hs-ph" aria-hidden="true">−</span>
+        <span className="hs-step hs-ph"><Icon name="minus" /></span>
         <span className="hs-value static" title={derived ? "From its stories" : undefined}>{words}</span>
-        <span className="hs-step hs-ph" aria-hidden="true">+</span>
+        <span className="hs-step hs-ph"><Icon name="add" /></span>
       </span>
     );
   const save = () => {
@@ -53,7 +54,7 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
   return (
     <span className={`hours-stepper ${className}`} role="group" aria-label={`Hours for ${label}`} onClick={stop} onDoubleClick={stop}>
       <button type="button" className="hs-step" tabIndex={tabIndex} disabled={disabled || (hours <= MIN_ESTIMATE_HOURS && !onClear)} aria-label={hours <= MIN_ESTIMATE_HOURS && onClear ? "None" : `Less: ${hoursText(stepHours(hours, -1) * 60)}`} onClick={() => (hours <= MIN_ESTIMATE_HOURS && onClear ? onClear() : onSet(stepHours(hours, -1)))}>
-        −
+        <Icon name="minus" />
       </button>
       {editing ? (
         <input
@@ -76,7 +77,7 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
         </button>
       )}
       <button type="button" className="hs-step" tabIndex={tabIndex} disabled={disabled || hours >= MAX_ESTIMATE_HOURS} aria-label={`More: ${hoursText(stepHours(hours, 1) * 60)}`} onClick={() => onSet(stepHours(hours, 1))}>
-        +
+        <Icon name="add" />
       </button>
     </span>
   );

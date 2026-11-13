@@ -8,6 +8,7 @@ import type { Pick } from "../plan/types.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
 import { spanText, timeStep } from "./menu.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
+import { Icon } from "./icons.tsx";
 
 const HINT_KEY = "focustime.hint.picktime";
 function hintSeen(): boolean {
@@ -21,10 +22,7 @@ function hintSeen(): boolean {
 /** A small calendar glyph for "on Outlook". */
 function CalIcon() {
   return (
-    <svg className="pt-cal" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-      <rect x="2" y="3.5" width="12" height="10.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M2 7h12M5.5 2v3M10.5 2v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
+    <Icon name="calendar" className="pt-cal" />
   );
 }
 
@@ -47,7 +45,7 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
     return (
       <span className="pt-anchor">
         <button type="button" className="pt-add" aria-haspopup="menu" onClick={open} title="Give it a time in this block's free time" {...stop}>
-          + time
+          <Icon name="add" /> time
         </button>
         {hint && !seen && <TimeHint onDone={() => setSeen(true)} />}
       </span>

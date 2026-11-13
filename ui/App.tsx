@@ -118,6 +118,7 @@ const CodePanel = lazy(() => import("./code/Code.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 import { CoworkCtx, openChat, useCowork } from "./cowork.tsx";
+import { Icon, type IconName } from "./icons.tsx";
 
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -143,6 +144,8 @@ function storedLoc(): Loc | null {
   }
 }
 
+/** RS-1: each tab's icon says what it is for: one day, the week in columns, the backlog's indented list, bars, a tray. */
+const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
   week: "The week's blocks, with Add work beside them",
@@ -1919,6 +1922,7 @@ export function App() {
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
             <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
+              <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
               {t === "status" && <StatusMark tone={statusTone} text={statusText} />}
@@ -1941,7 +1945,7 @@ export function App() {
               setPhoneMoreAt({ x: r.right, y: r.bottom + 4 });
             }}
           >
-            ⋯
+            <Icon name="more" />
             {notices.unread > 0 && <span className="top-dot" aria-label={`${notices.unread} new notifications`} />}
           </button>
           </>}
@@ -1966,13 +1970,16 @@ export function App() {
               title="Start focus: the next to-do, or a plain timer (F)"
               aria-haspopup="menu"
             >
+              <Icon name="focus" />
               Focus <kbd>F</kbd>
             </button>
           )}
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
+            <Icon name="capture" />
             Capture <kbd>N</kbd>
           </button>
           <button type="button" className="top-btn assistant-btn" data-tour="ask" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
+            <Icon name="ask" />
             Ask <kbd>Ctrl J</kbd>
           </button>
           <button
@@ -1986,7 +1993,7 @@ export function App() {
               setMoreAt({ x: r.right, y: r.bottom + 4 });
             }}
           >
-            ⋯
+            <Icon name="more" />
             {notices.unread > 0 && <span className="top-dot" aria-label={`${notices.unread} new notifications`} />}
           </button>
           </>}
@@ -2228,8 +2235,8 @@ export function App() {
           <header className="page-head week-head wd1-head">
             <div className="ph-title">
               <span className="pd-step" role="group" aria-label="Week">
-                <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">‹</button>
-                <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])">›</button>
+                <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)"><Icon name="back" /></button>
+                <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])"><Icon name="next" /></button>
               </span>
               <h2><span className="wk-of">Week of </span>{weekLabel(week.days[0]!.date, week.days[4]!.date)}</h2>
               {!thisWeek && (
@@ -2257,7 +2264,7 @@ export function App() {
               <CardsTimelineSwitch shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
               {!past && (
                 <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? closePanel() : addWork())} title="Add to a block (A)">
-                  + Add
+                  <Icon name="add" /> Add
                 </button>
               )}
               <MoreButton

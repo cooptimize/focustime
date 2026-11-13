@@ -27,6 +27,7 @@ import { WorkLink } from "./WorkLink.tsx";
 
 export { openSend, SEND_EVENT, type SendTarget } from "./send-event.ts";
 import { SEND_EVENT, type SendTarget } from "./send-event.ts";
+import { Icon } from "./icons.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const first = (name: string) => name.trim().split(/\s+/)[0] ?? name;
@@ -349,7 +350,7 @@ function PriorityRow({ p, weekStart, past, act }: { p: PriorityView; weekStart: 
         Client priority{p.note && <span className="send-note-text"> · “{p.note}”</span>}
       </span>
       <span className="carry-acts">
-        {p.onMyWeek ? <span className="muted">On your week ✓</span> : !past && <button type="button" className="mini" onClick={() => void act("priority.add_to_week", { clientKey: p.clientKey, itemId: p.itemId, weekStart })}>Add to my week</button>}
+        {p.onMyWeek ? <span className="muted">On your week <Icon name="done" /></span> : !past && <button type="button" className="mini" onClick={() => void act("priority.add_to_week", { clientKey: p.clientKey, itemId: p.itemId, weekStart })}>Add to my week</button>}
         {p.canUnflag && <button type="button" className="link-btn" onClick={() => void act("priority.unflag", { clientKey: p.clientKey, itemId: p.itemId })} title="Take it off the client's priorities">Not a priority</button>}
       </span>
     </li>
@@ -526,8 +527,8 @@ export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWe
       <header className="page-head">
         <h2>Team · {title}</h2>
         <span className="team-weeks">
-          <button type="button" className="mini quiet" onClick={() => step(-1)} aria-label="Previous week">‹</button>
-          <button type="button" className="mini quiet" onClick={() => step(1)} aria-label="Next week">›</button>
+          <button type="button" className="mini quiet" onClick={() => step(-1)} aria-label="Previous week"><Icon name="back" /></button>
+          <button type="button" className="mini quiet" onClick={() => step(1)} aria-label="Next week"><Icon name="next" /></button>
         </span>
         <ModeArea>{switcher}</ModeArea>
       </header>

@@ -18,6 +18,7 @@ import { StartHere } from "./StartHere.tsx";
 import { tourById } from "./tours.ts";
 import { TryIt, UrgentStrip } from "./TryIt.tsx";
 import "./guide.css";
+import { Icon } from "../icons.tsx";
 
 export { Keys, Rich };
 
@@ -168,7 +169,7 @@ function Area({ body, onTour, signedIn }: { body: AreaBody; onTour: ((id: string
   );
 }
 
-const MARK = { done: "✓", todo: "", skipped: "–", unknown: "" } as const;
+const MARK = { done: <Icon name="done" />, todo: null, skipped: <Icon name="minus" />, unknown: null } as const;
 
 function FirstDay({ checklist, onTour, signedIn }: { checklist: (() => Promise<Checklist>) | null; onTour: ((id: string) => void) | null; signedIn: boolean }) {
   const [list, setList] = useState<Checklist | "loading" | "problem" | null>(checklist ? "loading" : null);

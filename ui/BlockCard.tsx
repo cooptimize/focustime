@@ -44,6 +44,7 @@ import { NowLine, NowMark, NowPast, NowTick } from "./NowLine.tsx";
 import { Timeline, ms, offHours, pct, useEventMenu, type RailNow } from "./Timeline.tsx";
 import { AddPanelCtx, LiveOnCard, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
 import { PlacedFeatures } from "./BlockPanel.tsx";
+import { Icon } from "./icons.tsx";
 
 /**
  * WD-1 (MB-1's agenda line on every card with no rail): "3 meetings · 2h 30m · 1h 45m free", the block's meetings and
@@ -280,7 +281,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
             addWork();
           }}
         >
-          + Add
+          <Icon name="add" /> Add
         </button>
       )}
         </>

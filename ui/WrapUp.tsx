@@ -14,6 +14,7 @@ import type { DoneOfferEnv } from "./DoneOffer.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { cardStale } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const durText = (m: number) => (m < 60 ? `${m}m` : m % 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m / 60}h`);
@@ -121,7 +122,7 @@ function WritesOffHint({ onClose, onSettings }: { onClose: () => void; onSetting
         </button>
       </p>
       <button type="button" className="mini wrap-off-x" aria-label="Dismiss" onClick={onClose}>
-        ×
+        <Icon name="close" />
       </button>
     </div>
   );
@@ -477,7 +478,7 @@ export function WrapUpSheet({ data, onClose, onDone, notice, progressLeft = null
             <ul className="wrap-results">
               {results.results.map((r, i) => (
                 <li key={i} className={r.ok ? "db-ok" : "db-fail"}>
-                  {r.ok ? `✓ ${r.message}` : r.message}
+                  {r.ok && <><Icon name="done" /> </>}{r.message}
                   {!r.ok && r.retry && (
                     <button type="button" className="mini" disabled={!!busy} onClick={() => void retry(r)}>
                       {r.retry === "preview" ? "Preview again" : "Retry"}

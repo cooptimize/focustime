@@ -5,6 +5,7 @@ import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { InAppNotice, NoticeList } from "../plan/push.ts";
 import { call } from "./api.ts";
+import { Icon } from "./icons.tsx";
 
 const POLL_MS = 30_000;
 /** Something just sent one (Settings' test): look again shortly instead of waiting for the next poll. */
@@ -136,7 +137,7 @@ export function NoticeToasts({ toasts, onOpen, onDismiss }: { toasts: InAppNotic
             {firstLine(n.body) && <span className="nt-body">{firstLine(n.body)}</span>}
           </button>
           <button type="button" className="mini nt-x" aria-label="Dismiss" onClick={() => onDismiss(n.id)}>
-            ×
+            <Icon name="close" />
           </button>
         </div>
       ))}

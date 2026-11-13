@@ -20,6 +20,7 @@ import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { answersEmpty, descriptionMax, NO_ANSWERS, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
 import { usePhone } from "./viewport.ts";
+import { Icon } from "./icons.tsx";
 
 export type { NewPlace };
 /** What the opener hears back: the item it made (Ahead selects it, the panel places it) or the draft it saved. */
@@ -304,7 +305,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           </span>
         </div>
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-          {more ? "▾" : "▸"} {phone ? "More: details, description and size" : "More: description and size"}
+          <Icon name={more ? "open" : "closed"} /> {phone ? "More: details, description and size" : "More: description and size"}
         </button>
         {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" />}
         {more && (

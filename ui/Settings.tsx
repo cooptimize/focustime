@@ -47,6 +47,7 @@ import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SET
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 import { DeploySettings } from "./DeployItems.tsx";
+import { Icon } from "./icons.tsx";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
 export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
@@ -1492,7 +1493,7 @@ function ClientList(p: BodyProps) {
           <strong>{c.setting.name ?? c.dataverseName ?? c.key}</strong>
           <span className="muted">{c.follow?.active === false ? "Not followed" : "Followed"}</span>
           <span className="muted">{c.devops ? (c.write ? "DevOps writes on" : "DevOps read-only") : "No DevOps"}</span>
-          <span className="ps-chev" aria-hidden="true">›</span>
+          <span className="ps-chev"><Icon name="next" /></span>
         </a>
       </li>
     );

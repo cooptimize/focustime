@@ -12,6 +12,7 @@ import { call } from "./api.ts";
 import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { copyWorkLink } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 export type EditDraft = { rev: number; title: string; description: string; acceptance: string; /** The acceptance box is open (it was empty: "Add acceptance criteria"). */ acceptanceOpen: boolean };
 
@@ -69,7 +70,7 @@ export function LightEditor({ label, value, onChange, placeholder, onSave, boxRe
       <div className="sc-tools" role="toolbar" aria-label={`Format ${label.toLowerCase()}`}>
         {MARKS.map((m) => (
           <button key={m.mark} type="button" className={`mini sc-tool sc-tool-${m.mark}`} aria-label={m.label} title={m.key ? `${m.label} (${m.key})` : m.label} onMouseDown={(e) => e.preventDefault()} onClick={() => mark(m.mark)}>
-            {m.text}
+            <Icon name={m.mark} />
           </button>
         ))}
         {markdown && <span className="muted sc-tools-note">Kept as Markdown, as DevOps stores it</span>}
@@ -141,7 +142,7 @@ export function CardMore({ items }: { items: { label: string; run: () => void }[
   return (
     <span className="sc-more">
       <button ref={btn} type="button" className="more-btn" aria-label="More for this item" aria-haspopup="menu" aria-expanded={open} title="More" onClick={() => setOpen(!open)}>
-        ⋯
+        <Icon name="more" />
       </button>
       {open && (
         <div

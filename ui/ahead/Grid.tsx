@@ -36,6 +36,7 @@ import type { GridLayout } from "./layout.ts";
 import { isOpen, type LoadClient, type Row } from "./model.ts";
 import { NewUnder } from "./NewUnder.tsx";
 import { usePref } from "./prefs.ts";
+import { Icon } from "../icons.tsx";
 
 type Col = "item" | "state" | "dates" | "assignee" | "size" | "status";
 /** The columns at each layout, in order (BL-1: Start and Target are one Dates cell at every size). */
@@ -176,9 +177,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
           <section key={c.clientKey} className={`ah-client${open ? "" : " folded"}`} style={{ "--c": a.color(c.clientKey) } as CSSProperties} aria-label={c.clientName}>
             <h3 className="ah-client-head">
               <button type="button" className="ah-client-fold" aria-expanded={open} onClick={() => foldClient(c.clientKey)} title={open ? `Fold ${c.clientName}` : `Unfold ${c.clientName}`}>
-                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" className={`ah-chev-svg${open ? " open" : ""}`}>
-                  <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <Icon name="closed" className={`ah-chev-svg${open ? " open" : ""}`} />
                 <span className="dl-swatch" aria-hidden="true" />
                 <span className="ah-client-name">{c.clientName}</span>
               </button>
@@ -367,7 +366,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     <>
       {canChange && can(col) && (
         <span className="ah-add" aria-hidden="true">
-          {add}
+          <Icon name="add" /> {add}
         </span>
       )}
       <span className="sr-only">{why}</span>
@@ -381,7 +380,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   // "Aug 10 → Nov 6", "Nov 6" with only a target, "Aug 10 →" with only a start.
   const dates = () => {
     if (!r.has.start && !r.has.target) return <span className="sr-only">{notIn}</span>;
-    if (!r.eff.start && !r.eff.target) return empty("dates", "+ date", r.has.target ? "No target date" : "No start date");
+    if (!r.eff.start && !r.eff.target) return empty("dates", "date", r.has.target ? "No target date" : "No start date");
     return (
       <span className="ah-dates">
         {r.eff.start && day("start")}
@@ -489,7 +488,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
             </Fragment>
           );
         if (col === "dates") return <Fragment key={col}>{cell("dates", dates(), { label: datesLabel, ...(!r.has.start && !r.has.target ? { title: notIn } : {}) })}</Fragment>;
-        if (col === "assignee") return <Fragment key={col}>{cell("assignee", r.eff.assignee ? <Who name={r.eff.assignee.name} email={r.eff.assignee.email} /> : empty("assignee", "+ owner", "Nobody assigned"), { label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}</Fragment>;
+        if (col === "assignee") return <Fragment key={col}>{cell("assignee", r.eff.assignee ? <Who name={r.eff.assignee.name} email={r.eff.assignee.email} /> : empty("assignee", "owner", "Nobody assigned"), { label: `Assigned to: ${r.eff.assignee?.name ?? "nobody"}` })}</Fragment>;
         if (col === "size")
           return (
             <Fragment key={col}>
@@ -502,7 +501,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                     {r.eff.size} <span className="muted">{shortLabel(r.sizeLabel)}</span>
                   </span>
                 ) : (
-                  empty("size", "+ size", `No ${r.sizeLabel ?? "size"}${r.hint ? `. ${r.hint}` : ""}`)
+                  empty("size", "size", `No ${r.sizeLabel ?? "size"}${r.hint ? `. ${r.hint}` : ""}`)
                 ),
                 { label: `${r.sizeLabel ?? "Size"}: ${r.has.size ? (r.eff.size ?? "none") : notIn}${r.hint ? `. ${r.hint}` : ""}`, ...(!r.has.size ? { title: notIn } : r.eff.size === null && r.hint ? { title: r.hint } : {}) },
               )}

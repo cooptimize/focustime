@@ -54,6 +54,7 @@ import { aboveBlocks, dayHeadline, nextTodo } from "../plan/dayview.ts";
 import { CheckinBlock, CheckinFoot, checkLeft } from "./Checkin.tsx";
 import { CloseOutBlock, CloseOutPanel } from "./CloseOut.tsx";
 import { WeekendDay } from "./DayWeekend.tsx";
+import { Icon } from "./icons.tsx";
 
 export type DayMode = "now" | "checkin" | "closeout";
 
@@ -367,8 +368,8 @@ export function Day(props: Props) {
             <>
               {mode === "now" && props.onDay && (
                 <span className="pd-step today-step" data-tour="today-days" role="group" aria-label="Day">
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1, stops))} aria-label="Previous day" title="Previous day ([)">‹</button>
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1, stops))} aria-label="Next day" title="Next day (])">›</button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1, stops))} aria-label="Previous day" title="Previous day ([)"><Icon name="back" /></button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1, stops))} aria-label="Next day" title="Next day (])"><Icon name="next" /></button>
                 </span>
               )}
               <h1 title={longDate(date)}>{head.date}</h1>
@@ -415,7 +416,7 @@ export function Day(props: Props) {
           )}
           {canAdd && (
             <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!panelHere} onClick={() => props.onAdd(date)} title="Add to a block (A)">
-              + Add
+              <Icon name="add" /> Add
             </button>
           )}
           <MoreButton
@@ -617,7 +618,7 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], fr
               {[due.length ? `${due.length} promise${due.length === 1 ? "" : "s"}` : "", promises.length ? `${promises.length} promise${promises.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} due
             </span>
             {names.length > 0 && <span className="att-names">{names.join(" · ")}</span>}
-            <span aria-hidden="true">{open ? "⌃" : "›"}</span>
+            <Icon name={open ? "up" : "next"} />
           </button>
         )}
         {fromChats > 0 && (
@@ -698,10 +699,12 @@ export function UrgentStrip({ sources, now, today, tz, clientName, onItem, onAsk
           return (
             <li key={l.key} className={`us-item us-${v.cls}${v.late ? " overdue" : ""}`}>
               <button type="button" className="us-line" onClick={() => (l.kind === "item" ? onItem(l.key) : l.open?.())} title={l.kind === "item" ? "Open it in the Inbox" : undefined}>
+                {/* RS-1: the kind is an icon (a promise, a send, something from a chat), not a colored edge. */}
+                <Icon name={v.cls.startsWith("promise") ? "promise" : v.cls.startsWith("sends") ? "send" : "chats"} />
                 <span className="us-tag">{v.tag}</span>
                 {v.who && <span className="us-who">{v.who}</span>}
                 <span className="us-what">{v.what}</span>
-                <span className="us-go" aria-hidden="true">›</span>
+                <span className="us-go"><Icon name="next" /></span>
               </button>
               {l.kind === "item" && l.row.urgent && (
                 <button type="button" className="mini" onClick={() => onAskFocus(l.row.urgent!)} title="Add it to the block under way and start focus on it">
@@ -727,7 +730,7 @@ export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; client
 }
 
 const MOMENTS = {
-  plan: { title: "Nothing on today yet", body: "Put this week's stories into today's blocks.", button: "+ Add" },
+  plan: { title: "Nothing on today yet", body: "Put this week's stories into today's blocks.", button: "Add" },
   checkin: { title: "Midday check-in", body: "What's done, what's left, and the free time this afternoon.", button: "Check in" },
   closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and promises.", button: "Close out" },
 } as const;
@@ -741,7 +744,7 @@ export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false, su
   if (m.done)
     return (
       <p className="moment-done" role="status">
-        {m.kind === "checkin" ? "Midday check-in done" : "Closed out"} <span aria-hidden="true">✓</span>{" "}
+        {m.kind === "checkin" ? "Midday check-in done" : "Closed out"} <Icon name="done" />{" "}
         {open && (
           <button type="button" className="link-btn" onClick={open}>
             Reopen
@@ -762,7 +765,7 @@ export function MomentCard({ m, onPlan, onCheckIn, onCloseOut, phone = false, su
       )}
       {open && (
         <button type="button" className="primary" onClick={open}>
-          {t.button}
+          {t.button === "Add" && <><Icon name="add" /> </>}{t.button}
         </button>
       )}
     </section>

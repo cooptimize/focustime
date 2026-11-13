@@ -3,6 +3,7 @@
 // address (the server checks the viewer is in the chat); nothing here downloads, shares or opens them elsewhere.
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef } from "react";
+import { Icon } from "./icons.tsx";
 
 export type ViewerImage = { id: number; src: string };
 
@@ -39,10 +40,10 @@ export function ImageViewer({ images, at, onAt, onClose }: { images: readonly Vi
         {n > 1 && (
           <div className="image-viewer-nav">
             <button type="button" className="mini" onClick={() => go(-1)}>
-              ‹ Previous
+              <Icon name="back" /> Previous
             </button>
             <button type="button" className="mini" onClick={() => go(1)}>
-              Next ›
+              Next <Icon name="next" />
             </button>
           </div>
         )}

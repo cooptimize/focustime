@@ -12,15 +12,12 @@ import type { WeekLoadData } from "../actions/types.ts";
 import { deployedWhen, afterHoursText, deployedText, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
+import { Icon } from "./icons.tsx";
 
 /** The Deployment icon: a small upward arrow out of a tray (shipping it), drawn in the row's text colour. */
 export function DeployIcon({ title = "Deployment" }: { title?: string }) {
   return (
-    <svg className="deploy-icon" viewBox="0 0 16 16" width="1em" height="1em" role="img" aria-label={title}>
-      <title>{title}</title>
-      <path d="M8 2.5 4.5 6h2.3v4.2h2.4V6h2.3Z" fill="currentColor" />
-      <path d="M2.5 9.5v3.5h11V9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <span className="deploy-icon" title={title}><Icon name="deploy" label={title} /></span>
   );
 }
 

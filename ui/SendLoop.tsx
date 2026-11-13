@@ -13,6 +13,7 @@ import { CloseLoop, type CloseLoopValue } from "./CloseLoop.tsx";
 import type { LoopDraftView, LoopPreviewView, LoopResultView } from "../actions/loop-types.ts";
 import { CHANNEL_LABEL, sendLine, type LoopChannel } from "../plan/loop.ts";
 import type { CloseHow } from "../plan/types.ts";
+import { Icon } from "./icons.tsx";
 
 type Step = { kind: "draft" } | { kind: "preview"; p: LoopPreviewView } | { kind: "sent"; r: LoopResultView } | { kind: "without" };
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -154,7 +155,7 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
         {r.parts.length > 0 && (
           <ul className="sl-parts">
             {r.parts.map((x) => (
-              <li key={x.kind} className={x.ok ? "ok" : "bad"}>{x.ok ? "✓ " : "✗ "}{x.message}</li>
+              <li key={x.kind} className={x.ok ? "ok" : "bad"}><Icon name={x.ok ? "done" : "close"} /> {x.message}</li>
             ))}
           </ul>
         )}

@@ -22,6 +22,7 @@ import { StatusRows } from "./StatusRows.tsx";
 import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
 import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 import { WhoSetUp } from "./WhoSetUp.tsx";
+import { Icon } from "../icons.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -854,7 +855,7 @@ function AdminPeople() {
       {data.others.length > 0 && (
         <div className="adm-fold">
           <button type="button" className="fold-line" aria-expanded={othersOpen} onClick={() => setOthersOpen((o) => !o)}>
-            {othersOpen ? "▾" : "▸"} Not Cooptimizers ({data.others.length})
+            <Icon name={othersOpen ? "open" : "closed"} /> Not Cooptimizers ({data.others.length})
           </button>
           {othersOpen && (
             <>

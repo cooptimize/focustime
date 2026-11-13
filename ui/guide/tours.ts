@@ -66,9 +66,9 @@ const PLAN_WEEK: Tour = {
   steps: [
     {
       target: "wk-add",
-      title: "+ Add",
-      text: "Opens the block's panel on the block under way, or the next one, with the cursor in its Add box. Each block also has its own + Add at the bottom, and A opens it on the selected block.",
-      phone: { text: "+ Add on a block opens its panel as a sheet." },
+      title: "Add",
+      text: "Opens the block's panel on the block under way, or the next one, with the cursor in its Add box. Each block also has its own Add at the bottom, and A opens it on the selected block.",
+      phone: { text: "Add on a block opens its panel as a sheet." },
     },
     {
       target: "aw-panel",
@@ -90,7 +90,7 @@ const PLAN_WEEK: Tour = {
       phone: "skip",
     },
   ],
-  end: { line: "That's adding work. About 15 minutes on a Thursday or Friday.", tryIt: "Try it yourself: press A on Week, or + Add on any block." },
+  end: { line: "That's adding work. About 15 minutes on a Thursday or Friday.", tryIt: "Try it yourself: press A on Week, or Add on any block." },
 };
 
 const BOARD: Tour = {
@@ -117,12 +117,12 @@ const TODAY: Tour = {
   section: "today",
   steps: [
     { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent" },
-    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with + Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
-    { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. + Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. + Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
+    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
+    { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
     { target: "today-days", title: "Any day", text: "‹ › step to another day, and Today comes back. Today and later take work; a past day lets you tick what got done and move the rest forward.", phone: "skip" },
   ],
-  end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: + Add on one of today's blocks." },
+  end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: Add on one of today's blocks." },
 };
 
 const INBOX: Tour = {
@@ -180,7 +180,7 @@ const STATUS: Tour = {
   steps: [
     { target: "tab-status", title: "Status", text: "Status is its own tab (4): what Monday's report will say for your features, by client." },
     { target: "st-toggle", title: "Edit and Preview", text: "Preview shows the report as its email will read: a heading per feature, each comment this week a bullet with its author." },
-    { target: "st-add", title: "+ Add a line", text: "Each line becomes its own DevOps comment on the feature. Edit changes your own comments from this week.", example: "status-line" },
+    { target: "st-add", title: "Add a line", text: "Each line becomes its own DevOps comment on the feature. Edit changes your own comments from this week.", example: "status-line" },
     { target: "st-draft", example: "status-draft", title: "Draft", text: "With AI allowed for the client, a first version from your story changes, close-out notes and captures. Edit it as you like." },
     { target: "st-push", example: "status-push", title: "Push all", text: "One preview of every new line and edit, then each is written with its own result, Retry and Undo. FocusTime never sends the report." },
   ],

@@ -54,6 +54,7 @@ import type { PanelFocus } from "./weekctx.ts";
 import type { AheadLoad } from "../actions/types.ts";
 import { readPanelSort, writePanelSort } from "./daypanel.ts";
 import { useDevOpsChanged } from "./DevOpsFresh.tsx";
+import { Icon } from "./icons.tsx";
 
 const mondayOf = (d: IsoDate) => {
   const x = Temporal.PlainDate.from(d);
@@ -587,7 +588,7 @@ function AddBox({ ctx, groups, drafts, followUps, work, more, onTyping, clientNa
             const i = model.results.length + k;
             return (
               <li key={n.key} id={`bp-row-${i}`} role="option" aria-selected={hl === i} className={`aw-row bp-result bp-new${hl === i ? " hl" : ""}`} onMouseEnter={() => setHl(i)} onClick={() => void take(n)}>
-                <span className="aw-plus" aria-hidden="true">+</span>
+                <span className="aw-plus"><Icon name="add" /></span>
                 <span className="aw-row-title">{n.label}</span>
                 {n.kind === "draft" && parents.length > 1 && (
                   // The app's own menu (no browser select): which feature the draft story goes under.
@@ -603,7 +604,7 @@ function AddBox({ ctx, groups, drafts, followUps, work, more, onTyping, clientNa
                       openMenu({ x: r.left, y: r.bottom + 4 }, { title: "Under which feature", items: parents.map((p) => ({ id: `p${p.id ?? "none"}`, label: p.title, checked: p.id === under, run: () => setParent(p.id) })) });
                     }}
                   >
-                    {under === null ? "No feature yet" : `under ${parents.find((p) => p.id === under)!.title}`} ▾
+                    {under === null ? "No feature yet" : `under ${parents.find((p) => p.id === under)!.title}`} <Icon name="open" />
                   </button>
                 )}
               </li>
@@ -838,9 +839,9 @@ function AddRow({ ctx, k, d, children, menu, promise, focused = false }: { ctx: 
   return (
     <li className={`aw-row${here ? " placed" : ""}${focused ? " dp-focused" : ""}`} data-promise={promise} onContextMenu={menu?.onContextMenu} {...drag} title={here ? undefined : "Drag onto a block to place it there"}>
       {here ? (
-        <span className="aw-plus done" role="img" aria-label={w!.here ? "On this block" : `Done on ${w!.label}`} title={w!.here ? "On this block" : `Done on ${w!.label}`}>✓</span>
+        <span className="aw-plus done" role="img" aria-label={w!.here ? "On this block" : `Done on ${w!.label}`} title={w!.here ? "On this block" : `Done on ${w!.label}`}><Icon name="done" /></span>
       ) : (
-        <button type="button" className="aw-plus" onClick={() => void ctx.place(dd)} aria-label={w ? `Move ${d.title} here from ${w.label}` : `Add ${d.title}`} title={w ? `Move it here from ${w.label}` : "Add to this block"}>+</button>
+        <button type="button" className="aw-plus" onClick={() => void ctx.place(dd)} aria-label={w ? `Move ${d.title} here from ${w.label}` : `Add ${d.title}`} title={w ? `Move it here from ${w.label}` : "Add to this block"}><Icon name="add" /></button>
       )}
       {children}
       {w && <span className="aw-where">{w.label}</span>}
@@ -895,9 +896,9 @@ function Group({ g, ctx, pinnedHere, onWeek, onAddToWeek, menuOf }: { g: Assigne
     <li className={`aw-feature${g.breakDown ? " aw-not-ready" : ""}`} data-feature={f?.id ?? "none"} onContextMenu={f ? menu.onContextMenu : undefined}>
       <div className="aw-feat-head" {...drag}>
         {!f ? null : pinnedHere ? (
-          <span className="aw-plus done" role="img" aria-label="On this block as a placeholder" title="On this block as a placeholder">✓</span>
+          <span className="aw-plus done" role="img" aria-label="On this block as a placeholder" title="On this block as a placeholder"><Icon name="done" /></span>
         ) : (
-          <button type="button" className="aw-plus" disabled={ctx.past} onClick={() => void ctx.place(fd!)} aria-label={`Place ${f.title} on this block`} title="Place it on this block as a placeholder (or drag it onto a block)">+</button>
+          <button type="button" className="aw-plus" disabled={ctx.past} onClick={() => void ctx.place(fd!)} aria-label={`Place ${f.title} on this block`} title="Place it on this block as a placeholder (or drag it onto a block)"><Icon name="add" /></button>
         )}
         {f && <TypeIcon clientKey={ctx.clientKey} type={f.type} />}
         {f ? (

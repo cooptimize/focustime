@@ -3,6 +3,7 @@
 import { usePhone } from "./viewport.ts";
 import type { ModeStatus } from "../plan/modes.ts";
 import { MODE_NAMES, MODES, TAB_NAMES, type ModeName, type Tab } from "./nav.ts";
+import { Icon } from "./icons.tsx";
 
 const STATUS_WORDS = { done: "done", due: "due now" } as const;
 
@@ -20,7 +21,7 @@ export function ModeSwitch({ tab, current, status = {}, counts = {}, badges = {}
             {MODE_NAMES[m]}
             {counts[m] !== undefined && <span className="ms-count"> · {counts[m]}</span>}
             {n > 0 && <span className="count" aria-label={`${n} open`}>{n}</span>}
-            {s === "done" && <span className="ms-done" aria-label="done">✓</span>}
+            {s === "done" && <span className="ms-done"><Icon name="done" label="done" /></span>}
             {s === "due" && <span className="ms-due" role="img" aria-label="due now" />}
           </button>
         );

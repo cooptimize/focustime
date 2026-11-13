@@ -8,6 +8,7 @@ import { durationText, LEFT_CHOICES, parseLeft, progressAsk } from "../plan/prog
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { DoneBatch, useDoneOffer } from "./DoneOffer.tsx";
+import { Icon } from "./icons.tsx";
 
 type Answered = { text: string; ids: number[]; done: boolean };
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -266,7 +267,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
               <span className="db-state muted">{r.note ?? (r.offer.mode === "remaining" ? `Remaining Work ${f?.before ?? "none"} → ${f?.after ?? r.offer.hours}` : r.offer.text)}</span>
               {r.result && (
                 <span className={r.result.ok ? "db-ok" : "db-fail"}>
-                  {r.result.ok ? `✓ ${r.result.message}` : r.result.message}
+                  {r.result.ok && <><Icon name="done" /> </>}{r.result.message}
                   {r.result.ok && r.result.entryId !== null && <button type="button" className="mini" onClick={() => void write?.begin(r.offer.clientKey, [{ kind: "undo", writeId: r.result!.entryId! }])}>Undo</button>}
                   {!r.result.ok && r.result.entryId !== null && <button type="button" className="mini" disabled={busy} onClick={() => void retry(r)}>Retry</button>}
                 </span>

@@ -6,6 +6,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import type { SuggestionRow } from "../../plan/conversation-views.ts";
 import { ConvLink, DraftItem, Messages } from "../Conversations.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
+import { Icon } from "../icons.tsx";
 
 export type SuggestionForm = "create" | "link" | null;
 
@@ -53,7 +54,7 @@ export function SuggestionOpen({ s, form, setForm, tz, color, phone, onDismiss, 
         ))}
         <span className="fu-more">
           <button type="button" className="ib-act quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for ${s.conversationTitle}`} onClick={() => setMenu((v) => !v)}>
-            ⋯
+            <Icon name="more" />
           </button>
           {menu && (
             <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>

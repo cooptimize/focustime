@@ -8,6 +8,7 @@ import type { WorkItem } from "../week/types.ts";
 import { DevOpsWork } from "./work.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { WorkLink } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 /** This week's plan items (client and id), so the lookup can rank them first. App provides it. */
 export const WeekItems = createContext<readonly { clientKey: string; itemId: number }[]>([]);
@@ -82,7 +83,7 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
         <span className="pr-type">#{value.itemId}</span>
         {clientKey && value.url && value.url.startsWith("https://dev.azure.com/") ? <WorkLink clientKey={clientKey} url={value.url}>{value.title ?? `Item ${value.itemId}`}</WorkLink> : <span>{value.title ?? `Item ${value.itemId}`}</span>}
         <button type="button" className="mini quiet" onClick={() => (onChange({ ...NO_ITEM }), setTimeout(() => input.current?.focus(), 0))} aria-label={`Unlink #${value.itemId}`} title="Unlink, or choose another">
-          ×
+          <Icon name="close" />
         </button>
       </span>
     );

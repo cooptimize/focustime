@@ -4,6 +4,7 @@
 import type { CSSProperties } from "react";
 import { DAYS, TOUR_EXAMPLES as X, TOUR_UI, type ExampleColor } from "../content.ts";
 import type { IllustrationId } from "../tours.ts";
+import { Icon } from "../../icons.tsx";
 
 const tint = (c: ExampleColor | null): CSSProperties => ({ ["--c" as string]: c ? `var(--client-${c})` : "var(--border-strong)" });
 
@@ -67,7 +68,7 @@ function Add() {
       {X.add.rows.map((r) => (
         <div key={r} className="ti-must">
           <span className="ti-title">{r}</span>
-          <span className="ti-btn">+ Add</span>
+          <span className="ti-btn"><Icon name="add" /> Add</span>
         </div>
       ))}
       <div className="ti-box">{X.add.box}</div>

@@ -27,6 +27,7 @@ import { stampText } from "./stamp.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { byRank, closeLine, enterLine, needsLabel, pendingLabel, pendingLines, previewFeatures, type Line } from "./status-lines.ts";
+import { Icon } from "./icons.tsx";
 
 export type { Line } from "./status-lines.ts";
 
@@ -662,7 +663,7 @@ function AddFeature({ catalog, shown, onPick }: { catalog: CatalogFeature[]; sho
   const options = catalog.filter((f) => !shown.has(f.id)).map((f) => ({ key: String(f.id), label: f.title, sub: `#${f.id} · ${f.state}${f.closed ? " (closed)" : ""} · ${f.owner ?? "No owner"}`, search: `${f.id} #${f.id} ${f.title}` }));
   return (
     <>
-      <button ref={btn} type="button" className="mini st-add-feature" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>+ Add a feature</button>
+      <button ref={btn} type="button" className="mini st-add-feature" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="add" /> Add a feature</button>
       {open && (
         <CellPopover anchor={btn.current} title="Add a feature" sub="Any of this client's features, whoever owns it" onSave={close} onCancel={close} saveLabel="Done" className="ah-pop-list st-add-pop">
           <FilterList label="Add a feature" placeholder="Title or #id" options={options} current={null} empty="No feature matches" onPick={(k) => { const f = catalog.find((x) => String(x.id) === k); close(); if (f) onPick(f); }} />
@@ -790,11 +791,11 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, 
   );
 }
 
-/** SR-3: "+ Add a line": Tab from it goes to the next feature's, Shift+Tab to the previous one's. */
-function AddLineButton({ onAdd, label = "+ Add a line" }: { onAdd: () => void; label?: string }) {
+/** SR-3: Add a line (RS-1: the Add icon and the words): Tab from it goes to the next feature's, Shift+Tab to the previous one's. */
+function AddLineButton({ onAdd, label = "Add a line" }: { onAdd: () => void; label?: string }) {
   return (
     <button type="button" className="mini st-add" data-add-line="" data-tour="st-add" onClick={onAdd} onKeyDown={(e) => { if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey && moveToAdd(e.currentTarget, e.shiftKey)) e.preventDefault(); }}>
-      {label}
+      <Icon name="add" /> {label}
     </button>
   );
 }
