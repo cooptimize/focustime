@@ -51,7 +51,7 @@ export function notSuggested(c: SuggestionFacts, o: { now: string; hours: readon
   if (c.likelyItem) return "likely_item";
   if (c.closedAt || c.mergedInto || c.status === "resolved" || c.status === "closed") return "closed";
   if (c.windDown) return "wrapped_up";
-  if (o.mark?.outcome === "dismissed" || o.mark?.hiddenAt) return "dismissed";
+  if (o.mark?.outcome === "dismissed" || o.mark?.outcome === "promised" || o.mark?.hiddenAt) return "dismissed";
   if (Date.parse(o.now) - Date.parse(c.lastWorkAt) > SUGGEST_FOR_DAYS * 86_400_000) return "too_old";
   if (workingMinutesBetween(c.lastWorkAt, o.now, o.hours, SUGGEST_AFTER_WORK_MINUTES) < SUGGEST_AFTER_WORK_MINUTES) return "too_soon";
   return null;

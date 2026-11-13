@@ -1,5 +1,6 @@
 // NV-1: Today's urgent strip, mine only. CV-3: built from pluggable sources ({ kind, lines(now, zone) }) in order.
-// IB-1 slice 4: the first source is the Inbox's own rows (inboxSource): conversations needed now, my promises, sends.
+// IB-1 slice 4: the first source is the Inbox's own rows (inboxSource): my promises and sends (IB-4: no conversations,
+// and no "N more in Inbox" line).
 // A promise is urgent only when overdue or due within the next 2 hours; one due today with no time joins in the last 2
 // working hours of the day. Otherwise it shows only at its time in the agenda (or, with no time, in the attention
 // line's follow-ups row). Pure.
@@ -11,7 +12,7 @@ import { TODAY_SOON_MS, todayLines, type InboxItemView } from "./inbox-items.ts"
 export const PROMISE_SOON_MS = TODAY_SOON_MS;
 
 export type UrgentLine =
-  /** IB-1 slice 4: an Inbox item (a conversation needed now, a promise late or due soon, a send waiting), opening it in the Inbox. */
+  /** IB-1 slice 4: an Inbox item (IB-4: a promise late or due soon, a send waiting), opening it in the Inbox (a send: Week › Plan). */
   | { kind: "item"; key: string; row: InboxItemView }
   /** Any other source's line: its tag, one line, and where it opens. */
   | { kind: "other"; source: string; key: string; who: string; what: string; tag: string; overdue?: boolean; open?: () => void };
@@ -19,22 +20,12 @@ export type UrgentLine =
 /** One source of urgent lines; the strip shows the sources' lines in the order the sources are given. */
 export type UrgentSource = { kind: string; lines: (now: string, zone: string) => UrgentLine[] };
 
-/** IB-1 slice 4: the strip shows at most this many lines, the most urgent first; the rest wait in the Inbox. */
+/** IB-1 slice 4: the strip shows at most this many lines, the most urgent first. */
 export const STRIP_MAX = 3;
 
 /** The strip's lines from its sources, in order, at most STRIP_MAX; empty hides the strip. */
 export function urgentLines(sources: readonly UrgentSource[], now: string, zone: string): UrgentLine[] {
   return sources.flatMap((s) => s.lines(now, zone)).slice(0, STRIP_MAX);
-}
-
-/**
- * "N more in Inbox": the Needs you items the strip doesn't show (the badge's number less the Inbox lines shown), or
- * null when there are none or the count isn't known.
- */
-export function moreInInbox(lines: readonly UrgentLine[], needsYou: number | null | undefined): number | null {
-  if (needsYou == null) return null;
-  const n = needsYou - lines.filter((l) => l.kind === "item").length;
-  return n > 0 ? n : null;
 }
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));

@@ -1,0 +1,82 @@
+{
+  "01-everything-1440-dark": {
+    "rows": 22,
+    "controls": 61
+  },
+  "02-needs-you-1440-dark": {
+    "rows": 11,
+    "controls": 55
+  },
+  "03-conversation-open-1440-dark": {
+    "rows": 11,
+    "controls": 54
+  },
+  "04-promises-1440-dark": {
+    "rows": 7,
+    "controls": 45
+  },
+  "05-captures-1440-dark": {
+    "rows": 2,
+    "controls": 43
+  },
+  "01-everything-1440-light": {
+    "rows": 22,
+    "controls": 66
+  },
+  "02-needs-you-1440-light": {
+    "rows": 11,
+    "controls": 55
+  },
+  "03-conversation-open-1440-light": {
+    "rows": 11,
+    "controls": 54
+  },
+  "04-promises-1440-light": {
+    "rows": 7,
+    "controls": 44
+  },
+  "05-captures-1440-light": {
+    "rows": 2,
+    "controls": 43
+  },
+  "01-everything-phone-dark": {
+    "rows": 22,
+    "controls": 33
+  },
+  "02-needs-you-phone-dark": {
+    "rows": 11,
+    "controls": 20
+  },
+  "03-conversation-open-phone-dark": {
+    "rows": 11,
+    "controls": 28
+  },
+  "04-promises-phone-dark": {
+    "rows": 7,
+    "controls": 9
+  },
+  "05-captures-phone-dark": {
+    "rows": 2,
+    "controls": 13
+  },
+  "01-everything-phone-light": {
+    "rows": 22,
+    "controls": 33
+  },
+  "02-needs-you-phone-light": {
+    "rows": 11,
+    "controls": 20
+  },
+  "03-conversation-open-phone-light": {
+    "rows": 11,
+    "controls": 28
+  },
+  "04-promises-phone-light": {
+    "rows": 7,
+    "controls": 9
+  },
+  "05-captures-phone-light": {
+    "rows": 2,
+    "controls": 13
+  }
+}
