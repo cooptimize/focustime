@@ -7,8 +7,9 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 ## Local setup
 
 - **Node 26** or newer (`package.json` `engines`). FocusTime runs TypeScript directly on Node; there is no compile step for the server.
-- `npm ci`, then `npm run db:up` for the local SQL Server container (`scripts/db.ts`; its password is the host secret `sql-password` in the developer's keyring, never in a file). `npm run db:down` stops it, `npm run db:reset` starts it empty.
-- `npm run dev` runs the server with Vite inside it (no hot reload). Without Microsoft sign-in set up, use **Try the demo**: fictional data in memory, nothing fetched.
+- **Linux** with a Secret Service keyring and `secret-tool` (the developer loop's host keeps secrets there), **Podman** with `podman-compose` (not Docker) for the database container, and a system **Chromium** (`/usr/bin/chromium`, `chromium-browser` or `google-chrome`) for the browser tests. For the Safari checks: `npx playwright-core install --with-deps webkit`.
+- `npm ci`, then `npm run db:up` for the local SQL Server container (`scripts/db.ts`, `system/sqlserver/compose.yaml`, port 14330). The first time, it makes the container's password itself and keeps it as the host secret `sql-password` in the keyring, never in a file. `npm run db:down` stops it, `npm run db:reset` starts it empty.
+- `npm run dev` runs the server with Vite inside it (no hot reload). With no app config it keeps its data in a SQLite file; to use the container, set `[database]` in `~/.config/focustime/app.toml` (or the `FOCUSTIME_DB_*` variables), as [system/README.md](../../system/README.md) shows. Without Microsoft sign-in set up, use **Try the demo**: fictional data in memory, nothing fetched.
 - The developer loop (a user service and a launcher on one machine) is described in [system/README.md](../../system/README.md). It isn't part of the product.
 
 ## Commands
@@ -17,11 +18,11 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 |---|---|
 | `npm run dev` | The server with Vite inside it, for the browser at the printed address |
 | `npm run build` | The typecheck, then the UI build into `dist/` |
-| `npm start`, `npm run serve` | Build and serve; serve only |
+| `npm start`, `npm run serve` | The UI build (no typecheck) and serve; serve only |
 | `npm run typecheck` | Both TypeScript projects (the UI, and the server with scripts and tests) |
 | `npm run guards` | The repo guards (`scripts/guards.ts`): real names, desktop words, type and state names as code, "pick" in text people read |
 | `npm run check` | The typecheck and the guards |
-| `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests |
+| `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests. Run `npm run db:up` first, or the SQL Server tests are skipped (`FOCUSTIME_TEST_SQL=required` makes them fail instead, `off` skips them) |
 | `npm run test:zones` | The suite under four US time zones, one after another |
 | `npm run docs:check` | These pages' checks (`scripts/tech-docs.test.ts`) |
 | `npm run docs:diagrams` | Draws the Mermaid diagrams in these pages as SVG (`scripts/docs-diagrams.ts`); `-- --check` only checks |

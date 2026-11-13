@@ -124,7 +124,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Moment card | Day's one card for the moment of the day: Nothing on today yet (with + Add), Midday check-in or Close out; done is a small line with Reopen |
 | Next to-do | The first planned to-do, in time order, in the first block that hasn't ended (the timed to-do while focus runs): highlighted on its row, the only one with Start focus, or the countdown with Done and +15 |
 | Midday check-in | A flow over Day after the afternoon starts (M, `#/day/checkin`): the time and the afternoon's free time once ("2h 30m free this afternoon"), ended blocks dimmed, done to-dos as a count, every unfinished to-do with one move (Move to PM, Move to <day>, Tonight when its promise is due today) and More, then the timebox check-in; Done marks it done for the day |
-| Close out | A side panel over the dimmed Day (E, `#/day/closeout/<date>`), any day up to today: the day's numbers, where you left off, DevOps updates owed, promises due, the timebox check-in, then Done. Cards behind show not-done to-dos with "→ <day>" and done and dropped counts |
+| Close out | A side panel over the dimmed Day (E, `#/day/closeout/<date>`), any day up to today: the day's numbers, where you left off, DevOps updates owed, promises due, the timebox check-in, then Done (the reverse unroll). Cards behind show not-done to-dos with "→ <day>" and done and dropped counts |
 | Timebox check-in | At Midday check-in and Close out (and their Teams cards), each to-do whose timebox ended since the last one: Done, Partly (how much is left) or Didn't get to it, or All went to plan for the lot. Nothing qualifying, nothing shows |
 | Resume note | One line per client, "where I left off / next step"; the latest wins, shown on the client's next block |
 | Week | The second tab (2, `#/week`): the week's blocks, Monday to Thursday, Friday as the Catch-up day, Saturday or Sunday when they have work. The day in focus takes about twice a working day's width; days fold to strips when there isn't room (weekend, catch-up day, past days, then farthest from the focus); past days list their to-dos. "To place" sits above the grid |
@@ -145,7 +145,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Borrowed time | Slipped focus made up later (tonight, Friday, another day): to-do, minutes, payback; paid when the to-do is done or by hand |
 | Feature tier | The lowest portfolio backlog level of a project's process (what a week takes on); levels above it are the epic tier. From backlog levels, never type names |
 | Timebox | A stretch of a day's timeline for a client and a to-do or item (start, end). Local; counts as planned time; optional Put on Outlook. Shown on the to-do's row: "+ time" (untimed), "9:00–11:00" (timed), "9:00–11:00 · Outlook". Set from "+ time", the time editor, dragging on the timeline, or Timebox my day. Settings › Today and Week › Use timeboxing turns the controls off |
-| Timebox my day | Every planned to-do without a timebox placed into its block's free gaps (larger sizes first), shown as dashed placeholders on Day's timeline with ✓, ✕ and Accept all; Outlook events go through one combined preview |
+| Timebox my day | Every planned to-do without a timebox placed into its block's free gaps (larger sizes first), shown as dashed placeholders on Day's timeline, each with Accept and Drop, and Accept all; Outlook events go through one combined preview |
 | Focus timer | A countdown for focus or a break, plain or timeboxing a to-do; on the server, so it survives closing the window. Focus time on a to-do is recorded for Close out |
 | Focus screen | The calm view while focus runs (More › Focus screen): large countdown, the one to-do, next meeting, Done, +15 and Stop, the sound control. Esc goes back; the timer stays on the top bar's Focus button |
 | Focus sounds | Sounds made in the app (brown, pink, rain, binaural alpha and beta) that play only while focus runs, plus saved Spotify or YouTube playlists and optional music pause where the host can control players (Settings › Focus) |
@@ -209,7 +209,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Code | The read-only panel (`#/code/<client>/<repo>/<path>`, More › Code, the command menu's "Code" and "Code: <client>") where every Cooptimizer reads any client's repos on the default branch: the tree, Find a file, a file colored by its language with line numbers, Copy, Copy path, Copy DevOps link and Copy link. Never writes; nothing of the code is kept |
 | Code access | The per-client Rule "Who can read this client's code" in Admin › Clients: Whole company (the default) or Its team only; a team-only client shows greyed to everyone else with "Only <client>'s team can open this" |
 | Code views | Admin › Audit's log of who opened which client's repo or file, or used Find, and when; never content; kept 12 months; admins only (`code_views`) |
-| My VM | The one Azure VM the person confirmed (found by its Owner tag, their name by default, or entered by resource ID); the only VM FocusTime reads, starts or stops. No VM: no chip |
+| My VM | The one Azure VM the person confirmed (found by its Owner tag, their name by default, or entered by resource ID); the only VM FocusTime reads, starts, or stops (deallocates) when the person asks; it never stops one on its own. No VM: no chip |
 | VM chip | The one place for the person's VM's status, in the header on every tab: "VM Running · off at 7:30 PM" (Running, Stopped (deallocated), Stopped (still billing), Starting…, Stopping…, Unknown, plus the auto-shutdown time while it runs); Start, and Stop… while it runs (deallocate, after a preview), from its menu, with the next automatic start and Skip this one when Start my VM before my day is on (production only) |
 | Auto-shutdown | The VM's own schedule (`shutdown-computevm-<vm>`): FocusTime reads its time and status for the chip and never changes it |
 | Command menu | Ctrl+K (or More › Commands): every action from the action registry with its shortcut |
@@ -275,7 +275,7 @@ Older names still found in decisions, specs and the command menu, with what they
 | ⋯ (the menu) | More |
 | Use AI (personal) | AI for FocusTime (the team's) |
 
-Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have, Look ahead's planning mode, Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). Notification kinds still listed but never sent: `commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`.
+Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have on a week's list (Send to… keeps its own Must), Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). Notification kinds still listed but never sent: `commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`.
 
 ## Working style
 

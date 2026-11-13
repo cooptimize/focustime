@@ -160,7 +160,7 @@ describe("the technical docs stay the current state (TD-1)", () => {
     for (const f of ALL_PAGES) {
       for (const span of codeSpans(pageText(f))) {
         const path = span.replace(/:\d+$/, "").replace(/\/$/, "");
-        if (/[\s<>*{}$=|,]|^\.\.|^https?:/.test(path) || !path.includes("/") && !PATH_EXT.test(path)) continue;
+        if (/[\s<>*{}$=|,]|^\.\.|^~|^https?:/.test(path) || !path.includes("/") && !PATH_EXT.test(path)) continue;
         if (!TOP.has(path.split("/")[0]!) && !(path.includes("/") && PATH_EXT.test(path))) continue;
         if (![root, join(root, DOCS_DIR), join(root, DOCS_DIR, "coop-contract")].some((d) => existsSync(join(d, path)))) bad.push(`${f}: ${span}`);
       }

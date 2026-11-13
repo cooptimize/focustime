@@ -13,7 +13,7 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 | Actions | Every operation the UI, the command menu, the assistant and the bot can run (396 of them): named in one registry, validated, dispatched | `actions/registry.ts`, `actions/dispatch.ts` |
 | Pure rules | The week from patterns and events, risks, free time, planning, the Inbox's rules, notifications; no I/O | `week/`, `plan/` |
 | Sources | One adapter per outside system, and the demo's fakes | `sources/` |
-| Plan store | Azure SQL (dev and prod), every statement scoped to the signed-in person | `store/` |
+| Plan store | Azure SQL in dev and prod, the SQL Server container or a SQLite file in the developer loop, SQLite for the demo and tests; every statement scoped to the signed-in person | `store/` |
 | Host | The only code that touches the machine (secrets, keys, caches, notifications): `host/azure` hosted, `host/local` for the developer loop; picked by `FOCUSTIME_HOST` | `host/` |
 | Scheduler | One in-process scheduler: app jobs (polling, the purge), each person's ticks (timer ends, reminders, Teams messages) and start-up work | `server/scheduler.ts`, `server/ticks.ts`, `config/background-policy.ts` |
 | Teams bot | An Azure Bot whose identity is a managed identity, calling `/teams/messages` on the same app; 1:1 chats only | `server/teams/`, `infra/modules/bot.bicep` |
@@ -221,6 +221,23 @@ With AI off, not set up or over a cap, a message gets one line saying so and the
 - **Where a card can't hold it** (over 24 KB or 9 cards, or a preview over 20 rows or 12,000 characters), Teams shows the first part and Open in FocusTime (`#/ask/<turn>`). A DevOps change that can't be shown whole has no Confirm in Teams.
 - **The parity test is the rule** (`assistant/parity.test.ts`, in CI): every topic, tool and golden question runs through the panel's entry and the real bot core, and must return the same result, draw all of it as cards and make the same writes.
 
+## Where each source is read and written
+
+One adapter per outside system in `sources/`; [Integrations](integrations.md) says what each reads and writes and with which permission.
+
+| System | Read | Written |
+|---|---|---|
+| Outlook (Graph) | `sources/graph/source.ts` (the person's calendar view, through the shared calendar shell `sources/calendar/source.ts`), reached from `week.load` in `actions/dispatch.ts` | `sources/graph/write.ts` (events), `sources/graph/send.ts` (Close the loop) |
+| Teams and people (Graph) | `sources/graph/chats.ts`, `meetings.ts`, `schedule.ts`, `people.ts`, `presence.ts`, `photos.ts`, `groups.ts` | Teams status from `actions/presence-actions.ts` |
+| Google Calendar | `sources/google/source.ts` | Never |
+| Calendars added by link | `sources/ics/source.ts` (the link rules in `sources/ics/link.ts`, the guarded fetch in `server/ics-fetch.ts`) | Never |
+| Dataverse | `sources/dataverse/source.ts`, `directory.ts`, `holidays.ts` | Never |
+| Azure DevOps | `sources/devops/source.ts`, `git.ts` (Code), `changes.ts` | `sources/devops/write.ts` |
+| Azure (the VM) | `sources/azure/client.ts` | The same client: start and deallocate only |
+| GitHub (standards) | `sources/github/standards.ts` | Never |
+
+Some reads, such as `week.load`, are handled in `actions/dispatch.ts` itself rather than in an `*-actions.ts` file.
+
 ## A normal request
 
 1. The browser calls `POST /api/action` with `{ action, input }`, its session cookie and the `X-CSRF` header.
@@ -255,6 +272,8 @@ sequenceDiagram
 - **Read back.** The target is read again and compared with what was meant before the write counts as done.
 - **Audit log.** Every attempt with when, where, before and after, and its result (`write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`, `loop_sends`), shown in Settings › Activity with Undo and Retry where they apply.
 - **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
+
+One write end to end, a DevOps state change: the button in `ui/DevOpsWrite.tsx` calls `devops.preview`, which `actions/dispatch.ts` hands to `actions/devops-write-actions.ts`; the patch (with its `test /rev`) is built by `stateOps` in `plan/devopswrite.ts`; `devops.confirm` sends it as a PATCH from `sources/devops/write.ts` with the person's write PAT (`sources/devops/pat.ts`). An Outlook write goes the same way through `actions/timebox-actions.ts` and `sources/graph/write.ts`.
 
 The exceptions are listed in [Security](security.md#external-writes-and-the-audit-log): Teams presence during focus has no preview, the VM has no undo and its automatic start no preview, and plan store changes from the bot's buttons run at once with Undo.
 
