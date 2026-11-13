@@ -127,7 +127,20 @@ function ClientPicker({ clients, current, onPick }: { clients: Client[]; current
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
   return (
-    <div className="cv-picker" ref={wrap} data-menu={open ? "" : undefined}>
+    <div
+      className="cv-picker"
+      ref={wrap}
+      data-menu={open ? "" : undefined}
+      onKeyDown={(e) => {
+        // Esc closes the list first (the panel's own Esc waits for the next one).
+        if (e.key === "Escape" && open) {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen(false);
+          wrap.current?.querySelector<HTMLElement>(".cv-picker-btn")?.focus();
+        }
+      }}
+    >
       <button type="button" className="cv-picker-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={`Client: ${current?.name ?? "none"}. Change client`} onClick={() => setOpen((v) => !v)}>
         <Swatch color={current?.color ?? null} />
         <span>{current?.name ?? "Pick a client"}</span>
@@ -136,16 +149,7 @@ function ClientPicker({ clients, current, onPick }: { clients: Client[]; current
         </span>
       </button>
       {open && (
-        <div
-          className="cv-picker-pop"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen(false);
-            }
-          }}
-        >
+        <div className="cv-picker-pop">
           <ClientList
             clients={clients}
             current={current?.clientKey ?? null}

@@ -417,7 +417,7 @@ function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
     }
   }, [c.key]);
   useEffect(() => void run(), [run]);
-  const words = check === null || check === "checking" ? "Checking…" : check.state === "readable" ? `Readable: ${check.repos} repo${check.repos === 1 ? "" : "s"}` : check.text;
+  const words = check === null || check === "checking" ? "Checking…" : check.state === "readable" ? `Code: readable · ${check.repos} repo${check.repos === 1 ? "" : "s"}` : check.text;
   return (
     <div className="set-form adm-code">
       <AField label="Who can read this client's code" kind="Rule" s={saver.status(scope, "code_access")} retry={() => void saver.save(scope, "code_access", value, `${c.key}: who can read its code`)} hint="Code shows every client's repos, read only, to every Cooptimizer by default. Its team only keeps them to the people on this client. Every file opened is logged in Admin › Audit › Code views.">
@@ -427,7 +427,7 @@ function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
         </select>
       </AField>
       <div className="set-field">
-        <span className="set-label">Code</span>
+        <span className="set-label">Can FocusTime read it?</span>
         <span className="set-value" data-code-check={check && check !== "checking" ? check.state : "checking"}>
           {words}{" "}
           <button type="button" className="mini" disabled={check === "checking"} onClick={() => void run()}>

@@ -19,6 +19,15 @@ const shot = async (page: Page, name: string) => {
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 };
+/** <name>-dark.png and <name>-light.png, then back to dark. */
+const shotThemes = async (page: Page, name: string) => {
+  if (!SHOTS) return;
+  for (const t of ["dark", "light"] as const) {
+    await theme(page, t);
+    await shot(page, `${name}-${t}`);
+  }
+  await theme(page, "dark");
+};
 // The app sets its theme on load; the shots hold the chosen one (and the system's) for the rest of the page.
 const theme = async (page: Page, t: "dark" | "light") => {
   await page.emulateMedia({ colorScheme: t });
@@ -62,7 +71,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     const fab = start.locator(".cv-client-opt", { hasText: "Fabrikam" });
     expect(await fab.getAttribute("aria-disabled")).toBe("true");
     expect(await fab.textContent()).toContain("Only Fabrikam's team can open this");
-    await shot(page, "01-pick-client-dark");
+    await shotThemes(page, "01-pick-client");
 
     await pickClient(page, "Northwind");
     // Three repos: pick one.
@@ -83,10 +92,15 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await row(page, "/sql/dbo/Views/vSales.sql").click();
     await file(page).waitFor();
     expect(await file(page).getAttribute("data-lang")).toBe("sql");
+    // The client list open over a file: whose code is on screen stays in the header.
+    await panel(page).locator(".cv-picker-btn").click();
+    await shotThemes(page, "02-client-list-open");
+    await page.keyboard.press("Escape");
+    await panel(page).locator(".cv-picker-pop").waitFor({ state: "detached" });
     expect(await file(page).locator(".cv-ln").first().getAttribute("data-n")).toBe("1");
     expect(await file(page).locator(".tk-keyword").count()).toBeGreaterThan(2);
     expect(await page.evaluate(() => location.hash)).toMatch(/^#\/code\/Northwind\/a1b2c3d4-0001-4000-8000-00000000a001\/%2Fsql%2Fdbo%2FViews%2FvSales\.sql$/);
-    await shot(page, "02-sql-dark");
+    await shotThemes(page, "03-sql");
 
     // TMDL with its DAX.
     await row(page, "/model").click();
@@ -97,10 +111,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await expect.poll(() => file(page).getAttribute("data-lang")).toBe("tmdl");
     expect(await file(page).locator(".tk-keyword", { hasText: "measure" }).count()).toBeGreaterThan(0);
     expect(await file(page).locator(".tk-function").count()).toBeGreaterThan(0);
-    await shot(page, "03-tmdl-dark");
-    await theme(page, "light");
-    await shot(page, "03-tmdl-light");
-    await theme(page, "dark");
+    await shotThemes(page, "04-tmdl");
 
     // A squashed report: Format, then Copy formatted.
     await row(page, "/report").click();
@@ -108,10 +119,11 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await row(page, "/report/Sales.Report/report.json").click();
     await expect.poll(() => file(page).getAttribute("data-lang")).toBe("json");
     const before = await file(page).locator(".cv-line").count();
+    await shotThemes(page, "06-json-squashed");
     await file(page).getByRole("switch", { name: "Format" }).check();
     await expect.poll(() => file(page).locator(".cv-line").count()).toBeGreaterThan(before + 10);
     expect(await file(page).locator("[data-code-copy=file]").textContent()).toBe("Copy formatted");
-    await shot(page, "04-json-formatted-dark");
+    await shotThemes(page, "07-json-formatted");
 
     // Esc closes and goes back to where it opened from.
     await page.keyboard.press("Escape");
@@ -142,13 +154,15 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await panel(page).locator(".cv-find-list li").first().waitFor();
     expect(await panel(page).locator(".cv-find-list li").count()).toBe(2);
     await page.keyboard.press("ArrowDown");
-    await shot(page, "05-find-light");
+    await shotThemes(page, "08-find");
     await page.keyboard.press("Enter");
     await file(page).waitFor();
     expect(await file(page).getAttribute("data-code-file")).toBe("/adf/pipeline/pl_copy_shipments.json");
     // Breadcrumbs.
     expect(await file(page).locator(".cv-crumbs").textContent()).toBe("freight-ingest/adf/pipeline/pl_copy_shipments.json");
-    await shotBoth(page, "06-file-light");
+    await shotThemes(page, "09-json-pipeline");
+    await theme(page, "light");
+    await shotBoth(page, "09-json-pipeline-light");
 
     // Copy, Copy path, Copy DevOps link, Copy link.
     const clip = () => page.evaluate(() => navigator.clipboard.readText());
@@ -191,12 +205,12 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await panel(page).locator("[data-code-state=team_only]").waitFor();
     expect(await panel(page).locator("[data-code-state=team_only]").textContent()).toBe("Only Fabrikam's team can open this.");
     expect(await panel(page).getByLabel("Repo").count()).toBe(0);
-    await shot(page, "07-team-only-dark");
+    await shotThemes(page, "10-team-only");
 
     await page.evaluate(() => (location.hash = "#/code/Harbor"));
     await panel(page).locator("[data-code-state=needs_code_read]").waitFor();
     expect(await panel(page).locator("[data-code-state=needs_code_read]").textContent()).toBe("FocusTime can't read Harbor's code yet. The company DevOps token for Harbor needs Code (read).");
-    await shot(page, "08-needs-code-read-dark");
+    await shotThemes(page, "11-needs-code-read");
 
     await page.evaluate(() => (location.hash = "#/code/Northwind/a1b2c3d4-0006-4000-8000-00000000a006"));
     await panel(page).locator("[data-code-state=empty]").waitFor();
@@ -213,8 +227,14 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
       expect(await st.textContent()).toMatch(words);
       expect(await file(page).locator(".cv-code").count()).toBe(0);
       expect(await file(page).locator("[data-code-copy=file]").count()).toBe(0);
-      if (kind === "too_large") await shot(page, "09-too-large-dark");
+      if (kind === "binary") await shotThemes(page, "12-binary");
+      if (kind === "too_large") await shotThemes(page, "13-too-large");
     }
+    // Every Code response is no-store.
+    const cache = await page.evaluate(() =>
+      fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "code.file", input: { clientKey: "Northwind", repoId: "a1b2c3d4-0001-4000-8000-00000000a001", path: "/README.md" } }) }).then((r) => [r.status, r.headers.get("cache-control")]),
+    );
+    expect(cache).toEqual([200, "no-store"]);
     // An HTML file is shown as its source; nothing in it runs.
     await page.evaluate((h) => (location.hash = h), repo + encodeURIComponent("/docs/store-map.html"));
     await expect.poll(() => file(page).getAttribute("data-lang")).toBe("xml");
@@ -229,16 +249,16 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await theme(page, "dark");
     await page.evaluate(() => (location.hash = "#/code"));
     await panel(page).locator(".cv-start").waitFor();
-    await shot(page, "10-phone-clients-dark");
+    await shot(page, "20-phone-clients-dark");
     await pickClient(page, "Cooptimize");
     await row(page, "/scripts").waitFor();
     await row(page, "/scripts").click();
-    await shot(page, "11-phone-tree-dark");
+    await shot(page, "21-phone-tree-dark");
     await row(page, "/scripts/New-Workspace.ps1").click();
     await file(page).waitFor();
     expect(await file(page).getAttribute("data-lang")).toBe("powershell");
     expect(await noSidewaysScroll(page)).toBe(true);
-    await shotBoth(page, "12-phone-file-dark");
+    await shotBoth(page, "22-phone-file-dark");
     await panel(page).locator(".ps-back").click();
     await row(page, "/scripts/New-Workspace.ps1").waitFor();
     expect(await file(page).count()).toBe(0);
@@ -246,7 +266,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await theme(page, "light");
     await row(page, "/scripts/New-Workspace.ps1").click();
     await file(page).waitFor();
-    await shot(page, "13-phone-file-light");
+    await shot(page, "23-phone-file-light");
     expect(errors).toEqual([]);
     await page.close();
   });
@@ -265,11 +285,11 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await field.waitFor({ timeout: 60_000 });
     const card = page.locator(".adm-client", { has: field });
     await expect.poll(() => card.locator("[data-code-check]").getAttribute("data-code-check")).toBe("readable");
-    expect(await card.locator("[data-code-check]").textContent()).toMatch(/^Readable: 3 repos/);
+    expect(await card.locator("[data-code-check]").textContent()).toMatch(/^Code: readable · 3 repos/);
     await field.selectOption("team");
     await page.waitForTimeout(600);
     await card.locator(".adm-code").scrollIntoViewIfNeeded();
-    await shot(page, "14-admin-rule-dark");
+    await shotThemes(page, "14-admin-rule");
     // Harbor's token can't read code yet.
     const harbor = page.locator(".adm-client", { has: page.getByLabel("Harbor: who can read its code") });
     if (await harbor.count()) await expect.poll(() => harbor.locator("[data-code-check]").getAttribute("data-code-check")).toBe("needs_code_read");
@@ -280,7 +300,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     const first = await views.locator("tbody tr").first().locator("td").allTextContents();
     expect(first.slice(2)).toEqual(["Northwind", "sales-analytics", "Opened a file", "/README.md"]);
     expect(await views.locator(".adm-code-counts").textContent()).toMatch(/Northwind \d+/);
-    await shot(page, "15-admin-code-views-dark");
+    await shotThemes(page, "15-admin-code-views");
 
     // The person is on Northwind's team in the demo, so it still opens for them.
     await page.evaluate(() => (location.hash = "#/code/Northwind"));
