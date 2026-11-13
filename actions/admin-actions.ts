@@ -560,6 +560,8 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.clientKey !== "string" || !i.clientKey || i.clientKey.length > 100) return bad("clientKey names the client");
       if (!ops.code) return { ok: true, data: { state: "error", text: "Code isn't available here" } satisfies CodeStatus };
+      // Review 2: only a listed client's repos are checked, never a hidden or non-customer account's.
+      if (!(await ops.org.clientAccounts()).isClient(i.clientKey)) return bad("That isn't a client in FocusTime", 404);
       return { ok: true, data: await ops.code.status(i.clientKey) };
     }
     case "admin.audit": {

@@ -43,6 +43,10 @@ describe("the allow list", () => {
     expect(() => buildUrl(T, "repos", REPO.id, {})).toThrow();
     expect(() => buildUrl({ ...T, org: "evil.example.com/x" }, "repos", null, {})).toThrow();
     expect(() => buildUrl({ ...T, project: "a/../../other" }, "repos", null, {})).toThrow();
+    // Review 2: a project of "." would collapse to the whole organization's repos; ".." to another path.
+    for (const project of [".", "..", "...", " . "]) expect(() => buildUrl({ ...T, project }, "repos", null, {}), project).toThrow();
+    for (const org of [".", ".."]) expect(() => buildUrl({ ...T, org }, "repos", null, {}), org).toThrow();
+    expect(new URL(buildUrl({ ...T, project: "v1.2" }, "repos", null, {})).pathname).toBe("/contoso/v1.2/_apis/git/repositories");
     expect(() => buildUrl(T, "file_meta", REPO.id, { path: "/../x" })).toThrow();
     expect(() => buildUrl(T, "file_meta", REPO.id, { path: "/a?b=1&c" , includeContentMetadata: "true" })).not.toThrow();
     expect(() => buildUrl(T, "file_bytes", REPO.id, { "versionDescriptor.version": "main", "versionDescriptor.versionType": "commit" })).toThrow();

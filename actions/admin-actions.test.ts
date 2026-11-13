@@ -275,8 +275,16 @@ describe("Code (RB-1)", () => {
   it("Check reads a client's code status for an admin only", async () => {
     const s = await setup();
     expect(await s.run(s.admin, "admin.code_check", { clientKey: "fabrikam" })).toEqual({ ok: true, data: { state: "readable", repos: 3 } });
+    // Contoso as a listed client too (the setup lists Fabrikam).
+    const listed = s.ops.org.clientAccounts.bind(s.ops.org);
+    s.ops.org.clientAccounts = async () => {
+      const ca = await listed();
+      return Object.assign(Object.create(Object.getPrototypeOf(ca) as object), ca, { isClient: (k: string) => k === "contoso" || ca.isClient(k) });
+    };
     expect(await s.run(s.admin, "admin.code_check", { clientKey: "contoso" })).toMatchObject({ ok: true, data: { state: "needs_code_read" } });
     expect(await s.run(s.ben, "admin.code_check", { clientKey: "fabrikam" })).toMatchObject({ ok: false, status: 403 });
+    // Review 2: an account that isn't a listed client is never checked.
+    expect(await s.run(s.admin, "admin.code_check", { clientKey: "no-such-account" })).toMatchObject({ ok: false, status: 404 });
   });
 });
 

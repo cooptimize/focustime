@@ -56,8 +56,9 @@ const COMMIT = /^[0-9a-f]{40}$/i;
 export function buildUrl(t: Pick<GitTarget, "org" | "project">, op: GitOp, repo: string | null, query: Readonly<Record<string, string>>): string {
   const spec = ALLOWED[op];
   if (!spec) throw new Error("not an allowed Git read");
-  if (!ORG.test(t.org)) throw new Error("not an organization name");
-  if (!t.project || t.project.length > 200 || /[\u0000-\u001f\u007f/\\]/.test(t.project)) throw new Error("not a project name");
+  // A name of only dots would be read as "this folder" or "the folder above" and widen the request (review 2).
+  if (!ORG.test(t.org) || /^\.+$/.test(t.org)) throw new Error("not an organization name");
+  if (!t.project || t.project.length > 200 || /[\u0000-\u001f\u007f/\\]/.test(t.project) || /^\.+$/.test(t.project.trim())) throw new Error("not a project name");
   let path: string = spec.path;
   if (path.includes("{repo}")) {
     if (!repo || !REPO_ID.test(repo)) throw new Error("not a repo id");
@@ -76,7 +77,7 @@ export function buildUrl(t: Pick<GitTarget, "org" | "project">, op: GitOp, repo:
   // The host is fixed: only dev.azure.com, only the client's own organization and project.
   const url = new URL(`https://dev.azure.com/${encodeURIComponent(t.org)}/${encodeURIComponent(t.project)}/_apis/git/${path}`);
   url.search = q.toString();
-  if (url.origin !== "https://dev.azure.com" || !url.pathname.startsWith(`/${encodeURIComponent(t.org)}/`)) throw new Error("not the client's organization");
+  if (url.origin !== "https://dev.azure.com" || !url.pathname.startsWith(`/${encodeURIComponent(t.org)}/${encodeURIComponent(t.project)}/_apis/git/`)) throw new Error("not the client's organization and project");
   return url.toString();
 }
 

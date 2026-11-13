@@ -823,3 +823,4 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The admin status line checks each client's repos when Admin › Clients opens (one request per client, through the limiter, remembered 5 minutes). With many clients that is many requests on open; check it on Check only if that turns out slow.
 - Find matches file names; should it also match folder names (to jump to a folder)?
 - Opening a repo's top folder counts as "Opened the repo" each time the repo's tree is read again after the 5 minute memory; a person who keeps the panel open reads it once. Fine as a signal of use, not a count of visits.
+- A file's path is in Code's address, so it sits in the browser's history (never the file's text; the stored last place leaves Code out). Is a path in history acceptable, or should Code replace history entries instead of adding them? Taken as acceptable: Back and Copy link need it.
