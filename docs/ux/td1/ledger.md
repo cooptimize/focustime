@@ -8,15 +8,15 @@ Verdicts: **right** (true in the code), **wrong** (the code says otherwise; fixe
 
 | Page | Right | Wrong | Gone | Can't confirm | Rows |
 |---|---|---|---|---|---|
-| README.md | 12 | 4 | 0 | 1 | 17 |
+| README.md | 12 | 4 | 1 | 1 | 18 |
 | architecture.md | 404 | 4 | 7 | 1 | 416 |
-| data.md | 271 | 5 | 0 | 0 | 276 |
-| integrations.md | 147 | 2 | 3 | 1 | 153 |
+| data.md | 271 | 8 | 0 | 0 | 279 |
+| integrations.md | 147 | 3 | 3 | 1 | 154 |
 | security.md | 76 | 7 | 1 | 0 | 84 |
-| operations.md | 77 | 5 | 0 | 2 | 84 |
-| development.md | 29 | 2 | 1 | 0 | 32 |
-| coop-contract.md | 132 | 1 | 0 | 2 | 135 |
-| **All** | 1148 | 30 | 12 | 7 | 1197 |
+| operations.md | 78 | 6 | 3 | 3 | 90 |
+| development.md | 29 | 3 | 3 | 0 | 35 |
+| coop-contract.md | 133 | 1 | 0 | 2 | 136 |
+| **All** | 1150 | 36 | 18 | 8 | 1212 |
 
 ## Checked by hand
 
@@ -34,6 +34,7 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | Glossary | Product words are in the Guide's Renamed section | ui/guide/ | can't confirm | Not checked here (the Guide is GU-1's); the line now points to CLAUDE.md's Renamed list |
 | Keeping these docs current | docs:check fails on links, Checked lines, Graph permissions, diagrams, secrets | scripts/tech-docs.test.ts | right | TD-1 adds five more checks |
 | Keeping these docs current | "A page you didn't re-check keeps its old line" |  | wrong | Led to stamps with exception lists; now one stamp, set only after re-checking the whole page |
+| (added) | Names in the code | ui/nav.ts, actions/registry.ts | gone | Missing; added |
 
 ### architecture.md
 
@@ -103,6 +104,9 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | Deployment items (DP-2) | Catalog in config/deploy-catalog.ts | config/deploy-catalog.ts | right |  |
 | Time spent, time left and check-ins (TX-1) | picks.spent_minutes, remaining_minutes, done_removed, size_xs; timeboxes.settled_* | store/migrations | right |  |
 | Time spent, time left and check-ins (TX-1) | RF-1 setup_through mark | plan/setup.ts SETUP_THROUGH_MARK | right |  |
+| Export | kv is not in Export | store/user-data.ts (NOT_EXPORTED) | wrong | kv is a user table and is exported; only user_secrets, push_devices, the Teams bot tables and calendar links are not |
+| Export | Export schema version 26 (glossary) | store/user-data.ts | wrong | Version 41; import reads 26 to 41 |
+| (found in the rewrite) | Settings › Data | ui/settings/registry.ts | wrong | The section is Settings › Your data |
 
 ### integrations.md
 
@@ -134,6 +138,7 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | GitHub (Cooptimize's standards) | cooptimize/coop-standards by default | plan/standards.ts DEFAULT_STANDARDS_REPO | right | Timeout 20 s added |
 | The Teams bot | user-assigned managed identity, no secret | infra/modules/bot.bicep | right |  |
 | Web Push | ft-vapid-key | server/webpush.ts | right |  |
+| (found in the rewrite) | Settings › Connections | ui/settings/registry.ts | wrong | The section is Settings › Accounts and calendars |
 
 ### security.md
 
@@ -176,6 +181,12 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | Scripts | nine scripts in infra/scripts/ | infra/scripts/ | right |  |
 | The Teams package | scripts/teams-package.ts | scripts/teams-package.ts | right |  |
 | Troubleshooting | Six browser shards, CI-2 cache | .github/workflows/ci.yml, ci-webkit-deps.yml | right | ci-webkit-deps.yml wasn't named; added |
+| What runs on its own | Conversation upkeep: escalations and follow-through no longer made | actions/conversation-upkeep.ts | right | upkeep returns at once; the policy's description still names escalation and drafts (open question) |
+| What runs on its own | Reminders list includes taken over, conversations given or active | server/ticks.ts | gone | Never sent now; removed from the list; four kinds named as never sent |
+| Environments | Dev sleeps 300 s after the last request | infra/modules/app.bicep | can't confirm | No cooldown in the Bicep: Container Apps' default; marked Not verified |
+| Deploys | About is under ⋯ | ui/App.tsx | wrong | More › About |
+| (added) | App configuration: the FOCUSTIME_* variables | server/appconfig.ts, infra/modules/app.bicep | gone | Missing from the page; added |
+| (added) | Workflows table incl. ci-webkit-deps.yml | .github/workflows/ | gone | Missing; added |
 
 ### development.md
 
@@ -189,6 +200,9 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | Tests and CI | CI runs typecheck, guards, unit and store with SQL Server, UI build, six browser shards, Bicep, image | .github/workflows/ci.yml | right |  |
 | Tests and CI | "Known flaky tests. HK-5 found and fixed ... (D932 to D939: an Ahead test ...)" |  | wrong | History; shortened to the rule |
 | (missing) | Dependency list | package.json | gone | Added with what each is for and its license |
+| (added) | Dependencies with purpose and license | package.json | gone | Missing; added (27 packages) |
+| Commands | test:zones, demo:check, docs:diagrams, check, build | package.json | gone | Missing; added |
+| Adding a Graph permission | Settings › Connections shows it | plan/permissions.ts | wrong | Settings › Accounts and calendars › Microsoft permissions |
 
 ### coop-contract.md
 
@@ -200,6 +214,7 @@ The prose claims, and the mechanical rows whose name wasn't found as written.
 | (top) | Checked against c667e9e on Nov 9 |  | wrong | Re-stamped |
 | (top) | FocusTime's test is scripts/coop-contract.test.ts | scripts/coop-contract.test.ts | right |  |
 | (top) | Schemas and fixtures in coop-contract/ | docs/technical/coop-contract/ | right |  |
+| What this doesn't cover | Only the readers exist on FocusTime's side | plan/stories.ts, plan/status-report.ts, config/background-policy.ts | right | Added the reserved coop_mailbox note |
 
 ## Checked by script
 
