@@ -20,6 +20,7 @@ import { DateField } from "./DatePicker.tsx";
 import { TimeField } from "./TimeField.tsx";
 import { DeployChecks } from "./DeployItems.tsx";
 import { itemsSummary, type DeployItem } from "../plan/deploy-items.ts";
+import { Icon } from "./icons.tsx";
 
 const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Promise", draft: "Draft story", draft_feature: "Draft feature" };
 const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as promise", draft: "Save as draft story", draft_feature: "Save as draft feature" };
@@ -436,7 +437,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
         </div>
         {/* UI-7: ↵ is its own button between the box and the client chip, never over the box or its scrollbar. */}
         <button type="button" className="cap-send" aria-label="Save" title="Save (Enter)" disabled={busy || !text.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
-          ↵
+          <Icon name="enter" />
         </button>
         <button
           type="button"

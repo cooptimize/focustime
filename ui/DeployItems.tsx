@@ -8,6 +8,7 @@ import type { DeployItemsView } from "../actions/deploy-item-actions.ts";
 import type { DataPlatform } from "../config/deploy-catalog.ts";
 import { defaultKeys, itemsSummary, ownKey, switchTicks, toRows, type DeployItem, type ItemGroup, type ListItem } from "../plan/deploy-items.ts";
 import type { Pick } from "../plan/types.ts";
+import { Icon } from "./icons.tsx";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
@@ -235,8 +236,8 @@ export function DeploySettings({ clientKey, clientName }: { clientKey: string; c
               return (
                 <li key={it.key} className={it.hidden ? "hidden-item" : undefined}>
                   <span className="dep-move">
-                    <button type="button" className="mini quiet" aria-label={`Move ${it.name} up`} disabled={i === 0 || status.busy} onClick={() => swap(l.platform, l.items, i, -1)}>↑</button>
-                    <button type="button" className="mini quiet" aria-label={`Move ${it.name} down`} disabled={i === l.items.length - 1 || status.busy} onClick={() => swap(l.platform, l.items, i, 1)}>↓</button>
+                    <button type="button" className="mini quiet" aria-label={`Move ${it.name} up`} disabled={i === 0 || status.busy} onClick={() => swap(l.platform, l.items, i, -1)}><Icon name="arrow-up" /></button>
+                    <button type="button" className="mini quiet" aria-label={`Move ${it.name} down`} disabled={i === l.items.length - 1 || status.busy} onClick={() => swap(l.platform, l.items, i, 1)}><Icon name="arrow-down" /></button>
                   </span>
                   <span className="dep-name">
                     {it.name}

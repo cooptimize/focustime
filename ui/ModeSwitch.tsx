@@ -39,7 +39,7 @@ export function ModeArea({ children, done, note = null }: { children: React.Reac
       {done && (phone && /^Back to /.test(done.label ?? "") ? (
         // MB-1: on the phone a way back is a small text link with an arrow, not a big green button.
         <button type="button" className="done-link" data-tour="mode-done" disabled={done.disabled} onClick={done.onClick} title={done.title ?? "Go back"}>
-          <span aria-hidden="true">← </span>
+          <Icon name="arrow-left" />{" "}
           {done.label}
         </button>
       ) : (

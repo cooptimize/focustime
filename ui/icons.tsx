@@ -5,11 +5,11 @@
 // and Lumen (ui/brand/), and a person's photo.
 import {
   Activity, Archive, Calendar, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Bell, Bold, BookOpen, CalendarClock, CalendarDays, CalendarOff, CalendarPlus,
-  ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleHelp, Clock, Code, Columns4, Command, Copy, Database, Download,
+  ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleHelp, Clock, Code, Columns4, Command, Copy, CornerDownLeft, Database, Download,
   Ellipsis, ExternalLink, Eye, EyeOff, File, FileText, Flag, Folder, FolderGit2, GanttChart, GripVertical, Handshake, History, Image, Inbox, Info, Italic,
   Keyboard, LayoutGrid, Link, List, ListFilter, ListOrdered, ListTree, LogOut, MessageCircle, MessageSquareText, MessagesSquare, Mic, Minus, Monitor, Move,
   Palette, Paperclip, Pause, Pencil, Phone, Pin, Play, Plug, Plus, RefreshCw, Repeat, Ruler, Search, Send, Shield, SlidersHorizontal, Smartphone, Sparkles,
-  Square, SquarePlus, StickyNote, Sun, Target, Timer, Trash2, TreePalm, TriangleAlert, Type, Undo2, Upload, User, UserPlus, Users, Video, Volume2, WrapText, X,
+  Square, SquarePlus, Star, StickyNote, Sun, Target, Timer, Trash2, TreePalm, TriangleAlert, Type, Undo2, Upload, User, UserPlus, Users, Video, Volume2, WrapText, X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,11 +25,12 @@ const ICONS = {
   remove: Trash2, undo: Undo2, external: ExternalLink, hide: EyeOff, download: Download, sort: ArrowUpDown, minus: Minus, grip: GripVertical, pin: Pin,
   play: Play, pause: Pause, stop: Square, send: Send, assign: UserPlus, attach: Paperclip, mic: Mic,
   bold: Bold, italic: Italic, bullets: List, numbers: ListOrdered, wrap: WrapText,
+  enter: CornerDownLeft,
   "arrow-up": ArrowUp, "arrow-down": ArrowDown, "arrow-left": ArrowLeft, "arrow-right": ArrowRight,
   // Things
   promise: Handshake, chats: MessagesSquare, "to-sort": StickyNote, meeting: Video, call: Phone, personal: User, "all-day": Sun, pto: TreePalm,
   holiday: CalendarOff, catchup: History, standing: Repeat, risk: TriangleAlert, folder: Folder, file: File, repo: FolderGit2, people: Users,
-  flag: Flag, timer: Timer, size: Ruler, schedule: CalendarClock, "add-date": CalendarPlus, grid: LayoutGrid, gantt: GanttChart, archive: Archive, calendar: Calendar, deploy: Upload,
+  flag: Flag, priority: Star, timer: Timer, size: Ruler, schedule: CalendarClock, "add-date": CalendarPlus, grid: LayoutGrid, gantt: GanttChart, archive: Archive, calendar: Calendar, deploy: Upload,
   // Places in menus
   guide: BookOpen, docs: FileText, keys: Keyboard, commands: Command, feedback: MessageSquareText, about: Info, help: CircleHelp, notices: Bell,
   "sign-out": LogOut, theme: Palette, "text-size": Type, sound: Volume2, data: Database, activity: Activity, connect: Plug, admin: Shield, phone: Smartphone,

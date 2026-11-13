@@ -308,6 +308,23 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
         expect(ring.width).toBeGreaterThanOrEqual(2);
         expect(ring.color).toBe(ring.focus);
       }
+      // With focus running the countdown takes Focus's place; from 1280 up the bar is still one row (under that it
+      // took two rows before too: the countdown and its to-do's title need the room).
+      if (width < 1280) {
+        await page.close();
+        continue;
+      }
+      await buildState(page, "ordinary");
+      await page.locator(".top-btn.timer-btn").click();
+      await page.getByRole("menuitem").first().click();
+      await page.locator(".top-timer").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+      const running = await page.evaluate(() => [...document.querySelectorAll(".topbar .view-tab, .topbar .top-btn, .topbar .vm-chip, .topbar .top-timer, .topbar .person-chip")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0).map((r) => Math.round(r.top + r.height / 2)));
+      expect(Math.max(...running) - Math.min(...running), `${width}: one row with the timer running (${running.join(" ")})`).toBeLessThanOrEqual(6);
+      expect(await page.locator(".top-timer-count").evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${width}: the countdown shows whole`).toBe(true);
+      await page.locator(".top-timer").click();
+      await page.locator(".focus-screen").getByRole("button", { name: "Stop" }).click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(300);
       await page.close();
     }
   }, T);

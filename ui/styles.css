@@ -7376,3 +7376,12 @@ button:disabled { cursor: default; }
 /* On the phone the header's Add keeps the weight it had, so the phone's screens carry no more text styles than
    before (U5 counts them). */
 :root .app.phone .mode-area .add-work-head { font-weight: 600; }
+/* A running timer's words give way before the top bar wraps: the countdown always shows, its to-do's title shortens. */
+:root .top-timer { max-width: clamp(150px, calc(100vw - 1230px), 340px); min-width: 0; }
+/* A cell you can change shows the family's Open chevron on hover (it was a "▾" character). */
+:root .ah-cell.ah-edit:not(.ah-editing):hover::after {
+  content: ""; width: calc(12px * var(--text-scale)); height: calc(12px * var(--text-scale)); background: var(--text-faint);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:root .ah-cell.ah-edit:not(.ah-editing):has(.ah-add):hover::after { content: none; }

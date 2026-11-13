@@ -57,7 +57,7 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
   const label = `${when}${state === "outlook" ? " on Outlook" : ""}${note ? `. ${note}` : ""}${canEdit ? ". Change the time" : ""}`;
   return (
     <button type="button" className={`pt-time ${state}${t.conflict ? " conflict" : ""}${pending ? " pending" : ""}`} aria-haspopup={canEdit ? "menu" : undefined} aria-label={label} title={label} onClick={open} disabled={!canEdit} {...stop}>
-      {t.conflict && <span aria-hidden="true">⚠ </span>}
+      {t.conflict && <><Icon name="risk" /> </>}
       <span className="pt-when">{when}</span>
       {state === "outlook" && (
         <span className="pt-ol">

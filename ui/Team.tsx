@@ -340,7 +340,7 @@ function PriorityRow({ p, weekStart, past, act }: { p: PriorityView; weekStart: 
   return (
     <li className="carry-row priority-row">
       <span className="carry-main">
-        <span className="priority-mark" aria-hidden="true">★</span>
+        <span className="priority-mark"><Icon name="priority" /></span>
         {p.itemType && <TypeIcon clientKey={p.clientKey} type={p.itemType} decorative />}
         <WorkLink clientKey={p.clientKey} url={p.url} className="carry-title" title={p.title}>
           {p.title}

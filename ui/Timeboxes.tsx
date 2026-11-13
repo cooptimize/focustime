@@ -19,6 +19,7 @@ import { clientColor } from "./labels.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
+import { Icon } from "./icons.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -769,7 +770,7 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
     >
       <span className="tbox-edge top" onPointerDown={(ev) => down(ev, "start")} aria-hidden="true" />
       <span className="tbox-label">
-        {t.conflict ? "⚠ " : ""}
+        {t.conflict && <><Icon name="risk" /> </>}
         {t.title}
       </span>
       {(drag || t.outlook || edit) && <span className="tbox-time">{drag || edit ? range(live, env.tz) : "Outlook"}{edit && t.outlook ? " · Outlook" : ""}</span>}

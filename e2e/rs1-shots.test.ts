@@ -250,7 +250,7 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-1 screenshots", () => {
       return void (await page.close());
     }
     // The page's sticky header would sit over a shot of one section.
-    await page.addStyleTag({ content: ".sg-head { position: static !important; }" });
+    await page.evaluate(() => document.querySelector<HTMLElement>(".sg-head")?.style.setProperty("position", "static"));
     for (const theme of ["cooptimize-dark", "cooptimize-light", "neutral"]) {
       await page.locator(".sg-themes button").nth(["cooptimize-dark", "cooptimize-light", "neutral"].indexOf(theme)).click();
       await page.waitForTimeout(300);
