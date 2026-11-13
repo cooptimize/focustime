@@ -7440,3 +7440,10 @@ button:disabled { cursor: default; }
 :root :is(.nt-main, .hs-value) { border-radius: var(--radius-input); }
 :root .as-mic { border: 1px solid var(--line); background: transparent; }
 :root .as-mic.on { border-color: var(--risk); }
+
+/* RS-2: while the asked week or day is being read (or its read failed), the old one's blocks dim at once (no
+   transition, so reduced motion has nothing to cut) and can't be acted on; the header names the asked week or day and
+   says "Loading…" once, or the failed line with Retry. Nothing moves. */
+.wd1-body.reading, .day-view.reading > :not(.day-bar) { opacity: 0.45; pointer-events: none; }
+.read-line { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-2); white-space: nowrap; }
+.read-line.failed { color: var(--text); font-weight: 500; }

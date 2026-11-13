@@ -32,12 +32,17 @@ export type CalendarSourceDeps = {
   timeZone: string;
   now?: () => Temporal.Instant;
   memoryTtlMs?: number;
+  /** RS-2: how long a read may hold the week before the last good copy answers instead (3 s). */
+  answerWithinMs?: number;
 };
 
 export function createCalendarSource(d: CalendarSourceDeps) {
   const now = d.now ?? (() => Temporal.Now.instant());
   const ttl = d.memoryTtlMs ?? 5 * 60_000;
+  const answerWithin = d.answerWithinMs ?? 3000;
   const memory = new Map<string, { at: number; result: SourceResult<CalEvent> }>();
+  /** RS-2: a week's read under way, which a second load joins instead of starting another. */
+  const reading = new Map<string, Promise<SourceResult<CalEvent>>>();
   const L = d.label;
 
   type Mapped = { status: Status; message: string; fixAction?: FixAction; useCache: boolean; cause?: FailureCause };
@@ -83,16 +88,15 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     return { source: d.id, status: "ok", fetchedAt, fromCache: false, items: events };
   }
 
-  async function load(weekStart: string, opts: { refresh?: boolean } = {}): Promise<SourceResult<CalEvent>> {
+  /** One read of a week: live, else what failed with the last good copy (if any). Never throws; remembered for the TTL. */
+  async function read(weekStart: string): Promise<SourceResult<CalEvent>> {
     const t = now().epochMilliseconds;
-    const hit = memory.get(weekStart);
-    if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
     let result: SourceResult<CalEvent>;
     try {
       result = await fetchLive(weekStart);
     } catch (e) {
       const m = map(e);
-      const snap = m.useCache ? await d.snapshots.read<CalEvent>(d.id, weekStart) : null;
+      const snap = m.useCache ? await d.snapshots.read<CalEvent>(d.id, weekStart).catch(() => null) : null;
       const at = snap ? formatFetchedAt(snap.fetchedAt, d.timeZone, now()) : null;
       const message = !m.useCache
         ? m.message
@@ -105,6 +109,32 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     }
     memory.set(weekStart, { at: t, result });
     return result;
+  }
+
+  /**
+   * RS-2: a slow or failing calendar never holds the week. When the read isn't in after `answerWithin` and there is an
+   * earlier good copy, that copy answers, marked as a failed read is (unreachable, with its age); the read finishes
+   * behind it and the next load has its result. With no earlier copy the week waits for the read, as before.
+   */
+  async function load(weekStart: string, opts: { refresh?: boolean } = {}): Promise<SourceResult<CalEvent>> {
+    const t = now().epochMilliseconds;
+    const hit = memory.get(weekStart);
+    if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
+    let live = reading.get(weekStart);
+    if (!live) {
+      live = read(weekStart).finally(() => reading.delete(weekStart));
+      reading.set(weekStart, live);
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const slow = new Promise<null>((r) => (timer = setTimeout(() => r(null), answerWithin)));
+    const first = await Promise.race([live, slow]);
+    clearTimeout(timer);
+    if (first) return first;
+    const snap = await d.snapshots.read<CalEvent>(d.id, weekStart).catch(() => null);
+    if (!snap) return live;
+    d.log({ source: d.id, op: "load", kind: "answered_from_cache" });
+    const at = formatFetchedAt(snap.fetchedAt, d.timeZone, now());
+    return { source: d.id, status: "unreachable", fetchedAt: snap.fetchedAt, fromCache: true, items: snap.items, message: `${L} unreachable. Showing data from ${at}`, cause: "network" };
   }
 
   async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {

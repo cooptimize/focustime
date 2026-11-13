@@ -55,6 +55,8 @@ import { CheckinBlock, CheckinFoot, checkLeft } from "./Checkin.tsx";
 import { CloseOutBlock, CloseOutPanel } from "./CloseOut.tsx";
 import { WeekendDay } from "./DayWeekend.tsx";
 import { Icon } from "./icons.tsx";
+import { ReadLine } from "./ReadLine.tsx";
+import type { WeekRead } from "./weekread.ts";
 
 export type DayMode = "now" | "checkin" | "closeout";
 
@@ -63,6 +65,10 @@ type Props = {
   viewDate?: IsoDate | null;
   /** QF-1: ‹ › and Today (null: today). */
   onDay?: (date: IsoDate | null) => void;
+  /** RS-2: the day asked for while its week is being read (`viewDate` is then the last day drawn, dimmed); its read state and Retry. */
+  asked?: IsoDate | null;
+  read?: WeekRead;
+  onRetryRead?: () => void;
   /** WK-3: Show weekend (‹ › step onto Saturday and Sunday always, not only when something is on them). */
   showWeekend?: boolean;
   /** QF-1: Timebox my day. */
@@ -354,12 +360,15 @@ export function Day(props: Props) {
   };
   const openBlock = (half: Half, o?: { add?: boolean; focus?: PanelFocus | null }) => props.onOpenBlock(date, half, o);
   const panelHere = props.panelAt?.date === date ? props.panelAt : null;
-  const head = dayHeadline(date, realToday);
+  // RS-2: the header is the day asked for at once; the blocks under it follow when its week is in.
+  const headDate = props.asked ?? date;
+  const head = dayHeadline(headDate, realToday);
+  const headIsToday = headDate === realToday;
   // SG-1: the morning card says when suggestions wait in today's blocks, with Keep all beside + Add.
   const morning = useMorningSuggestions(date);
 
   return (
-    <main className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}`} aria-label="Day">
+    <main className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
       <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
@@ -370,12 +379,12 @@ export function Day(props: Props) {
             <>
               {mode === "now" && props.onDay && (
                 <span className="pd-step today-step" data-tour="today-days" role="group" aria-label="Day">
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, -1, stops))} aria-label="Previous day" title="Previous day ([)"><Icon name="back" /></button>
-                  <button type="button" onClick={() => props.onDay!(stepWeekday(date, 1, stops))} aria-label="Next day" title="Next day (])"><Icon name="next" /></button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(headDate, -1, stops))} aria-label="Previous day" title="Previous day ([)"><Icon name="back" /></button>
+                  <button type="button" onClick={() => props.onDay!(stepWeekday(headDate, 1, stops))} aria-label="Next day" title="Next day (])"><Icon name="next" /></button>
                 </span>
               )}
-              <h1 title={longDate(date)}>{head.date}</h1>
-              {isToday ? (
+              <h1 title={longDate(headDate)}>{head.date}</h1>
+              {headIsToday ? (
                 <span className="today-pill day-today">Today</span>
               ) : (
                 mode === "now" && props.onDay && (
@@ -385,12 +394,13 @@ export function Day(props: Props) {
                 )
               )}
               {/* PS-1: a day off is marked in the header as Week marks it: "Holiday" or "PTO". */}
-              {mode === "now" && day?.pto && (
+              {mode === "now" && day?.pto && !props.asked && (
                 <span className={`pto-pill${day.pto.holiday ? " holiday-pill" : ""}`} title={ptoLabel(day.pto)}>
                   {offWord(day.pto)}
                 </span>
               )}
-              {!isToday && <span className="muted day-when">{head.when}</span>}
+              {!headIsToday && <span className="muted day-when">{head.when}</span>}
+              {mode === "now" && props.onRetryRead && <ReadLine read={props.read ?? null} what="day" onRetry={props.onRetryRead} />}
               {/* SG-1: the day's suggestions, in the header row. */}
               {mode === "now" && !weekendDay && <DaySuggestLine date={date} className="sug-day-head" />}
             </>

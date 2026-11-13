@@ -1,10 +1,12 @@
-// RS-2 STEP 0.5 (a measurement, not a check): how long week.load takes with a calendar source that fails slowly or at once.
+// RS-2: a slow or failing calendar never holds the week. STEP 0.5's measurement (only with RS2_MEASURE set: how long
+// week.load takes with Outlook failing after 20 s or at once, with and without an earlier good copy), and the check
+// that with an earlier copy the week answers within 3 seconds, the source still marked as failed.
 import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { createLoopback } from "../host/local/loopback.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { it } from "vitest";
+import { expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { fakeApis, TENANT } from "../sources/calendar/test-fakes.ts";
@@ -59,4 +61,24 @@ it.runIf(process.env.RS2_MEASURE)("measures week.load with a failing calendar so
       rows.push(`| ${mode === "slow" ? "fails after 20 s" : "fails at once"} | ${copy ? "yes" : "no"} | ${r.ms} ms | ${r.outlook} |`);
     }
   console.log(["| Outlook | Earlier copy | week.load | Outlook's status |", "|---|---|---|---|", ...rows].join("\n"));
+});
+
+it("with an earlier good copy, a calendar that fails slowly doesn't hold the week: it answers within 3 s, marked as failed", { timeout: 30_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rs2-"));
+  const good = await load(ctx(dir, "ok"));
+  expect(good.outlook).toMatch(/^ok/);
+  const r = await load(ctx(dir, "slow"));
+  expect(r.ms).toBeLessThan(3500);
+  expect(r.outlook).toMatch(/^unreachable \(earlier copy\): Outlook unreachable\. Showing data from /);
+});
+
+it("with no earlier copy, the week waits for the read and says what failed", { timeout: 30_000 }, async () => {
+  process.env.SLOW_MS = "4000";
+  try {
+    const r = await load(ctx(mkdtempSync(join(tmpdir(), "rs2-")), "slow"));
+    expect(r.ms).toBeGreaterThanOrEqual(3900);
+    expect(r.outlook).toBe("unreachable: Outlook unreachable. No cached data yet");
+  } finally {
+    delete process.env.SLOW_MS;
+  }
 });
