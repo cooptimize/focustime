@@ -395,44 +395,14 @@ describe("move things around: proposals, written only on confirm", () => {
   });
 });
 
-describe("Part 0: who has a conversation", () => {
-  const shared = { state: "open", view: "up_for_grabs", owner: null, helpers: [], offer: null, history: [], canUndo: false, mayHandOff: true, team: [{ id: "p-sam", name: "Sam Lee", me: false }, { id: "p-me", name: "Tess Vale", me: true }] };
-  const card = { id: 9, clientKey: FAB, clientName: "Fabrikam", title: "Invoices", commitments: [], shared };
-  const handlers = {
-    "conversations.list": () => ({ ok: true as const, data: { needsYou: [card], inProgress: [], teammates: [], closed: [] } }),
-    "inbox.list": () => ({ ok: true as const, data: { today: TODAY, items: [{ key: "v9", kind: "conversation", clientKey: FAB, title: "Invoices", views: ["needs_you"], who: null, due: null, itemId: null, late: false }], counts: {}, needsYou: 1 } }),
-    "conversations.claim": () => ({ ok: true as const, data: {} }),
-    "conversations.give": () => ({ ok: true as const, data: {} }),
-    "conversations.undo_ownership": () => ({ ok: true as const, data: {} }),
-  };
-  const asked = async (tool: Record<string, unknown>, words: string) => {
-    const s = setup({ handlers });
-    s.script(["inbox", "conversation_owner"], call(["inbox", { view: "needs_you" }]), call(["conversation_owner", { conversationId: 9, person: null, ...tool }]), say("Here's the change."));
-    return { s, r: await s.a.handle(words) };
-  };
-
-  it("a claim is a proposal: nothing changes until Confirm, and Undo goes through the same undo as the button", async () => {
-    const { s, r } = await asked({ change: "claim" }, "I'll take the Fabrikam Invoices conversation");
-    const p = r.proposals[0]!;
-    expect(p).toMatchObject({ action: "conversations.claim", title: "Take this conversation", preview: { rows: [{ label: "Who has it", before: "Nobody", after: "You" }] } });
-    expect(s.writes().filter((w) => w.action.startsWith("conversations."))).toEqual([]);
-    expect(await s.a.confirm(p.id)).toMatchObject({ ok: true, undo: { kind: "moves", id: p.id } });
-    expect(s.writes().at(-1)).toMatchObject({ action: "conversations.claim", input: { id: 9 } });
-    expect(await s.a.undo(p.id)).toMatchObject({ ok: true });
-    expect(s.writes().at(-1)).toMatchObject({ action: "conversations.undo_ownership", input: { id: 9 } });
-  });
-
-  it("Give to takes the person from the chat's own team, by name, never an id from the model", async () => {
-    const { s, r } = await asked({ change: "give", person: "Sam" }, "Give the Fabrikam Invoices conversation to Sam");
-    await s.a.confirm(r.proposals[0]!.id);
-    expect(s.writes().at(-1)).toMatchObject({ action: "conversations.give", input: { id: 9, toId: "p-sam" } });
-    expect((await asked({ change: "give", person: "Morgan" }, "Give the Fabrikam Invoices conversation to Morgan")).r.proposals).toEqual([]);
-  });
-
-  it("a conversation that wasn't in anything read for this request can't be changed", async () => {
-    const s = setup({ handlers });
-    s.script(["conversation_owner"], call(["conversation_owner", { conversationId: 77, change: "claim", person: null }]), say("I can't find it."));
+describe("IB-4: no ownership or snooze from the assistant", () => {
+  it("conversation_owner and snooze aren't tools: naming one makes no proposal and changes nothing", async () => {
+    expect(TOOL_NAMES).not.toContain("conversation_owner");
+    expect(TOOL_NAMES).not.toContain("snooze");
+    const s = setup({ handlers: { "conversations.claim": () => ({ ok: true as const, data: {} }), "inbox.snooze": () => ({ ok: true as const, data: {} }) } });
+    s.script(["conversation_owner"], call(["conversation_owner", { conversationId: 9, change: "claim", person: null }]), say("Done."));
     expect((await s.a.handle("I'll take the Fabrikam Invoices conversation")).proposals).toEqual([]);
+    expect(s.writes().filter((w) => w.action === "conversations.claim" || w.action === "inbox.snooze")).toEqual([]);
   });
 });
 
@@ -939,13 +909,15 @@ describe("AS-2", () => {
     }
   });
 
-  it("the Inbox is a read: what needs me, with counts and no AI text from chats", async () => {
+  it("the Inbox is a read: suggestions and promises, with counts and no AI text from chats", async () => {
     const s = opts();
-    s.script(["inbox"], call(["inbox", { view: "needs_you" }]), say("Nothing needs you."));
+    s.script(["inbox"], call(["inbox", { view: "chats" }]), call(["inbox", { view: "promises" }]), say("Nothing needs you."));
     const r = await s.a.handle("What's in my inbox?");
     expect(r.status).toBe("ok");
+    // IB-4: what's in my inbox is the suggestions from chats and my promises.
+    expect(s.ran.some((x) => x.action === "conversations.suggestions")).toBe(true);
     expect(s.ran.some((x) => x.action === "inbox.list")).toBe(true);
-    expect(s.writes()).toEqual(s.writes().filter((w) => w.action === "inbox.list" || w.action === "ahead.load"));
+    expect(s.writes()).toEqual(s.writes().filter((w) => w.action === "inbox.list" || w.action === "conversations.suggestions" || w.action === "ahead.load"));
   });
 });
 

@@ -267,12 +267,12 @@ export async function openInboxView(page: Page, slug: string): Promise<Locator> 
   return main;
 }
 
-/** IB-1: opens the row whose title matches in the Inbox list; returns the detail pane. */
+/** IB-4: opens the row whose title matches in the open Inbox list (it opens in place); returns the open row. */
 export async function openInboxItem(page: Page, title: string | RegExp): Promise<Locator> {
-  const row = page.locator(".ib-row", { has: page.locator(".ib-row-title", { hasText: title }) }).first();
+  const row = page.locator("li.ib4-row", { has: page.locator(".ib4-row-title", { hasText: title }) }).first();
   await row.waitFor();
-  await row.click();
-  const pane = page.locator(".ib-pane");
-  await pane.locator(".ib-detail-title", { hasText: title }).first().waitFor();
-  return pane;
+  if (!(await row.evaluate((el) => el.classList.contains("open")))) await row.locator(".ib4-row-head").click();
+  const open = page.locator("li.ib4-row.open", { has: page.locator(".ib4-row-title", { hasText: title }) }).first();
+  await open.waitFor();
+  return open;
 }

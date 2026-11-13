@@ -4,7 +4,7 @@
 import type { ActionName } from "../actions/registry.ts";
 import type { ActionResponse, AheadItem, AheadLoad, WeekLoadData } from "../actions/types.ts";
 import type { CommitData, SendView } from "../plan/team-types.ts";
-import type { ConversationsData } from "../plan/conversation-views.ts";
+import type { ConversationsData, SuggestionsData } from "../plan/conversation-views.ts";
 import { buildRows, isOpen, tierOf } from "../plan/ahead-model.ts";
 import { GAP_WORDS } from "../plan/fixnext.ts";
 import type { Pick } from "../plan/types.ts";
@@ -208,17 +208,40 @@ export async function statusRead(d: ReadDeps, client: string | null): Promise<Re
   return { cards, facts, itemIds: client ? features.map(({ f }) => f.id) : [], pickIds: [] };
 }
 
-const VIEW_WORDS: Partial<Record<InboxView, string>> = { needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", done: "Done" };
+/** IB-4: the Inbox's three lists, as the assistant names them. */
+export type InboxListName = "chats" | "promises" | "captures";
+const LIST_WORDS: Record<InboxListName, string> = { chats: "From chats", promises: "Promises", captures: "Captures" };
+/** An older view's name (a model, or a saved request, may still say one) lands on its nearest list. */
+const listOf = (v: string): InboxListName => (v === "captures" ? "captures" : v === "promises" || v === "in_progress" || v === "done" ? "promises" : "chats");
 
 /**
- * AS-2: one Inbox view (IB-1's inbox.list), my rows only. In progress is the conversations and promises with a linked
- * item (CV-5). With one client the model hears titles (quoted), who, due and the linked item; with none, how many.
+ * IB-4: one list of my Inbox. From chats is conversations.suggestions (the conversations in my chats that need a
+ * DevOps item); Promises and Captures are inbox.list's rows, mine only. With one client the model hears titles
+ * (quoted), who, due and the linked item; with none, how many.
  */
-export async function inboxRead(d: ReadDeps, view: InboxView, client: string | null): Promise<ReadResult> {
+export async function inboxRead(d: ReadDeps, asked: InboxView | InboxListName | string, client: string | null): Promise<ReadResult> {
+  const list = listOf(asked);
+  const name = LIST_WORDS[list];
+  if (list === "chats") {
+    const sg = await data<SuggestionsData>(d.run("conversations.suggestions", {}));
+    if (typeof sg === "string") return fail(sg);
+    const rows = sg.suggestions.filter((x) => d.isMine(x.clientKey) && (client === null || x.clientKey === client)).slice(0, 12);
+    const cards: Card[] = rows.map((x) => ({ kind: "note", text: `${x.clientName}: ${x.title} (${x.levelWord.toLowerCase()})`, link: d.link(`#/inbox/item/v${x.id}`, "Open in the Inbox") }));
+    if (!cards.length) cards.push({ kind: "note", text: `Nothing from your chats needs an item${client ? ` for ${d.clientName(client)}` : ""}.`, link: d.link("#/inbox/chats", "Open From chats") });
+    return {
+      cards,
+      facts: client ? rows.map((x) => ({ key: `v${x.id}`, title: { quoted: x.title }, level: x.levelWord, lastActivity: x.lastWorkAt })) : { suggestions: rows.length },
+      itemIds: [],
+      pickIds: [],
+      keys: rows.map((x) => `v${x.id}`),
+      conversationIds: rows.map((x) => x.id),
+      promiseIds: [],
+    };
+  }
+  const views: InboxView[] = list === "promises" ? ["promises", "in_progress"] : ["captures"];
   const l = await data<InboxListData>(d.run("inbox.list", {}));
   if (typeof l === "string") return fail(l);
-  const rows = l.items.filter((r) => r.views.includes(view) && (r.clientKey === null ? client === null : d.isMine(r.clientKey) && (client === null || r.clientKey === client))).slice(0, 12);
-  const name = VIEW_WORDS[view] ?? view;
+  const rows = l.items.filter((r) => r.views.some((v) => views.includes(v)) && (r.clientKey === null ? client === null : d.isMine(r.clientKey) && (client === null || r.clientKey === client))).slice(0, 12);
   const cards: Card[] = rows.map((r) => ({ kind: "note", text: `${r.title}${r.who ? ` · ${r.who}` : ""}${r.due ? ` · due ${r.due}` : ""}${r.itemId ? ` · #${r.itemId}` : ""}`, link: d.link(`#/inbox/item/${r.key}`, "Open in the Inbox") }));
   if (!cards.length) cards.push({ kind: "note", text: `Nothing in ${name}${client ? ` for ${d.clientName(client)}` : ""}.`, link: d.link("#/inbox", "Open the Inbox") });
   const ids = rows.map((r) => ({ r, k: parseKey(r.key) }));

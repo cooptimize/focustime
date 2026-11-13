@@ -32,6 +32,8 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 /** The remembered list is the person's Inbox setting (ui.set_inbox's view): From chats is stored as Needs you. */
 const LIST_PREF: Record<InboxList, "needs_you" | "promises" | "captures"> = { chats: "needs_you", promises: "promises", captures: "captures" };
 const listOfPref = (v: string | undefined): InboxList => (v === "promises" ? "promises" : v === "captures" ? "captures" : "chats");
+/** The list I chose this session, so coming back to #/inbox lands there before my saved setting is read again. */
+let chosenThisSession: InboxList | null = null;
 const EMPTY: Record<InboxList, string> = { chats: "Nothing from your chats needs an item.", promises: "No promises open.", captures: "Nothing to sort." };
 
 type Group<T> = { clientKey: string | null; name: string; rows: T[] };
@@ -67,7 +69,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const today = src.list?.today ?? data.planDay.date;
   const clientList = useMemo(() => captureClients(data), [data]);
   const clientName = useCallback((k: string | null) => (k ? (clientList.find((c) => c.clientKey === k)?.clientName ?? k) : "No client"), [clientList]);
-  const [lastList, setLastList] = useState<InboxList>(listOfPref(data.ui.inbox?.view));
+  const [lastList, setLastList] = useState<InboxList>(chosenThisSession ?? listOfPref(data.ui.inbox?.view));
   const list: InboxList = nav.view ?? (nav.item ? (listOfKey(nav.item) ?? lastList) : lastList);
   const [clients, setClients] = useState<string[]>(data.ui.inbox?.clients ?? []);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -82,6 +84,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   useEffect(() => {
     if (!nav.view || nav.view === lastList) return;
     setLastList(nav.view);
+    chosenThisSession = nav.view;
     void call("ui.set_inbox", { view: LIST_PREF[nav.view] }, { background: true }).catch(() => undefined);
   }, [nav.view, lastList]);
   const chooseList = (l: InboxList) => onNav({ tab: "inbox", view: l, item: null });
@@ -263,7 +266,8 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = keyRef.current;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-      const done = () => (e.preventDefault(), e.stopPropagation());
+      // The Inbox's keys win over the app's own (C is Capture elsewhere): this listener runs first and stops the rest.
+      const done = () => (e.preventDefault(), e.stopImmediatePropagation());
       if (e.key === "?") return void (setKeysOpen((v) => !v), done());
       if (e.key === "Escape" && (k.form || k.sForm)) return void (setForm(null), setSForm(null));
       if (key === "J" || key === "K") {
@@ -294,9 +298,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       const key = KEY_OF[String((e as CustomEvent).detail)];
       if (key) onKey(new KeyboardEvent("keydown", { key: key === "Enter" ? "Enter" : key.toLowerCase() }));
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener(ASK_KEY_EVENT, onCmd);
-    return () => (window.removeEventListener("keydown", onKey), window.removeEventListener(ASK_KEY_EVENT, onCmd));
+    return () => (window.removeEventListener("keydown", onKey, true), window.removeEventListener(ASK_KEY_EVENT, onCmd));
   }, []);
 
   // ---- rendering ----
