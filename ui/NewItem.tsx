@@ -17,9 +17,8 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { SelectField } from "./SelectField.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { briefEmpty, EMPTY_BRIEF, type Brief } from "../plan/work-templates.ts";
-import { FourLines, FullExample, TypeField, withoutPeople } from "./FourLines.tsx";
-import { useTemplates } from "./templates.ts";
+import { answersEmpty, NO_ANSWERS, withCarried, type Answers } from "../plan/three-questions.ts";
+import { ThreeQuestions } from "./ThreeQuestions.tsx";
 import { usePhone } from "./viewport.ts";
 
 export type { NewPlace };
@@ -81,13 +80,9 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const [more, setMore] = useState(false);
   const [description, setDescription] = useState("");
   const [size, setSize] = useState("");
-  // TP-1: the request type and the four lines; all optional, shown once a type is chosen or asked for.
-  const tpl = useTemplates().view;
+  // TP-1b: three optional questions under Title (under More on the phone).
   const phone = usePhone();
-  const [brief, setBrief] = useState<Brief>(EMPTY_BRIEF);
-  const [showLines, setShowLines] = useState(false);
-  const [example, setExample] = useState(false);
-  const linesOn = !!tpl && (showLines || !!brief.type);
+  const [answers, setAnswers] = useState<Answers>(NO_ANSWERS);
   const [busy, setBusy] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,11 +113,12 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
     setParentId(draft.parentItemId);
     setAssignTo(draft.assignTo === "none" ? "" : (draft.assignTo ?? "me"));
     setTarget(draft.targetDate ?? null);
-    setDescription(draft.description ?? "");
-    if (draft.description) setMore(true);
-    if (draft.brief && !briefEmpty(draft.brief)) {
-      setBrief(draft.brief);
-      setShowLines(true);
+    // A TP-1 draft's other words (its fourth line and choices) show once at the end of the description.
+    const shown = withCarried(draft.description, draft.carried) ?? "";
+    setDescription(shown);
+    if (shown) setMore(true);
+    if (draft.answers) {
+      setAnswers(draft.answers);
       if (phone) setMore(true);
     }
   }, [draft, opts]);
@@ -173,7 +169,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         return;
       }
     }
-    const change = { kind: "new_item" as const, title: madeTitle, type, parentId, assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, description: description.trim() || null, size: sizeNum, ...(did !== null ? { draftId: did } : {}), ...briefPart() };
+    const change = { kind: "new_item" as const, title: madeTitle, type, parentId, assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, description: description.trim() || null, size: sizeNum, ...(did !== null ? { draftId: did } : {}), ...answersPart() };
     await w.begin(clientKey, [change], (r) => {
       if (r.confirmed && r.created?.[0]) {
         forgetNewOptions();
@@ -197,13 +193,9 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
     if (placedHere.current) notify("Kept on the block as a draft. Create it in DevOps from its ⋯, or drop it");
     onClose();
   };
-  // The four lines go only when something is in them (a title-only create sends what it always did), or to clear a draft's.
-  const sentBrief = (): Brief | null | undefined => (!briefEmpty(brief) ? brief : draft?.brief ? null : undefined);
-  const briefPart = (): { brief?: Brief | null } => {
-    const b = sentBrief();
-    return b === undefined ? {} : { brief: b };
-  };
-  const draftBody = () => ({ clientKey: clientKey!, title: trimmed, ...(type ? { type } : {}), parentItemId: parentId, assignTo: assignTo === "me" ? null : assignTo || "none", description: description.trim() || null, targetDate: target, ...briefPart() });
+  // The answers go only when something is in them (a title-only create sends what it always did), or to clear a draft's.
+  const answersPart = (): { answers?: Answers | null } => (!answersEmpty(answers) ? { answers } : draft?.answers || draft?.carried ? { answers: null } : {});
+  const draftBody = () => ({ clientKey: clientKey!, title: trimmed, ...(type ? { type } : {}), parentItemId: parentId, assignTo: assignTo === "me" ? null : assignTo || "none", description: description.trim() || null, targetDate: target, ...answersPart() });
   const saveDraft = async () => {
     if (!clientKey || !trimmed || titleProblem || busy) return;
     setBusy(true);
@@ -257,15 +249,13 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           </h2>
           <CloseButton onClose={close} disabled={busy} />
         </div>
-        <div className={`nf-body${example ? " with-example" : ""}`}>
-        <div className="nf-main">
-        <div className={`nf-grid${linesOn && !phone ? " with-lines" : ""}`}>
+        <div className="nf-grid">
           <span className="set-label" id="nf-client">Client</span>
           {draftId !== null && clientKey ? (
             // A draft belongs to its client.
             <span className="nf-fixed">{clientName}</span>
           ) : (
-            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null), setBrief(withoutPeople(brief)))} className="nf-select" empty="Choose a client" />
+            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
           )}
           <span className="set-label" id="nf-type">Level</span>
           <span className="nf-types">
@@ -293,24 +283,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             />
             {titleProblem && <span className="set-problem nf-line" role="alert">{titleProblem}</span>}
           </span>
-          {tpl && (
-            <>
-              <span className="set-label">Request type</span>
-              <span className="nf-reqtype">
-                <TypeField doc={tpl.doc} label="Request type" value={brief.type} onChange={(t) => (setBrief({ ...brief, type: t }), t && phone && setMore(true))} />
-                {!linesOn ? (
-                  <button type="button" className="link-btn" onClick={() => (setShowLines(true), phone && setMore(true))}>
-                    Add the four lines
-                  </button>
-                ) : (
-                  <button type="button" className="link-btn" aria-expanded={example} onClick={() => setExample(!example)}>
-                    {example ? "Hide the full example" : "See a full example"}
-                  </button>
-                )}
-              </span>
-              {linesOn && !phone && <FourLines doc={tpl.doc} brief={brief} onChange={setBrief} clientKey={clientKey} />}
-            </>
-          )}
+          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" />}
           <span className="set-label">Parent</span>
           <span className="nf-parent">
             {type && !allowedParents.size ? (
@@ -331,9 +304,9 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           </span>
         </div>
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-          {more ? "▾" : "▸"} {phone && linesOn ? "More: the four lines, description and size" : "More: description and size"}
+          {more ? "▾" : "▸"} {phone ? "More: three questions, description and size" : "More: description and size"}
         </button>
-        {more && phone && linesOn && tpl && <FourLines doc={tpl.doc} brief={brief} onChange={setBrief} clientKey={clientKey} layout="stack" />}
+        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" />}
         {more && (
           <div className="nf-grid nf-more-body">
             <label className="set-label" htmlFor="nf-desc">Description</label>
@@ -356,9 +329,6 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             </span>
           </div>
         )}
-        </div>
-        {example && tpl && <FullExample doc={tpl.doc} typeId={brief.type} onClose={() => setExample(false)} />}
-        </div>
         {clientKey && opts && !canWrite && (
           <p className="nf-nopat" role="status">
             DevOps is read-only for {clientName} until you add your own write PAT.{" "}
