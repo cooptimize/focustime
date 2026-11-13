@@ -62,6 +62,32 @@ The product's words (to-do, block, promise, Inbox and the rest) are in the gloss
 | Flex | OpenAI's slower, half-price processing tier, used only for background AI work nobody waits on |
 | Demo | "Try the demo": a fictional person with fictional data in memory; nothing leaves FocusTime |
 
+## Names in the code
+
+Where the code keeps a name people don't see, these pages use the screen's name and this table gives the code's. Old addresses still land on the screen named here.
+
+| In the code | On screen | Where in the code |
+|---|---|---|
+| `today` (the tab's id), `#/today` | Day, `#/day` | `ui/nav.ts` |
+| `ahead` (the tab's id, `ahead.*` actions, `ahead_*` tables), `#/ahead` | Backlog, `#/backlog` | `ui/nav.ts`, `actions/ahead-actions.ts` |
+| `roadmap.*` actions, `roadmap_dates`, `delivery_snapshots` | Backlog's dates and its trends | `actions/roadmap-actions.ts` |
+| `fix`, `readiness`, `attention` (`#/ahead/fix`) | Backlog's Grid with Needs attention on | `ui/nav.ts`, `plan/ahead-view.ts` |
+| `board` (Week's mode) | Week | `ui/nav.ts` |
+| `team` (`#/week/team`) | Team: hidden, the address still opens it | `ui/nav.ts` |
+| `pick`, `picks`, `pick.*` actions | To-do | `actions/plan-actions.ts`, `store/plan-store.ts` |
+| `planday.*`, `day_plans` | A day's plan on Day | `actions/plan-actions.ts` |
+| `weekplan.*`, `week_plans`, `week_features` | A week's features per client, shown on Week and Backlog | `actions/weekplan-actions.ts` |
+| `committedAt`, `weekplan.commit`, `planday.commit` | Nothing on screen: the actions are hidden from the command menu ("There's nothing to confirm now") | `ui/menu.ts` |
+| `followup.*`, `follow_ups` | A promise I added (Inbox › Promises) | `actions/followup-actions.ts` |
+| `my_promises.*`, `promises` | Inbox › Promises: the promises found in chats and the ones I added, one list | `actions/conversation-actions.ts` |
+| `conversations.*`, `conversations`, `suggest.*` | Inbox › From chats | `actions/conversation-actions.ts` |
+| `requests.*`, `requests`, `asks` (a reminder kind) | Urgent requests | `actions/request-actions.ts`, `plan/notify.ts` |
+| `chats.*`, `client_chats` | Client chats (Settings › Client chats, Admin › Clients) | `actions/chat-actions.ts` |
+| `loop.*`, `loop_sends` | Close the loop | `actions/loop-actions.ts` |
+| `wrapup.*` | Wrap it up, on the story card | `actions/wrapup-actions.ts` |
+| `checkin` | Midday check-in | `ui/nav.ts` |
+| `CoopilotId` | The marker on FocusTime's Outlook events | `sources/graph/write.ts` |
+
 ## How to keep them true
 
 - **Same pull request as the change.** A step that changes what a page describes updates that page in the same pull request. A new table, write, permission, secret, job, reminder, dependency or retention rule always does.
