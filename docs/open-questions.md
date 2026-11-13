@@ -881,3 +881,24 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - From review 1, seen and left: Status keeps its nested boxes (a client's card, Needs your update, a feature's box): they are cards, not rows, and were out of this step; should Status be flattened next? With no lines between the Backlog's rows, tracing a title across to its status takes the hover band; is that enough on a wide screen? Mine, Contributing and Everyone with nothing chosen reads as one grey slab. The Today pill is the accent wash now and anchors Week's header less than the filled pill did.
 - From review 2, seen and left: the stepper's − and + and its value keep their own small shapes (one compound control); the date picker's days and the timeline's placeholder buttons are drawn at their own sizes; two CSS marks with no element left in the app (`.dp-calls .lc-start`, a "☎") were not touched; "›" between steps and in a story card's path is a separator in a sentence.
 
+## GU-1
+
+- Places the app's own words looked wrong. The Guide describes what the app does and does not repeat these; none was changed.
+  - The key legend (`ui/keys.ts`, shown as the Guide's "Every key" and in Keyboard shortcuts): the Inbox row lists "Needs you, Promises, Waiting on, Captures and drafts" (the lists are From chats, Promises, Captures); two rows say "Actions (⋯)" and "Week's ⋯" (the buttons are named Actions and View options).
+  - The Backlog tab's tooltip says "Readiness and Backlog" (`ui/App.tsx`).
+  - On a phone, Backlog's notice has a button "Back to Today" (the tab is Day).
+  - Settings: the section is named "Today and Week"; two settings are "Readiness nudges" and "Plan ahead rituals"; an org setting's label is "Fix next…" (`config/org.ts`).
+  - The command menu's summary for Open Settings says "connections" (the section is Accounts and calendars).
+  - `.dp-calls .lc-start` in `ui/styles.css` styles nothing.
+- Client calls: the Guide used to say "⋯ › Client calls". It is not in More; it opens from the call's mark on Week and the command "My client calls". Should it be in More?
+- In the Gantt, Enter on a row runs Break down. The Guide used to say it opens the side panel, and now says nothing about Enter there. Is Break down on Enter meant?
+- Backlog's section keeps the id `ahead` (`#/guide/ahead`), the tab's code name, so no address moved. Should it become `#/guide/backlog` with the old one mapped, like Today to Day?
+- Hand-drawn, and why, is the third table of `docs/ux/gu1/ledger.md`: the 13 tour drawings and most of the try-its stand for screen states that need the person's data and a server session. Should the block card and the Inbox row get a display-only form the Guide could render with example data?
+- The urgent strip in the Guide is the app's lines laid out by the Guide, not `UrgentStrip` itself (it reads the person's Inbox items). Same question.
+- Should Renamed be removed after the next production release, or kept while people still type the old names? Its 33 rows include names from before October.
+- "Today" is allowed in Guide text only as the day that is today, the Today button and pill, a time, and "Settings › Today and Week" (`TODAY_ALLOWED` in `ui/guide/retired.ts`). If the Settings section is renamed, that entry goes.
+- The check that a bold label or a path's last label is "a string the app shows" reads the source of `ui/`, `actions/`, `config/` and `plan/` for the label, or its first words. It catches a renamed or removed label; it cannot tell that the label is on the screen the sentence names.
+- The tour's id for Day is still `today` (`#/guide/tour/today`) and its hooks are `today-…`: addresses and attributes of the app, left alone.
+- Not added to the Guide: Admin's pages beyond one answer, and anything RS-2 or TD-1 bring (neither had merged). If RS-2 merges first, Day needs the catch-up day and Week a line on what a loading week looks like.
+- Glossary rows in CLAUDE.md (not edited; TD-1 is rewriting it). Most rows that open with an old name end with the change that retired it (Today, Mode switch, Plan the day, Plan the week, Plan (mode), Status (Week mode), Confirm, Detail panel), so they are right if read to the end and wrong if read from the start. Rows that still disagree with the app: "Command menu" ("⋯ > Commands": the menu is More, and the entry is Commands); "Check-in" and "Close out" (they say Today for the tab; it is Day); every row that writes a control as a character ("+ Add", "‹ ›", "⋯").
+
