@@ -113,6 +113,8 @@ const Guide = lazy(() => import("./guide/Guide.tsx"));
 const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
 // DOC-1: the Technical docs, their pages and diagrams load only when opened.
 const TechDocs = lazy(() => import("./docs/TechDocs.tsx"));
+// RB-1: Code and its coloring library load only when opened.
+const CodePanel = lazy(() => import("./code/Code.tsx"));
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 import { CoworkCtx, openChat, useCowork } from "./cowork.tsx";
@@ -255,7 +257,8 @@ export function App() {
     if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
     else if (location.hash !== h) history.pushState(null, "", h);
     try {
-      localStorage.setItem(LOC_KEY, h);
+      // RB-1: nothing of the code is kept in the browser's storage, not even a file's path: reopening lands on the place under it.
+      localStorage.setItem(LOC_KEY, loc.overlay?.kind === "code" ? hashOf({ nav: loc.nav, overlay: null }) : h);
     } catch {
       /* per-window convenience only */
     }
@@ -290,6 +293,8 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   /** DOC-1: the Technical docs (#/docs/<page>/<heading>), over the current place like the Guide. */
   const docsAt = loc.overlay?.kind === "docs" ? loc.overlay : null;
+  /** RB-1: Code (#/code/<client>/<repo>/<path>), every client's repos, read only. */
+  const codeAt = loc.overlay?.kind === "code" ? loc.overlay : null;
   /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
@@ -343,6 +348,20 @@ export function App() {
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
   const openDocs = useCallback((page: string | null = null, heading: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "docs", page, heading } })), [go]);
   const docsAccess = useCallback(() => call<DocsAccess>("docs.access", {}), []);
+  const openCode = useCallback((clientKey: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey, repoId: null, path: null } })), [go]);
+  // RB-1: the clients Code can open, read when a menu first opens (names only; the server checks every read again).
+  // Unset until then and empty for anyone Code isn't for (a guest or an automation account): no menu entry.
+  const [codeList, setCodeList] = useState<readonly { clientKey: string; name: string }[] | null>(null);
+  const codeAsked = useRef(false);
+  const askCode = useCallback(() => {
+    if (codeAsked.current) return;
+    codeAsked.current = true;
+    call<{ clients: { clientKey: string; name: string; locked: boolean }[] }>("code.clients", {}).then(
+      (r) => setCodeList(r.clients.filter((c) => !c.locked).map((c) => ({ clientKey: c.clientKey, name: c.name }))),
+      () => setCodeList([]),
+    );
+  }, []);
+  const codeItem = codeList && codeList.length ? [{ id: "code", label: "Code", run: () => openCode() }] : [];
   // P1: opening the list marks every notice read (the dot goes).
   const readAllNotices = notices.readAll;
   const openNotices = useCallback(() => setNoticesOpen(readAllNotices()), [readAllNotices]);
@@ -428,6 +447,9 @@ export function App() {
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
+  // Once per page, after the week has loaded: one read of names from FocusTime's own client list, never DevOps.
+  const haveData = !!data;
+  useEffect(() => void (haveData && askCode()), [haveData, askCode]);
   // IB-1 slice 4: the badge, Today's urgent strip and Week's rail read the same rows (inbox.today).
   const inboxToday = useInboxToday(captureVersion, data);
   const needsYouCount = inboxToday?.needsYou ?? null;
@@ -1566,6 +1588,7 @@ export function App() {
       showKeys: () => setKeysOpen(true),
       showGuide: (section) => openGuide(section ?? null),
       showDocs: (page, heading) => openDocs(page ?? null, heading ?? null),
+      ...(codeList && codeList.length ? { showCode: (k: string | null) => openCode(k), codeClients: codeList } : {}),
       startTour: (id) => {
         const t = tourById(id);
         if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));
@@ -2055,6 +2078,18 @@ export function App() {
             checklist={guideChecklist}
           />
         </Suspense>
+      ) : codeAt ? (
+        <Suspense fallback={null}>
+          <CodePanel
+            at={codeAt}
+            onGo={(next, opts) => {
+              const to = { nav: loc.nav, overlay: { kind: "code" as const, ...next } };
+              if (opts?.replace) history.replaceState(null, "", hashOf(to));
+              go(to);
+            }}
+            onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
+          />
+        </Suspense>
       ) : docsAt ? (
         <Suspense fallback={null}>
           <TechDocs
@@ -2378,6 +2413,7 @@ export function App() {
               ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               { id: "guide", label: "Guide", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },
+              ...codeItem,
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
@@ -2427,6 +2463,7 @@ export function App() {
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },
+              ...codeItem,
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
               // ADM-1: only for FocusTime admins (the server checks every admin action again).

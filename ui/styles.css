@@ -169,6 +169,15 @@
   --risk: var(--p-co-red-300);
   --watch: var(--p-co-amber-300);
   --ok: var(--p-co-green-300);
+  /* RB-1: Code's syntax colors (ui/code/code.css). */
+  --code-keyword: var(--p-co-sky-300);
+  --code-string: var(--p-co-green-300);
+  --code-number: var(--p-co-amber-300);
+  --code-function: var(--p-co-purple-300);
+  --code-name: var(--p-co-violet-300);
+  --code-property: var(--p-co-pink-300);
+  --code-comment: var(--text-faint);
+  --code-punct: var(--text-muted);
   --personal: var(--p-co-pink-300);
   --sample: var(--p-co-violet-300);
   --pto: var(--p-co-sky-300);
@@ -237,6 +246,15 @@
   --risk: var(--p-co-red-700);
   --watch: var(--p-co-amber-700);
   --ok: var(--p-co-green-700);
+  /* RB-1: Code's syntax colors (ui/code/code.css). */
+  --code-keyword: var(--p-co-sky-700);
+  --code-string: var(--p-co-green-700);
+  --code-number: var(--p-co-amber-700);
+  --code-function: var(--p-co-purple-700);
+  --code-name: var(--p-co-violet-700);
+  --code-property: var(--p-co-pink-700);
+  --code-comment: var(--text-faint);
+  --code-punct: var(--text-muted);
   --personal: var(--p-co-pink-700);
   --sample: var(--p-co-violet-700);
   --pto: var(--p-co-sky-700);
@@ -293,6 +311,15 @@
   --risk: var(--p-red-700);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
+  /* RB-1: Code's syntax colors (ui/code/code.css). */
+  --code-keyword: var(--p-co-sky-700);
+  --code-string: var(--p-co-green-700);
+  --code-number: var(--p-co-amber-700);
+  --code-function: var(--p-co-purple-700);
+  --code-name: var(--p-co-violet-700);
+  --code-property: var(--p-co-pink-700);
+  --code-comment: var(--text-faint);
+  --code-punct: var(--text-muted);
   --personal: var(--p-pink-700);
   --sample: var(--p-violet-700);
   --pto: var(--p-sky-700);
@@ -342,6 +369,15 @@
     --risk: var(--p-red-300);
     --watch: var(--p-amber-300);
     --ok: var(--p-green-300);
+    /* RB-1: Code's syntax colors (ui/code/code.css). */
+    --code-keyword: var(--p-co-sky-300);
+    --code-string: var(--p-co-green-300);
+    --code-number: var(--p-co-amber-300);
+    --code-function: var(--p-co-purple-300);
+    --code-name: var(--p-co-violet-300);
+    --code-property: var(--p-co-pink-300);
+    --code-comment: var(--text-faint);
+    --code-punct: var(--text-muted);
     --personal: var(--p-pink-300);
     --sample: var(--p-violet-300);
     --pto: var(--p-sky-300);
