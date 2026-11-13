@@ -253,8 +253,8 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
           Close out <span className="muted">{date === st?.today ? Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" }) : dayName(date)}</span>
         </h2>
         <span className="co-step">
-          <button type="button" className="mini quiet" onClick={() => onDate(prev)} aria-label="Previous day" title="Previous day"><Icon name="back" /></button>
-          <button type="button" className="mini quiet" onClick={() => onDate(next)} disabled={!st || next > st.today} aria-label="Next day" title="Next day"><Icon name="next" /></button>
+          <button type="button" className="mini quiet icon-btn small" onClick={() => onDate(prev)} aria-label="Previous day" title="Previous day"><Icon name="back" /></button>
+          <button type="button" className="mini quiet icon-btn small" onClick={() => onDate(next)} disabled={!st || next > st.today} aria-label="Next day" title="Next day"><Icon name="next" /></button>
         </span>
         <button type="button" className="done-btn" disabled={!st} onClick={() => void done()} title={st?.closedOutAt ? "Back to Today (Esc)" : "Close out this day, then back to Today"}>
           Done

@@ -146,7 +146,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
               </button>
             )}
             <span className="fu-more">
-              <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${l.what}`} onClick={() => setMenu((v) => !v)}>
+              <button type="button" className="mini quiet icon-btn small" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${l.what}`} onClick={() => setMenu((v) => !v)}>
                 <Icon name="more" />
               </button>
               {menu && (

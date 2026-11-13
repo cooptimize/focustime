@@ -155,7 +155,7 @@ export function SendLoop({ promiseKey, who, demo = false, compact = false, onClo
         {r.parts.length > 0 && (
           <ul className="sl-parts">
             {r.parts.map((x) => (
-              <li key={x.kind} className={x.ok ? "ok" : "bad"}><Icon name={x.ok ? "done" : "close"} /> {x.message}</li>
+              <li key={x.kind} className={x.ok ? "ok" : "bad"}><Icon name={x.ok ? "done" : "close"} label={x.ok ? "Done" : "Failed"} /> {x.message}</li>
             ))}
           </ul>
         )}

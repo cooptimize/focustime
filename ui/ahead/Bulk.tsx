@@ -171,7 +171,7 @@ export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[];
               Undo
             </button>
           )}
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={() => setToast(null)}>
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={() => setToast(null)}>
             <Icon name="close" />
           </button>
         </div>

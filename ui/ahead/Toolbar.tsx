@@ -125,7 +125,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
         <span className="ah-search ah-tb-search">
           <input className="rm-search" type="text" placeholder="Titles or #id" aria-label="Search titles or #id" value={f.q} onChange={(e) => set({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === "Escape" && f.q && (e.stopPropagation(), set({ ...f, q: "" }))} />
           {f.q && (
-            <button type="button" className="ah-search-clear" aria-label="Clear the search" onClick={() => set({ ...f, q: "" })}>
+            <button type="button" className="ah-search-clear icon-btn small" aria-label="Clear the search" onClick={() => set({ ...f, q: "" })}>
               <Icon name="close" />
             </button>
           )}

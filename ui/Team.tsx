@@ -527,8 +527,8 @@ export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWe
       <header className="page-head">
         <h2>Team · {title}</h2>
         <span className="team-weeks">
-          <button type="button" className="mini quiet" onClick={() => step(-1)} aria-label="Previous week"><Icon name="back" /></button>
-          <button type="button" className="mini quiet" onClick={() => step(1)} aria-label="Next week"><Icon name="next" /></button>
+          <button type="button" className="mini quiet icon-btn small" onClick={() => step(-1)} aria-label="Previous week"><Icon name="back" /></button>
+          <button type="button" className="mini quiet icon-btn small" onClick={() => step(1)} aria-label="Next week"><Icon name="next" /></button>
         </span>
         <ModeArea>{switcher}</ModeArea>
       </header>

@@ -125,7 +125,7 @@ function DoneOfferCard({ card, setCard, previewFor, onDone }: { card: Card; setC
           <button type="button" className="mini" onClick={() => (close(), void writes?.begin(offer.clientKey, [{ kind: "undo", writeId: result.entry.id }]))}>
             Undo
           </button>
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={close}>
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={close}>
             <Icon name="close" />
           </button>
         </div>

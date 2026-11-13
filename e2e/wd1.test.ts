@@ -303,6 +303,8 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     await line.waitFor();
     await expect(line.getAttribute("aria-expanded")).resolves.toBe("false");
     expect(await line.innerText()).toMatch(/^\s*\d+ to place$/);
+    // RS-1: folded is the Closed chevron (it was the "▸" character).
+    expect(await line.locator("svg[data-icon=closed]").count()).toBe(1);
     expect(await line.getAttribute("title")).toMatch(/\d+ (unfinished|from last week|sent to you)/);
     expect(await panel(page).locator("section.carry-summary, section.carry").count()).toBe(0);
     // Order: On this block, the meetings line, Add with Assigned to you first, then Promises and More in the client;

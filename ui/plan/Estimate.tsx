@@ -59,7 +59,7 @@ export function HoursStepper({ minutes, onSet, onClear, derived = false, about =
       {editing ? (
         <input
           ref={box}
-          className="hs-input"
+          className="hs-input plain-input"
           inputMode="numeric"
           aria-label={`Hours for ${label}, ${MIN_ESTIMATE_HOURS} to ${MAX_ESTIMATE_HOURS}`}
           value={text}

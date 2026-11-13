@@ -253,7 +253,7 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
   return (
     <li className={`dl-row rm-row st-${r.status.state}`} onContextMenu={(e) => env && show(e)}>
       <div className="rm-top">
-        <button type="button" className="rm-expand" aria-expanded={open} aria-controls={storiesId} aria-label={`${open ? "Hide" : "Show"} ${noun[1]} of ${r.title}`} onClick={() => setOpen(!open)} disabled={!r.stories.length}>
+        <button type="button" className="rm-expand icon-btn small" aria-expanded={open} aria-controls={storiesId} aria-label={`${open ? "Hide" : "Show"} ${noun[1]} of ${r.title}`} onClick={() => setOpen(!open)} disabled={!r.stories.length}>
           <Icon name={open ? "open" : "closed"} />
         </button>
         <StateBadge state={r.status.state} />

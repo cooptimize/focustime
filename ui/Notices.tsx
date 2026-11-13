@@ -136,7 +136,7 @@ export function NoticeToasts({ toasts, onOpen, onDismiss }: { toasts: InAppNotic
             <span className="nt-title">{n.title}</span>
             {firstLine(n.body) && <span className="nt-body">{firstLine(n.body)}</span>}
           </button>
-          <button type="button" className="mini nt-x" aria-label="Dismiss" onClick={() => onDismiss(n.id)}>
+          <button type="button" className="mini nt-x icon-btn small" aria-label="Dismiss" onClick={() => onDismiss(n.id)}>
             <Icon name="close" />
           </button>
         </div>

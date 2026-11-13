@@ -130,6 +130,10 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
         await page.locator("aside.block-panel").waitFor({ timeout: 10_000 });
         expect(await oddButtons(page, scale), `${where}: Week`).toEqual([]);
 
+        // The top bar is one row at every text size (the panel sits under it and would cover a second row).
+        const bar = await page.evaluate(() => [...document.querySelectorAll(".topbar .view-tab, .topbar .top-btn, .topbar .vm-chip, .topbar .person-chip")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0).map((r) => Math.round(r.top + r.height / 2)));
+        expect(Math.max(...bar) - Math.min(...bar), `${where}: the top bar is one row (${bar.join(" ")})`).toBeLessThanOrEqual(6);
+
         // Tabs: no box around the group, an icon in each, the accent wash on the active one only.
         const views = (await linesOf(page, "nav.views"))[0]!;
         expect(hasLine(views.top) || !clearBg(views.bg), `${where}: the tabs' group has a box`).toBe(false);
@@ -229,6 +233,19 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
           expect(Math.abs(i.h - 32 * scale), `${where}: an input ${i.h} high`).toBeLessThan(1.5);
           expect(i.r, where).toBe("8px");
         }
+        // A field that isn't right keeps its red line (review 2: the new input rule had outranked it).
+        const invalid = await page.evaluate(() => {
+          const el = [...document.querySelectorAll<HTMLElement>(".settings select, .settings input")].find((e) => e.getBoundingClientRect().width > 0 && !["checkbox", "radio", "range"].includes((e as HTMLInputElement).type))!;
+          el.setAttribute("aria-invalid", "true");
+          const probe = document.createElement("i");
+          probe.style.color = "var(--risk)";
+          document.body.append(probe);
+          const out = { line: getComputedStyle(el).borderTopColor, risk: getComputedStyle(probe).color };
+          probe.remove();
+          el.removeAttribute("aria-invalid");
+          return out;
+        });
+        expect(invalid.line, `${where}: an invalid field's line`).toBe(invalid.risk);
         await page.keyboard.press("Escape");
       }
       expect(errors).toEqual([]);
@@ -275,6 +292,11 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
     await page.locator(".cap-dialog").waitFor();
     expect(await page.locator(".cap-dialog").evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe("16px");
     expect(await marksAndNames(page, MARKS.source), "Capture").toEqual({ chars: [], nameless: [] });
+    // Capture's kinds: the chosen one has its wash, the others a line (review 1: the chosen kind had lost its mark).
+    const kinds = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".cap-dialog .cap-box-kinds .chip-btn")].map((c) => ({ on: c.getAttribute("aria-checked") === "true", bg: getComputedStyle(c).backgroundColor, line: getComputedStyle(c).borderTopColor })));
+    expect(kinds.filter((k) => k.on).length).toBe(1);
+    for (const k of kinds) expect(clearBg(k.bg), "a kind's wash").toBe(!k.on);
+    for (const k of kinds.filter((x) => !x.on)) expect(clearBg(k.line), "a kind's line").toBe(false);
     await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
     await page.close();
@@ -343,6 +365,13 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
     const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".page-head .more-btn, .today-head .more-btn, .mode-area .add-work-head, .pd-step button, .day-step")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.getBoundingClientRect()).filter((r) => r.height < 43.5 || r.width < 43.5).length);
     expect(small).toBe(0);
     expect(await marksAndNames(page, MARKS.source), "the phone's Day").toEqual({ chars: [], nameless: [] });
+    // The block's sheet: its round Add buttons are 44 px targets too (review 2).
+    await page.locator("main .add-work.ph-add").first().click();
+    await page.locator(".block-panel.sheet").waitFor({ timeout: 10_000 });
+    const plus = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".block-panel.sheet button.aw-plus, .block-panel.sheet .more-btn")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0).map((r) => Math.round(Math.min(r.width, r.height))));
+    expect(plus.length).toBeGreaterThan(0);
+    expect(Math.min(...plus), `the sheet's round buttons (${plus.join(" ")})`).toBeGreaterThanOrEqual(44);
+    await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

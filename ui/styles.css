@@ -275,9 +275,9 @@
   --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
   --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
   --wash-accent: color-mix(in oklab, var(--accent) 9%, transparent);
-  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 11%, transparent);
   --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
-  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 12%, transparent);
   --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
   --track: color-mix(in oklab, var(--text) 7%, transparent); /* a switch's track */
   --lift: var(--surface); /* its chosen side */
@@ -6121,7 +6121,11 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .adm-standards-table th, .adm-standards-table td { padding: 4px 8px 4px 0; vertical-align: top; }
 .adm-standards-path { color: var(--text-muted); overflow-wrap: anywhere; }
 .names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
-.names-removed::before { content: "ⓘ "; }
+.names-removed::before {
+  content: ""; display: inline-block; width: var(--icon); height: var(--icon); margin-right: 4px; vertical-align: calc(-3px * var(--text-scale)); background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 /* CW-1: a co-working call live in a client's delivery chat: one line, who started it, Join (opens Teams). */
 .live-calls { display: grid; gap: 4px; min-width: 0; }
 .live-call { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 8px; border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 6px; background: color-mix(in oklab, var(--ok) 8%, transparent); }
@@ -7081,9 +7085,9 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 :root .mini.danger { border-color: color-mix(in oklab, var(--risk) 45%, var(--line)); }
 :root .mini.danger:where(:not(:disabled)):hover { background: var(--wash-risk); }
 /* Quiet: no line, muted text; the wash shows it can be pressed. */
-:root :is(.mini.quiet, button.quiet, .today-timebox, .ib-act.quiet) { border-color: transparent; background: transparent; color: var(--text-muted); }
-:root :is(.mini.quiet, button.quiet, .today-timebox, .ib-act.quiet):where(:not(:disabled)):hover { background: var(--wash-1); border-color: transparent; color: var(--text); }
-:root :is(.mini.quiet, button.quiet, .today-timebox, .ib-act.quiet):where(:not(:disabled)):active { background: var(--wash-2); }
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet) { border-color: transparent; background: transparent; color: var(--text-muted); }
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet):where(:not(:disabled)):hover { background: var(--wash-1); border-color: transparent; color: var(--text); }
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet):where(:not(:disabled)):active { background: var(--wash-2); }
 /* A link stays a link: no pill, no wash. */
 :root .link-btn, :root .link-btn:hover, :root .link-btn:active { border-radius: 4px; background: none; font-weight: inherit; line-height: inherit; }
 button:disabled { cursor: default; }
@@ -7140,7 +7144,7 @@ button:disabled { cursor: default; }
 
 /* ---- A5. Pills -------------------------------------------------------------------------------------------------
    A status has no line: a wash, with color only for a state that needs it. The transparent line keeps its size. */
-:root :is(.status-pill, .due-badge, .today-pill, .holiday-pill, .overflow-pill, .status-chip, .bd-chip, .mtg-chip, .checkin-chip, .st-badge, .cal-tag, .adm-mark, .soon-tag, .state:not(.state-link)) {
+:root :is(.status-pill, .due-badge, .today-pill, .status-chip, .bd-chip, .mtg-chip, .st-badge, .cal-tag, .adm-mark, .soon-tag, .state:not(.state-link)) {
   border: 1px solid transparent; background: var(--wash-2); color: var(--text-muted); font-weight: 500;
 }
 :root :is(.status-pill.at_risk, .due-badge.overdue, .due-badge.today) { background: var(--wash-risk); color: var(--risk); }
@@ -7149,18 +7153,19 @@ button:disabled { cursor: default; }
 :root .status-pill.on_track { background: var(--wash-ok); color: var(--ok); }
 :root :is(.today-pill, .cal-tag.now, .cal-tag.next) { background: var(--wash-accent); color: var(--accent); }
 :root .state.live { background: var(--wash-ok); color: var(--ok); }
+:root .state.sample { background: color-mix(in oklab, var(--sample) 13%, transparent); color: var(--sample); }
 :root .state.cached { background: var(--wash-watch); color: var(--watch); }
 :root :is(.state.error, .state.signin) { background: var(--wash-risk); color: var(--risk); }
 /* Late is a state too: the watch wash, no edge of its own. It opens the late promises, so it keeps its hover. */
 :root .late-chip { border: 1px solid transparent; border-radius: var(--radius-control); background: var(--wash-watch); color: var(--watch); font-weight: 500; }
-:root .late-chip:hover { background: color-mix(in oklab, var(--watch) 22%, transparent); }
+:root .late-chip:hover { background: color-mix(in oklab, var(--watch) 18%, transparent); }
 /* Anything you can press that looks like a chip has a line when off and its wash when on. */
 :root :is(.chip-btn, .rm-chip, .ib4-chip, .ah-chip-btn, button.ah-chip, .dp-chip, .as-chip, button.att-chip, .att-chip.urgent, .att-chip.promise, .carry-chip, .vm-chip) {
   border: 1px solid var(--line); border-radius: var(--radius-control); background: transparent; font-weight: 500;
 }
 :root :is(.chip-btn, .rm-chip, .ib4-chip, .ah-chip-btn, button.ah-chip, .dp-chip, .as-chip, button.att-chip, .carry-chip, .vm-chip):where(:not(:disabled)):hover { background: var(--wash-1); border-color: var(--line); }
 :root :is(.chip-btn, .rm-chip)[aria-pressed="true"] { border-color: transparent; background: color-mix(in oklab, var(--c, var(--accent)) 16%, transparent); color: var(--text); font-weight: 500; }
-:root :is(.ib4-chip.on, .dp-chip.on, .chip-btn.on) { border-color: transparent; background: var(--wash-accent); color: var(--text); font-weight: 500; }
+:root :is(.ib4-chip.on, .dp-chip.on, .chip-btn.on, .chip-btn[aria-checked="true"], .cap-box-kinds .chip-btn[aria-checked="true"]) { border-color: transparent; background: var(--wash-accent); color: var(--text); font-weight: 500; }
 /* A size: pressed to change it, so it has a line (its pill is drawn inside its target on Day, Week and the panel);
    where it only tells (.static), a wash and no line. */
 :root .size-chip { border-radius: var(--radius-control); font-weight: 500; }
@@ -7180,7 +7185,8 @@ button:disabled { cursor: default; }
 :root textarea:not(.plain-input) { border: 1px solid var(--line); border-radius: var(--radius-input); background: transparent; }
 :root :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select, textarea):not(.plain-input):focus-visible,
 :root :is(.date-field, .select-field, .cv-picker-btn):focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 1px; }
-:root :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--risk); }
+:root :is(input, select, textarea):not(.plain-input)[aria-invalid="true"], :root :is(input, select, textarea):not(.plain-input)[aria-invalid="true"]:focus-visible { border-color: var(--risk); }
+:root .cell-pop input:not(.plain-input)[aria-invalid="true"] { border-color: var(--watch); }
 :root :is(.date-field, .select-field, .cv-picker-btn):hover { background: var(--wash-1); border-color: var(--line); }
 :where(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select, textarea) { padding-inline: 10px; font: inherit; color: inherit; }
 /* The command menu's search is the dialog's own head (.plain-input): no box of its own. */
@@ -7223,6 +7229,8 @@ button:disabled { cursor: default; }
 :root .date-field-icon .ft-icon, :root .pt-cal { width: calc(14px * var(--text-scale)); height: calc(14px * var(--text-scale)); }
 :root :is(.ps-chev, .ib4-chev, .us-go, .fl-check, .aw-plus.done, .gd-mark, .pl-handle, .drag-handle, .try-grip, .hs-step, .ms-done, .deploy-icon) { display: inline-grid; place-items: center; }
 :root :is(.pl-handle, .drag-handle, .try-grip) .ft-icon { color: var(--text-faint); }
+:root .pl-row.done .pl-handle .ft-icon { color: var(--ok); }
+:root .pl-handle { width: var(--icon); }
 :root .deploy-icon { vertical-align: calc(-3px * var(--text-scale)); }
 :root .ms-done { color: var(--ok); }
 /* A fold line's chevron and a button's icon sit on the text's line. */
@@ -7241,7 +7249,7 @@ button:disabled { cursor: default; }
 :root .ib4-row-head { min-height: var(--h-control); padding: 6px 10px; border: 0; background: transparent; font-weight: 400; line-height: 1.4; }
 :root .ib4-row:not(.open) > .ib4-row-head:hover { background: var(--wash-1); }
 :root .ib4-row:not(.open) > .ib4-row-head:active { background: var(--wash-2); }
-:root .ib4-row.open { border-color: var(--line); border-radius: var(--radius-menu); background: var(--wash-1); }
+:root .ib4-row.open { border-color: var(--line); border-radius: var(--radius-menu); background: var(--surface); }
 :root .ib4-row.open > .ib4-row-head:hover { background: transparent; }
 :root .ib4-row > .ib4-open, :root .ib4-row > .ib-detail { padding: 0 10px 10px 28px; }
 /* The client is a small swatch at the start of the row, not an edge down its side. */
@@ -7265,7 +7273,8 @@ button:disabled { cursor: default; }
 :root .ah-grid tbody tr.ah-row > .ah-cell:first-child { border-radius: var(--radius-input) 0 0 var(--radius-input); }
 :root .ah-grid tbody tr.ah-row > .ah-cell:last-child { border-radius: 0 var(--radius-input) var(--radius-input) 0; }
 /* Hover is drawn over the cell, not as its fill: a cell's fill says something (a change to save, AH-1). */
-:root .ah-grid tbody tr.ah-row:hover > .ah-cell { box-shadow: inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:not(.sel):not(.highlighted):hover > .ah-cell { box-shadow: inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-edit:hover { box-shadow: inset 0 -2px 0 var(--selected), inset 0 0 0 100vmax var(--wash-1); }
 :root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch), inset 0 0 0 100vmax var(--wash-1); }
 :root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-editing { box-shadow: inset 0 0 0 2px var(--focus); }
 :root .ah-grid tbody tr.ah-row.sel > .ah-cell, :root .ah-grid tbody tr.ah-row.highlighted > .ah-cell { background: var(--wash-accent); }
@@ -7377,7 +7386,7 @@ button:disabled { cursor: default; }
    before (U5 counts them). */
 :root .app.phone .mode-area .add-work-head { font-weight: 600; }
 /* A running timer's words give way before the top bar wraps: the countdown always shows, its to-do's title shortens. */
-:root .top-timer { max-width: clamp(150px, calc(100vw - 1230px), 340px); min-width: 0; }
+:root .top-timer { max-width: clamp(150px, calc(100vw - 1212px), 340px); min-width: 0; }
 /* A cell you can change shows the family's Open chevron on hover (it was a "▾" character). */
 :root .ah-cell.ah-edit:not(.ah-editing):hover::after {
   content: ""; width: calc(12px * var(--text-scale)); height: calc(12px * var(--text-scale)); background: var(--text-faint);
@@ -7385,3 +7394,44 @@ button:disabled { cursor: default; }
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 :root .ah-cell.ah-edit:not(.ah-editing):has(.ah-add):hover::after { content: none; }
+
+/* ---- RS-1 review 1 ------------------------------------------------------------------------------------------- */
+/* Status's Edit | Preview is a switch like the others. */
+:root .st-toggle { border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); padding: 2px; gap: 2px; }
+:root .st-toggle .ms-btn { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
+:root .st-toggle .ms-btn[aria-pressed="true"] { background: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1); }
+/* A small button inside a row keeps the row's title its room (the side padding it had). */
+:root :is(.pick-row, .aw-row, .pl-row) .mini { padding-inline: 8px; }
+/* A whole-day cell's icon sits above its name, so the name wraps as it did. */
+:root .whole-label > .ft-icon { display: block; margin: 0 0 4px; }
+/* The largest text sizes: the top bar keeps one row on a laptop by sitting closer, and the VM chip says its state in
+   one word sooner (its full words are in its title and menu). */
+@media (max-width: 1500px) {
+  :root[data-text-size="large"] .topbar { gap: 10px; }
+  :root[data-text-size="large"] .views { gap: 0; }
+  :root[data-text-size="large"] .view-tab { padding: 0 8px; gap: 5px; }
+  :root[data-text-size="large"] .top-actions { gap: 6px; }
+  :root[data-text-size="large"] .topbar .top-btn:not(.top-more) { padding-inline: 10px; }
+}
+@media (max-width: 1700px) {
+  :root[data-text-size="larger"] .topbar { gap: 8px; }
+  :root[data-text-size="larger"] .views { gap: 0; }
+  :root[data-text-size="larger"] .view-tab { padding: 0 7px; gap: 4px; }
+  :root[data-text-size="larger"] .top-actions { gap: 6px; }
+  :root[data-text-size="larger"] .topbar .top-btn:not(.top-more) { padding-inline: 9px; gap: 4px; }
+  :root[data-text-size="larger"] .topbar .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  :root[data-text-size="larger"] .topbar .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+
+/* ---- RS-1 review 2 ------------------------------------------------------------------------------------------- */
+/* The phone: every round button in a sheet or a row is a 44 px target. */
+:root .app.phone :is(.aw-plus:not(.done), .sug-plus, .sug-x, .sc-tool, .icon-btn.small), :root .block-panel.sheet :is(.aw-plus:not(.done), .sug-plus, .sug-x) { width: var(--tap, 44px); min-width: var(--tap, 44px); height: var(--tap, 44px); }
+/* A chip's remove sits inside its chip. */
+:root .chip-x { width: calc(20px * var(--text-scale)); min-width: 0; height: calc(20px * var(--text-scale)); }
+/* Status: a suggested line and a line being edited keep their own edges. */
+:root .st-box.st-suggested textarea { border: 1px dashed var(--accent); }
+:root .st-box.st-editing textarea { border-color: var(--accent); }
+/* A toast's words are a row, not a pill; the settings' Back is a quiet button. */
+:root :is(.nt-main, .hs-value) { border-radius: var(--radius-input); }
+:root .as-mic { border: 1px solid var(--line); background: transparent; }
+:root .as-mic.on { border-color: var(--risk); }

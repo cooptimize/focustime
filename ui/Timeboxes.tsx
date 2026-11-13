@@ -770,7 +770,7 @@ function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds
     >
       <span className="tbox-edge top" onPointerDown={(ev) => down(ev, "start")} aria-hidden="true" />
       <span className="tbox-label">
-        {t.conflict && <><Icon name="risk" /> </>}
+        {t.conflict && <><Icon name="risk" label="Conflict" /> </>}
         {t.title}
       </span>
       {(drag || t.outlook || edit) && <span className="tbox-time">{drag || edit ? range(live, env.tz) : "Outlook"}{edit && t.outlook ? " · Outlook" : ""}</span>}

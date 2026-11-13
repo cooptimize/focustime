@@ -45,7 +45,7 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
           <button type="button" className="ag-open" aria-expanded={open === tb.id} onClick={() => setOpen(open === tb.id ? null : tb.id)} title="Timebox details: show as, Put on Outlook, remove">
             <span className="ag-time">{when}</span>
             <span className="ag-title">
-              {tb.conflict && <><Icon name="risk" /> </>}
+              {tb.conflict && <><Icon name="risk" label="Conflict" /> </>}
               {tb.title}
             </span>
             {tb.onOutlook && <span className="tb-ol" title="On Outlook">O</span>}

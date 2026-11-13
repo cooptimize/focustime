@@ -81,7 +81,8 @@ describe("RS-1 tokens: contrast", () => {
 
     it(`${name}: a state's color passes AA on its own wash, and muted text does too`, () => {
       const low: string[] = [];
-      for (const s of ["--bg", "--surface", "--raised"])
+      // A past day's card is sunken, and a pill sits on it too.
+      for (const s of ["--bg", "--surface", "--raised", "--sunken"])
         for (const [w, fg] of STATES) {
           const bg = toHex(over(color(t, t[w]!), color(t, t[s]!)));
           for (const text of [fg, "--text", "--text-muted"]) {
@@ -105,6 +106,14 @@ describe("RS-1 tokens: contrast", () => {
         if (contrast(track, lift) < 1.08) low.push(`the lifted side on the track over ${s}: ${contrast(track, lift).toFixed(2)}`);
       }
       expect(low).toEqual([]);
+    });
+
+    it(`${name}: a late chip under the pointer (the watch color at 18%) still reads`, () => {
+      const watch = color(t, t["--watch"]!);
+      for (const s of ["--bg", "--surface", "--raised"]) {
+        const bg = toHex(over([watch[0], watch[1], watch[2], 0.18], color(t, t[s]!)));
+        expect(contrast(toHex(watch), bg), `--watch on its hover over ${s}`).toBeGreaterThanOrEqual(4.5);
+      }
     });
 
     it(`${name}: the quiet line sits between the surface and the control outline`, () => {

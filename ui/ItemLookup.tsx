@@ -82,7 +82,7 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
         {name && <input type="hidden" name={name} value={value.itemId} />}
         <span className="pr-type">#{value.itemId}</span>
         {clientKey && value.url && value.url.startsWith("https://dev.azure.com/") ? <WorkLink clientKey={clientKey} url={value.url}>{value.title ?? `Item ${value.itemId}`}</WorkLink> : <span>{value.title ?? `Item ${value.itemId}`}</span>}
-        <button type="button" className="mini quiet" onClick={() => (onChange({ ...NO_ITEM }), setTimeout(() => input.current?.focus(), 0))} aria-label={`Unlink #${value.itemId}`} title="Unlink, or choose another">
+        <button type="button" className="mini quiet icon-btn small" onClick={() => (onChange({ ...NO_ITEM }), setTimeout(() => input.current?.focus(), 0))} aria-label={`Unlink #${value.itemId}`} title="Unlink, or choose another">
           <Icon name="close" />
         </button>
       </span>

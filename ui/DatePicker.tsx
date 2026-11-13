@@ -95,13 +95,13 @@ export function DatePicker({ value, onChange, today, label, clearable = true, on
       </div>
       <div className="dp-cal" ref={cal}>
         <div className="dp-nav">
-          <button type="button" className="dp-step" aria-label="Previous month" onClick={() => step(-1)}>
+          <button type="button" className="dp-step icon-btn small" aria-label="Previous month" onClick={() => step(-1)}>
             <Icon name="back" />
           </button>
           <span className="dp-month" aria-live="polite">
             {monthTitle(month.y, month.m)}
           </span>
-          <button type="button" className="dp-step" aria-label="Next month" onClick={() => step(1)}>
+          <button type="button" className="dp-step icon-btn small" aria-label="Next month" onClick={() => step(1)}>
             <Icon name="next" />
           </button>
         </div>

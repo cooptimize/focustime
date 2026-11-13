@@ -124,7 +124,7 @@ export function PanelShell(p: PanelShellProps) {
   const header = (
     <header className="ps-head">
       {p.onBack ? (
-        <button type="button" className="ps-back" onClick={p.onBack}>
+        <button type="button" className="ps-back quiet" onClick={p.onBack}>
           <Icon name="back" /> {p.backLabel ?? "Back"}
         </button>
       ) : null}

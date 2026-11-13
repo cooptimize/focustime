@@ -121,7 +121,7 @@ function WritesOffHint({ onClose, onSettings }: { onClose: () => void; onSetting
           Turn them on in Settings › DevOps
         </button>
       </p>
-      <button type="button" className="mini wrap-off-x" aria-label="Dismiss" onClick={onClose}>
+      <button type="button" className="mini wrap-off-x icon-btn small" aria-label="Dismiss" onClick={onClose}>
         <Icon name="close" />
       </button>
     </div>

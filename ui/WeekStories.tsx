@@ -266,7 +266,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
               Undo
             </button>
           )}
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={() => setToast(null)}>
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={() => setToast(null)}>
             <Icon name="close" />
           </button>
         </div>

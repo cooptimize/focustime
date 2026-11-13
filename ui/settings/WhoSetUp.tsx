@@ -346,7 +346,7 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
         <ul className="sl-parts">
           {r.items.map((it, i) => (
             <li key={i} className={it.ok ? "ok" : "bad"}>
-              <Icon name={it.ok ? "done" : "close"} />{" "}
+              <Icon name={it.ok ? "done" : "close"} label={it.ok ? "Done" : "Failed"} />{" "}
               <strong>{it.names.join(", ")}</strong>: {it.line}
               {it.link && it.ok && (
                 <>
