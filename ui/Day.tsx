@@ -176,7 +176,9 @@ export function Day(props: Props) {
   const nameOf = clientNames(data);
   // QF-1 (plan/todayday.ts): a PTO day shows only the blocks that still hold a to-do; nothing nags on it or on any day but today.
   const shape = todayShape(day, { date, today: realToday, todayWorkday: data.planDay.workday, picked: new Set(picks.filter(live).map((p) => p.half)) });
-  const { ptoDay, workday, nudges, readOnly } = shape;
+  const { ptoDay, workday, nudges, readOnly, whole } = shape;
+  // RS-2: a catch-up day with no working hours is Week's one "Catch-up" cell, here too.
+  const catchUpCell = whole === "catchup";
   const blocks = shape.blocks.map((b) => b.slot);
   const cal = day ? dayCalendar(day, now) : null;
   const onPromise = props.onPromises ?? props.onInbox;
@@ -320,7 +322,7 @@ export function Day(props: Props) {
   const canAdd = mode === "now" && !!day && !weekendDay && !ptoDay && workday && blocks.some((s) => canAddWork({ date, today: realToday, pto: !!day.pto || s.pto, off: s.off }));
 
   // TY-1: the timeline shows on a day with blocks or PTO (a weekend day stays its plain list; so do the flows).
-  const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay);
+  const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay || catchUpCell);
   const startTimebox = () => {
     if (!day || !canTimebox) return;
     const slots: Partial<Record<Half, Slot>> = {};
@@ -482,7 +484,7 @@ export function Day(props: Props) {
         <WeekendDay day={day} date={date} past={past} data={data} picks={picks} />
       ) : !day ? (
         <p className="muted today-loading">Opening {longDate(date)}…</p>
-      ) : ptoDay && !blocks.length && !timelineShown ? null : !workday && !ptoDay ? (
+      ) : ptoDay && !blocks.length && !timelineShown ? null : (!workday && !ptoDay && !catchUpCell) || (workday && !blocks.length) ? (
         <p className="today-off">
           {!isToday ? `Nothing scheduled ${dayWord}.` : target.isToday ? "Nothing scheduled today." : `No work today. Next workday is ${longDate(target.date).replace(/,\s*\d{4}$/, "")}.`}{" "}
           {(isToday || !past) && (
@@ -491,7 +493,7 @@ export function Day(props: Props) {
             </button>
           )}
         </p>
-      ) : phoneToday && !timelineShown ? (
+      ) : phoneToday && !timelineShown && !catchUpCell ? (
         <div className="today-body ph-today">
           <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
           <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />

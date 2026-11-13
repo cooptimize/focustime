@@ -22,6 +22,7 @@ import { weekFit, type Tier } from "./weekfit.ts";
 import { focusIndex, foldOrder, longWeekday, stepShown } from "../plan/weekdays.ts";
 import { clientColor, eventRange, SampleSources, shortDate, shortRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
+import { dayBlocks, type WholeDay as WholeKind } from "../plan/dayblocks.ts";
 import { type Layout } from "./viewport.ts";
 import { PlanCtx } from "./planview.ts";
 import { HalfScope } from "./scope.ts";
@@ -316,14 +317,9 @@ function useGridBox(ref: RefObject<HTMLElement | null>, active: boolean): { cont
 /** P1: how far a finger moves sideways, in CSS px, to change the day. */
 const SWIPE_PX = 50;
 
-/** U3: a whole day in one cell: a PTO day (hatched) or a day with no working hours (Friday's dashed catch-up). */
-type Whole = "pto" | "catchup" | null;
-
-function wholeDay(day: Day): Whole {
-  if (day.pto) return "pto";
-  if (day.kind !== "work" && day.am.off && day.pm.off && !day.eve) return "catchup";
-  return null;
-}
+/** U3: a whole day in one cell: a PTO day (hatched) or a day with no working hours (Friday's dashed catch-up). RS-2: the shared answer. */
+type Whole = WholeKind | null;
+const wholeDay = (day: Day): Whole => dayBlocks(day).whole;
 
 function DayColumn(props: { /** WD-2: Day draws the column with no header (Day has its own). */ bare?: boolean; day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean; badges: ReadonlyMap<string, FollowUpView[]>; own?: { tier: Tier; railPx: number } | undefined; grow?: boolean; /** WK-3: the Evening band's items, or null (no band). */ band?: EveningBand | null } & Omit<Props, "week" | "today">) {
   // WK-2: this column's own tier (from its own width) in the medium layout; the grid's otherwise.

@@ -791,8 +791,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .event.cont-before { border-top-left-radius: 0; border-top-right-radius: 0; border-top-style: dotted; }
 .event.cont-after { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-style: dotted; }
 
-/* Friday: lighter overflow column */
-.day.overflow .half {
+/* Friday: lighter overflow column. RS-2: Day's Timeline draws the catch-up day's bands the same way. */
+.day.overflow .half,
+.tt-block.half.overflow {
   background: var(--sunken);
   border-style: dashed;
   box-shadow: none;
