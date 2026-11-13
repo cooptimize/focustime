@@ -29,6 +29,8 @@ export function demoDirectory(): DirectoryRead {
       { clientKey: "Northwind", personId: priya!.aadId, source: "lead_worker" },
       { clientKey: "Harbor", personId: priya!.aadId, source: "owner" },
       { clientKey: "Atlas", personId: jordan!.aadId, source: "owner" },
+      // RB-1: Fabrikam is a customer the demo's person isn't on; its code is set to its team only (server/demo.ts).
+      { clientKey: "Fabrikam", personId: sam!.aadId, source: "owner" },
       { clientKey: "Cooptimize", personId: DEMO_PERSON.oid, source: "owner" },
       // Owning a prospect or a vendor never makes a lead (ADM-2).
       { clientKey: "Bluebird", personId: priya!.aadId, source: "owner" },
@@ -43,6 +45,8 @@ export function demoDirectory(): DirectoryRead {
       { personId: priya!.aadId, clientKey: "Harbor" },
       { personId: sam!.aadId, clientKey: "Northwind" },
       { personId: kim!.aadId, clientKey: "Harbor" },
+      { personId: jordan!.aadId, clientKey: "Fabrikam" },
+      { personId: sam!.aadId, clientKey: "Fabrikam" },
     ].map((c) => ({ ...c, worker: true })),
     accounts: [
       { accountId: acct(1), clientKey: "Atlas", name: "Atlas Freight", type: "customer", workers: 2, focus: 1 },
@@ -50,6 +54,7 @@ export function demoDirectory(): DirectoryRead {
       { accountId: acct(3), clientKey: "Cooptimize", name: "Cooptimize", type: "customer", workers: 5, focus: 5 },
       { accountId: acct(4), clientKey: "Harbor", name: "Harbor Health", type: "customer", workers: 3, focus: 2 },
       { accountId: acct(5), clientKey: "Northwind", name: "Northwind Foods", type: "customer", workers: 3, focus: 2 },
+      { accountId: acct(7), clientKey: "Fabrikam", name: "Fabrikam Fiber", type: "customer", workers: 2, focus: 0 },
       { accountId: acct(6), clientKey: "Registered Agent Co", name: "Registered Agent Co", type: "vendor", workers: 0, focus: 0 },
     ],
     // AH-3: Priya's Account Worker row on Harbor has her Harbor login, so it's her everywhere. Sam's Harbor login isn't

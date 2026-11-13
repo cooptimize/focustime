@@ -4,6 +4,8 @@
 // picks, follow-ups, captures, focus sessions, write PATs, AI request content or chat messages: a person's health is
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
+import type { CodeStatus } from "./code-actions.ts";
+import { CODE_VIEWS_SHOWN, type CodeViewsStore } from "../store/code-views-store.ts";
 import { articleUrl, DEFAULT_STANDARDS_REPO, STANDARDS_EVERY_MS, STANDARDS_TOKEN_BUDGET } from "../plan/standards.ts";
 import type { StandardsPort } from "./standards.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
@@ -32,7 +34,7 @@ import { INVITE_VIA, type InviteVia } from "../store/admin-store.ts";
 import { INVITE_SEND_ACTIONS, inviteSendAction, type InviteSendAction, type InviteSendPort } from "./invite-send.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", "admin.standards_sync", ...INVITE_SEND_ACTIONS] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", "admin.standards_sync", "admin.code_views", "admin.code_check", ...INVITE_SEND_ACTIONS] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "standards", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -127,6 +129,11 @@ export type AdminOps = {
   removePerson(id: string): Promise<void>;
   /** AH-2: each client's project areas and teams with counts from the central store (absent: DevOps isn't polled here). */
   scope?(clientKeys: string[]): Promise<Record<string, ClientScopeFacts>>;
+  /**
+   * RB-1: Code's view log (Admin › Audit › Code views) and each client's code status (Admin › Clients), checked when an
+   * admin opens a client or presses Check, never on a schedule. Absent: Code isn't available here.
+   */
+  code?: { views: CodeViewsStore; status(clientKey: string): Promise<CodeStatus> };
   /** AH-3: each client's DevOps assignees (email and display name) from the central store; emails stay on the server. */
   assignees?(clientKeys: string[]): Promise<Record<string, Assignee[]>>;
 };
@@ -234,6 +241,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         exactCaseDefault: exactCaseDefault([k, ...(row?.names ?? [])]),
         houseStyle: c?.houseStyle ?? null,
         fixGaps: c?.fixGaps ?? [...GAP_KINDS],
+        codeAccess: c?.codeAccess ?? "company",
         sourceSystems: c?.sourceSystems ?? null,
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
         scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
@@ -536,6 +544,23 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if (extra) return bad(`unknown input field ${extra}`);
       if (!ops.standards) return bad("Standards aren't available here", 404);
       return { ok: true, data: await ops.standards.syncNow() };
+    }
+    case "admin.code_views": {
+      const extra = only(i, ["clientKey", "personId"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (!ops.code) return bad("Code isn't available here", 404);
+      const clientKey = typeof i.clientKey === "string" && i.clientKey && i.clientKey.length <= 100 ? i.clientKey : null;
+      const actorId = typeof i.personId === "string" && /^[0-9a-f-]{36}$/i.test(i.personId) ? i.personId : null;
+      const since = Temporal.Now.instant().subtract({ hours: 24 * 30 }).toString();
+      const [views, counts, people] = await Promise.all([ops.code.views.list({ clientKey, actorId }), ops.code.views.counts(since), ops.code.views.people()]);
+      return { ok: true, data: { views, counts, people, shown: CODE_VIEWS_SHOWN } };
+    }
+    case "admin.code_check": {
+      const extra = only(i, ["clientKey"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.clientKey !== "string" || !i.clientKey || i.clientKey.length > 100) return bad("clientKey names the client");
+      if (!ops.code) return { ok: true, data: { state: "error", text: "Code isn't available here" } satisfies CodeStatus };
+      return { ok: true, data: await ops.code.status(i.clientKey) };
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);

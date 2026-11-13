@@ -54,6 +54,9 @@ import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
 import { docsAccessAction } from "./docs-actions.ts";
+import { codeAction, type CodeAction, type CodeContext } from "./code-actions.ts";
+import type { CodeGit } from "./code-git.ts";
+import type { CodeViewsStore } from "../store/code-views-store.ts";
 import { NO_CLIENT } from "../ai/types.ts";
 import { patternsAction, type PatternsAction, type PatternsContext, type PatternsPort } from "./patterns.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
@@ -150,6 +153,12 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   /** TP-1: the team's work templates (app tables). Absent: none here (the New form works without the four lines). */
   templates?: TemplatesStore;
+  /**
+   * RB-1: reading clients' code (Code). A real session's reads its clients' DevOps with the company read PAT
+   * (actions/code-git.ts); a demo session's are the demo's made-up repos (sources/demo/code.ts). `views` is the app's
+   * view log. Absent: Code isn't available here.
+   */
+  code?: { git: CodeGit | null; views: CodeViewsStore | null };
   /** KB-1: the synced standards. Absent: none here. */
   standards?: StandardsPort;
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
@@ -2021,6 +2030,12 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input ?? {},
       );
     }
+    case "code.clients":
+    case "code.repos":
+    case "code.folder":
+    case "code.find":
+    case "code.file":
+      return codeAction(codeCtx(ctx), action as CodeAction, req.input);
     case "docs.access":
       // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).
       return docsAccessAction({ automation: async () => (await aheadContext(ctx)).automation() }, req.input);
@@ -2241,6 +2256,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.identity":
     case "admin.invited":
     case "admin.standards_sync":
+    case "admin.code_views":
+    case "admin.code_check":
     case "admin.invite_access":
     case "admin.invite_preview":
     case "admin.invite_send":
@@ -2708,6 +2725,41 @@ export function patternsContext(ctx: ActionContext): PatternsContext {
 }
 
 /** SW-1: sends, priorities, the Team view and Ask to look. */
+/**
+ * RB-1: who may read a client's code, by the existing rules only: the people rule (a Cooptimizer: not a guest, not
+ * outside the Cooptimize domains, not an automation account), clientAccounts() (listed, never hidden), the client's
+ * Rule and the client report's team (reportTeam). Without the team's settings (no org) nobody is let in.
+ */
+function codeCtx(ctx: ActionContext): CodeContext {
+  const me = async () => {
+    const m = await storedIdentity(ctx.plan);
+    return m ? { id: m.oid, name: m.name || m.username || "Someone" } : null;
+  };
+  return {
+    me,
+    notCooptimizer: async () => {
+      const id = (await me())?.id;
+      if (!ctx.org || !id) throw new Error("who I am can't be read");
+      const entry = (await ctx.org.levels()).people.entry(id);
+      if (!entry) throw new Error("not in the people list");
+      return entry.notCooptimizer;
+    },
+    clients: async () => {
+      if (!ctx.org) return [];
+      const [ca, rules] = await Promise.all([ctx.org.clientAccounts(), ctx.org.rules()]);
+      const colors = teamColors(rules);
+      return ca.keys.filter((k) => ca.isClient(k)).map((k) => ({ clientKey: k, name: k, color: colors[k] ?? null }));
+    },
+    rule: async (k) => (ctx.org ? clientRules(await ctx.org.rules(), k).codeAccess : "team"),
+    team: async () => {
+      const t = await reportTeam(teamCtx(ctx));
+      return { myClients: t.myClients, onClient: t.onClient };
+    },
+    git: ctx.code?.git ?? null,
+    views: ctx.code?.views ?? null,
+  };
+}
+
 export function teamCtx(ctx: ActionContext): TeamContext {
   return {
     plan: ctx.plan,
