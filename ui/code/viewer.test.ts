@@ -74,6 +74,8 @@ describe("coloring", () => {
     expect(kindsOf(lines, "column")[0]).toContain("keyword");
     expect(kindsOf(lines, "partition")[0]).toContain("keyword");
     expect(kindsOf(lines, "dataType")[0]).toContain("property");
+    // The properties after a multi-line measure are properties again, not part of its DAX.
+    expect(kindsOf(lines, "displayFolder")[0]).toContain("property");
     expect(kindsOf(lines, "/// Sales lines")[0]).toContain("comment");
     // DAX: SUM and CALCULATE are DAX functions; M: "let" and "in" are Power Query keywords, Sql.Database a function.
     expect(kindsOf(lines, "SUM").flat()).toEqual(expect.arrayContaining([expect.stringMatching(/function/)]));

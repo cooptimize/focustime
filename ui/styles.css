@@ -4035,6 +4035,12 @@ button.ask-label { cursor: pointer; }
 .adm-confirm p { flex-basis: 100%; margin: 0; }
 .adm-confirm .set-field { flex-basis: 100%; }
 .adm-filter { margin-bottom: 10px; }
+/* RB-1: Admin › Clients' Code access and Admin › Audit › Code views. */
+.adm-code select { width: auto; max-width: 100%; }
+.adm-code-views { margin-top: 24px; }
+.adm-code-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+.adm-code-filter select { max-width: 100%; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); }
+.adm-code-counts { color: var(--text-muted); font-size: var(--fs-2); }
 .adm-process h4, .adm-scope h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
 .adm-admins li { padding: 6px 10px; }
 /* IN-1: Admin › People › Who's set up and the invite sheet. */

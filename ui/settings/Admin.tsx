@@ -188,7 +188,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { /** KB-1. */ sourceSystems?: SourceSystem[] | null; key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; /** HK-7 */ exactCase?: boolean; exactCaseDefault?: boolean; houseStyle: string | null; fixGaps?: GapKind[]; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientRow = { /** KB-1. */ sourceSystems?: SourceSystem[] | null; key: string; isClient: boolean; whyText: string; names: string[]; types: string[]; treatAsClient: boolean; hidden: boolean; hasSettings: boolean; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; /** GD-2 */ aliases?: string[]; /** HK-7 */ exactCase?: boolean; exactCaseDefault?: boolean; houseStyle: string | null; fixGaps?: GapKind[]; /** RB-1 */ codeAccess?: "company" | "team"; process: ClientProcess; scope: ClientScopeRow | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
 type ClientFilterValue = "customers" | "all";
 type ClientCounts = { customers: number; all: number };
 type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
@@ -343,6 +343,7 @@ function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: Clie
       <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       {c.scope && <ScopeField clientKey={c.key} project={c.process.ok ? c.process.project : null} s={c.scope} save={(v) => saver.save(scope, "devops_scope", v, `${c.key}: Cooptimize's work`)} status={saver.status(scope, "devops_scope")} retry={() => void saver.save(scope, "devops_scope", c.scope?.rule ?? undefined, `${c.key}: Cooptimize's work`)} />}
       {c.isClient && <FixGapsField c={c} saver={saver} />}
+      {c.isClient && <CodeAccessField c={c} saver={saver} />}
       {c.isClient && <DeploySettings clientKey={c.key} clientName={c.key} />}
       {c.isClient && <SourceSystemsField c={c} saver={saver} />}
       {c.isClient && (
@@ -397,6 +398,44 @@ function SourceSystemsField({ c, saver }: { c: ClientRow; saver: Saver }) {
           ))}
         </select>
       </AField>
+    </div>
+  );
+}
+
+type CodeCheck = { state: "readable"; repos: number } | { state: "needs_code_read" | "no_token" | "no_devops" | "error"; text: string };
+/** RB-1: who can read this client's code in Code, and whether FocusTime can read it yet (checked on open and on Check). */
+function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
+  const scope = `client:${c.key}`;
+  const value = saver.shown(scope, "code_access", c.codeAccess ?? "company");
+  const [check, setCheck] = useState<CodeCheck | "checking" | null>(null);
+  const run = useCallback(async () => {
+    setCheck("checking");
+    try {
+      setCheck(await call<CodeCheck>("admin.code_check", { clientKey: c.key }));
+    } catch (e) {
+      setCheck({ state: "error", text: e instanceof Error ? plain(e.message) : "Couldn't check" });
+    }
+  }, [c.key]);
+  useEffect(() => void run(), [run]);
+  const words = check === null || check === "checking" ? "Checking…" : check.state === "readable" ? `Readable: ${check.repos} repo${check.repos === 1 ? "" : "s"}` : check.text;
+  return (
+    <div className="set-form adm-code">
+      <AField label="Who can read this client's code" kind="Rule" s={saver.status(scope, "code_access")} retry={() => void saver.save(scope, "code_access", value, `${c.key}: who can read its code`)} hint="Code shows every client's repos, read only, to every Cooptimizer by default. Its team only keeps them to the people on this client. Every file opened is logged in Admin › Audit › Code views.">
+        <select aria-label={`${c.key}: who can read its code`} value={value} onChange={(e) => void saver.save(scope, "code_access", e.target.value, `${c.key}: who can read its code`)}>
+          <option value="company">Whole company</option>
+          <option value="team">Its team only</option>
+        </select>
+      </AField>
+      <div className="set-field">
+        <span className="set-label">Code</span>
+        <span className="set-value" data-code-check={check && check !== "checking" ? check.state : "checking"}>
+          {words}{" "}
+          <button type="button" className="mini" disabled={check === "checking"} onClick={() => void run()}>
+            Check
+          </button>
+        </span>
+        <span className="set-hint">Read with the company DevOps token for this client. It needs Code (read), added to the token in DevOps.</span>
+      </div>
     </div>
   );
 }
@@ -1461,6 +1500,85 @@ const shown = (v: string | null) => {
   }
 };
 
+type CodeViewRow = { id: number; at: string; actorId: string; actorName: string; clientKey: string; repoName: string; path: string; event: "repo_opened" | "file_opened" | "find_used" };
+type CodeViewsData = { views: CodeViewRow[]; counts: { clientKey: string; views: number }[]; people: { id: string; name: string }[]; shown: number };
+const CODE_EVENT_WORDS: Record<CodeViewRow["event"], string> = { repo_opened: "Opened the repo", file_opened: "Opened a file", find_used: "Used Find" };
+/** RB-1: Admin › Audit › Code views: who opened which client's code, newest first, never any content. */
+function CodeViews() {
+  const [clientKey, setClientKey] = useState("");
+  const [personId, setPersonId] = useState("");
+  const [data, setData] = useState<CodeViewsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    call<CodeViewsData>("admin.code_views", { ...(clientKey ? { clientKey } : {}), ...(personId ? { personId } : {}) }).then(
+      (d) => live && (setData(d), setError(null)),
+      (e) => live && setError(e instanceof Error ? plain(e.message) : "Couldn't load this"),
+    );
+    return () => void (live = false);
+  }, [clientKey, personId]);
+  useEffect(() => {
+    if (!data || !/\/code-views$/.test(location.hash)) return;
+    document.querySelector<HTMLElement>('[data-setting="code-views"]')?.scrollIntoView?.({ block: "start" });
+  }, [data]);
+  const clients = data ? [...new Set([...data.counts.map((c) => c.clientKey), ...data.views.map((v) => v.clientKey)])].sort((a, b) => a.localeCompare(b)) : [];
+  return (
+    <section className="set-form adm-code-views" data-setting="code-views" aria-labelledby="code-views-h">
+      <h3 id="code-views-h">Code views</h3>
+      <p className="muted">Who opened which client's code in Code, and when: the repo, the file or Find. Never any of the code. The newest {data?.shown ?? 200}; kept 12 months.</p>
+      {data && data.counts.length > 0 && (
+        <p className="adm-code-counts">
+          Last 30 days: {data.counts.map((c) => `${c.clientKey} ${c.views}`).join(" · ")}
+        </p>
+      )}
+      <div className="adm-code-filter">
+        <select aria-label="Client" value={clientKey} onChange={(e) => setClientKey(e.target.value)}>
+          <option value="">Every client</option>
+          {clients.map((k) => (
+            <option key={k} value={k}>{k}</option>
+          ))}
+        </select>
+        <select aria-label="Person" value={personId} onChange={(e) => setPersonId(e.target.value)}>
+          <option value="">Everyone</option>
+          {(data?.people ?? []).map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="field-problem">{error}</p>}
+      {data && data.views.length === 0 && <p className="muted">Nothing yet.</p>}
+      {data && data.views.length > 0 && (
+        <div className="adm-scroll">
+          <table className="adm-table adm-code-table">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Who</th>
+                <th scope="col">Client</th>
+                <th scope="col">Repo</th>
+                <th scope="col">What</th>
+                <th scope="col">File</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.views.map((v) => (
+                <tr key={v.id}>
+                  <td>{when(v.at)}</td>
+                  <td>{v.actorName}</td>
+                  <td>{v.clientKey}</td>
+                  <td>{v.repoName}</td>
+                  <td>{CODE_EVENT_WORDS[v.event]}</td>
+                  <td className="adm-val">{v.event === "file_opened" ? v.path : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function AdminAudit() {
   const [area, setArea] = useState("");
   const [text, setText] = useState("");
@@ -1628,6 +1746,11 @@ export function AdminSection({ id, admin }: { id: AdminUiSection; admin: boolean
     case "admin-status":
       return <AdminStatus />;
     case "admin-audit":
-      return <AdminAudit />;
+      return (
+        <>
+          <AdminAudit />
+          <CodeViews />
+        </>
+      );
   }
 }

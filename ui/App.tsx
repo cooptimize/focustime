@@ -1439,7 +1439,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       // WD-2: the block keys work on Week and on Day (the day's own blocks; [ and ] step Day's days in its own handler).
       const onDay = nav.tab === "today" && !nav.flow;
-      if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || meetingAt || patternsAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || codeAt || meetingAt || patternsAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
@@ -1502,7 +1502,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, meetingAt, patternsAt, base, captureOpen, layout, nav, weekDays, revealDays]);
+  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, codeAt, meetingAt, patternsAt, base, captureOpen, layout, nav, weekDays, revealDays]);
 
   // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
   useEffect(() => {
@@ -2383,7 +2383,7 @@ export function App() {
 
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || docsAt || meetingAt || patternsAt || focusOpen || nav.tab === "status" ? null : nav.tab}
+          current={settingsAt !== null || guideAt || docsAt || codeAt || meetingAt || patternsAt || focusOpen || nav.tab === "status" ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.

@@ -3,7 +3,8 @@
 // relationship, role and the like), names, properties, annotations and descriptions, and the expression after "="
 // handed to DAX or Power Query (M) by what it belongs to: a measure, a calculated column, a calculation item, a
 // table permission or a calculated partition's source is DAX; an M partition's source and a shared expression are M.
-// A multi-line expression is every following line indented deeper than the line that opened it.
+// A multi-line expression is every following line indented deeper than the line that opened it; after an object's
+// "=" (a measure), deeper than its properties, which sit one level in.
 //
 // It only ever cuts the text into pieces: joined back, the pieces are exactly the file's characters, in order.
 
@@ -98,8 +99,9 @@ export function tmdlTokens(text: string, embed: Embed): Piece[] {
           continue;
         }
         if (rest.trim() === "") {
+          // An object's own expression sits one level deeper than its properties: the properties after it aren't part of it.
           out.push(...s(rest), ...s(nl));
-          block(ind, lang);
+          block(ind + 1, lang);
           continue;
         }
         out.push(...(lang ? embed(rest, lang) : s(rest)), ...s(nl));
