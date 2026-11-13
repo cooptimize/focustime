@@ -5,7 +5,7 @@ import { ACTIONS, type ActionSpec } from "../actions/registry.ts";
 import { BOX_NAME } from "./Capture.tsx";
 import { filterCommands, type MenuItem } from "./menu.ts";
 import { hashOf, MODE_NAMES, MODES, navOf, parseHash } from "./nav.ts";
-import { TEAM } from "./guide/content.ts";
+import { RENAMED_ROWS } from "./guide/retired.ts";
 
 const commands = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}) }));
 
@@ -21,9 +21,10 @@ describe("QF-1 names", () => {
   it("the command menu finds Quick capture by decide later and by sort later", () => {
     for (const q of ["decide later", "sort later"]) expect(filterCommands(commands, q).map((i) => i.label)).toContain("Quick capture");
   });
-  it("the Guide's renamed answer names both", () => {
-    const text = JSON.stringify(TEAM);
-    expect(text).toContain("Fix next became Gaps, then Readiness, and is now Backlog's Needs attention");
-    expect(text).toContain("Sort later is now Decide later");
+  // GU-1: the answer that told the history as a chain is gone; Renamed has one row per old name.
+  it("the Guide's Renamed list has a row for each, with where it lives now", () => {
+    const now = Object.fromEntries(RENAMED_ROWS);
+    expect(now["Fix next"]).toBe("Backlog › Needs attention");
+    expect(now["Sort later"]).toBe("Decide later");
   });
 });
