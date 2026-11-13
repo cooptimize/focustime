@@ -91,6 +91,17 @@ describe("coloring", () => {
     expect(tooLargeToColor("x".repeat(300 * 1024 + 1))).toBe(true);
     expect(tooLargeToColor("SELECT 1")).toBe(false);
   });
+  it("only Prism's token tree is used: manual mode, the core alone, never its HTML or file loading", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = ["highlight.ts", "Code.tsx", "tmdl.ts"].map((f) => readFileSync(new URL(f, import.meta.url), "utf8")).join("\n");
+    expect(src).not.toMatch(/\.highlight(All|Element|AllUnder)?\(|innerHTML|dangerouslySetInnerHTML|from "prismjs"/);
+    expect(src).toContain('from "prismjs/components/prism-core"');
+    // Manual mode is set before the core loads (the core reads it only in a browser, at load).
+    const hl = readFileSync(new URL("highlight.ts", import.meta.url), "utf8");
+    expect(hl.indexOf('import "./prism-manual.ts"')).toBeGreaterThan(-1);
+    expect(hl.indexOf('import "./prism-manual.ts"')).toBeLessThan(hl.indexOf("prismjs/components/prism-core"));
+    expect(readFileSync(new URL("prism-manual.ts", import.meta.url), "utf8")).toMatch(/manual: true/);
+  });
   it("the token tree has no HTML", () => {
     expect(JSON.stringify(pieces("<b>x</b>", "xml"))).not.toMatch(/<span|class=/);
   });

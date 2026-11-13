@@ -1,5 +1,5 @@
-// RB-1: the little of Prism's API ui/code/highlight.ts uses (no @types package: the one new dependency is prismjs).
-declare module "prismjs" {
+// RB-1: the little of Prism's core API ui/code/highlight.ts uses (no @types package: the one new dependency is prismjs).
+declare module "prismjs/components/prism-core" {
   type Grammar = Record<string, unknown>;
   type TokenStream = string | Token | (string | Token)[];
   class Token {

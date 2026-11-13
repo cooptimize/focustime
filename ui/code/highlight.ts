@@ -2,9 +2,12 @@
 // its token tree (Prism.tokenize): strings and typed pieces. Its HTML output (Prism.highlight) is never used, so file
 // text never becomes page content: the panel draws each piece as a text node in a span whose class comes from the
 // piece's type. TMDL uses ui/code/tmdl.ts, with Prism's DAX and Power Query grammars for its expressions. Prism runs
-// in manual mode (ui/code/prism-manual.ts, imported first) and makes no network request.
+// in manual mode (ui/code/prism-manual.ts, imported first) and makes no network request: only its core and the
+// grammars below are loaded.
 import "./prism-manual.ts";
-import Prism, { type Token, type TokenStream } from "prismjs";
+// The core only: the package's main file also carries the file-highlight plugin (which can request a file) and grammars
+// FocusTime doesn't use. The core's highlightElement (HTML and a Web Worker) is never called.
+import Prism, { type Token, type TokenStream } from "prismjs/components/prism-core";
 import "prismjs/components/prism-markup";
 import "prismjs/components/prism-sql";
 import "prismjs/components/prism-json";
