@@ -2,7 +2,8 @@
 // color on its wash, pass AA (4.5:1) in every theme; the wash is what gets fixed, never the text color.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { contrast } from "../config/org.ts";
+import { contrast, SLOT_VALUES } from "../config/org.ts";
+import { DEMO_CLIENTS } from "../sources/demo/data.ts";
 
 const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const tokens = css.slice(0, css.indexOf("* { box-sizing"));
@@ -122,4 +123,23 @@ describe("RS-1 tokens: contrast", () => {
       expect(Math.abs(line! - surface!)).toBeLessThan(Math.abs(strong! - surface!));
     });
   }
+
+  // RS-2: a client's block card is filled in its color at the timeline bands' strength (--client-tint over the
+  // surface); a past one at 60% of it. Every client color a theme names, the team palette's slots (both values) and
+  // the demo's own: the card's text, muted text and faint text (its time) pass AA on both fills.
+  for (const [name, t] of Object.entries(THEMES))
+    it(`${name}: text on every client's card fill, today and past (RS-2)`, () => {
+      const tint = parseFloat(t["--client-tint"]!);
+      const clients = [...Object.keys(t).filter((k) => /^--client-(none|teal|violet|ochre|blue|rose|earth|green|slate)$/.test(k)).map((k) => `var(${k})`), ...Object.values(SLOT_VALUES).flat(), ...DEMO_CLIENTS.map((c) => c.color)];
+      const low: string[] = [];
+      for (const c of clients)
+        for (const [when, p] of [["today", tint], ["past", tint * 0.6]] as const) {
+          const fill = toHex(color(t, `color-mix(in oklab, ${c} ${p}%, var(--surface))`));
+          for (const text of ["--text", "--text-muted", "--text-faint"]) {
+            const r = contrast(toHex(color(t, t[text]!)), fill);
+            if (r < 4.5) low.push(`${text} on ${c} (${when}, ${p}%): ${r.toFixed(2)}`);
+          }
+        }
+      expect(low).toEqual([]);
+    });
 });

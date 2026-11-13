@@ -89,6 +89,17 @@ const items = (s: MenuStep) => ("items" in s ? s.items : []);
 const find = (s: MenuStep, label: string) => items(s).find((i) => i.label === label)!;
 
 describe("command menu (built from the action registry)", () => {
+  it("RS-2 D7: the window commands' groups are one run each, so Views shows its label once; the registry's order is kept", () => {
+    const list = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
+    const groups = list.map((c) => c.group ?? "");
+    const runs = groups.filter((g, i) => i === 0 || g !== groups[i - 1]);
+    expect(runs[0]).toBe("Views");
+    expect(runs.filter((g) => g === "Views")).toHaveLength(1);
+    const registry = list.filter((c) => (ACTION_NAMES as readonly string[]).includes(c.id));
+    expect(registry.map((c) => c.id)).toEqual(list.slice(list.length - registry.length).map((c) => c.id));
+    // A search's first result is what it was before grouping (review 2: "history" must find the history first).
+    expect(filterCommands(list, "history")[0]!.label).not.toMatch(/^Clear/);
+  });
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
     for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !name.startsWith("patterns.") && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);

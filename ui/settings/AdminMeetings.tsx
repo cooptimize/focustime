@@ -62,7 +62,7 @@ export function MeetingsField({ clientKey, clientName }: { clientKey: string; cl
       {adding && data ? (
         <RegisterForm clientKey={clientKey} clientName={clientName} people={data.people} onDone={async (line) => (setAdding(false), setSaved(line), await load())} onCancel={() => setAdding(false)} />
       ) : (
-        <button type="button" className="mini" onClick={() => setAdding(true)} disabled={!data}>Register a meeting</button>
+        <button type="button" className="mini mtg-register" onClick={() => setAdding(true)} disabled={!data}>Register a meeting</button>
       )}
     </div>
   );

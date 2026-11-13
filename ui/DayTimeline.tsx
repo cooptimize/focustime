@@ -32,6 +32,7 @@ import { ms, pct, railNowOf, Timeline } from "./Timeline.tsx";
 import { WeekDnd } from "./WeekStories.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { Icon } from "./icons.tsx";
+import { dayBlocks, isCatchUp } from "../plan/dayblocks.ts";
 
 /** Timebox my day's suggestions, until each is accepted or dropped. */
 export type Proposals = { date: IsoDate; items: DayPlacement[]; unplaced: Unplaced[]; outlook: boolean };
@@ -358,6 +359,8 @@ export function DayTimeline(props: Props) {
 
   const rulerCtx = { layout: "wide" as const, promises: isToday ? rail.filter((p) => !p.overdue) : [], onPromise: props.onPromise, onLate: props.onLate, today: date, now: clockNow, home: null, late: lateBy };
   const offered = placed.length;
+  // RS-2: Week's answer for the day: a PTO day or a catch-up day with no working hours is one cell, as on Week.
+  const whole = dayBlocks(day).whole;
 
   return (
     <RulerCtx.Provider value={rulerCtx}>
@@ -367,10 +370,10 @@ export function DayTimeline(props: Props) {
             <ProposalBar p={proposals} env={env} count={offered} onAcceptAll={() => void acceptAll()} onDiscard={() => setProposals(null)} onOutlook={(on) => setProposals({ ...proposals, outlook: on })} />
           )}
           <AllDay events={day.allDay} />
-          <OutLine kind="early" items={day.pto ? [] : day.early.map((p) => p.event)} tz={tz} />
-          {day.pto ? (
+          <OutLine kind="early" items={whole ? [] : day.early.map((p) => p.event)} tz={tz} />
+          {whole ? (
             <div className="tt-off">
-              <WholeDay day={day} band={band} kind="pto" tz={tz} selected={false} refAm={() => {}} refPm={() => {}} onOpen={() => {}} dayLabel={dayLabel} now={null} />
+              <WholeDay day={day} band={band} kind={whole} tz={tz} selected={false} refAm={() => {}} refPm={() => {}} onOpen={whole === "catchup" && props.onOpen ? () => props.onOpen!("AM") : () => {}} dayLabel={dayLabel} now={null} />
             </div>
           ) : (
             blocks.map((s) => {
@@ -387,7 +390,7 @@ export function DayTimeline(props: Props) {
                   tz={tz}
                   now={now}
                   nowLine={railNowOf(day, s.half, spot, now, label, () => {})}
-                  name={s.focus[0] ? props.nameOf(s.focus[0].clientKey) : s.half === "EVE" ? "Evening" : s.open ? "Open" : halfName(s.half)}
+                  name={s.focus[0] ? props.nameOf(s.focus[0].clientKey) : s.half === "EVE" ? "Evening" : s.open ? "Open" : isCatchUp(day, s) ? "Catch-up" : halfName(s.half)}
                   untimed={untimed}
                   checklist={checklist}
                   tickable={date <= data.planDay.date && !s.pto}
@@ -418,7 +421,7 @@ export function DayTimeline(props: Props) {
               );
             })
           )}
-          {band ? <EveningBandView band={band} date={date} tz={tz} dayLabel={dayLabel} /> : <OutLine kind="late" items={day.pto ? [] : day.evening.map((p) => p.event)} tz={tz} />}
+          {band ? <EveningBandView band={band} date={date} tz={tz} dayLabel={dayLabel} /> : <OutLine kind="late" items={whole ? [] : day.evening.map((p) => p.event)} tz={tz} />}
           {drag && !drag.over && (
             <div className="tt-drag-chip" style={{ left: drag.x + 12, top: drag.y + 8 }} aria-hidden="true">
               {drag.pick.title}
@@ -509,7 +512,8 @@ function TimelineBlock(b: BlockProps) {
   const status = blockStatus(slot.risks);
   const sev = status.kind === "at_risk" ? "at_risk" : null;
   const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : "";
-  const state = slot.pto ? "pto-half" : slot.half === "EVE" ? "eve" : slot.open ? "open" : "focus";
+  // RS-2: a catch-up block is a band like any other, in the neutral color, as Week's card is.
+  const state = slot.pto ? "pto-half" : slot.half === "EVE" ? "eve" : slot.open ? "open" : isCatchUp(day, slot) && !slot.focus.length ? "overflow" : "focus";
   const span = Math.max(1, ms(slot.view.end) - ms(slot.view.start));
   const pos = (iso: string) => (ms(iso) - ms(slot.view.start)) / span;
   const minutes = span / 60_000;

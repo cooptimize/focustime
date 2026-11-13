@@ -16,8 +16,14 @@ import { todoLine, useTodoSheet } from "./TodoSheet.tsx";
 import { userZone } from "../week/zone.ts";
 import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 import { Icon } from "./icons.tsx";
+import { isCatchUp, slotOf } from "../plan/dayblocks.ts";
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
+/** RS-2: a block with no client is the catch-up day's ("Catch-up", as Week names it) or an Open half-day. */
+const noClient = (data: WeekLoadData, date: string | undefined, half: Slot["half"]) => {
+  const d = data.week.days.find((x) => x.date === date);
+  return d && isCatchUp(d, slotOf(d, half) ?? d.am) ? "Catch-up" : "Open";
+};
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
 /** The Now card's state for today's blocks and calendar. */
@@ -47,7 +53,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, tickable, onStar
   const t = data.timer;
   const block = card.kind === "after" ? null : card.block;
   const client = block?.clientKey ?? null;
-  const name = client ? nameOf(client) : "Open";
+  const name = client ? nameOf(client) : block ? noClient(data, data.planDay.date, block.half as Slot["half"]) : "Open";
   const when = (iso: string) => startClock(iso, tz);
   const running = !!t && (!pick || t.pickId === pick.id);
   const head =
@@ -126,7 +132,7 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
           <div key={s.half} className={`ph-block${over ? " over" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
             <h3 className="ph-block-head">
               <span className="swatch" aria-hidden="true" />
-              {client ? nameOf(client) : "Open"}
+              {client ? nameOf(client) : noClient(data, s.date, s.half)}
               <span className="muted"> · {startClock(s.start, tz)}–{startClock(s.end, tz)}</span>
             </h3>
             {mine.length ? (
@@ -164,7 +170,7 @@ export function PhoneNextUp({ blocks, events, data, nameOf, now }: { blocks: rea
   const t = ms(now);
   const rows = [
     ...events.filter((e) => ms(e.start) > t).map((e) => ({ key: `e-${e.event.id}`, at: e.start, end: e.end, title: e.event.title, kind: e.kind as string })),
-    ...blocks.filter((s) => ms(s.start) > t).map((s) => ({ key: `b-${s.half}`, at: s.start, end: s.end, title: `${s.focus[0] ? nameOf(s.focus[0].clientKey) : "Open"} block`, kind: "block" })),
+    ...blocks.filter((s) => ms(s.start) > t).map((s) => ({ key: `b-${s.half}`, at: s.start, end: s.end, title: `${s.focus[0] ? nameOf(s.focus[0].clientKey) : noClient(data, s.date, s.half)} block`, kind: "block" })),
   ].sort((a, b) => ms(a.at) - ms(b.at));
   if (!rows.length) return null;
   return (

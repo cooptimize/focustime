@@ -103,6 +103,8 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
           data-tour="ah-owner"
           title={`Mine: assigned to you and what's under your features and epics. Contributing: the features and epics your stories are under. Everyone: all of Cooptimize's work. Remembered per client.${people.owner ? "" : `\nNow: ${people.word}.`}`}
         >
+          {/* RS-2 D2: clients on different choices: "Mixed" with nothing lifted; the tooltip names each; a pick sets all. */}
+          {!people.owner && <span className="ah-tb-mixed">Mixed</span>}
           {(["mine", "contributing", "all"] as const).map((o) => (
             <button key={o} type="button" aria-pressed={people.owner === o} onClick={() => setOwner(o)}>
               {PEOPLE_WORDS[o]}

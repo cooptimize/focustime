@@ -1217,4 +1217,4 @@ The five drawings of the old Plan the week screen (`pw-grid`, `pw-carry`, `pw-ca
 | The Friday reminder to finish the status update | Status › Can FocusTime remind me? |
 | Several status lines typed at once | Status › How do I type several lines quickly? |
 
-Not added, on purpose: Admin's pages beyond one answer (admins have the technical docs), the developer loop, and anything RS-2 would add (it had not merged; TD-1 merged during review and changed no screen).
+Not added, on purpose: Admin's pages beyond one answer (admins have the technical docs) and the developer loop. TD-1 merged during review and changed no screen. RS-2 merged after the pull request opened; the catch-up day on Day, what a loading week looks like and Mixed in Backlog were added then.

@@ -248,3 +248,24 @@ describe("shared root causes (step 6.1)", () => {
     expect(r.fixAction).toBeUndefined();
   });
 });
+
+describe("RS-2: a read started before a sign-out (review 2)", () => {
+  it("isn't remembered once the source is disconnected: the next load reads again", async () => {
+    const api = fakeApis("ok");
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    const fetch = async (input: string | URL | Request, init?: RequestInit) => (await gate, api.fetch(input, init));
+    const keyring = memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH });
+    const source = createOutlookSource({ fetch, keyring, loopback: createLoopback(), openBrowser: async () => {}, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "focustime-cal-"))), log: () => {}, timeZone: NY, now: () => NOW, config: { tenantId: TENANT, clientId: "44444444-4444-4444-8444-444444444444" } });
+    const first = source.load(WEEK);
+    await new Promise((r) => setTimeout(r, 20));
+    await source.disconnect();
+    open();
+    await first;
+    const reads = () => api.calls.filter((c) => c.url.includes("calendarView")).length;
+    const before = reads();
+    // The next load reads again: the answer of a read begun under the old sign-in isn't remembered.
+    await source.load(WEEK);
+    expect(reads()).toBeGreaterThan(before);
+  });
+});

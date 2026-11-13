@@ -432,7 +432,7 @@
     --pto: var(--p-sky-300);
     --oof: var(--p-purple-300);
     --event-surface: var(--p-graphite-850);
-    --client-tint: 14%;
+    --client-tint: 13%; /* RS-2: 14% left faint text at 4.47:1 on the palette's light earth; lowered, not the text */
     --brand-am: var(--p-brand-am-d);
     --brand-pm: var(--p-brand-pm-d);
     --brand-accent: var(--p-brand-accent-d);
@@ -791,8 +791,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .event.cont-before { border-top-left-radius: 0; border-top-right-radius: 0; border-top-style: dotted; }
 .event.cont-after { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-style: dotted; }
 
-/* Friday: lighter overflow column */
-.day.overflow .half {
+/* Friday: lighter overflow column. RS-2: Day's Timeline draws the catch-up day's bands the same way. */
+.day.overflow .half,
+.tt-block.half.overflow {
   background: var(--sunken);
   border-style: dashed;
   box-shadow: none;
@@ -945,7 +946,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .half.card { flex-direction: column; min-height: 0; }
 .card-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; min-width: 0; flex: 1; }
 .half.card.open { background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--border) 50%, transparent) 10px 11px), var(--raised); }
-.half.card.focus { background: color-mix(in oklab, var(--c) 5%, var(--surface)); }
+/* RS-2: a client's card is filled in its color at the timeline bands' strength, so Cards and Timeline match. */
+.half.card.focus { background: color-mix(in oklab, var(--c) var(--client-tint), var(--surface)); }
 .half.card .client { font-size: var(--fs-4); margin-top: 2px; }
 .half.card .also { margin-top: 2px; padding: 2px 6px; font-size: var(--fs-2); }
 .half.card .stats { margin-top: 2px; flex-wrap: wrap; gap: 0 10px; }
@@ -5173,7 +5175,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 @container (max-width: 17em) { .day-head .date-long { display: none; } .day-head .date-short { display: inline; } }
 @container (max-width: 7em) { .day-head:not(.fold-head) .date, .day-head .today-pill { display: none; } }
 /* On a narrow PTO column the hatched cell already says PTO. */
-@container (max-width: 9em) { .day-head .pto-pill { display: none; } }
+/* RS-2 D8: up to 11em (was 9em), so "Thu 5 Holiday" never cuts or spills its pill: it drops instead. */
+@container (max-width: 11em) { .day-head .pto-pill { display: none; } }
 /* SR-1: Week › Status, the preview of Monday's status report and the boxes that feed it. */
 .status-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
 .status-view .page-head { flex-wrap: wrap; row-gap: 4px; }
@@ -5185,14 +5188,16 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-bar { position: sticky; top: -8px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .st-count { margin: 0; font-weight: 600; font-size: var(--fs-3); }
 .st-push { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-2); }
-.st-client { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); max-width: 1100px; }
+/* RS-2 D1: no boxes inside boxes. A client is a labelled section under a rule (its swatch names it), "Needs your update" a
+   label, each feature a row under a hairline ("No update yet" is its badge), the AI suggestion the one quiet card. */
+.st-client { display: grid; gap: 8px; padding: 12px 2px 4px; border-top: 2px solid var(--c, var(--border)); max-width: 1100px; }
 .st-client-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .st-client-head h3 { margin: 0; }
 .st-sent, .st-note { margin: 0; font-size: var(--fs-2); }
 .st-features { display: grid; gap: 4px; }
 .st-feature { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
 .st-feature + .st-feature { border-top-color: var(--border); border-top-left-radius: 0; border-top-right-radius: 0; }
-.st-feature.st-empty { background: color-mix(in oklab, var(--watch) 7%, transparent); border-color: color-mix(in oklab, var(--watch) 30%, transparent); }
+
 .st-feature-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
 .st-feature h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .st-title { color: var(--text); }
@@ -5260,17 +5265,15 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-nu-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: var(--fs-3); }
 .st-nu-head .st-title { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 /* SR-3: Needs your update, the "AI suggests" line, pending lines, click-to-edit, holidays, Add a feature. */
-.st-needs { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: 8px; background: color-mix(in oklab, var(--accent) 5%, transparent); }
+.st-needs { display: grid; gap: 6px; }
 .st-needs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
 .st-needs-head h4 { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
 .st-needs-head .muted { font-size: var(--fs-2); }
-.st-needs .st-feature.st-empty { background: var(--surface); }
 .st-needs-count { color: var(--accent); }
 .st-pending-count { color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 .st-worked { padding: 0 8px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; }
 .st-why { margin: 0; font-size: var(--fs-2); }
-.st-sugg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 4px 10px; padding: 6px 8px; border: 1px dashed var(--accent); border-radius: 6px; }
-.st-sugg-template { border-color: var(--border-strong); }
+.st-sugg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 4px 10px; padding: 6px 8px; border-radius: 6px; background: var(--sunken); }
 .st-sugg-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); white-space: nowrap; }
 .st-sugg-template .st-sugg-label { color: var(--text-muted); }
 .st-sugg-text { margin: 0; font-size: var(--fs-3); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -5301,7 +5304,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .app.phone .status-view .st-box-foot .link-btn, .app.phone .status-view .st-by .link-btn, .app.phone .status-view .st-pending-line .link-btn,
 .app.phone .status-view .st-add-feature, .app.phone .status-view .st-adds .link-btn, .app.phone .status-view .st-toggle .ms-btn, .app.phone .status-view .st-scope .ms-btn { min-height: 44px; min-width: 44px; }
 .app.phone .status-view .st-text-edit { min-height: 44px; }
-.app.phone .status-view .st-client { padding: 8px; }
+.app.phone .status-view .st-client { padding: 8px 0 4px; }
 .app.phone .status-view .st-feature { padding: 6px 4px; }
 .app.phone .status-view .st-needs { padding: 6px; }
 
@@ -5961,7 +5964,10 @@ td > .pat-buttons { margin-top: 0; }
 .pa-backdrop .pa-gridline { top: 0; bottom: 0; }
 .pa-weekend { position: absolute; top: 0; bottom: 0; background: color-mix(in oklab, var(--sunken) 55%, transparent); }
 .pa-today-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--selected); opacity: 0.8; }
-.ah-gantt .pa-today { bottom: 0; }
+/* RS-2 D3: in the header the now line is a short tick under the week labels, never through "This week"; the free-time
+   cells sit over the line, and their words wrap whole ("nothing planned", "2h planned") instead of being cut. */
+.ah-gantt .pa-today { top: auto; bottom: 0; height: 6px; }
+.ah-gantt .pa-cap .pa-capcell { z-index: 1; white-space: normal; text-overflow: clip; }
 
 /* Bars: centered, the app's radius, the client's color. */
 .ah-gantt .pa-item .pa-bar { top: 50%; bottom: auto; height: var(--bar-h); margin-top: calc(var(--bar-h) / -2); border-radius: 5px; display: flex; align-items: center; overflow: visible; background: color-mix(in oklab, var(--c) 72%, var(--surface)); border: 1.5px solid var(--c); }
@@ -6814,6 +6820,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .half.past, .half.card.past { background: var(--sunken); border-color: var(--border); border-left-width: 2px; box-shadow: none; opacity: 1; }
 .half.past .card-client { color: var(--text-muted); font-weight: 500; }
 .half.past .card-head .swatch { opacity: 0.6; }
+/* RS-2: a past client card keeps its color: the full edge and a fill at 60% of the client tint (still not the plain
+   surface); the muted title and text say it is past. A PTO half keeps its own hatch. */
+.half.past.focus:not(.pto-half), .half.card.past.focus:not(.pto-half) { background: color-mix(in oklab, var(--c) calc(var(--client-tint) * 0.6), var(--surface)); border-left-width: 5px; border-left-color: var(--c); }
 
 /* C2, C4: the card's ⋯ is a full target and the header keeps room for it, so a chip never touches it. */
 .card-head { min-height: max(var(--target), calc(20px * var(--text-scale))); padding-right: calc(var(--target) + 4px); }
@@ -6928,6 +6937,10 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-toolbar .ah-tb-row { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px 12px; }
 .ah-tb-clients { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .ah-tb-people button { white-space: nowrap; }
+.ah-tb-mixed { display: inline-flex; align-items: center; margin-right: 4px; padding: 0 10px 0 10px; border-right: 1px solid var(--line, var(--border-strong)); color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; cursor: default; }
+/* The word needs room the toolbar has only from 1400 px: below, as before, nothing lifted says it (the tooltip names each). */
+@media (max-width: 1399px) { .ah-tb-mixed { display: none; } }
+:root .app.phone .ah-tb-mixed { display: none; }
 .ah-attention { gap: 6px; }
 .ah-attention[aria-pressed="true"] { --c: var(--ah-attention); }
 .ah-attention-n { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-2); font-weight: 600; text-align: center; }
@@ -7435,3 +7448,37 @@ button:disabled { cursor: default; }
 :root :is(.nt-main, .hs-value) { border-radius: var(--radius-input); }
 :root .as-mic { border: 1px solid var(--line); background: transparent; }
 :root .as-mic.on { border-color: var(--risk); }
+
+/* RS-2: while the asked week or day is being read (or its read failed), the old one's blocks dim at once (no
+   transition, so reduced motion has nothing to cut) and can't be acted on; the header names the asked week or day and
+   says "Loading…" once, or the failed line with Retry. Nothing moves. */
+.wd1-body.reading, .day-view.reading > :not(.day-bar) { opacity: 0.45; pointer-events: none; }
+.read-line { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-2); white-space: nowrap; }
+.read-line.failed { color: var(--watch); font-weight: 600; }
+
+/* RS-2 D4: Day's "VM is off" is one quiet line with its two buttons, no box around it (its neighbours are pills). */
+:root .att-chip.vm { padding: 0 2px; gap: 6px; border: 0; border-radius: 0; background: none; }
+:root .att-chip.vm .att-tag { padding: 0; background: none; color: var(--text-muted); font-weight: 500; }
+
+/* RS-2 D5: the phone's Day header keeps More on the controls' first line, at its right; the others wrap beside it. */
+:root .app.phone .day-bar .mode-area { position: relative; padding-right: calc(36px * var(--text-scale, 1) + 8px); box-sizing: border-box; }
+:root .app.phone .day-bar .mode-area > .more-btn:last-child { position: absolute; top: 0; right: 0; }
+
+/* RS-2 D6: Admin › Clients › Meetings' "Register a meeting" is a normal button, not the field's full width. */
+:root .mtg-admin > .mtg-register { justify-self: start; align-self: start; width: auto; }
+
+/* RS-2 D8 (style guide section 10): a pill that doesn't fit is never cut mid-word. A client call's mark wraps its words,
+   "· Review 6 proposals" under the call's role, the role never ellipsized; wrapped, its corners soften. */
+:root .call-mark { flex-wrap: wrap; white-space: normal; border-radius: 10px; row-gap: 0; }
+:root .call-mark .call-name { overflow: visible; text-overflow: clip; overflow-wrap: normal; }
+:root .call-mark .call-name, :root .call-mark .call-what { min-width: 0; }
+/* The same on Week's other card pills: the status ("At risk · Dentist 12:00"), badges and head chips wrap whole words;
+   a day header's PTO or Holiday pill drops on a narrow column (the hatched cell names the day). */
+:root main.grid :is(.card-head .status-pill, .half.card .badge-text, .half .head-chip) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
+:root main.grid .card-head .status-pill { border-radius: 10px; }
+
+/* RS-2: a Status feature's title link keeps a 28 px hit area (section 10's targets) without growing its row. */
+.st-feature h4 .st-title { position: relative; }
+.st-feature h4 .st-title::after { content: ""; position: absolute; top: -6px; bottom: -6px; left: 0; right: 0; }
+/* RS-2 D3: the Gantt's free-time row holds three lines, so a cell with an over part or Crowded month shows whole. */
+.ah-gantt .pa-cap { min-height: calc(var(--fs-2) * 1.25 * 3 + 10px); }
