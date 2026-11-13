@@ -128,6 +128,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay |
 | `code_views` | 12 months |
 | `job_claims` | 30 days |
+| `admin_audit` | No age limit (not in the purge) |
 
 Kept elsewhere:
 

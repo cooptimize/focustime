@@ -5,7 +5,7 @@ For IT first: this is the page to read before approving FocusTime. Engineers cha
 ## In short
 
 - Only Cooptimize accounts sign in (Entra, single tenant); guests are refused.
-- FocusTime acts as the signed-in person with delegated permissions, never app-only, except its read-only Dataverse reader.
+- FocusTime acts as the signed-in person with delegated permissions, never app-only, except its read-only Dataverse reader and the company DevOps read PAT (one per client, used for the shared DevOps store, Code and the patterns page). The Teams bot replies as itself, only in a person's 1:1 chat.
 - Every outside write is a named action with a preview, a confirm, a read back, an audit log and an undo. The few exceptions are listed below.
 - One client's data stays in that client's views, drafts, AI requests and DevOps writes; Cooptimize Internal is the one exception. Where another client's name could reach a client's eyes, FocusTime holds it back, replaces it, or flags it first (the client boundary).
 - Client code is the one thing every Cooptimizer may read across clients: read only, never kept, never sent to AI, every file opened logged for admins.
@@ -141,7 +141,7 @@ A calendar link is a URL a person types, fetched by the server, so it is the one
 - **https only.** webcal:// and webcals:// become https://; anything else is refused. Port 443 only, no user name or password in the link.
 - **No private or internal addresses.** Refused by name: localhost, `.local`, `.internal`, `.home.arpa`, names without a dot. Refused by address, checked in the socket's own DNS lookup at connect time (so a name can't pass and then resolve somewhere else): unspecified, loopback, private, carrier-grade NAT, link-local (169.254.0.0/16, where the cloud metadata services are; fe80::/10), unique local, multicast, reserved and documentation ranges, and IPv4 hidden in IPv6 (mapped, NAT64, 6to4). A name is refused if any of its answers is.
 - **Redirects re-checked.** The HTTP client never follows a redirect; each hop (at most 3) goes through the same rules.
-- **Bounded.** 15 seconds for the whole request, 5 MB, and only `text/calendar` (or a generic type whose body is a calendar) that parses. Errors carry a kind only, never the server's words.
+- **Bounded.** 15 seconds a request (at most 3 redirects, each with its own 15 seconds), 5 MB, and only `text/calendar` (or a generic type whose body is a calendar) that parses. Errors carry a kind only, never the server's words.
 - **Read only, one person.** GET only, never a write to the calendar. One person's links are fetched for that person only.
 
 **Busy only** (the default) keeps no title, location or description: only when the person is busy. Show titles keeps titles only.
@@ -200,6 +200,8 @@ The one write without a preview is the start before your day, and only because y
 - **Dataverse is read app-only.** FocusTime reads it with its reader's identity, not each person's own Dataverse permissions (Q89).
 - **Global PATs retire on December 1, 2026.** A client PAT created as global stops working then; recreate it as organization-scoped (Q17).
 - **The DevOps identity check uses an undocumented endpoint.** `_apis/connectionData` isn't on Microsoft Learn (Q80).
+- **Public endpoints.** Azure SQL, Key Vault, the container registry and the bot are reachable on their public endpoints (`publicNetworkAccess: 'Enabled'` in `infra/modules/`); there are no private endpoints. Azure SQL's firewall allows only Azure services; every request still needs Entra or managed identity access.
+- **People can erase their own outside-write log.** Settings › Activity's rows (and `loop_sends`, which holds the text sent) are user rows, removed with Delete my data. `admin_audit` has no age limit.
 - **Data at rest.** Azure SQL encrypts its data at rest by default (transparent data encryption); `infra/` doesn't set it either way. **Not verified.**
 
 ## These docs

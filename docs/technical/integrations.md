@@ -17,7 +17,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 | Azure DevOps | Writes and the identity check; Code's repo reads | 20 seconds |
 | Dataverse | Every read | 20 seconds |
 | Google Calendar | Every read | 20 seconds |
-| Calendar links | The whole request, redirects included | 15 seconds |
+| Calendar links | Each request, and each of at most 3 redirects | 15 seconds |
 | Azure Resource Manager | Every request | 20 seconds |
 | OpenAI | Standard requests and push-to-talk | 30 seconds (`[ai] timeout_ms`) |
 | OpenAI | Flex requests | 120 seconds a try, 90 seconds of tries before falling back to standard |

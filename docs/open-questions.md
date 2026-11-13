@@ -908,3 +908,10 @@ Kept but not written:
 - `chat_messages`, `asks` (the retention purge still deletes old rows), `delivery_chats` (neither read nor written) and `dedupe_log` (only counted at a SQLite start). Each can go in a later release through a `safe-drop:` migration once nothing reads it. Who decides when?
 
 Should `docs/architecture.md` and `docs/spec.md` be cut down now that `docs/technical/` is the reference for how FocusTime works? Both still describe old screens in detail; this step left them alone.
+
+From the IT review (TD-1):
+- Azure SQL, Key Vault, the registry and the bot use public endpoints with no private endpoints. Is that acceptable to Cooptimize IT, or should A6 add private networking?
+- A person's outside-write log (Settings › Activity, `loop_sends`) goes with Delete my data, and `admin_audit` is kept forever. Should outside writes have an audit trail people can't erase, and should `admin_audit` have an age limit?
+- OpenAI: the pages say only `store: false`. Who records the data region, the provider's retention and the data processing agreement?
+- Every Cooptimizer can read every client's code by default (Code access: Whole company). Do client contracts allow that, and who checks?
+- No rotation schedule is written down for `ft-data-key` or the OpenAI key. Who owns rotation?
