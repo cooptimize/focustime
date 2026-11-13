@@ -6262,6 +6262,48 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .sc-comments li { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .sc-c-who { margin: 0 0 2px; font-size: var(--fs-2); }
 .sc-foot { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
+.sc-html :is(h1, h2, h3) { margin: 0 0 6px; font-weight: 600; line-height: 1.3; }
+.sc-html h1 { font-size: var(--fs-4); }
+.sc-html h2 { font-size: var(--fs-3); }
+.sc-html h3 { font-size: var(--fs-3); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text); }
+/* ED-1: Edit on the story card: the title box, the light editor with its live look, the line for what can't be edited,
+   Move…, the card's ⋯, the save bar and the "changed in DevOps" banner. */
+.sc-head h2.sc-title-editing { flex: 0 0 auto; }
+.sc-title-box { flex: 1 1 auto; min-width: 0; display: flex; }
+.sc-title-box input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-4); font-weight: 600; padding: 4px 8px; }
+.sc-light { display: grid; gap: 6px; }
+.sc-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.sc-tool { min-width: 2.2em; }
+.sc-tool-bold { font-weight: 600; }
+.sc-tool-italic { font-style: italic; }
+.sc-tools-note { margin-left: auto; font-size: var(--fs-2); }
+.sc-light-box { width: 100%; font: inherit; font-size: var(--fs-3); line-height: 1.45; }
+.sc-look { display: grid; gap: 4px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: 8px; background: var(--sunken); }
+.sc-look-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.sc-look .sc-html > :last-child { margin-bottom: 0; }
+.sc-cant { display: grid; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); border-left: 3px solid var(--watch); border-radius: 8px; }
+.sc-cant-why { margin: 0; font-size: var(--fs-2); }
+.sc-edit-acts.start { justify-content: flex-start; }
+.sc-add-ac { justify-self: start; }
+.sc-move-link { margin-left: 8px; }
+.sc-move-now, .sc-move-note { font-size: var(--fs-2); }
+.sc-edit-note { font-size: var(--fs-2); }
+.sc-more { position: relative; margin-left: auto; }
+.sc-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 2; display: grid; min-width: 180px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-menu); }
+.sc-more-menu button { text-align: left; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: var(--fs-3); cursor: pointer; }
+.sc-more-menu button:hover, .sc-more-menu button:focus-visible { background: var(--raised); }
+.sc-save { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: flex-end; padding: 8px 0; border-top: 1px solid var(--border); background: var(--surface); }
+.sc-save > .muted { margin-right: auto; font-size: var(--fs-2); }
+.sc-discard { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; width: 100%; justify-content: flex-end; }
+.sc-discard span { margin-right: auto; font-weight: 600; }
+.sc-changed { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--watch); border-radius: 8px; }
+.sc-changed p { margin: 0; }
+.sc-changed-now { font-size: var(--fs-2); overflow-wrap: anywhere; }
+.dw-looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dw-looks > h4 { grid-column: 1 / -1; margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.dw-look { display: grid; gap: 4px; align-content: start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.dw-look.after { border-color: color-mix(in oklab, var(--accent) 50%, var(--border)); }
+.dw-look-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 
 .wrap-backdrop { z-index: 61; }
 .wrap-sheet { width: min(560px, 100%); gap: 12px; }
@@ -6295,7 +6337,13 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .story-card, .wrap-sheet { width: 100%; max-height: none; height: 100%; border-radius: 0; border: 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); align-content: start; overflow-x: hidden; }
   .wrap-outcome { grid-template-columns: 1fr; }
   .wrap-pv-row { grid-template-columns: 1fr; gap: 0; }
-  .sc-acts .mini, .wrap-foot .mini { min-height: 44px; }
+  .sc-acts .mini, .wrap-foot .mini, .sc-save .mini, .sc-tools .mini, .sc-edit-acts .mini { min-height: 44px; }
+  .sc-head:has(.sc-title-box) { flex-wrap: wrap; }
+  .sc-title-box { flex-basis: 100%; order: 3; }
+  .sc-title-box input { font-size: 16px; }
+  .sc-light-box { font-size: 16px; }
+  .dw-looks { grid-template-columns: 1fr; }
+  .sc-more-menu button { min-height: 44px; }
 }
 
 /* CAL-1: Settings › Accounts and calendars › Calendars added by link. */
