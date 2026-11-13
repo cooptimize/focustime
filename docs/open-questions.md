@@ -883,7 +883,7 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 
 ## GU-1
 
-- Places the app's own words looked wrong. The Guide describes what the app does and does not repeat these; none was changed.
+- Places the app's own words looked wrong. None was changed. The Guide's own sentences don't repeat them, with one exception: "Every key" in Settings, phone and keys shows the app's key legend as it is, so the legend's old names and "⋯" show there until `ui/keys.ts` is fixed. Should the Guide drop that list and point to More › Keyboard shortcuts?
   - The key legend (`ui/keys.ts`, shown as the Guide's "Every key" and in Keyboard shortcuts): the Inbox row lists "Needs you, Promises, Waiting on, Captures and drafts" (the lists are From chats, Promises, Captures); two rows say "Actions (⋯)" and "Week's ⋯" (the buttons are named Actions and View options).
   - The Backlog tab's tooltip says "Readiness and Backlog" (`ui/App.tsx`).
   - On a phone, Backlog's notice has a button "Back to Today" (the tab is Day).
@@ -901,4 +901,6 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The tour's id for Day is still `today` (`#/guide/tour/today`) and its hooks are `today-…`: addresses and attributes of the app, left alone.
 - Not added to the Guide: Admin's pages beyond one answer, and anything RS-2 or TD-1 bring (neither had merged). If RS-2 merges first, Day needs the catch-up day and Week a line on what a loading week looks like.
 - Glossary rows in CLAUDE.md (not edited; TD-1 is rewriting it). Most rows that open with an old name end with the change that retired it (Today, Mode switch, Plan the day, Plan the week, Plan (mode), Status (Week mode), Confirm, Detail panel), so they are right if read to the end and wrong if read from the start. Rows that still disagree with the app: "Command menu" ("⋯ > Commands": the menu is More, and the entry is Commands); "Check-in" and "Close out" (they say Today for the tab; it is Day); every row that writes a control as a character ("+ Add", "‹ ›", "⋯").
-
+- The Cards and Timeline try-it uses the app's own switch, so inside the Guide it carries the switch's tooltips ("(B)"), and B does nothing there.
+- The check on bold labels and path labels can't tell a search label from a heading: "DevOps write access" is what Settings' search calls the group whose heading is "Write access" (review 2 caught it).
+- Renamed has no row for Week › Team: where what it showed lives now wasn't confirmed.

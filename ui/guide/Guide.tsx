@@ -278,7 +278,7 @@ export type Hit = { section: SectionId; title: string; text: string; q?: string 
 export function guideIndex(): Hit[] {
   const out: Hit[] = [];
   for (const s of SECTIONS) out.push({ section: s.id, title: s.name, text: SECTION_LINES[s.id] ?? "" });
-  for (const st of [...START.day.steps, ...START.week.steps]) out.push({ section: "start", title: st.name, text: st.text });
+  for (const st of [...START.day.steps, ...START.week.steps]) out.push({ section: "start", title: st.name, text: plainText(st.text) });
   for (const [id, body] of Object.entries(AREAS) as [SectionId, AreaBody][]) {
     for (const d of body.does) out.push({ section: id, title: d.title, text: plainText(d.text) });
     for (const q of body.faqs) out.push({ section: id, title: q, text: plainText(ANSWER.get(q) ?? ""), q });

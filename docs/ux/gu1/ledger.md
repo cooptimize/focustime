@@ -6,7 +6,7 @@ One row for every sentence the Guide had on `origin/main` at 2f4c0ea1 (1048 sent
 - **wrong**: it uses a name the app no longer has, writes a control as a character, or says something the code doesn't do. The last column says what.
 - **gone**: it describes something that is out of the app, or is history about how the app got this way. Removed, or folded into Renamed.
 
-Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was first finished: the rewrite found 4 rows marked right that were not, rows 481, 852, 928 and 969, and they are marked wrong here with "found in the rewrite".) What became of each wrong and gone row is in the second table of this file.
+Totals: **943 right, 82 wrong, 23 gone.** (958, 67 and 23 when the ledger was first finished. The rewrite found 4 rows marked right that were not, rows 481, 852, 928 and 969, marked "found in the rewrite"; the second review found 11 more, marked "found in review 2".) What became of each wrong and gone row is in the second table of this file.
 
 "Where it is true": a label is quoted with the file and line where the app has it; a fact has the constant or the rule's file; "read against" names the screen's file when the sentence has no single label. Drawn pieces are marked hand-drawn in the third table.
 
@@ -33,7 +33,7 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 19 | start › week › Your blocks | Timeline shows each block's hours. | statement | read against ui/Day.tsx, ui/App.tsx | right |  |
 | 20 | start › week › Status | Before Monday's status report, write a line per feature. | statement | "Monday's status report" at plan/notify.ts:39 | right |  |
 | 21 | start › week › Status | It goes to DevOps as a comment. | statement | "Dev" at plan/weeklist.ts:67 | right |  |
-| 22 | start › FocusTime proposes, you confirm | Every change to DevOps, Teams or Outlook shows a preview first, and has Undo. | rule | "Dev" at plan/weeklist.ts:67 | right |  |
+| 22 | start › FocusTime proposes, you confirm | Every change to DevOps, Teams or Outlook shows a preview first, and has Undo. | rule | "Dev" at plan/weeklist.ts:67 | wrong | found in review 2: see the note under the second table |
 | 23 | start › FocusTime proposes, you confirm | Your own plan changes from a tap happen at once, with Undo. | rule | "Undo" at ui/Status.tsx:1122 | right |  |
 | 24 | start › Clients stay separate | One client's work never shows in another client's view, AI request or post. | rule | read against ui/Day.tsx, ui/App.tsx | right |  |
 | 25 | start › Clients stay separate | AI is optional, and allowed per client. | statement | read against ui/Day.tsx, ui/App.tsx | right |  |
@@ -562,7 +562,7 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 548 | first-day › Q: Where do my clients and blocks come from? | From Focus Time in Dataverse, the schedule Cooptimize already keeps. | statement | "Focus" at actions/registry.ts:40 | right |  |
 | 549 | first-day › Q: Where do my clients and blocks come from? | If a block is wrong, change it there and FocusTime picks it up on the next refresh. | statement | "Focus" at actions/registry.ts:40 | right |  |
 | 550 | first-day › Q: What does FocusTime change in DevOps or Outlook? | Only what you confirm. | rule | read against ui/settings/registry.ts | right |  |
-| 551 | first-day › Q: What does FocusTime change in DevOps or Outlook? | Every change shows a preview first, is checked afterwards, and can be undone from Settings › Activity. | path, screen, rule | "Settings" at actions/registry.ts:40 | right |  |
+| 551 | first-day › Q: What does FocusTime change in DevOps or Outlook? | Every change shows a preview first, is checked afterwards, and can be undone from Settings › Activity. | path, screen, rule | "Settings" at actions/registry.ts:40 | wrong | found in review 2: see the note under the second table |
 | 552 | first-day › Q: What does FocusTime change in DevOps or Outlook? | In Outlook it only edits events it created, or your own events with no one else on them. | rule | read against ui/settings/registry.ts | right |  |
 | 553 | first-day › Q: What does FocusTime change in DevOps or Outlook? | It never deletes anything in DevOps. | rule | "Dev" at plan/weeklist.ts:67 | right |  |
 | 554 | week › Q: Does FocusTime tell me I planned too much? | No. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
@@ -580,12 +580,12 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 566 | week › Q: How do I plan stories into Week's blocks? | Each drop has Undo. | statement | "Undo" at ui/Status.tsx:1122 | right |  |
 | 567 | week › Q: How do I plan stories into Week's blocks? | Without a mouse, use Add to… or Move to… (the drag handle or ⋯); on a tablet, press and hold; on a phone, Add to…. | control | "Add to" at actions/registry.ts:104 | wrong | a control written as a character ("⋯"): the app shows an icon button with a name (docs/ux/gu1/app.md, Icon buttons) |
 | 568 | week › Q: How do I plan stories into Week's blocks? | A story planned elsewhere stays in the list as "Planned · Thu AM", which opens that block. | statement | "Planned" at actions/registry.ts:216 | right |  |
-| 569 | week › Q: This week's feature says No stories for you yet. Now what? | Type a title in Add a story for me and press Enter (a size is optional). | key | "Add a" at ui/BreakDownPanel.tsx:755 | right |  |
-| 570 | week › Q: This week's feature says No stories for you yet. Now what? | You see the DevOps preview; Create makes the story under the feature, assigned to you, and puts it in the block you're on. | statement | "Dev" at plan/weeklist.ts:67 | right |  |
-| 571 | week › Q: This week's feature says No stories for you yet. Now what? | Not now leaves nothing behind. | rule | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
+| 569 | week › Q: This week's feature says No stories for you yet. Now what? | Type a title in Add a story for me and press Enter (a size is optional). | key | "Add a" at ui/BreakDownPanel.tsx:755 | wrong | found in review 2: see the note under the second table |
+| 570 | week › Q: This week's feature says No stories for you yet. Now what? | You see the DevOps preview; Create makes the story under the feature, assigned to you, and puts it in the block you're on. | statement | "Dev" at plan/weeklist.ts:67 | wrong | found in review 2: see the note under the second table |
+| 571 | week › Q: This week's feature says No stories for you yet. Now what? | Not now leaves nothing behind. | rule | read against ui/App.tsx (Week), ui/BlockPanel.tsx | wrong | found in review 2: see the note under the second table |
 | 572 | week › Q: This week's feature says No stories for you yet. Now what? | Break down opens the Break down panel for the feature, where AI can propose its stories. | screen | "Break down panel" at ui/menu.ts:1416 | right |  |
 | 573 | week › Q: This week's feature says No stories for you yet. Now what? | If teammates have stories there, Take one assigns one to you after a preview: the person who had it gets a quiet note in FocusTime, and Undo in Settings › Activity gives it back. | path, screen | "Take one" at ui/BlockPanel.tsx:872 | right |  |
-| 574 | week › Q: This week's feature says No stories for you yet. Now what? | Without DevOps write access for that client, the panel says where to add it. | screen | "Dev" at plan/weeklist.ts:67 | right |  |
+| 574 | week › Q: This week's feature says No stories for you yet. Now what? | Without DevOps write access for that client, the panel says where to add it. | screen | "Dev" at plan/weeklist.ts:67 | wrong | found in review 2: see the note under the second table |
 | 575 | week › Q: What is From last week? | When a new week starts, To place (at the bottom of a block's panel) shows last week's features per client with one suggestion each (the line over Week counts them). | screen, rule | "To place" at ui/BlockPanel.tsx:754 | right |  |
 | 576 | week › Q: What is From last week? | A feature with your open stories carries over, with those stories. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
 | 577 | week › Q: What is From last week? | One that's resolved or closed shows as Finished last week. | statement | "Finished last week" at ui/Watching.tsx:57 | right |  |
@@ -651,9 +651,9 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 637 | first-day › Q: Do I need to connect my personal calendar? | No. | statement | read against ui/settings/registry.ts | right |  |
 | 638 | first-day › Q: Do I need to connect my personal calendar? | Google Calendar is optional, and so is adding any calendar by its link (iCloud, Outlook, school apps). | statement | "Calendar is" at ui/Setup.tsx:469 | right |  |
 | 639 | first-day › Q: Do I need to connect my personal calendar? | If you add one, personal events count against your free time so the plan stays realistic, and you can hide them with ui.set_show_personal. | statement | read against ui/settings/registry.ts | right |  |
-| 640 | first-day › Q: Can anyone else see my plan? | No. | statement | read against ui/settings/registry.ts | right |  |
-| 641 | first-day › Q: Can anyone else see my plan? | Your plan, notes, promises and settings are yours. | statement | read against ui/settings/registry.ts | right |  |
-| 642 | first-day › Q: Can anyone else see my plan? | Teammates only ever see your free and busy times and your Teams presence, the same as in Outlook and Teams today. | rule | "Teams presence" at config/background-policy.ts:55 | right |  |
+| 640 | first-day › Q: Can anyone else see my plan? | No. | statement | read against ui/settings/registry.ts | wrong | found in review 2: see the note under the second table |
+| 641 | first-day › Q: Can anyone else see my plan? | Your plan, notes, promises and settings are yours. | statement | read against ui/settings/registry.ts | wrong | found in review 2: see the note under the second table |
+| 642 | first-day › Q: Can anyone else see my plan? | Teammates only ever see your free and busy times and your Teams presence, the same as in Outlook and Teams today. | rule | "Teams presence" at config/background-policy.ts:55 | wrong | found in review 2: see the note under the second table |
 | 643 | first-day › Q: First run: what was that setup? | Four short screens the first time you sign in: Your day, Your clients, Standing blocks and Calendars. | statement | "Your day" at plan/setup.ts:21 | right |  |
 | 644 | first-day › Q: First run: what was that setup? | Every one has Skip and Back, and closing it skips the rest. | rule | "Skip" at ui/Setup.tsx:422 | right |  |
 | 645 | first-day › Q: First run: what was that setup? | Today shows a quiet line while steps are left, and Settings › Profile › Run setup again runs it again. | path, screen | "Settings" at actions/registry.ts:40 | wrong | retired name. Today as a screen: the tab is Day (ui/nav.ts:15) |
@@ -733,7 +733,7 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 719 | calls › Q: How do I review a client call? | Tick what's right, change the words where needed and skip the rest, then Confirm: every DevOps change is shown before anything runs, and each can be undone in Settings › Activity. | path, screen, rule | "Confirm" at ui/DoneOffer.tsx:162 | right |  |
 | 720 | calls › Q: How do I review a client call? | Only the call's reviewers can confirm; other Cooptimizers on the call can look. | rule | "Cooptimizers on" at actions/registry.ts:119 | right |  |
 | 721 | calls › Q: How do I review a client call? | Transcripts are kept 30 days; what you confirmed stays. | number | plan/meetings.ts:233 | right |  |
-| 722 | calls › Q: It asks me to upload a transcript. | When the client hosts the call, or the transcript didn't come through, open the meeting's recap in Teams, download the transcript (.vtt or .docx) and use Upload a transcript. | rule | "Upload" at plan/notify.ts:319 | right |  |
+| 722 | calls › Q: It asks me to upload a transcript. | When the client hosts the call, or the transcript didn't come through, open the meeting's recap in Teams, download the transcript (.vtt or .docx) and use Upload a transcript. | rule | "Upload" at plan/notify.ts:319 | wrong | found in review 2: see the note under the second table |
 | 723 | calls › Q: It asks me to upload a transcript. | If you can't download it, ask the meeting's organizer to send it. | rule | read against ui/meetings/Meetings.tsx | right |  |
 | 724 | calls › Q: It asks me to upload a transcript. | No transcript this week clears the note for everyone. | statement | read against ui/meetings/Meetings.tsx | right |  |
 | 725 | code › Q: Can I read another client's code? | Yes, read only. | rule | read against ui/code/Code.tsx | right |  |
@@ -882,7 +882,7 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 | 868 | settings › shortcuts | Open a block (A puts the cursor in Add). | statement | read against ui/Settings.tsx | right |  |
 | 869 | settings › shortcuts | Every action. | rule | read against ui/Settings.tsx | right |  |
 | 870 | settings › shortcuts | Ask the assistant. | screen | read against ui/Settings.tsx | right |  |
-| 871 | settings › shortcuts | Next or previous client. | statement | read against ui/Settings.tsx | right |  |
+| 871 | settings › shortcuts | Next or previous client. | statement | read against ui/Settings.tsx | wrong | found in review 2: see the note under the second table |
 | 872 | settings › shortcuts | Text size. | statement | read against ui/Settings.tsx | right |  |
 | 873 | renamed | Coopilot → FocusTime | statement | "Focus" at actions/registry.ts:40 | right |  |
 | 874 | renamed | Today (the tab) → Day | screen | "Day" at actions/registry.ts:40 | right |  |
@@ -1063,7 +1063,7 @@ Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was fi
 
 ## What became of each wrong and gone row
 
-Of the 71 wrong rows, 66 were fixed and 5 were removed (rows 211, 326, 362, 431 and 627: the sentence went with a question that was history, or said a thing twice). Of the 23 gone rows, 21 were removed and 2 (rows 317 and 976) keep a sentence that now says only what the app does; the old names the gone rows held are rows in Renamed. "[more icon]" stands for the app's icon drawn beside the control's name.
+Of the 71 wrong rows known when the rewrite finished, 66 were fixed and 5 were removed (rows 211, 326, 362, 431 and 627: the sentence went with a question that was history, or said a thing twice). Of the 23 gone rows, 21 were removed and 2 (rows 317 and 976) keep a sentence that now says only what the app does; the old names the gone rows held are rows in Renamed. "[more icon]" stands for the app's icon drawn beside the control's name.
 
 | # | The sentence as it was | Verdict | What became of it |
 |---|---|---|---|
@@ -1162,6 +1162,8 @@ Of the 71 wrong rows, 66 were fixed and 5 were removed (rows 211, 326, 362, 431 
 | 976 | What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. | gone | Fixed. Now, in tour today › The urgent strip: "What needs you now: promises late or due within 2 hours, and work sent to you that waits for your answer." |
 | 990 | ‹ › step to another day, and Today comes back. | wrong | Fixed. Now, in tour today › Any day: "[back icon] Previous day and [next icon] Next day step to another day, and Today comes back." |
 
+The second review then checked 98 rows marked right against the code and found 11 that were not (22, 551, 569, 570, 571, 574, 640, 641, 642, 722, 871): a promise of Undo that a sent message doesn't have, a control WD-2 removed (Add a story for me), "nobody sees your plan" (teammates see the features on your week), Upload a transcript (the button is Choose a file) and J and K for clients (they move between Inbox rows). Each is fixed in the Guide and marked in the first table with "found in review 2". About 850 rows marked right were checked only by the rewrite, sentence by sentence, and by the names test; the first table's "where it is true" column is often a weak citation (a word found somewhere), so it is a pointer, not proof.
+
 Sentences marked right were also rewritten where their answer was cut to 120 words, split in two, or moved to the section a person would look in (the status report's questions moved from Week to Status). Every sentence in the rebuilt Guide was read against the code again as it was written; `ui/guide/app-names.test.ts` now checks the names on every run.
 
 ## Drawn pieces: what is the app's own and what is hand-drawn
@@ -1173,7 +1175,7 @@ Sentences marked right were also rewritten where their answer was cut to 120 wor
 | The rail and the page frame | the Guide | `PanelShell`, with the tabs' icons |  |  |
 | Cards and Timeline switch | Week › Try it: Cards or Timeline | `CardsTimelineSwitch` from `ui/ModeSwitch.tsx` | the block under it | a block card needs the person's week from the server |
 | The urgent strip | Day | the app's own lines (`.urgent-strip`, `.us-line`) and icons, with example rows | laid out by the Guide, so hand-drawn | `UrgentStrip` in `ui/Day.tsx` reads the person's Inbox items and opens them |
-| Work item type icons | Capture and Break down › How DevOps work is shaped | `TypeIcon` |  |  |
+| Work item type icons | Week › How DevOps work is shaped | `TypeIcon` |  |  |
 | How much fits in a block | Week › Try it | the sums are `plan/estimate.ts` and `plan/fit.ts`; the app's buttons | the block and its meter, hand-drawn | the meter exists only in the Guide |
 | Put a to-do on a block | Week › Try it | the app's buttons and grip icon | two block cards and their to-do rows, hand-drawn in the block card's look (client edge, border) | a block card needs the person's week, and its drops write to the plan |
 | Open a row in From chats | Inbox › Try it | the app's buttons | the rows and the open card, hand-drawn | the Inbox's rows read the person's chats and its buttons write |
@@ -1193,7 +1195,7 @@ The five drawings of the old Plan the week screen (`pw-grid`, `pw-carry`, `pw-ca
 | Words in answers | 12,464 | 10,011 |
 | Answers over 120 words | 30 | 0 |
 | The longest answer | 200 words | 117 words |
-| Renamed | 21 rows, with chains | 33 rows, one per old name, no chains |
+| Renamed | 21 rows and 118 words, several old names to a row, with chains | 34 rows and about 260 words, one per old name, no chains |
 | "Where did X go?" questions | 6 | 0 |
 
 ## What the app has that the Guide never mentioned, and where it is now

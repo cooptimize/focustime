@@ -29,7 +29,7 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
     expect(shown["Close out"]).toEqual(["E"]);
     expect(shown["Open a block (A puts the cursor in Add)"]).toEqual(["A", "W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
-    expect(shown["Next or previous client"]).toEqual(["J", "K"]);
+    expect(shown["Next or previous row in the Inbox"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);
   });
   it("every key in the copy comes from keys.ts", () => {
