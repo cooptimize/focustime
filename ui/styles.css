@@ -6583,7 +6583,9 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .tq-grid, .tq-grid .tq-row { display: contents; }
 .tq-stack { display: grid; gap: 8px; }
 .tq-stack .tq-row { display: grid; gap: 3px; }
-.tq-box { width: 100%; min-width: 0; }
+.tq-box { width: 100%; min-width: 0; font: inherit; font-size: var(--fs-3); line-height: 1.4; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); resize: none; }
+.tq-box::placeholder { color: var(--text-faint); }
+.tq-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (max-width: 640px) {
   .nf-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .nf-grid > .set-label { margin-top: 6px; }
