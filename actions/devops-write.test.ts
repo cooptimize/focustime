@@ -9,14 +9,15 @@ import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsTarget } from "../sources/devops/types.ts";
 import { basic, COMPANY_PAT, fakeDevOpsWrite, OTHER_PAT, WRITE_PAT } from "../sources/devops/write-fakes.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
-import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
+import { openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { takesStore } from "../store/devops-takes.ts";
 import { notesStore } from "../store/devops-notes.ts";
-import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
 import { IDENTITY_KEY } from "./account.ts";
+import { planWithRaw, TP1_CARRIED } from "../test/tp1-drafts.ts";
+import { aTp1Brief } from "../test/builders/index.ts";
 import { clearDevopsPreviews, type DevOpsPreview, type DevOpsResult } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 
@@ -34,14 +35,13 @@ function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps iden
   dv.add(601, { "System.WorkItemType": "Feature", "System.Title": "Dana's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "dana@cooptimize.example" } }, 600);
   const logs: unknown[] = [];
   const writer = createDevOpsWriter({ fetch: dv.fetch, log: (e) => void logs.push(e) });
-  const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
+  const { plan, plantBrief } = planWithRaw(() => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York"));
   // The shared Teams store (its own database here) for creates from a request.
   const teamsConn = sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") }));
   const teams = createTeamsStore(teamsConn, () => Temporal.Instant.from(NOW));
   const convs = createConversationStore(teamsConn, () => Temporal.Instant.from(NOW), teams);
   const takes = takesStore(teamsConn, () => Temporal.Instant.from(NOW));
   const notes = notesStore(teamsConn, () => Temporal.Instant.from(NOW));
-  const templates = workTemplatesStoreOn(teamsConn, () => NOW);
   const stored: { clientKey: string; id: number; fields: Record<string, unknown> }[] = [];
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
@@ -69,7 +69,6 @@ function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps iden
     takes,
     devopsNotes: notes,
     devopsStored: async (clientKey, v) => void stored.push({ clientKey, ...v }),
-    templates,
     ...(opts.chat ? { account: () => ({ chatMessages: opts.chat }) as never } : {}),
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
@@ -87,7 +86,7 @@ function setup(opts: { /** GD-1: extra config (clients) and Adatum's DevOps iden
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { templates, dv, plan, teams, convs, takes, notes, stored, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
+  return { plantBrief, dv, plan, teams, convs, takes, notes, stored, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -1384,9 +1383,9 @@ describe("QC-1: new_item, the New form's create", () => {
   });
 });
 
-// TP-1: the four lines at create. One addition to new_item: the lines under their headings in the description, "How
-// we'll check" in the acceptance field when the type has it, and one request type tag; nothing else changes.
-describe("TP-1: the four lines and the request type tag at create", () => {
+// TP-1b: three plain questions at create. One addition to new_item: the first two answers as short paragraphs in the
+// description, the third in the acceptance field when the type has it (else in the description); no tag, no headings.
+describe("TP-1b: the three answers at create", () => {
   let s: S;
   beforeEach(async () => {
     s = setup();
@@ -1394,110 +1393,102 @@ describe("TP-1: the four lines and the request type tag at create", () => {
   });
   const shown = (p: DevOpsPreview) => Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
   const posts = (t: S) => t.dv.writes().filter((w) => w.method === "POST" && /workitems\/\$/.test(w.url));
-  const sentPaths = (t: S) => (posts(t).at(-1)!.body as { path: string }[]).map((o) => o.path);
-  const brief = { type: "new-measure", where: "The Sales model", env: "Test", change: "Gross margin percent", checkedBy: { name: "Sam Lee", email: null }, doneWhen: "In test", signedOffBy: { name: "the finance lead", email: null }, notWithout: ["Deploy to production"] };
+  const sent = (t: S) => posts(t).at(-1)!.body as { path: string; value: unknown }[];
+  const sentPaths = (t: S) => sent(t).map((o) => o.path);
+  const field = (t: S, f: string) => sent(t).find((o) => o.path === `/fields/${f}`)?.value;
+  const answers = { where: "The margin page of the sales report", change: "Margin percent is revenue minus cost, over revenue", check: "October, East region: 31.2%" };
 
-  it("title only: the same keys as before, nothing new written", async () => {
-    const before = await s.preview({ kind: "new_item", title: "Plain one", type: "User Story" });
-    await s.confirm(before);
-    const plain = sentPaths(s);
-    const p = await s.preview({ kind: "new_item", title: "Plain two", type: "User Story", brief: null });
-    expect(p.fields.map((r) => r.label)).toEqual(before.fields.map((r) => r.label));
-    await s.confirm(p);
-    expect(sentPaths(s)).toEqual(plain);
-    expect(plain).not.toContain("/fields/System.Tags");
-    expect(plain).not.toContain("/fields/System.Description");
-    expect(await s.templates.uses()).toEqual({});
+  it("title only: the same keys as before TP-1, and no tag in any case", async () => {
+    await s.confirm(await s.preview({ kind: "new_item", title: "Plain one", type: "User Story" }));
+    expect(sentPaths(s)).toEqual(["/fields/System.Title", "/fields/System.AssignedTo"]);
+    await s.confirm(await s.preview({ kind: "new_item", title: "Plain two", type: "User Story", answers: null }));
+    expect(sentPaths(s)).toEqual(["/fields/System.Title", "/fields/System.AssignedTo"]);
+    await s.confirm(await s.preview({ kind: "new_item", title: "Three", type: "User Story", answers }));
+    expect(sentPaths(s)).not.toContain("/fields/System.Tags");
   });
 
-  it("two lines and choices: the preview shows the description, acceptance and tag in plain words; DevOps gets them under headings", async () => {
-    const p = await s.preview({ kind: "new_item", title: "Margin percent", type: "User Story", description: "From the finance review.", brief: { ...brief, check: "October, East: 31.2%" } });
-    const f = shown(p);
-    expect(f.Description).toBe("From the finance review.\n\nWhat and where\nThe Sales model\nEnvironment: Test.\n\nWhat changes\nGross margin percent\n\nHow we'll check\nOctober, East: 31.2%\nChecked by: Sam Lee.\n\nHow far and who signs off\nDone when it is: in test. Signed off by: the finance lead. Not without asking: deploy to production.");
-    expect(f["Acceptance criteria"]).toBe("October, East: 31.2%\nChecked by: Sam Lee.");
-    expect(f.Tags).toBe("type:new-measure");
-    expect(p.notes?.join(" ")).toContain("Adds the tag type:new-measure");
+  it("all three on a type with acceptance: two paragraphs in the description, the third as acceptance, in plain words in the preview", async () => {
+    const p = await s.preview({ kind: "new_item", title: "Margin percent", type: "User Story", description: "From the finance review.", answers });
+    expect(shown(p).Description).toBe("From the finance review.\n\nWhere: The margin page of the sales report\n\nWhat should change: Margin percent is revenue minus cost, over revenue");
+    expect(shown(p)["Acceptance criteria"]).toBe("October, East region: 31.2%");
+    expect(shown(p).Tags).toBeUndefined();
     const r = await s.confirm(p);
     const it = s.dv.items.get(r.entry.itemId!)!;
-    expect(it.fields["System.Tags"]).toBe("type:new-measure");
-    expect(String(it.fields["System.Description"])).toBe("<div>From the finance review.</div><h3>What and where</h3><p>The Sales model</p><p>Environment: Test.</p><h3>What changes</h3><p>Gross margin percent</p><h3>How we'll check</h3><p>October, East: 31.2%</p><p>Checked by: Sam Lee.</p><h3>How far and who signs off</h3><p>Done when it is: in test. Signed off by: the finance lead. Not without asking: deploy to production.</p>");
-    expect(String(it.fields["Microsoft.VSTS.Common.AcceptanceCriteria"])).toBe("<div>October, East: 31.2%</div><div>Checked by: Sam Lee.</div>");
-    expect(await s.templates.uses()).toEqual({ "new-measure": { created: 1, complete: 1 } });
+    expect(String(it.fields["System.Description"])).toBe("<div>From the finance review.</div><p><strong>Where:</strong> The margin page of the sales report</p><p><strong>What should change:</strong> Margin percent is revenue minus cost, over revenue</p>");
+    expect(String(it.fields["Microsoft.VSTS.Common.AcceptanceCriteria"])).toBe("<div>October, East region: 31.2%</div>");
+    expect(it.fields["System.Tags"]).toBeUndefined();
   });
 
-  it("acceptance only when the type has the field and How we'll check has text", async () => {
-    const f = await s.preview({ kind: "new_item", title: "A feature", type: "Feature", brief: { check: "One row" } });
+  it("every mix of typed description and the first two answers: empty ones are left out", async () => {
+    const cases: [string | null, Partial<typeof answers>, string | null][] = [
+      [null, { where: "W" }, "<p><strong>Where:</strong> W</p>"],
+      [null, { change: "C" }, "<p><strong>What should change:</strong> C</p>"],
+      [null, { where: "W", change: "C" }, "<p><strong>Where:</strong> W</p><p><strong>What should change:</strong> C</p>"],
+      ["D", { change: "C" }, "<div>D</div><p><strong>What should change:</strong> C</p>"],
+      ["D", {}, "<div>D</div>"],
+      [null, { check: "K" }, null],
+    ];
+    for (const [i, [description, a, html]] of cases.entries()) {
+      await s.confirm(await s.preview({ kind: "new_item", title: `Mix ${i}`, type: "User Story", description, answers: { where: "", change: "", check: "", ...a } }));
+      expect(field(s, "System.Description") ?? null, `case ${i}`).toBe(html);
+    }
+  });
+
+  it("the third answer on a type without the acceptance field goes in the description, with a note", async () => {
+    const f = await s.preview({ kind: "new_item", title: "A feature", type: "Feature", answers: { where: "", change: "", check: "One row per order" } });
     expect(shown(f)["Acceptance criteria"]).toBeUndefined();
+    expect(shown(f).Description).toBe("How we'll know it's right: One row per order");
     expect(f.notes?.join(" ")).toContain("Feature has no acceptance criteria field");
     await s.confirm(f);
     expect(sentPaths(s)).not.toContain("/fields/Microsoft.VSTS.Common.AcceptanceCriteria");
-    const st = await s.preview({ kind: "new_item", title: "A story", type: "User Story", brief: { where: "x", checkedBy: { name: "Sam", email: null } } });
-    expect(shown(st)["Acceptance criteria"]).toBeUndefined();
+    expect(field(s, "System.Description")).toBe("<p><strong>How we'll know it's right:</strong> One row per order</p>");
   });
 
-  it("the tag only when a type is chosen; a line's text and no type writes no tag", async () => {
-    const p = await s.preview({ kind: "new_item", title: "Generic", type: "User Story", brief: { where: "Orders report" } });
-    expect(shown(p).Tags).toBeUndefined();
-    await s.confirm(p);
-    expect(sentPaths(s)).not.toContain("/fields/System.Tags");
-    expect(sentPaths(s)).toContain("/fields/System.Description");
+  it("text is escaped and its lines kept", async () => {
+    await s.confirm(await s.preview({ kind: "new_item", title: "Escaped", type: "User Story", answers: { where: "Sales <model>\nPage 2", change: "", check: "" } }));
+    expect(field(s, "System.Description")).toBe("<p><strong>Where:</strong> Sales &lt;model&gt;<br>Page 2</p>");
   });
 
-  it("Checked by and Signed off by: only someone on the client's own project, or a role typed in", async () => {
-    const r = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { ...brief, checkedBy: { name: "Someone Else", email: "stranger@example.com" } } } });
-    expect(r.error).toContain("Checked by must be someone on Cooptimize's DevOps project");
-    const r2 = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { ...brief, signedOffBy: { name: "Someone Else", email: "stranger@example.com" } } } });
-    expect(r2.error).toContain("Signed off by must be someone");
-    // A role has no email: just words.
-    expect((await s.preview({ kind: "new_item", title: "X", type: "User Story", brief })).fields.length).toBeGreaterThan(0);
-  });
-
-  it("a refused tag creates nothing, says so in plain words, and the same create goes without it", async () => {
-    const t = setup({ fake: { noNewTags: true } });
-    await t.enable();
-    const r = await t.confirm(await t.preview({ kind: "new_item", title: "Tagged", type: "User Story", brief }));
-    expect(r).toMatchObject({ confirmed: false, code: "tag_refused" });
-    expect(r.message).toContain("didn't let you add the tag type:new-measure");
-    expect(r.entry.status).toBe("refused");
-    expect([...t.dv.items.values()].some((i) => i.fields["System.Title"] === "Tagged")).toBe(false);
-    const again = await t.preview({ kind: "new_item", title: "Tagged", type: "User Story", brief, noTag: true });
-    expect(shown(again).Tags).toBeUndefined();
-    const ok = await t.confirm(again);
-    expect(ok.confirmed).toBe(true);
-    expect(t.dv.items.get(ok.entry.itemId!)!.fields["System.Tags"]).toBeUndefined();
-    expect(String(t.dv.items.get(ok.entry.itemId!)!.fields["System.Description"])).toContain("<h3>What and where</h3>");
-  });
-
-  it("a draft keeps its type, lines and choices, and its create writes them", async () => {
-    const d = await s.run<{ draft: { id: number; brief: unknown } }>("draft.add", { clientKey: COOP, title: "Drafted", type: "User Story", brief });
-    expect(d.draft.brief).toMatchObject({ type: "new-measure", where: "The Sales model", doneWhen: "In test" });
-    const saved = await s.run<{ draft: { brief: unknown } }>("draft.save", { id: d.draft.id, clientKey: COOP, title: "Drafted", type: "User Story" });
-    expect(saved.draft.brief).toMatchObject({ type: "new-measure" });
-    const p = await s.preview({ kind: "new_item", draftId: d.draft.id });
-    expect(shown(p).Tags).toBe("type:new-measure");
-    expect(shown(p).Description).toContain("Done when it is: in test.");
-  });
-
-  it("an unknown type or field is refused before anything is sent", async () => {
-    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { type: "nope" } } })).error).toContain("isn't one of the team's");
-    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { secret: "x" } } })).status).toBe(400);
+  it("refuses anything but the three answers as text, before anything is sent", async () => {
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", answers: { where: "x", type: "new-measure" } } })).status).toBe(400);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", answers: { where: 3 } } })).status).toBe(400);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", brief: { where: "x" } } })).status).toBe(400);
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "User Story", noTag: true } })).status).toBe(400);
     expect(posts(s)).toHaveLength(0);
   });
 
-  it("a renamed or removed type: a draft keeps its tag, and the tag is written as it was", async () => {
-    const d = await s.run<{ draft: { id: number } }>("draft.add", { clientKey: COOP, title: "Old type", type: "User Story", brief: { type: "deployment", where: "x" } });
-    const doc = (await s.templates.read()).doc;
-    await s.templates.save({ ...doc, types: doc.types.map((t) => (t.id === "deployment" ? { ...t, name: "Release", removed: true } : t)) }, 1, { id: "a", name: "Ada" }, "test", [{ target: "Release", setting: "Removed", oldValue: null, newValue: null }]);
+  it("a draft keeps its answers, and its create (either path) writes them", async () => {
+    const d = await s.run<{ draft: { id: number; answers: unknown } }>("draft.add", { clientKey: COOP, title: "Drafted", type: "User Story", answers });
+    expect(d.draft.answers).toEqual(answers);
+    const kept = await s.run<{ draft: { answers: unknown } }>("draft.save", { id: d.draft.id, clientKey: COOP, title: "Drafted", type: "User Story" });
+    expect(kept.draft.answers).toEqual(answers);
     const p = await s.preview({ kind: "new_item", draftId: d.draft.id });
-    expect(shown(p).Tags).toBe("type:deployment");
+    expect(shown(p).Description).toContain("Where: The margin page");
+    expect(shown(p)["Acceptance criteria"]).toBe("October, East region: 31.2%");
   });
 
-  it("the client boundary covers the four lines", async () => {
+  it("a TP-1 draft: its first three lines are the answers and the rest is in the description; no headings, no tag", async () => {
+    const d = await s.run<{ draft: { id: number } }>("draft.add", { clientKey: COOP, title: "Old draft", type: "User Story", description: "Context." });
+    s.plantBrief(d.draft.id, JSON.stringify(aTp1Brief()));
+    const p = await s.preview({ kind: "new_item", draftId: d.draft.id });
+    expect(shown(p).Description).toBe(`Context.\n\n${TP1_CARRIED}\n\nWhere: The Sales model\n\nWhat should change: Gross margin percent`);
+    expect(shown(p)["Acceptance criteria"]).toBe("October, East: 31.2%");
+    const r = await s.confirm(p);
+    const html = String(s.dv.items.get(r.entry.itemId!)!.fields["System.Description"]);
+    expect(html).not.toContain("<h3>");
+    expect(html).toContain("Not without asking: Deploy to production.");
+    expect(sentPaths(s)).not.toContain("/fields/System.Tags");
+  });
+
+  it("the client boundary covers the three answers", async () => {
     const t = setup({ toml: `\n[clients.Northwind]\nname = "Northwind Traders"\n`, adatumEmail: "avery@cooptimize.example", adatumOrg: "cooptimize" });
     await t.run("devops.set_write_pat", { clientKey: Adatum, pat: WRITE_PAT });
-    const p = await t.preview({ kind: "new_item", title: "Same as before", type: "User Story", brief: { change: "As we did for Northwind Traders" } }, Adatum);
-    expect(p.mentions).toEqual(["Northwind Traders"]);
-    const fixed = await t.preview({ kind: "new_item", title: "Same as before", type: "User Story", brief: { change: "As we did for Northwind Traders" }, mentions: "replace" }, Adatum);
-    expect(shown(fixed).Description).toContain("As we did for another client");
+    for (const k of ["where", "change", "check"] as const) {
+      const a = { where: "", change: "", check: "", [k]: "As we did for Northwind Traders" };
+      const p = await t.preview({ kind: "new_item", title: `Same as before ${k}`, type: "User Story", answers: a }, Adatum);
+      expect(p.mentions, k).toEqual(["Northwind Traders"]);
+      const fixed = await t.preview({ kind: "new_item", title: `Same as before ${k}`, type: "User Story", answers: a, mentions: "replace" }, Adatum);
+      expect(JSON.stringify(shown(fixed)), k).toContain("As we did for another client");
+    }
   });
 });

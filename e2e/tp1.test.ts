@@ -1,17 +1,26 @@
-// TP-1 Work templates, the main paths in demo mode (the demo's own fake DevOps, no AI): a title-only create writes what
-// it always did; a request type brings its hints and, on focus by mouse or keyboard, its examples; the full example
-// opens and closes without touching the form; choices and two lines reach the preview as the description, the
-// acceptance text and the one tag, and the card shows the block, the type and "Missing: …", or Ready with all four;
-// Save as draft keeps the lines; Harbor (which refuses new tags) offers the create without it; an admin's edit to a
-// hint, an example and a choice list shows in the form; someone who isn't an admin can't save or open the admin page;
-// the phone puts the lines under More. Edge cases are unit tests (plan/work-templates.test.ts, actions/*).
-// FOCUSTIME_SHOTS: screenshots at 1440 × 900 and the phone, light and dark (docs/ux/tp1/ for the PR).
+// TP-1b: three plain questions on the New form (this file was TP-1's; TP-1b rewrote it for what remains). Demo mode,
+// the demo's own fake DevOps, no AI: a title-only create shows the same preview rows as before TP-1; the three answers
+// reach the preview in plain words (the first two in the description, the third as acceptance) and the story card shows
+// them as its description with no chip; Save as draft keeps them and the draft editor shows them; nothing of TP-1's
+// (request type, chips, help marks, examples) on the form or the editor; the old Work templates addresses land safely;
+// the phone puts the three boxes under More, at Default and the largest text size. Then a real-style session, not an
+// admin: a draft TP-1 saved opens with nothing lost, and the old addresses land safely.
+// Taken out with TP-1's screens: the request type's hints and examples on focus, the full example, the tag refusal and
+// its retry, an admin's edit in Admin › Work templates, and Settings' read-only view of the templates.
+// Edge cases are unit tests (plan/three-questions.test.ts, actions/devops-write.test.ts, actions/plan-actions.test.ts).
+// FOCUSTIME_SHOTS: screenshots at 1440 × 900 and the phone, light and dark (docs/ux/tp1b/ for the PR).
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 import { phonePage } from "./mb1-helpers.ts";
-import { appReady, liveBrowser, liveContext, liveTeam, type LiveBrowser } from "./live.ts";
+import { appReady, liveBrowser, liveContext, NOW as LIVE_NOW, type LiveBrowser } from "./live.ts";
+import { SETUP_STEPS } from "../plan/setup.ts";
+import { aTp1Brief } from "../test/builders/index.ts";
+import { planWithRaw, TP1_CARRIED } from "../test/tp1-drafts.ts";
 
 let h: Harness;
 const T = 240_000;
@@ -35,15 +44,17 @@ async function shot(page: Page, name: string) {
 const form = (page: Page) => page.getByRole("dialog", { name: /^New (in .*DevOps|work item)$/ });
 const preview = (page: Page) => page.getByRole("dialog", { name: "Create a DevOps item" });
 const created = async (page: Page) => (await call<{ entries: { op: string; status: string; title: string; itemId: number | null }[] }>(page, "devops.log", {})).data.entries.filter((e) => e.op === "create" && e.status === "confirmed");
-async function choose(page: Page, scope: Locator, label: string, option: string | RegExp, nth = 0) {
+const QUESTIONS = ["Where is it?", "What should change?", "How will we know it's right?"] as const;
+const HINTS = ["The report and page, model, table or pipeline", "Before and after, or the rule", "One example and the answer it should give"];
+const boxes = (scope: Locator) => scope.locator("textarea.tq-box");
+const heading = (page: Page) => page.locator(".ps-head h2").first();
+async function choose(page: Page, scope: Locator, label: string, option: string | RegExp) {
   await scope.getByRole("button", { name: new RegExp(`^${label}:`) }).click();
   const pop = page.locator(".cell-pop");
   const box = pop.getByRole("combobox");
   if (typeof option === "string" && (await box.count())) await box.fill(option);
-  await pop.getByRole("option", { name: option }).nth(nth).click();
+  await pop.getByRole("option", { name: option }).first().click();
 }
-const line = (f: Locator, k: "where" | "change" | "check" | "done") => f.locator(`.fl-line[data-line="${k}"]`);
-const box = (f: Locator, k: "where" | "change" | "check" | "done") => line(f, k).locator("textarea");
 async function failShot(page: Page, name: string, run: () => Promise<void>) {
   try {
     await run();
@@ -63,6 +74,21 @@ async function openNew(page: Page, client: string) {
   await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
   return f;
 }
+/** Nothing of TP-1's on a form or editor: no request type, choices, chips, help marks, examples or full example. */
+async function noTp1(scope: Locator) {
+  const text = (await scope.textContent()) ?? "";
+  expect(text).not.toMatch(/Request type|four lines|full example|Environment|Touches|Checked by|Done when it is|Signed off by|Not without asking/);
+  await expect(scope.locator(".chip-btn, .fl-help-btn, .fl-example, .fl-lines, .nf-example").count()).resolves.toBe(0);
+}
+/** The three boxes in order, each with its label and grey text. */
+async function threeBoxes(scope: Locator) {
+  const b = boxes(scope);
+  await expect(b.count()).resolves.toBe(3);
+  for (const [i, q] of QUESTIONS.entries()) {
+    await expect(scope.getByLabel(q, { exact: true }).count()).resolves.toBe(1);
+    await expect(b.nth(i).getAttribute("placeholder")).resolves.toBe(HINTS[i]);
+  }
+}
 /** Confirms the open preview and waits for the create; the new item's id. */
 async function confirmCreate(page: Page, title: string): Promise<number> {
   const before = (await created(page)).length;
@@ -70,224 +96,192 @@ async function confirmCreate(page: Page, title: string): Promise<number> {
   await expect.poll(async () => (await created(page)).length, { timeout: 30_000 }).toBe(before + 1);
   return (await created(page)).find((e) => e.title === title)!.itemId!;
 }
+const rows = (p: Locator) => p.locator("tbody th[scope=row]").allTextContents();
+const where = "The margin page of the sales report";
+const change = "Margin percent is revenue minus cost, divided by revenue";
+const check = "October, East region shows 31.2%";
 
-describe.skipIf(!CHROMIUM)("TP-1: work templates in the New form (browser, demo mode)", () => {
+describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browser, demo mode)", () => {
   beforeAll(async () => {
     h = await startDemo();
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("title only writes what it always did; a type's hints, examples on focus, the full example, the preview, the card", async () => {
+  it("title only is as before TP-1; the three answers reach the preview in plain words; the card shows them with no chip", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     await failShot(page, "t0", async () => {
-      // Title only: no four lines, no tag, the same preview as before.
+      // Empty: three quiet boxes under Title, nothing of TP-1's, and it fits 1440 × 900 without scrolling.
       let f = await openNew(page, "Northwind");
-      await expect(f.getByRole("button", { name: /^Request type:/ }).textContent()).resolves.toContain("No type");
-      await expect(f.locator(".fl-lines").count()).resolves.toBe(0);
-      await shot(page, "tp1-form-no-type");
-      await f.locator("#nf-title").fill("Plain title only");
-      await f.locator("#nf-title").press("Enter");
-      const p0 = preview(page);
-      await p0.waitFor();
-      const text0 = (await p0.textContent()) ?? "";
-      expect(text0).not.toMatch(/Tags|What and where|How we'll check|type:/);
-      await confirmCreate(page, "Plain title only");
-
-      // A type: its hints in the boxes; an example only while I'm in that line, by keyboard and by mouse.
-      f = await openNew(page, "Northwind");
-      await choose(page, f, "Request type", "New measure");
-      await expect(box(f, "where").getAttribute("placeholder")).resolves.toBe("Which model, and where the measure should appear.");
-      await expect(line(f, "where").locator(".fl-example").isVisible()).resolves.toBe(false);
-      await shot(page, "tp1-form-type");
-      await f.locator("#nf-title").fill("Gross margin percent on the finance report");
-      await f.locator("#nf-title").focus();
-      // Keyboard: Tab from the title reaches Request type, then its link, then the first line.
-      // Keyboard: Tab from the title reaches Request type, its link, the first line's ?, then the first line's box.
-      for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
-      await expect.poll(() => page.evaluate(() => (document.activeElement?.tagName === "TEXTAREA" ? document.activeElement.closest(".fl-line")?.getAttribute("data-line") : null))).toBe("where");
-      await expect(line(f, "where").locator(".fl-example").isVisible()).resolves.toBe(true);
-      await expect(line(f, "where").locator(".fl-example").textContent()).resolves.toContain("The Sales model.");
-      await shot(page, "tp1-form-example-focus");
-      // Mouse: clicking into What changes shows its example, and the first one goes away.
-      await box(f, "change").click();
-      await expect.poll(() => line(f, "change").locator(".fl-example").isVisible()).toBe(true);
-      await expect.poll(() => line(f, "where").locator(".fl-example").isVisible()).toBe(false);
-      // The help mark's one sentence on hover.
-      await line(f, "check").locator(".fl-help-btn").hover();
-      await expect(line(f, "check").locator(".fl-why").isVisible()).resolves.toBe(true);
-      await shot(page, "tp1-form-help");
-
-      // The full example opens beside the form and changes nothing in it.
-      await f.getByRole("button", { name: "See a full example" }).click();
-      const ex = f.getByRole("complementary", { name: "A full example" });
-      await ex.waitFor();
-      await expect(ex.textContent()).resolves.toContain("Gross margin percent");
-      await expect(box(f, "where").inputValue()).resolves.toBe("");
-      await shot(page, "tp1-form-full-example");
-      await ex.getByRole("button", { name: "Close" }).click();
-      await expect(ex.count()).resolves.toBe(0);
-      await expect(f.locator("#nf-title").inputValue()).resolves.toBe("Gross margin percent on the finance report");
-
-      // Choices for environment, done when and a person; two lines typed. It fits 1440 × 900 without scrolling.
-      await choose(page, f, "Environment", "Test");
-      await box(f, "where").fill("The Sales model. On the margin page of the finance report.");
-      await box(f, "check").fill("October, East region: 31.2%, from the finance ledger.");
-      await choose(page, f, "Done when it is", /./, 2);
-      await choose(page, f, "Signed off by", /./, 2);
-      const fits = await f.evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        return { bottom: r.bottom, scroll: el.scrollHeight - el.clientHeight };
-      });
+      await f.getByRole("radio", { name: "User Story" }).click();
+      await threeBoxes(f);
+      await noTp1(f);
+      const fits = await f.evaluate((el) => ({ bottom: el.getBoundingClientRect().bottom, scroll: el.scrollHeight - el.clientHeight }));
       expect(fits.bottom).toBeLessThanOrEqual(900);
       expect(fits.scroll).toBeLessThanOrEqual(1);
-      // A user story, whose process has the acceptance field.
-      await f.getByRole("radio", { name: "User Story" }).click();
-      await f.getByRole("button", { name: "Data", exact: true }).click();
-      await page.mouse.move(1, 1);
       await f.locator("#nf-title").focus();
-      await shot(page, "tp1-form-filled");
-      // Ctrl+Enter from a line opens the preview: the description under its headings, the acceptance and the tag.
-      await box(f, "check").press("Control+Enter");
-      const p = preview(page);
+      await shot(page, "tp1b-form-empty");
+
+      // Title only: Enter opens the same preview rows as before TP-1, with no answer's words, tag or heading.
+      await f.locator("#nf-title").fill("Plain title only");
+      await f.locator("#nf-title").press("Enter");
+      let p = preview(page);
+      await p.waitFor();
+      expect(await rows(p)).toEqual(["Type", "Title", "Description", "Assigned to", "Area", "Iteration", "Parent"]);
+      expect((await p.textContent()) ?? "").not.toMatch(/Where:|What should change|know it's right|Tags|type:/);
+      await confirmCreate(page, "Plain title only");
+
+      // Tab goes Title, then the three boxes in order; Ctrl+Enter from the last opens the preview.
+      f = await openNew(page, "Northwind");
+      await f.getByRole("radio", { name: "User Story" }).click();
+      await f.locator("#nf-title").fill("Gross margin percent on the sales report");
+      await f.locator("#nf-title").focus();
+      for (const [i, text] of [where, change, check].entries()) {
+        await page.keyboard.press("Tab");
+        await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-question"))).toBe(["where", "change", "check"][i]);
+        await page.keyboard.type(text);
+      }
+      // A longer answer grows its box (one line to start).
+      const one = await boxes(f).nth(0).evaluate((e) => e.getBoundingClientRect().height);
+      await boxes(f).nth(1).fill(`${change}\nTotals are recalculated, not averaged.\nBlank when revenue is zero.`);
+      expect(await boxes(f).nth(1).evaluate((e) => e.getBoundingClientRect().height)).toBeGreaterThan(one * 1.8);
+      await boxes(f).nth(1).fill(change);
+      await page.mouse.move(1, 1);
+      await shot(page, "tp1b-form-filled");
+      await boxes(f).nth(2).press("Control+Enter");
+      p = preview(page);
       await p.waitFor();
       const text = (await p.textContent()) ?? "";
-      expect(text).toContain("What and where");
-      expect(text).toContain("Environment: Test.");
-      expect(text).toContain("Touches: Data.");
-      expect(text).toContain("How we'll check");
-      expect(text).toContain("Acceptance criteria");
-      expect(text).toContain("type:new-measure");
-      await shot(page, "tp1-preview");
-      const id = await confirmCreate(page, "Gross margin percent on the finance report");
+      expect(text).toContain(`Where: ${where}`);
+      expect(text).toContain(`What should change: ${change}`);
+      expect(await rows(p)).toContain("Acceptance criteria");
+      expect(text).toContain(check);
+      expect(text).not.toMatch(/Tags|type:|What and where|How far and who signs off/);
+      await shot(page, "tp1b-preview");
+      const id = await confirmCreate(page, "Gross margin percent on the sales report");
 
-      // The card: the four lines as one block, the type, and what is missing, quietly.
+      // The card: the description as DevOps has it (the two answers), the third as acceptance; no chip, no type.
       await page.evaluate((i) => (location.hash = `#/item/Northwind/${i}`), id);
-      const card = page.locator(".sc-lines");
-      await card.waitFor({ timeout: 30_000 });
-      await expect(page.locator(".sc-reqtype").textContent()).resolves.toBe("New measure");
-      await expect(page.locator(".sc-ready").textContent()).resolves.toBe("Missing: What changes");
-      await expect(card.textContent()).resolves.toContain("Not written yet");
-      await shot(page, "tp1-card-missing");
-      await page.keyboard.press("Escape");
-
-      // All four: Ready.
-      f = await openNew(page, "Northwind");
-      await choose(page, f, "Request type", "Small change");
-      await f.locator("#nf-title").fill("Created date on the orders table");
-      for (const [k, v] of [["where", "Orders report, the orders table."], ["change", "Add the created date as a column."], ["check", "An order from Nov 3 shows Nov 3."], ["done", "In test, the operations lead confirms."]] as const) await box(f, k).fill(v);
-      // "How far" counts once "Done when it is" is chosen: built is not published is not approved.
-      await choose(page, f, "Done when it is", "In test");
-      await box(f, "done").press("Control+Enter");
-      await preview(page).waitFor();
-      const id2 = await confirmCreate(page, "Created date on the orders table");
-      await page.evaluate((i) => (location.hash = `#/item/Northwind/${i}`), id2);
-      await expect.poll(() => page.locator(".sc-ready").textContent(), { timeout: 30_000 }).toBe("Ready");
-      await shot(page, "tp1-card-ready");
+      const desc = page.getByRole("region", { name: "Description" });
+      await desc.waitFor({ timeout: 30_000 });
+      await expect(desc.textContent()).resolves.toContain(`Where: ${where}`);
+      await expect(desc.textContent()).resolves.toContain(`What should change: ${change}`);
+      await expect(page.getByRole("region", { name: "Acceptance criteria" }).textContent()).resolves.toContain(check);
+      await expect(page.locator(".sc-ready, .sc-reqtype, .sc-lines").count()).resolves.toBe(0);
+      await shot(page, "tp1b-card");
       await page.keyboard.press("Escape");
     });
     expect(errors).toEqual([]);
   }, T);
 
-  it("Save as draft keeps the lines; Harbor refuses the tag and the create goes through without it", async () => {
+  it("Save as draft keeps the answers; the draft editor shows and edits them; Create in DevOps writes them", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     await failShot(page, "t1", async () => {
-      let f = await openNew(page, "Northwind");
-      await choose(page, f, "Request type", "New report");
+      const f = await openNew(page, "Northwind");
+      await f.getByRole("radio", { name: "User Story" }).click();
       await f.locator("#nf-title").fill("Timesheet comments report");
-      await box(f, "where").fill("For project managers. Reads the Projects model.");
+      await boxes(f).nth(0).fill("The projects model, a new report page");
+      await boxes(f).nth(2).fill("Last week's comments for one manager, newest first");
       await f.getByRole("button", { name: "Save as draft" }).click();
       await expect.poll(() => f.count(), { timeout: 30_000 }).toBe(0);
-      const drafts = (await call<{ drafts: { id: number; title: string; brief?: { type: string; where: string } }[] }>(page, "capture.load", {})).data.drafts;
+      const drafts = (await call<{ drafts: { id: number; title: string; answers?: Record<string, string> }[] }>(page, "capture.load", {})).data.drafts;
       const d = drafts.find((x) => x.title === "Timesheet comments report")!;
-      expect(d.brief).toMatchObject({ type: "new-report", where: "For project managers. Reads the Projects model." });
-      // Reopened from the Inbox, its Create in DevOps previews the same type and words.
+      expect(d.answers).toEqual({ where: "The projects model, a new report page", change: "", check: "Last week's comments for one manager, newest first" });
+
+      // The draft editor: the same three boxes with the answers; an edit saves.
       await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), d.id);
-      await page.getByRole("button", { name: "Create in DevOps" }).first().click({ timeout: 30_000 });
+      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
+      const ed = page.locator(".draft-editor");
+      await ed.waitFor();
+      await threeBoxes(ed);
+      await noTp1(ed);
+      // The third question is the acceptance: no second, empty Acceptance criteria box beside it.
+      await expect(ed.getByText(/^Acceptance criteria/).count()).resolves.toBe(0);
+      await expect(boxes(ed).nth(0).inputValue()).resolves.toBe("The projects model, a new report page");
+      await boxes(ed).nth(1).fill("A new page; nothing else changes");
+      await page.mouse.move(1, 1);
+      await shot(page, "tp1b-draft-editor");
+      await ed.getByRole("button", { name: "Save", exact: true }).click();
+      await expect.poll(async () => (await call<{ drafts: { id: number; answers?: Record<string, string> }[] }>(page, "capture.load", {})).data.drafts.find((x) => x.id === d.id)?.answers?.change).toBe("A new page; nothing else changes");
+
+      // Create in DevOps from the draft: the preview shows its answers in plain words.
+      await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), d.id);
+      await page.locator(".ib-pane").getByRole("button", { name: "Create in DevOps" }).first().click({ timeout: 30_000 });
       const pd = preview(page);
       await pd.waitFor({ timeout: 30_000 });
-      await expect(pd.textContent()).resolves.toContain("What and where\nFor project managers. Reads the Projects model.");
-      await expect(pd.textContent()).resolves.toContain("type:new-report");
+      await expect(pd.textContent()).resolves.toContain("Where: The projects model, a new report page");
+      await expect(pd.textContent()).resolves.toContain("What should change: A new page; nothing else changes");
+      await expect(pd.textContent()).resolves.toContain("Last week's comments for one manager, newest first");
       await pd.getByRole("button", { name: "Not now" }).click();
-
-      // Harbor's project lets no one add a new tag: nothing is created, and one click creates it without the tag.
-      f = await openNew(page, "Harbor");
-      await choose(page, f, "Request type", "Exploration");
-      await f.locator("#nf-title").fill("Can returns match their orders");
-      await box(f, "where").fill("The returns and orders tables.");
-      await f.locator("#nf-title").press("Control+Enter");
-      const p = preview(page);
-      await p.waitFor();
-      const before = (await created(page)).length;
-      await p.getByRole("button", { name: "Create in DevOps" }).click();
-      await expect.poll(() => p.textContent(), { timeout: 30_000 }).toContain("didn't let you add the tag");
-      expect((await created(page)).length).toBe(before);
-      await shot(page, "tp1-tag-refused");
-      await p.getByRole("button", { name: "Create it without the tag" }).click();
-      await expect.poll(() => preview(page).textContent()).not.toContain("type:exploration");
-      await confirmCreate(page, "Can returns match their orders");
     });
     expect(errors).toEqual([]);
   }, T);
 
-  it("an admin edits a hint, an example and a choice list; the form shows them", async () => {
+  it("the old Work templates addresses land on the section's first page, and nothing offers them", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     await failShot(page, "t2", async () => {
+      // The demo's person is an admin in their own demo: Admin's first page.
       await page.evaluate(() => (location.hash = "#/settings/admin-templates"));
-      const admin = page.locator(".wt-admin");
-      await admin.waitFor({ timeout: 30_000 });
-      await admin.getByRole("button", { name: /^New measure/ }).click();
-      await admin.getByRole("textbox", { name: "New measure: What and where hint" }).fill("Which model, and on which page.");
-      await admin.getByRole("textbox", { name: "New measure: What and where example" }).fill("The Sales model, on the margin page.");
-      // The preview beside the editor shows the edit before it is saved.
-      await expect(admin.locator(".wt-preview .fl-line[data-line=where] textarea").getAttribute("placeholder")).resolves.toBe("Which model, and on which page.");
-      await shot(page, "tp1-admin-type");
-      await admin.getByRole("button", { name: /^Choice lists/ }).click();
-      const env = admin.getByRole("textbox", { name: "Environment choices" });
-      await env.fill(`${await env.inputValue()}\nStaging`);
-      await admin.getByRole("textbox", { name: "Why, for the audit" }).fill("Shorter hint for measures, and Staging");
-      await admin.getByRole("button", { name: "Save", exact: true }).click();
-      await expect.poll(() => admin.getByRole("status").textContent()).toContain("Saved");
-      await shot(page, "tp1-admin-saved");
-      const audit = (await call<{ rows: { area: string; note: string }[] }>(page, "admin.load", { section: "audit" })).data;
-      expect(JSON.stringify(audit)).toContain("Shorter hint for measures, and Staging");
-
-      const f = await openNew(page, "Northwind");
-      await choose(page, f, "Request type", "New measure");
-      await expect(box(f, "where").getAttribute("placeholder")).resolves.toBe("Which model, and on which page.");
-      await box(f, "where").focus();
-      await expect(line(f, "where").locator(".fl-example").textContent()).resolves.toContain("The Sales model, on the margin page.");
-      await f.getByRole("button", { name: /^Environment:/ }).click();
-      await expect(page.locator(".cell-pop").getByRole("option", { name: "Staging" }).count()).resolves.toBe(1);
+      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).toBe("Admin › Clients");
+      await page.evaluate(() => (location.hash = "#/settings/planning/work-templates"));
+      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).not.toContain("Admin");
+      await expect(page.locator('[data-setting="work-templates"]').count()).resolves.toBe(0);
+      // Not in the rail, nor Settings' search, nor the command menu.
+      await expect(page.getByRole("link", { name: "Work templates" }).count()).resolves.toBe(0);
+      await page.locator(".ps-search input[type=search]").fill("work templates");
+      await expect.poll(() => page.locator(".ps-hit").count()).toBe(0);
+      await page.locator(".ps-search input[type=search]").fill("request type");
+      await expect.poll(() => page.locator(".ps-hit").count()).toBe(0);
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => (location.hash = "#/today"));
+      await page.keyboard.press("Control+k");
+      const cmd = page.getByRole("dialog", { name: "Command menu" });
+      await cmd.waitFor({ timeout: 30_000 });
+      await page.keyboard.type("templates");
+      await expect.poll(() => cmd.textContent()).not.toMatch(/work templates/i);
       await page.keyboard.press("Escape");
     });
     expect(errors).toEqual([]);
   }, T);
 
-  it("the phone: the four lines under More, one per row", async () => {
+  it("the phone: the three boxes under More, above Description, at Default and the largest text size", async () => {
     const page = await phonePage(h, 390);
     await failShot(page, "t3", async () => {
-      await page.evaluate(() => (location.hash = "#/ahead"));
-      await page.keyboard.press("Shift+N");
-      const f = form(page);
-      await f.waitFor({ timeout: 30_000 });
-      await choose(page, f, "Client", "Northwind");
-      await choose(page, f, "Request type", "Small change");
-      await expect(f.locator(".fl-lines.fl-stack").isVisible()).resolves.toBe(true);
-      await expect(f.getByRole("button", { name: /More: the four lines/ }).getAttribute("aria-expanded")).resolves.toBe("true");
-      // One line per row: each line's box spans the form's width.
-      const widths = await f.locator(".fl-line textarea").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
-      expect(widths).toHaveLength(4);
-      for (const w of widths) expect(w).toBeGreaterThan(280);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await box(f, "where").scrollIntoViewIfNeeded();
-      await box(f, "where").focus();
-      await shot(page, "tp1-phone");
+      for (const size of ["default", "larger"] as const) {
+        expect((await call(page, "ui.set_text_size", { size })).ok).toBe(true);
+        await page.reload();
+        await page.locator(".topbar, .bottombar").first().waitFor({ timeout: 60_000 });
+        await page.evaluate(() => (location.hash = "#/ahead"));
+        await page.keyboard.press("Shift+N");
+        const f = form(page);
+        await f.waitFor({ timeout: 30_000 });
+        await choose(page, f, "Client", "Northwind");
+        await expect(boxes(f).count()).resolves.toBe(0);
+        await noTp1(f);
+        if (size === "default") await shot(page, "tp1b-phone-empty");
+        await f.getByRole("button", { name: /More: details, description and size/ }).click();
+        await threeBoxes(f);
+        // Each box spans the form's width, and all three sit above Description.
+        const boxRects = await boxes(f).evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ w: r.width, top: r.top })));
+        const descTop = await f.locator("#nf-desc").evaluate((e) => e.getBoundingClientRect().top);
+        for (const r of boxRects) {
+          expect(r.w).toBeGreaterThan(280);
+          expect(r.top).toBeLessThan(descTop);
+        }
+        await boxes(f).nth(0).fill(where);
+        await boxes(f).nth(1).fill(change);
+        await boxes(f).nth(2).fill(check);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await boxes(f).nth(0).scrollIntoViewIfNeeded();
+        await shot(page, size === "default" ? "tp1b-phone" : "tp1b-phone-larger");
+        await f.getByRole("button", { name: "Cancel" }).click();
+      }
+      expect((await call(page, "ui.set_text_size", { size: "default" })).ok).toBe(true);
     });
     await page.close();
   }, T);
 });
 
-describe.skipIf(!CHROMIUM)("TP-1: someone who isn't an admin (browser, real session)", () => {
+describe.skipIf(!CHROMIUM)("TP-1b: a draft TP-1 saved, and someone who isn't an admin (browser, real session)", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -295,30 +289,48 @@ describe.skipIf(!CHROMIUM)("TP-1: someone who isn't an admin (browser, real sess
   afterAll(async () => {
     await lb?.close();
   }, T);
-  it("can't save the templates or open Admin › Work templates; Settings shows them read-only", async () => {
-    const app = await lb.start(await liveContext({ team: liveTeam() }));
+  it("a TP-1 draft opens with every word (the answers, then the rest in its description); old addresses land safely", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ft-tp1b-"));
+    const store = planWithRaw(() => Temporal.Instant.from(LIVE_NOW).toZonedDateTimeISO("America/New_York"), join(dir, "plan.db"));
+    for (const s of SETUP_STEPS) await store.plan.setSetupStep(s, "done");
+    const app = await lb.start(await liveContext({ extra: { plan: store.plan } }));
     try {
       const page = await app.page();
       await page.setViewportSize(VIEW);
       await page.goto(app.url);
       await appReady(page);
-      const load = await call<{ doc: { types: unknown[] }; version: number; admin: boolean }>(page, "templates.load", {});
-      expect(load.ok).toBe(true);
-      expect(load.data.admin).toBe(false);
-      const save = await call(page, "templates.save", { doc: load.data.doc, version: load.data.version, why: "try" });
-      expect(save.ok).toBe(false);
-      await page.evaluate(() => (location.hash = "#/settings/admin-templates"));
-      await expect.poll(() => page.locator("main, .settings").first().textContent(), { timeout: 30_000 }).toContain("Admin is only for FocusTime admins");
-      await expect(page.locator(".wt-admin").count()).resolves.toBe(0);
-      await page.evaluate(() => (location.hash = "#/settings/planning/work-templates"));
-      const ro = page.locator('[data-setting="work-templates"]');
-      await ro.waitFor({ timeout: 30_000 });
-      await expect(ro.textContent()).resolves.toContain("Set by your FocusTime admin");
-      // The first launch's welcome waits for a key.
       if (await page.locator(".brand-stage").count()) await page.keyboard.press("Shift");
       await page.locator(".brand-stage").waitFor({ state: "detached", timeout: 30_000 });
-      await ro.getByRole("button", { name: /New measure/ }).click();
-      await shot(page, "tp1-settings-readonly");
+      const r = await call<{ draft: { id: number } }>(page, "draft.add_story", { clientKey: "Cooptimize", parentItemId: null, title: "Gross margin percent", size: "M" });
+      expect(r.ok, r.error).toBe(true);
+      const id = r.data.draft.id;
+      expect((await call(page, "draft.update", { id, description: "From the finance review." })).ok).toBe(true);
+      const json = JSON.stringify(aTp1Brief());
+      store.plantBrief(id, json);
+
+      await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), id);
+      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
+      const ed = page.locator(".draft-editor");
+      await ed.waitFor();
+      await threeBoxes(ed);
+      await noTp1(ed.locator(".tq"));
+      expect(await boxes(ed).evaluateAll((els) => els.map((e) => (e as HTMLTextAreaElement).value))).toEqual(["The Sales model", "Gross margin percent", "October, East: 31.2%"]);
+      await expect(ed.getByLabel("Description").inputValue()).resolves.toBe(`From the finance review.\n\n${TP1_CARRIED}`);
+      await page.mouse.move(1, 1);
+      await shot(page, "tp1b-tp1-draft");
+      // Opening it changed nothing; closing without saving changes nothing.
+      expect(store.briefOf(id)).toBe(json);
+      await page.keyboard.press("Escape");
+      await expect.poll(() => ed.count()).toBe(0);
+      expect(store.briefOf(id)).toBe(json);
+
+      // Not an admin: the retired Admin page lands on Settings' first page, the retired setting on its section's top.
+      await page.evaluate(() => (location.hash = "#/settings/admin-templates"));
+      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).not.toMatch(/^Admin/);
+      await expect(page.locator(".ps-body").textContent()).resolves.not.toContain("Admin is only for FocusTime admins");
+      await page.evaluate(() => (location.hash = "#/settings/planning/work-templates"));
+      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).not.toMatch(/^Admin/);
+      await expect(page.locator('[data-setting="work-templates"]').count()).resolves.toBe(0);
     } finally {
       await app.close();
     }

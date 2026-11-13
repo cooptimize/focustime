@@ -30,8 +30,6 @@ export type CardRead = {
   target: string | null;
   descriptionHtml: string;
   acceptanceHtml: string;
-  /** TP-1: the item's DevOps tags (the request type tag among them). */
-  tags?: string[];
   parent: CardLink | null;
   /** The parent's parent (the epic over a feature), when there is one. */
   grandparent: CardLink | null;
@@ -57,13 +55,6 @@ export type CardPromise = { key: string; what: string; due: string | null; state
 export type ItemCard = Omit<CardRead, "comments" | "descriptionHtml" | "acceptanceHtml"> & {
   clientKey: string;
   clientName: string;
-  /** TP-1: the four lines read out of the description (plain text each, null when empty), shown as one block above the rest. */
-  lines?: { key: "where" | "change" | "check" | "done"; name: string; text: string | null }[] | null;
-  /** TP-1: the request type the item's tag names (the team's name for it), or null. */
-  requestType?: string | null;
-  /** TP-1: the quiet chip: "Ready" or "Missing: How we'll check"; null for an item never written this way. */
-  readiness?: { ready: boolean; text: string } | null;
-  /** The description without the four lines' sections, when they were found (else the whole description). */
   description: string;
   acceptance: string;
   comments: CardComment[];

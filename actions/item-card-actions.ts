@@ -10,7 +10,6 @@ import type { PlanStore } from "../store/plan-store.ts";
 import type { CardRead, CardTodo, ItemCard } from "../plan/item-card.ts";
 import { sanitizeMessageHtml } from "../plan/sanitize.ts";
 import { pickNeed } from "../plan/types.ts";
-import { LINE_KEYS, LINE_NAMES, readiness, readinessText, readLines, typeOfTags, type WorkTemplates } from "../plan/work-templates.ts";
 
 export const ITEM_CARD_ACTIONS = ["item.card"] as const;
 export type ItemCardAction = (typeof ITEM_CARD_ACTIONS)[number];
@@ -25,8 +24,6 @@ export type ItemCardContext = {
   /** Whose cache entries these are: the session's person (their plan store), never shared between people. */
   scope: object;
   now: () => string;
-  /** TP-1: the team's work templates (the request type a tag names). Absent: the four lines are still read, with no type. */
-  templates?: () => Promise<WorkTemplates | null>;
 };
 
 const CACHE_MS = 60_000;
@@ -82,20 +79,11 @@ export async function itemCardAction(ctx: ItemCardContext, action: ItemCardActio
   const promises = ctx.plan ? (await ctx.plan.openFollowUps()).filter((f) => f.clientKey === clientKey && f.itemId === itemId).map((f) => ({ key: `f${f.id}`, what: f.what, due: f.due, state: f.snoozedUntil ? "snoozed" : "open" })) : [];
   const canWrite = writes.includes(clientKey);
   const { descriptionHtml, acceptanceHtml, comments, ...rest } = read;
-  // TP-1: the four lines out of the description (this step's headings or the earlier names), the request type its tag
-  // names, and the quiet chip. An item with neither shows none of it.
-  const doc = (await ctx.templates?.().catch(() => null)) ?? null;
-  const four = readLines(descriptionHtml);
-  const type = doc ? typeOfTags(doc, read.tags) : null;
-  const ready = readiness(four, type);
   const card: ItemCard = {
     ...rest,
     clientKey,
     clientName: ref?.clientName ?? cfg.clientSettings[clientKey]?.name ?? clientKey,
-    lines: four.found ? LINE_KEYS.map((k) => ({ key: k, name: LINE_NAMES[k], text: four.lines[k]?.trim() || null })) : null,
-    requestType: type?.name ?? null,
-    readiness: ready ? { ready: ready.ready, text: readinessText(ready) } : null,
-    description: cardHtml(four.found ? four.rest : descriptionHtml),
+    description: cardHtml(descriptionHtml),
     acceptance: cardHtml(acceptanceHtml),
     comments: comments.map((c) => ({ id: c.id, author: c.author, at: c.at, html: cardHtml(c.text) })),
     todos,

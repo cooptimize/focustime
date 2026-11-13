@@ -117,8 +117,6 @@ import type { CheckNowResult } from "../plan/meetings.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
-import { templateAction } from "./template-actions.ts";
-import type { TemplatesStore } from "../store/work-templates-store.ts";
 import { adminAction, type AdminAction, type AdminOps } from "./admin-actions.ts";
 import type { OrgRuntime } from "./org.ts";
 import { aheadIdentities } from "./identities.ts";
@@ -148,8 +146,6 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
-  /** TP-1: the team's work templates (app tables). Absent: none here (the New form works without the four lines). */
-  templates?: TemplatesStore;
   /** KB-1: the synced standards. Absent: none here. */
   standards?: StandardsPort;
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
@@ -999,8 +995,6 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
     // SR-1: a comment edit only inside the client's status report window (Kat's last send, else Monday 7:00 AM ET).
-    // TP-1: the team's templates for a create's four lines, and the count of items made with each type.
-    templates: ctx.templates ? { read: () => ctx.templates!.read(), used: (tag, complete) => ctx.templates!.used(tag, complete) } : undefined,
     reportSince: async (cfg, clientKey) => {
       const r = await katSentFor(ctx, cfg, [clientKey]).catch(() => null);
       return reportWindow(r?.ok ? (r.sent[clientKey] ?? null) : null, Temporal.Instant.from(ctx.now())).since;
@@ -1235,7 +1229,6 @@ function newItemContext(ctx: ActionContext): NewItemContext {
       return hits ? hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, url: i.url, parentId: i.parentId })) : null;
     },
     canWrite: async (key) => !!ctx.devopsWriter && !!ctx.writePats && !!(await ctx.plan?.devopsIdentity(key).catch(() => null)),
-    templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
   };
 }
 
@@ -1279,7 +1272,6 @@ function itemCardContext(ctx: ActionContext): ItemCardContext {
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     scope: ctx.plan ?? ctx,
     now: ctx.now,
-    templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
   };
 }
 
@@ -2433,20 +2425,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "draft.add":
     case "draft.save":
       return newItemAction(newItemContext(ctx), action, req.input);
-    case "templates.load":
-    case "templates.save":
-      return templateAction(
-        {
-          store: ctx.templates ?? null,
-          admin: async () => {
-            if (!(await amAdmin(ctx))) return null;
-            const me = await storedIdentity(ctx.plan);
-            return me ? { id: me.oid, name: me.name || me.username || "An admin" } : null;
-          },
-        },
-        action,
-        req.input,
-      );
     case "ahead.load":
     case "ahead.people":
     case "ahead.stage":
@@ -2592,7 +2570,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             return rule ? { dataPlatform: rule.dataPlatform, deployItems: rule.deployItems } : null;
           },
           now: ctx.now,
-          templates: async () => (ctx.templates ? (await ctx.templates.read()).doc : null),
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
           storeItem: async (clientKey, itemId) => {
             const r = await aheadAction(await aheadContext(ctx), "ahead.load", {});
