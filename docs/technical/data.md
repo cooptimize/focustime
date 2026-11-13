@@ -134,7 +134,7 @@ Kept elsewhere:
 - **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Conversations, 14 days by default, 1 to 90; `config/org.ts`).
 - **Co-working calls** (`chat_calls`): 48 hours after the call started, at the next poll (`actions/request-poll.ts`); with their chat when it is removed or its messages purged.
 - **Sessions** end after 12 hours idle or 7 days at most (`store/accounts.ts`); the hourly maintenance sweeps them.
-- **Delete my data** (Settings › Data): a soft delete now, everything removed 30 days later (`HARD_DELETE_AFTER_DAYS` in `store/user-data.ts`). The Teams bot's rows go at once. Clear (the assistant history, for example) deletes at once.
+- **Delete my data** (Settings › Your data): a soft delete now, everything removed 30 days later (`HARD_DELETE_AFTER_DAYS` in `store/user-data.ts`). The Teams bot's rows go at once. Clear (the assistant history, for example) deletes at once.
 - **Everything else a person keeps** (their plan, promises, captures, audit logs, `loop_sends`, calendar links) stays until they remove it or delete their data.
 - **Profile photos** in the hosted app: in memory only, lost on restart (`host/azure/memory.ts`). In the developer loop, cached 7 days under hashed names.
 - **Logs**: Log Analytics keeps 30 days, and Application Insights is workspace-based, so it keeps the same (`infra/modules/monitoring.bicep`).
@@ -142,7 +142,7 @@ Kept elsewhere:
 
 ## Export
 
-Settings › Data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 41, `store/user-data.ts`), without their user id. Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
+Settings › Your data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 41, `store/user-data.ts`), without their user id. Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
 
 ## What is never stored
 
@@ -168,6 +168,6 @@ Settings › Data › Export my data gives a person every user table's rows as J
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
 - **DevOps patterns** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing.
 - **Code** shows any client's code to every Cooptimizer, except a client an admin set to its team only; Code views shows admins who opened what, never the code.
-- **Diagnostics** (Settings › Data › Diagnostics) is counts only, for a person's own chats, with no admin view.
+- **Diagnostics** (Settings › Your data › Diagnostics) is counts only, for a person's own chats, with no admin view.
 
 History: each table's step is in [docs/decisions.md](../decisions.md) and the migrations in `store/migrations/`.

@@ -28,7 +28,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 
 **Auth.** One Microsoft sign-in on the "FocusTime" web app registration (single tenant, Cooptimize only), OpenID Connect with authorization code and PKCE (`server/auth/entra.ts`). The client secret is the Key Vault secret `ft-entra-client-secret`. Sign-in asks for `openid profile email offline_access` and Graph's `.default`, so it gets the delegated permissions granted on the registration. Further token kinds (presence, photos, chats, messages, meetings, Azure) each ask for their own scopes on the same refresh token (`sources/oauth/oauth.ts`). The refresh token is sealed in the person's `user_secrets`; access tokens stay in memory.
 
-**Permissions.** All delegated: FocusTime always acts as the signed-in person, never app-only. The list lives in three places that must agree: `plan/permissions.ts` (what Settings › Connections shows), `GRAPH_SCOPES` in `infra/scripts/app-registration.sh` (what the registration requests and the tenant grant covers) and the scope constants in `sources/oauth/oauth.ts`. `scripts/tech-docs.test.ts` fails when one of them names a permission missing here.
+**Permissions.** All delegated: FocusTime always acts as the signed-in person, never app-only. The list lives in three places that must agree: `plan/permissions.ts` (what Settings › Accounts and calendars shows), `GRAPH_SCOPES` in `infra/scripts/app-registration.sh` (what the registration requests and the tenant grant covers) and the scope constants in `sources/oauth/oauth.ts`. `scripts/tech-docs.test.ts` fails when one of them names a permission missing here.
 
 | Permission | API | Admin consent | Granted how | What it is for |
 |---|---|---|---|---|
@@ -63,7 +63,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 - **Close the loop**, only after its preview and Send, as you: one Teams message in the chat the promise came from or a 1:1 chat with someone at Cooptimize (`POST /chats`, `POST /chats/{id}/messages`, read back with `Chat.Read` when granted), or one email in your own mailbox (`POST /me/messages` as a draft, `POST /me/messages/{id}/send` only for Send now, read back by its immutable id). Never reactions, read marks, edits or deletes, and never a message you didn't preview (`sources/graph/send.ts`; setup in `docs/setup/close-the-loop.md`).
 - **An admin's invite** from Admin › People: the same requests and the same per-person consents, one 1:1 Teams message per person, or an Outlook draft or email, only to Cooptimizers who haven't signed in, after the invite's preview and Send, each read back (`actions/invite-send.ts`).
 
-**Failure.** A missing consent shows in Settings › Connections as needs consent or needs an admin, with where to allow it. An expired sign-in shows Reconnect. A failed calendar read shows the last good data and its age.
+**Failure.** A missing consent shows in Settings › Accounts and calendars as needs consent or needs an admin, with where to allow it. An expired sign-in shows Reconnect. A failed calendar read shows the last good data and its age.
 
 ## Azure DevOps
 

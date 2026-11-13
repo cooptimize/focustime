@@ -81,7 +81,7 @@ Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each k
 | Plan today | The start of a workday with nothing planned |
 | Midday check-in, Close out | After the afternoon starts; near the end of the day |
 | The week | Plan next week, a dropped must, the week's nudges |
-| Look ahead, Plan ahead, Direction review | Every other Thursday once next week is planned; the first Thursday of the month |
+| Look ahead 4 weeks, Direction review | Every other Thursday once next week is planned; the first Thursday of the month |
 | Focus timer, Meeting | A timer ends; a meeting is about to start during focus |
 | VM | The morning prompt about the person's VM |
 | Promises due | A promise is due or late |
