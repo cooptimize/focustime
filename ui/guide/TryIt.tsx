@@ -421,9 +421,6 @@ export function UrgentStrip() {
                 <span className="us-tag">{r.tag}</span>
                 <span className="us-who">{r.who}</span>
                 <span className="us-what">{r.text}</span>
-                <span className="us-go">
-                  <Icon name="next" />
-                </span>
               </span>
             </li>
           ))}

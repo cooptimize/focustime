@@ -83,7 +83,7 @@ const PLAN_WEEK: Tour = {
     {
       target: "aw-box",
       title: "One box to add",
-      text: "Type to search this client's work and your promises. Up and Down move, Enter takes the highlighted row. The last rows are always New to-do and New draft story, so with no match Enter makes a to-do.",
+      text: "Type to search this client's work and your promises. Up and Down move, Enter takes the highlighted row. The rows for something new (New to-do, New draft story) are always at the end, so with no match Enter makes a to-do.",
       phone: "skip",
     },
   ],
@@ -99,7 +99,7 @@ const BOARD: Tour = {
   steps: [
     { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with one day for catch-up (Friday unless your week is set up differently). Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it to open its panel.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
     { target: "wk-timeline", title: "Cards or Timeline", text: "Timeline shows the hours beside each block: meetings, free time and the line for now. Cards gives the to-dos the whole width. B switches.", phone: "skip" },
-    { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a story from a block's list onto any of that client's blocks this week. The block shows its free time as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
+    { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a to-do onto another of that client's blocks this week, or a story from the panel onto a block. The block shows its free time as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
     { title: "Check it off", text: "Tick a to-do when it's done. When it has a DevOps item you can change, Wrap it up opens: Finished or Made progress, a preview, then Confirm. Skip DevOps keeps only the tick.", example: "done-offer" },
     { target: "wk-carry", title: "To place", text: "The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. Review opens it in the block's panel. Nothing moves until you place it." },
   ],
@@ -132,7 +132,7 @@ const INBOX: Tour = {
     { target: "ib-rail", title: "Three lists", text: "From chats, Promises and Captures, each with its count. The chips under them choose clients. FocusTime remembers the list you used last." },
     { target: "ib-list", title: "From chats", text: "A conversation shows here when it asks for work no DevOps item covers yet, after it has been quiet for 4 working hours. Hover a row to see why. Click it to open the messages in place." },
     { target: "ib-acts", title: "Create item, Already covered, Dismiss", text: "Create item (C) fills a new item from the conversation and shows a preview first. Already covered (L) links one that exists. Dismiss (X) takes it off your list only.", example: "ib-item" },
-    { target: "ib-keys", title: "Promises clear themselves", text: "What you said you'd do in a chat lands in Promises. When its item is finished, or it sat untouched 7 days past due, it clears on its own, and Put back brings it back. J and K move, Enter opens, D marks done.", phone: "skip" },
+    { target: "ib-keys", title: "The keys, and Promises", text: "This line lists the keys: J and K move, Enter opens a row, and each action has its letter. In Promises, the second list, what you said you'd do in a chat clears on its own when its item is finished, or after 7 days untouched past due; Put back brings it back.", phone: "skip" },
   ],
   end: { line: "That's the Inbox. Most days it's a few rows, and they go away on their own.", tryIt: "Try it yourself: open a row in From chats." },
 };

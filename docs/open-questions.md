@@ -904,3 +904,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The Cards and Timeline try-it uses the app's own switch, so inside the Guide it carries the switch's tooltips ("(B)"), and B does nothing there.
 - The check on bold labels and path labels can't tell a search label from a heading: "DevOps write access" is what Settings' search calls the group whose heading is "Write access" (review 2 caught it).
 - Renamed has no row for Week › Team: where what it showed lives now wasn't confirmed.
+- From review 1 (a first-day consultant with only the demo and the Guide), seen and left:
+  - App words that disagree with the app's own names, beyond the list above: the Backlog phone notice ("Grid, Gantt, Gaps and Backlog need room for the whole roadmap"), the Inbox tab's tooltip ("promises, conversations, sends, captures and drafts"), Status's Push all preview ("logged in Settings > Data with Undo"; the section is Activity).
+  - On a block card a to-do's title did not open its story card in the demo; titles in the block's panel, Backlog, Status and the Inbox do. The Guide now says only that. Should a to-do's title on a card open it too?
+  - Opening Settings from a Guide link and closing it lands on Day, not back in the Guide. The Guide now says Close "closes Settings".
+  - On the phone, More has no Send feedback and Backlog asks first; the footer now says "on a computer".
+  - The app hides keys on the phone; the Guide shows them there, because its sentences are written around them. Should the Guide have phone wording instead?
+  - Your first day's empty circles can read as checkboxes; they only show a state.
+  - A tour's ring can run a few pixels past the window's edge where its target touches the edge (Add work step 2, Week step 5): the tour layer's own drawing, unchanged here.
+  - Backlog shows a "Start here" chip beside Why these? that the Guide doesn't mention; what it does wasn't clear in the demo.
+  - Not checked on a real screen by either review: Writing, Capture, the assistant, Ask, Teams, Client calls and Code beyond their links; anything past the first preview of a write; drag and drop.
+

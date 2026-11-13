@@ -19,22 +19,12 @@ export function Keys({ keys }: { keys: readonly string[] }) {
 }
 
 export function Rich({ text }: { text: string }) {
-  const parts = richParts(text).map((p) => ({ ...p }));
+  const parts = richParts(text);
   const out: ReactNode[] = [];
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i]!;
     if (p.kind === "text") out.push(<Fragment key={i}>{p.text}</Fragment>);
-    else if (p.kind === "keys") {
-      // A key alone in brackets, "Timeline (B)", is one piece, so the phone (which shows no keys) drops the brackets too.
-      const before = parts[i - 1];
-      const after = parts[i + 1];
-      if (before?.kind === "text" && before.text.endsWith(" (") && after?.kind === "text" && after.text.startsWith(")")) {
-        out.pop();
-        out.push(<Fragment key={`${i}b`}>{before.text.slice(0, -2)}</Fragment>);
-        out.push(<span key={i} className="guide-keyp"> (<Keys keys={p.keys} />)</span>);
-        after.text = after.text.slice(1);
-      } else out.push(<Keys key={i} keys={p.keys} />);
-    }
+    else if (p.kind === "keys") out.push(<Keys key={i} keys={p.keys} />);
     else if (p.kind === "size") out.push(<span key={i} className="guide-tag">{p.text}</span>);
     else if (p.kind === "b") out.push(<b key={i}>{p.text}</b>);
     else {
