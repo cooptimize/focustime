@@ -1,11 +1,14 @@
 // DOC-1: the technical docs stay honest. Every page has its "Checked against" line; every relative link and heading
 // it points to exists; every Graph permission the code or the setup script asks for is listed in integrations.md;
 // every diagram is drawn and none is left over; nothing in the pages looks like a secret; and the rendering keeps
-// raw HTML, script URLs and event handlers inert.
+// raw HTML, script URLs and event handlers inert. TD-1 adds: exactly one "Checked against" commit per page, no retired
+// screen name outside the names table and History lines, every repo path named exists, every table on data.md is one
+// the code has, and every package.json dependency is listed in development.md.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS } from "../plan/permissions.ts";
+import { USER_TABLES } from "../store/scope.ts";
 import { wantedDiagrams } from "./docs-diagrams.ts";
 import { anchorsOf, checkSvg, CHECKED_RE, DOCS_DIR, DocsError, linkTarget, renderAll, renderPage, TECH_PAGES, unstyleSvg } from "./tech-docs.ts";
 
@@ -100,6 +103,87 @@ describe("the technical docs (DOC-1)", () => {
     const security = docs.pages.find((p) => p.id === "security")!;
     expect(security.html).toContain('<figure class="td-diagram"');
     expect(security.html).not.toMatch(/\sstyle\s*=|<style/);
+  });
+});
+
+/** Every page these checks cover: the panel's pages and the Coop contract beside them. */
+const ALL_PAGES = [...TECH_PAGES.map((p) => p.file), "coop-contract.md"];
+/** A page's lines that may name retired screens: the names table on the Overview and each History line. */
+function proseLines(file: string): [number, string][] {
+  let inNames = false;
+  const out: [number, string][] = [];
+  pageText(file).replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, "")).split("\n").forEach((line, i) => {
+    if (/^## /.test(line)) inNames = /^## Names in the code\b/.test(line);
+    if (inNames || /^History:/.test(line)) return;
+    out.push([i + 1, line.replace(/`[^`\n]*`/g, "").replace(/\]\([^)]*\)/g, "]")]);
+  });
+  return out;
+}
+/** Screen names people no longer see (the names table gives the code's, CLAUDE.md's Renamed list the history). */
+const RETIRED: [string, RegExp][] = [
+  ["Today as a screen", /\bToday ›|\bToday tab\b|\bthe Today screen\b/],
+  ["Roadmap", /\bRoadmap\b/],
+  ["Ahead", /\bAhead\b/],
+  ["Plan the day, Plan the week, Plan ahead", /\bPlan (the day|the week|ahead)\b/],
+  ["Fix next, Gaps, Readiness", /\b(Fix next|Gaps|Readiness)\b/],
+  ["Week's old modes", /\bWeek › (Status|Plan|Commit|Board|Team)\b|\bBoard\b/],
+  ["Inbox's old views", /\bInbox › (Conversations|Needs you|Chatter|Unsorted|Waiting on|In progress)\b/],
+  ["the Detail panel, Add work panel, Your stories", /\b(Detail panel|Add work panel|Your stories)\b/],
+  ["Delivery chats", /\bDelivery chats?\b|\bDelivery team chat\b|\bCustomer collaboration chat\b/],
+  ["Needs help from", /\bNeeds help from\b/],
+  ["old Settings sections", /\bSettings › (Connections|Data|Planning|Roadmap|Ahead|AI)\b/],
+  ["the ⋯ menu", /⋯/],
+];
+/** Top-level folders and files of the repo, for telling a repo path from a word in backticks. */
+const TOP = new Set(readdirSync(root).filter((f) => !f.startsWith(".") || f === ".github"));
+const PATH_EXT = /\.(ts|tsx|mjs|js|md|json|ya?ml|bicep|bicepparam|sh|css|html|toml|svg|txt)$/;
+const codeSpans = (md: string) => [...md.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]+)`/g)].map((m) => m[1]!);
+
+describe("the technical docs stay the current state (TD-1)", () => {
+  it("names exactly one commit in one Checked against line per page", () => {
+    const bad = ALL_PAGES.flatMap((f) => {
+      const n = [...pageText(f).matchAll(new RegExp(CHECKED_RE.source, "g"))].length;
+      const extra = /Checked against [^.\n]*\(|against `[0-9a-f]{7,40}`[^.\n]*`[0-9a-f]{7,40}`/.test(pageText(f));
+      return n === 1 && !extra ? [] : [`${f}: ${n} Checked against lines${extra ? ", or exceptions in it" : ""}`];
+    });
+    expect(bad).toEqual([]);
+  });
+
+  it("uses no retired screen name outside the names table and History lines", () => {
+    const hits: string[] = [];
+    for (const f of ALL_PAGES) for (const [n, line] of proseLines(f)) for (const [what, re] of RETIRED) if (re.test(line)) hits.push(`${f}:${n}: ${what}`);
+    expect(hits).toEqual([]);
+  });
+
+  it("names only repo paths that exist", () => {
+    const bad: string[] = [];
+    for (const f of ALL_PAGES) {
+      for (const span of codeSpans(pageText(f))) {
+        const path = span.replace(/:\d+$/, "").replace(/\/$/, "");
+        if (/[\s<>*{}$=|,]|^\.\.|^~|^https?:/.test(path) || !path.includes("/") && !PATH_EXT.test(path)) continue;
+        if (!TOP.has(path.split("/")[0]!) && !(path.includes("/") && PATH_EXT.test(path))) continue;
+        if (![root, join(root, DOCS_DIR), join(root, DOCS_DIR, "coop-contract")].some((d) => existsSync(join(d, path)))) bad.push(`${f}: ${span}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("lists on data.md only tables the code has", () => {
+    const created = new Set(USER_TABLES);
+    const walk = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : e.name.endsWith(".ts") && !e.name.endsWith(".test.ts") ? [`${dir}/${e.name}`] : []));
+    for (const f of walk("store")) for (const m of read(f).matchAll(/CREATE TABLE (?:IF NOT EXISTS )?\[?([a-z_]+)|_TABLE = "([a-z_]+)"/gi)) created.add((m[1] ?? m[2])!.toLowerCase());
+    expect(created.size).toBeGreaterThan(100);
+    const named = pageText("data.md").split("\n").filter((l) => /^\| `/.test(l)).flatMap((l) => [...l.split("|")[1]!.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]!));
+    expect(named.length).toBeGreaterThan(100);
+    expect([...new Set(named)].filter((t) => !created.has(t))).toEqual([]);
+  });
+
+  it("lists every package.json dependency on development.md", () => {
+    const pkg = JSON.parse(read("package.json")) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const deps = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+    const spans = new Set(codeSpans(pageText("development.md")));
+    expect(deps.length).toBeGreaterThan(10);
+    expect(deps.filter((d) => !spans.has(d))).toEqual([]);
   });
 });
 

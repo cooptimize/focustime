@@ -2577,6 +2577,22 @@ Unnumbered until merge.
 | - | Done | The style guide: section 11 holds the rules; sections 3 to 6 were corrected where this step changed them; `/styleguide` shows every control in every state, the icons by name and the rows, in each theme. |
 
 
+## TD-1: Technical docs rewritten as the current state (Nov 13)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | The code on `main` is the truth. Every page in `docs/technical/` was checked whole against one commit and says so in one "Checked against" line, with no exceptions; a fact the code, the Bicep, the scripts and the workflows can't confirm is marked **Not verified**. The claims checked before the rewrite are in `docs/ux/td1/ledger.md` |
+| - | Done | Pages describe the present only: no "was", "until", "used to" or step ids in the body. One short History line per page points to this file |
+| - | Done | Pages use the screen names people see (Day, Week, Backlog, Status, Inbox, More). The Overview's "Names in the code" table gives the code's names beside them (`today`, `ahead`, `pick`, `followup.*`, `requests` and the rest) and is the one place outside History lines a retired name may appear |
+| - | Done | Data lists the tables kept but no longer written (`chat_messages`, `asks`, `delivery_chats`, `dedupe_log`) and what would remove them; it does not drop them (migrations only add) |
+| - | Done | Operations gains the app configuration (the `FOCUSTIME_*` variables, by group, names only), the reminders that exist now (and the four notification kinds still listed but never sent), and the workflows. Development gains every command and every dependency with its purpose and license |
+| - | Done | The Coop comment contract stays "Proposed, not built": re-checked, re-stamped, step ids replaced by rule names, and a line saying only the comment readers exist on FocusTime's side. It stays outside the panel (`scripts/tech-docs.ts` lists seven pages; changing it is out of this step) |
+| - | Done | CLAUDE.md's glossary: one row per term in use, duplicates merged (Day, Promise and Follow-up, External member, Status), retired terms moved to a short Renamed list (old, current) with a "Gone" line, history notes and step ids removed, controls named (More, Previous, Next) instead of drawn. The folder map lists every folder that exists. Principles, Hard rules, Working style and Completion report are unchanged (same sha256 of the four sections) |
+| - | Done | `npm run docs:check` also fails on: a page with other than one "Checked against" commit or with exceptions in it; a retired screen name outside the names table and History lines; a repo path in backticks that doesn't exist; a table on Data the code doesn't create; a `package.json` dependency missing from Development. The checks cover the Coop contract too |
+| - | Done | Where the code looked wrong, the pages say what the code does and the question goes to open questions; no code changed |
+
 ## RS-2: Day's catch-up day, Week's client colors, loading (Nov 13)
 
 Unnumbered until merge.
