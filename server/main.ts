@@ -122,7 +122,6 @@ import { createCodeGit } from "../actions/code-git.ts";
 import { codeStatus } from "../actions/code-actions.ts";
 import { codeViewsStoreOn } from "../store/code-views-store.ts";
 import { standardsStoreOn } from "../store/standards-store.ts";
-import { workTemplatesStoreOn } from "../store/work-templates-store.ts";
 import { parseRepoUrl } from "../plan/standards.ts";
 import type { StandardsPort } from "../actions/standards.ts";
 import { createPatternsStore } from "../store/patterns-store.ts";
@@ -1005,7 +1004,6 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     org,
     adminOps,
     standards: standardsPort,
-    templates: templatesStore,
     code: { git: codeGit, views: codeViews },
     links: host.links,
     media,
@@ -1141,8 +1139,6 @@ const directorySource = app.dataverse
 // KB-1: Cooptimize's standards, read from public GitHub (GET only, no token) and kept as data. FOCUSTIME_DEMO servers
 // (the e2e harness) and FOCUSTIME_STANDARDS_SYNC=off make no outside request; demo sessions have their own library.
 const standardsStore = standardsStoreOn(db);
-// TP-1: the team's work templates (seeded once at the first read; admins edit them in Admin › Work templates).
-const templatesStore = workTemplatesStoreOn(db, () => instantNow().toString());
 const standardsSyncOn = process.env.FOCUSTIME_STANDARDS_SYNC !== "off" && !process.env.FOCUSTIME_DEMO;
 const standards = standardsJob({ store: standardsStore, reader: createStandardsReader({ fetch }), source: async () => (await org.rules()).standards, now: instantNow, log });
 const standardsPort: StandardsPort = { library: () => standardsStore.library(parseRepoUrl), state: () => standardsStore.state(), syncNow: () => (standardsSyncOn ? standards.syncNow() : Promise.resolve({ ok: false, changed: false, error: "The sync is off on this server" })) };

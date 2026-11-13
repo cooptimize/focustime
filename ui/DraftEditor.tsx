@@ -15,9 +15,8 @@ import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.ts
 import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { briefEmpty, EMPTY_BRIEF, type Brief } from "../plan/work-templates.ts";
-import { FourLines, TypeField, withoutPeople } from "./FourLines.tsx";
-import { useTemplates } from "./templates.ts";
+import { descriptionMax, NO_ANSWERS, storedOf, withCarried, type Answers } from "../plan/three-questions.ts";
+import { ThreeQuestions } from "./ThreeQuestions.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -42,7 +41,10 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   const clients = useMemo(() => captureClients(data), [data]);
   const feature = draft.level === "feature";
   const [title, setTitle] = useState(draft.title);
-  const [description, setDescription] = useState(draft.description ?? "");
+  // TP-1b: a TP-1 draft's other words (its fourth line and choices) show once at the end of the description, to keep
+  // or delete; nothing changes in the store until the person saves.
+  const shownDescription = withCarried(draft.description, draft.carried);
+  const [description, setDescription] = useState(shownDescription ?? "");
   const [acceptance, setAcceptance] = useState(draft.acceptance ?? "");
   const [client, setClient] = useState(draft.clientKey);
   const [parent, setParent] = useState<ItemValue>(draft.parentItemId ? { itemId: draft.parentItemId, title: null, url: null, text: "" } : NO_ITEM);
@@ -51,11 +53,9 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   const [target, setTarget] = useState(draft.targetDate ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // TP-1: the request type and the four lines, as the New form keeps them.
-  const tpl = useTemplates().view;
-  const [brief, setBrief] = useState<Brief>(draft.brief ?? EMPTY_BRIEF);
-  const [showLines, setShowLines] = useState(!briefEmpty(draft.brief));
-  const briefChanged = JSON.stringify(briefEmpty(brief) ? null : brief) !== JSON.stringify(briefEmpty(draft.brief) ? null : draft.brief);
+  // TP-1b: the three questions, as the New form asks them.
+  const [answers, setAnswers] = useState<Answers>(draft.answers ?? NO_ANSWERS);
+  const answersChanged = storedOf(answers) !== storedOf(draft.answers);
   const features = useClientFeatures(client, true);
   const choices = feature ? features?.epics : features?.features;
   const pool = useMemo(() => parentPool(choices, feature ? "epic" : "feature"), [choices, feature]);
@@ -73,11 +73,12 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
     return () => b?.focus?.();
   }, []);
   const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
-  const showAc = !feature && (features?.acceptanceField ?? features?.status !== "ok");
+  // TP-1b: the third question is the acceptance; a separate box only when the draft already holds acceptance text (CP-1's AI version, an older draft).
+  const showAc = !feature && !!draft.acceptance?.trim() && (features?.acceptanceField ?? features?.status !== "ok");
   const startAfter = feature && start && target && start > target;
   const dirty =
-    title.trim() !== draft.title || (description.trim() || null) !== (draft.description ?? null) || (acceptance.trim() || null) !== (draft.acceptance ?? null) || client !== draft.clientKey ||
-    parent.itemId !== draft.parentItemId || size !== draft.size || (start || null) !== (draft.startDate ?? null) || (target || null) !== (draft.targetDate ?? null) || briefChanged;
+    title.trim() !== draft.title || (description.trim() || null) !== (shownDescription ?? null) || (acceptance.trim() || null) !== (draft.acceptance ?? null) || client !== draft.clientKey ||
+    parent.itemId !== draft.parentItemId || size !== draft.size || (start || null) !== (draft.startDate ?? null) || (target || null) !== (draft.targetDate ?? null) || answersChanged;
 
   /** Saves the edits (only what changed); the saved draft, or null when it didn't save. */
   const save = async (): Promise<DraftStory | null> => {
@@ -89,14 +90,15 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
     try {
       const input: Record<string, unknown> = { id: draft.id };
       if (title.trim() !== draft.title) input.title = title.trim();
-      if ((description.trim() || null) !== (draft.description ?? null)) input.description = description.trim() || null;
+      // A TP-1 draft's save sends its description as shown (carried words kept or deleted) and its answers, once.
+      if (draft.carried || (description.trim() || null) !== (draft.description ?? null)) input.description = description.trim() || null;
       if (!feature && (acceptance.trim() || null) !== (draft.acceptance ?? null)) input.acceptance = acceptance.trim() || null;
       if (client !== draft.clientKey) input.clientKey = client;
       if (parent.itemId !== draft.parentItemId || client !== draft.clientKey) input.parentItemId = parent.itemId;
       if (!feature && size !== draft.size) input.size = size;
       if (feature && (start || null) !== (draft.startDate ?? null)) input.startDate = start || null;
       if (feature && (target || null) !== (draft.targetDate ?? null)) input.targetDate = target || null;
-      if (briefChanged) input.brief = briefEmpty(brief) ? null : brief;
+      if (answersChanged || draft.carried) input.answers = storedOf(answers) ? answers : null;
       const r = await call<{ draft: DraftStory }>("draft.update", input);
       onChanged();
       return r.draft;
@@ -140,24 +142,11 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             <span className="set-label">Title</span>
             <input ref={first} value={title} required maxLength={200} onChange={(e) => setTitle(e.target.value)} />
           </label>
+          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" />
           <label className="set-field">
             <span className="set-label">Description</span>
-            <TextBox value={description} minRows={4} maxRows={14} maxLength={8000} onChange={(e) => setDescription(e.target.value)} />
+            <TextBox value={description} minRows={4} maxRows={14} maxLength={descriptionMax(draft.carried)} onChange={(e) => setDescription(e.target.value)} />
           </label>
-          {tpl && (
-            <div className="set-field de-lines">
-              <span className="set-label">Request type</span>
-              <span className="nf-reqtype">
-                <TypeField doc={tpl.doc} label="Request type" value={brief.type} onChange={(t) => (setBrief({ ...brief, type: t }), t && setShowLines(true))} />
-                {!showLines && !brief.type && (
-                  <button type="button" className="link-btn" onClick={() => setShowLines(true)}>
-                    Add the four lines
-                  </button>
-                )}
-              </span>
-              {(showLines || !!brief.type) && <FourLines doc={tpl.doc} brief={brief} onChange={setBrief} clientKey={client} layout="stack" />}
-            </div>
-          )}
           {showAc && (
             <label className="set-field">
               <span className="set-label">Acceptance criteria{features?.status !== "ok" ? " (written only when the process has the field)" : ""}</span>
@@ -167,7 +156,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           <div className="draft-row">
             <label className="set-field">
               <span className="set-label">Client</span>
-              <select value={client} onChange={(e) => (setClient(e.target.value), setParent(NO_ITEM), setBrief(withoutPeople(brief)))}>
+              <select value={client} onChange={(e) => (setClient(e.target.value), setParent(NO_ITEM))}>
                 {!clients.some((c) => c.clientKey === client) && <option value={client}>{client}</option>}
                 {clients.map((c) => (
                   <option key={c.clientKey} value={c.clientKey}>

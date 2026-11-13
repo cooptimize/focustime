@@ -122,7 +122,16 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - Admin: **Who can read this client's code** (Rule): **Whole company** or **Its team only**; **Can FocusTime read it?** with **"Code: readable · 3 repos"**, **"Can't read yet: the token needs Code (read)"** or **"No DevOps set up"**, and **Check**. Admin › Audit: **Code views**, **Opened the repo**, **Opened a file**, **Used Find**, **"Last 30 days: <client> 12 · …"**, **Every client**, **Everyone**.
 - Avoid: "browse", "source code", "codebase" in visible copy; say **code**, **repo**, **file**, **folder**.
 
-## TP-1 words (Nov 12)
+## TP-1b words (Nov 12)
+
+- The three questions, always these words and in this order: **Where is it?**, **What should change?**, **How will we know it's right?** Their grey text: **"The report and page, model, table or pipeline"**, **"Before and after, or the rule"**, **"One example and the answer it should give"**. No other hint, help mark, example or choice.
+- Written to DevOps as short paragraphs with a bold label: **"Where: …"**, **"What should change: …"**, and, only when the type has no acceptance field, **"How we'll know it's right: …"**. The preview says so: "<type> has no acceptance criteria field in <project>'s process, so "How will we know it's right?" goes in the description."
+- The phone's toggle: **"More: details, description and size"**.
+- A TP-1 draft's other words, at the end of its description under **"From your earlier draft:"**, one per line: "Environment: …", "Touches: …", "Checked by: …", "How far and who signs off: …", "Done when it is: …", "Signed off by: …", "Not without asking: …".
+
+## TP-1 words (Nov 12, retired by TP-1b)
+
+The words below are no longer shown: the New form, the draft editor and the card don't use them, and Admin › Work templates is hidden. Kept as a record.
 
 - **The four lines**, always these names and in this order: **What and where**, **What changes**, **How we'll check**, **How far and who signs off**. Never Target, Change, Control or Boundary (the studies' earlier names, only read).
 - **Request type** (the New form's label; "No type" when none), **Add the four lines** (without a type), **See a full example** / **Hide the full example**, and in it **"A full example: <type>"** with "Made up, to show what each line holds. Nothing here is copied into your form."

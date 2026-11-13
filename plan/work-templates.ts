@@ -1,25 +1,20 @@
-// TP-1: work templates and the four lines, pure. The smallest item a builder can use is four short lines: what is being
-// touched and where, what changes, how it will be checked, and how far "done" goes and who signs off. Their names are
-// defined here once (fixed, so other tools can find them in a description); the team's templates (a request type each,
-// with a hint and a worked example per line, and the choice lists the New form offers) are data an admin edits in the
-// app. This file builds what a create writes (the description under the four headings, the acceptance text, the one
-// request type tag) and reads the four lines back out of a description. No I/O.
-import { textToHtml } from "./devopswrite.ts";
+// TP-1: work templates, pure. TP-1b hid them: the New form asks three plain questions instead (plan/three-questions.ts)
+// and nothing writes the four lines, a request type or its tag any more. What stays is the team's stored templates
+// (their shape, the seed, each type's typical stories and its tag, read back from an item's tags) and the checks an
+// admin's save went through, for the later step where Break down offers a type's typical stories. No I/O.
 
 export const LINE_KEYS = ["where", "change", "check", "done"] as const;
 export type LineKey = (typeof LINE_KEYS)[number];
 
-/** The four lines' names, everywhere a person sees them and as the headings written to DevOps. Never edited. */
+/** The four lines' names (the templates' hints and examples are per line). TP-1 wrote them as headings; nothing does now. */
 export const LINE_NAMES: Record<LineKey, string> = {
   where: "What and where",
   change: "What changes",
   check: "How we'll check",
   done: "How far and who signs off",
 };
-/** The names the two studies used before TP-1; read as the same four lines, never written. */
-export const EARLIER_NAMES: Record<LineKey, string> = { where: "Target", change: "Change", check: "Control", done: "Boundary" };
 
-/** The prefix of the one request type tag a create writes ("type:new-measure"). */
+/** The prefix of a request type tag (TP-1 wrote "type:new-measure" at create; items that carry one keep it in DevOps). */
 export const TAG_PREFIX = "type:";
 /** A template's tag: lower case letters and digits joined by hyphens (never a ";", "," or "@", which DevOps tags can't hold). */
 export const TAG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -89,7 +84,7 @@ export const helpFor = (t: WorkTemplates, id: string | null | undefined): Record
 
 /** A person chosen from the client's DevOps project (their email kept to check them), or a role typed in. */
 export type Who = { name: string; email: string | null };
-/** The four lines as the New form and a draft keep them. Every part is optional. */
+/** The four lines as TP-1's New form and its drafts kept them (draft_stories.brief). TP-1b only reads that column (plan/three-questions.ts keptOf). */
 export type Brief = {
   /** The template's id, or null (the generic hints). */
   type: string | null;
@@ -104,167 +99,7 @@ export type Brief = {
   signedOffBy: Who | null;
   notWithout: string[];
 };
-export const EMPTY_BRIEF: Brief = { type: null, where: "", env: null, touches: [], change: "", check: "", checkedBy: null, done: "", doneWhen: null, signedOffBy: null, notWithout: [] };
-
-/** Nothing in it at all (no type, no line, no choice). */
-export const briefEmpty = (b: Brief | null | undefined): boolean => !b || (!b.type && LINE_KEYS.every((k) => !lineWords(b, k).length));
-
-/** The person's own text, one line of it: a single space for runs of spaces and tabs, at most two newlines in a row. */
-const tidy = (s: string) => s.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-/** "Deploy to production" → "deploy to production" (but "SQL", "Power BI" stay). */
-export const lcFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
-const sentence = (s: string) => (/[.!?:]$/.test(s) ? s : `${s}.`);
-
-/**
- * One line's parts as plain words, in the order they are written: the person's text and then the line's choices,
- * except "How far and who signs off", whose choices come first and the box after ("anything else").
- */
-export function lineWords(b: Brief, k: LineKey): string[] {
-  const t = tidy(b[k]);
-  const choices: string[] = [];
-  if (k === "where") {
-    if (b.env?.trim()) choices.push(sentence(`Environment: ${b.env.trim()}`));
-    if (b.touches.length) choices.push(sentence(`Touches: ${b.touches.map((x) => x.trim()).filter(Boolean).join(", ")}`));
-  } else if (k === "check") {
-    if (b.checkedBy?.name.trim()) choices.push(sentence(`Checked by: ${b.checkedBy.name.trim()}`));
-  } else if (k === "done") {
-    if (b.doneWhen?.trim()) choices.push(sentence(`Done when it is: ${lcFirst(b.doneWhen.trim())}`));
-    if (b.signedOffBy?.name.trim()) choices.push(sentence(`Signed off by: ${b.signedOffBy.name.trim()}`));
-    if (b.notWithout.length) choices.push(sentence(`Not without asking: ${b.notWithout.map((x) => lcFirst(x.trim())).filter(Boolean).join(", ")}`));
-  }
-  const chosen = choices.join(" ");
-  if (k === "done") return [chosen, t].filter(Boolean);
-  return [t, chosen].filter(Boolean);
-}
-
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const para = (s: string) => `<p>${s.split("\n").map(esc).join("<br>")}</p>`;
-
-/** The four lines as DevOps gets them: a heading and its paragraphs per line that has anything, in order. "" when none. */
-export function linesHtml(b: Brief): string {
-  return LINE_KEYS.map((k) => {
-    const parts = lineWords(b, k);
-    return parts.length ? `<h3>${esc(LINE_NAMES[k])}</h3>${parts.map(para).join("")}` : "";
-  }).join("");
-}
-/** The same as plain text, for the preview ("as it will read"). */
-export function linesText(b: Brief): string {
-  return LINE_KEYS.map((k) => {
-    const parts = lineWords(b, k);
-    return parts.length ? `${LINE_NAMES[k]}\n${parts.join("\n")}` : "";
-  })
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-/**
- * The description a create writes: what the person typed in the description box (as DevOps keeps plain text, a <div>
- * per line), then the four lines under their headings. Null when there is nothing.
- */
-export function descriptionHtml(typed: string | null | undefined, b: Brief | null): string | null {
-  const own = typed?.trim() ? textToHtml(typed.trim()) : "";
-  const lines = b ? linesHtml(b) : "";
-  return own + lines || null;
-}
-/** As plain text, for the preview. */
-export function descriptionText(typed: string | null | undefined, b: Brief | null): string | null {
-  const t = [typed?.trim() ?? "", b ? linesText(b) : ""].filter(Boolean).join("\n\n");
-  return t || null;
-}
-
-/** "How we'll check" for the acceptance field (with who checks), or null when that line has no text. */
-export function acceptanceText(b: Brief | null): string | null {
-  if (!b || !tidy(b.check)) return null;
-  const who = b.checkedBy?.name.trim();
-  return who ? `${tidy(b.check)}\n${sentence(`Checked by: ${who}`)}` : tidy(b.check);
-}
-
-/** The tag a create adds when a type is chosen ("type:new-measure"), or null. */
-export function templateTag(t: WorkTemplates, b: Brief | null): string | null {
-  const x = typeById(t, b?.type);
-  return x && TAG_PATTERN.test(x.tag) ? `${TAG_PREFIX}${x.tag}` : null;
-}
-
-/** Which lines count as filled: text, except "How far and who signs off", which counts once "Done when it is" is chosen. */
-export function briefFilled(b: Brief): Record<LineKey, boolean> {
-  return { where: !!tidy(b.where), change: !!tidy(b.change), check: !!tidy(b.check), done: !!b.doneWhen?.trim() };
-}
-
-// ---- reading the four lines back out of a description ----
-
-const NBSP = / /g;
-const decode = (s: string) => s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&#x27;|&apos;/g, "'").replace(/&amp;/g, "&");
-/** HTML to plain text: one line per block, tags gone, entities decoded. */
-export function plainOf(html: string): string {
-  return decode(html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n").replace(/<[^>]+>/g, ""))
-    .replace(NBSP, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-const norm = (s: string) => s.replace(/[‘’ʼ]/g, "'").replace(NBSP, " ").replace(/\s+/g, " ").trim().replace(/:$/, "").trim().toLowerCase();
-const NAMES = new Map<string, { k: LineKey; earlier: boolean }>([...LINE_KEYS.map((k) => [norm(LINE_NAMES[k]), { k, earlier: false }] as const), ...LINE_KEYS.map((k) => [norm(EARLIER_NAMES[k]), { k, earlier: true }] as const)]);
-
-export type ReadLines = {
-  /** The text under each heading that was found (plain text). */
-  lines: Partial<Record<LineKey, string>>;
-  /** Any heading at all was found. */
-  found: boolean;
-  /** Found under the earlier names (Target, Change, Control, Boundary). */
-  earlier: boolean;
-  /** The description without the four lines' sections (HTML, as given). */
-  rest: string;
-};
-
-/**
- * The four lines out of a description: a heading (h1 to h6), or a paragraph or div holding only a line's name (bold or
- * not, with or without a colon), starts a line; it runs until the next such heading or any other heading. Text around
- * them stays in `rest`. The first of each line counts.
- */
-export function readLines(html: string | null | undefined): ReadLines {
-  const src = html ?? "";
-  type Mark = { start: number; end: number; k: LineKey | null; earlier: boolean };
-  const marks: Mark[] = [];
-  const re = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1\s*>|<(p|div)\b[^>]*>\s*((?:<(?:b|strong|u|em)\b[^>]*>\s*)*)([^<]{1,80})((?:\s*<\/(?:b|strong|u|em)\s*>)*)\s*(?:<br\s*\/?>\s*)?<\/\3\s*>/gi;
-  for (let m = re.exec(src); m; m = re.exec(src)) {
-    const text = norm(decode(m[1] ? m[2]!.replace(/<[^>]+>/g, "") : m[5]!));
-    const hit = NAMES.get(text);
-    if (hit) marks.push({ start: m.index, end: m.index + m[0].length, k: hit.k, earlier: hit.earlier });
-    else if (m[1]) marks.push({ start: m.index, end: m.index + m[0].length, k: null, earlier: false });
-  }
-  // The earlier names are everyday words ("Target", "Change"): they count only when at least two of them head lines.
-  const earlierKeys = new Set(marks.filter((m) => m.earlier).map((m) => m.k));
-  const useEarlier = earlierKeys.size >= 2;
-  if (!useEarlier) marks.splice(0, marks.length, ...marks.filter((m) => !m.earlier));
-  const lines: Partial<Record<LineKey, string>> = {};
-  const cut: [number, number][] = [];
-  let earlier = false;
-  marks.forEach((mk, i) => {
-    if (!mk.k) return;
-    const until = marks[i + 1]?.start ?? src.length;
-    cut.push([mk.start, until]);
-    if (lines[mk.k] !== undefined) return;
-    lines[mk.k] = plainOf(src.slice(mk.end, until));
-    if (mk.earlier) earlier = true;
-  });
-  let rest = "";
-  let at = 0;
-  for (const [s, e] of cut) {
-    rest += src.slice(at, s);
-    at = e;
-  }
-  rest += src.slice(at);
-  return { lines, found: cut.length > 0, earlier, rest: plainOf(rest) ? rest : "" };
-}
-
-/** Which lines count as filled in a description read back (the same rule as the form's). */
-export function readFilled(r: ReadLines): Record<LineKey, boolean> {
-  const has = (k: LineKey) => !!r.lines[k]?.trim();
-  // "How far" counts once "Done when it is" was chosen; an item written under the earlier names had no choice, so text counts.
-  const done = /done when it is:\s*\S/i.test(r.lines.done ?? "") || (r.earlier && has("done"));
-  return { where: has("where"), change: has("change"), check: has("check"), done };
-}
+// ---- reading an item's tags ----
 
 /** The request type an item's tags name, from the team's templates (removed types too), or null. */
 export function typeOfTags(t: WorkTemplates, tags: readonly string[] | null | undefined): TemplateType | null {
@@ -278,90 +113,7 @@ export function typeOfTags(t: WorkTemplates, tags: readonly string[] | null | un
   return null;
 }
 
-/** The story card's quiet chip: Ready, or the empty lines by name. Null for an item with neither headings nor a known tag. */
-export type Readiness = { ready: true } | { ready: false; missing: LineKey[] };
-export function readiness(r: ReadLines, type: TemplateType | null): Readiness | null {
-  if (!r.found && !type) return null;
-  const f = readFilled(r);
-  const missing = LINE_KEYS.filter((k) => !f[k]);
-  return missing.length ? { ready: false, missing } : { ready: true };
-}
-export const readinessText = (x: Readiness) => (x.ready ? "Ready" : `Missing: ${x.missing.map((k) => LINE_NAMES[k]).join(", ")}`);
-
-// ---- checking a brief from the client ----
-
 export class BriefError extends Error {}
-const optStr = (v: unknown, name: string, max: number): string => {
-  if (v === undefined || v === null) return "";
-  if (typeof v !== "string") throw new BriefError(`${name} must be text`);
-  if (v.length > max) throw new BriefError(`${name} is at most ${max} characters`);
-  return v;
-};
-const optChoice = (v: unknown, name: string): string | null => {
-  const s = optStr(v, name, LIMITS.choice).trim();
-  return s ? s.replace(/\s+/g, " ") : null;
-};
-const optList = (v: unknown, name: string): string[] => {
-  if (v === undefined || v === null) return [];
-  if (!Array.isArray(v) || v.length > LIMITS.listItems) throw new BriefError(`${name} is a list of at most ${LIMITS.listItems}`);
-  const out: string[] = [];
-  for (const x of v) {
-    const s = optChoice(x, name);
-    if (s && !out.some((y) => y.toLowerCase() === s.toLowerCase())) out.push(s);
-  }
-  return out;
-};
-const optWho = (v: unknown, name: string): Who | null => {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "object" || Array.isArray(v)) throw new BriefError(`${name} is a person or a role`);
-  const o = v as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (k !== "name" && k !== "email") throw new BriefError(`${name} has an unknown field ${k}`);
-  const n = optStr(o.name, name, LIMITS.who).replace(/\s+/g, " ").trim();
-  if (!n) return null;
-  const email = o.email === undefined || o.email === null || o.email === "" ? null : optStr(o.email, `${name} email`, 320).trim().toLowerCase();
-  if (email !== null && !/^[^\s@]+@[^\s@]+$/.test(email)) throw new BriefError(`${name} email isn't an email`);
-  return { name: n, email };
-};
-
-/**
- * A brief as the server takes it (the New form, a draft): every part optional, lengths capped. The type must be one of
- * the team's (a removed one is kept: a draft saved before the removal still carries it). Null when it is empty.
- */
-export function parseBrief(v: unknown, t: WorkTemplates): Brief | null {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "object" || Array.isArray(v)) throw new BriefError("brief must be an object");
-  const o = v as Record<string, unknown>;
-  const known = new Set<string>(Object.keys(EMPTY_BRIEF));
-  for (const k of Object.keys(o)) if (!known.has(k)) throw new BriefError(`brief has an unknown field ${k}`);
-  const type = o.type === undefined || o.type === null || o.type === "" ? null : optStr(o.type, "type", TAG_MAX);
-  if (type !== null && !typeById(t, type)) throw new BriefError("That request type isn't one of the team's any more. Choose another");
-  const b: Brief = {
-    type,
-    where: optStr(o.where, LINE_NAMES.where, LIMITS.lineText),
-    env: optChoice(o.env, "Environment"),
-    touches: optList(o.touches, "Touches"),
-    change: optStr(o.change, LINE_NAMES.change, LIMITS.lineText),
-    check: optStr(o.check, LINE_NAMES.check, LIMITS.lineText),
-    checkedBy: optWho(o.checkedBy, "Checked by"),
-    done: optStr(o.done, LINE_NAMES.done, LIMITS.lineText),
-    doneWhen: optChoice(o.doneWhen, "Done when it is"),
-    signedOffBy: optWho(o.signedOffBy, "Signed off by"),
-    notWithout: optList(o.notWithout, "Not without asking"),
-  };
-  return briefEmpty(b) ? null : b;
-}
-/** A brief kept as JSON (a draft's column): read leniently, never throws; anything unreadable is no brief. */
-export function briefFromJson(json: string | null | undefined, t: WorkTemplates | null): Brief | null {
-  if (!json) return null;
-  try {
-    const raw = JSON.parse(json) as Record<string, unknown>;
-    // A removed or unknown type on an old draft: its id is kept as it was (the form names it), never dropped silently.
-    const b = parseBrief({ ...raw, type: null }, t ?? SEED);
-    return b || raw.type ? { ...(b ?? EMPTY_BRIEF), type: typeof raw.type === "string" ? raw.type : null } : null;
-  } catch {
-    return null;
-  }
-}
 
 // ---- checking the team's templates (an admin's save) ----
 
@@ -588,26 +340,3 @@ export const SEED: WorkTemplates = {
     notWithout: ["Deploy to production", "Rerun or reload data", "Change or fix data", "Change who can see it"],
   },
 };
-
-/** A full made-up item for a type ("See a full example"): its four lines filled from the type's examples and the team's first choices. */
-export function fullExample(t: WorkTemplates, id: string | null): { brief: Brief; help: Record<LineKey, LineHelp> } {
-  const help = helpFor(t, id);
-  const first = (xs: string[], i = 0) => xs[Math.min(i, xs.length - 1)] ?? null;
-  return {
-    help,
-    brief: {
-      ...EMPTY_BRIEF,
-      type: id,
-      where: help.where.example,
-      env: first(t.lists.environments, 1),
-      touches: t.lists.touches.slice(0, 1),
-      change: help.change.example,
-      check: help.check.example,
-      checkedBy: { name: "the finance lead", email: null },
-      done: help.done.example,
-      doneWhen: first(t.lists.doneWhen, 1),
-      signedOffBy: { name: "the finance lead", email: null },
-      notWithout: t.lists.notWithout.slice(0, 1),
-    },
-  };
-}

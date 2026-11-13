@@ -8,7 +8,7 @@ import { isClosed } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, draftLevelOf, parentProblem, type NewOptions } from "../plan/quick-create.ts";
 export type { NewOptions, NewParent } from "../plan/quick-create.ts";
 import type { DraftStory, Size } from "../plan/types.ts";
-import { BriefError, EMPTY_BRIEF, parseBrief, typeById, type Brief, type WorkTemplates } from "../plan/work-templates.ts";
+import { AnswersError, descriptionMax, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { ActionResponse } from "./types.ts";
 
@@ -22,8 +22,6 @@ export type NewItemContext = {
   /** The client's open items in scope (the store), or null when DevOps can't say. */
   items: (cfg: AppConfig, clientKey: string) => Promise<{ id: number; title: string; type: string; state: string; stateCategory: string; url: string; parentId: number | null }[] | null>;
   canWrite: (clientKey: string) => Promise<boolean>;
-  /** TP-1: the team's work templates, to check a draft's four lines. Absent or null: a draft keeps none. */
-  templates?: () => Promise<WorkTemplates | null>;
 };
 
 class Invalid extends Error {}
@@ -95,7 +93,7 @@ async function optionsOf(ctx: NewItemContext, cfg: AppConfig, clientKey: string)
 }
 
 /** Save as draft's values, checked against the process when it can be read. */
-async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, was: DraftStory | null = null): Promise<{ clientKey: string; title: string; itemType: string | null; level: "story" | "feature"; parentItemId: number | null; assignTo: string | null; description: string | null; targetDate: string | null; size: Size; brief?: Brief | null }> {
+async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, was: DraftStory | null = null): Promise<{ clientKey: string; title: string; itemType: string | null; level: "story" | "feature"; parentItemId: number | null; assignTo: string | null; description: string | null; targetDate: string | null; size: Size; answers?: Answers | null }> {
   const clientKey = key(o.clientKey);
   const t = cleanTitle(o.title);
   if ("problem" in t) throw new Invalid(t.problem);
@@ -117,27 +115,20 @@ async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, w
       }
     }
   }
-  // TP-1: the four lines and the request type, kept with the draft (a save that doesn't send them keeps the draft's).
-  let brief: Brief | null | undefined = undefined;
-  if (o.brief !== undefined) {
-    const doc = (await ctx.templates?.().catch(() => null)) ?? null;
-    if (!doc) brief = was?.brief ?? null;
-    else
-      try {
-        // A draft saved before its type was removed keeps that type (the form names it); any other unknown type is refused.
-        const keepType = was?.brief?.type && (o.brief as { type?: unknown } | null)?.type === was.brief.type && !typeById(doc, was.brief.type);
-        const b = parseBrief(keepType ? { ...(o.brief as object), type: null } : o.brief, doc);
-        brief = keepType ? { ...(b ?? EMPTY_BRIEF), type: was!.brief!.type } : b;
-      } catch (e) {
-        if (e instanceof BriefError) throw new Invalid(e.message);
-        throw e;
-      }
-  }
-  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", 8000), targetDate: optDate(o.targetDate), size: o.size === undefined && was ? was.size : optSize(o.size), ...(brief !== undefined ? { brief } : {}) };
+  // TP-1b: the three answers, kept with the draft (a save that doesn't send them keeps the draft's).
+  let answers: Answers | null | undefined = undefined;
+  if (o.answers !== undefined)
+    try {
+      answers = parseAnswers(o.answers);
+    } catch (e) {
+      if (e instanceof AnswersError) throw new Invalid(e.message);
+      throw e;
+    }
+  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", descriptionMax(was?.carried)), targetDate: optDate(o.targetDate), size: o.size === undefined && was ? was.size : optSize(o.size), ...(answers !== undefined ? { answers } : {}) };
 }
 
 const INPUT = ["clientKey", "title"];
-const OPTIONAL = ["type", "level", "parentItemId", "assignTo", "description", "targetDate", "size", "brief"];
+const OPTIONAL = ["type", "level", "parentItemId", "assignTo", "description", "targetDate", "size", "answers"];
 
 export async function newItemAction(ctx: NewItemContext, action: NewItemAction, input: unknown): Promise<ActionResponse> {
   const plan = ctx.plan;
