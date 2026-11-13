@@ -63,13 +63,13 @@ describe("day headings", () => {
 
 // Step 0's list (docs/ux/ib2/date-inventory.md): every place that says when something happened uses the formatter.
 describe("every place uses the shared formatter", () => {
-  const files = ["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/inbox/HeldBack.tsx", "ui/inbox/MergePane.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/FollowUps.tsx", "ui/StatusBar.tsx", "ui/Status.tsx", "ui/Day.tsx", "ui/CloseOut.tsx", "ui/Checkin.tsx", "ui/WeekGrid.tsx", "ui/Phone.tsx", "ui/PhoneDay.tsx", "ui/BlockPanel.tsx"];
+  const files = ["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/FollowUps.tsx", "ui/StatusBar.tsx", "ui/Status.tsx", "ui/Day.tsx", "ui/CloseOut.tsx", "ui/Checkin.tsx", "ui/WeekGrid.tsx", "ui/Phone.tsx", "ui/PhoneDay.tsx", "ui/BlockPanel.tsx"];
   it.each(files)("%s has no other stamp formatter", (f) => {
     const src = readFileSync(f, "utf8");
     expect(src).not.toMatch(/\bwhenText\(/);
     expect(src).not.toMatch(/split\(", "\)\[1\]/);
   });
-  it.each(["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/inbox/HeldBack.tsx", "ui/inbox/MergePane.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/Status.tsx"])("%s draws them with Stamp (full time on hover)", (f) => {
+  it.each(["ui/inbox/InboxPage.tsx", "ui/inbox/Detail.tsx", "ui/MessageThread.tsx", "ui/Conversations.tsx", "ui/Status.tsx"])("%s draws them with Stamp (full time on hover)", (f) => {
     expect(readFileSync(f, "utf8")).toMatch(/<Stamp\b/);
   });
   it("FollowUps and the status bar's strings come from stampText", () => {

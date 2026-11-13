@@ -36,9 +36,26 @@ export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [] };
 
-/** IB-1: the Inbox's views in its address (#/inbox/needs-you …). */
-export const INBOX_VIEW_SLUGS: Record<InboxPlace, string> = { everything: "everything", needs_you: "needs-you", promises: "promises", waiting: "waiting", in_progress: "in-progress", captures: "captures", teammates: "teammates", done: "done", chatter: "chatter" };
-const viewOfSlug = (slug: string): InboxPlace | null => (Object.keys(INBOX_VIEW_SLUGS) as InboxPlace[]).find((v) => INBOX_VIEW_SLUGS[v] === slug) ?? null;
+/** IB-4: the Inbox's three lists, in its address (#/inbox/chats, #/inbox/promises, #/inbox/captures). */
+export const INBOX_LISTS = ["chats", "promises", "captures"] as const;
+export type InboxList = (typeof INBOX_LISTS)[number];
+export const INBOX_LIST_NAMES: Record<InboxList, string> = { chats: "From chats", promises: "Promises", captures: "Captures" };
+/**
+ * IB-4: an IB-1 view's nearest list, for the addresses before IB-4 (#/inbox/needs-you …) and stored routes: what was
+ * about conversations lands on From chats, In progress on Promises, Everything on the list I used last (null).
+ */
+export function listOfPlace(v: InboxPlace | InboxList): InboxList | null {
+  switch (v) {
+    case "everything": return null;
+    case "promises": case "in_progress": return "promises";
+    case "captures": return "captures";
+    default: return "chats";
+  }
+}
+const OLD_SLUGS: Record<string, InboxPlace> = { everything: "everything", "needs-you": "needs_you", waiting: "waiting", "in-progress": "in_progress", teammates: "teammates", done: "done", chatter: "chatter" };
+const listOfSlug = (slug: string): InboxList | null | undefined => ((INBOX_LISTS as readonly string[]).includes(slug) ? (slug as InboxList) : slug in OLD_SLUGS ? listOfPlace(OLD_SLUGS[slug]!) : undefined);
+/** IB-4: where an item's key lives: a conversation in From chats, a promise in Promises, a capture or draft in Captures. */
+export const listOfKey = (key: string): InboxList | null => (key.startsWith("v") ? "chats" : /^[cf]/.test(key) ? "promises" : /^[kd]/.test(key) ? "captures" : null);
 /** An Inbox item key (plan/inbox-items.ts): v conversation, c chat promise, f promise, s send, k capture, d draft. */
 const ITEM_KEY = /^[vcfskd][1-9]\d{0,9}$/;
 
@@ -60,10 +77,10 @@ export type Nav =
   | { tab: "status"; group?: "needs" }
   | { tab: "ahead"; mode: AheadMode; item?: number; /** BL-1: an old address's filter, applied once on arrival. */ preset?: AheadPreset }
   /**
-   * IB-1: one list with views. `view` null is the bare #/inbox (IB-2: Everything);
-   * `item` is the item open in the detail pane (#/inbox/item/<key>), which picks a view it's in when `view` is null.
+   * IB-4: three lists. `view` null is the bare #/inbox (the list I used last); `item` is the row open in place
+   * (#/inbox/item/<key>), in the list its key belongs to.
    */
-  | { tab: "inbox"; view: InboxPlace | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
+  | { tab: "inbox"; view: InboxList | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
 
 /** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
 export type LateFilter = { client: string | null };
@@ -92,24 +109,24 @@ export const navOf = {
   aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
   /** SR-3: Week › Status on its Needs your update group (the nudge's click). */
   statusNeeds: (): Nav => ({ tab: "status", group: "needs" }),
-  /** The bare Inbox (IB-2: Everything), or a promise I added or a rule opened, open in the detail pane (was #/inbox/<id>). */
-  inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: null, item: followUp ? `f${followUp}` : null }),
-  /** IB-1: one view of the Inbox (#/inbox/<view>). */
-  inboxView: (view: InboxPlace): Nav => ({ tab: "inbox", view, item: null }),
+  /** The bare Inbox (the list I used last), or a promise I added or a rule opened, open in Promises (was #/inbox/<id>). */
+  inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", view: followUp ? "promises" : null, item: followUp ? `f${followUp}` : null }),
+  /** IB-4: one list of the Inbox (#/inbox/<list>); an IB-1 view lands on its nearest list. */
+  inboxView: (view: InboxPlace | InboxList): Nav => ({ tab: "inbox", view: listOfPlace(view), item: null }),
   /** UI-9: the Promises view, late ones only, for one client (#/inbox/promises/late/<client>; null: any client). */
   inboxLate: (client: string | null): Nav => ({ tab: "inbox", view: "promises", item: null, late: { client } }),
-  /** IB-1: one item open in the detail pane (#/inbox/item/<key>). */
-  inboxItem: (key: string, view: InboxPlace | null = null): Nav => ({ tab: "inbox", view, item: key }),
-  /** Captures and drafts (was Inbox › Captures). */
+  /** IB-4: one row open in place (#/inbox/item/<key>), in its own list. A send opens Week › Team, where it is answered. */
+  inboxItem: (key: string, _view: InboxPlace | InboxList | null = null): Nav => (key.startsWith("s") ? navOf.week("team") : { tab: "inbox", view: listOfKey(key), item: key }),
+  /** Captures (was Captures and drafts). */
   captures: (): Nav => ({ tab: "inbox", view: "captures", item: null }),
-  /** Needs you (was Inbox › Conversations). */
-  conversations: (): Nav => ({ tab: "inbox", view: "needs_you", item: null }),
+  /** From chats (was Needs you, and Conversations before it). */
+  conversations: (): Nav => ({ tab: "inbox", view: "chats", item: null }),
   /** Promises (was Inbox › My promises). */
   myPromises: (): Nav => ({ tab: "inbox", view: "promises", item: null }),
-  /** One conversation, open in the detail pane (the old #/inbox/conversation/<id> lands here). */
-  conversation: (id: number): Nav => ({ tab: "inbox", view: null, item: `v${id}` }),
-  /** One promise found in a chat, open in the detail pane (the old #/inbox/promise/<id> lands here). */
-  promise: (id: number): Nav => ({ tab: "inbox", view: null, item: `c${id}` }),
+  /** One conversation, open in From chats (the old #/inbox/conversation/<id> lands here). */
+  conversation: (id: number): Nav => ({ tab: "inbox", view: "chats", item: `v${id}` }),
+  /** One promise found in a chat, open in Promises (the old #/inbox/promise/<id> lands here). */
+  promise: (id: number): Nav => ({ tab: "inbox", view: "promises", item: `c${id}` }),
 };
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
@@ -160,9 +177,6 @@ export function modeNav(tab: Tab, mode: ModeName): Nav {
   if (tab === "ahead") return navOf.ahead(mode as AheadMode);
   return defaultNav(tab);
 }
-
-/** IB-1: the Inbox's views by name (the rail, headers, the Guide). */
-export const INBOX_VIEW_NAMES: Record<InboxPlace, string> = { everything: "Everything", needs_you: "Needs you", promises: "Promises", waiting: "Waiting on", in_progress: "In progress", captures: "Captures and drafts", teammates: "Teammate has it", done: "Done", chatter: "Chatter" };
 
 // ---- Addresses ----
 
@@ -215,7 +229,7 @@ export function hashOf(l: Loc): string {
   if (n.tab === "ahead") return (n.mode === "gantt" ? "#/backlog/gantt" : n.item ? `#/backlog/item/${n.item}` : "#/backlog") + (aheadQuery ? `?${aheadQuery}` : "");
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
-  return n.view ? `#/inbox/${INBOX_VIEW_SLUGS[n.view]}` : "#/inbox";
+  return n.view ? `#/inbox/${n.view}` : "#/inbox";
 }
 
 /**
@@ -364,7 +378,7 @@ export function parseHash(full: string): Loc | null {
       // IB-1: #/inbox/item/<key>. The addresses before it land on the same item or view: #/inbox/conversation/<id>,
       // #/inbox/promise/<id>, #/inbox/<id> (a follow-up, now a promise), and UI-7's modes.
       // LP-1: #/inbox/item/<key>/loop opens a promise with its Close the loop draft (only a promise: c or f).
-      if (a === "item" && c === "loop") return b !== undefined && /^[cf][1-9]\d{0,9}$/.test(b) ? plain({ tab: "inbox", view: null, item: b, loop: true }) : null;
+      if (a === "item" && c === "loop") return b !== undefined && /^[cf][1-9]\d{0,9}$/.test(b) ? plain({ tab: "inbox", view: "promises", item: b, loop: true }) : null;
       if (a === "item") return c === undefined && b !== undefined && ITEM_KEY.test(b) ? plain(navOf.inboxItem(b)) : null;
       if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
       // UI-9: #/inbox/promises/late and #/inbox/promises/late/<client>.
@@ -381,8 +395,8 @@ export function parseHash(full: string): Loc | null {
       if (a === undefined) return plain(navOf.inbox());
       if (a === "conversations" || a === "requests" || a === "asks") return plain(navOf.conversations());
       if (a === "my-promises") return plain(navOf.myPromises());
-      const v = viewOfSlug(a);
-      if (v) return plain(navOf.inboxView(v));
+      const v = listOfSlug(a);
+      if (v !== undefined) return plain({ tab: "inbox", view: v, item: null });
       return ID.test(a) ? plain(navOf.inbox(Number(a))) : null;
     }
     default:
@@ -490,7 +504,7 @@ export function viewName(loc: Loc): string {
     : n.tab === "status" ? TAB_NAMES.status
     : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
-    : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
+    : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
   return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

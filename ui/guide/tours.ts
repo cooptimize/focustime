@@ -116,7 +116,7 @@ const TODAY: Tour = {
   start: { tab: "today", flow: null, date: null },
   section: "today",
   steps: [
-    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent, then N more in Inbox.", example: "urgent" },
+    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent" },
     { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with + Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
     { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. + Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. + Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
@@ -128,17 +128,16 @@ const TODAY: Tour = {
 const INBOX: Tour = {
   id: "inbox",
   title: "The Inbox",
-  summary: "One list of what needs a decision.",
-  start: { tab: "inbox", view: "needs_you", item: null },
+  summary: "Three short lists: suggestions from chats, your promises and your captures.",
+  start: { tab: "inbox", view: "chats", item: null },
   section: "inbox",
   steps: [
-    { target: "ib-rail", title: "Views and clients", text: "Everything first: every item in time order. Needs you, Promises and the rest are shortcuts to one status. Tick the clients you want to see.", phone: { text: "View and Clients at the top open one picker: the views, with counts, and the clients you want to see." } },
-    { target: "ib-list", title: "Why it's here", text: "Each row says why it needs you: due, late, new, or waiting on you." },
-    { target: "ib-pane", title: "The open item", text: "Its summary, the messages, the linked DevOps item and where it came from.", example: "ib-item", phone: "skip" },
-    { target: "ib-acts", title: "Every action, the main one first", text: "Create DevOps item, Link, Close the loop or Accept leads, with the rest beside it. Anything outside FocusTime shows a preview first.", example: "ib-item" },
-    { target: "ib-keys", title: "Close the loop", text: "When you've done what you promised, Close the loop (L): send the update by Teams, email, a DevOps comment or a call, after a preview of who sees it. Not needed closes it quietly. J and K move, Enter opens.", phone: "skip" },
+    { target: "ib-rail", title: "Three lists", text: "From chats, Promises and Captures, each with its count. The chips under them pick clients. FocusTime remembers the list you used last." },
+    { target: "ib-list", title: "From chats", text: "A conversation shows here when it asks for work no DevOps item covers yet, after it has been quiet for 4 working hours. Hover a row to see why. Click it to open the messages in place." },
+    { target: "ib-acts", title: "Create item, Already covered, Dismiss", text: "Create item (C) fills a new item from the conversation and shows a preview first. Already covered (L) links one that exists. Dismiss (X) takes it off your list only.", example: "ib-item" },
+    { target: "ib-keys", title: "Promises clear themselves", text: "What you said you'd do in a chat lands in Promises. When its item is finished, or it sat untouched 7 days past due, it clears on its own, and Put back brings it back. J and K move, Enter opens, D marks done.", phone: "skip" },
   ],
-  end: { line: "That's the Inbox. Needs you is the one number to keep at zero.", tryIt: "Try it yourself: the Guide's Inbox section has a list to open items in." },
+  end: { line: "That's the Inbox. Most days it's a few rows, and they go away on their own.", tryIt: "Try it yourself: open a row in From chats." },
 };
 
 const AHEAD: Tour = {

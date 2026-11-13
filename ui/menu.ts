@@ -1698,16 +1698,13 @@ export const COOP_BRIEF_EVENT = "focustime:coop-brief";
 export const openCoopBrief = (clientKey: string, item: BreakDownTarget, weekStart?: string | null) => window.dispatchEvent(new CustomEvent(COOP_BRIEF_EVENT, { detail: { clientKey, item, weekStart: weekStart ?? null } }));
 /** IB-1: the Inbox's keys as commands (the same list as ui/inbox/ItemActions.tsx's ITEM_KEYS; a test keeps them equal). */
 export const ASK_KEYS = [
-  { id: "inbox.key.next", act: "next", label: "Inbox: next item", hint: "J" },
-  { id: "inbox.key.prev", act: "prev", label: "Inbox: previous item", hint: "K" },
-  { id: "inbox.key.open", act: "open", label: "Inbox: open the item", hint: "Enter" },
-  { id: "inbox.key.create", act: "create", label: "Inbox: create DevOps item", hint: "C" },
-  { id: "inbox.key.close", act: "close", label: "Inbox: close the loop", hint: "L" },
-  { id: "inbox.key.due", act: "due", label: "Inbox: change the due day", hint: "F" },
-  { id: "inbox.key.week", act: "week", label: "Inbox: put it on my week", hint: "W" },
-  { id: "inbox.key.hide", act: "hide", label: "Inbox: hide it for me", hint: "H" },
-  { id: "inbox.key.not_needed", act: "not_needed", label: "Inbox: not needed", hint: "N" },
-  { id: "inbox.key.done", act: "done", label: "Inbox: done", hint: "E" },
+  { id: "inbox.key.next", act: "next", label: "Inbox: next row", hint: "J" },
+  { id: "inbox.key.prev", act: "prev", label: "Inbox: previous row", hint: "K" },
+  { id: "inbox.key.open", act: "open", label: "Inbox: open or close the row", hint: "Enter" },
+  { id: "inbox.key.create", act: "create", label: "Inbox › From chats: create an item for the open suggestion", hint: "C" },
+  { id: "inbox.key.link", act: "link", label: "Inbox › From chats: already covered, link an item", hint: "L" },
+  { id: "inbox.key.dismiss", act: "dismiss", label: "Inbox › From chats: dismiss for me", hint: "X" },
+  { id: "inbox.key.done", act: "done", label: "Inbox › Promises: done", hint: "D" },
 ] as const;
 export type AskKeyId = (typeof ASK_KEYS)[number]["id"];
 const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent(ASK_KEY_EVENT, { detail: ASK_KEYS.find((k) => k.id === id)!.act }));
@@ -1720,8 +1717,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps, Grid", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "4", run: () => env.setView("status") },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "5", run: () => env.setView("inbox") },
-    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Needs you: what your clients' chats and your promises need from you", run: () => env.setView("requests") },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: from chats, promises, captures", hint: "5", run: () => env.setView("inbox") },
+    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › From chats: conversations that need a DevOps item", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
     { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Backlog: Grid or Gantt)", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", aka: ["Plan today", "Plan the day"], group: "Views", label: "Add work to today", run: () => env.openPlanDay() },
