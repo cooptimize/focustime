@@ -6938,6 +6938,9 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-tb-clients { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .ah-tb-people button { white-space: nowrap; }
 .ah-tb-mixed { display: inline-flex; align-items: center; margin-right: 4px; padding: 0 10px 0 10px; border-right: 1px solid var(--line, var(--border-strong)); color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; cursor: default; }
+/* The word needs room the toolbar has only from 1400 px: below, as before, nothing lifted says it (the tooltip names each). */
+@media (max-width: 1399px) { .ah-tb-mixed { display: none; } }
+:root .app.phone .ah-tb-mixed { display: none; }
 .ah-attention { gap: 6px; }
 .ah-attention[aria-pressed="true"] { --c: var(--ah-attention); }
 .ah-attention-n { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-2); font-weight: 600; text-align: center; }
