@@ -831,6 +831,17 @@ From the Nov 11 review: start the VM on work days before the day, but never from
 - **Not in it:** any schedule change, stopping on a schedule or when idle, other VMs, the assistant or the Teams bot, Azure, Entra or infra changes.
 - **Store:** no migration (settings rows and kv state). **Rollback:** revert the PR and redeploy; the settings rows are ignored by an older build.
 
+## 52. RB-1: Code, every client's repos, read only (authorized Nov 12)
+
+Cooptimizers borrow working code from one client to start the same job at another. Code gives every Cooptimizer one place to open any client's repos, walk the tree and read a file, read only. Decisions under "RB-1" in `docs/decisions.md`; the rules in CLAUDE.md (Client code (RB-1)).
+
+- **Code.** `#/code[/<client>[/<repo>[/<path>]]]` from ⋯ and the command menu: the client picker, the repo, Find a file, the tree, and the file colored by its language with line numbers, Copy, Copy path, Copy DevOps link, Copy link, Wrap, and Format for squashed JSON. One client at a time, its name and color always in the header with Read only.
+- **Who.** Every Cooptimizer, every client, unless an admin sets a client to its team only. Guests, automation accounts and the demo's people never reach real code.
+- **What is read.** The client's registered project, its default branch, with the company read token (it needs Code (read), added by hand). Text up to 1 MB; binaries, images and larger files say why.
+- **Kept.** Only the view log (`code_views`, 12 months, admins only). Nothing of the code.
+- **Not in it:** a view by kind, search across clients or inside files, other branches, history or pull requests, notebooks as cells, Markdown as a page, anything with AI, any write.
+- **Store:** one migration, `20261113T0022_code_views` (an app table; adds only). Not in Export. **Rollback:** revert the PR and redeploy; the table stays unused.
+
 ## Part 0: a shared owner and state per conversation
 
 One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.

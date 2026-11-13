@@ -27,11 +27,11 @@ type FileState = { state: "loading" } | { state: "ok"; file: CodeFileView } | { 
 const TEXT = {
   name: "Code",
   readOnly: "Read only",
-  pickClient: "Pick a client to read its code.",
+  pickClient: "Choose a client to read its code.",
   yours: "Your clients",
   others: "Other clients",
-  pickRepo: "Pick a repo.",
-  pickFile: "Pick a file in the tree, or find one by name.",
+  pickRepo: "Choose a repo.",
+  pickFile: "Choose a file in the tree, or find one by name.",
   noRepos: (c: string) => `${c}'s DevOps project has no repos.`,
   empty: "This repo is empty: it has no commits yet.",
   disabled: "This repo is disabled in DevOps, so it can't be read.",
@@ -143,7 +143,7 @@ function ClientPicker({ clients, current, onPick }: { clients: Client[]; current
     >
       <button type="button" className="cv-picker-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={`Client: ${current?.name ?? "none"}. Change client`} onClick={() => setOpen((v) => !v)}>
         <Swatch color={current?.color ?? null} />
-        <span>{current?.name ?? "Pick a client"}</span>
+        <span>{current?.name ?? "Choose a client"}</span>
         <span className="cv-picker-caret" aria-hidden="true">
           ▾
         </span>
@@ -540,7 +540,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
             <label className="cv-repo">
               <span className="sr-only">Repo</span>
               <select aria-label="Repo" value={at.repoId ?? ""} onChange={(e) => onGo({ clientKey: at.clientKey, repoId: e.target.value || null, path: null })}>
-                <option value="">Pick a repo</option>
+                <option value="">Choose a repo</option>
                 {repoList.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}

@@ -77,7 +77,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     // Three repos: pick one.
     const select = panel(page).getByLabel("Repo");
     await select.waitFor();
-    expect(await select.locator("option").allTextContents()).toEqual(["Pick a repo", "archive (empty)", "sales-analytics", "store-portal"]);
+    expect(await select.locator("option").allTextContents()).toEqual(["Choose a repo", "archive (empty)", "sales-analytics", "store-portal"]);
     await select.selectOption({ label: "sales-analytics" });
     await row(page, "/sql").waitFor();
     expect(await tree(page).locator("[role=treeitem][aria-level='1'] .cv-folder").first().textContent()).toBe("data");

@@ -1,6 +1,6 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10; WP-1's tables against `feat/wp1-devops-patterns` on Nov 11; WP-3's against `feat/wp3-patterns-trust` on Nov 12.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `4088995` on Nov 7, 2026; `picks.done_removed` against `fix/tx1-loose-ends` on Nov 8; SR-3's parts against `feat/report-finish` on Nov 8; DP-2's parts against `feat/deployment-items` on Nov 8; IB-2's against `feat/inbox-everything` on Nov 8; TX-1's parts against `fix/tx1-review` on Nov 8; CAL-1's calendar links against `feat/ics-calendars` on Nov 10; WP-1's tables against `feat/wp1-devops-patterns` on Nov 11; WP-3's against `feat/wp3-patterns-trust` on Nov 12; RB-1's parts against `feat/rb1-code-browser` on Nov 12.
 
 ## One database, two kinds of table
 
@@ -77,6 +77,7 @@ Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, 
 | `org_settings`, `admin_audit`, `admin_seen` | App | Team settings (Rules and Defaults) and every admin change |
 | `people_directory`, `directory_accounts`, `people_clients`, `client_leads`, `people_overrides`, `client_logins`, `people_invites` | App | People, their levels and clients, client leads, client DevOps logins an admin confirmed, invites |
 | `sends`, `week_commitments`, `client_priorities`, `look_asks` | App | Send to…, each person's week features for Team and the status report, written on every change since CF-1 (feature, type, title, link; no hours, to-dos or notes), client priorities, Ask to look |
+| `code_views` | App | RB-1: who opened which client's repo or file in Code, or used Find, and when (actor id and name, client, repo id and name, path, event); never content. Written before a file's text is returned; read only by admins (Admin › Audit › Code views); kept 12 months |
 | `work_templates`, `work_template_uses` | App | TP-1: the team's work templates (one row: the document, its version, when and by whom it was last saved; edits audited in `admin_audit`, area `work_templates`) and one row per item created with a request type (its tag, when, whether all four lines were filled): counts only, never who, which client or which item |
 | `scheduler_state`, `job_claims`, `schema_migrations`, `schema_version`, `schema_migration_names` | App | The scheduler's next due time, job claims, migrations |
 
@@ -98,6 +99,7 @@ What is deleted by age, for everyone at once (`store/retention.ts` `RETENTION_RU
 | `delivery_snapshots` | 120 days |
 | `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay |
 | `job_claims` | 30 days |
+| `code_views` | 12 months |
 
 Kept elsewhere:
 
@@ -122,6 +124,7 @@ Kept elsewhere:
 - **Status report drafts and suggestions (SR-1, SR-3).** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours and never written to the plan store. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
 - **Calendar link details with Busy only (CAL-1).** No title, location or description is read into what is kept: only start, end and busy, free or tentative. Show titles keeps titles only. A calendar link's own address is never shown again, logged or exported; only its host is shown.
 - **DevOps item text (WP-1).** The patterns page reads descriptions and acceptance criteria to measure them and, for a classification, to send; the text is dropped once the request is done. Only lengths and labels are kept.
+- **Client code (RB-1).** Repo lists, folder lists and file text are read from DevOps on each click and held in server memory at most 5 minutes; never written to the database, disk, logs, Export or the browser's storage. Only the view log's row (who, which repo and path, when) is kept.
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
 ## Who can see what
@@ -132,6 +135,7 @@ Kept elsewhere:
 - **Team views** (Team, sends, priorities) show a commit snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
 - **DevOps patterns (WP-1)** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing. Team and area names (WP-2) show on the page to people with the switch; in the summary download only in the scope line of a client the person is on.
+- **Code (RB-1)** shows any client's code to every Cooptimizer, except a client an admin set to its team only; Code views shows admins who opened what, never the code.
 - **Diagnostics** (Settings › Data › Diagnostics) is counts only, for a person's own chats, with no admin view.
 
 ## Deployment items (DP-2)

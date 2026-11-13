@@ -111,6 +111,17 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - Backlog after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Backlog. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
+## RB-1 words (Nov 12)
+
+- The panel is **Code**; its header always shows the client's name and color, the repo, and **Read only**. Menus: **Code**, and **Code: <client>** in Commands.
+- Choosing: **Choose a client** (the picker), **Your clients** and **Other clients**, **Choose a repo**, **Choose a file in the tree, or find one by name.**, **Find a file**, **"2 matches"**, **No file name matches.**, **"Only the first 20,000 file names are searched."**
+- A client set to its team only: **"Only <client>'s team can open this"** (greyed in the list, and as the reason on its page). Never its repo names.
+- Buttons: **Copy** (the whole file as it is), **Copy formatted** (only while Format is on), **Copy path**, **Copy DevOps link**, **Copy link**; switches **Wrap** and **Format**; **Copied**.
+- The log line, once at the foot of the left side: **"Opening a file is logged for FocusTime admins: who, which file and when."**
+- States, always with the reason: **"FocusTime can't read <client>'s code yet. The company DevOps token for <client> needs Code (read)."**; **"<client> has no DevOps set up in Dataverse, so there's no code to show."**; **"This repo is empty: it has no commits yet."**; **"This repo is disabled in DevOps, so it can't be read."**; **"This is a binary file (23 bytes), so it isn't shown here."**; **"This is an image (40 KB). Images aren't shown here."**; **"This file is 3.4 MB. Files over 1 MB aren't shown here."**; **"This file is a Git LFS pointer. It's shown as it is; the file it points to isn't read."**; **"Coloring is off for large files."**
+- Admin: **Who can read this client's code** (Rule): **Whole company** or **Its team only**; **Can FocusTime read it?** with **"Code: readable · 3 repos"**, **"Can't read yet: the token needs Code (read)"** or **"No DevOps set up"**, and **Check**. Admin › Audit: **Code views**, **Opened the repo**, **Opened a file**, **Used Find**, **"Last 30 days: <client> 12 · …"**, **Every client**, **Everyone**.
+- Avoid: "browse", "source code", "codebase" in visible copy; say **code**, **repo**, **file**, **folder**.
+
 ## TP-1 words (Nov 12)
 
 - **The four lines**, always these names and in this order: **What and where**, **What changes**, **How we'll check**, **How far and who signs off**. Never Target, Change, Control or Boundary (the studies' earlier names, only read).
