@@ -4,7 +4,7 @@
 import { Pat } from "./pat.ts";
 import { fakePat } from "./test-fakes.ts";
 
-export type FakeItem = { id: number; rev: number; fields: Record<string, unknown>; relations: { rel: string; url: string; attributes?: unknown }[] };
+export type FakeItem = { id: number; rev: number; fields: Record<string, unknown>; relations: { rel: string; url: string; attributes?: unknown }[]; /** ED-1: multilineFieldsFormat (a field stored as Markdown). */ formats?: Record<string, string> };
 export type FakeComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 export type Seen = { method: string; url: string; authorization: string | null; contentType: string | null; body: unknown };
 
@@ -57,7 +57,10 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
   const me = (auth: string | null) => (auth ? identities[auth] : undefined);
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json; charset=utf-8" } });
   const itemUrl = (id: number) => `https://dev.azure.com/${org}/_apis/wit/workItems/${id}`;
-  const view = (i: FakeItem) => ({ id: i.id, rev: i.rev, fields: { ...i.fields, "System.Id": i.id }, relations: i.relations, url: itemUrl(i.id) });
+  const view = (i: FakeItem) => ({ id: i.id, rev: i.rev, fields: { ...i.fields, "System.Id": i.id }, relations: i.relations, url: itemUrl(i.id), ...(i.formats && Object.keys(i.formats).length ? { multilineFieldsFormat: { ...i.formats } } : {}) });
+  const PARENT = "System.LinkTypes.Hierarchy-Reverse";
+  const CHILD = "System.LinkTypes.Hierarchy-Forward";
+  const idOf = (u: string) => Number(u.match(/workItems\/(\d+)$/i)?.[1]);
   const bump = (i: FakeItem) => {
     i.rev++;
     i.fields["System.ChangedDate"] = clock();
@@ -107,7 +110,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
-    if (m) return json({ value: [{ referenceName: "System.Title", alwaysRequired: true }, ...(opts.required?.[decodeURIComponent(m[1]!)] ?? []).map((r) => ({ referenceName: r, name: r.split(".").pop(), alwaysRequired: true })), ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
+    if (m) return json({ value: [{ referenceName: "System.Title", alwaysRequired: true }, { referenceName: "System.Description" }, ...(opts.required?.[decodeURIComponent(m[1]!)] ?? []).map((r) => ({ referenceName: r, name: r.split(".").pop(), alwaysRequired: true })), ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
     if (rest === "_apis/wit/wiql") {
       const q = String(body.query);
       const pm = q.match(/\[System\.Parent\] = (\d+)/);
@@ -155,13 +158,41 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
       if (method === "PATCH") {
         let commentId: number | null = null;
         for (const op of body as { op: string; path: string; value: unknown }[]) if (op.op === "test" && op.path === "/rev" && op.value !== it.rev) return json({ message: "TF26071: This work item has been changed by someone else since you opened it." }, 412);
+        // One patch is one revision: an op DevOps refuses leaves the item (and the items it links) as they were.
+        const saved = new Map([...items.values()].map((x) => [x.id, structuredClone({ fields: x.fields, relations: x.relations, formats: x.formats })] as const));
+        const refuse = (r: Response) => {
+          for (const x of items.values()) Object.assign(x, saved.get(x.id));
+          return r;
+        };
         for (const op of body as { op: string; path: string; value: unknown }[]) {
           if (op.op === "test") continue;
           // CV-4: a relation removed by its index (the documented "remove" on /relations/<index>).
           const ri = op.op === "remove" ? op.path.match(/^\/relations\/(\d+)$/) : null;
           if (ri) {
-            if (Number(ri[1]) >= it.relations.length) return json({ message: "TF401349: relation index out of range" }, 400);
-            it.relations.splice(Number(ri[1]), 1);
+            if (Number(ri[1]) >= it.relations.length) return refuse(json({ message: "TF401349: relation index out of range" }, 400));
+            const [gone] = it.relations.splice(Number(ri[1]), 1);
+            // ED-1: removing the parent link takes the child link off the old parent too.
+            if (gone?.rel === PARENT) {
+              delete it.fields["System.Parent"];
+              const old = items.get(idOf(gone.url));
+              if (old) old.relations = old.relations.filter((r) => !(r.rel === CHILD && idOf(r.url) === it.id));
+            }
+            continue;
+          }
+          if (op.path === "/relations/-" && (op.value as { rel?: string })?.rel === PARENT) {
+            // ED-1: an item has one parent at most; the new parent gets the child link.
+            if (it.relations.some((r) => r.rel === PARENT)) return refuse(json({ message: "TF201036: You cannot add a Parent link to this work item because a work item can have only one link of this type." }, 400));
+            const r = op.value as { rel: string; url: string };
+            const np = items.get(idOf(r.url));
+            if (!np) return refuse(json({ message: "TF401232: Work item does not exist" }, 400));
+            it.relations.push({ rel: PARENT, url: r.url });
+            it.fields["System.Parent"] = np.id;
+            np.relations.push({ rel: CHILD, url: itemUrl(it.id) });
+            continue;
+          }
+          const fm = op.path.match(/^\/multilineFieldsFormat\/(.+)$/);
+          if (fm) {
+            (it.formats ??= {})[fm[1]!] = String(op.value);
             continue;
           }
           const k = op.path.replace(/^\/fields\//, "");

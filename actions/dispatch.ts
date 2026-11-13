@@ -1820,6 +1820,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.done_offer":
     case "devops.undo_offer":
     case "devops.wrap_offer":
+    case "devops.edit_offer":
       return devopsWriteAction(await devopsWriteContext(ctx), action, req.input);
     case "item.card":
       return itemCardAction(itemCardContext(ctx), action, req.input);

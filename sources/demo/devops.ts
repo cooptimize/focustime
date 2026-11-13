@@ -38,10 +38,12 @@ export type DemoItem = {
   area: string;
   iteration: string;
   relations: { rel: string; url: string; attributes?: unknown }[];
+  /** ED-1: multilineFieldsFormat (a field stored as Markdown). */
+  formats?: Record<string, string>;
 };
 /** DV-2: what a teammate can change in the demo's DevOps (see `teammate`). */
 export type TeammateChange =
-  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null }
+  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null; /** ED-1: a teammate rewrites the description. */ description?: string }
   | { create: { type: string; title: string; parent?: number | null; assignee?: string | null; target?: string | null; /** In the project, outside the scope (another team's area). */ outsideScope?: boolean } };
 /** DV-2: a teammate's change from a request's input, or null when it isn't one. */
 export function parseTeammate(v: unknown): TeammateChange | null {
@@ -55,8 +57,8 @@ export function parseTeammate(v: unknown): TeammateChange | null {
     if (!str(c.type) || !str(c.title) || !opt(c.parent, (x) => x === null || Number.isInteger(x)) || !opt(c.assignee, (x) => x === null || str(x)) || !opt(c.target, day) || !opt(c.outsideScope, (x) => typeof x === "boolean")) return null;
     return { create: { type: c.type as string, title: c.title as string, ...(c.parent !== undefined ? { parent: c.parent as number | null } : {}), ...(c.assignee !== undefined ? { assignee: c.assignee as string | null } : {}), ...(c.target !== undefined ? { target: c.target as string | null } : {}), ...(c.outsideScope ? { outsideScope: true } : {}) } };
   }
-  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day)) return null;
-  return { id: o.id as number, ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
+  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day) || !opt(o.description, str)) return null;
+  return { id: o.id as number, ...(o.description !== undefined ? { description: o.description as string } : {}), ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
 }
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
@@ -140,7 +142,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     return f;
   }
   const relationsOf = (i: DemoItem) => [...(i.parent !== null ? [{ rel: "System.LinkTypes.Hierarchy-Reverse", url: apiUrl(orgOf(i.clientKey), i.parent) }] : []), ...[...items.values()].filter((c) => c.parent === i.id).map((c) => ({ rel: "System.LinkTypes.Hierarchy-Forward", url: apiUrl(orgOf(i.clientKey), c.id) })), ...i.relations];
-  const view = (i: DemoItem) => ({ id: i.id, rev: i.rev, fields: fields(i), relations: relationsOf(i), url: apiUrl(orgOf(i.clientKey), i.id) });
+  const view = (i: DemoItem) => ({ id: i.id, rev: i.rev, fields: fields(i), relations: relationsOf(i), url: apiUrl(orgOf(i.clientKey), i.id), ...(i.formats && Object.keys(i.formats).length ? { multilineFieldsFormat: { ...i.formats } } : {}) });
   /** DV-2: each client's version moves on every change to one of its items (a write, a create, a teammate's change). */
   const versions = new Map<DemoClientKey, number>();
   /** DV-2: the items changed since the client's last Refresh, for "DevOps checked just now · 3 changes". */
@@ -241,15 +243,35 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
         const ops = body as { op: string; path: string; value: unknown }[];
         if (ops.some((op) => op.op === "test" && op.path === "/rev" && op.value !== it.rev)) return json({ message: "TF26071: This work item has been changed by someone else since you opened it." }, 412);
         let commentId: number | null = null;
+        // One patch is one revision: an op refused leaves the item (and a parent it linked) as it was.
+        const saved = structuredClone({ parent: it.parent, relations: it.relations, formats: it.formats });
+        const undoAll = (r: Response) => (Object.assign(it, saved), r);
+        const oldParent = it.parent;
         for (const op of ops) {
           if (op.op === "test") continue;
           const ri = op.op === "remove" ? /^\/relations\/(\d+)$/.exec(op.path) : null;
           if (ri) {
-            // Only the item's own relations (attachments, links) can be removed; the index counts the parent links first.
+            // The index counts the parent link first, then the children, then the item's own relations.
             const all = relationsOf(it);
             const target = all[Number(ri[1])];
-            if (!target) return json({ message: "TF401349: relation index out of range" }, 400);
-            it.relations = it.relations.filter((r) => r !== target);
+            if (!target) return undoAll(json({ message: "TF401349: relation index out of range" }, 400));
+            if (target.rel === "System.LinkTypes.Hierarchy-Reverse") it.parent = null;
+            else if (target.rel === "System.LinkTypes.Hierarchy-Forward") return undoAll(json({ message: "The demo moves an item from the child's side only" }, 400));
+            else it.relations = it.relations.filter((r) => r !== target);
+            continue;
+          }
+          if (op.path === "/relations/-" && (op.value as { rel?: string })?.rel === "System.LinkTypes.Hierarchy-Reverse") {
+            // ED-1: one parent at most, in the same client's project.
+            if (it.parent !== null) return undoAll(json({ message: "TF201036: You cannot add a Parent link to this work item because a work item can have only one link of this type." }, 400));
+            const pid = Number(/workItems\/(\d+)$/i.exec((op.value as { url: string }).url)?.[1]);
+            const np = items.get(pid);
+            if (!np || np.clientKey !== clientKey) return undoAll(json({ message: "TF401232: the parent work item does not exist" }, 400));
+            it.parent = pid;
+            continue;
+          }
+          const fm = /^\/multilineFieldsFormat\/(.+)$/.exec(op.path);
+          if (fm) {
+            (it.formats ??= {})[fm[1]!] = String(op.value);
             continue;
           }
           const k = op.path.replace(/^\/fields\//, "");
@@ -259,6 +281,8 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
           } else setField(it, k, op.value, op.op === "remove");
         }
         bump(it);
+        // A move changes both parents' children too.
+        if (oldParent !== it.parent) for (const pid of [oldParent, it.parent]) if (pid !== null && items.get(pid)) bump(items.get(pid)!);
         return json({ ...view(it), ...(commentId ? { commentVersionRef: { commentId, version: 1 } } : {}) });
       }
     }
@@ -323,6 +347,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     if (c.state !== undefined) setField(it, "System.State", c.state);
     if (c.assignee !== undefined) setField(it, "System.AssignedTo", c.assignee ?? "", c.assignee === null);
     if (c.target !== undefined) setField(it, T, c.target ?? null, c.target === null);
+    if (c.description !== undefined) setField(it, "System.Description", c.description);
     bump(it);
     return { ok: true, id: it.id };
   }

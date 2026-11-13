@@ -241,6 +241,15 @@ const DESCRIPTIONS: Record<number, string> = {
   1160: "<div>Sales numbers in one place: a Gold fact table for sales orders, a customer dimension, a semantic model over them and a sales report in Power BI.</div>",
   1110: "<div>Customers export their order history from the portal, filtered by date, as CSV.</div>",
   2210: "<div>Patients complete the intake form before their first visit, on a phone or at home.</div>",
+  // ED-1: one of each kind the story card's Edit meets: simply formatted, with fonts and colors, with a table, with an image.
+  1111: "<div>Customers download their orders as a <b>CSV file</b> from the order history page.</div><div><br></div><ul><li>One row per order line</li><li>Dates as YYYY-MM-DD</li><li>Totals in the order's currency<ul><li>with the currency code in its own column</li></ul></li></ul>",
+  1112: '<div><span style="font-family: Segoe UI; font-size: 14px; color: rgb(32, 31, 30)">Filter the order list by a start and end date before exporting.</span></div><div><span style="color: rgb(32, 31, 30)">The last 90 days by default.</span></div>',
+  1141: "<div>Points per order, by tier:</div><table><tr><th>Tier</th><th>Points per dollar</th></tr><tr><td>Silver</td><td>1</td></tr><tr><td>Gold</td><td>2</td></tr></table>",
+  1142: '<div>The balance sits under the account menu, as in the mockup:</div><div><img src="https://dev.azure.com/northwind-demo/_apis/wit/attachments/mockup.png" alt="Points balance mockup"></div>',
+};
+/** ED-1: a description stored as Markdown in DevOps (multilineFieldsFormat), edited and written back as Markdown. */
+const MARKDOWN: Record<number, string> = {
+  1151: "Show the stores near the customer on a map.\n\n- Use the browser's location when they allow it\n- Otherwise ask for a postcode",
 };
 const ACCEPTANCE: Record<number, string> = {
   1120: "<div>A supplier can save a draft and come back to it.</div><div>Purchasing gets one notification per new supplier.</div><div>Certificates are PDF or image files up to 10 MB.</div>",
@@ -263,7 +272,7 @@ export function demoItems(): DemoItem[] {
       out.push({
         clientKey: c.key, id, rev: 3 + (id % 7), type, state, parent, title, who, whoEmail: emailOf(who), target: target ?? null, start: START[id] ?? null,
         size: isPortfolio(type) || UNSIZED.has(id) ? null : 3, changedAt: STALE.has(id) ? "2026-09-04T15:00:00Z" : QUIET.has(id) ? "2026-10-09T15:00:00Z" : "2026-10-30T15:00:00Z", order: n + 1, blocked: BLOCKED.has(id),
-        description: DESCRIPTIONS[id] ?? "<div>A fictional work item for the FocusTime demo.</div>", acceptance: ACCEPTANCE[id] ?? "", projectOnly, createdBy: null, area: c.key !== "Northwind" ? c.project : projectOnly ? `${c.project}\\Finance` : `${c.project}\\Web`, iteration: `${c.project}\\Sprint 23`, relations: [],
+        description: MARKDOWN[id] ?? DESCRIPTIONS[id] ?? "<div>A fictional work item for the FocusTime demo.</div>", acceptance: ACCEPTANCE[id] ?? "", ...(MARKDOWN[id] ? { formats: { "System.Description": "markdown" } } : {}), projectOnly, createdBy: null, area: c.key !== "Northwind" ? c.project : projectOnly ? `${c.project}\\Finance` : `${c.project}\\Web`, iteration: `${c.project}\\Sprint 23`, relations: [],
       });
     });
   }

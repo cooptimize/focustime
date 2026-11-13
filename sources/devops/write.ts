@@ -3,7 +3,7 @@
 // followed. Logs carry op, status and duration only; bodies, headers and PATs are never logged or returned. From an
 // error body only DevOps's own `message` is read (cut to 300 characters), so a rule error can be shown in plain words.
 import type { Logger } from "../../log/logger.ts";
-import { COMMENTS_API, identityFrom, orgBase, PARENT_REL, WIT_API, type DevOpsIdentity, type ItemSnapshot, type PatchOp, type StateInfo } from "../../plan/devopswrite.ts";
+import { COMMENTS_API, FORMAT_API, identityFrom, orgBase, PARENT_REL, WIT_API, type DevOpsIdentity, type ItemSnapshot, type PatchOp, type StateInfo } from "../../plan/devopswrite.ts";
 import type { FieldInfo } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 
@@ -64,6 +64,19 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
     async item(org: string, pat: Pat, project: string, id: number): Promise<ItemSnapshot> {
       return snapshot(await req<RawItem>(org, pat, "item", "GET", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, WIT_API));
     },
+    /**
+     * ED-1: the item with the format each large text field is stored in (multilineFieldsFormat, only in
+     * 7.2-preview.3; checked on Learn Nov 12). An organization that doesn't answer that version has no Markdown
+     * fields, so the 7.1 read is used and every field counts as HTML.
+     */
+    async itemWithFormats(org: string, pat: Pat, project: string, id: number): Promise<ItemSnapshot> {
+      try {
+        return snapshot(await req<RawItem>(org, pat, "item_formats", "GET", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, FORMAT_API));
+      } catch (e) {
+        if (e instanceof WriteFailure && e.kind === "rejected") return snapshot(await req<RawItem>(org, pat, "item", "GET", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, WIT_API));
+        throw e;
+      }
+    },
     async states(org: string, pat: Pat, project: string, type: string): Promise<StateInfo[]> {
       const r = await req<{ value?: { name?: unknown; category?: unknown }[] }>(org, pat, "states", "GET", `${p(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states`, WIT_API);
       return (r.value ?? []).filter((s): s is StateInfo => typeof s.name === "string" && typeof s.category === "string").map((s) => ({ name: s.name, category: s.category }));
@@ -84,7 +97,9 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
       return req<unknown>(org, pat, "processconfiguration", "GET", `${p(project)}/_apis/work/processconfiguration`, WIT_API);
     },
     async update(org: string, pat: Pat, project: string, id: number, ops: PatchOp[]): Promise<ItemSnapshot & { commentId: number | null }> {
-      const r = await req<RawItem>(org, pat, "update", "PATCH", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, WIT_API, ops, "application/json-patch+json");
+      // ED-1: a patch that keeps a Markdown field Markdown (/multilineFieldsFormat/...) needs the version that has it.
+      const version = ops.some((o) => o.path.startsWith("/multilineFieldsFormat/")) ? FORMAT_API : WIT_API;
+      const r = await req<RawItem>(org, pat, "update", "PATCH", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, version, ops, "application/json-patch+json");
       return { ...snapshot(r), commentId: typeof r.commentVersionRef?.commentId === "number" ? r.commentVersionRef.commentId : null };
     },
     async create(org: string, pat: Pat, project: string, type: string, ops: PatchOp[]): Promise<ItemSnapshot> {
@@ -138,7 +153,7 @@ async function safeMessage(res: Response): Promise<string | null> {
   }
 }
 
-type RawItem = { id?: unknown; rev?: unknown; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown; attributes?: unknown }[]; commentVersionRef?: { commentId?: unknown } };
+type RawItem = { id?: unknown; rev?: unknown; multilineFieldsFormat?: Record<string, unknown>; fields?: Record<string, unknown>; relations?: { rel?: unknown; url?: unknown; attributes?: unknown }[]; commentVersionRef?: { commentId?: unknown } };
 type RawComment = { id?: unknown; commentId?: unknown; text?: unknown; isDeleted?: unknown; createdBy?: { uniqueName?: unknown }; createdDate?: unknown; modifiedDate?: unknown };
 
 function snapshot(r: RawItem): ItemSnapshot {
@@ -148,7 +163,8 @@ function snapshot(r: RawItem): ItemSnapshot {
   const parentUrl = relations.find((x) => x.rel === PARENT_REL)?.url;
   const fromField = typeof f["System.Parent"] === "number" ? (f["System.Parent"] as number) : null;
   const fromRel = parentUrl ? Number(parentUrl.match(/workItems\/(\d+)$/i)?.[1]) || null : null;
-  return { id: r.id, rev: r.rev, type: String(f["System.WorkItemType"] ?? ""), title: String(f["System.Title"] ?? ""), state: String(f["System.State"] ?? ""), fields: f, parentId: fromField ?? fromRel, relations };
+  const formats = Object.fromEntries(Object.entries(r.multilineFieldsFormat ?? {}).filter((e): e is [string, string] => typeof e[1] === "string").map(([k, v]) => [k, v.toLowerCase()]));
+  return { id: r.id, rev: r.rev, type: String(f["System.WorkItemType"] ?? ""), title: String(f["System.Title"] ?? ""), state: String(f["System.State"] ?? ""), fields: f, parentId: fromField ?? fromRel, relations, formats };
 }
 function comment(r: RawComment): Comment {
   const id = typeof r.id === "number" ? r.id : typeof r.commentId === "number" ? r.commentId : null;

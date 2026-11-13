@@ -36,7 +36,13 @@ export type DevOpsChange =
   /** CV-5: "Also add a comment on the item" after Link to item (a conversation, or my promise by commitmentId). */
   | { kind: "conversation_comment"; conversationId: number; itemId: number; text?: string }
   | { kind: "conversation_comment"; commitmentId: number; itemId: number; text?: string }
-  | { kind: "description_update"; suggestionId: number; after?: string };
+  | { kind: "description_update"; suggestionId: number; after?: string }
+  /** ED-1: the story card's Add to the end, for a field it can't edit exactly. */
+  | { kind: "description_update"; itemId: number; rev: number; text: string; part: "description" | "acceptance" }
+  /** ED-1: the story card's Edit: only the parts that changed, guarded by the revision Edit read. */
+  | { kind: "item_edit"; itemId: number; rev: number; title?: string; description?: string; acceptance?: string }
+  /** ED-1: Move…: the parent link only (null: No parent). */
+  | { kind: "reparent"; itemId: number; rev: number; parentId: number | null };
 /** GD-2: a change sent again with another client's names written as "another client" (the flag's one click). */
 const replaced = (changes: readonly DevOpsChange[]) => changes.map((c) => ({ ...c, mentions: "replace" as const }));
 
@@ -63,7 +69,7 @@ export const DevOpsWriteCtx = createContext<DevOpsWriteEnv | null>(null);
 export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
-export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
+export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
 /** CP-1: how the preview names and colors a client. */
 type ClientLook = { name: (clientKey: string) => string; color: (clientKey: string) => string | undefined };
@@ -90,7 +96,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
         }
         setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled });
       } catch (e) {
-        if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e) });
+        if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e), ...(e instanceof ActionRefusal && e.code ? { code: e.code } : {}) });
         settled?.({ confirmed: false, sent: false });
         if (e instanceof ActionRefusal && e.code === "no_write_pat") return void notify(`${e.message}.`);
         notify(errText(e));
@@ -237,7 +243,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
                 </tr>
               </thead>
               <tbody>
-                {r.preview.fields.map((f) => (
+                {r.preview.fields.filter((f) => !r.preview.looks?.some((l) => l.label === f.label)).map((f) => (
                   <tr key={f.label} className={f.changed && r.preview.op !== "create" ? "changed" : ""}>
                     <th scope="row">{f.label}</th>
                     {r.preview.op !== "create" && <td>{f.before ?? "(none)"}</td>}
@@ -246,6 +252,19 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
                 ))}
               </tbody>
             </table>
+            {r.preview.looks?.map((l) => (
+              <div key={l.label} className="dw-looks" role="group" aria-label={`${l.label}, now and after`}>
+                <h4>{l.label}</h4>
+                <div className="dw-look">
+                  <span className="dw-look-label">Now</span>
+                  {l.before ? <div className="sc-html" dangerouslySetInnerHTML={{ __html: l.before }} /> : <p className="muted">(none)</p>}
+                </div>
+                <div className="dw-look after">
+                  <span className="dw-look-label">After, as DevOps will show it</span>
+                  {l.after ? <div className="sc-html" dangerouslySetInnerHTML={{ __html: l.after }} /> : <p className="muted">(none)</p>}
+                </div>
+              </div>
+            ))}
             {r.preview.attachments && r.preview.attachments.length > 0 && <AttachPicker list={r.preview.attachments} disabled={busy || tried} onChange={onImages} />}
             {r.preview.mentions?.length ? <MentionFlag names={r.preview.mentions} where={`${clientWord}'s DevOps`} disabled={busy || tried} onReplace={onReplace} /> : null}
             {[...r.preview.links, ...r.preview.notes.filter((n) => !(r.preview.mentions?.length && n.startsWith("This mentions ")))].map((n) => (
@@ -286,7 +305,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
         <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
           {tried ? "Close" : "Not now"}
         </button>
-        <span className="muted">Logged in Settings &gt; Data, with Undo.</span>
+        <span className="muted">Logged in Settings › Activity, with Undo.</span>
       </div>
     </Modal>
   );
@@ -322,7 +341,7 @@ function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPr
   );
 }
 const confirmLabel = (p: DevOpsPreview) =>
-  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : "Undo in DevOps";
+  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
 
 /** The small form before a preview: a state and comment, or a date. */
 function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void; onPreview: (c: DevOpsChange[]) => void }) {
@@ -432,9 +451,15 @@ export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?
   return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
 }
 
-const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };
+const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", item_edit: "Edited", undo_item_edit: "Undo: edit put back", reparent: "Moved", undo_reparent: "Undo: moved back", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };
 const DW_STATUS: Record<string, string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
-const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x ?? "(empty)"}`).join(", ");
+/** ED-1: a description's HTML reads as its words in the log, cut to a line (the full text stays in the entry for Undo). */
+const plainLine = (x: string) => {
+  const t = /<[a-z]/i.test(x) ? x.replace(/<(br|\/div|\/p|\/li|\/h[1-6])\b[^>]*>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&") : x;
+  const one = t.replace(/\s+/g, " ").trim();
+  return one.length > 140 ? `${one.slice(0, 139)}…` : one;
+};
+const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x === null || x === "" ? "(empty)" : plainLine(x)}`).join(", ");
 
 /** Settings > Data (step 14): every DevOps write, newest first, with the values before and after, Undo and Retry. */
 export function DevOpsWriteLog(): ReactNode {

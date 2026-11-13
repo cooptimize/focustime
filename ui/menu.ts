@@ -1630,6 +1630,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.done_offer":
     case "devops.undo_offer":
     case "devops.wrap_offer":
+    case "devops.edit_offer":
     case "wrapup.preview":
     case "wrapup.confirm":
     case "wrapup.apply":
