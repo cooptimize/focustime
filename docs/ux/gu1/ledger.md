@@ -1190,9 +1190,9 @@ The five drawings of the old Plan the week screen (`pw-grid`, `pw-carry`, `pw-ca
 
 | | Before | After |
 |---|---|---|
-| Sentences | 1048 | 982 |
+| Sentences | 1048 | 986 |
 | Questions | 159 | 157 |
-| Words in answers | 12,464 | 10,011 |
+| Words in answers | 12,464 | 10,123 |
 | Answers over 120 words | 30 | 0 |
 | The longest answer | 200 words | 117 words |
 | Renamed | 21 rows and 118 words, several old names to a row, with chains | 34 rows and about 260 words, one per old name, no chains |
