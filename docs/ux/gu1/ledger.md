@@ -6,7 +6,7 @@ One row for every sentence the Guide had on `origin/main` at 2f4c0ea1 (1048 sent
 - **wrong**: it uses a name the app no longer has, writes a control as a character, or says something the code doesn't do. The last column says what.
 - **gone**: it describes something that is out of the app, or is history about how the app got this way. Removed, or folded into Renamed.
 
-Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row is in the second table of this file (added when the rewrite was done).
+Totals: **954 right, 71 wrong, 23 gone.** (958, 67 and 23 when the ledger was first finished: the rewrite found 4 rows marked right that were not, rows 481, 852, 928 and 969, and they are marked wrong here with "found in the rewrite".) What became of each wrong and gone row is in the second table of this file.
 
 "Where it is true": a label is quoted with the file and line where the app has it; a fact has the constant or the rule's file; "read against" names the screen's file when the sentence has no single label. Drawn pieces are marked hand-drawn in the third table.
 
@@ -492,7 +492,7 @@ Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row
 | 478 | ahead › Q: How do I read and fold Backlog's Gantt? | The small flag at a bar's end gathers what needs attention, with a count; hover or focus it for the list and a fix for each (Break down, Set dates, Assign, Size), plus the hours planned per week. | screen | "Break down" at plan/fixnext.ts:19 | right |  |
 | 479 | ahead › Q: How do I read and fold Backlog's Gantt? | Callouts, in the toolbar's view group, turns the flags off for a clean planning view. | statement | read against ui/ahead/ | right |  |
 | 480 | ahead › Q: How do I read and fold Backlog's Gantt? | Drag the edge of the item column to widen it. | statement | read against ui/ahead/ | right |  |
-| 481 | ahead › Q: How do I read and fold Backlog's Gantt? | Keys: Up and Down move between rows, Left closes, Right opens, Enter opens the side panel. | key, screen | "Enter opens" at ui/WeekGrid.tsx:198 | right |  |
+| 481 | ahead › Q: How do I read and fold Backlog's Gantt? | Keys: Up and Down move between rows, Left closes, Right opens, Enter opens the side panel. | key, screen | "Enter opens" at ui/WeekGrid.tsx:198 | wrong | found in the rewrite: Enter in the Gantt runs Break down on the row (ui/ahead/Gantt.tsx:591), it does not open a side panel |
 | 482 | ahead › Q: How do I read and fold Backlog's Gantt? | FocusTime remembers these choices in this browser. | statement | read against ui/ahead/ | right |  |
 | 483 | ahead › Q: How do Backlog's filters work? | One row under the header, the same in Grid and Gantt: Clients, People (Mine, Contributing, Everyone), Needs attention with its count, and Search (titles or #id). | screen | "Grid and" at ui/keys.ts:113 | right |  |
 | 484 | ahead › Q: How do Backlog's filters work? | Filter at the end of the row holds Epic, Dates (Next 2 weeks, Next 4 weeks, This quarter, Any time, or your own dates) and Levels (Epics, Features or Stories, and One level as a list); its number says how many of thos… | number | plan/ahead-view.ts:10 | right |  |
@@ -863,7 +863,7 @@ Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row
 | 849 | week › ladder › Needs stories | An admin can turn this off for a type that's worked directly. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
 | 850 | week › ladder › Child | Stories, and bugs and tasks where the team tracks them. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
 | 851 | week › ladder › Child | Go on a day, get a size, get done. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
-| 852 | week › ladder › Done | Tick it and FocusTime offers to set its item done in DevOps (Confirm or Not now); Close out asks once for the day's. | rule | "Confirm" at ui/DoneOffer.tsx:162 | right |  |
+| 852 | week › ladder › Done | Tick it and FocusTime offers to set its item done in DevOps (Confirm or Not now); Close out asks once for the day's. | rule | "Confirm" at ui/DoneOffer.tsx:162 | wrong | found in the rewrite: ticking a story opens Wrap it up (Finished, Made progress, Skip DevOps); there is no "Confirm or Not now" |
 | 853 | week › ladder › Done | Resolved in DevOps means no hours left; it drops off planning lists. | statement | "Dev" at plan/weeklist.ts:67 | right |  |
 | 854 | week › ladder | FocusTime makes the healthy path the easy one. | statement | read against ui/App.tsx (Week), ui/BlockPanel.tsx | right |  |
 | 855 | week › ladder | It reads your work from DevOps, nudges big things into smaller pieces, and offers to update DevOps when you finish. | rule | "Dev" at plan/weeklist.ts:67 | right |  |
@@ -939,7 +939,7 @@ Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row
 | 925 | try urgent › label | Example: the urgent strip | screen | the try-it's own example data | right |  |
 | 926 | try urgent › replay | Play again | statement | the try-it's own example data | right |  |
 | 927 | tour drawing todo-drag | Northwind · Mon PM \| 2h of 3h free \| Export button \| M · 2h \| Date filter  ← dropped here \| S · 1h \| Actions: Undo | number | "Mon" at config/schema.ts:190 | right |  |
-| 928 | tour drawing done-offer | Set #4411 to Closed? \| Northwind \| State \| Active → Closed \| Actions: Confirm, Not now | number | "Closed" at plan/conversations.ts:709 | right |  |
+| 928 | tour drawing done-offer | Set #4411 to Closed? \| Northwind \| State \| Active → Closed \| Actions: Confirm, Not now | number | "Closed" at plan/conversations.ts:709 | wrong | found in the rewrite: the drawing showed the old "Set to Closed?" offer; ticking opens Wrap it up |
 | 929 | tour drawing urgent | Urgent \| Send the test plan to Alex \| 1 day late \| Reply about the price list \| Due 2:00 \| Supplier onboarding · Must \| Waiting for you \| Actions: From chats · 2 | number, screen | "Send the" at actions/registry.ts:56 | right |  |
 | 930 | tour drawing closeout | Close out · Monday \| 4 done · 3h 10m focused \| Where you left off \| Chart renders; next, the filter \| #4411 still Active in DevOps \| Mark done \| Reply to Jordan \| Overdue \| Actions: Done | number | "Where you left off" at ui/CloseOut.tsx:174 | right |  |
 | 931 | tour drawing ib-item | Fix the export's last day \| Northwind · From chats \| Priya says the export stops a day early on Sundays. \| Why it needs an item \| Asks for a fix no item covers yet \| Actions: Create item, Already covered, Dismiss, ⋯ | control, screen | "From chats" at actions/registry.ts:291 | wrong | a control written as a character ("⋯"): the app shows an icon button with a name (docs/ux/gu1/app.md, Icon buttons) |
@@ -980,7 +980,7 @@ Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row
 | 966 | tour board › Put a to-do on a block (phone) | Tap a block, then Add to… on a story. | statement | "Add to" at actions/registry.ts:104 | right |  |
 | 967 | tour board › Put a to-do on a block (phone) | Long-press a to-do to move it. | statement | read against the tour's screen | right |  |
 | 968 | tour board › Check it off | Tick a to-do when it's done. | rule | read against the tour's screen | right |  |
-| 969 | tour board › Check it off | When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now. | rule | "Dev" at plan/weeklist.ts:67 | right |  |
+| 969 | tour board › Check it off | When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now. | rule | "Dev" at plan/weeklist.ts:67 | wrong | found in the rewrite: ticking a story opens Wrap it up (Finished, Made progress, Skip DevOps); there is no "Confirm or Not now" |
 | 970 | tour board › To place | The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. | statement | read against the tour's screen | right |  |
 | 971 | tour board › To place | Review opens it in the block's panel. | screen | read against the tour's screen | right |  |
 | 972 | tour board › To place | Nothing moves until you place it. | rule | read against the tour's screen | right |  |
@@ -1060,3 +1060,159 @@ Totals: **958 right, 67 wrong, 23 gone.** What became of each wrong and gone row
 | 1046 | tour status › end | That's Status. | screen | "Status" at ui/App.tsx:2422 | right |  |
 | 1047 | tour status › end | A few minutes on Friday afternoon is plenty. | statement | "Friday afternoon" at plan/notify.ts:69 | right |  |
 | 1048 | tour status › end | Try it yourself: Preview shows what Monday's report will say. | statement | "Preview" at ui/Feedback.tsx:161 | right |  |
+
+## What became of each wrong and gone row
+
+Of the 71 wrong rows, 66 were fixed and 5 were removed (rows 211, 326, 362, 431 and 627: the sentence went with a question that was history, or said a thing twice). Of the 23 gone rows, 21 were removed and 2 (rows 317 and 976) keep a sentence that now says only what the app does; the old names the gone rows held are rows in Renamed. "[more icon]" stands for the app's icon drawn beside the control's name.
+
+| # | The sentence as it was | Verdict | What became of it |
+|---|---|---|---|
+| 47 | ‹ › step to other days, and Today comes back. | wrong | Fixed. Now, in day › does › Any day: "[back icon] Previous day and [next icon] Next day step to other days, and Today comes back." |
+| 59 | A call live in the client's delivery chat shows on its block with Join; ⋯ › Start a call opens the chat in Teams. [Open Week #/week] | wrong | Fixed. Now, in week › Q: What does Call live mean?: "To start one yourself, use Start a call in <chat> under the block's [more icon] Actions." |
+| 62 | Before you type it lists what's assigned to you (your features and stories, each story under its feature), your promises, and More in the client for everyone else's work. | wrong | Fixed. Now, in week › does › A block's panel: "Before you type it lists what's assigned to you, your promises, and More in the client." |
+| 64 | Drag a to-do from a block onto the panel, or ⋯ › Take off the plan. | wrong | Fixed. Now, in week › does › Take work off: "Drag a to-do from a block onto the panel, or Take off the plan under its [more icon] More." |
+| 69 | ⋯ › Send to… on a feature or story, for this week or next. | wrong | Fixed. Now, in week › does › Send work to someone: "Send to…, under a feature's or story's [more icon] More, for this week or next." |
+| 109 | Ctrl+Enter in the box saves and opens the New form, with the AI version under More. [Open Captures and drafts #/inbox/captures] | wrong | Fixed. Now, in capture › does › Into DevOps: "Ctrl+Enter in the box saves and opens the New form. [Open Captures #/inbox/captures]" |
+| 136 | Start a message with capture: and it's saved to Captures and drafts, as typed. | wrong | Fixed. Now, in teams › does › capture:: "Start a message with capture: and it's saved to Captures, as typed." |
+| 145 | ⋯ › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file. [Open Code #/code] | wrong | Fixed. Now, in code › does › Find a file: "[more icon] More › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file. [Open Code #/code]" |
+| 152 | Type at the top of Settings' list: it finds a setting by its name or its old name. × or Esc closes. [Open Settings #/settings] | wrong | Fixed. Now, in settings › does › Search settings: "Type at the top of Settings' list: it finds a setting by its name or its old name." |
+| 153 | Day, Week, the round + to capture, the Inbox and Ask in the bar at the bottom. | wrong | Fixed. Now, in settings › does › On your phone: "Day, Week, the round [add icon] Capture button, Inbox and Ask in the bar at the bottom." |
+| 157 | ⋯ › Send feedback: an idea, a problem or a question, as a story in the FocusTime backlog, after a preview. | wrong | Fixed. Now, in settings › does › Send feedback: "[more icon] More › Send feedback: an idea, a problem or a question, as a story in the FocusTime backlog, after a preview." |
+| 186 | Each card is one item: edit its title, description and acceptance criteria (a short checklist; Enter adds the next), give it a size (S 1h, M 2h, L 4h, or leave it unsized | wrong | Fixed. Now, in capture › Q: How do I review the proposals?: "Each card is one item: edit its title, description and acceptance criteria, give it a size (S 1h, M 2h, L 4h, or leave it unsized), drag it by its handle or use [arrow-up icon] Move up and [arrow-down icon] Move down, or Drop it (Undo brings it back)." |
+| 202 | Cards and Timeline, in Week's header, switch in one click (B does the same, and it's in Week's ⋯ and Ctrl K). | wrong | Fixed. Now, in week › Q: Cards or Timeline?: "Cards and Timeline, in Week's header, switch in one click ((its key), also under [more icon] View options)." |
+| 209 | To see the weekend always, turn on Every weekend day in Week's ⋯ (this browser remembers it); to never see it, turn off Show weekend. | wrong | Fixed. Now, in week › Q: When do Saturday and Sunday show on Week?: "Every weekend day, under Week's [more icon] View options, shows the weekend always." |
+| 210 | You can still move a to-do onto a weekend by dragging it, from its ⋯ (Move, To Saturday) or by asking the assistant, and Undo puts it back. | wrong | Fixed. Now, in week › Q: When do Saturday and Sunday show on Week?: "You can move a to-do onto a weekend by dragging it, from Move under its [more icon] More, or by asking the assistant." |
+| 211 | Today's ‹ › stop on a weekend day the same way, shown as "Weekend" with nothing asking you to plan it. | wrong | Removed: it said the weekend rule a second time, for the day steppers. The rule is said once, for Week. |
+| 216 | Week and Today show a count like "4 items": hover or tap it for the list. | wrong | Fixed. Now, in week › Q: How do I plan a deployment?: "Week and Day show a count like "4 items": hover or tap it for the list." |
+| 221 | Plan one from Capture (choose Deployment), a day's ⋯ (Plan a deployment…), Ctrl K, the assistant (it proposes, you Confirm), or make an existing to-do one with its ⋯ › Ki | wrong | Fixed. Now, in week › Q: How do I plan a deployment?: "Capture a line like "Deploy Saturday" and choose Deployment, or use Plan a deployment… under a day's [more icon] Actions on Week, or ask the assistant and Confirm." |
+| 228 | Your block for that client today and Today's Now card say Call live in <chat>, when it started and who started it; Join opens the chat in Teams, where you join. | wrong | Fixed. Now, in week › Q: What does Call live mean?: "Your block for that client says Call live in <chat>, when it started and who started it; [call icon] Join opens the chat in Teams." |
+| 230 | To start one yourself, use the block's ⋯ or its details: Start a call in <chat> opens the chat in Teams ready for you to press Call. | wrong | Fixed. Now, in week › Q: What does Call live mean?: "To start one yourself, use Start a call in <chat> under the block's [more icon] Actions." |
+| 239 | Yes, each on its own: in Week's ⋯, Show weekend and Show with your catch-up day's name (Show Friday when it's Friday); both are also in Settings › Display › Days on Week. | wrong | Fixed. Now, in week › Q: Can I hide the catch-up day or the weekend?: "Yes, each on its own: under Week's [more icon] View options, Show weekend and Show with your catch-up day's name (Show Friday when it's Friday); both are also in Settings › Display › Days on Week." |
+| 242 | The bar at the bottom has Day, Week, a round + to capture, the Inbox and Ask. | wrong | Fixed. Now, in settings › Q: What works on a phone?: "The bar at the bottom has Day, Week, the round [add icon] Capture button, Inbox and Ask; Status is under [more icon] More." |
+| 256 | A Backlog link on a phone says Backlog is made for a bigger screen, with Open anyway (read only, for the rest of the session) and Back to Today. | wrong | Fixed. Now, in settings › Q: What works on a phone?: "Backlog is made for a bigger screen: on a phone it asks first, with Open anyway (read only)." |
+| 257 | On Android or in Chrome or Edge on a computer: ⋯ › Install app. | wrong | Fixed. Now, in settings › Q: How do I install it?: "On Android or in Chrome or Edge on a computer: [more icon] More › Install app." |
+| 259 | ⋯ › Install app shows the steps. | wrong | Fixed. Now, in settings › Q: How do I install it?: "On iPhone: tap Share in Safari, then Add to Home Screen, then Add; [more icon] More › Install app shows the steps." |
+| 260 | Once installed it opens like an app, straight to Today. | wrong | Fixed. Now, in settings › Q: How do I install it?: "Once installed it opens like an app, straight to Day." |
+| 261 | Every notification shows in ⋯ › Notifications, with a dot on ⋯ when there's something new, and as a short note at the bottom while FocusTime is open. | wrong | Fixed. Now, in settings › Q: How do notifications work?: "Every notification shows in [more icon] More › Notifications, with a dot on [more icon] More when there's something new, and as a short note at the bottom while FocusTime is open." |
+| 272 | On a phone, Capture is the round + in the middle of the bar at the bottom. | wrong | Fixed. Now, in capture › Q: Quick capture from anywhere?: "On a phone, [add icon] Capture is the round button in the middle of the bar at the bottom." |
+| 275 | Each card has a title, two to four lines on where it stands, who's in it and when it last moved. | gone | Removed: the Inbox draws suggestions, not conversation cards. What a row shows is in "What's in From chats?". |
+| 276 | Its status comes from what happened, never from a guess: New, In discussion, <Name> committed, Tracked #id (it has a DevOps item), Resolved or Closed. | gone | Removed: statuses are out of view. |
+| 277 | "Updated" means it changed since you last looked. | gone | Removed: statuses are out of view. |
+| 293 | Under ⋯: Add as my promise, This isn't work (closes it for everyone on the chat, with Undo) and Open in Teams. | wrong | Fixed. Now, in inbox › Q: What can I do with a suggestion?: "Under its [more icon] More: Add as my promise, This isn't work and Open in Teams." |
+| 312 | This isn't work (under ⋯) closes the conversation for everyone on the chat, with your name, and Undo opens it again. | wrong | Fixed. Now, in inbox › Q: Dismiss or This isn't work?: "This isn't work, under the row's [more icon] More, closes the conversation for everyone on the chat, with your name, and Undo opens it again." |
+| 317 | FocusTime doesn't chase anyone about it: no waiting days, no reminders, no Unclaimed list. | gone | Fixed. Now, in inbox › Q: What happens when someone commits to work?: "FocusTime doesn't chase anyone about it." |
+| 325 | The Inbox kept the parts people used: suggestions from chats, promises and captures. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 326 | Needs you is now From chats, and the old views (Everything, In progress, Waiting on, Handled by teammates, Done, Chatter) are gone, with ownership (I'll take it, Give to… | wrong | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 327 | Nothing was deleted: what you linked and created stays in DevOps, and old links open the nearest list. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 336 | A promise due later waits at its time in Today's agenda and on Week's rail. | wrong | Fixed. Now, in day › Q: What's in the urgent strip?: "A promise due later waits at its time on the Timeline and on Week's rail." |
+| 343 | Each line in Today's urgent strip and each promise on Week's rail opens that row in the Inbox, open in place, with the same actions. | wrong | Fixed. Now, in inbox › Q: Where do promises show?: "Each one opens its row in the Inbox, open in place." |
+| 362 | Links to the old views open the nearest list: Needs you and the conversation views open From chats, Promises and In progress open Promises, Captures and drafts opens Capt | wrong | Removed with its question. Renamed's first line says old links open the nearest place. |
+| 367 | Due, Who, Add to my week, Done and Not needed are always there; Link to item is under ⋯. | wrong | Fixed. Now, in inbox › Q: What are Promises?: "Due, Who, Add to my week, Done and Not needed are always there; Link to item is under the row's [more icon] More." |
+| 398 | On any feature or story (a feature or a story in a block's panel, an item Break down just created), ⋯ then Send to…. | wrong | Fixed. Now, in week › Q: How do I send work to someone?: "On a feature or story, Send to… under its [more icon] More." |
+| 414 | Then the usual DevOps write runs: a preview, the item assigned to you, read back, in the audit log with Undo, and a quiet note to whoever had it. | wrong | Fixed. Now, in week › Q: Does Accept change DevOps?: "Then the usual DevOps write runs: a preview, the item assigned to you, checked afterwards, with Undo in Settings › Activity and a quiet note to whoever had it." |
+| 428 | Ahead's Fix next became Gaps, then Readiness, and is now Backlog's Needs attention, a chip in the Grid's toolbar; the capture box's Sort later is now Decide later. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 429 | Typing fix next, gaps, readiness or sort later in the command menu still finds them. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 430 | It's called Backlog now, with two views, Grid and Gantt; 3 still opens it. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 431 | Readiness is the Grid's Needs attention, and Ahead's Backlog mode is Filter › Levels › One level as a list. | wrong | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 432 | Nothing you could do went away: see the Guide's Backlog section. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 433 | Old links still open the right place, and typing ahead, roadmap, gaps or readiness in the command menu finds it. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 434 | Renamed, nothing else changed. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 435 | A pick is now a to-do: one planned piece of work in a half-day block. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 436 | Typing pick in the command menu still finds every to-do command, and the assistant understands pick and to-do the same. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 437 | It's now Ask to collaborate, in the same places. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 438 | It still finds teammates who are free and sends a help invite after a preview. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 439 | Typing needs help in the command menu still finds it. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 464 | It goes to the Inbox's Captures and drafts exactly as typed, to sort later, with Undo on the reply. | wrong | Fixed. Now, in teams › Q: How do I capture something from Teams?: "It goes to the Inbox's Captures exactly as typed, to sort later, with Undo on the reply." |
+| 473 | Readiness and the old Backlog mode are part of the Grid now: Needs attention in the toolbar, and One level as a list under Filter. | gone | Removed (history). Needs attention and One level as a list are described where they are. |
+| 481 | Keys: Up and Down move between rows, Left closes, Right opens, Enter opens the side panel. | wrong | Fixed. Now, in ahead › Q: How do I fold Backlog's rows?: "Keys: Up and Down move between rows, Left closes and Right opens." |
+| 485 | ⋯ beside it has Expand all, Collapse all, Callouts (the Gantt's flags), Show the whole project, and which clients show Cooptimize's work only. | wrong | Fixed. Now, in ahead › Q: How do I fold Backlog's rows?: "Under Filter, Levels shows Epics, Features or Stories; Expand all and Collapse all are under [more icon] More in the toolbar." |
+| 493 | Old links to Ahead's Backlog open this list. | gone | Removed. The old names are rows in Renamed, one each; search and the command menu still find them. |
+| 522 | A client's project often holds much more than our work, so Backlog, Readiness and Week's lists show Cooptimize's work in it. | wrong | Fixed. Now, in ahead › Q: Why doesn't Backlog show everything in a client's DevOps project?: "A client's project often holds much more than our work, so Backlog and Week's lists show Cooptimize's work in it." |
+| 559 | Unsized stories count as 1h so the plan still adds up (change that in Settings › Planning), and nothing waits on a size. | wrong | Fixed. Now, in week › Q: Do I have to size everything?: "Unsized stories count as 1h so the plan still adds up (change that in Settings › Today and Week), and nothing waits on a size." |
+| 567 | Without a mouse, use Add to… or Move to… (the drag handle or ⋯); on a tablet, press and hold; on a phone, Add to…. | wrong | Fixed. Now, in week › Q: How do I plan stories into Week's blocks?: "Without a mouse, use [add icon] Add on the row, or Move under its [more icon] More; on a tablet, press and hold." |
+| 584 | Click it or + to keep it as a to-do, × to clear it for the week, or drag it to another of that client's blocks. | wrong | Fixed. Now, in week › Q: What are the suggested rows in my blocks?: "Click it or [add icon] Keep to make it a to-do, [close icon] Clear to drop it for the week." |
+| 588 | Turn them off in Settings › Planning or with Suggestions in Day's or Week's ⋯. | wrong | Fixed. Now, in week › Q: What are the suggested rows in my blocks?: "Turn them off in Settings › Today and Week, or with Suggestions under [more icon] View options on Day or Week." |
+| 627 | Today's agenda and Plan today show it as a row in time order. | wrong | Removed: the sentence named two screens that are gone. The answer now says where the line shows on Day. |
+| 645 | Today shows a quiet line while steps are left, and Settings › Profile › Run setup again runs it again. | wrong | Fixed. Now, in first-day › Q: First run: what was that setup?: "Day shows a quiet line while steps are left, and Settings › Profile › Run setup again runs it again." |
+| 646 | ⋯ › About: one line with where it runs, the pull request, the commit and when it was built, and a Copy button for sending it to the FocusTime team. | wrong | Fixed. Now, in settings › Q: Which version am I on?: "[more icon] More › About: one line with where it runs, the pull request, the commit and when it was built, and a Copy button for sending it to the FocusTime team." |
+| 654 | Turn it on from ⋯ on Today; the phone remembers this separately from your computer. | wrong | Fixed. Now, in day › Q: How does the timeline work on a phone?: "Turn on Timeline under [more icon] View options on Day; the phone remembers this separately from your computer." |
+| 657 | Timebox my day shows its suggestions with ✓ and ✕ and an Accept all bar. | wrong | Fixed. Now, in day › Q: How does the timeline work on a phone?: "Timebox my day shows its suggestions with [done icon] Accept and [close icon] Drop, and Accept all." |
+| 679 | ⋯ › Send feedback, or Send feedback in Commands. | wrong | Fixed. Now, in settings › Q: How do I send an idea, a problem or a question?: "[more icon] More › Send feedback, or Send feedback in (its key)." |
+| 693 | Admin (in ⋯ and in Settings, only for admins) holds the team's settings: clients, AI, conversations, people and their levels and leads, the organization's defaults, the h | wrong | Fixed. Now, in settings › Q: What can a FocusTime admin do?: "Admin (under [more icon] More and in Settings' list, only for admins) holds the team's settings: Clients, AI, Conversations, People, Organization, Standards, Status and Audit." |
+| 709 | On a phone, Settings opens on the list; each section is a page with Back. × at the top right, or Esc, closes Settings and goes back where you were. | wrong | Fixed. Now, in settings › Q: Where is Settings?: "On a phone, Settings is under [more icon] More and opens on the list; each section is a page with Back." |
+| 714 | After each one, FocusTime reads its transcript (or a reviewer uploads it) and proposes what to do about it: new DevOps items for gaps nobody has a story for, promises peo | wrong | Fixed. Now, in calls › Q: What are client calls?: "After each one, FocusTime reads its transcript (or a reviewer uploads it) and proposes what to do about it: new DevOps items for gaps nobody has a story for, promises people made, each in the Promises of the person who made it, and DevOps comments for decisions and status." |
+| 716 | The call shows on its client's card on Week; ⋯ › Client calls lists yours. | wrong | Fixed. Now, in calls › Q: What are client calls?: "The call shows on its client's block on Week; My client calls in (its key) lists yours." |
+| 726 | ⋯ › Code (or Code in Commands): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file. | wrong | Fixed. Now, in code › Q: Can I read another client's code?: "[more icon] More › Code (or Code in (its key)): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file." |
+| 749 | ‹ and › (or [ and ]) step to another day, and Today comes back. | wrong | Fixed. Now, in day › Q: Can I look at another day?: "[back icon] Previous day and [next icon] Next day (or (its key) and (its key)) step to another day, and Today comes back." |
+| 778 | Copy DevOps link at the foot copies the item's address; the ⋯ menus on to-dos and items do the same. | wrong | Fixed. Now, in day › Q: What is a story card?: "Copy DevOps link is at the foot." |
+| 779 | Esc or × closes it and Back returns to the one before. | wrong | Fixed. Now, in day › Q: What is a story card?: "Esc or [close icon] Close closes it, and Back returns to the one before." |
+| 785 | Move…, beside the parent or in the card's ⋯, puts the item under another feature or epic one level up; only the link changes, never its order, area or dates. | wrong | Fixed. Now, in day › Q: How do I fix an item's title, description or parent?: "Move…, beside the parent or under the card's [more icon] More, puts the item under another feature or epic." |
+| 818 | They were a lot to fill in while getting an idea down, so the New form now asks only the three questions. | gone | Removed (history about how it got this way). |
+| 819 | A draft you saved with the four lines keeps every word: its first three lines are the answers, and anything else it held shows once at the end of its description, to keep | gone | Removed (history about how it got this way). |
+| 820 | Items already created keep what was written in DevOps, and the story card shows their description as it is. | gone | Removed (history about how it got this way). |
+| 835 | Change that in Settings › Planning. | wrong | Fixed. Now, in week › try sizing: "Change that in Settings › Today and Week." |
+| 852 | Tick it and FocusTime offers to set its item done in DevOps (Confirm or Not now); Close out asks once for the day's. | wrong | Fixed. Now, in week › ladder › Done: "Tick it and Wrap it up opens: Finished or Made progress, then one preview and Confirm." |
+| 896 | ⋯ › Send feedback, or message the FocusTime team in Teams. | wrong | Fixed. Now, in footer: "[more icon] More › Send feedback, or message the FocusTime team in Teams." |
+| 921 | Done ✓ | wrong | Fixed. Now, in try assistant › done: "Done" |
+| 928 | Set #4411 to Closed? \| Northwind \| State \| Active → Closed \| Actions: Confirm, Not now | wrong | Fixed. Now, in tour drawing done-offer: "Wrap it up: #4411 Export button \| Northwind \| State \| Active → Closed \| Remaining Work \| 2 → 0 \| Actions: Confirm, Skip DevOps" |
+| 931 | Fix the export's last day \| Northwind · From chats \| Priya says the export stops a day early on Sundays. \| Why it needs an item \| Asks for a fix no item covers yet \| | wrong | Fixed. Now, in tour drawing ib-item: "Fix the export's last day \| Northwind · From chats \| Priya says the export stops a day early on Sundays. \| Why it needs an item \| Asks for a fix no item covers yet \| Actions: Create item, Already covered, Dismiss" |
+| 932 | Northwind · Portal \| 3 gaps \| Customer portal redesign \| Set dates \| Export button on the order page \| Size \| Supplier onboarding \| Break down \| Actions: Skip | wrong | Fixed. Now, in tour drawing attention-row: "Northwind · Portal \| 3 need attention \| Customer portal redesign \| Set dates \| Export button on the order page \| Size \| Supplier onboarding \| Break down \| Actions: Skip" |
+| 946 | More in the client, below, has everyone else's. + puts a row on this block, or drag it onto any block. | wrong | Fixed. Now, in tour plan-week › Assigned to you: "[add icon] Add to this block puts a row on it, or drag the row onto any block." |
+| 969 | When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now. | wrong | Fixed. Now, in tour board › Check it off: "When it has a DevOps item you can change, Wrap it up opens: Finished or Made progress, a preview, then Confirm." |
+| 976 | What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. | gone | Fixed. Now, in tour today › The urgent strip: "What needs you now: promises late or due within 2 hours, and work sent to you that waits for your answer." |
+| 990 | ‹ › step to another day, and Today comes back. | wrong | Fixed. Now, in tour today › Any day: "[back icon] Previous day and [next icon] Next day step to another day, and Today comes back." |
+
+Sentences marked right were also rewritten where their answer was cut to 120 words, split in two, or moved to the section a person would look in (the status report's questions moved from Week to Status). Every sentence in the rebuilt Guide was read against the code again as it was written; `ui/guide/app-names.test.ts` now checks the names on every run.
+
+## Drawn pieces: what is the app's own and what is hand-drawn
+
+| Piece | Where | The app's own | Hand-drawn | Why not the real component |
+|---|---|---|---|---|
+| Icons beside control names | every section, the tours | `Icon` from `ui/icons.tsx`, by name |  |  |
+| Keys | every section | the keys in `ui/keys.ts`, the app's `kbd` |  |  |
+| The rail and the page frame | the Guide | `PanelShell`, with the tabs' icons |  |  |
+| Cards and Timeline switch | Week › Try it: Cards or Timeline | `CardsTimelineSwitch` from `ui/ModeSwitch.tsx` | the block under it | a block card needs the person's week from the server |
+| The urgent strip | Day | the app's own lines (`.urgent-strip`, `.us-line`) and icons, with example rows | laid out by the Guide, so hand-drawn | `UrgentStrip` in `ui/Day.tsx` reads the person's Inbox items and opens them |
+| Work item type icons | Capture and Break down › How DevOps work is shaped | `TypeIcon` |  |  |
+| How much fits in a block | Week › Try it | the sums are `plan/estimate.ts` and `plan/fit.ts`; the app's buttons | the block and its meter, hand-drawn | the meter exists only in the Guide |
+| Put a to-do on a block | Week › Try it | the app's buttons and grip icon | two block cards and their to-do rows, hand-drawn in the block card's look (client edge, border) | a block card needs the person's week, and its drops write to the plan |
+| Open a row in From chats | Inbox › Try it | the app's buttons | the rows and the open card, hand-drawn | the Inbox's rows read the person's chats and its buttons write |
+| Ask the assistant | The assistant › Try it | the app's input and buttons | the turns and the proposal card, hand-drawn | the panel calls the assistant service; this one is scripted |
+| A proposal, confirmed | Start here | the done icon | the card, hand-drawn | it is an animation of a card |
+| Your first day's checks | Your first day | the done icon; states from `guide.checklist` | the rows, hand-drawn | the list exists only in the Guide |
+| 13 tour drawings | tours, only where the real screen has nothing to point at | the type scale, pills, button shapes | every one is hand-drawn, in one of three shapes: a block card (`todo-drag`), rows (`urgent`, `closeout`, `ib-item`, `attention-row`, `ask-answer`, `status-line`, `status-draft`) or a preview (`done-offer`, `pending`, `ask-move`, `ask-update`, `status-push`) | each stands for a screen state that needs the person's data and a server session (Wrap it up, Close out, the change set, the assistant's cards, Status's lines) |
+
+The five drawings of the old Plan the week screen (`pw-grid`, `pw-carry`, `pw-card`, `pw-add`, `pw-next`) were used by no tour and are removed.
+
+## Length, before and after
+
+| | Before | After |
+|---|---|---|
+| Sentences | 1048 | 982 |
+| Questions | 159 | 157 |
+| Words in answers | 12,464 | 10,011 |
+| Answers over 120 words | 30 | 0 |
+| The longest answer | 200 words | 117 words |
+| Renamed | 21 rows, with chains | 33 rows, one per old name, no chains |
+| "Where did X go?" questions | 6 | 0 |
+
+## What the app has that the Guide never mentioned, and where it is now
+
+| The app has | Now in |
+|---|---|
+| Status as a tab of its own | the Status section (what you do there, its tour, 9 questions, most moved from Week), in the rail between Backlog and Inbox |
+| Start focus, the focus screen, Deep focus | Day › How do I start focus on a to-do? |
+| Close out's steps | Day › What does Close out ask? |
+| Hours for one day and blocked time | Day › Can I change my hours for one day, or block time? |
+| I'll make it up… | Day › What is I'll make it up…? |
+| Ask to collaborate | Day › How do I ask a teammate to work with me? |
+| Settings is in the photo's menu, with search | Settings, phone and keys › Where is Settings? |
+| Theme, text size, reduce motion | Settings, phone and keys › How do I change the theme or the text size? |
+| Export my data and deleting it | Settings, phone and keys › How do I export or delete my data? |
+| Needs your update | Status › What is Needs your update? |
+| Wrap it up (the tours still showed "Confirm, or Not now") | the Week tour's Check it off step and its drawing |
+| Timeline on a phone, under View options | Day › How does the timeline work on a phone? |
+| The Friday reminder to finish the status update | Status › Can FocusTime remind me? |
+| Several status lines typed at once | Status › How do I type several lines quickly? |
+
+Not added, on purpose: Admin's pages beyond one answer (admins have the technical docs), the developer loop, and anything RS-2 or TD-1 would add (neither had merged when this was written).
