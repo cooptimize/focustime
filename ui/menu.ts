@@ -165,6 +165,10 @@ export type MenuEnv = {
   showDocs?: (page?: string, heading?: string) => void;
   /** WP-1: opens the DevOps patterns page; absent unless an admin turned it on for this person (then not in the menu). */
   showPatterns?: () => void;
+  /** RB-1: open Code (#/code), on a client when one is named. Absent: signed out. */
+  showCode?: (clientKey: string | null) => void;
+  /** RB-1: the clients Code lists ("Code: <client>" each), once they are loaded. Never a repo or a file. */
+  codeClients?: readonly { clientKey: string; name: string }[];
   /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
   startTour?: (id: string) => void;
   /** The active theme and how to change it (saved in config, applied live). */
@@ -1238,6 +1242,13 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
+    // RB-1: Code opens the panel; its reads are the panel's own and never listed (commandList hides them).
+    case "code.clients": return env.showCode ? { run: () => env.showCode!(null) } : { disabled: "Sign in to read clients' code" };
+    case "code.repos":
+    case "code.folder":
+    case "code.find":
+    case "code.file":
+      return { disabled: "Open Code to read a client's code" };
     case "patterns.status": return env.showPatterns ? { run: () => env.showPatterns!() } : { disabled: "Not available" };
     case "patterns.access":
     case "patterns.run_inventory":
@@ -1380,6 +1391,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
+    // RB-1: Code views sit in Admin › Audit; a client's code status in Admin › Clients.
+    case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin-audit", "code-views") } : { disabled: "Only for FocusTime admins" };
+    case "admin.code_check": return env.admin ? { run: () => env.openSettings("admin-clients") } : { disabled: "Only for FocusTime admins" };
     case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };
     // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
     // happens in the panel.
@@ -1753,6 +1767,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     ...GUIDE_SECTIONS.filter((s) => s.id !== "start").map((s) => ({ id: `ui.guide.${s.id}`, action: "ui.guide", group: "Help", label: `Guide: ${s.name}`, run: () => env.showGuide(s.id) })),
     // DOC-1: each Technical docs page by name ("Technical docs: Security"); the registry's docs.access opens the Overview.
     ...DOC_PAGES.filter((p) => p.id !== "overview").map((p) => ({ id: `ui.docs.${p.id}`, action: "docs.access", group: "Help", label: `Technical docs: ${p.label}`, aka: ["technical", "docs", ...p.aka], ...(env.showDocs ? { run: () => env.showDocs!(p.id) } : { disabled: "Sign in to read the Technical docs" }) })),
+    // RB-1: "Code: <client>" for each client Code lists (never a repo, a folder or a file).
+    ...(env.showCode ? (env.codeClients ?? []).map((c) => ({ id: `ui.code.${c.clientKey}`, action: "code.clients", group: "Code", label: `Code: ${c.name}`, aka: ["code", "repo", "repos", "git"], run: () => env.showCode!(c.clientKey) })) : []),
     { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];
 }
@@ -1765,7 +1781,8 @@ export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.r
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
   // WP-1: the DevOps patterns page is hidden: one entry, only for people it is on for; its own actions never show.
-  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns));
+  // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
+  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }

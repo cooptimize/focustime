@@ -71,7 +71,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -197,6 +197,8 @@ export function hashOf(l: Loc): string {
   // DOC-1: the Technical docs, at a page and a heading.
   if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
   if (l.overlay?.kind === "patterns") return "#/patterns";
+  // RB-1: Code at a client, a repo and a file: #/code/<client>/<repo id>/<path, one encoded part>.
+  if (l.overlay?.kind === "code") return codeHash(l.overlay);
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
@@ -235,8 +237,40 @@ export const setAheadQuery = (q: string) => void (aheadQuery = q);
 /** The query part of an address ("" when there is none). */
 export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
 
+/** RB-1: Code's address. The repo is its id (never its name); the path is one encoded part. */
+export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null }): string {
+  if (!o.clientKey) return "#/code";
+  const c = `#/code/${encodeURIComponent(o.clientKey)}`;
+  if (!o.repoId) return c;
+  return o.path && o.path !== "/" ? `${c}/${o.repoId}/${encodeURIComponent(o.path)}` : `${c}/${o.repoId}`;
+}
+const REPO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>, over Today. */
+function parseCode(hash: string): Loc | null {
+  if (hash.length > 1400) return null;
+  const parts = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
+  if (parts.length > 3) return null;
+  const at = (clientKey: string | null, repoId: string | null, path: string | null): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path } });
+  if (!parts.length) return at(null, null, null);
+  try {
+    const clientKey = decodeURIComponent(parts[0]!);
+    if (!CLIENT_KEY.test(clientKey)) return null;
+    if (parts.length === 1) return at(clientKey, null, null);
+    if (!REPO_ID.test(parts[1]!)) return null;
+    const repoId = parts[1]!.toLowerCase();
+    if (parts.length === 2) return at(clientKey, repoId, null);
+    const path = decodeURIComponent(parts[2]!);
+    // eslint-disable-next-line no-control-regex
+    if (!path.startsWith("/") || path.length > 1024 || /[\u0000-\u001f\\]/.test(path) || path.split("/").some((s, i) => i > 0 && (s === "" || s === "." || s === ".."))) return null;
+    return at(clientKey, repoId, path);
+  } catch {
+    return null;
+  }
+}
+
 export function parseHash(full: string): Loc | null {
   if (typeof full !== "string") return null;
+  if (/^#\/?code(\/|$)/.test(full)) return full.includes("?") ? null : parseCode(full);
   // AH-6: only Ahead's addresses carry a query (its filters and view, #/ahead/gantt?c=northwind&l=epic).
   const qi = full.indexOf("?");
   const hash = qi < 0 ? full : full.slice(0, qi);
@@ -492,5 +526,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_VIEW_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "code" ? "Code" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }
