@@ -236,6 +236,29 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-1 screenshots", () => {
     await page.close();
   }, T);
 
+  it("the style guide page's controls, icons and rows (the after set only: the section is new)", async () => {
+    const { page } = await freshPage(h, { width: 1440, height: 900 });
+    // A tall window: the page scrolls inside its own box, and a shot only holds what is in view.
+    await page.setViewportSize({ width: 1440, height: 2600 });
+    await page.goto(new URL("/styleguide", h.url).href);
+    const sec = page.locator('[data-sg="controls"]');
+    // The page exists only in a development UI (FOCUSTIME_E2E_DIST=dev); a built one has no style guide.
+    if (!(await sec.waitFor({ timeout: 20_000 }).then(() => true, () => false))) {
+      missed.push(`50-styleguide-controls: no style guide at ${page.url()} (run with FOCUSTIME_E2E_DIST=dev)`);
+      await page.screenshot({ path: `${DIR}/50-styleguide-missing.png` });
+      return void (await page.close());
+    }
+    // The page's sticky header would sit over a shot of one section.
+    await page.addStyleTag({ content: ".sg-head { position: static !important; }" });
+    for (const theme of ["cooptimize-dark", "cooptimize-light", "neutral"]) {
+      await page.locator(".sg-themes button").nth(["cooptimize-dark", "cooptimize-light", "neutral"].indexOf(theme)).click();
+      await page.waitForTimeout(300);
+      await sec.scrollIntoViewIfNeeded();
+      await sec.screenshot({ path: `${DIR}/50-styleguide-controls-${theme}.png` });
+    }
+    await page.close();
+  }, T);
+
   it("the phone's Day, Inbox and block sheet at 390x844", async () => {
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });

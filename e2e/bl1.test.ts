@@ -175,7 +175,7 @@ describe.skipIf(!CHROMIUM)("BL-1: Backlog, measured (browser, demo mode)", () =>
     const pop = await openFilter(page);
     await pop.getByRole("checkbox", { name: /^Stale only/ }).check();
     await page.keyboard.press("Escape");
-    await expect.poll(() => page.locator(".ah-tb-summary .ah-tb-chip").allTextContents()).toContain("Stale×");
+    await expect.poll(() => page.locator(".ah-tb-summary .ah-tb-chip").allTextContents()).toContain("Stale");
     for (const l of await page.locator(".ah-grid tbody .ah-row:not(.context) .ah-col-status").evaluateAll((xs) => xs.map((x) => x.getAttribute("aria-label") ?? ""))) expect(l).toContain("Stale");
     expect(errors).toEqual([]);
     await page.close();

@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { call } from "./api.ts";
 import { liveLine, type CoworkChatView, type CoworkData } from "../plan/cowork.ts";
+import { Icon } from "./icons.tsx";
 
 /** How often the window asks again: the server only reads its own rows (the shared poll reads Teams every 5 minutes). */
 const RELOAD_MS = 60_000;
@@ -61,7 +62,7 @@ export function LiveCalls({ chats, zone, tabIndex, className = "" }: { chats: re
               title={`Open ${c.name} in Teams to join the call`}
               aria-label={`Join the call in ${c.name}`}
             >
-              Join
+              <Icon name="call" /> Join
             </a>
           </div>
         );

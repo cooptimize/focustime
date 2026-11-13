@@ -143,7 +143,7 @@ describe.skipIf(!CHROMIUM)("QC-1: one New form, straight to DevOps (browser, dem
       const box = page.locator(".bp-addbox .bp-box");
       await box.waitFor();
       await box.fill("Store pickup");
-      const row = page.locator(".bp-new", { hasText: /^\+New (feature|.*): Store pickup/ }).filter({ hasText: /New (?!to-do|draft)/ });
+      const row = page.locator(".bp-new", { hasText: /^\s*New (feature|.*): Store pickup/ }).filter({ hasText: /New (?!to-do|draft)/ });
       await row.first().waitFor();
       await shot(page, "qc1-panel-new-feature", page.locator(".bp-addbox"));
       await row.first().click();

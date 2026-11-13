@@ -34,6 +34,7 @@ import { NowLine } from "./NowLine.tsx";
 import { railNowOf, type RailNow } from "./Timeline.tsx";
 import { LiveOnCard, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus, type Selection } from "./weekctx.ts";
 import { BlockCard, CardPick, CardPicks } from "./BlockCard.tsx";
+import { Icon } from "./icons.tsx";
 export type { PanelFocus, Selection } from "./weekctx.ts";
 export { CardWhen, LateChip, RulerPromises } from "./BlockCard.tsx";
 
@@ -527,7 +528,8 @@ export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, 
     >
       {now && <NowLine at={now.at} label={now.label} thin onClick={now.onClick} />}
       <div className="whole-label" title={kind === "pto" && day.pto ? ptoLabel(day.pto) : undefined}>
-        {label}
+        {/* RS-1: what kind of day off it is, as an icon before its name (a holiday, PTO, the catch-up day). */}
+        <Icon name={kind === "pto" ? (day.pto?.holiday ? "holiday" : "pto") : "catchup"} /> {label}
       </div>
       {drop.tip}
       {picks.length > 0 && <CardPicks picks={picks} label={`Catch-up work for ${dayLabel}`} tabIndex={selected ? 0 : -1} />}

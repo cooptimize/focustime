@@ -302,7 +302,7 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     const line = panel(page).locator(".aw-toplace-line");
     await line.waitFor();
     await expect(line.getAttribute("aria-expanded")).resolves.toBe("false");
-    expect(await line.innerText()).toMatch(/^▸ \d+ to place$/);
+    expect(await line.innerText()).toMatch(/^\s*\d+ to place$/);
     expect(await line.getAttribute("title")).toMatch(/\d+ (unfinished|from last week|sent to you)/);
     expect(await panel(page).locator("section.carry-summary, section.carry").count()).toBe(0);
     // Order: On this block, the meetings line, Add with Assigned to you first, then Promises and More in the client;
@@ -315,7 +315,7 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
     expect(order.at(-1)).toBe("sends");
     expect(order.indexOf("other")).toBeGreaterThan(order.indexOf("features"));
     const sends = panel(page).locator(".aw-sends > .pl-fold");
-    await expect(sends.innerText()).resolves.toMatch(/^▸ You sent/);
+    await expect(sends.innerText()).resolves.toMatch(/^\s*You sent/);
     expect(await panel(page).locator(".aw-sends section.team-group").count()).toBe(0);
     await sends.click();
     await panel(page).locator(".aw-sends section.team-group").waitFor();

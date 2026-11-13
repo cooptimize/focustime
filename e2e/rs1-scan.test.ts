@@ -119,7 +119,7 @@ describe.skipIf(!CHROMIUM || !OUT)("RS-1 scan", () => {
       await page.waitForTimeout(700);
       await look(page, `inbox ${list}`);
     }
-    for (const s of SECTION_IDS.filter((x) => x !== "client")) {
+    for (const s of [...SECTION_IDS.filter((x) => x !== "client"), "admin-clients", "admin-ai", "admin-conversations", "admin-people", "admin-organization", "admin-status", "admin-audit", "admin-standards"]) {
       await go(page, `#/settings/${s}`, 900);
       await look(page, `settings ${s}`);
     }

@@ -120,7 +120,7 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await expect(panel(page).locator(".bp-title h2").innerText()).resolves.toBe("Cooptimize · Mon AM");
     await expect(panel(page).locator(".bp-when").innerText()).resolves.toMatch(/^9:00–12:30 · /);
     await expect.poll(() => onBlock(page)).toContain(onIt);
-    await expect(panel(page).locator(".bp-meet-line").innerText()).resolves.toMatch(/^▸ 3 meetings · 1h 30m$/);
+    await expect(panel(page).locator(".bp-meet-line").innerText()).resolves.toMatch(/^\s*3 meetings · 1h 30m$/);
     // Opened by a click, the cursor is not put in the box.
     expect(await inBox(page)).toBe(false);
     // Another block: the same panel moves there (its empty space this time).
@@ -433,11 +433,11 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     // Not mine: it isn't under Assigned to you.
     expect(await assigned.getByText("Gift cards").count()).toBe(0);
     const fold = panel(page).locator(".bp-other > .pl-fold");
-    await expect(fold.innerText()).resolves.toMatch(/^▸ More in Northwind/);
+    await expect(fold.innerText()).resolves.toMatch(/^\s*More in Northwind/);
     await fold.click();
     const group = panel(page).locator(".bp-other .aw-group", { hasText: "Gift cards" });
     await group.waitFor();
-    await expect(fold.innerText()).resolves.toMatch(/^▾ More in Northwind · \d+$/);
+    await expect(fold.innerText()).resolves.toMatch(/^\s*More in Northwind · \d+$/);
     await group.locator(".aw-row", { hasText: "Gift card balance page" }).locator("button.aw-plus").click();
     await expect.poll(() => cardTitles(page, MON, "PM")).toContain("Gift card balance page");
     await expect.poll(() => onBlock(page)).toContain("Gift card balance page");

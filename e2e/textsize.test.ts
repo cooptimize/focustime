@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await go(page, "#/day");
       const timed = page.locator(".day-view .half.card .pick-row.planned").first();
       await timed.hover();
-      await timed.getByRole("button", { name: /\+ time/ }).click();
+      await timed.getByRole("button", { name: /^time$/ }).click();
       await page.getByRole("menuitem", { name: /Custom/ }).click();
       await page.locator("[role=dialog]").waitFor();
       await check("Timebox…");

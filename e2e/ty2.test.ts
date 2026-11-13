@@ -130,7 +130,9 @@ describe.skipIf(!CHROMIUM)("TY-2: the checklist beside Today's timeline", () => 
   }, T);
 
   it("hover links the row and its band both ways; a click on a row brings its band into view", async () => {
-    const { page } = await freshPage(h, { width: 1920, height: 620 });
+    // RS-1: 560 high (620 before): Day's promise lines above the timeline are rows now, 2 apart with no boxes, so the
+    // page above the timeline is about 30 px shorter and the band below the fold needs a shorter window.
+    const { page } = await freshPage(h, { width: 1920, height: 560 });
     await monday(page);
     await open(page);
     const r = row(page, "Utilization chart");
@@ -141,7 +143,7 @@ describe.skipIf(!CHROMIUM)("TY-2: the checklist beside Today's timeline", () => 
     await band(page, "Timesheet summary query").hover();
     await expect.poll(() => row(page, "Timesheet summary query").getAttribute("class")).toMatch(/\blinked\b/);
     await page.mouse.move(5, 5);
-    // The band is below the fold at 620; a click on the row's empty space scrolls to it. Sticky keeps the column in view.
+    // The band is below the fold at 560; a click on the row's empty space scrolls to it. Sticky keeps the column in view.
     const inView = () => band(page, "Utilization chart").evaluate((el) => {
       const r = el.getBoundingClientRect();
       return r.top >= 0 && r.bottom <= window.innerHeight;

@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     await expect.poll(() => nu.locator(".st-nu-head .st-title").allTextContents()).toEqual(["Supplier onboarding", "Store locator"]);
     await expect.poll(() => nu.locator(".st-nu").first().locator(".st-meta").textContent()).toContain("Owner Alex Rivera");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-no-update-1920.png`, fullPage: true });
-    await nu.locator(".st-nu").first().getByRole("button", { name: "+ Add a line" }).click();
+    await nu.locator(".st-nu").first().getByRole("button", { name: "Add a line" }).click();
     await nu.getByRole("textbox", { name: "New line for Supplier onboarding" }).fill("Sign-up form designed; purchasing reviews it Friday.");
     await expect.poll(() => nu.locator(".st-box-foot .muted").first().textContent()).toContain("Shows as Alex Rivera");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-add-line-1920.png`, fullPage: true });
@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     }
     // SR-3: the phone writes too (Add a line and Push all are there); No update yet still reads.
     expect(await page.getByRole("button", { name: "Push all" }).count()).toBe(1);
-    expect(await page.getByRole("button", { name: "+ Add a line" }).count()).toBeGreaterThan(0);
+    expect(await page.getByRole("button", { name: "Add a line" }).count()).toBeGreaterThan(0);
     await page.locator(".st-noupdate summary").waitFor();
     await page.close();
   }, T);

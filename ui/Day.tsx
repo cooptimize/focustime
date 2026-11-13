@@ -614,6 +614,7 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], fr
       <div className="attention-line">
         {dueCount > 0 && (
           <button type="button" className="att-chip due" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            <Icon name="promise" />
             <span className="att-tag">
               {[due.length ? `${due.length} promise${due.length === 1 ? "" : "s"}` : "", promises.length ? `${promises.length} promise${promises.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} due
             </span>
@@ -623,6 +624,7 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], fr
         )}
         {fromChats > 0 && (
           <button type="button" className="att-chip from-chats" onClick={() => (location.hash = "#/inbox/chats")} title="Conversations in your chats that may need a DevOps item">
+            <Icon name="chats" />
             <span className="att-tag">From chats · {fromChats}</span>
           </button>
         )}

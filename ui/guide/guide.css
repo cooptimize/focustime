@@ -65,8 +65,15 @@
 .guide-q { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; }
 .guide-q summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
 .guide-q summary::-webkit-details-marker { display: none; }
-.guide-q summary::after { content: "+"; color: var(--text-muted); font-family: var(--font-mono); }
-.guide-q[open] summary::after { content: "–"; }
+/* RS-1: the fold's mark is the family's chevron, at the right as before (it was a + and a – character). */
+.guide-q summary::before { content: none; }
+.guide-q summary::after {
+  content: ""; flex: none; width: var(--icon); height: var(--icon); align-self: center; background: var(--text-muted); transition: transform 120ms ease-out;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.guide-q[open] summary::after { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .guide-q summary::after { transition: none; } }
 .guide-q p { margin: 10px 0 2px; color: var(--text-muted); max-width: 68ch; }
 
 .guide-footer { margin-top: 48px; color: var(--text-faint); font-size: var(--fs-3); display: flex; gap: 10px; align-items: center; }

@@ -7103,7 +7103,7 @@ button:disabled { cursor: default; }
 :root :is(.page-head, .today-head, .ah-toolbar, .st-head) > .more-btn, :root .mode-area .more-btn { width: var(--h-control); min-width: var(--h-control); height: var(--h-control); }
 :root .app.phone :is(.more-btn, .icon-btn, .day-step, .pd-step button, .ph-sheet-close) { width: var(--tap, 44px); min-width: var(--tap, 44px); height: var(--tap, 44px); }
 /* The close button keeps its 44 px target; what shows is the round 32. */
-:root .x-close { border-radius: 50%; background: transparent; }
+:root .x-close { background: transparent; }
 :root .x-close::before { content: ""; position: absolute; width: var(--h-control); height: var(--h-control); border-radius: 50%; }
 :root .x-close { position: relative; }
 :root .x-close:hover:not(:disabled) { background: transparent; color: var(--text); }
@@ -7179,6 +7179,7 @@ button:disabled { cursor: default; }
 :root :is(.date-field, .select-field, .cv-picker-btn):focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 1px; }
 :root :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--risk); }
 :root :is(.date-field, .select-field, .cv-picker-btn):hover { background: var(--wash-1); border-color: var(--line); }
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select, textarea) { padding-inline: 10px; font: inherit; color: inherit; }
 /* The command menu's search is the dialog's own head (.plain-input): no box of its own. */
 
 /* ---- A7. Menus, the command menu and dialogs -------------------------------------------------------------- */
@@ -7260,7 +7261,10 @@ button:disabled { cursor: default; }
 :root .ah-grid .ah-cell { border-bottom: 0; }
 :root .ah-grid tbody tr.ah-row > .ah-cell:first-child { border-radius: var(--radius-input) 0 0 var(--radius-input); }
 :root .ah-grid tbody tr.ah-row > .ah-cell:last-child { border-radius: 0 var(--radius-input) var(--radius-input) 0; }
-:root .ah-grid tbody tr.ah-row:hover > .ah-cell { background: var(--wash-1); }
+/* Hover is drawn over the cell, not as its fill: a cell's fill says something (a change to save, AH-1). */
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell { box-shadow: inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch), inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-editing { box-shadow: inset 0 0 0 2px var(--focus); }
 :root .ah-grid tbody tr.ah-row.sel > .ah-cell, :root .ah-grid tbody tr.ah-row.highlighted > .ah-cell { background: var(--wash-accent); }
 :root .ah-grid th { border-bottom-color: var(--line); }
 /* Status: a feature's lines with no rule between features. */
@@ -7295,9 +7299,10 @@ button:disabled { cursor: default; }
 /* Day and Week give every button a 28 px target (PS-1); the header's main button and Day's promise lines are 32. */
 :root .mode-area :is(.add-work-head, .done-btn) { height: var(--h-control); }
 :root .day-view .urgent-strip .us-item .us-line { min-height: var(--h-control); }
-/* A narrow window: the top bar keeps one row with every tab's icon and word, by sitting a little closer. */
-@media (max-width: 1100px) {
-  :root .topbar { gap: 10px; padding-inline: 16px; }
+/* A narrower window (a laptop at 1280, a half screen at 1024): the top bar keeps one row with every tab's icon and
+   word, by sitting a little closer. */
+@media (max-width: 1320px) {
+  :root .topbar { gap: 10px; }
   :root .views { gap: 0; }
   :root .view-tab { padding: 0 8px; gap: 5px; }
   :root .top-actions { gap: 6px; }
@@ -7316,3 +7321,52 @@ button:disabled { cursor: default; }
 :root .adm-filter button:hover { background: transparent; color: var(--text); }
 :root .adm-filter button[aria-checked="true"] { background: var(--lift); color: var(--text); box-shadow: var(--shadow-1); }
 :root .adm-kind { border: 0; background: var(--wash-2); color: var(--text-muted); }
+/* Status: My features | <Client> report is a switch too (the client's side is a list to choose from). */
+:root .st-scope { border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); padding: 2px; gap: 2px; }
+:root .st-scope .ms-btn, :root .st-scope .st-scope-pick { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background-color: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
+:root .st-scope .ms-btn[aria-pressed="true"], :root .st-scope .st-scope-pick.on { background-color: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1); }
+/* A fold drawn by the browser (details) gets the family's chevron in place of the browser's triangle. */
+:root summary { list-style: none; cursor: pointer; }
+:root summary::-webkit-details-marker { display: none; }
+:root summary::before {
+  content: ""; display: inline-block; width: var(--icon); height: var(--icon); margin-right: 4px; vertical-align: calc(-3px * var(--text-scale)); background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 120ms ease-out;
+}
+:root details[open] > summary::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { :root summary::before { transition: none; } }
+/* A Backlog chevron's target is the row's full height (BL-1); what shows on hover is the round 28. */
+:root .ah-row .ah-chev, :root .pa-row .ah-chev, :root .bl-row .ah-chev { position: relative; align-self: stretch; height: auto; min-height: var(--h-small); border-radius: var(--radius-input); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:where(:not(:disabled)):hover, :root :is(.ah-row, .pa-row, .bl-row) .ah-chev:where(:not(:disabled)):active { background: transparent; }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev::before { content: ""; position: absolute; left: 50%; top: 50%; width: var(--h-small); height: var(--h-small); border-radius: 50%; transform: translate(-50%, -50%); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:hover::before { background: var(--wash-1); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:active::before { background: var(--wash-2); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev > * { position: relative; }
+/* The close button's target stays the whole 44 px square (UI-3); only what shows is round. */
+:root .x-close { border-radius: var(--radius-input); }
+/* The phone: Day's VM line wraps inside its chip, never past the screen's edge. */
+:root .app.phone .attention-line { flex-wrap: wrap; min-width: 0; }
+:root .app.phone .attention-line .att-chip { flex-wrap: wrap; max-width: 100%; min-width: 0; white-space: normal; row-gap: 4px; border-radius: var(--radius-dialog); }
+/* The panel's Start focus (on hover, on the next to-do) is one line. */
+:root .dp-start { flex: none; white-space: nowrap; }
+
+/* ---- E. The /styleguide page's RS-1 samples -------------------------------------------------------------------- */
+.sg-states { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); margin-bottom: var(--space-control); }
+.sg-state-name { flex: 0 0 260px; font-size: var(--fs-2); color: var(--text-muted); }
+.sg-states .done-btn, .sg-states .start-focus { border: 1px solid var(--action); }
+.sg-states .done-btn { min-height: var(--h-control); padding-inline: 14px; }
+.sg-rows { list-style: none; margin: 0; padding: 0; max-width: 720px; display: grid; gap: var(--space-row); }
+.sg-rows li { display: flex; align-items: center; gap: 10px; min-height: var(--h-control); padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius-input); }
+.sg-rows li.hover { background: var(--wash-1); }
+.sg-rows li.selected { background: var(--wash-accent); }
+.sg-rows li.open { border-color: var(--line); border-radius: var(--radius-menu); background: var(--wash-1); padding-block: 8px; }
+.sg-rows .sg-row-title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sg-rows .sg-row-sub { font-size: var(--fs-2); }
+.sg-rows .swatch.small { background: var(--c2); }
+.sg-rows li > .ft-icon { color: var(--text-faint); }
+.sg-icons { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; }
+.sg-icons li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.sg-icons li .ft-icon { color: var(--text); }
+.sg-dialog { width: 300px; max-height: none; }
+.sg-row { align-items: center; }
