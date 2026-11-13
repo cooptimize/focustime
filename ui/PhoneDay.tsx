@@ -108,7 +108,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, tickable, onStar
 }
 
 /** Today's to-dos, grouped by block: a checkbox, the title on its own line (two at most), then time, size and client. */
-export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: "+ Add" on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
+export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: Add on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
   const sheet = useTodoSheet();
   const tz = userZone(data);
   const start = (p: Pick) => data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt)?.start ?? null;
