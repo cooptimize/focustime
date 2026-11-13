@@ -918,7 +918,8 @@ function monthLoads(rows: Row[], bars: Map<number, Bar | null>, cap: AheadState[
 function PastWords({ words }: { words: string }) {
   // RS-2 D3: two whole parts that wrap as wholes: "planned 4h," "no focus time", or "nothing" "planned".
   const comma = words.includes(", ");
-  const [a, b] = comma ? words.split(", ") : [words.slice(0, words.lastIndexOf(" ")) || words, words.lastIndexOf(" ") > 0 ? words.slice(words.lastIndexOf(" ") + 1) : undefined];
+  const sp = words.lastIndexOf(" ");
+  const [a, b] = comma ? words.split(", ") : sp > 0 ? [words.slice(0, sp), words.slice(sp + 1)] : [words, undefined];
   return (
     <span className="pa-pw">
       <span>{b && comma ? `${a},` : a}</span>

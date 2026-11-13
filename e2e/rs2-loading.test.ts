@@ -76,6 +76,8 @@ describe.skipIf(!CHROMIUM)("RS-2: changing week or day answers at once (browser,
     await expect(page.locator(".wd1-body").evaluate((e) => getComputedStyle(e).opacity)).resolves.toBe("0.45");
     expect(await page.locator(".week-head .read-line").allInnerTexts()).toEqual(["Loading…"]);
     expect(await page.getByText("Loading…", { exact: true }).count()).toBe(1);
+    // Not reachable by keyboard either (review 2): the dimmed body is inert; the header's arrows still work.
+    expect(await page.locator(".wd1-body").evaluate((e) => (e as HTMLElement).inert)).toBe(true);
     // Two more presses while the first read is held: the header follows each, and ends three weeks on.
     await page.locator('.week-head button[aria-label="Next week"]').click();
     await page.locator('.week-head button[aria-label="Next week"]').click();
@@ -137,6 +139,9 @@ describe.skipIf(!CHROMIUM)("RS-2: changing week or day answers at once (browser,
     expect(ms).toBeLessThan(150);
     await expect.poll(() => busy(page, "main.day-view")).toBe("true");
     expect(await page.locator(".day-bar .read-line").allInnerTexts()).toEqual(["Loading…"]);
+    // The header's actions belong to the day drawn, not the asked one, so they wait (review 2); the body is inert.
+    expect(await page.locator(".day-bar .add-work-head").count()).toBe(0);
+    expect(await page.locator("main.day-view > :not(.day-bar)").evaluateAll((els) => els.every((e) => (e as HTMLElement).inert))).toBe(true);
     await reads.releaseAll();
     await expect.poll(() => busy(page, "main.day-view")).toBe("false");
     // The demo's Nov 9 is a holiday: Day draws the asked day, not the Friday it came from.

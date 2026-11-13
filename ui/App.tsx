@@ -1085,12 +1085,15 @@ export function App() {
   );
 
   // The week each place shows: Week its week (this week by default; the block panel's block's week), Day and its flows the day's.
-  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ?? (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
+  const wantWeek = !data ? null : nav.tab === "week" ? (nav.week ? mondayOf(nav.week) : (addAt?.date ? mondayOf(addAt.date) : data.today.weekStart)) : nav.tab === "today" && !loc.overlay ? (dayShown ? mondayOf(dayShown) : data.today.weekStart) : null;
   askedRef.current = wantWeek;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
-  }, [wantWeek]); // eslint-disable-line react-hooks/exhaustive-deps
+    // RS-2 (review 2): also after any other load (the day's rollover) took over from the asked one, so the asked week is
+    // read again rather than staying dimmed. weekRef is the week last asked of the server: while the asked week is read,
+    // after it drew and after it failed it equals wantWeek, so this neither repeats a read nor loops.
+  }, [wantWeek, data]); // eslint-disable-line react-hooks/exhaustive-deps
   /** RS-2: where the read of the asked week stands (Week's and Day's headers say it), and its Retry. */
   const read = weekRead({ asked: wantWeek, shown: data?.weekStart ?? null, failed: failedWeek });
   const retryRead = useCallback(() => void (wantWeek && load({ weekStart: wantWeek })), [wantWeek, load]);
@@ -2325,7 +2328,7 @@ export function App() {
           </button>
         </p>
       )}
-      <div className={`wd1-body${shownPanel ? " with-panel" : ""}${read ? " reading" : ""}`} aria-busy={read === "loading"}>
+      <div className={`wd1-body${shownPanel ? " with-panel" : ""}${read ? " reading" : ""}`} aria-busy={read === "loading"} inert={!!read}>
       <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => addWork(d, h) }}>
       <WeekGrid
         week={week}

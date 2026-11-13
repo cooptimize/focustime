@@ -43,6 +43,8 @@ export function createCalendarSource(d: CalendarSourceDeps) {
   const memory = new Map<string, { at: number; result: SourceResult<CalEvent> }>();
   /** RS-2: a week's read under way, which a second load joins instead of starting another. */
   const reading = new Map<string, Promise<SourceResult<CalEvent>>>();
+  /** Bumped by connect and disconnect, so a read started under the old sign-in neither joins nor fills the memory. */
+  let generation = 0;
   const L = d.label;
 
   type Mapped = { status: Status; message: string; fixAction?: FixAction; useCache: boolean; cause?: FailureCause };
@@ -91,6 +93,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
   /** One read of a week: live, else what failed with the last good copy (if any). Never throws; remembered for the TTL. */
   async function read(weekStart: string): Promise<SourceResult<CalEvent>> {
     const t = now().epochMilliseconds;
+    const gen = generation;
     let result: SourceResult<CalEvent>;
     try {
       result = await fetchLive(weekStart);
@@ -107,7 +110,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
       if (m.fixAction) result.fixAction = m.fixAction;
       if (m.cause) result.cause = m.cause;
     }
-    memory.set(weekStart, { at: t, result });
+    if (gen === generation) memory.set(weekStart, { at: t, result });
     return result;
   }
 
@@ -122,7 +125,8 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
     let live = reading.get(weekStart);
     if (!live) {
-      live = read(weekStart).finally(() => reading.delete(weekStart));
+      const started: Promise<SourceResult<CalEvent>> = read(weekStart).finally(() => reading.get(weekStart) === started && reading.delete(weekStart));
+      live = started;
       reading.set(weekStart, live);
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -134,17 +138,22 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     if (!snap) return live;
     d.log({ source: d.id, op: "load", kind: "answered_from_cache" });
     const at = formatFetchedAt(snap.fetchedAt, d.timeZone, now());
-    return { source: d.id, status: "unreachable", fetchedAt: snap.fetchedAt, fromCache: true, items: snap.items, message: `${L} unreachable. Showing data from ${at}`, cause: "network" };
+    // Slow is not offline: no shared cause, so the status bar names this source alone, not the network.
+    return { source: d.id, status: "unreachable", fetchedAt: snap.fetchedAt, fromCache: true, items: snap.items, message: `${L} unreachable. Showing data from ${at}` };
   }
 
   async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {
     const r = await d.auth.connect(opts);
+    generation++;
+    reading.clear();
     memory.clear();
     return r;
   }
 
   /** Forget this source: its refresh token, its cache folder and anything in memory. Nothing else. */
   async function disconnect(): Promise<void> {
+    generation++;
+    reading.clear();
     memory.clear();
     await d.auth.disconnect();
     await d.snapshots.clear(d.id);

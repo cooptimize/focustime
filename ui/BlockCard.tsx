@@ -206,8 +206,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
             <div className="card-calls">
               {calls.map((c) => (
                 <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
-                  <span className="call-name">{c.role}</span>
-                  <span className="call-what">· {c.label}</span>
+                  <span className="call-name">{c.role} ·</span>
+                  <span className="call-what">{c.label}</span>
                 </a>
               ))}
             </div>
@@ -239,8 +239,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         <div className="card-calls">
           {calls.map((c) => (
             <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
-              <span className="call-name">{c.role}</span>
-              <span className="call-what">· {c.label}</span>
+              <span className="call-name">{c.role} ·</span>
+              <span className="call-what">{c.label}</span>
             </a>
           ))}
         </div>

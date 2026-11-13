@@ -56,9 +56,15 @@ function walk(name: string, week: Week) {
         expect(w.halves.every((h) => (h === "AM" ? d.am : h === "PM" ? d.pm : d.eve!).off)).toBe(true);
         return expect(shape.blocks).toEqual([]);
       }
-      expect(shape.blocks.map((b) => b.slot.half)).toEqual(w.halves);
+      // A half with no working hours stays off Day, as before RS-2 (Week draws "No working hours" there).
+      expect(shape.blocks.map((b) => b.slot.half)).toEqual(w.halves.filter((h) => !(h === "AM" ? d.am : h === "PM" ? d.pm : d.eve!).off));
     });
 }
+
+describe("a weekday with one short span (review 2): its halves both have hours, so Day and Week agree", () => {
+  for (const tue of [[{ start: "13:00", end: "17:00" }], [{ start: "09:00", end: "12:00" }]])
+    walk(`builder week, Tuesday ${tue[0]!.start} to ${tue[0]!.end}`, aWeek({ patterns, config: aWeekConfig({ hours: { ...base, weekdays: { ...base.weekdays, tue } } }) }));
+});
 
 describe("every day of the fixture weeks and the demo: Day's blocks are Week's cards", () => {
   const flexAt = (date: string, from: string, to: string, id: number) => ({ id, clientKey: north.clientKey, start: `${date}T${from}:00-05:00`, end: `${date}T${to}:00-05:00`, itemId: null, itemTitle: null, itemUrl: null, note: null }) as never;

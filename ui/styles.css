@@ -5190,7 +5190,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-push { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-2); }
 /* RS-2 D1: no boxes inside boxes. A client is a labelled section under a rule (its swatch names it), "Needs your update" a
    label, each feature a row under a hairline ("No update yet" is its badge), the AI suggestion the one quiet card. */
-.st-client { display: grid; gap: 8px; padding: 12px 2px 4px; border-top: 1px solid var(--border); max-width: 1100px; }
+.st-client { display: grid; gap: 8px; padding: 12px 2px 4px; border-top: 2px solid var(--c, var(--border)); max-width: 1100px; }
 .st-client-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .st-client-head h3 { margin: 0; }
 .st-sent, .st-note { margin: 0; font-size: var(--fs-2); }
@@ -6937,7 +6937,7 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-toolbar .ah-tb-row { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px 12px; }
 .ah-tb-clients { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .ah-tb-people button { white-space: nowrap; }
-.ah-tb-mixed { display: inline-flex; align-items: center; padding: 0 6px 0 10px; color: var(--text-muted); font-size: var(--fs-2); font-weight: 600; white-space: nowrap; }
+.ah-tb-mixed { display: inline-flex; align-items: center; margin-right: 4px; padding: 0 10px 0 10px; border-right: 1px solid var(--line, var(--border-strong)); color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; cursor: default; }
 .ah-attention { gap: 6px; }
 .ah-attention[aria-pressed="true"] { --c: var(--ah-attention); }
 .ah-attention-n { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 99px; background: var(--sunken); color: var(--text); font-size: var(--fs-2); font-weight: 600; text-align: center; }
@@ -7451,7 +7451,7 @@ button:disabled { cursor: default; }
    says "Loading…" once, or the failed line with Retry. Nothing moves. */
 .wd1-body.reading, .day-view.reading > :not(.day-bar) { opacity: 0.45; pointer-events: none; }
 .read-line { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-2); white-space: nowrap; }
-.read-line.failed { color: var(--text); font-weight: 500; }
+.read-line.failed { color: var(--watch); font-weight: 600; }
 
 /* RS-2 D4: Day's "VM is off" is one quiet line with its two buttons, no box around it (its neighbours are pills). */
 :root .att-chip.vm { padding: 0 2px; gap: 6px; border: 0; border-radius: 0; background: none; }
@@ -7473,3 +7473,9 @@ button:disabled { cursor: default; }
    a day header's PTO or Holiday pill drops on a narrow column (the hatched cell names the day). */
 :root main.grid :is(.card-head .status-pill, .half.card .badge-text, .half .head-chip) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
 :root main.grid .card-head .status-pill { border-radius: 10px; }
+
+/* RS-2: a Status feature's title link keeps a 28 px hit area (section 10's targets) without growing its row. */
+.st-feature h4 .st-title { position: relative; }
+.st-feature h4 .st-title::after { content: ""; position: absolute; top: -6px; bottom: -6px; left: 0; right: 0; }
+/* RS-2 D3: the Gantt's free-time row holds three lines, so a cell with an over part or Crowded month shows whole. */
+.ah-gantt .pa-cap { min-height: calc(var(--fs-2) * 1.25 * 3 + 10px); }

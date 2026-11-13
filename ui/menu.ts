@@ -1790,7 +1790,9 @@ export function commandList(env: MenuEnv): MenuItem[] {
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
   const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
-  return byGroup([...uiCommands(env), ...fromRegistry]);
+  // RS-2 D7: only the window commands are grouped; the registry's keep their place after them, so a search's first
+  // result (what Enter runs) is what it was.
+  return [...byGroup(uiCommands(env)), ...fromRegistry];
 }
 
 /** RS-2 D7: each group's commands together, groups in the order they first appear, so the menu labels each group once. */

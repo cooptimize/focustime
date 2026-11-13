@@ -48,7 +48,7 @@ const load = async (c: ActionContext) => {
   const r = await dispatch(c, { action: "week.load", input: { weekStart: "2026-11-02" } });
   if (!r.ok) throw new Error(r.error);
   const o = (r.data as WeekLoadData).sources.find((s) => s.source === "outlook")!;
-  return { ms: Math.round(performance.now() - t), outlook: `${o.status}${o.fromCache ? " (earlier copy)" : ""}: ${o.message ?? ""}` };
+  return { ms: Math.round(performance.now() - t), cause: o.cause ?? null, outlook: `${o.status}${o.fromCache ? " (earlier copy)" : ""}: ${o.message ?? ""}` };
 };
 
 it.runIf(process.env.RS2_MEASURE)("measures week.load with a failing calendar source", { timeout: 120_000 }, async () => {
@@ -70,6 +70,8 @@ it("with an earlier good copy, a calendar that fails slowly doesn't hold the wee
   const r = await load(ctx(dir, "slow"));
   expect(r.ms).toBeLessThan(3500);
   expect(r.outlook).toMatch(/^unreachable \(earlier copy\): Outlook unreachable\. Showing data from /);
+  // Slow isn't offline: no shared network cause, so the status bar names Outlook, not the connection (review 2).
+  expect(r.cause).toBeNull();
 });
 
 it("with no earlier copy, the week waits for the read and says what failed", { timeout: 30_000 }, async () => {

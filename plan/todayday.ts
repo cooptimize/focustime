@@ -31,7 +31,9 @@ export function todayShape(day: Day | null, o: { date: IsoDate; today: IsoDate; 
   const shape = day ? dayBlocks(day) : null;
   // RS-2: a working day's blocks are the cards Week draws for it (a PTO half shows, muted, where it would be). A PTO day
   // keeps only the halves that still hold a to-do; a day with no working hours has none (a catch-up day is one cell).
-  const slots = !day || !shape ? [] : ptoDay ? [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => o.picked.has(s.half)) : workday ? shape.halves.map((h) => slotOf(day, h)!).filter(Boolean) : [];
+  // A half with no working hours (hours 13:00 to 17:00 leave no morning) isn't a block on Day, as before RS-2; Week draws
+  // it as a "No working hours" card (docs/open-questions.md).
+  const slots = !day || !shape ? [] : ptoDay ? [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => o.picked.has(s.half)) : workday ? shape.halves.map((h) => slotOf(day, h)!).filter((x) => x && !x.off) : [];
   return {
     isToday,
     past,
