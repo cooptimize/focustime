@@ -7125,14 +7125,17 @@ button:disabled { cursor: default; }
 }
 :root :is(.mode-switch .ms-btn, .day-switch button, .rm-seg button, .ib4-tab, .seg-btn, .cv-wrap-switch span) {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--h-small); min-width: 0; padding: 0 12px; border: 0; border-radius: var(--radius-input);
-  background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; line-height: 1.2; white-space: nowrap; box-shadow: none; cursor: pointer;
+  background: transparent; color: var(--text-muted); font-weight: 500; line-height: 1.2; white-space: nowrap; box-shadow: none; cursor: pointer;
 }
+/* Each switch keeps the text size it had: the body size, or the meta size for the smaller ones. */
+:root :is(.mode-switch .ms-btn, .rm-seg button, .ib4-tab) { font-size: var(--fs-3); }
+:root :is(.day-switch button, .mode-switch .seg-btn, .seg .seg-btn, .cv-wrap-switch span) { font-size: var(--fs-2); }
+:root :is(.mode-switch .seg-btn, .seg .seg-btn) { min-height: calc(24px * var(--text-scale)); }
 :root :is(.mode-switch .ms-btn, .day-switch button, .rm-seg button, .ib4-tab, .seg-btn):where(:not(:disabled)):hover { background: transparent; color: var(--text); }
 :root :is(.mode-switch .ms-btn[aria-current="page"], .mode-switch .ms-btn[aria-pressed="true"], .day-switch button[aria-pressed="true"], .rm-seg button[aria-pressed="true"], .ib4-tab.on, .seg-btn.on, .cv-wrap-switch span.on) {
   background: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1);
 }
 :root .rm-seg button + button, :root .day-switch button + button { border-left: 0; }
-:root .seg-btn { min-height: calc(24px * var(--text-scale)); font-size: var(--fs-2); }
 :root .mode-switch .count, :root .ib4-count { padding: 0; min-width: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: var(--fs-2); font-weight: 500; }
 
 /* ---- A5. Pills -------------------------------------------------------------------------------------------------
@@ -7370,3 +7373,6 @@ button:disabled { cursor: default; }
 .sg-icons li .ft-icon { color: var(--text); }
 .sg-dialog { width: 300px; max-height: none; }
 .sg-row { align-items: center; }
+/* On the phone the header's Add keeps the weight it had, so the phone's screens carry no more text styles than
+   before (U5 counts them). */
+:root .app.phone .mode-area .add-work-head { font-weight: 600; }

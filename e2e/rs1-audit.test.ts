@@ -12,7 +12,7 @@ import { buildState, PS_CLOCK } from "./ps1-states.ts";
 const OUT = process.env.RS1_AUDIT ?? null;
 const T = 900_000;
 const SCOPE = "main, aside.block-panel, .page-head, .week-head, .day-head, .topbar, .settings";
-type Row = { screen: string; smallTargets: number; clippedLines: number; textStyles: number; offScale: number; filledInHeader: number; small: string[]; clipped: string[] };
+type Row = { screen: string; smallTargets: number; clippedLines: number; textStyles: number; offScale: number; filledInHeader: number; small: string[]; clipped: string[]; styles: string[] };
 const rows: Row[] = [];
 
 /** Distinct text styles in view (size, weight, uppercase), the ones off the type scale, and the header's filled buttons. */
@@ -38,7 +38,7 @@ const styles = (page: Page) =>
     const fill = getComputedStyle(probe).backgroundColor;
     probe.remove();
     const filled = [...document.querySelectorAll<HTMLElement>(".page-head button, .week-head button, .day-head button, .ah-head button, .st-head button")].filter((b) => b.getBoundingClientRect().width > 0 && getComputedStyle(b).backgroundColor === fill).length;
-    return { textStyles: seen.size, offScale: off, filled };
+    return { textStyles: seen.size, offScale: off, filled, list: [...seen].sort() };
   });
 
 async function measure(page: Page, screen: string, min: number) {
@@ -46,7 +46,7 @@ async function measure(page: Page, screen: string, min: number) {
   const small = await smallTargets(page, SCOPE, min);
   const clipped = await clippedLines(page, "main, aside.block-panel, .settings");
   const s = await styles(page);
-  rows.push({ screen, smallTargets: small.length, clippedLines: clipped.length, textStyles: s.textStyles, offScale: s.offScale, filledInHeader: s.filled, small: small.map((x) => `${x.what} ${x.w}x${x.h}`), clipped });
+  rows.push({ screen, smallTargets: small.length, clippedLines: clipped.length, textStyles: s.textStyles, offScale: s.offScale, filledInHeader: s.filled, small: small.map((x) => `${x.what} ${x.w}x${x.h}`), clipped, styles: s.list });
 }
 const go = async (page: Page, hash: string, wait = 1200) => {
   await page.evaluate((x) => (location.hash = x), hash);

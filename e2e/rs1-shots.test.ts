@@ -170,9 +170,11 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-1 screenshots", () => {
     await screen(page, "15-new-form", async () => {
       await go(page, "#/backlog", 2000);
       await page.locator(".ah-new").click();
-      const f = page.locator(".new-form, .nf, [aria-label='New item'], .ps-new").first();
       await page.locator("#nf-title").waitFor({ timeout: 15_000 });
-      void f;
+      // A client, then the level the form chooses for it, so the form is whole and its preview can open.
+      await page.locator(".new-form").getByRole("button", { name: /^Client:/ }).click();
+      await page.locator(".cell-pop").getByRole("option", { name: "Northwind" }).first().click();
+      await page.locator(".new-form").getByRole("radio").first().waitFor({ timeout: 15_000 });
       await page.locator("#nf-title").fill("Gross margin percent on the sales report");
       await page.waitForTimeout(500);
     });
@@ -243,9 +245,8 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-1 screenshots", () => {
     await page.goto(new URL("/styleguide", h.url).href);
     const sec = page.locator('[data-sg="controls"]');
     // The page exists only in a development UI (FOCUSTIME_E2E_DIST=dev); a built one has no style guide.
-    if (!(await sec.waitFor({ timeout: 20_000 }).then(() => true, () => false))) {
-      missed.push(`50-styleguide-controls: no style guide at ${page.url()} (run with FOCUSTIME_E2E_DIST=dev)`);
-      await page.screenshot({ path: `${DIR}/50-styleguide-missing.png` });
+    if (!(await sec.waitFor({ timeout: 8000 }).then(() => true, () => false))) {
+      missed.push("50-styleguide-controls: no style guide in a built UI (run this one with FOCUSTIME_E2E_DIST=dev)");
       return void (await page.close());
     }
     // The page's sticky header would sit over a shot of one section.
@@ -267,8 +268,10 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-1 screenshots", () => {
       await go(page, "#/day");
     });
     await screen(page, "41-phone-block-sheet", async () => {
-      await page.locator("main .half.focus .card-head").first().click({ position: { x: 4, y: 4 } });
-      await page.waitForTimeout(900);
+      // Add on a block opens its panel as a sheet.
+      await page.locator("main .add-work.ph-add").first().click({ timeout: 10_000 });
+      await page.locator(".block-panel.sheet, .ph-sheet").first().waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(700);
     }, async () => esc(page, 2));
     await screen(page, "42-phone-inbox", async () => {
       await go(page, "#/inbox/promises", 1500);
