@@ -35,7 +35,7 @@ const AFTER: Shot[] = [
   { name: "01-from-chats", at: "#/inbox/chats" },
   { name: "02-suggestion-open", at: "#/inbox/chats", then: async (p) => {
     await p.locator(".ib4-row").first().locator(".ib4-row-head").click();
-    await p.locator(".ib4-row.open .conv-messages, .ib4-row.open .ib4-messages").first().waitFor({ timeout: 15_000 }).catch(() => {});
+    await p.locator(".ib4-row.open .ib-messages li").first().waitFor({ timeout: 15_000 }).catch(() => {});
     await p.waitForTimeout(500);
   } },
   { name: "03-promises", at: "#/inbox/promises" },
@@ -87,6 +87,30 @@ try {
       if (s.then) await s.then(page);
       await page.screenshot({ path: `${out}/${s.name}-${run.tag}.png` });
       counts[`${s.name}-${run.tag}`] = await measure(page);
+    }
+    if (!run.phone && mode === "after") {
+      // Each list's empty state: this demo session's suggestions dismissed, promises not needed, captures and drafts removed.
+      await page.evaluate(async () => {
+        const csrf = document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "";
+        const call = (action: string, input: unknown) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": csrf }, body: JSON.stringify({ action, input }) }).then((r) => r.json());
+        const sug = await call("conversations.suggestions", {});
+        for (const x of sug.data.suggestions) await call("conversations.dismiss", { id: x.id });
+        const list = await call("inbox.list", {});
+        for (const r of list.data.items as { key: string; kind: string; done: boolean }[]) {
+          const id = Number(r.key.slice(1));
+          if (r.kind === "promise" && !r.done) await call(r.key[0] === "c" ? "my_promises.not_needed" : "followup.not_needed", { id });
+        }
+        const caps = await call("capture.load", {});
+        for (const c of caps.data.inbox) await call("capture.route", { id: c.id, as: "dismissed" });
+        for (const d of caps.data.drafts) await call("draft.remove", { id: d.id });
+      });
+      for (const [name, at] of [["09-empty-from-chats", "#/inbox/chats"], ["10-empty-promises", "#/inbox/promises"], ["11-empty-captures", "#/inbox/captures"]] as const) {
+        await page.goto(`${harness.url.split("#")[0]}${at}`);
+        await page.waitForSelector("main.ib4", { timeout: 30_000 });
+        await page.waitForTimeout(1200);
+        await page.screenshot({ path: `${out}/${name}-${run.tag}.png` });
+        counts[`${name}-${run.tag}`] = await measure(page);
+      }
     }
     if (run.phone && mode === "after") {
       // The largest text size on the phone: nothing wider than the screen, the page itself scrolls.

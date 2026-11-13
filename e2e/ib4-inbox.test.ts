@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("the slim Inbox (IB-4)", () => {
     await page.keyboard.press("Escape");
     // Day: the chip beside the strip.
     await page.keyboard.press("1");
-    const chip = page.locator("a.att-chip.from-chats");
+    const chip = page.locator("button.att-chip.from-chats");
     await expect(chip.textContent()).resolves.toMatch(/From chats · 2/);
     await chip.click();
     await expect.poll(async () => tab(page, /^From chats/).getAttribute("aria-selected")).toBe("true");

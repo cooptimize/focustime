@@ -33,8 +33,10 @@ export async function openField(page: Page, field: Field, phone: boolean): Promi
     return { box: surface.getByRole("textbox", { name: "Ask the assistant" }), surface };
   }
   await go(page, "#/inbox/promises");
-  await page.locator(".ib-row", { hasText: "Send Marcus the updated export spec" }).first().click();
-  const pane = page.locator(phone ? ".ib-sheet.tall" : ".ib-pane");
+  await page.locator("li.ib4-row", { hasText: "Send Marcus the updated export spec" }).first().locator(".ib4-row-head").click();
+  // IB-4: the row opens in place, on the computer and the phone.
+  const pane = page.locator("li.ib4-row.open");
+  void phone;
   await pane.getByRole("button", { name: /^Close the loop/ }).first().click();
   const surface = pane.locator("form.send-loop");
   await surface.getByRole("radio", { name: /^Teams/ }).waitFor({ timeout: 20_000 });

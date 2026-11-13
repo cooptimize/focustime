@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     const strip = page.getByRole("region", { name: "Urgent" });
     await expect.poll(() => strip.locator(".us-item").count()).toBeGreaterThan(0);
     expect(await strip.locator(".us-item").count()).toBeLessThanOrEqual(3);
-    const chip = page.locator("a.att-chip.from-chats");
+    const chip = page.locator("button.att-chip.from-chats");
     await expect(chip.textContent()).resolves.toMatch(/From chats · 2/);
     await chip.click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/chats");

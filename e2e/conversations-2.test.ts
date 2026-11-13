@@ -324,7 +324,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       const strip = page.getByRole("region", { name: "Urgent" });
       await strip.getByText("Log a ticket for the filter bug").waitFor();
       await shotAll(page, "cv2-urgent-strip", strip);
-      const chip = page.locator("a.att-chip.from-chats");
+      const chip = page.locator("button.att-chip.from-chats");
       await expect(chip.textContent()).resolves.toMatch(/From chats · 1/);
       await chip.click();
       await page.getByRole("main", { name: "Inbox" }).locator(".ib4-row-title", { hasText: FIX }).waitFor();

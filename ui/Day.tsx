@@ -621,9 +621,9 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], fr
           </button>
         )}
         {fromChats > 0 && (
-          <a className="att-chip from-chats" href="#/inbox/chats" title="Conversations in your chats that may need a DevOps item">
+          <button type="button" className="att-chip from-chats" onClick={() => (location.hash = "#/inbox/chats")} title="Conversations in your chats that may need a DevOps item">
             <span className="att-tag">From chats · {fromChats}</span>
-          </a>
+          </button>
         )}
         {soon.map((p) => (
           <button key={`promise-${p.id}`} type="button" className={`att-chip promise${p.overdue ? " overdue" : ""}`} onClick={onPromises} title="Open it in Inbox › Promises">
