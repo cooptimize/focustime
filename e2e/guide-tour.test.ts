@@ -25,7 +25,9 @@ function recordActions(page: Page): string[] {
     if (url.pathname === "/api/open-request") return;
     if (url.pathname !== "/api/action") return void seen.push(`${r.method()} ${url.pathname}`);
     try {
-      seen.push((JSON.parse(r.postData() ?? "{}") as { action: string }).action);
+      const action = (JSON.parse(r.postData() ?? "{}") as { action: string }).action;
+      // RB-1: the app's own one read of Code's client names, a few seconds after start (a read on any screen).
+      if (action !== "code.clients") seen.push(action);
     } catch {
       seen.push("unreadable");
     }

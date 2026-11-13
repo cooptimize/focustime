@@ -20,6 +20,7 @@ export const SECTIONS = [
   { id: "ask", name: "Ask", group: "more" },
   { id: "teams", name: "FocusTime in Teams", group: "more" },
   { id: "calls", name: "Client calls", group: "more" },
+  { id: "code", name: "Reading another client's code", group: "more" },
   { id: "settings", name: "Settings, phone and keys", group: "more" },
   { id: "renamed", name: "Renamed", group: "more" },
 ] as const;

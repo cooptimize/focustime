@@ -389,6 +389,9 @@ export { SECTIONS, SECTION_GROUPS, type SectionId } from "./sections.ts";
 
 /** Questions with no G1 home, written for UI-5. */
 const NEW_QUESTIONS = [
+  { q: "Can I read another client's code?", a: "Yes, read only. ⋯ › Code (or Code in Commands): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file. The client's name is at the top the whole time. Copy takes the whole file; Copy link opens the same file for a teammate. FocusTime never changes a repo, keeps none of the code and sends none of it to AI. A FocusTime admin can keep one client's code to its team; that client shows greyed for everyone else." },
+  { q: "Who sees that I opened a file?", a: "FocusTime admins, in Admin › Audit › Code views: who opened which client's repo or file, or used Find, and when. Never the code. Rows are kept 12 months." },
+  { q: "It says FocusTime can't read a client's code yet.", a: "The company DevOps token for that client doesn't have Code (read) yet. It's added by hand in DevOps; ask your FocusTime admin. Until then that client's work items still show as before." },
   { q: "How do I see who's set up?", a: "If you're a FocusTime admin: Admin › People shows every Cooptimizer with yes or no for Signed in, DevOps connected, Calendar connected and, where the Teams app is set up, Teams app added. Filter by Not signed in or Set up partly. It shows only these marks, never anyone's plan." },
   { q: "How do I invite a teammate?", a: "In Admin › People, Invite on their row (or tick several and Invite several) opens a message to edit, with FocusTime's link and the first three steps. Open in Teams starts a chat with them, Open in Outlook starts an email, or Copy message, and you send it. Where your sign-in allows it, Send in Teams (one 1:1 chat each) or Create Outlook draft or Send now sends it from FocusTime as you, after a preview of who gets it and the final text; if someone isn't reached, Retry tries only them. The row then shows when and how you invited them, and you can invite them again any time. In {key:Ctrl K}: Invite, or Who's set up." },
   { q: "What is the moment card?", a: "Day's one card for the moment of the day: Nothing on today yet (with + Add) while today's blocks have no to-dos, Midday check-in once your afternoon starts, and Close out near the end of your day. Each opens its flow; once it's done it's a small line with Reopen. Nothing is forced: skip any of them." },
@@ -455,7 +458,7 @@ export const AREA_UI = {
   noTour: "Tours run on your own screens. Sign in to see them.",
 };
 
-export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "capture" | "assistant" | "ask" | "teams" | "calls" | "settings", AreaBody> = {
+export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "capture" | "assistant" | "ask" | "teams" | "calls" | "code" | "settings", AreaBody> = {
   today: {
     lead: "Day is one day on one screen: what's urgent, the moment of the day, and the day's blocks.",
     does: [
@@ -643,6 +646,15 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "c
     ],
     faqs: ["What are client calls?", "How do I review a client call?", "It asks me to upload a transcript."],
   },
+  code: {
+    lead: "Read any client's code, read only, to borrow what already works. One client at a time.",
+    does: [
+      { title: "Find a file", text: "⋯ › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file.", go: { href: "#/code", label: "Open Code" } },
+      { title: "Copy what you need", text: "Copy takes the whole file, Copy path its path, Copy DevOps link its page in DevOps. Select part of it to copy just that." },
+      { title: "It's logged", text: "Opening a file is logged for FocusTime admins: who, which file and when. Nothing of the code is kept." },
+    ],
+    faqs: ["Can I read another client's code?", "Who sees that I opened a file?", "It says FocusTime can't read a client's code yet."],
+  },
   settings: {
     lead: "Settings are yours. They save as you change them, and search at the top of the list finds any of them.",
     does: [
@@ -758,6 +770,7 @@ export const SECTION_LINES: Record<string, string> = {
   ask: AREAS.ask.lead,
   teams: AREAS.teams.lead,
   calls: AREAS.calls.lead,
+  code: AREAS.code.lead,
   settings: AREAS.settings.lead,
   renamed: "Old names, and what they're called now.",
 };

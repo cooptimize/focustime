@@ -18,6 +18,8 @@ import type { Logger } from "../log/logger.ts";
 export type AdminOpsDeps = {
   /** KB-1: the synced standards. */
   standards?: StandardsPort;
+  /** RB-1: Code's view log and each client's code status. */
+  code?: AdminOps["code"];
   /** DV-1: the status rows registry Admin › Status renders (DevOps polling, and later sources). */
   statusRows?: StatusRegistry;
   check: AdminCheck;
@@ -71,6 +73,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
   let lastDirectory: { ok: boolean; message: string | null } = { ok: true, message: null };
   const ops: AdminOps = {
     ...(d.standards ? { standards: d.standards } : {}),
+    ...(d.code ? { code: d.code } : {}),
     ...(d.statusRows ? { statusRows: d.statusRows } : {}),
     ...(d.scope ? { scope: d.scope } : {}),
     ...(d.assignees ? { assignees: d.assignees } : {}),

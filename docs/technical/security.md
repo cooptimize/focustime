@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11. Test sites (ENV-1) against `feat/env1-background-policy` on Nov 11.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same PR. Checked against `d25c148` on Nov 7, 2026 (SR-2 parts against its own branch); the assistant's context against `1e74410` with AS-3 (`feat/assistant-answers`). The standards repo (KB-1) against `feat/coop-standards` on Nov 8. Calendar links (CAL-1) against `feat/ics-calendars` on Nov 10. The VM (VM-2) against `feat/vm2-stop-autostart` on Nov 11. Test sites (ENV-1) against `feat/env1-background-policy` on Nov 11; RB-1's parts against `feat/rb1-code-browser` on Nov 12.
 
 ## In short
 
@@ -74,6 +74,18 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 
 Unchanged: admins never see others' content, client views only show that client's records, and FocusTime never posts to a client chat by itself.
 
+### The one exception: client code (RB-1)
+
+The product owner chose to let every Cooptimizer read every client's code in Code, read only, so people can borrow working code from one client to start the same job at another. It covers code read through that panel and nothing else: work items, chats, promises, transcripts and reports keep every rule above.
+
+- **Who.** A signed-in Cooptimizer by the people rule (`notCooptimizer` in `plan/person-match.ts`): never a guest, a person outside the Cooptimize domains or an automation account. A demo session reads only the demo's invented repos. Checked on every read: the client list, a repo list, a folder, Find and a file (`actions/code-actions.ts`).
+- **A client set to its team only.** The Rule "Who can read this client's code" (Admin › Clients) is Whole company by default; Its team only uses the client status report's team check (`reportTeam().onClient`). Everyone else still sees the client listed, greyed, with "Only <client>'s team can open this", and no repo names. A change is in `admin_audit` like any Rule.
+- **What is read.** Only the client's registered DevOps project, its default branch, through the reader's allow list ([Integrations](integrations.md#azure-devops)). Never a write.
+- **Nothing of the code is kept.** Not in the database, on disk, in logs, Application Insights, error messages, Export or the browser's storage; the stored last place leaves out a Code address. Folder lists and file text may sit in the server's memory 5 minutes, reached only after the access check. Every response is no-store, and the service worker never caches `/api`.
+- **Drawn as text.** The coloring library (Prism, `ui/code/`) only cuts text into pieces; each piece is a text node, so an `.html` or `.svg` file shows its source and nothing in it runs. The library is loaded only when Code opens, in its manual mode, and makes no network call.
+- **No AI, nothing on its own.** Code never goes to an AI, and the assistant, the Teams bot and notifications can't reach it. Every read comes from a click; there is no background work.
+- **The view log.** `code_views` (an app table) keeps when, who (id and name), the client, the repo, the path and what happened (repo opened, file opened, Find used), never content, for 12 months. A file's row is written before its text is returned; if it can't be written, no text is returned. Only admins read it (Admin › Audit › Code views). The panel says so: "Opening a file is logged for FocusTime admins: who, which file and when."
+
 Names come only from the client directory: each client's key, its Dataverse and settings names, and the aliases an admin sets in Admin › Clients (a Rule). The match is whole words, any case, and ignores links and email addresses; a client set to "Match only as written" (Admin › Clients, on by default when its name is an ordinary word like "Atlas", `plan/common-words.ts`) matches its names and aliases only with their casing, so "atlas" in a sentence isn't a mention (HK-7); numbers and projects count only at an exit. GD-2 logs only counts for its scrub and holds (`ai scrub`, `held_not_work`), never the matched name or the text.
 
 ```mermaid
@@ -93,6 +105,7 @@ flowchart LR
 ## Admins, guests and automation accounts
 
 - **Admins** are members of the "FocusTime Admins" Entra group, or on a short break-glass list of object ids (`FOCUSTIME_ADMINS`), checked in one place (`actions/admin.ts`) and again by the server for every admin action. They set team values (AI switches and caps, Rules, Defaults by level, client chats and meetings, people's levels and client logins) and see health and counts. Every change is in `admin_audit`.
+- **Admins see** Code views (who opened which client's repo or file, and when; RB-1), never any code through it.
 - **Admins never see** anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history, or chats they aren't in.
 - **Guests** are refused at sign-in, from the token itself and the domains Rule (`server/people.ts`); a session of someone later found to be a guest is ended, with an audit line. Pickers never list them.
 - **Automation accounts** are flagged by an admin. They never show as Cooptimizers in pickers, the Teams bot refuses them, and FocusTime refuses their DevOps writes (`canEdit`, `actions/ahead-actions.ts`).

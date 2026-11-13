@@ -15,6 +15,7 @@ import { ADMIN_ACTIONS, ADMIN_SECTIONS, adminAction, type AdminContext } from ".
 import { createOrgRuntime } from "./org.ts";
 import { buildProcessModel, type ProcessOverrides } from "../plan/process.ts";
 import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
+import { codeViewsStoreOn } from "../store/code-views-store.ts";
 
 const NOW = "2026-11-04T15:00:00Z";
 const ADMIN = "00000000-0000-4000-8000-0000000000a1";
@@ -71,6 +72,7 @@ async function setup() {
       await hardDeleteUser(db, id, now());
     },
     log: () => {},
+    code: { views: codeViewsStoreOn(db, now), status: async (k) => (k === "fabrikam" ? { state: "readable", repos: 3 } : { state: "needs_code_read", text: "Can't read yet: the token needs Code (read)" }) },
     standards: {
       library: async () => ({ repo: STD_REPO, commit: STD_COMMIT, articles: [aStandardsArticle({ title: "Gold Fact Tables", layer: "gold", artifact: "fact_table", path: "SQL/Gold/Fact Tables.md", body: "- SECRET-ARTICLE-TEXT" })] }),
       state: async () => ({ repoUrl: "https://github.com/contoso/standards", branch: "", commit: STD_COMMIT, syncedAt: NOW, checkedAt: NOW, error: "GitHub answered 503", errorAt: NOW, warnings: [{ kind: "duplicate_id", id: "dup", paths: ["SQL/A.md", "SQL/B.md"] }] }),
@@ -244,6 +246,47 @@ describe("admin actions", () => {
   });
 });
 
+
+describe("Code (RB-1)", () => {
+  it("only admins read Code views: newest first, by client and person, with counts for 30 days and no content", async () => {
+    const s = await setup();
+    const views = s.ops.code!.views;
+    await views.add({ actorId: BEN, actorName: "Ben Person", clientKey: "fabrikam", repoId: "11111111-2222-4333-8444-555555555555", repoName: "warehouse", path: "/sql/a.sql", event: "file_opened" });
+    await views.add({ actorId: CY, actorName: "Cy Person", clientKey: "contoso", repoId: "11111111-2222-4333-8444-555555555555", repoName: "models", path: "/", event: "repo_opened" });
+    expect(await s.run(s.ben, "admin.code_views")).toMatchObject({ ok: false, status: 403 });
+    const all = await s.run(s.admin, "admin.code_views");
+    expect(all).toMatchObject({ ok: true, data: { views: [{ actorName: "Cy Person", event: "repo_opened" }, { actorName: "Ben Person", path: "/sql/a.sql" }], counts: [{ clientKey: "contoso", views: 1 }, { clientKey: "fabrikam", views: 1 }] } });
+    expect(await s.run(s.admin, "admin.code_views", { clientKey: "fabrikam" })).toMatchObject({ ok: true, data: { views: [{ actorName: "Ben Person" }] } });
+    const byPerson = await s.run(s.admin, "admin.code_views", { personId: CY });
+    expect(byPerson.ok && (byPerson.data as { views: unknown[] }).views).toHaveLength(1);
+    expect(Object.keys((all as { data: { views: Record<string, unknown>[] } }).data.views[0]!).sort()).toEqual(["actorId", "actorName", "at", "clientKey", "event", "id", "path", "repoId", "repoName"]);
+  });
+  it("Who can read this client's code is a client Rule (Whole company by default), audited when it changes", async () => {
+    const s = await setup();
+    expect((await s.org.rules()).clients.fabrikam?.codeAccess ?? "company").toBe("company");
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "code_access", value: "everyone" })).toMatchObject({ ok: false, status: 422 });
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "code_access", value: "team" })).toMatchObject({ ok: true });
+    s.org.invalidate();
+    expect((await s.org.rules()).clients.fabrikam?.codeAccess).toBe("team");
+    expect(await s.store.auditList({})).toMatchObject([{ actorName: "Ada Admin", target: "fabrikam", setting: "client:fabrikam/code_access", oldValue: null, newValue: '"team"' }]);
+    const c = await s.run(s.admin, "admin.load", { section: "clients" });
+    expect(c.ok && (c.data as { clients: { key: string; codeAccess: string }[] }).clients.find((x) => x.key === "fabrikam")?.codeAccess).toBe("team");
+  });
+  it("Check reads a client's code status for an admin only", async () => {
+    const s = await setup();
+    expect(await s.run(s.admin, "admin.code_check", { clientKey: "fabrikam" })).toEqual({ ok: true, data: { state: "readable", repos: 3 } });
+    // Contoso as a listed client too (the setup lists Fabrikam).
+    const listed = s.ops.org.clientAccounts.bind(s.ops.org);
+    s.ops.org.clientAccounts = async () => {
+      const ca = await listed();
+      return Object.assign(Object.create(Object.getPrototypeOf(ca) as object), ca, { isClient: (k: string) => k === "contoso" || ca.isClient(k) });
+    };
+    expect(await s.run(s.admin, "admin.code_check", { clientKey: "contoso" })).toMatchObject({ ok: true, data: { state: "needs_code_read" } });
+    expect(await s.run(s.ben, "admin.code_check", { clientKey: "fabrikam" })).toMatchObject({ ok: false, status: 403 });
+    // Review 2: an account that isn't a listed client is never checked.
+    expect(await s.run(s.admin, "admin.code_check", { clientKey: "no-such-account" })).toMatchObject({ ok: false, status: 404 });
+  });
+});
 
 describe("Admin › Standards (KB-1)", () => {
   it("shows the repo, the sync, the article list (never its text) and the warnings", async () => {

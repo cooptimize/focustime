@@ -6,6 +6,9 @@
 // nothing leaves FocusTime. Its AI is the app's real provider on this fictional data when the app has one, with stored
 // sample answers when it hasn't or is slow (sources/demo/ai.ts). Its starting data comes from sources/demo/seeds/.
 import { demoStandards } from "../sources/demo/standards.ts";
+import { demoCodeGit } from "../sources/demo/code.ts";
+import { codeStatus } from "../actions/code-actions.ts";
+import { codeViewsStoreOn } from "../store/code-views-store.ts";
 import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch, vmContext } from "../actions/dispatch.ts";
@@ -128,6 +131,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     await adminStore.setOrg({ scope: clientScope("Northwind"), key: "data_platform", value: "fabric", actor: FOCUSTIME, area: "clients", target: "Northwind", note: "demo" });
     await adminStore.setOrg({ scope: clientScope("Harbor"), key: "data_platform", value: "azure", actor: FOCUSTIME, area: "clients", target: "Harbor", note: "demo" });
     await adminStore.setOrg({ scope: clientScope("Harbor"), key: "source_systems", value: ["d365_dataverse"], actor: FOCUSTIME, area: "clients", target: "Harbor", note: "demo" });
+    // RB-1: Fabrikam's code is for its team only, so Code shows it greyed for the demo's person (who isn't on it).
+    await adminStore.setOrg({ scope: clientScope("Fabrikam"), key: "code_access", value: "team", actor: FOCUSTIME, area: "clients", target: "Fabrikam", note: "demo" });
     // IN-1: the helper bot is flagged as an automation account (ADM-2 meant it as one), so it is never a Cooptimizer.
     await adminStore.setOrg({ scope: `person:${DEMO_BOT.personId}`, key: "automation", value: true, actor: FOCUSTIME, area: "people", target: DEMO_BOT.name, note: "demo" });
   })();
@@ -144,8 +149,11 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const statusRows = createStatusRegistry();
   statusRows.register(devopsStatusSource(demoPoll));
   const standards = demoStandards(opts.now);
+  // RB-1: the demo's made-up repos (never DevOps) and its own view log, on the demo's in-memory database.
+  const code = { git: demoCodeGit(), views: codeViewsStoreOn(shared, instant) };
   const adminOps: AdminOps = {
     standards,
+    code: { views: code.views, status: (k) => codeStatus(code.git, k, k) },
     statusRows,
     check: demoAdminCheck(DEMO_PERSON.oid),
     org,
@@ -255,6 +263,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     org,
     adminOps,
     standards,
+    code,
     demo: {
       ...opts.demo,
       status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),
