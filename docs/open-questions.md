@@ -819,3 +819,14 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - When does Work templates come back? Its tables, store and seed are kept; the plan is that Break down offers a type's typical stories. Until then nothing reads or writes them, and the Admin page and Settings view are hidden.
 - The third answer goes after a draft's own acceptance text, separated by a blank line, when a draft has both. Keep both, or let the box replace it?
 - From the consultant review, seen but outside this step: size is asked three ways (the draft editor's XS to L chips, the New form's box, the card's Story Points); the phone's Description box is grey in dark mode; on the phone at the largest text size the Size help sits under the + button; the card's labels sit a few pixels below their values; "Saved on this computer" in the draft editor reads oddly for a hosted app.
+
+## ED-1
+
+- Should a moved item take its new parent's area and iteration? ED-1 changes only the link (the reading that changes less in DevOps); DevOps doesn't do it either.
+- Should tables and images become editable? Today a description with either gets Add to the end; a table editor is a bigger step, and images need attachment uploads outside a create.
+- Should the assistant offer these edits (a title fix or a move as a proposal)? Not in ED-1: the assistant keeps its own `description_edit` and offers neither `item_edit` nor `reparent`.
+- What should ED-2 carry into the Backlog grid first: an inline title edit, Move… by drag, or bulk move of selected rows?
+- The revision guard counts any revision, a comment included, so a comment while I type means Save again. Narrow it to the fields being edited (as `fields` does per field), or keep the whole-item guard?
+- Markdown fields rely on API 7.2-preview.3's `multilineFieldsFormat`; when it leaves preview, move to the released version and check the format op's casing again.
+- The DevOps docs don't state that a remove and an add on relations can go in one patch, nor the one-parent rule; ED-1 relies on the patch being applied all or nothing (as the docs say for a test failure). Recheck if DevOps ever returns a partial result.
+- The not-allowed note on the card says "Harbor's leads" with the client key where Backlog says the client's name; the write framework's rights note uses the key. Use the name everywhere?

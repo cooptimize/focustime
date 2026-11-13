@@ -53,7 +53,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 Newer DevOps write kinds than the `op` column's CHECK are kept in `write_kind`, with `op` "comment", so an older build still reads the row. SR-3's delete of one's own comment is stored as `write_kind` "comment_edit" with `deleted: true` in `ops`, and the old text in `before` for Undo. No migration.
 | `devops_identities`, `devops_item_clients` | User | Yes | A person's checked DevOps identity per client (never the PAT), item to client links |
 | `devops_items`, `devops_changes`, `devops_poll` | App | Yes | Central DevOps reads, the change log, the poll's watermarks |
-| `devops_takes`, `devops_notes` | App | No | Quiet notes to someone whose item was taken or changed |
+| `devops_takes`, `devops_notes`, `devops_edit_notes` | App | No | Quiet notes to someone whose item was taken, changed, edited or moved (ED-1: once a day per item) |
 | `patterns_runs`, `patterns_snapshots`, `patterns_items`, `patterns_labels`, `patterns_type_lists`, `patterns_platforms` | App | Yes | WP-1's DevOps patterns: runs (kind, state, the starter's user id, progress, estimate and spend), each client's numbers per run (the two newest are shown), items of the last 24 months and their parents (id, rev, type, state, dates, parent, title, and numbers about the text: lengths, empty or not, comment count, tags and estimate set or not, history booleans), labels per item, revision and list version, the request type lists, each client's platform. Never description, acceptance or comment text, never names |
 | `patterns_layout`, `patterns_projects`, `patterns_scopes`, `patterns_kinds` | App | Yes | WP-2's scope and kinds for DevOps patterns: per item in the window its project, area path, type and created date (the layout, also for items outside the scope); per project the area tree and teams (names, area paths, whether the team field is the area path; never the teams' people); each client's scope as set on the page (who and when); each type's kind when a person chose one. Never titles, text or names |
 | `patterns_ignored`; `patterns_type_lists.made_by`, `why`, `base`, `relabel` | App | Yes | WP-3's request types list a person owns: for each saved version who made it (a user id), one line of why, the version it was made from and which labels an added type asks to label again; the "other" names a person chose to ignore (the name, who and when). Never titles, text or names of people |
@@ -93,7 +93,7 @@ What is deleted by age, for everyone at once (`store/retention.ts` `RETENTION_RU
 | `teams_bot_seen` | a day |
 | `teams_bot_cards` | a week after it settles or expires |
 | `teams_rhythm` | 30 days |
-| `devops_takes`, `devops_notes` | 14 days |
+| `devops_takes`, `devops_notes`, `devops_edit_notes` | 14 days |
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
 | `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay |

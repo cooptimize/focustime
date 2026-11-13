@@ -179,3 +179,16 @@ The words below are no longer shown: the New form, the draft editor and the card
 - Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
 - The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
 - The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.
+
+## ED-1 words (Nov 12)
+
+- **Edit** (E) on the story card; **Save** (Ctrl+Enter) and **Cancel** at the foot, with "Nothing is written until you confirm the preview. Ctrl+Enter saves." The preview's button: **Save in DevOps**, **Move in DevOps**.
+- **Add acceptance criteria**, a quiet button; its box's grey text: "One example and the answer it should give".
+- The format buttons: **B**, **I**, **•**, **1.**, **Link** (read as Bold, Italic, Bullets, Numbers, Link); the look under the box: **"How it will read in DevOps"**; for a Markdown field: "Kept as Markdown, as DevOps stores it".
+- "Fonts and colors from the old text will be removed." in Edit and the preview.
+- A field that isn't a box says why in one line: "This has a table or an image, so it can't be changed here without losing it." (and "embedded content", "This mentions someone, … without losing the mention.", "formatting FocusTime can't keep"), then **Add to the end** and **Copy DevOps link**.
+- **"Discard your changes?"** with **Discard** and **Keep editing**.
+- **"This changed in DevOps since you opened it."** Nothing was written. Your words are still in the boxes. DevOps has now: … then **Save again**.
+- **Move…** beside the parent and in the card's ⋯; "Now under: …", "Find a feature", **No parent**, "(now)", "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.", then **Preview**.
+- The owner's note: **"<name> edited #<id>"**. The preview: "Assigned to <name>, not you. They get a quiet note in FocusTime that you edited it."
+- The write log: **Edited**, **Moved**, **Undo: edit put back**, **Undo: moved back**.

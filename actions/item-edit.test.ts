@@ -248,6 +248,12 @@ describe("ED-1 reparent", () => {
     await s.enable();
   });
   const parentsOf = (id: number) => s.dv.items.get(id)!.relations.filter((r) => r.rel === "System.LinkTypes.Hierarchy-Reverse").map((r) => Number(r.url.split("/").pop()));
+  it("moving someone else's item tells a Cooptimizer owner with the same quiet note", async () => {
+    const p = (await s.preview({ kind: "reparent", itemId: 501, rev: rev(s, 501), parentId: 438 })).preview!;
+    expect(p.notes.join(" ")).toContain("They get a quiet note in FocusTime that you edited it.");
+    await s.confirm(p);
+    expect(await s.notes.editedTo!(["dana@cooptimize.example"], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ itemId: 501 })]);
+  });
   it("old link out and new link in, in one patch behind the rev; only the link changes", async () => {
     s.dv.items.get(500)!.relations.push({ rel: "Related", url: "https://dev.azure.com/cooptimize/_apis/wit/workItems/600" });
     const before = structuredClone(s.dv.items.get(500)!.fields);

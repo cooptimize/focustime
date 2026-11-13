@@ -1408,7 +1408,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.",
         ...(to === null ? ["It will have no parent in DevOps."] : []),
       ];
-      const owner = await ownerNote(env, item, false);
+      const owner = await ownerNote(env, item);
       if (owner) notes.push(owner);
       return { ...base(env), ...none, op: "reparent", itemId: item.id, title: item.title, ops: reparentOps(org, item.rev, item.relations, to), rev: item.rev, before: { Parent: parentText(old ?? (was !== null ? { id: was, title: "" } : null)).trim() }, after: { Parent: parentText(parent) }, type: item.type, parentId: to, notes };
     }
@@ -1665,11 +1665,10 @@ async function editTarget(env: Env, o: Obj, memo: Map<string, Promise<unknown>>)
 }
 export const CHANGED_SINCE = "This changed in DevOps since you opened it. Nothing was written. Your words are kept: check what it says now, then save again.";
 /** ED-1: the preview's line for someone else's item: who it is, and whether they get FocusTime's quiet note. */
-async function ownerNote(env: Env, item: ItemSnapshot, edit = true): Promise<string | null> {
+async function ownerNote(env: Env, item: ItemSnapshot): Promise<string | null> {
   const owner = identityEmail(item.fields["System.AssignedTo"]);
   if (!owner || owner === env.me.email.toLowerCase()) return null;
   const name = identityName(item.fields["System.AssignedTo"]) ?? owner;
-  if (!edit) return `Assigned to ${name}, not you.`;
   const coop = env.ahead?.isCooptimizer ? await env.ahead.isCooptimizer(env.clientKey, owner).catch(() => false) : false;
   return coop ? `Assigned to ${name}, not you. They get a quiet note in FocusTime that you edited it.` : `Assigned to ${name}, not you.`;
 }
@@ -1881,7 +1880,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     const moved = entry.op === "reparent" || entry.op === "undo_reparent" ? { "System.Parent": parentLinks(back.relations)[0] ?? null } : {};
     await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev, ...moved } }).catch(() => {});
     if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
-    if (entry.op === "item_edit") await editedNote(ctx, env, back).catch(() => {});
+    if (entry.op === "item_edit" || entry.op === "reparent") await editedNote(ctx, env, back).catch(() => {});
     // CV-4: an undone create's images are unlinked (the files stay in DevOps: there's no delete).
     let unlinked = 0;
     if (entry.op === "undo_create" && entry.undoOf !== null) {
