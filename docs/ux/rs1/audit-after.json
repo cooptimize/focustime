@@ -204,7 +204,7 @@
  },
  {
   "screen": "Status",
-  "smallTargets": 16,
+  "smallTargets": 14,
   "clippedLines": 0,
   "textStyles": 8,
   "offScale": 0,
@@ -212,8 +212,6 @@
   "small": [
    "button.brand-home \"FocusTime\" 130x25",
    "button.demo-tag \"Demo data\" 82x21",
-   "button.ms-btn \"Edit\" 44x26",
-   "button.ms-btn \"Preview\" 68x26",
    "a.st-title \"Internal reporting refresh\" 154x17",
    "button.link-btn \"Dismiss\" 46x18",
    "summary. \"What a draft uses (2)\" 1028x18",
@@ -471,7 +469,7 @@
  },
  {
   "screen": "Backlog, grid (Larger)",
-  "smallTargets": 30,
+  "smallTargets": 32,
   "clippedLines": 0,
   "textStyles": 8,
   "offScale": 0,
@@ -506,7 +504,9 @@
    "a. \"Supplier onboarding\" 154x22",
    "button.ah-chip.ah-chip-btn \"Break down: Supplier onboarding\" 110x24",
    "input. \"Select #1160 Sales reporting: Gold fact and dimens\" 13x13",
-   "button.ah-chip.ah-chip-btn \"Break down: Sales reporting: Gold fact and dimensi\" 110x24"
+   "button.ah-chip.ah-chip-btn \"Break down: Sales reporting: Gold fact and dimensi\" 110x24",
+   "input. \"Select #1140 Loyalty points\" 13x13",
+   "a. \"Loyalty points\" 106x22"
   ],
   "clipped": [],
   "styles": [
@@ -522,7 +522,7 @@
  },
  {
   "screen": "Backlog, Gantt (Larger)",
-  "smallTargets": 14,
+  "smallTargets": 17,
   "clippedLines": 0,
   "textStyles": 9,
   "offScale": 0,
@@ -541,7 +541,10 @@
    "a. \"Search analytics\" 124x22",
    "a. \"Customer portal redesign\" 200x22",
    "div.pa-bar.ah-bar \"Customer portal redesign: start estimated, end est\" 763x21",
-   "button.pa-marker \"Customer portal redesign: 3 callouts. Needs a date\" 37x24"
+   "button.pa-marker \"Customer portal redesign: 3 callouts. Needs a date\" 37x24",
+   "a. \"Loyalty points\" 106x22",
+   "div.pa-bar.ah-bar \"Loyalty points: start estimated, Fri, Sep 4 AM to \" 763x21",
+   "button.pa-marker \"Loyalty points: 2 callouts. Target in 7 weeks, not\" 37x24"
   ],
   "clipped": [],
   "styles": [
@@ -558,7 +561,7 @@
  },
  {
   "screen": "Status (Larger)",
-  "smallTargets": 9,
+  "smallTargets": 11,
   "clippedLines": 0,
   "textStyles": 8,
   "offScale": 0,
@@ -572,7 +575,9 @@
    "summary. \"Also assigned to you (1)\" 1072x22",
    "a.st-title \"Knowledge base search\" 187x22",
    "a.st-title \"Order history export\" 159x22",
-   "button.st-text.st-text-edit \"CSV export is merged; filtering by date range is n\" 1032x24"
+   "button.st-text.st-text-edit \"CSV export is merged; filtering by date range is n\" 1032x24",
+   "button.link-btn \"Edit\" 28x22",
+   "button.link-btn \"Delete\" 47x22"
   ],
   "clipped": [],
   "styles": [
@@ -588,7 +593,7 @@
  },
  {
   "screen": "Inbox, chats (Larger)",
-  "smallTargets": 3,
+  "smallTargets": 4,
   "clippedLines": 0,
   "textStyles": 9,
   "offScale": 0,
@@ -596,7 +601,8 @@
   "small": [
    "button.demo-tag \"Demo data\" 102x26",
    "a.ib4-teams \"Open in Teams\" 106x20",
-   "button.link-btn \"Refresh\" 55x22"
+   "button.link-btn \"Refresh\" 55x22",
+   "button.link-btn \"? all keys\" 84x22"
   ],
   "clipped": [],
   "styles": [
@@ -657,7 +663,7 @@
  {
   "screen": "Settings, Display (Larger)",
   "smallTargets": 14,
-  "clippedLines": 1,
+  "clippedLines": 0,
   "textStyles": 7,
   "offScale": 0,
   "filledInHeader": 0,
@@ -677,9 +683,7 @@
    "input. \"INPUT\" 139x24",
    "input. \"INPUT\" 139x24"
   ],
-  "clipped": [
-   "main.panel-shell.settings: \"DevOps\" 14px of 22px shown"
-  ],
+  "clipped": [],
   "styles": [
    "15px/600/caps",
    "16px/400",
