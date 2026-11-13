@@ -138,7 +138,11 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-2 screenshots", () => {
     await screen(page, "09-day-loading", async () => {
       await go(page, `#/day/${FRIDAY}`, 1500);
       const release = await holdWeekRead(page, "slow");
-      await page.getByRole("button", { name: "Next day" }).click();
+      // Next until the asked day is in next week (a weekend with something on it is a stop of its own).
+      for (let i = 0; i < 3 && !(await page.locator(".day-bar h1").innerText()).includes("Nov 9"); i++) {
+        await page.getByRole("button", { name: "Next day" }).click();
+        await page.waitForTimeout(150);
+      }
       await page.waitForTimeout(400);
       await shot(page, "09-day-loading");
       await release();
@@ -148,7 +152,11 @@ describe.skipIf(!CHROMIUM || !DIR)("RS-2 screenshots", () => {
     await screen(page, "10-day-failed", async () => {
       await go(page, `#/day/${FRIDAY}`, 1500);
       const release = await holdWeekRead(page, "fail");
-      await page.getByRole("button", { name: "Next day" }).click();
+      // Next until the asked day is in next week (a weekend with something on it is a stop of its own).
+      for (let i = 0; i < 3 && !(await page.locator(".day-bar h1").innerText()).includes("Nov 9"); i++) {
+        await page.getByRole("button", { name: "Next day" }).click();
+        await page.waitForTimeout(150);
+      }
       await page.waitForTimeout(1500);
       await shot(page, "10-day-failed");
       await release();

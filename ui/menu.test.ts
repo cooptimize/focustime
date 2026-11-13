@@ -89,6 +89,12 @@ const items = (s: MenuStep) => ("items" in s ? s.items : []);
 const find = (s: MenuStep, label: string) => items(s).find((i) => i.label === label)!;
 
 describe("command menu (built from the action registry)", () => {
+  it("RS-2 D7: each group is one run, so its label shows once (Views, then Inbox, Week...)", () => {
+    const groups = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] }).map((c) => c.group ?? "");
+    const runs = groups.filter((g, i) => i === 0 || g !== groups[i - 1]);
+    expect(runs.length).toBe(new Set(groups).size);
+    expect(runs[0]).toBe("Views");
+  });
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
     for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !name.startsWith("patterns.") && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);

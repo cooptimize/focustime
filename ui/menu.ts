@@ -1790,7 +1790,14 @@ export function commandList(env: MenuEnv): MenuItem[] {
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
   const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
-  return [...uiCommands(env), ...fromRegistry];
+  return byGroup([...uiCommands(env), ...fromRegistry]);
+}
+
+/** RS-2 D7: each group's commands together, groups in the order they first appear, so the menu labels each group once. */
+export function byGroup(items: MenuItem[]): MenuItem[] {
+  const order = new Map<string, number>();
+  for (const i of items) if (!order.has(i.group ?? "")) order.set(i.group ?? "", order.size);
+  return items.map((i, n) => ({ i, n })).sort((a, b) => order.get(a.i.group ?? "")! - order.get(b.i.group ?? "")! || a.n - b.n).map((x) => x.i);
 }
 
 /** Search: every word must appear in the label, group or hint, any order, any case. */

@@ -43,7 +43,7 @@ Every outside system is read only, except the named writes listed for each one b
 - `reparent`: `remove` on `/relations/<i>` for each `System.LinkTypes.Hierarchy-Reverse` link (highest index first, by the relations read at that revision), then `add` on `/relations/-` with the new parent's `_apis/wit/workItems/<id>` url, or nothing for No parent. The docs show remove and add separately, not together, and don't state the one-parent rule; the single patch behind the rev test keeps the item from ever having two parents. Undo (`undo_reparent`) moves it back, only while it is still under the parent FocusTime chose.
 - Neither touches area, iteration, state, dates, assignee or backlog order (`Microsoft.VSTS.Common.StackRank`, `BacklogPriority`).
 
-**Failure.** A missing consent shows in Settings › Connections as needs consent or needs an admin, with where to allow it. An expired sign-in shows "Reconnect". A failed calendar read shows the last good data and its age.
+**Failure.** A missing consent shows in Settings › Connections as needs consent or needs an admin, with where to allow it. An expired sign-in shows "Reconnect". A failed calendar read shows the last good data and its age. A read still going after 3 s answers from that last good copy, marked unreachable with its time, and finishes in the background to refresh the copy (RS-2; Outlook and Google, not calendar links or Dataverse).
 
 ## Azure DevOps
 

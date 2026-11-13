@@ -916,11 +916,13 @@ function monthLoads(rows: Row[], bars: Map<number, Bar | null>, cap: AheadState[
 }
 
 function PastWords({ words }: { words: string }) {
-  const [a, b] = words.split(", ");
+  // RS-2 D3: two whole parts that wrap as wholes: "planned 4h," "no focus time", or "nothing" "planned".
+  const comma = words.includes(", ");
+  const [a, b] = comma ? words.split(", ") : [words.slice(0, words.lastIndexOf(" ")) || words, words.lastIndexOf(" ") > 0 ? words.slice(words.lastIndexOf(" ") + 1) : undefined];
   return (
     <span className="pa-pw">
-      <span>{b ? `${a},` : a}</span>
-      {b && <span>{b}</span>}
+      <span>{b && comma ? `${a},` : a}</span>
+      {b && <>{" "}<span>{b}</span></>}
     </span>
   );
 }
@@ -948,8 +950,12 @@ function CapacityRow({ name, clientKey, cap, cols, scale, loads, ahead }: { name
             const bw = budgetWords(w?.freeMinutes ?? 0, w?.plannedMinutes ?? 0);
             return (
               <span key={col.from} className={`pa-capcell ${w?.status ?? "none"}`} style={style} title={`Free focus time in ${name}'s blocks that week, after meetings; what's planned against it`}>
-                {bw.text}
-                {w?.over && <span className="over-word"> · {w.over}</span>}
+                {/* RS-2 D3: whole phrases wrap to a second line, never cut ("2h planne"). */}
+                <span className="pa-pw">
+                  <span>{bw.planned ? `${bw.free} ·` : bw.free}</span>
+                  {bw.planned && <>{" "}<span>{bw.planned}</span></>}
+                  {w?.over && <>{" "}<span className="over-word">· {w.over}</span></>}
+                </span>
               </span>
             );
           }
