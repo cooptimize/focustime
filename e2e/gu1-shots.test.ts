@@ -63,6 +63,35 @@ describe.skipIf(!CHROMIUM || !DIR)("GU-1 screenshots", () => {
       await page.close();
     }, T);
 
+  // 1366 wide at the Larger text size (the tightest desktop case): every section, with anything wider than the window named.
+  it("every section at 1366 with the Larger text size, light and dark", async () => {
+    const { page } = await freshPage(h, { width: 1366, height: 768 });
+    await page.locator("body").click({ position: { x: 5, y: 5 } }).catch(() => {});
+    await page.keyboard.press("Control+Equal");
+    await page.keyboard.press("Control+Equal");
+    for (const s of SECTIONS) {
+      try {
+        await section(page, s.id);
+        const wide = await page.evaluate(() => {
+          const b = document.querySelector(".guide .ps-body") as HTMLElement | null;
+          const over = [...document.querySelectorAll(".guide .ps-body *")].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest(".sr-only")).map((e) => String(e.className)).slice(0, 5);
+          return document.documentElement.scrollWidth > innerWidth || (b && b.scrollWidth > b.clientWidth + 1) ? ["sideways scroll", ...over] : over;
+        });
+        if (wide.length) missed.push(`${s.id} at 1366 Larger is too wide: ${wide.join(", ")}`);
+        for (const theme of THEMES) {
+          await themed(page, theme);
+          await scrollBody(page, "top");
+          await page.waitForTimeout(200);
+          await page.screenshot({ path: `${DIR}/${s.id}-1366-larger-${theme}.png` });
+        }
+        await themed(page, "dark");
+      } catch (e) {
+        missed.push(`${s.id} at 1366 Larger: ${String((e as Error).message).split("\n")[0]}`);
+      }
+    }
+    await page.close();
+  }, T);
+
   it("each try-it and the Guide's small examples, dark and light", async () => {
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     for (const s of SECTIONS) {

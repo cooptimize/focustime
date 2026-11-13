@@ -1,3 +1,4 @@
+// GU-1 changed here only: the Day section's id (was today), and Day and Status among the sections its optional screenshots take.
 // UI-5: Start here and every tour on the real screens (a demo session), at 1920, 1366 and phone width, with the keyboard
 // only. A tour only highlights and explains: while it runs the page under it takes no click or key, it calls no action
 // its screens don't call on their own (a baseline visits the same screens without a tour), and the plan store is the
@@ -175,9 +176,9 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
     await page.waitForTimeout(300);
     expect(await running()).toEqual([]);
     expect(await page.locator(".gs-proposal.done").count()).toBe(1);
-    // Today's urgent strip shows its end state, still.
+    // Day's urgent strip is still (GU-1: the old address #/guide/today opens Day).
     await page.evaluate(() => (location.hash = "#/guide/today"));
-    await page.locator(".guide-body[data-section='today']").waitFor();
+    await page.locator(".guide-body[data-section='day']").waitFor();
     await page.waitForTimeout(300);
     expect(await running()).toEqual([]);
     const tour = tourById("board")!;
@@ -213,7 +214,7 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
         await openStartHere(page);
         await page.waitForTimeout(1800);
         await page.screenshot({ path: `${SHOTS}/ui5-start-${w}-${theme}.png` });
-        for (const s of ["first-day", "today", "week", "inbox", "assistant", "renamed"]) {
+        for (const s of ["first-day", "day", "week", "status", "inbox", "assistant", "renamed"]) {
           await page.evaluate((x) => (location.hash = `#/guide/${x}`), s);
           await page.locator(`.guide-body[data-section='${s}']`).waitFor();
           await page.waitForTimeout(900);
