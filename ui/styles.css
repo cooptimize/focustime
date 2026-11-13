@@ -6299,6 +6299,8 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .sc-discard span { margin-right: auto; font-weight: 600; }
 .sc-changed { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--watch); border-radius: 8px; }
 .sc-changed p { margin: 0; }
+.sc-changed-how { font-size: var(--fs-2); color: var(--text-muted); }
+@media (pointer: coarse) { .sc-save-key { display: none; } }
 .sc-changed-now { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: var(--fs-2); overflow-wrap: anywhere; }
 .sc-changed-now dt { color: var(--text-muted); font-weight: 500; }
 .sc-changed-now dd { margin: 0; min-width: 0; }
@@ -6349,6 +6351,7 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .sc-light-box { font-size: 16px; }
   .dw-looks { grid-template-columns: 1fr; }
   .sc-changed-now { grid-template-columns: 1fr; }
+  .sc-save { position: static; }
   .sc-more-menu button { min-height: 44px; }
 }
 

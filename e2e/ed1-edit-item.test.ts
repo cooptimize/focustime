@@ -128,6 +128,8 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
       await row.getByRole("button", { name: "Undo" }).click();
       await confirmPreview(page);
     }
+    // The log reads a description as its words, never its HTML.
+    await expect(wl.locator("tr", { hasText: "#1111" }).first().textContent()).resolves.not.toMatch(/<(div|ul|li|strong)/);
     if (SHOTS) await shot(page, "write-log");
     const back = await call(page, "devops.edit_offer", { clientKey: "Northwind", itemId: 1111 });
     expect(back.data.offer.title).toBe("Export ordres to CSV");
@@ -187,6 +189,8 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     await expect(banner.textContent()).resolves.toContain("This changed in DevOps since you opened it");
     await expect(card.getByRole("textbox", { name: "Title" }).inputValue()).resolves.toBe("Map of stores near me");
     expect((await log(page)).filter((e) => e.itemId === 1151 && e.status === "confirmed").length).toBe(0);
+    // One way on: the banner's Save again (the foot's Save goes while it shows).
+    await expect(card.locator(".sc-save").getByRole("button", { name: "Save", exact: true }).count()).resolves.toBe(0);
     if (SHOTS) await shot(page, "changed-since");
     await banner.getByRole("button", { name: "Save again" }).click();
     await confirmPreview(page);
@@ -264,6 +268,8 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     expect(wide).toBeLessThanOrEqual(0);
     const cardWide = await card.evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(cardWide).toBeLessThanOrEqual(0);
+    // The save bar sits after the boxes on the phone, never over them.
+    await expect(card.locator(".sc-save").evaluate((el) => getComputedStyle(el).position)).resolves.toBe("static");
     const save = await card.getByRole("button", { name: "Save", exact: true }).boundingBox();
     expect(save!.height).toBeGreaterThanOrEqual(44);
     const tb = await card.getByRole("textbox", { name: "Title" }).boundingBox();

@@ -453,7 +453,13 @@ export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?
 
 const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", item_edit: "Edited", undo_item_edit: "Undo: edit put back", reparent: "Moved", undo_reparent: "Undo: moved back", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };
 const DW_STATUS: Record<string, string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
-const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x ?? "(empty)"}`).join(", ");
+/** ED-1: a description's HTML reads as its words in the log, cut to a line (the full text stays in the entry for Undo). */
+const plainLine = (x: string) => {
+  const t = /<[a-z]/i.test(x) ? x.replace(/<(br|\/div|\/p|\/li|\/h[1-6])\b[^>]*>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&") : x;
+  const one = t.replace(/\s+/g, " ").trim();
+  return one.length > 140 ? `${one.slice(0, 139)}…` : one;
+};
+const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x === null || x === "" ? "(empty)" : plainLine(x)}`).join(", ");
 
 /** Settings > Data (step 14): every DevOps write, newest first, with the values before and after, Undo and Retry. */
 export function DevOpsWriteLog(): ReactNode {

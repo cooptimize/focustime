@@ -255,6 +255,7 @@ export function ChangedSince({ now, onUse, children }: { now: EditOffer; onUse: 
         )}
       </dl>
       {children}
+      <p className="sc-changed-how">Save again shows your words against what DevOps has now, in the preview, before anything is written.</p>
       <div className="sc-edit-acts start">
         <button type="button" className="mini primary" onClick={onUse}>
           Save again

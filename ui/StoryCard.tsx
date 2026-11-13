@@ -426,13 +426,18 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                     </p>
                   ) : (
                     <>
-                      <span className="muted">Nothing is written until you confirm the preview. Ctrl+Enter saves.</span>
+                      <span className="muted">
+                        Nothing is written until you confirm the preview.<span className="sc-save-key"> Ctrl+Enter saves.</span>
+                      </span>
                       <button type="button" className="mini" onClick={cancelEdit}>
                         Cancel
                       </button>
-                      <button type="button" className="mini primary" disabled={!draft.title.trim()} onClick={() => saveEdit()}>
-                        Save
-                      </button>
+                      {/* While DevOps has a newer version, the banner's Save again is the one way on. */}
+                      {!stale && (
+                        <button type="button" className="mini primary" disabled={!draft.title.trim()} onClick={() => saveEdit()}>
+                          Save
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
