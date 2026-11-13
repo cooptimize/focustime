@@ -56,6 +56,8 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     source: "MC-1",
     run: del("UPDATE meeting_proposals SET quotes_json = NULL WHERE quotes_json IS NOT NULL AND created_at < ?", (n) => ago(n, days(30))),
   },
+  // RB-1: the code view log (who opened which file, never content), 12 months.
+  { name: "code_views", table: "code_views", keep: "12 months", source: "RB-1", run: del("DELETE FROM code_views WHERE at < ?", (n) => ago(n, days(365))) },
   { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ? AND job <> 'conversation_ownership_backfill'", (n) => ago(n, days(CLAIM_DAYS))) },
 ];
 
