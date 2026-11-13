@@ -305,7 +305,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
         <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
           {tried ? "Close" : "Not now"}
         </button>
-        <span className="muted">Logged in Settings &gt; Data, with Undo.</span>
+        <span className="muted">Logged in Settings › Activity, with Undo.</span>
       </div>
     </Modal>
   );

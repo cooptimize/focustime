@@ -21,11 +21,13 @@ const log = async (page: Page) => (await call(page, "devops.log", {})).data.entr
 const shot = async (page: Page, name: string) => {
   if (!SHOTS) return;
   for (const theme of ["dark", "light"] as const) {
-    await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
-    await page.waitForTimeout(120);
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme === "dark" ? "cooptimize-dark" : "cooptimize-light");
+    await page.waitForTimeout(150);
     await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png` });
   }
-  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.evaluate(() => (document.documentElement.dataset.theme = "cooptimize-dark"));
 };
 async function openCard(page: Page, clientKey: string, id: number): Promise<Locator> {
   await page.evaluate(([c, i]) => (location.hash = `#/item/${c}/${i}`), [clientKey, id] as const);
@@ -80,11 +82,11 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     await desc.click();
     await page.keyboard.press("Control+End");
     await page.keyboard.type("\nAlso:\nNo hidden columns\nQuotes around text with commas");
-    await page.keyboard.press("Shift+ArrowUp");
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Shift+End");
-    await page.keyboard.press("Shift+ArrowDown");
-    await page.keyboard.press("Shift+End");
+    // Select the last two lines, then Bullets.
+    await desc.evaluate((el: HTMLTextAreaElement) => {
+      const at = el.value.indexOf("No hidden columns");
+      el.setSelectionRange(at, el.value.length);
+    });
     await card.getByRole("button", { name: "Bullets" }).click();
     await desc.press("Control+End");
     await page.keyboard.type("\n");

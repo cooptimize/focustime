@@ -4,7 +4,7 @@
 // is written while typing. A field FocusTime can't keep exactly isn't offered as a box: one line says why, with Add
 // to the end and Copy DevOps link. Move… picks a new parent one level up from the client's own items (the New form's
 // pool), or No parent. The server checks everything again; these are only the boxes.
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { EditFieldOffer, EditOffer } from "../actions/types.ts";
 import { applyMark, lookHtml, LOSSY_TEXT } from "../plan/light-format.ts";
 import type { NewOptions, NewParent } from "../plan/quick-create.ts";
@@ -43,12 +43,19 @@ export function LightEditor({ label, value, onChange, placeholder, onSave, boxRe
     const t = ref.current;
     if (!t) return;
     const r = applyMark(value, t.selectionStart, t.selectionEnd, m);
+    pending.current = { start: r.start, end: r.end };
     onChange(r.value);
-    requestAnimationFrame(() => {
-      t.focus();
-      t.setSelectionRange(r.start, r.end);
-    });
   };
+  // The marked text stays selected, set as the new value lands (before anything else is typed).
+  const pending = useRef<{ start: number; end: number } | null>(null);
+  useLayoutEffect(() => {
+    const t = ref.current;
+    const p = pending.current;
+    if (!t || !p) return;
+    pending.current = null;
+    t.focus();
+    t.setSelectionRange(p.start, p.end);
+  }, [value]);
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && !e.shiftKey && !e.altKey && (e.key === "b" || e.key === "B")) return void (e.preventDefault(), mark("bold"));
