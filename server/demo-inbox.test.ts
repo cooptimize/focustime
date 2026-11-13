@@ -1,10 +1,10 @@
-// IB-1 slice 4: the demo shows every Inbox view with something in it (Needs you with reasons, Promises with a late one,
-// Waiting on, In progress, Captures and drafts, Handled by teammates, Done, Chatter), on whatever weekday it opens,
-// with nothing sent out of FocusTime and only the demo's fictional people.
+// IB-1 slice 4, IB-4: the demo shows each of the slim Inbox's lists with something in it (From chats with two
+// suggestions and a conversation that isn't one, Promises with a late one and two that cleared on their own, Captures),
+// on whatever weekday it opens, with nothing sent out of FocusTime and only the demo's fictional people.
 import { describe, expect, it } from "vitest";
 import { dispatch, type ActionContext } from "../actions/dispatch.ts";
-import type { ConversationsData } from "../plan/conversation-views.ts";
-import { INBOX_VIEWS, railItems, todayLines, type InboxListData, type InboxTodayData } from "../plan/inbox-items.ts";
+import type { MyPromisesData, SuggestionsData } from "../plan/conversation-views.ts";
+import { railItems, todayLines, type InboxListData, type InboxTodayData } from "../plan/inbox-items.ts";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,29 +25,29 @@ const run = async <T>(ctx: ActionContext, action: string, input: unknown = {}): 
   return r.data as T;
 };
 
-describe("the demo's Inbox (IB-1)", () => {
+describe("the demo's Inbox (IB-4)", () => {
   const net = useNoOutbound();
 
   for (const now of days)
-    it(`has something in every view (${Temporal.Instant.from(now).toZonedDateTimeISO("America/New_York").toLocaleString("en-US", { weekday: "long" })})`, async () => {
+    it(`has something in each list (${Temporal.Instant.from(now).toZonedDateTimeISO("America/New_York").toLocaleString("en-US", { weekday: "long" })})`, async () => {
       const ctx = await demo(now);
+      const promises = await run<MyPromisesData>(ctx, "my_promises.list");
       const list = await run<InboxListData>(ctx, "inbox.list");
-      const convs = await run<ConversationsData>(ctx, "conversations.list");
-      const empty = INBOX_VIEWS.filter((v) => (v === "chatter" ? convs.chatter.length === 0 : list.counts[v] === 0));
-      expect(empty, `empty views: ${empty.join(", ")}`).toEqual([]);
-      // Needs you says why for each; Promises has a late one.
-      const needs = list.items.filter((i) => i.views.includes("needs_you"));
-      for (const i of needs) expect(i.reason, i.key).toBeTruthy();
+      const chats = await run<SuggestionsData>(ctx, "conversations.suggestions");
+      // From chats: the two from my last workday; never the one about which story is next, nor the one asked 25 minutes ago.
+      expect(chats.suggestions.map((x) => x.title).sort()).toEqual(["Show the delivery fee as its own column in the order export", "Spanish version of the intake form"]);
+      expect(chats.suggestions.find((x) => x.clientName === "Harbor")?.levelWord).toBe("Feature");
+      expect(chats.foot.lastPoll).toBeTruthy();
+      // Promises: a late one; two cleared on their own, with their reasons.
       expect(list.items.some((i) => i.views.includes("promises") && i.late)).toBe(true);
-      // IB-1's own rows: Priya's question by name, her commitment to me, and both kinds in Done.
-      const asked = list.items.find((i) => i.title === "Warehouse sign-in fails after this morning's release");
-      expect(asked).toMatchObject({ kind: "conversation", reason: "Priya asked you by name" });
-      expect(asked!.views).toContain("needs_you");
-      expect(list.items.some((i) => i.kind === "commitment" && i.views.includes("waiting") && i.who === "Priya Shah")).toBe(true);
-      expect(new Set(list.items.filter((i) => i.views.includes("done")).map((i) => i.kind))).toEqual(new Set(["conversation", "promise"]));
-      // Today's strip and Week's rail have something from the same rows, and the badge is Needs you.
+      expect(promises.cleared?.map((c) => c.reason).sort()).toEqual(["#2216 was finished", "Not touched for 7 days"]);
+      expect(promises.promises.map((p) => p.what)).not.toContain("Share a sample pallet label with Priya");
+      // Captures.
+      expect(list.items.some((i) => i.views.includes("captures"))).toBe(true);
+      // The badge: suggestions plus late or due-today promises; Today's strip and Week's rail read the same rows.
       const today = await run<InboxTodayData>(ctx, "inbox.today");
       expect(today.needsYou).toBe(list.counts.needs_you);
+      expect(list.counts.needs_you).toBe(chats.suggestions.length + list.items.filter((i) => i.kind === "promise" && i.views.includes("needs_you")).length);
       expect(todayLines(today.items, { today: list.today, now, dayEnd: null }).length).toBeGreaterThan(0);
       expect(railItems(today.items).length).toBeGreaterThan(0);
       net.expectNone();

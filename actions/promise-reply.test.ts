@@ -35,10 +35,10 @@ describe("an \"I will\" reply is my promise", () => {
       const mine = await p.as(EVAN).run<MyPromisesData>("my_promises.list");
       expect(mine.promises).toHaveLength(1);
       expect(mine.promises[0]).toMatchObject({ state: "open", toName: "Lena Hart" });
-      // The Inbox: in Promises, and in Needs you while it's new to me.
+      // The Inbox: in Promises (IB-4: new alone doesn't make it count).
       const facts = (await inboxFacts(p.as(EVAN).ctx, cfg)).filter((f) => f.kind === "promise");
       expect(facts).toHaveLength(1);
-      expect(viewsOf(facts[0]!, undefined, NOW.slice(0, 10), NOW)).toEqual(expect.arrayContaining(["promises", "needs_you"]));
+      expect(viewsOf(facts[0]!, undefined, NOW.slice(0, 10), NOW)).toEqual(["promises"]);
       if (mode === "with AI") {
         const list = await p.as(EVAN).run<ConversationsData>("conversations.list");
         const lines = [...list.needsYou, ...list.inProgress].map((c) => c.statusLine);

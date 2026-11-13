@@ -135,7 +135,7 @@ describe("a promise with an item stays actionable", () => {
     return (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
   }
 
-  it("linked: still open, with due, Today and done; Unlink is its undo; the item closing never closes it", async () => {
+  it("linked: still open, with due, Today and done; Unlink is its undo; IB-4: the item finishing clears it, Put back brings it back", async () => {
     const w = world({ allowed: [] });
     const k = await promise(w);
     let state = DASHBOARD;
@@ -145,7 +145,14 @@ describe("a promise with an item stays actionable", () => {
     expect(linked.open).toBe(1);
     expect((await sam.run<MyPromisesData>("my_promises.today", { id: k.id, on: true })).promises[0]!.onToday).toBeTruthy();
     state = { ...DASHBOARD, stateCategory: "Completed", state: "Closed" };
-    expect((await sam.run<MyPromisesData>("my_promises.list")).promises[0]).toMatchObject({ state: "open", item: { closed: true } });
+    const cleared = await sam.run<MyPromisesData>("my_promises.list");
+    expect(cleared.promises).toEqual([]);
+    expect(cleared.cleared).toEqual([expect.objectContaining({ id: k.id, reason: "#4101 was finished" })]);
+    expect((await w.convs.commitment(k.id))!.state).toBe("done");
+    // Put back: open again, and the same finished item doesn't clear it a second time.
+    const put = await sam.run<MyPromisesData>("my_promises.put_back", { id: k.id });
+    expect(put.promises[0]).toMatchObject({ id: k.id, state: "open", item: { closed: true } });
+    expect((await sam.run<MyPromisesData>("my_promises.list")).promises.map((x) => x.id)).toEqual([k.id]);
     const back = await sam.run<MyPromisesData>("my_promises.unlink", { id: k.id });
     expect(back.promises[0]).toMatchObject({ state: "open", item: null });
     await sam.run("my_promises.link", { id: k.id, itemId: 4101 });

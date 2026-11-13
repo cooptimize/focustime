@@ -5,7 +5,7 @@
 // is decided by the pipeline's own rule (refreshStatus). The demo reads no Teams messages and runs no sorting for them.
 import { refreshStatus } from "../../../actions/conversations-pipeline.ts";
 import type { ChatKind, ChatMember } from "../../../plan/chats.ts";
-import type { Participant } from "../../../plan/conversations.ts";
+import type { ItemNeeded, Participant } from "../../../plan/conversations.ts";
 import type { Mention, TeamsMessage } from "../../../plan/requests.ts";
 import { demoChats, DEMO_TENANT } from "../chats.ts";
 import { DEMO_PEOPLE } from "../data.ts";
@@ -31,18 +31,20 @@ export const conversationsSeed: DemoSeed = {
     for (const [chatId, clientKey, kind] of REGISTERED) {
       const c = chats.find((x) => x.id === chatId)!;
       await e.teams.addChat({ chatId, clientKey, kind, displayName: c.topic!, webUrl: null, members: c.members, by: e.me.id });
+      // IB-4: read a few minutes ago, as the shared job would have (the foot of From chats says when).
+      await e.teams.recordPoll(chatId, { polledAt: e.ago(4), retryAt: null, failures: 0, state: "ok", note: null, tokenUser: e.me.id });
     }
     const person = (chatId: string, name: string) => members(chatId).find((m) => m.displayName === name)!;
     const meIn = (chatId: string) => members(chatId).find((m) => m.userId?.toLowerCase() === e.me.id.toLowerCase())!;
     const [jordan, priya] = DEMO_PEOPLE;
 
-    // 1. Northwind's client asks; nobody at Cooptimize has answered yet: New, Needs you, Create DevOps item.
+    // 1. Northwind's client asked on my last workday; nobody has made an item: IB-4's From chats suggests one.
     const nc = "19:demo-northwind-collab@thread.v2";
     await thread(e, nc, "Northwind", "Delivery fee missing from the order export", "Dana asks for the delivery fee as its own column in the order history export, before the month-end close.\nMarcus says finance reconciles fees by hand today.", [
-      { id: "nc-1", from: person(nc, "Dana Whitfield"), minutesAgo: 95, text: "Quick one on the order history export: finance needs the delivery fee as its own column. Today it's folded into the order total." },
-      { id: "nc-2", from: person(nc, "Marcus Bell"), minutesAgo: 88, text: "Yes please. We reconcile fees by hand every month end, so having it before the close on the 28th would really help." },
-      { id: "nc-3", from: person(nc, "Dana Whitfield"), minutesAgo: 80, text: "Thanks!", role: "ack" },
-    ]);
+      { id: "nc-1", from: person(nc, "Dana Whitfield"), minutesAgo: { on: e.lastWorkday, at: "10:05" }, text: "Quick one on the order history export: finance needs the delivery fee as its own column. Today it's folded into the order total." },
+      { id: "nc-2", from: person(nc, "Marcus Bell"), minutesAgo: { on: e.lastWorkday, at: "10:12" }, text: "Yes please. We reconcile fees by hand every month end, so having it before the close on the 28th would really help." },
+      { id: "nc-3", from: person(nc, "Dana Whitfield"), minutesAgo: { on: e.lastWorkday, at: "10:20" }, text: "Thanks!", role: "ack" },
+    ], { itemNeeded: { why: "Asks for a new column in the order export, and no item covers it yet", title: "Show the delivery fee as its own column in the order export", level: "child" } });
     // My late promise, in the same chat: on my last workday I said I'd send the spec by end of day; still open.
     const spec = await thread(e, nc, "Northwind", "Updated export spec for review", "Marcus asked for the updated export spec with the new filters.\nAlex said they'd send it.", [
       { id: "nc-4", from: person(nc, "Marcus Bell"), minutesAgo: { on: e.lastWorkday, at: "09:40" }, text: "Could you share the updated export spec with the date filters? We'd like to review it with the controllers." },
@@ -84,7 +86,7 @@ export const conversationsSeed: DemoSeed = {
 };
 
 /** One conversation with its messages, as the pipeline would have placed them. The status comes from its own rule. */
-export async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, title: string, summary: string, lines: Line[], o: { item?: { id: number; url: string; title: string }; ownerId?: string | null } = {}): Promise<number> {
+export async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, title: string, summary: string, lines: Line[], o: { item?: { id: number; url: string; title: string }; ownerId?: string | null; itemNeeded?: ItemNeeded } = {}): Promise<number> {
   const msgs = await save(e, chatId, clientKey, lines);
   const people = new Map<string, Participant>();
   for (const l of lines) if (l.from.userId) people.set(l.from.userId, { id: l.from.userId, name: l.from.displayName ?? "", external: l.from.tenantId !== DEMO_TENANT });
@@ -92,6 +94,8 @@ export async function thread(e: DemoSeedEnv, chatId: string, clientKey: string, 
   const lastWork = msgs.filter((_, i) => (lines[i]!.role ?? "work") === "work").at(-1)!.createdAt;
   const c = await e.conversations.addConversation({ chatId, clientKey, title, summary, participants: [...people.values()], firstAt: first, lastAt: last, lastWorkAt: lastWork, ownerId: o.ownerId ?? null, ...(o.item ? { item: o.item, status: "tracked" as const } : {}), changeNote: o.item ? `Tracked as #${o.item.id}` : null });
   await e.conversations.place(lines.map((l, i) => ({ chatId, messageId: l.id, conversationId: c.id, role: l.role ?? "work", reason: null, placedBy: "ai" as const, at: msgs[i]!.createdAt })));
+  // IB-4: the sorting step's judgment that it needs a DevOps item (the demo runs no sorting, so it's written here).
+  if (o.itemNeeded) await e.conversations.updateConversation(c.id, { itemNeeded: o.itemNeeded });
   await refreshStatus({ convs: e.conversations, teams: e.teams, homeTenant: DEMO_TENANT }, c.id);
   // Part 0: a seeded owner is the shared owner, the same as the one-time backfill sets.
   const owner = o.ownerId ? people.get(o.ownerId) : undefined;

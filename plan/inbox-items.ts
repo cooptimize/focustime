@@ -167,6 +167,9 @@ export function viewsOf(f: InboxFacts, m: Mark | undefined, today: IsoDate, now:
   if (l === "waiting" || f.waitingOn) out.push("waiting");
   if (l === "teammates") out.push("teammates");
   if (f.kind === "capture" || f.kind === "draft") out.push("captures");
+  // IB-4: a send waiting for my answer is in no list (Week's To place answers it) and never counts, but Today's strip
+  // still shows it: it keeps a view so a hidden or snoozed one (no views) stays off the strip.
+  if (f.kind === "send" && f.sendState === "waiting") out.push("waiting");
   return [...new Set(out)];
 }
 

@@ -132,7 +132,7 @@ const INBOX: Tour = {
   start: { tab: "inbox", view: "chats", item: null },
   section: "inbox",
   steps: [
-    { target: "ib-rail", title: "Three lists", text: "From chats, Promises and Captures, each with its count. The chips under them pick clients. FocusTime remembers the list you used last." },
+    { target: "ib-rail", title: "Three lists", text: "From chats, Promises and Captures, each with its count. The chips under them choose clients. FocusTime remembers the list you used last." },
     { target: "ib-list", title: "From chats", text: "A conversation shows here when it asks for work no DevOps item covers yet, after it has been quiet for 4 working hours. Hover a row to see why. Click it to open the messages in place." },
     { target: "ib-acts", title: "Create item, Already covered, Dismiss", text: "Create item (C) fills a new item from the conversation and shows a preview first. Already covered (L) links one that exists. Dismiss (X) takes it off your list only.", example: "ib-item" },
     { target: "ib-keys", title: "Promises clear themselves", text: "What you said you'd do in a chat lands in Promises. When its item is finished, or it sat untouched 7 days past due, it clears on its own, and Put back brings it back. J and K move, Enter opens, D marks done.", phone: "skip" },

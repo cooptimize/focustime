@@ -649,7 +649,7 @@ export async function suggestionsList(ctx: ConversationContext, cfg: AppConfig):
       id: c.id, clientKey: c.clientKey, clientName: name(c.clientKey), chatName: chat.displayName, internalChat: chat.kind === "delivery",
       title: s.title, why: s.why, level: s.level, levelWord: levelWord(s.level, names), conversationTitle: c.title, summary: c.summary,
       people: [...new Set(c.participants.filter((p) => !same(p.id, v.me)).map((p) => first(p.name)))].slice(0, 4), lastWorkAt: c.lastWorkAt, link: teamsLink(chat),
-      ...(c.mentions?.length ? { mentions: c.mentions.map(name) } : {}), canCreate: writeClients.includes(c.clientKey), ...(images.get(c.id) ? { images: images.get(c.id) } : {}),
+      ...(c.mentions?.length ? { mentions: c.mentions.map(name) } : {}), canCreate: writeClients.includes(c.clientKey), ...(images.get(c.id) ? { images: images.get(c.id)! } : {}),
     });
   }
   suggestions.sort((a, b) => b.lastWorkAt.localeCompare(a.lastWorkAt));

@@ -42,16 +42,14 @@ describe("Today and Week read the Inbox's items", () => {
     await plan.markInbox([`f${snoozed.id}`], { snoozedUntil: "2099-01-01T00:00:00Z" });
     await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T20:30:00Z", "I'll check the October filter tomorrow")]);
 
-    // A conversation that needs me, holding a request sorted as needed now.
+    // A conversation holding a request sorted as needed now: IB-4 keeps conversations off the strip (From chats · N
+    // is its own chip), so it never leads.
     const m = await w.say(CHAT, LENA, "2026-11-04T21:00:00Z", "Login is down for the client, can someone look?");
     const c = await w.convs.addConversation({ chatId: CHAT.chatId, clientKey: CHAT.clientKey, title: "Login is down", summary: "Login fails for the client.", participants: [{ id: LENA.userId!, name: LENA.displayName!, external: LENA.tenantId !== HOME_TENANT }], firstAt: m.createdAt, lastAt: m.createdAt, lastWorkAt: m.createdAt });
     await w.convs.place([{ chatId: CHAT.chatId, messageId: m.messageId, conversationId: c.id, role: "work", reason: null, placedBy: "ai", at: m.createdAt }]);
-    let list = await run<InboxListData>("inbox.list");
-    const conv = list.items.find((i) => i.kind === "conversation" && i.views.includes("needs_you"));
-    expect(conv).toBeDefined();
-    setConv(Number(conv!.key.slice(1)));
+    setConv(c.id);
 
-    list = await run<InboxListData>("inbox.list");
+    const list = await run<InboxListData>("inbox.list");
     const today = await run<InboxTodayData>("inbox.today");
     const badge = await run<{ needsYou: number }>("inbox.count");
     const now = w.now();
@@ -62,15 +60,13 @@ describe("Today and Week read the Inbox's items", () => {
     for (const r of today.items) expect(r).toEqual(byKey.get(r.key));
     expect(todayLines(today.items, o).map((r) => r.key)).toEqual(todayLines(list.items, o).map((r) => r.key));
     expect(railItems(today.items)).toEqual(railItems(list.items));
-    // Every strip line is in Needs you; the late one and the waiting send are there; the snoozed, later and accepted ones aren't.
+    // The late promise and the waiting send are on the strip; the snoozed, later and accepted ones and the conversation aren't.
     const strip = todayLines(today.items, o).map((r) => r.key);
-    for (const k of strip) expect(byKey.get(k)!.views).toContain("needs_you");
     expect(strip).toContain(`f${late.id}`);
     expect(strip).toContain("s1");
     expect(strip).not.toContain(`f${snoozed.id}`);
     expect(strip).not.toContain("s2");
-    expect(strip[0]).toBe(conv!.key);
-    expect(byKey.get(conv!.key)!.urgent).toMatchObject({ title: "Login is down" });
+    expect(strip).not.toContain(`v${c.id}`);
     // The rail has the late promise (carried to today), never the snoozed one.
     expect(railItems(today.items).map((r) => r.key)).toContain(`f${late.id}`);
     expect(railItems(today.items).map((r) => r.key)).not.toContain(`f${snoozed.id}`);
