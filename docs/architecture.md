@@ -982,6 +982,25 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Removed.** UI-B's `SuggestedCards`, the panel's Keep all · Review line, its review list and hint; `CarrySummary` keeps only "Unfinished from earlier days".
 - **Tests.** `e2e/sg1.test.ts` (Day and Week, Keep all per block and per day, Clear per block and row across a reload, own to-do, free time and the morning card, unfinished first, the setting, the phone, the next working day only); screenshots `e2e/sg1-shots.test.ts` (`SG1_SHOTS=docs/ux/sg1`).
 
+## RB-1: Code, every client's repos, read only (Nov 12)
+
+- **Pure.** `plan/code.ts`: limits (1 MB, 20,000 names, 5,000 entries a folder, 5 minutes), the events and the Rule's values, `cleanPath`, `sortEntries`, `fileKind` (text, LFS pointer, binary, image, too large), `decodeText`, `sizeWords`, and the shapes the panel gets (`CodeRepoView`, `CodeFileView`).
+- **Reader.** `sources/devops/git.ts`: `ALLOWED` and `buildUrl` (only the four reads under `dev.azure.com/<org>/<project>/_apis/git`; anything else throws), `createGitReader` (fetch, the shared `devopsLimiter`, a 1 MB + 1 byte stream cap, `GitFailure` reasons; logs only the read's name, status and time).
+- **Memory and access.** `actions/code-git.ts`: `createCodeGit` (the company read PAT from `accountTargets` at each read, the head commit, a 5 minute memory capped at 500 entries and 40 million characters, keyed by client, repo, commit and path). `actions/code-actions.ts`: `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file` (the Cooptimizer, listed client, Rule or team, repo and path checks on every call; the view row before a file's text), `codeStatus` for Admin.
+- **Store.** `store/code-views-store.ts` over the app table `code_views` (`store/migrations/20261113T0022_code_views.ts`); retention 12 months in `store/retention.ts`. The Rule `code_access` in `config/org.ts`.
+- **Admin.** `admin.code_views` and `admin.code_check` in `actions/admin-actions.ts`; `CodeAccessField` and `CodeViews` in `ui/settings/Admin.tsx`.
+- **UI.** `ui/code/Code.tsx` (lazy, on `PanelShell`), `ui/code/code.css`, `ui/code/languages.ts` (the one language table), `ui/code/highlight.ts` (Prism's token tree to lines of text spans), `ui/code/prism-manual.ts` (manual mode before Prism loads), `ui/code/tmdl.ts` (the TMDL grammar), `ui/code/format.ts` (Format). Address in `ui/nav.ts` (`codeHash`, the `code` overlay); menu entries in `ui/menu.ts` and `ui/App.tsx`; the stored last place leaves out a Code address. Token colors `--code-*` in `ui/styles.css`.
+- **Demo.** `sources/demo/code.ts` (`demoCodeGit`), wired in `server/demo.ts`; Fabrikam in `sources/demo/directory.ts`.
+- **Tests.** `sources/devops/git.test.ts`, `plan/code.test.ts`, `actions/code-git.test.ts`, `actions/code-actions.test.ts`, `store/code-views-store.test.ts`, the RB-1 block in `actions/admin-actions.test.ts`, `ui/code/viewer.test.ts`, e2e `e2e/rb1-code.test.ts` (screenshots in `docs/ux/rb1/` with `FOCUSTIME_SHOTS`).
+
+## ED-1: edit an item on its story card (Nov 12)
+
+- **Light formatting.** `plan/light-format.ts` (pure): HTML or Markdown to the light marks and back (`editingOf`, `lightToHtml`, `storedValue`, `lookHtml`, `sameContent`, `canonOf`, `applyMark`), with why a field can't be edited (`NOT_EDITABLE_TEXT`) and the lossy line (`LOSSY_TEXT`). `plan/sanitize.ts` allows h1 to h3.
+- **The writes.** `plan/devopswrite.ts` (`itemEditOps`, `editRefs`, `reparentOps`, `parentLinks`, `parentIdOf`, `parentText`, `FORMAT_API`); `actions/devops-write-actions.ts` (`devops.edit_offer`, the `item_edit` and `reparent` previews and their undos, Add to the end through `description_update` with `part`, `ownerNote`, `editedNote`); `sources/devops/write.ts` (`itemWithFormats`, the 7.2-preview.3 patch); fakes in `sources/devops/write-fakes.ts`, the demo's in `sources/demo/devops.ts`.
+- **The note.** `store/migrations/20261204T1300_devops_edit_notes.ts` (an app table), `store/devops-notes.ts` (`edited`, `editedTo`), `plan/notify.ts` kind `item_edited`, `server/ticks.ts`.
+- **The card.** `ui/StoryCardEdit.tsx` (`LightEditor`, `CantEdit`, `CardMore`, `MoveEditor`, `ChangedSince`, the draft helpers) used by `ui/StoryCard.tsx`; the preview's before and after looks in `ui/DevOpsWrite.tsx`.
+- **Tests.** `plan/light-format.test.ts`, `actions/item-edit.test.ts`, `e2e/ed1-edit-item.test.ts`.
+
 ## IB-4: A slim Inbox (Nov 12)
 
 - **The rules.** `plan/slim-inbox.ts` (pure): `isSuggestion` and `notSuggested` (the reason a conversation isn't one), the 4 working hours (`workingMinutesBetween` over my hours) and 7 days; `clearsAs` (a chat promise clears as `item` or `expired`), `clearedRecently` (14 days), `clearedReason`, `levelWord`. `plan/conversations.ts`: `item_needed` in the `conversations.update` schema and `checkItemNeeded`; `conversations-pipeline.ts` stores it (`item_needed_json`), cleared when an item is linked.

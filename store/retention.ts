@@ -38,6 +38,7 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
   { name: "teams_rhythm", table: "teams_rhythm", keep: "30 days", source: "TB-2", run: del("DELETE FROM teams_rhythm WHERE created_at < ?", (n) => ago(n, days(30))) },
   { name: "devops_takes", table: "devops_takes", keep: "14 days", source: "PV-1 D572", run: del("DELETE FROM devops_takes WHERE taken_at < ?", (n) => ago(n, days(14))) },
   { name: "devops_notes", table: "devops_notes", keep: "14 days", source: "AH-1 D664", run: del("DELETE FROM devops_notes WHERE at < ?", (n) => ago(n, days(14))) },
+  { name: "devops_edit_notes", table: "devops_edit_notes", keep: "14 days", source: "ED-1", run: del("DELETE FROM devops_edit_notes WHERE at < ?", (n) => ago(n, days(14))) },
   { name: "devops_changes", table: "devops_changes", keep: "30 days", source: "DV-1 D590", run: del("DELETE FROM devops_changes WHERE logged_at < ?", (n) => ago(n, days(30))) },
   {
     name: "delivery_snapshots",
@@ -56,6 +57,8 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     source: "MC-1",
     run: del("UPDATE meeting_proposals SET quotes_json = NULL WHERE quotes_json IS NOT NULL AND created_at < ?", (n) => ago(n, days(30))),
   },
+  // RB-1: the code view log (who opened which file, never content), 12 months.
+  { name: "code_views", table: "code_views", keep: "12 months", source: "RB-1", run: del("DELETE FROM code_views WHERE at < ?", (n) => ago(n, days(365))) },
   { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ? AND job <> 'conversation_ownership_backfill'", (n) => ago(n, days(CLAIM_DAYS))) },
 ];
 

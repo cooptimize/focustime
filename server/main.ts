@@ -117,6 +117,10 @@ import type { ClientScopeFacts } from "../actions/admin-actions.ts";
 import { createAdminOps } from "./admin-ops.ts";
 import { standardsJob } from "./standards-job.ts";
 import { createStandardsReader } from "../sources/github/standards.ts";
+import { createGitReader } from "../sources/devops/git.ts";
+import { createCodeGit } from "../actions/code-git.ts";
+import { codeStatus } from "../actions/code-actions.ts";
+import { codeViewsStoreOn } from "../store/code-views-store.ts";
 import { standardsStoreOn } from "../store/standards-store.ts";
 import { parseRepoUrl } from "../plan/standards.ts";
 import type { StandardsPort } from "../actions/standards.ts";
@@ -1000,6 +1004,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     org,
     adminOps,
     standards: standardsPort,
+    code: { git: codeGit, views: codeViews },
     links: host.links,
     media,
     // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime
@@ -1137,8 +1142,14 @@ const standardsStore = standardsStoreOn(db);
 const standardsSyncOn = process.env.FOCUSTIME_STANDARDS_SYNC !== "off" && !process.env.FOCUSTIME_DEMO;
 const standards = standardsJob({ store: standardsStore, reader: createStandardsReader({ fetch }), source: async () => (await org.rules()).standards, now: instantNow, log });
 const standardsPort: StandardsPort = { library: () => standardsStore.library(parseRepoUrl), state: () => standardsStore.state(), syncNow: () => (standardsSyncOn ? standards.syncNow() : Promise.resolve({ ok: false, changed: false, error: "The sync is off on this server" })) };
+// RB-1: Code. The Git reader reads a client's repos with the company read PAT, from Dataverse with the app's own access
+// at fetch time for each read (accountTargets), through the DevOps limiter; nothing of the code is kept but the 5-minute
+// memory in actions/code-git.ts. No Dataverse, no code. The view log is an app table, read only by admins.
+const codeGit = directorySource ? createCodeGit({ reader: createGitReader({ fetch, log, limiter: devopsLimiter }), targets: (keys) => directorySource.accountTargets(keys) }) : null;
+const codeViews = codeViewsStoreOn(db, instantNow);
 const adminOps = createAdminOps({
   standards: standardsPort,
+  code: { views: codeViews, status: (k) => codeStatus(codeGit, k, k) },
   statusRows,
   check: adminCheck,
   org,

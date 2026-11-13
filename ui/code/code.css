@@ -1,0 +1,113 @@
+/* RB-1: Code (#/code/<client>/<repo>/<path>) on ST-1's panel shell (.panel-shell, ui/styles.css). The left side holds
+   the client picker, the repo select, Find a file and the tree; the right side the file. The file scrolls sideways
+   inside its own box (or wraps), so the page never does, at 390 and 360 wide too. Colors come only from the theme's
+   --code-* tokens, so both themes read. Loaded only with the panel. */
+.code-panel { background: var(--bg); color: var(--text); }
+.panel-shell.code-panel:not(.phone) { grid-template-columns: clamp(260px, 22vw, 360px) minmax(0, 1fr); }
+.code-panel .ps-rail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.code-panel .ps-body { min-width: 0; }
+
+.cv-title { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.cv-title-repo { color: var(--text-muted); font-weight: 500; }
+.cv-ro { font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+.cv-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.cv-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cv-note { margin: 4px 0; color: var(--text-muted); font-size: var(--fs-2); }
+.cv-note.problem, .cv-tree-note.problem { color: var(--watch); }
+.cv-log-line { margin: 0; color: var(--text-muted); font-size: var(--fs-1); }
+.cv-next { margin: 8px 0 0; color: var(--text-muted); }
+.cv-lead { margin: 0 0 12px; color: var(--text-muted); }
+.cv-state-text { margin: 0; }
+.cv-state { margin: 24px 0; padding: 16px; max-width: 70ch; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-muted); }
+
+/* The client picker */
+.cv-picker { position: relative; }
+.cv-picker-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.cv-picker-btn > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-picker-caret { color: var(--text-muted); }
+.cv-picker-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cv-picker-pop { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); max-height: min(60vh, 480px); overflow: auto; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-menu); }
+.cv-clients { display: flex; flex-direction: column; gap: 8px; }
+.cv-start .cv-clients { max-width: 520px; }
+.cv-group-head { padding: 4px 8px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.cv-client-opt { width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.cv-client-opt:hover { background: var(--sunken); }
+.cv-client-opt[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
+.cv-client-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-client-name { flex: 1; min-width: 0; }
+.cv-client-opt.locked { color: var(--text-faint); cursor: default; }
+.cv-client-opt.locked:hover { background: transparent; }
+.cv-locked { flex-basis: 100%; padding-left: 18px; font-size: var(--fs-1); color: var(--text-faint); }
+
+.cv-repo select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+
+/* Find a file */
+.cv-find { display: flex; flex-direction: column; gap: 4px; }
+.cv-find-input { width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--sunken); color: var(--text); font: inherit; }
+.cv-find-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cv-find-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.cv-find-list li { display: flex; flex-direction: column; padding: 5px 10px; cursor: pointer; min-width: 0; }
+.cv-find-list li:hover { background: var(--sunken); }
+.cv-find-list li.on { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.cv-hit-name { font-family: var(--font-mono); font-size: var(--fs-2); overflow-wrap: anywhere; }
+.cv-hit-path { font-size: var(--fs-1); color: var(--text-faint); overflow-wrap: anywhere; }
+
+/* The tree */
+.cv-tree { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.cv-tree-row { display: flex; align-items: center; gap: 2px; padding: 2px 6px 2px 0; border-radius: 6px; cursor: pointer; font-size: var(--fs-3); min-width: 0; }
+.cv-tree-row:hover { background: var(--sunken); }
+.cv-tree-row.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
+.cv-tree-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-tree-row .ah-chev { margin-block: 0; min-height: calc(24px * var(--text-scale)); pointer-events: none; }
+.cv-folder, .cv-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-folder { font-weight: 500; }
+.cv-tree-gap { list-style: none; }
+.cv-tree-gap:empty { display: none; }
+.cv-tree-note { list-style: none; padding: 2px 0; font-size: var(--fs-2); color: var(--text-muted); }
+
+/* The file */
+.cv-file-view { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cv-file-head { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; z-index: 1; background: var(--bg); padding-bottom: 6px; }
+.cv-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-family: var(--font-mono); font-size: var(--fs-2); min-width: 0; }
+.cv-crumb-part { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.cv-crumb { padding: 1px 4px; border: 0; border-radius: 4px; background: transparent; color: var(--accent); font: inherit; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.cv-crumb:hover { background: var(--sunken); }
+.cv-crumb:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.cv-crumb-sep { color: var(--text-faint); }
+.cv-crumb-file { font-weight: 600; overflow-wrap: anywhere; padding: 1px 4px; }
+.cv-file-meta { display: flex; flex-wrap: wrap; gap: 12px; color: var(--text-muted); font-size: var(--fs-2); }
+.cv-file-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cv-switch { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); cursor: pointer; margin-left: 4px; }
+.cv-toast { font-size: var(--fs-2); color: var(--ok); }
+
+.cv-code { overflow: auto; max-width: 100%; max-height: calc(100dvh - 220px); border: 1px solid var(--border); border-radius: 10px; background: var(--sunken); }
+.cv-code:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cv-lines { display: table; min-width: 100%; padding: 8px 0; font-family: var(--font-mono); font-size: var(--fs-3); line-height: 1.5; color: var(--text); counter-reset: none; tab-size: 4; }
+.cv-line { display: table-row; }
+.cv-ln { display: table-cell; position: sticky; left: 0; padding: 0 12px 0 14px; text-align: right; color: var(--text-faint); background: var(--sunken); user-select: none; white-space: nowrap; border-right: 1px solid var(--border); }
+.cv-ln::before { content: attr(data-n); }
+.cv-lt { display: table-cell; padding: 0 16px 0 12px; white-space: pre; }
+.cv-code.wrap .cv-lt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-code.wrap .cv-lines { display: table; width: 100%; table-layout: fixed; }
+.cv-code.wrap .cv-ln { width: 4.5em; }
+
+/* Coloring: the theme's tokens only. */
+.tk-keyword, .tk-tag, .tk-important, .tk-atrule, .tk-rule, .tk-selector { color: var(--code-keyword); }
+.tk-string, .tk-attr-value, .tk-char, .tk-regex, .tk-url, .tk-inserted { color: var(--code-string); }
+.tk-number, .tk-boolean, .tk-constant, .tk-symbol { color: var(--code-number); }
+.tk-function, .tk-builtin, .tk-function-name { color: var(--code-function); }
+.tk-class-name, .tk-variable, .tk-namespace, .tk-title { color: var(--code-name); }
+.tk-property, .tk-attr-name, .tk-key { color: var(--code-property); }
+.tk-comment, .tk-prolog, .tk-doctype, .tk-cdata { color: var(--code-comment); font-style: italic; }
+.tk-punctuation, .tk-operator, .tk-entity { color: var(--code-punct); }
+.tk-bold { font-weight: 600; }
+.tk-italic { font-style: italic; }
+
+/* The phone: the client, repo and tree as one list page, the file as its own page with Back. */
+.panel-shell.phone.code-panel .cv-side { padding: 12px 16px; }
+.panel-shell.phone.code-panel .ps-body { padding-inline: 16px; }
+.panel-shell.phone.code-panel .cv-tree-row { min-height: 40px; font-size: var(--fs-4); }
+.panel-shell.phone.code-panel .cv-file-head { position: static; }
+.panel-shell.phone.code-panel .cv-code { max-height: none; }
+.panel-shell.phone.code-panel .cv-lines { font-size: var(--fs-2); }

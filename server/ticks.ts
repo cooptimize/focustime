@@ -461,6 +461,10 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (notifier.allows("assigned"))
       for (const n of got.filter((x) => x.kind === "assigned"))
         if (await store.markOnce(`assigned_notice:${n.id}`, n.at)) await send(notices.assigned(`assigned:${n.id}`, first(n.byName), n.itemIds, at.toString()));
+    // ED-1: one quiet note a day per item a teammate edited on its story card.
+    if (notifier.allows("item_edited") && notes.editedTo)
+      for (const n of await notes.editedTo(emails, at.subtract({ hours: 72 }).toString()))
+        if (await store.markOnce(`edited_notice:${n.id}`, n.at)) await send(notices.itemEdited(`item_edited:${n.id}`, first(n.byName), n.itemId, at.toString()));
     if (!notifier.allows("dates_moved")) return;
     const groups: (typeof got)[] = [];
     for (const n of got.filter((x) => x.kind === "dates")) {

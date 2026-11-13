@@ -25,6 +25,10 @@ import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../p
 import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
+import { canonOf, editingOf, LIGHT_MAX, lightToHtml, lookHtml, LOSSY_TEXT, NOT_EDITABLE_TEXT, sameContent, storedValue, type FieldFormat } from "../plan/light-format.ts";
+import { aOr, parentTypesOf, TITLE_MAX } from "../plan/quick-create.ts";
+import { EDIT_LABEL, editRefs, itemEditOps, parentIdOf, parentLinks, parentText, reparentOps, type EditPart } from "../plan/devopswrite.ts";
+import type { EditFieldOffer, EditOffer } from "./types.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
 import { Pat } from "../sources/devops/pat.ts";
@@ -46,7 +50,7 @@ import { readImage, type ReadImage } from "./chat-images.ts";
 import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
-export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer", "devops.wrap_offer"] as const;
+export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer", "devops.wrap_offer", "devops.edit_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
 export type { DoneOffer, UndoOffer } from "./types.ts";
 import type { DoneOffer, ItemDoneOffer, ProgressOffer, UndoOffer, WrapOffer } from "./types.ts";
@@ -172,6 +176,10 @@ type Held = {
   attach?: { offered: AttachOffer[]; ticked: number[] };
   /** GD-2: the other clients the text names (shown in the preview); Confirm needs mentionsOk while any are left. */
   mentions?: string[];
+  /** ED-1: the card's Add to the end: the text is added after what is there, nothing replaced. */
+  appendOnly?: boolean;
+  /** ED-1: a description or acceptance criteria as it reads now and after (safe HTML). */
+  looks?: { label: string; before: string; after: string }[];
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -216,6 +224,8 @@ const SUMMARY: Record<WriteOp, string> = {
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
   comment_delete: "Delete your comment on a DevOps item", undo_comment_delete: "Undo: post your deleted comment's text again",
   remaining_work: "Update Remaining Work in DevOps", undo_remaining_work: "Undo: put Remaining Work back",
+  item_edit: "Edit a DevOps item's title, description or acceptance criteria", undo_item_edit: "Undo: put the title, description and acceptance criteria back",
+  reparent: "Move a DevOps item under a different parent", undo_reparent: "Undo: put the item back under its old parent",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -430,6 +440,43 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       };
       return { ok: true, data: { offer, why: null, code: null } };
     }
+    case "devops.edit_offer": {
+      // ED-1: read only. What the story card's Edit and Move… offer for one item, read with my write PAT (never the
+      // company read PAT): its revision (every edit is guarded by it), whether canEdit lets me change it and why not,
+      // each large text field as light text or why it can't be changed here, whether its type has acceptance
+      // criteria, and the level above it. No write PAT: no offer, with the reason.
+      const o = fields(input, ["clientKey", "itemId"]);
+      const clientKey = str(o.clientKey, "clientKey", 100)!;
+      const itemId = posId(o.itemId, "itemId");
+      let env: Env;
+      try {
+        env = await envOf(clientKey);
+      } catch (e) {
+        if (e instanceof Refused) return { ok: true, data: { offer: null, why: e.message, code: e.code ?? null } };
+        throw e;
+      }
+      const memo = new Map<string, Promise<unknown>>();
+      const item = await env.writer.itemWithFormats(env.org, env.pat, env.project, itemId);
+      const [typeHas, right, ladder] = await Promise.all([env.writer.typeFields(env.org, env.pat, env.project, item.type), rightsOn(env, item, memo), ladderOf(env, memo)]);
+      const parent = item.parentId ? await env.writer.item(env.org, env.pat, env.project, item.parentId).catch(() => null) : null;
+      const offerOf = (f: string | null, label: string): EditFieldOffer | null => {
+        if (!f) return null;
+        const format = formatOf(item, f);
+        const e = editingOf(String(item.fields[f] ?? ""), format);
+        return e.editable ? { label, format, editable: true, text: e.text, lossy: e.lossy, why: null } : { label, format, editable: false, text: "", lossy: false, why: NOT_EDITABLE_TEXT[e.why] };
+      };
+      const offer: EditOffer = {
+        clientKey, itemId: item.id, rev: item.rev, type: item.type, title: item.title, titleMax: TITLE_MAX,
+        canEdit: right.ok, editNote: right.ok ? null : right.note,
+        description: offerOf(descFieldOf(item, typeHas), EDIT_LABEL.description),
+        acceptance: typeHas.has(AC_FIELD) ? offerOf(AC_FIELD, EDIT_LABEL.acceptance) : null,
+        parent: parent ? { id: parent.id, title: parent.title, type: parent.type } : null,
+        parentTypes: parentTypesOf(ladder, item.type),
+        children: item.relations.filter((r) => r.rel === CHILD_REL).length,
+        url: workItemUrl(env.org, env.projectName, item.id),
+      };
+      return { ok: true, data: { offer, why: null, code: null } };
+    }
     case "devops.progress_offer": {
       // TX-1: read only. End of day, once: the stories answered "partly" today (or "went to plan" with time left), each
       // as Remaining Work where its type has the field, else a short comment. Only items I can change, with my write PAT.
@@ -596,8 +643,9 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   held.set(id, { ...h, id, expiresAt });
   const labels = Object.keys({ ...h.before, ...h.after });
   const isDesc = h.op === "description" || h.op === "undo_description";
-  const shown = (v: string | null | undefined) => (isDesc && v ? htmlToText(v) : v ?? null);
-  const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : shown(h.before[l]), shown(h.after[l])));
+  const isEdit = h.op === "item_edit" || h.op === "undo_item_edit";
+  const shown = (l: string, v: string | null | undefined) => ((isDesc || (isEdit && l !== EDIT_LABEL.title)) && v ? htmlToText(v) : v ?? null);
+  const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : shown(l, h.before[l]), shown(l, h.after[l])));
   const links = h.op === "create" && h.parentId ? [`Adds a parent link to #${h.parentId}, which shows the new item as its child`] : h.op === "undo_create" && h.parentId ? ["The parent link stays; the item shows as Removed under it"] : [];
   const notes: string[] = [];
   if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in FocusTime, with its to-dos.");
@@ -607,7 +655,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   if (h.conv && h.op === "create") notes.push("Tracks the conversation as the new item for everyone on the chat once DevOps shows it. Nothing is posted in Teams.");
   if (h.op === "undo_create" && h.conv) notes.push("The conversation opens again in Inbox › Conversations.");
   if (h.op === "assign" && assigneeEmail(h.before["Assigned to"])) notes.push(`${(h.before["Assigned to"] ?? "").replace(/\s*<[^>]*>$/, "")} gets a quiet note in FocusTime, if they use it. Undo gives it back.`);
-  if (h.op === "description") notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
+  if (h.op === "description" && !h.appendOnly) notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
   notes.push(...(h.notes ?? []));
   if (h.attach?.ticked.length) notes.push(`The ${h.attach.ticked.length === 1 ? "image is" : `${h.attach.ticked.length} images are`} read from Teams with your sign-in when you confirm, uploaded to DevOps and linked to the new item. FocusTime keeps no copy. An image that can't be read is left out and the item is still created.`);
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
@@ -616,6 +664,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
     item: h.itemId ? `#${h.itemId} ${h.title}` : `New ${h.type ?? "item"}: ${h.title}`, identity: `${env.me.name} <${env.me.email}>`, fields: fieldsRows, links, notes,
     visibility: VISIBILITY(h.projectName), undo: h.undoOf !== null,
     ...(h.mentions?.length ? { mentions: h.mentions } : {}),
+    ...(h.looks?.length ? { looks: h.looks } : {}),
     ...(h.attach ? { attachments: h.attach.offered.map((a) => ({ id: a.id, src: chatImageSrc(a.id), sender: a.sender, at: a.at, description: a.description, ticked: h.attach!.ticked.includes(a.id) })) } : {}),
   };
 }
@@ -709,7 +758,7 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention", "assignTo", "size", "answers"]);
+  const o = fields(c, ["kind"], ["key", "hours", "itemId", "commentId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type", "images", "assign", "pickId", "mention", "assignTo", "size", "answers", "rev", "part"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -1225,6 +1274,8 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const cv = env.conversations;
       const shared = env.requests;
       if (o.kind === "conversation_comment" && o.suggestionId === undefined) return linkComment(env, o);
+      // ED-1: the story card's Add to the end, for a description FocusTime can't keep exactly: it only appends.
+      if (o.kind === "description_update" && o.suggestionId === undefined) return appendText(env, o, memo);
       if (!cv || !shared) throw new PlanError("No such suggestion");
       const sg = await cv.view.suggestion(posId(o.suggestionId, "suggestionId"));
       const kind = o.kind === "conversation_comment" ? "comment" : "description";
@@ -1270,6 +1321,96 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (afterText.trim() === htmlToText(curHtml).trim()) return `#${item.id} already has that description`;
       const html = textToHtml(afterText.trim());
       return { ...base(env), ...none, op: "description", itemId: item.id, title: item.title, ops: descriptionOps(item.rev, field, html), rev: item.rev, before: { Description: curHtml }, after: { Description: html }, type: item.type, field };
+    }
+    case "item_edit": {
+      // ED-1: the story card's Edit: any of title, description and acceptance criteria, in one patch behind the rev the
+      // card's edit read (a newer version in DevOps is never overwritten: nothing is written and my words stay). Only
+      // the parts that change are in it; each large text field is written in the format it is stored in, and only
+      // when FocusTime can keep it exactly (apart from fonts and colors, which the preview flags).
+      const item = await editTarget(env, o, memo);
+      const typeHas = await writer.typeFields(org, pat, project, item.type);
+      const parts: EditPart[] = [];
+      const before: Record<string, string | null> = {};
+      const after: Record<string, string | null> = {};
+      const looks: { label: string; before: string; after: string }[] = [];
+      const notes: string[] = [];
+      let lossy = false;
+      if (o.title !== undefined) {
+        const t = cleanTitle(o.title);
+        if ("problem" in t) throw new Invalid(t.problem);
+        if (t.title !== item.title) {
+          parts.push({ label: EDIT_LABEL.title, field: "System.Title", value: t.title, markdown: false });
+          before[EDIT_LABEL.title] = item.title;
+          after[EDIT_LABEL.title] = t.title;
+        }
+      }
+      const text = (label: string, field: string | null, raw: unknown) => {
+        if (raw === undefined) return;
+        if (!field) throw new Refused(`${item.type} has no ${label.toLowerCase()} field in ${env.projectName}'s process`, 409, "no_field");
+        if (typeof raw !== "string" || raw.length > LIGHT_MAX) throw new Invalid(`${label} is text of at most ${LIGHT_MAX} characters`);
+        const cur = String(item.fields[field] ?? "");
+        const format = formatOf(item, field);
+        const e = editingOf(cur, format);
+        if (!e.editable) throw new Refused(`${NOT_EDITABLE_TEXT[e.why]} Use Add to the end, or change it in DevOps`, 409, "not_editable");
+        // The same words as now: nothing is written (and nothing dropped).
+        if (raw.replace(/\s+$/, "") === e.text.replace(/\s+$/, "")) return;
+        const value = raw.trim() ? storedValue(raw, format) : "";
+        if (value && sameContent(cur, value, format)) return;
+        parts.push({ label, field, value, markdown: format === "markdown" });
+        before[label] = cur;
+        after[label] = value;
+        looks.push({ label, before: lookOf(cur, format), after: lookOf(value, format) });
+        if (e.lossy) lossy = true;
+        if (format === "markdown") notes.push(`${label} is stored as Markdown in DevOps, so it is written as Markdown.`);
+      };
+      text(EDIT_LABEL.description, descFieldOf(item, typeHas), o.description);
+      text(EDIT_LABEL.acceptance, typeHas.has(AC_FIELD) ? AC_FIELD : null, o.acceptance);
+      if (!parts.length) return `Nothing changed on #${item.id}`;
+      if (lossy) notes.unshift(LOSSY_TEXT);
+      const owner = await ownerNote(env, item);
+      if (owner) notes.push(owner);
+      const had = (f: string) => item.fields[f] !== undefined && item.fields[f] !== null && item.fields[f] !== "";
+      return { ...base(env), ...none, op: "item_edit", itemId: item.id, title: item.title, ops: itemEditOps(item.rev, parts, had), rev: item.rev, before, after, type: item.type, notes, looks };
+    }
+    case "reparent": {
+      // ED-1: Move…: the parent link only, to an open item exactly one level up in this client's own project (the New
+      // form's pool and rule), or No parent. One patch behind the rev the card's edit read: the old link out and the
+      // new one in, so the item is never left with two parents or none unless that was chosen.
+      const item = await editTarget(env, o, memo);
+      const ladder = await ladderOf(env, memo);
+      const ups = parentTypesOf(ladder, item.type);
+      if (!ups.length) throw new Refused(`${cap(aOr(item.type))} has no level above it in ${env.projectName}'s process, so it has no parent to change`, 409, "no_parent_level");
+      if (o.parentId === undefined) throw new Invalid("parentId is required (null for No parent)");
+      const to = o.parentId === null ? null : posId(o.parentId, "parentId");
+      if (to === item.id) throw new Refused("An item can't be its own parent", 409);
+      const links = parentLinks(item.relations);
+      const was = links[0] ?? null;
+      if (links.length <= 1 && was === to) return to === null ? `#${item.id} has no parent already` : `#${item.id} is already under #${to}`;
+      let parent: ItemSnapshot | null = null;
+      if (to !== null) {
+        try {
+          parent = await writer.item(org, pat, project, to);
+        } catch (e) {
+          if (e instanceof WriteFailure && e.kind === "not_found") throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+          throw e;
+        }
+        const inProject = String(parent.fields["System.TeamProject"] ?? "").toLowerCase();
+        if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+        const why = parentProblem(ladder, parent.type, item.type);
+        if (why) throw new Refused(why, 409, "wrong_level");
+        const ps = await writer.states(org, pat, project, parent.type);
+        if (!isOpenCategory(ps.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime moves items only under open parents`, 409, "closed_parent");
+      }
+      const old = was !== null ? await writer.item(org, pat, project, was).catch(() => null) : null;
+      const kids = item.relations.filter((r) => r.rel === CHILD_REL).length;
+      const notes = [
+        kids ? `Its ${kids === 1 ? "child item moves" : `${kids} child items move`} with it.` : "It has no child items.",
+        "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.",
+        ...(to === null ? ["It will have no parent in DevOps."] : []),
+      ];
+      const owner = await ownerNote(env, item);
+      if (owner) notes.push(owner);
+      return { ...base(env), ...none, op: "reparent", itemId: item.id, title: item.title, ops: reparentOps(org, item.rev, item.relations, to), rev: item.rev, before: { Parent: parentText(old ?? (was !== null ? { id: was, title: "" } : null)).trim() }, after: { Parent: parentText(parent) }, type: item.type, parentId: to, notes };
     }
     case "undo": {
       const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
@@ -1338,9 +1479,33 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       }
       if (entry.op === "description") {
         const field = fieldOf(entry.ops) ?? "System.Description";
+        // ED-1: an append to the acceptance criteria is logged under its own label.
+        const key = Object.keys(entry.after)[0] ?? "Description";
         const curHtml = String(item.fields[field] ?? "");
-        if (htmlToText(curHtml).trim() !== htmlToText(entry.after.Description ?? "").trim()) throw new Refused(`DevOps shows another description on #${item.id} now. Undo would overwrite it`, 409, "changed");
-        return { ...u, op: "undo_description", ops: descriptionOps(item.rev, field, entry.before.Description ?? ""), rev: item.rev, before: { Description: curHtml }, after: { Description: entry.before.Description ?? null }, field };
+        // Compared as the stored text itself (spacing between tags aside), so a changed image, a table cell or words past
+        // what a text read keeps all count as someone else's change (review 2).
+        if (sameStored(curHtml) !== sameStored(entry.after[key] ?? "")) throw new Refused(`DevOps shows another ${key.toLowerCase()} on #${item.id} now. Undo would overwrite it`, 409, "changed");
+        const md = Array.isArray(entry.ops) && entry.ops.some((p) => p.path === `/multilineFieldsFormat/${field}`);
+        return { ...u, op: "undo_description", ops: [...descriptionOps(item.rev, field, entry.before[key] ?? ""), ...(md ? [{ op: "add" as const, path: `/multilineFieldsFormat/${field}`, value: "markdown" }] : [])], rev: item.rev, before: { [key]: curHtml }, after: { [key]: entry.before[key] ?? null }, field };
+      }
+      if (entry.op === "item_edit") {
+        // ED-1: every part goes back, only while DevOps still shows FocusTime's text for each (compared as content).
+        const cur = current(entry, item, tz);
+        const moved = Object.keys(cur).filter((k) => cur[k] !== asCurrent(entry, k, entry.after[k]));
+        if (moved.length) throw new Refused(`DevOps shows another ${moved.join(" and ").toLowerCase()} on #${item.id} now. Undo would overwrite it`, 409, "changed");
+        const refs = editRefs(entry.ops);
+        const parts: EditPart[] = Object.entries(refs).map(([label, r]) => ({ label, field: r.field, value: entry.before[label] ?? "", markdown: r.markdown }));
+        const had = (f: string) => item.fields[f] !== undefined && item.fields[f] !== null && item.fields[f] !== "";
+        const looks = parts.filter((p) => p.label !== EDIT_LABEL.title).map((p) => ({ label: p.label, before: lookOf(entry.after[p.label] ?? "", p.markdown ? "markdown" : "html"), after: lookOf(p.value, p.markdown ? "markdown" : "html") }));
+        return { ...u, op: "undo_item_edit", ops: itemEditOps(item.rev, parts, had), rev: item.rev, before: { ...entry.after }, after: Object.fromEntries(Object.keys(entry.after).map((k) => [k, entry.before[k] ?? null])), looks };
+      }
+      if (entry.op === "reparent") {
+        // ED-1: back under the old parent (or none), only while it is still under the one FocusTime moved it to.
+        const links = parentLinks(item.relations);
+        const now = links.length > 1 ? -1 : (links[0] ?? null);
+        if (now !== parentIdOf(entry.after.Parent)) throw new Refused(`DevOps shows #${item.id} under ${now === null ? "no parent" : now === -1 ? "two parents" : `#${now}`} now. Undo would overwrite that`, 409, "changed");
+        const back = parentIdOf(entry.before.Parent);
+        return { ...u, op: "undo_reparent", ops: reparentOps(org, item.rev, item.relations, back), rev: item.rev, before: { Parent: entry.after.Parent ?? null }, after: { Parent: entry.before.Parent ?? null }, parentId: back, notes: ["Only the parent link changes back. Nothing else is touched."] };
       }
       if (entry.op === "comment_edit") {
         const cid = editedComment(entry.ops);
@@ -1380,7 +1545,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, new_item, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, new_item, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, item_edit, reparent, target_date, assign, fields or undo");
   }
 }
 
@@ -1415,11 +1580,17 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
     return out;
   }
   // CV-1: a description is compared as text (DevOps may tidy the HTML it stores).
-  if (e.op === "description" || e.op === "undo_description") return { Description: htmlToText(String(item.fields[fieldOf(e.ops) ?? "System.Description"] ?? "")).trim() };
+  if (e.op === "description" || e.op === "undo_description") return { [Object.keys(e.after)[0] ?? "Description"]: htmlToText(String(item.fields[fieldOf(e.ops) ?? "System.Description"] ?? "")).trim() };
+  // ED-1: each edited part as content (a table or image added since never matches); a parent by its id.
+  if (e.op === "item_edit" || e.op === "undo_item_edit") return Object.fromEntries(Object.entries(editRefs(e.ops)).map(([k, r]) => [k, k === EDIT_LABEL.title ? String(item.fields["System.Title"] ?? "").trim() : canonOf(String(item.fields[r.field] ?? ""), r.markdown ? "markdown" : "html")]));
+  if (e.op === "reparent" || e.op === "undo_reparent") {
+    const links = parentLinks(item.relations);
+    return { Parent: links.length > 1 ? "two parents" : links[0] !== undefined ? `#${links[0]}` : null };
+  }
   return {};
 }
 /** A logged value as current() reports it. */
-const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => ((e.op === "description" || e.op === "undo_description") && k === "Description" ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign" || e.op === "fields" || e.op === "undo_fields") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
+const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => (e.op === "item_edit" || e.op === "undo_item_edit" ? editCurrent(e, k, v) : e.op === "reparent" || e.op === "undo_reparent" ? (parentIdOf(v) !== null ? `#${parentIdOf(v)}` : null) : (e.op === "description" || e.op === "undo_description") && (k === "Description" || k === EDIT_LABEL.acceptance) ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign" || e.op === "fields" || e.op === "undo_fields") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
 
 /**
  * AH-1: a fields write's labels and the fields behind them, from its ops: Start Date, System.AssignedTo, one of the
@@ -1464,6 +1635,68 @@ async function rightsOn(env: Env, item: ItemSnapshot, memo: Map<string, Promise<
   const at = (i: ItemSnapshot) => ({ assigneeEmail: identityEmail(i.fields["System.AssignedTo"]), rung: rungOf(ladder, i.type) });
   return canEdit({ email: env.me.email, lead, automation }, at(item), parent ? at(parent) : null, env.clientName);
 }
+const editCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => {
+  if (k === EDIT_LABEL.title) return (v ?? "").trim();
+  const r = editRefs(e.ops)[k];
+  return canonOf(v ?? "", r?.markdown ? "markdown" : "html");
+};
+const CHILD_REL = "System.LinkTypes.Hierarchy-Forward";
+const REPRO = "Microsoft.VSTS.TCM.ReproSteps";
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** ED-1: the process ladder, read once per preview (the same memo key rightsOn uses). */
+const ladderOf = (env: Env, memo: Map<string, Promise<unknown>>) => (memo.get("ladder") ?? memo.set("ladder", env.writer.processConfig(env.org, env.pat, env.project).then(ladderFromProcessConfig)).get("ladder")!) as Promise<string[][]>;
+/** ED-1: the format a large text field is stored in (multilineFieldsFormat); anything not named Markdown is HTML. */
+const formatOf = (item: ItemSnapshot, field: string): FieldFormat => (item.formats?.[field] === "markdown" ? "markdown" : "html");
+/** ED-1: the field the card shows as the description: System.Description, or a bug's Repro Steps when that is where the text is. */
+function descFieldOf(item: ItemSnapshot, typeHas: ReadonlySet<string>): string | null {
+  const d = String(item.fields["System.Description"] ?? "");
+  const r = String(item.fields[REPRO] ?? "");
+  if (typeHas.has(REPRO) && !d.trim() && (r.trim() || !typeHas.has("System.Description"))) return REPRO;
+  return typeHas.has("System.Description") ? "System.Description" : null;
+}
+/** ED-1: a stored value as it reads (the card's sanitizer for HTML; the light look for Markdown). */
+const lookOf = (v: string, format: FieldFormat) => (format === "markdown" ? lookHtml(v) : sanitizeMessageHtml(v, { contentType: "html" }));
+/** ED-1: the item at the revision the card's edit read, and only when canEdit lets me change it. */
+async function editTarget(env: Env, o: Obj, memo: Map<string, Promise<unknown>>): Promise<ItemSnapshot> {
+  const item = await env.writer.itemWithFormats(env.org, env.pat, env.project, posId(o.itemId, "itemId"));
+  const right = await rightsOn(env, item, memo);
+  if (!right.ok) throw new Refused(right.note, 403, "read_only");
+  const rev = posId(o.rev, "rev");
+  if (item.rev !== rev) throw new Refused(CHANGED_SINCE, 409, "changed");
+  return item;
+}
+export const CHANGED_SINCE = "This changed in DevOps since you opened it. Nothing was written. Your words are kept: check what it says now, then save again.";
+/** ED-1: the preview's line for someone else's item: who it is, and whether they get FocusTime's quiet note. */
+async function ownerNote(env: Env, item: ItemSnapshot): Promise<string | null> {
+  const owner = identityEmail(item.fields["System.AssignedTo"]);
+  if (!owner || owner === env.me.email.toLowerCase()) return null;
+  const name = identityName(item.fields["System.AssignedTo"]) ?? owner;
+  const coop = env.ahead?.isCooptimizer ? await env.ahead.isCooptimizer(env.clientKey, owner).catch(() => false) : false;
+  return coop ? `Assigned to ${name}, not you. They get a quiet note in FocusTime that you edited it.` : `Assigned to ${name}, not you.`;
+}
+/** ED-1: Add to the end, for a field the card can't edit exactly: the typed text after what is there, nothing else touched. */
+async function appendText(env: Env, o: Obj, memo: Map<string, Promise<unknown>>): Promise<HeldIn | string> {
+  const item = await editTarget(env, o, memo);
+  const typeHas = await env.writer.typeFields(env.org, env.pat, env.project, item.type);
+  if (o.part !== undefined && o.part !== "description" && o.part !== "acceptance") throw new Invalid("part is description or acceptance");
+  const acc = o.part === "acceptance";
+  const field = acc ? (typeHas.has(AC_FIELD) ? AC_FIELD : null) : descFieldOf(item, typeHas);
+  const label = acc ? EDIT_LABEL.acceptance : EDIT_LABEL.description;
+  if (!field) throw new Refused(`${item.type} has no ${label.toLowerCase()} field in ${env.projectName}'s process`, 409, "no_field");
+  const text = str(o.text, "text", LIGHT_MAX)!;
+  const cur = String(item.fields[field] ?? "");
+  const format = formatOf(item, field);
+  const value = format === "markdown" ? `${cur.replace(/\s+$/, "")}${cur.trim() ? "\n\n" : ""}${text}` : `${cur}${cur.trim() ? "<div><br></div>" : ""}${lightToHtml(text)}`;
+  const ops: PatchOp[] = [...descriptionOps(item.rev, field, value), ...(format === "markdown" ? [{ op: "add" as const, path: `/multilineFieldsFormat/${field}`, value: "markdown" }] : [])];
+  if (!cur.trim()) ops[1] = { ...ops[1]!, op: "add" };
+  const owner = await ownerNote(env, item);
+  return {
+    ...base(env), ...none, op: "description", itemId: item.id, title: item.title, ops, rev: item.rev, before: { [label]: cur }, after: { [label]: value }, type: item.type, field, appendOnly: true,
+    looks: [{ label, before: lookOf(cur, format), after: lookOf(value, format) }],
+    notes: ["Adds your text at the end. Nothing already there changes, the table or image included.", ...(owner ? [owner] : [])],
+  };
+}
+const sameStored = (v: string) => v.replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
 const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**
@@ -1646,8 +1879,11 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     const back = await again(() => writer.item(org, pat, project, itemId));
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
     // AH-1 (D660): the read-back goes straight into the central store and its change log, so every screen shows it.
-    await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
+    // ED-1: a move names the parent explicitly (null for none), so the store never keeps the old one.
+    const moved = entry.op === "reparent" || entry.op === "undo_reparent" ? { "System.Parent": parentLinks(back.relations)[0] ?? null } : {};
+    await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev, ...moved } }).catch(() => {});
     if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
+    if (entry.op === "item_edit" || entry.op === "reparent") await editedNote(ctx, env, back).catch(() => {});
     // CV-4: an undone create's images are unlinked (the files stay in DevOps: there's no delete).
     let unlinked = 0;
     if (entry.op === "undo_create" && entry.undoOf !== null) {
@@ -1685,7 +1921,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
-    const msg = entry.op === "undo_create" && unlinked ? `Undone in DevOps. The ${unlinked === 1 ? "image stays in DevOps as a file" : `${unlinked} images stay in DevOps as files`}, unlinked: DevOps has no way to delete an attachment` : entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "fields" ? `#${itemId} changed in DevOps` : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
+    const msg = entry.op === "undo_create" && unlinked ? `Undone in DevOps. The ${unlinked === 1 ? "image stays in DevOps as a file" : `${unlinked} images stay in DevOps as files`}, unlinked: DevOps has no way to delete an attachment` : entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "fields" ? `#${itemId} changed in DevOps` : entry.op === "item_edit" ? `#${itemId} saved in DevOps` : entry.op === "reparent" ? (parentIdOf(entry.after.Parent) === null ? `#${itemId} has no parent in DevOps now` : `#${itemId} is under ${entry.after.Parent} in DevOps`) : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : entry.op === "description" ? "Description changed in DevOps" : entry.op === "assign" ? `#${itemId} is assigned to you in DevOps` : "Target date set in DevOps";
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {
@@ -1753,6 +1989,16 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
   void tz;
 }
 
+/**
+ * ED-1: an edit of someone else's item tells its owner, quietly, once a day for the same item: only a Cooptimizer
+ * (never anyone outside Cooptimize), through the same notes reassignment uses.
+ */
+async function editedNote(ctx: DevOpsWriteContext, env: Env, back: ItemSnapshot): Promise<void> {
+  const owner = identityEmail(back.fields["System.AssignedTo"]);
+  if (!owner || owner === env.me.email.toLowerCase() || !ctx.notes?.edited || !ctx.ahead?.isCooptimizer) return;
+  if (!(await ctx.ahead.isCooptimizer(env.clientKey, owner).catch(() => false))) return;
+  await ctx.notes.edited({ clientKey: env.clientKey, org: env.org, itemId: back.id, toEmail: owner, byName: env.me.name });
+}
 const sameText = (html: string, text: string) => html.trim() === text.trim() || htmlToText(html).trim() === text.trim() || (/<[a-z]/i.test(text) && htmlToText(html).trim() === htmlToText(text).trim());
 const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** LP-1: a person on this item (assignee, creator, last changer) by their DevOps address: their identity id and name. */

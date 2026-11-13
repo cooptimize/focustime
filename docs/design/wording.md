@@ -111,6 +111,17 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - Backlog after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Backlog. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
+## RB-1 words (Nov 12)
+
+- The panel is **Code**; its header always shows the client's name and color, the repo, and **Read only**. Menus: **Code**, and **Code: <client>** in Commands.
+- Choosing: **Choose a client** (the picker), **Your clients** and **Other clients**, **Choose a repo**, **Choose a file in the tree, or find one by name.**, **Find a file**, **"2 matches"**, **No file name matches.**, **"Only the first 20,000 file names are searched."**
+- A client set to its team only: **"Only <client>'s team can open this"** (greyed in the list, and as the reason on its page). Never its repo names.
+- Buttons: **Copy** (the whole file as it is), **Copy formatted** (only while Format is on), **Copy path**, **Copy DevOps link**, **Copy link**; switches **Wrap** and **Format**; **Copied**.
+- The log line, once at the foot of the left side: **"Opening a file is logged for FocusTime admins: who, which file and when."**
+- States, always with the reason: **"FocusTime can't read <client>'s code yet. The company DevOps token for <client> needs Code (read)."**; **"<client> has no DevOps set up in Dataverse, so there's no code to show."**; **"This repo is empty: nothing has been pushed to it yet."**; **"This repo is disabled in DevOps, so it can't be read."**; **"This is a binary file (23 bytes), so it isn't shown here."**; **"This is an image (40 KB). Images aren't shown here."**; **"This file is 3.4 MB. Files over 1 MB aren't shown here."**; **"This file is a Git LFS pointer. It's shown as it is; the file it points to isn't read."**; **"Coloring is off for large files."**
+- Admin: **Who can read this client's code** (Rule): **Whole company** or **Its team only**; **Can FocusTime read it?** with **"Code: readable · 3 repos"**, **"Can't read yet: the token needs Code (read)"** or **"No DevOps set up"**, and **Check**. Admin › Audit: **Code views**, **Opened the repo**, **Opened a file**, **Used Find**, **"Last 30 days: <client> 12 · …"**, **Every client**, **Everyone**.
+- Avoid: "browse", "source code", "codebase" in visible copy; say **code**, **repo**, **file**, **folder**.
+
 ## TP-1b words (Nov 12)
 
 - The three questions, always these words and in this order: **Where is it?**, **What should change?**, **How will we know it's right?** Their grey text: **"The report and page, model, table or pipeline"**, **"Before and after, or the rule"**, **"One example and the answer it should give"**. No other hint, help mark, example or choice.
@@ -179,6 +190,19 @@ The words below are no longer shown: the New form, the draft editor and the card
 - Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
 - The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
 - The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.
+
+## ED-1 words (Nov 12)
+
+- **Edit** (E) on the story card; **Save** (Ctrl+Enter) and **Cancel** at the foot, with "Nothing is written until you confirm the preview. Ctrl+Enter saves." The preview's button: **Save in DevOps**, **Move in DevOps**.
+- **Add acceptance criteria**, a quiet button; its box's grey text: "One example and the answer it should give".
+- The format buttons: **B**, **I**, **•**, **1.**, **Link** (read as Bold, Italic, Bullets, Numbers, Link); the look under the box: **"How it will read in DevOps"**; for a Markdown field: "Kept as Markdown, as DevOps stores it".
+- "Fonts and colors from the old text will be removed." in Edit and the preview.
+- A field that isn't a box says why in one line: "This has a table or an image, so it can't be changed here without losing it." (and "embedded content", "This mentions someone, … without losing the mention.", "formatting FocusTime can't keep"), then **Add to the end** and **Copy DevOps link**.
+- **"Discard your changes?"** with **Discard** and **Keep editing**.
+- **"This changed in DevOps since you opened it."** Nothing was written. Your words are still in the boxes. DevOps has now: … then **Save again**.
+- **Move…** beside the parent and in the card's ⋯; "Now under: …", "Find a feature", **No parent**, "(now)", "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.", then **Preview**.
+- The owner's note: **"<name> edited #<id>"**. The preview: "Assigned to <name>, not you. They get a quiet note in FocusTime that you edited it."
+- The write log: **Edited**, **Moved**, **Undo: edit put back**, **Undo: moved back**.
 
 ## IB-4 words (Nov 12)
 

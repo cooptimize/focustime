@@ -1,13 +1,13 @@
 // CV-1: a Teams message body as safe HTML for a conversation's "Show messages" and for the original messages a DevOps
 // draft appends. An allowlist, never a blocklist: p, br, div, strong, em, u, a, ul, ol, li, table, thead, tbody, tr, th,
-// td, blockquote, code, pre (b and i become strong and em). Every attribute goes except href on a, and only an http,
+// td, blockquote, code, pre, h1 to h3 (ED-1) (b and i become strong and em). Every attribute goes except href on a, and only an http,
 // https or mailto href. Scripts, styles and anything like them go with their content. <at id="N">…</at> becomes a
 // mention chip named from the message's mentions (by position, as Graph numbers them); a hosted image (Graph's
 // hostedContents URL, never hotlinked) or any other picture becomes "Image attached"; an emoji keeps its own character;
 // a quoted reply's <attachment> marker is dropped. Unknown tags keep their text. The output is balanced: every tag
 // opened is closed. Pure: no DOM, so the server and the browser give the same result.
 
-const ALLOWED = new Set(["p", "br", "div", "strong", "em", "u", "a", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "blockquote", "code", "pre"]);
+const ALLOWED = new Set(["p", "br", "div", "strong", "em", "u", "a", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "blockquote", "code", "pre", /* ED-1: headings a description may have */ "h1", "h2", "h3"]);
 const RENAME: Record<string, string> = { b: "strong", i: "em" };
 /** Tags dropped with everything inside them. */
 const SKIP = new Set(["script", "style", "head", "title", "template", "iframe", "object", "embed", "svg", "math", "noscript", "textarea", "select", "button", "form"]);

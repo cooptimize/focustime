@@ -16,6 +16,7 @@ import { GAP_KINDS, type GapKind } from "../plan/fixnext.ts";
 import { DeployItemsInputError, parseDeployItems, parsePlatform, type DeployItemsRule } from "../plan/deploy-items.ts";
 import type { DataPlatform } from "./deploy-catalog.ts";
 import { DEFAULT_STANDARDS_REPO, parseRepoUrl, SOURCE_SYSTEMS, validBranch, type SourceSystem } from "../plan/standards.ts";
+import { CODE_ACCESS, type CodeAccess } from "../plan/code.ts";
 
 export type SettingKind = "rule" | "default" | "level" | "personal";
 export const KIND_NAMES: Record<SettingKind, string> = { rule: "Rule", default: "Default", level: "Default by level", personal: "Personal" };
@@ -313,6 +314,12 @@ export const CLIENT_SPECS = {
   // ADM-2 (D597): an admin's two per-account overrides of the customer rule (plan/client-accounts.ts).
   treat_as_client: { kind: "rule", area: "clients", label: "Treat as a client", builtin: false, parse: bool },
   hidden: { kind: "rule", area: "clients", label: "Hide from FocusTime", builtin: false, parse: bool },
+  // RB-1: who can read this client's code in Code: the whole company (the built-in default) or the client's team only
+  // (Account Workers and leads, the client report's check). Code views are logged either way.
+  code_access: { kind: "rule", area: "clients", label: "Who can read this client's code", builtin: "company" as CodeAccess, parse: (v) => {
+    if (!(CODE_ACCESS as readonly unknown[]).includes(v)) throw new OrgInputError(`One of: ${CODE_ACCESS.join(", ")}`);
+    return v as CodeAccess;
+  } },
   // AH-3: the gaps Fix next (and Ahead's Readiness) counts for this client; all four by default. Turning Unsized off
   // suits a client that doesn't size in DevOps.
   fix_gaps: { kind: "rule", area: "clients", label: "Gaps Fix next counts", builtin: [...GAP_KINDS] as GapKind[], parse: (v) => {
@@ -394,8 +401,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** KB-1: null is not set (both D365 systems), [] is None. */ sourceSystems: SourceSystem[] | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, sourceSystems: null, deployItems: null };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** KB-1: null is not set (both D365 systems), [] is None. */ sourceSystems: SourceSystem[] | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null; /** RB-1. */ codeAccess: CodeAccess };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, sourceSystems: null, deployItems: null, codeAccess: "company" };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -435,7 +442,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), sourceSystems: c("source_systems"), deployItems: c("deploy_items") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), sourceSystems: c("source_systems"), deployItems: c("deploy_items"), codeAccess: c("code_access") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {

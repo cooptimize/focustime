@@ -37,7 +37,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Team" | "Day" | "Close out" | "To-dos" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Promises" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant" | "Meetings";
+  readonly group: "Week" | "Team" | "Day" | "Close out" | "To-dos" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Promises" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Inbox" | "Admin" | "Assistant" | "Meetings" | "Code";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -193,6 +193,13 @@ export const ACTIONS = [
   { name: "setup.reset", title: "Setup: start over", group: "Settings", target: "none", summary: "Forgets your setup record so the flow shows again (dev and local only)" },
   { name: "ui.tour_offer", title: "Tour link", group: "Display", target: "none", summary: "Whether a person's first Today offers the 2-minute tour; { done: true } once they open it or say Not now; kept per person in the plan store" },
   { name: "guide.checklist", title: "Your first day", group: "Help", target: "none", summary: "The Guide's first-day checklist: for each of seven checks whether it's done, to do or skipped (read only; never a PAT or token)", aka: ["checklist", "getting started"] },
+  // RB-1: Code, every client's repos, read only. code.clients opens the panel; the other reads are the panel's own (never
+  // in the command menu's results, never in assistant/allowlist.ts). Each checks who may read the client on the server.
+  { name: "code.clients", title: "Code", group: "Code", target: "none", summary: "Read any client's repos, read only: walk the tree and read a file down to the code. Opening a file is logged for FocusTime admins; nothing of the code is kept", aka: ["code", "repo", "repos", "git", "source", "browse code", "pipeline", "sql", "tmdl"] },
+  { name: "code.repos", title: "Code: a client's repos", group: "Code", target: "none", summary: "The repos in one client's registered DevOps project (read only)" },
+  { name: "code.folder", title: "Code: a folder", group: "Code", target: "none", summary: "One folder of a client's repo on its default branch (read only)" },
+  { name: "code.find", title: "Code: find a file", group: "Code", target: "none", summary: "Every file name in one client's repo, to find a file (read only; logged as Find used)" },
+  { name: "code.file", title: "Code: a file", group: "Code", target: "none", summary: "One file of a client's repo as text, up to 1 MB (read only; logged as File opened before its text is shown)" },
   { name: "docs.access", title: "Technical docs", group: "Help", target: "none", summary: "How FocusTime works under the hood: architecture, data, integrations, security, operations and development, for this build (whether this account may open them; never anything sensitive)", aka: ["technical", "architecture", "security", "docs", "documentation", "under the hood"] },
   { name: "ui.set_reduce_motion", title: "Reduce motion", group: "Display", target: "none", summary: "No opening and closing animation and no moving Lumen; the still pose shows" },
   { name: "ui.set_text_size", title: "Text size", group: "Display", target: "none", shortcut: "Ctrl +", summary: "Default, Large or Larger for all text; saved in config" },
@@ -319,6 +326,8 @@ export const ACTIONS = [
   { name: "admin.remove_person", title: "Remove a person who has left", group: "Admin", target: "none", summary: "Admins: delete a person's FocusTime data and personal secrets after typing their name; logged; never yourself" },
   { name: "admin.audit", title: "Admin audit", group: "Admin", target: "none", summary: "Admins: the last 200 admin changes, filtered by area or text" },
   { name: "admin.identity", title: "Link a client DevOps login", group: "Admin", target: "none", summary: "Admins: confirm that a client's DevOps login (an Ext- account) is a Cooptimizer, link one to a person, or remove a link; logged" },
+  { name: "admin.code_views", title: "Code views", aka: ["code log", "who opened code"], group: "Admin", target: "none", summary: "Admins: who opened which client's repo or file in Code, and when (newest first, by client and person), with a count per client for the last 30 days; never any content" },
+  { name: "admin.code_check", title: "Check a client's code access", group: "Admin", target: "none", summary: "Admins: whether FocusTime can read one client's code with the company DevOps token (Code (read)), and how many repos" },
   { name: "admin.standards_sync", title: "Sync the standards now", aka: ["coop standards", "standards sync"], group: "Admin", target: "none", summary: "Admins: read Cooptimize's development standards from GitHub now; only ever reads the repo" },
   { name: "admin.invited", title: "Invite to FocusTime (Who's set up)", aka: ["invite", "who's set up", "whos set up", "setup status"], group: "Admin", target: "none", summary: "Admins: who has signed in and connected DevOps, the calendar and Teams, and an invite to open in Teams or Outlook and send yourself; FocusTime records only that you invited them" },
   { name: "admin.invite_access", title: "Can I send invites from FocusTime", group: "Admin", target: "none", summary: "Admins: whether your sign-in allows sending an invite in Teams, as an Outlook draft or as an email now; nothing is sent" },
@@ -393,6 +402,7 @@ export const ACTIONS = [
   { name: "devops.log", title: "Show the DevOps write log", group: "DevOps", target: "none", summary: "Every DevOps write: what, where, when, the result, the prior values, and Undo" },
   // PK-1: read only. What a checked-off to-do may offer in DevOps (Set #id to its done state), and the Undo when it's unchecked.
   { name: "devops.progress_offer", title: "Offer to update DevOps with progress", group: "DevOps", target: "day", summary: "End of day: stories answered with time left, as Remaining Work where the type has it, else a short comment (read only; writes need preview and confirm)" },
+  { name: "devops.edit_offer", title: "What Edit and Move… offer for an item", group: "DevOps", target: "item", summary: "For a story card's Edit and Move…: whether I may change the item, its title, description and acceptance criteria as light text (or why a field can't be edited here), its revision and the parent types it may move under (read-only)" },
   { name: "devops.wrap_offer", title: "What Wrap it up offers for an item", group: "DevOps", target: "item", summary: "For a story being wrapped up: its done states from the process, whether a New item moves to In Progress, Remaining Work, and its parent (read-only)" },
   { name: "wrapup.offer", title: "Wrap it up", group: "To-dos", target: "pick", aka: ["finish story", "close story", "mark done in DevOps"], summary: "How far you got on a DevOps story (Finished or Made progress), with a comment, before the DevOps preview (read only)" },
   { name: "wrapup.preview", title: "Preview a wrap-up", group: "To-dos", target: "pick", summary: "One preview of every DevOps write a wrap-up makes: the state, the comment, Remaining Work, the feature's status line" },

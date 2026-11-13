@@ -387,6 +387,9 @@ export { SECTIONS, SECTION_GROUPS, type SectionId } from "./sections.ts";
 
 /** Questions with no G1 home, written for UI-5. */
 const NEW_QUESTIONS = [
+  { q: "Can I read another client's code?", a: "Yes, read only. ⋯ › Code (or Code in Commands): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file. The client's name is at the top the whole time. Copy takes the whole file; Copy link opens the same file for a teammate. FocusTime never changes a repo, keeps none of the code and sends none of it to AI. A FocusTime admin can keep one client's code to its team; that client shows greyed for everyone else." },
+  { q: "Who sees that I opened a file?", a: "FocusTime admins, in Admin › Audit › Code views: who opened which client's repo or file, or used Find, and when. Never the code. Rows are kept 12 months." },
+  { q: "It says FocusTime can't read a client's code yet.", a: "The company DevOps token for that client doesn't have Code (read) yet. It's added by hand in DevOps; ask your FocusTime admin. Until then that client's work items still show as before." },
   { q: "How do I see who's set up?", a: "If you're a FocusTime admin: Admin › People shows every Cooptimizer with yes or no for Signed in, DevOps connected, Calendar connected and, where the Teams app is set up, Teams app added. Filter by Not signed in or Set up partly. It shows only these marks, never anyone's plan." },
   { q: "How do I invite a teammate?", a: "In Admin › People, Invite on their row (or tick several and Invite several) opens a message to edit, with FocusTime's link and the first three steps. Open in Teams starts a chat with them, Open in Outlook starts an email, or Copy message, and you send it. Where your sign-in allows it, Send in Teams (one 1:1 chat each) or Create Outlook draft or Send now sends it from FocusTime as you, after a preview of who gets it and the final text; if someone isn't reached, Retry tries only them. The row then shows when and how you invited them, and you can invite them again any time. In {key:Ctrl K}: Invite, or Who's set up." },
   { q: "What is the moment card?", a: "Day's one card for the moment of the day: Nothing on today yet (with + Add) while today's blocks have no to-dos, Midday check-in once your afternoon starts, and Close out near the end of your day. Each opens its flow; once it's done it's a small line with Reopen. Nothing is forced: skip any of them." },
@@ -400,7 +403,8 @@ const NEW_QUESTIONS = [
   { q: "Does it answer about every client?", a: "About every client you can see, grouped by client. Never a client you can't see, and an answer is never posted anywhere: it stays in your panel or your own Teams chat with FocusTime." },
   { q: "What if AI is off?", a: "It says AI isn't on and points you to the command menu ({key:Ctrl K}), where every action is. Everything else in FocusTime works the same." },
   { q: "What is Diagnostics?", a: "Settings › Your data › Diagnostics, or Diagnostics in {key:Ctrl K}. Counts only, for your own chats: why a conversation where someone said they'd do something has no promise of yours, why messages of yours that sounded like a promise have none, and where your chats' messages were sorted in the last 14 days. It never shows message text, and Copy as text copies only the counts." },
-  { q: "What is a story card?", a: "A work item's title anywhere in FocusTime opens its card here, not DevOps: its state, type, who has it, iteration, size, Remaining Work and dates, its feature and epic (each opens its own card), its description and acceptance criteria, the latest comments (Show all for more), and what FocusTime knows: your to-dos and timeboxes on it and your promises about it. From the card: Wrap it up, Add comment, Change state, Assign, Dates and Break down, each with the usual preview and Confirm. Copy DevOps link at the foot copies the item's address; the ⋯ menus on to-dos and items do the same. Esc or × closes it and Back returns to the one before." },
+  { q: "What is a story card?", a: "A work item's title anywhere in FocusTime opens its card here, not DevOps: its state, type, who has it, iteration, size, Remaining Work and dates, its feature and epic (each opens its own card), its description and acceptance criteria, the latest comments (Show all for more), and what FocusTime knows: your to-dos and timeboxes on it and your promises about it. From the card: Wrap it up, Edit, Add comment, Change state, Assign, Dates, Move… and Break down, each with the usual preview and Confirm. Copy DevOps link at the foot copies the item's address; the ⋯ menus on to-dos and items do the same. Esc or × closes it and Back returns to the one before." },
+  { q: "How do I fix an item's title, description or parent?", a: "Open its story card and press Edit (or E). The title, description and acceptance criteria become boxes in place, with Bold, Italic, Bullets, Numbers and Link and a look at how DevOps will show it. Save (Ctrl+Enter) opens one preview with the text before and after; nothing is written until you confirm. If someone changed the item in DevOps meanwhile, nothing is written, your words stay and the card shows what it says now, with Save again. A description with a table, an image or a mention isn't a box: Add to the end adds your text after it. Move…, beside the parent or in the card's ⋯, puts the item under another feature or epic one level up; only the link changes, never its order, area or dates. You can edit items you own, features under your epic and anything on a client you lead. Undo is in Settings › Activity." },
   { q: "How do I wrap up a story?", a: "Tick it, or Wrap it up on its card. Finished sets the item's done state (the one you use most for that client) and Remaining Work to 0. Made progress keeps the state (a New item moves to Active), asks about how much is left (30m, 1h, 1.5h, 2h or type it) and keeps the story's later to-dos on your plan. Add a comment, or Suggest one, and tick Also add to <feature>'s status for Monday if it belongs there. Preview shows one line with every change, then Confirm writes them in order, each with its own result and Retry. Undo puts the tick back and offers each DevOps change's own undo. Close out asks the same for the day's done stories in one list: Finished or Made progress, the time left and a comment for each, then one Preview and one Confirm. In Teams, Done and Partly on a check-in card offer the same, with an optional comment and Confirm. If a client's DevOps updates are off, the first tick says so once, with the way to turn them on." },
   { q: "Add any calendar by link", a: "Settings › Accounts and calendars › Calendars added by link › Add a calendar by link. Paste the calendar's subscription link (https:// or webcal://), press Check link, and FocusTime says how many upcoming events it found. Give it a name and a color, choose Busy only (the default: no titles, places or notes are kept, events show as Busy) or Show titles, and Personal (hidden with {key:ui.set_show_personal}, like Google's) or Work (counts as meetings), then Save calendar. Where the link is: in Google Calendar, Settings, the calendar, Integrate calendar, Secret address in iCal format (Google's changes can take hours to reach it); in Outlook on the web, Settings › Calendar › Shared calendars › Publish a calendar, then copy the ICS link; in iCloud, share the calendar and turn on Public Calendar; school and activity apps say Subscribe, iCal or ICS. FocusTime reads it about every 15 minutes while you use it, and Refresh reads it now. It never writes to it. The link works like a password: FocusTime keeps it encrypted and only ever shows its host. If it stops working, the status line says so; Replace link takes a new one and Remove deletes it and its events." },
   { q: "Can I stop my VM from FocusTime?", a: "Yes, your own VM only. The VM chip's menu has Stop while it runs: a preview says it will be deallocated (it shuts down and stops billing for compute) and that anything running on it ends, then Stop. FocusTime never stops it on its own and never changes its auto-shutdown. Each start and stop is in Settings › Activity." },
@@ -452,7 +456,7 @@ export const AREA_UI = {
   noTour: "Tours run on your own screens. Sign in to see them.",
 };
 
-export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "capture" | "assistant" | "ask" | "teams" | "calls" | "settings", AreaBody> = {
+export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "capture" | "assistant" | "ask" | "teams" | "calls" | "code" | "settings", AreaBody> = {
   today: {
     lead: "Day is one day on one screen: what's urgent, the moment of the day, and the day's blocks.",
     does: [
@@ -463,7 +467,7 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "c
       { title: "The timeline", text: "Timeline at the top right, or {key:ui.set_today_timeline}, shows the day as hours, like Week. Each block's to-dos are listed beside its hours with their checkboxes, the ones with a time first. Drag one from Not timeboxed yet onto the hours, move or resize it, or drag it back to take its time off, each with Undo. Timebox my day adds dashed suggestions to accept." },
     ],
     extras: ["urgent"],
-    faqs: ["Timeboxes and check-ins: how do they work?", "How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "How do I wrap up a story?", "What is a story card?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
+    faqs: ["Timeboxes and check-ins: how do they work?", "How do I use the timeline with the keyboard?", "How does the timeline work on a phone?", "Does Timebox my day write to my calendar?", "What is the moment card?", "What's on Today on a phone?", "What's in Today's urgent strip?", "Can I look at another day?", "Does checking off a to-do change DevOps?", "How do I wrap up a story?", "What is a story card?", "How do I fix an item's title, description or parent?", "What is the line across today?", "How does FocusTime know I'm off?", "Why can't I move some of my old timeboxes?"],
   },
   week: {
     lead: "Week is your half-day blocks for the week, with one panel beside them for the block you're on.",
@@ -638,6 +642,15 @@ export const AREAS: Record<"today" | "week" | "ahead" | "inbox" | "writing" | "c
     ],
     faqs: ["What are client calls?", "How do I review a client call?", "It asks me to upload a transcript."],
   },
+  code: {
+    lead: "Read any client's code, read only, to borrow what already works. One client at a time.",
+    does: [
+      { title: "Find a file", text: "⋯ › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file.", go: { href: "#/code", label: "Open Code" } },
+      { title: "Copy what you need", text: "Copy takes the whole file, Copy path its path, Copy DevOps link its page in DevOps. Select part of it to copy just that." },
+      { title: "It's logged", text: "Opening a file is logged for FocusTime admins: who, which file and when. Nothing of the code is kept." },
+    ],
+    faqs: ["Can I read another client's code?", "Who sees that I opened a file?", "It says FocusTime can't read a client's code yet."],
+  },
   settings: {
     lead: "Settings are yours. They save as you change them, and search at the top of the list finds any of them.",
     does: [
@@ -753,6 +766,7 @@ export const SECTION_LINES: Record<string, string> = {
   ask: AREAS.ask.lead,
   teams: AREAS.teams.lead,
   calls: AREAS.calls.lead,
+  code: AREAS.code.lead,
   settings: AREAS.settings.lead,
   renamed: "Old names, and what they're called now.",
 };
