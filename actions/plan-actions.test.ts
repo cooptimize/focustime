@@ -513,6 +513,13 @@ describe("draft editor (step 15.3): draft.update", () => {
     const b2 = (await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: b, description: "Only mine", answers: { where: "x", change: "", check: "" } })).draft;
     expect(b2).toMatchObject({ description: "Only mine", answers: { where: "x", change: "", check: "" } });
     expect(b2.carried).toBeUndefined();
+    // A TP-1 draft whose own description was near the cap still saves with its carried words (review 2); others keep 8000.
+    const n = await add("Long old draft");
+    await t.run("draft.update", { id: n, description: "x".repeat(7990) });
+    t.plantBrief(n, json);
+    const shown = `${"x".repeat(7990)}\n\n${TP1_CARRIED}`;
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: n, description: shown, answers: read!.answers })).draft.description).toBe(shown);
+    expect((await t.fail("draft.update", { id: n, description: "y".repeat(8001) })).status).toBe(400);
     // An unreadable column is no answers and nothing carried; a type alone carries nothing.
     const c = await add("Broken");
     t.plantBrief(c, "{not json");

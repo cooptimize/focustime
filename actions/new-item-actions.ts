@@ -8,7 +8,7 @@ import { isClosed } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, draftLevelOf, parentProblem, type NewOptions } from "../plan/quick-create.ts";
 export type { NewOptions, NewParent } from "../plan/quick-create.ts";
 import type { DraftStory, Size } from "../plan/types.ts";
-import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
+import { AnswersError, descriptionMax, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { ActionResponse } from "./types.ts";
 
@@ -124,7 +124,7 @@ async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, w
       if (e instanceof AnswersError) throw new Invalid(e.message);
       throw e;
     }
-  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", 8000), targetDate: optDate(o.targetDate), size: o.size === undefined && was ? was.size : optSize(o.size), ...(answers !== undefined ? { answers } : {}) };
+  return { clientKey, title: t.title, itemType: type, level, parentItemId, assignTo: optEmail(o.assignTo), description: optText(o.description, "description", descriptionMax(was?.carried)), targetDate: optDate(o.targetDate), size: o.size === undefined && was ? was.size : optSize(o.size), ...(answers !== undefined ? { answers } : {}) };
 }
 
 const INPUT = ["clientKey", "title"];

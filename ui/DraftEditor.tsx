@@ -15,7 +15,7 @@ import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.ts
 import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { NO_ANSWERS, storedOf, withCarried, type Answers } from "../plan/three-questions.ts";
+import { descriptionMax, NO_ANSWERS, storedOf, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -73,7 +73,8 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
     return () => b?.focus?.();
   }, []);
   const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
-  const showAc = !feature && (features?.acceptanceField ?? features?.status !== "ok");
+  // TP-1b: the third question is the acceptance; a separate box only when the draft already holds acceptance text (CP-1's AI version, an older draft).
+  const showAc = !feature && !!draft.acceptance?.trim() && (features?.acceptanceField ?? features?.status !== "ok");
   const startAfter = feature && start && target && start > target;
   const dirty =
     title.trim() !== draft.title || (description.trim() || null) !== (shownDescription ?? null) || (acceptance.trim() || null) !== (draft.acceptance ?? null) || client !== draft.clientKey ||
@@ -144,7 +145,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" />
           <label className="set-field">
             <span className="set-label">Description</span>
-            <TextBox value={description} minRows={4} maxRows={14} maxLength={8000} onChange={(e) => setDescription(e.target.value)} />
+            <TextBox value={description} minRows={4} maxRows={14} maxLength={descriptionMax(draft.carried)} onChange={(e) => setDescription(e.target.value)} />
           </label>
           {showAc && (
             <label className="set-field">

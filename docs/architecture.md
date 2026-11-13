@@ -927,7 +927,16 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Demo.** `sources/demo/data.ts` and `sources/demo/devops.ts`: Cooptimize's process has a Domains level above Epics.
 - **Tests.** `plan/quick-create.test.ts`, `actions/new-item-actions.test.ts`, the QC-1 part of `actions/devops-write.test.ts` (with `fakeDevOpsWrite`'s `domain` and `required` options), `plan/blockpanel.test.ts`; e2e `e2e/qc1.test.ts` (demo mode, plus a real session for no write PAT; screenshots with FOCUSTIME_SHOTS) and the updated `e2e/capture-devops.test.ts`.
 
-## TP-1: Work templates, the four lines at create (Nov 12)
+## TP-1b: Three plain questions (Nov 12)
+
+- **Pure.** `plan/three-questions.ts`: the questions' words (`QUESTIONS`), `parseAnswers` (each optional, plain text, 2000 characters at most), `written` (what a create writes: the typed description, then "Where:" and "What should change:" paragraphs, and the third answer as acceptance or in the description), and a draft's column read leniently (`keptOf`: this step's three answers, or a TP-1 brief's first three lines as answers and the rest as `carried` plain words; `storedOf`; `withCarried`).
+- **Store.** `draft_stories.brief` unchanged in shape and place: a TP-1b draft stores only `{where, change, check}`; `toDraft` gives `answers` and `carried`. No migration.
+- **Actions.** `new_item` and the step-14 `create` in `actions/devops-write-actions.ts` use `written`; no tag, no tag refusal, no `work_template_uses` count. `draft.save`/`draft.add` and `draft.update` take `answers`. `item.card` returns the description as DevOps has it (sanitized), no lines, request type or readiness. `templates.load` and `templates.save` are gone from the registry.
+- **UI.** `ui/ThreeQuestions.tsx` (grid in the New form, stacked in the draft editor and on the phone under More). `ui/FourLines.tsx`, `ui/templates.ts`, `ui/settings/AdminTemplates.tsx` and `actions/template-actions.ts` removed. Old addresses: `RETIRED_ADMIN_SECTIONS` (`ui/settings/Admin.tsx`) and `RETIRED_SETTINGS` (`ui/settings/registry.ts`) land on the section's first page.
+- **Kept, hidden.** `plan/work-templates.ts` (types, `SEED`, tag reading, typical stories) and `store/work-templates-store.ts` with their tables, for Break down later.
+- **Tests.** `plan/three-questions.test.ts`, the TP-1b parts of `actions/devops-write.test.ts` and `actions/plan-actions.test.ts`, `store/work-templates-store.test.ts`, `test/tp1-drafts.ts` (plants a TP-1 brief), `e2e/tp1.test.ts` (screenshots in `docs/ux/tp1b/`).
+
+## TP-1: Work templates, the four lines at create (Nov 12, replaced by TP-1b above)
 
 - **Pure.** `plan/work-templates.ts`: the four lines' names (`LINE_KEYS`, `LINE_NAMES`, `EARLIER_NAMES`), the templates' shape and `SEED`, `Brief` and `parseBrief`, what a create writes (`descriptionHtml`, `acceptanceText`, `templateTag`), reading the lines back (`readLines`, `readFilled`, `readiness`), an admin's save (`checkTemplates`, `templateChanges`) and `fullExample`.
 - **Store.** `store/work-templates-store.ts` over the app tables `work_templates` and `work_template_uses`, and `draft_stories.brief` (`store/migrations/20261203T0900_work_templates.ts`; export schema 40).

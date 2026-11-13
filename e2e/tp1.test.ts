@@ -194,6 +194,8 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
       await ed.waitFor();
       await threeBoxes(ed);
       await noTp1(ed);
+      // The third question is the acceptance: no second, empty Acceptance criteria box beside it.
+      await expect(ed.getByText(/^Acceptance criteria/).count()).resolves.toBe(0);
       await expect(boxes(ed).nth(0).inputValue()).resolves.toBe("The projects model, a new report page");
       await boxes(ed).nth(1).fill("A new page; nothing else changes");
       await page.mouse.move(1, 1);
@@ -256,7 +258,7 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
         await expect(boxes(f).count()).resolves.toBe(0);
         await noTp1(f);
         if (size === "default") await shot(page, "tp1b-phone-empty");
-        await f.getByRole("button", { name: /More: three questions, description and size/ }).click();
+        await f.getByRole("button", { name: /More: details, description and size/ }).click();
         await threeBoxes(f);
         // Each box spans the form's width, and all three sit above Description.
         const boxRects = await boxes(f).evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ w: r.width, top: r.top })));

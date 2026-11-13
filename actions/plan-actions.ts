@@ -1,6 +1,6 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
-import { AnswersError, parseAnswers } from "../plan/three-questions.ts";
+import { AnswersError, descriptionMax, parseAnswers } from "../plan/three-questions.ts";
 import { markResolved, materializeCheckins } from "./carry-actions.ts";
 import { removedNotice, resizedRemaining } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
@@ -615,12 +615,13 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
         const patch: DraftPatch = {};
         if (o.title !== undefined) patch.title = text(o.title, "title");
-        const long = (v: unknown, name: string) => {
+        const long = (v: unknown, name: string, max = 8000) => {
           if (v === null || v === "") return null;
-          if (typeof v !== "string" || v.length > 8000) throw new Invalid(`${name} must be text of at most 8000 characters`);
+          if (typeof v !== "string" || v.length > max) throw new Invalid(`${name} must be text of at most ${max} characters`);
           return v.trim() || null;
         };
-        if (o.description !== undefined) patch.description = long(o.description, "description");
+        // TP-1b: a TP-1 draft's description is shown with its carried words; room for them so it still saves.
+        if (o.description !== undefined) patch.description = long(o.description, "description", descriptionMax(draft.carried));
         if (o.acceptance !== undefined) {
           if (draft.level !== "story" && o.acceptance) return bad("Acceptance criteria are for stories", 422);
           patch.acceptance = long(o.acceptance, "acceptance");

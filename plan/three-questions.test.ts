@@ -91,7 +91,7 @@ describe("a draft's column", () => {
   });
   it("a TP-1 brief with only a type or only choices, or unreadable: nothing lost, nothing made up", () => {
     expect(keptOf(JSON.stringify(aTp1Brief({ where: "", change: "", check: "", env: null, touches: [], checkedBy: null, done: "", doneWhen: null, signedOffBy: null, notWithout: [] })))).toEqual({ answers: null, carried: null });
-    expect(keptOf(JSON.stringify({ doneWhen: "Published" }))).toEqual({ answers: null, carried: "Done when it is: Published." });
+    expect(keptOf(JSON.stringify({ doneWhen: "Published" }))).toEqual({ answers: null, carried: "From your earlier draft:\nDone when it is: Published." });
     expect(keptOf("{oops")).toEqual({ answers: null, carried: null });
     expect(keptOf("[1]")).toEqual({ answers: null, carried: null });
     expect(keptOf(JSON.stringify({ where: 3, touches: "Data", checkedBy: "x" }))).toEqual({ answers: null, carried: null });

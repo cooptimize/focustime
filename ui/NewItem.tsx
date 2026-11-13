@@ -17,7 +17,7 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { SelectField } from "./SelectField.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { answersEmpty, NO_ANSWERS, withCarried, type Answers } from "../plan/three-questions.ts";
+import { answersEmpty, descriptionMax, NO_ANSWERS, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
 import { usePhone } from "./viewport.ts";
 
@@ -304,14 +304,14 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           </span>
         </div>
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-          {more ? "▾" : "▸"} {phone ? "More: three questions, description and size" : "More: description and size"}
+          {more ? "▾" : "▸"} {phone ? "More: details, description and size" : "More: description and size"}
         </button>
         {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" />}
         {more && (
           <div className="nf-grid nf-more-body">
             <label className="set-label" htmlFor="nf-desc">Description</label>
             <span>
-              <TextBox id="nf-desc" minRows={3} maxRows={12} maxLength={8000} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <TextBox id="nf-desc" minRows={3} maxRows={12} maxLength={descriptionMax(draft?.carried)} value={description} onChange={(e) => setDescription(e.target.value)} />
               {ai && (
                 <span className="nf-ai">
                   <span className="muted">AI wrote a version{ai.note === "Another client's name was removed" ? " (another client's name was removed)" : ""}.</span>{" "}

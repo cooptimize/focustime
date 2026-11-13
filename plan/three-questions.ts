@@ -110,11 +110,17 @@ export function keptOf(json: string | null | undefined): Kept {
     signedOffBy && sentence(`Signed off by: ${signedOffBy}`),
     notWithout.length > 0 && sentence(`Not without asking: ${notWithout.join(", ")}`),
   ].filter((x): x is string => typeof x === "string" && !!x);
-  return { answers: answersEmpty(answers) ? null : answers, carried: lines.length ? lines.join("\n") : null };
+  return { answers: answersEmpty(answers) ? null : answers, carried: lines.length ? [CARRIED_HEAD, ...lines].join("\n") : null };
 }
+
+/** The line above a TP-1 draft's carried words, so the person knows where they came from. */
+export const CARRIED_HEAD = "From your earlier draft:";
 
 /** What the draft column holds for these answers (null for none): only the three, so a TP-1 build can still read it. */
 export const storedOf = (a: Answers | null | undefined): string | null => (answersEmpty(a) ? null : JSON.stringify({ where: tidy(a!.where), change: tidy(a!.change), check: tidy(a!.check) }));
+
+/** The description cap, 8000 characters, plus room for a TP-1 draft's carried words, so a draft near the cap still saves. */
+export const descriptionMax = (carried: string | null | undefined): number => 8000 + (carried ? carried.length + 2 : 0);
 
 /** A draft's description as the person sees it: their own text, then a TP-1 draft's carried words once. */
 export const withCarried = (description: string | null | undefined, carried: string | null | undefined): string | null => [description?.trim() || null, carried?.trim() || null].filter(Boolean).join("\n\n") || null;
