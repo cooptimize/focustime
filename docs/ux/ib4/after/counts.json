@@ -1,0 +1,138 @@
+{
+  "01-from-chats-1440-dark": {
+    "rows": 2,
+    "controls": 12
+  },
+  "02-suggestion-open-1440-dark": {
+    "rows": 2,
+    "controls": 17
+  },
+  "03-promises-1440-dark": {
+    "rows": 7,
+    "controls": 17
+  },
+  "04-promise-open-1440-dark": {
+    "rows": 7,
+    "controls": 24
+  },
+  "05-cleared-1440-dark": {
+    "rows": 7,
+    "controls": 19
+  },
+  "06-captures-1440-dark": {
+    "rows": 2,
+    "controls": 20
+  },
+  "07-day-chips-1440-dark": {
+    "rows": 0,
+    "controls": 73
+  },
+  "09-empty-from-chats-1440-dark": {
+    "rows": 0,
+    "controls": 4
+  },
+  "10-empty-promises-1440-dark": {
+    "rows": 0,
+    "controls": 4
+  },
+  "11-empty-captures-1440-dark": {
+    "rows": 0,
+    "controls": 12
+  },
+  "01-from-chats-1440-light": {
+    "rows": 2,
+    "controls": 12
+  },
+  "02-suggestion-open-1440-light": {
+    "rows": 2,
+    "controls": 17
+  },
+  "03-promises-1440-light": {
+    "rows": 7,
+    "controls": 17
+  },
+  "04-promise-open-1440-light": {
+    "rows": 7,
+    "controls": 24
+  },
+  "05-cleared-1440-light": {
+    "rows": 7,
+    "controls": 19
+  },
+  "06-captures-1440-light": {
+    "rows": 2,
+    "controls": 20
+  },
+  "07-day-chips-1440-light": {
+    "rows": 0,
+    "controls": 73
+  },
+  "09-empty-from-chats-1440-light": {
+    "rows": 0,
+    "controls": 4
+  },
+  "10-empty-promises-1440-light": {
+    "rows": 0,
+    "controls": 4
+  },
+  "11-empty-captures-1440-light": {
+    "rows": 0,
+    "controls": 12
+  },
+  "01-from-chats-phone-dark": {
+    "rows": 2,
+    "controls": 11
+  },
+  "02-suggestion-open-phone-dark": {
+    "rows": 2,
+    "controls": 16
+  },
+  "03-promises-phone-dark": {
+    "rows": 7,
+    "controls": 16
+  },
+  "04-promise-open-phone-dark": {
+    "rows": 7,
+    "controls": 23
+  },
+  "05-cleared-phone-dark": {
+    "rows": 7,
+    "controls": 18
+  },
+  "06-captures-phone-dark": {
+    "rows": 2,
+    "controls": 19
+  },
+  "07-day-chips-phone-dark": {
+    "rows": 0,
+    "controls": 26
+  },
+  "01-from-chats-phone-light": {
+    "rows": 2,
+    "controls": 11
+  },
+  "02-suggestion-open-phone-light": {
+    "rows": 2,
+    "controls": 16
+  },
+  "03-promises-phone-light": {
+    "rows": 7,
+    "controls": 16
+  },
+  "04-promise-open-phone-light": {
+    "rows": 7,
+    "controls": 23
+  },
+  "05-cleared-phone-light": {
+    "rows": 7,
+    "controls": 18
+  },
+  "06-captures-phone-light": {
+    "rows": 2,
+    "controls": 19
+  },
+  "07-day-chips-phone-light": {
+    "rows": 0,
+    "controls": 26
+  }
+}

@@ -78,7 +78,7 @@ function answer(inputText: string): string {
   if (input.messages.some((m) => /CRM_Silver/.test(m.text))) {
     const a: UpdateAnswer = {
       messages: work("n1"),
-      conversations: [{ ref: "n1", title: "Rerun the Salesforce data from CRM_Silver", summary: "Evan asked for a rerun today.\nSam will do it tonight.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will rerun it tonight", item_change: null, scope_changed: false, likely_item: null,
+      conversations: [{ ref: "n1", title: "Rerun the Salesforce data from CRM_Silver", summary: "Evan asked for a rerun today.\nSam will do it tonight.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will rerun it tonight", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Sam Tester")!, what: "Rerun the Salesforce data from CRM_Silver", due: "2026-11-02T19:30", to: ref("Evan Ford"), implies_item: false, messages: by("Sam Tester"), status_only: false }] }],
     };
     return JSON.stringify(a);
@@ -87,9 +87,9 @@ function answer(inputText: string): string {
   const a: UpdateAnswer = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: lena.includes(m.ref) ? "n2" : "n1", confident_new_topic: lena.includes(m.ref) })),
     conversations: [
-      { ref: "n1", title: "Movement Dashboard quantity gap on 4417001", summary: "Blake sees about 7.7k lb less on the Movement Dashboard than the BOM report for 4417001.\nEvan and Lena traced it to BOM bridging.\nSam will add the fix to the development queue.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will add the fix to the development queue", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n1", title: "Movement Dashboard quantity gap on 4417001", summary: "Blake sees about 7.7k lb less on the Movement Dashboard than the BOM report for 4417001.\nEvan and Lena traced it to BOM bridging.\nSam will add the fix to the development queue.", owner: ref("Sam Tester"), wrapped_up: false, change: "Sam will add the fix to the development queue", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Sam Tester")!, what: "Add the BOM bridging fix to the development queue", due: null, to: ref("Blake Novak"), implies_item: true, messages: by("Sam Tester"), status_only: false }] },
-      { ref: "n2", title: "Dashboard refresh schedule", summary: "Blake asks whether the dashboard can refresh at 6 AM.\nLena is changing the schedule.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is changing the schedule", item_change: null, scope_changed: false, likely_item: null,
+      { ref: "n2", title: "Dashboard refresh schedule", summary: "Blake asks whether the dashboard can refresh at 6 AM.\nLena is changing the schedule.", owner: ref("Lena Hart"), wrapped_up: false, change: "Lena is changing the schedule", item_change: null, scope_changed: false, likely_item: null, item_needed: null,
         commitments: [{ who: ref("Lena Hart")!, what: "Move the refresh to 6 AM", due: null, to: ref("Blake Novak"), implies_item: false, messages: lena.filter((r) => input.messages.find((m) => m.ref === r)?.from === ref("Lena Hart")), status_only: false }] },
     ],
   };
@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
     await lb?.close();
   }, T);
 
-  it("the Alliance conversation: Needs you, the DevOps draft and create, a comment suggestion; the Wingtip promise on Today", async () => {
+  it("the Alliance conversation: my promise, the DevOps draft and create; the Wingtip promise on Today (IB-4)", async () => {
     const graph = fakeGraph();
     const chats = createChatsClient({ fetch: graph.fetch, token: async () => "fake-graph-token", invalidate: () => {}, log: () => {} });
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
@@ -200,25 +200,18 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       graph.say(DELIVERY, ME, "Absolutely. I'll get this done tonight.", 21);
       graph.say(DELIVERY, ME, "I'll be back online around 7:30 PM.", 22);
 
-      // The Inbox (IB-1): Refresh reads the chats now; the conversation is a row in Needs you.
+      // The Inbox (IB-4): Refresh reads the chats now. Nothing is in From chats yet (the conversations are minutes old);
+      // my two promises are in Promises.
       await page.keyboard.press("5");
-      const main = await openInboxView(page, "needs-you");
-      await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const TITLE = "Movement Dashboard quantity gap on 4417001";
-      const alliance = await openInboxItem(page, TITLE);
-      await alliance.getByText(/Sam will add the fix to the development queue/).first().waitFor();
-      await alliance.getByRole("button", { name: /^Create DevOps item/ }).first().waitFor();
-      // Part 0: Lena said she'd do it, which never claims: until someone takes it, it is Up for grabs for me.
-      await main.locator(".ib-row", { hasText: "Dashboard refresh schedule" }).getByText("Up for grabs").waitFor();
-      await shotBoth(page, "conversations-needs-you", main);
+      const main = await openInboxView(page, "chats");
+      await main.getByRole("button", { name: "Refresh" }).click();
+      await main.getByText("Nothing from your chats needs an item.").waitFor();
+      const mine = await openInboxView(page, "promises");
+      const FIX = "Add the BOM bridging fix to the development queue";
+      const pane = await openInboxItem(page, FIX);
+      await shotBoth(page, "conversations-promise-open", pane);
 
-      // The pane: its summary and, below, the messages as Teams shows them.
-      await openInboxView(page, "needs-you");
-      const pane = await openInboxItem(page, TITLE);
-      await pane.getByRole("list", { name: "The messages" }).getByText(/skips bridged BOM lines/).waitFor();
-      await shotBoth(page, "conversations-card-messages", pane);
-
-      // Create DevOps item: the draft, then the preview through the write framework, then Tracked.
+      // Create DevOps item from the promise: the draft, then the preview through the write framework, then its #id.
       await pane.getByRole("button", { name: /^Create DevOps item/ }).first().click();
       const draft = pane.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
@@ -233,25 +226,12 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await preview.waitFor({ state: "detached" });
       const made = [...dv.items.values()].at(-1)!;
       expect(String(made.fields["System.Description"] ?? made.fields["Microsoft.VSTS.TCM.ReproSteps"])).toContain("Blake Novak");
-      await expect.poll(async () => (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("Movement"))?.status).toBe("tracked");
-      await pane.getByText(new RegExp(`#${made.id}`)).first().waitFor();
-
-      // A comment suggestion for the item's owner (made by the shared job after a change and a pause).
-      const conv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("Movement"))!;
-      await convs.addSuggestion({ conversationId: conv.id, itemId: made.id, kind: "comment", forUser: ME, body: "Blake confirmed the gap is about 7.7k lb on 4417001.\nThe fix is in the development queue.", before: null, after: null, internal: [], day: "2026-11-02" });
-      await main.getByRole("button", { name: "Refresh conversations" }).click();
-      // Its own address opens it in the pane, whichever view it's in (the old #/inbox/conversation/<id> too).
-      await page.evaluate((id) => (location.hash = `#/inbox/conversation/${id}`), conv.id);
-      const tracked = page.locator(".ib-pane");
-      await tracked.locator(".ib-detail-title", { hasText: TITLE }).waitFor();
-      await tracked.getByRole("button", { name: /^Post comment/ }).waitFor();
-      await shotBoth(page, "conversations-comment-suggestion", tracked);
+      await mine.locator("li.ib4-row", { hasText: FIX }).locator(".ib4-row-sub", { hasText: `#${made.id}` }).waitFor();
 
       // Promises: the Wingtip promise, one, to Evan, due today 7:30 PM.
-      const mine = await openInboxView(page, "promises");
       const promise = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
       await promise.getByText(/7:30 PM/).first().waitFor();
-      await expect(mine.locator(".ib-row").count()).resolves.toBe(2);
+      await expect(mine.locator("li.ib4-row").count()).resolves.toBe(2);
       await shotBoth(page, "my-promises", mine);
 
       // Day: the promise is in the chips line above the blocks ("1 promise due"), with its time (WD-2: Day's cards
@@ -268,7 +248,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await openInboxView(page, "promises");
       const card = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
       await expect(card.getByRole("button", { name: "Make it a follow-up" }).count()).resolves.toBe(0);
-      await expect(page.locator(".ib-row", { hasText: "Rerun the Salesforce data from CRM_Silver" }).first().textContent()).resolves.toMatch(/For Evan/);
+      await expect(card.locator(".ib4-row-sub").first().textContent()).resolves.toMatch(/For Evan/);
       expect(errors).toEqual([]);
     } finally {
       await app.close();

@@ -103,7 +103,7 @@ describe("addresses", () => {
     [loc(navOf.aheadItem(437)), "#/backlog/item/437"],
     [loc(navOf.inbox()), "#/inbox"],
     [loc(navOf.inbox(12)), "#/inbox/item/f12"],
-    [loc(navOf.conversations()), "#/inbox/needs-you"],
+    [loc(navOf.conversations()), "#/inbox/chats"],
     [loc(navOf.myPromises()), "#/inbox/promises"],
     [{ nav: navOf.today(), overlay: { kind: "focus" } }, "#/focus"],
     [{ nav: navOf.today(), overlay: { kind: "settings", section: "notifications" } }, "#/settings/notifications"],
@@ -158,10 +158,10 @@ describe("addresses", () => {
     ["#/ahead/fix", loc(navOf.ahead("grid", "attention")), "#/backlog"],
     ["#/ahead/readiness", loc(navOf.ahead("grid", "attention")), "#/backlog"],
     ["#/ahead/backlog", loc(navOf.ahead("grid", "stories")), "#/backlog"],
-    ["#/conversations", loc(navOf.conversations()), "#/inbox/needs-you"],
+    ["#/conversations", loc(navOf.conversations()), "#/inbox/chats"],
     ["#/my-promises", loc(navOf.myPromises()), "#/inbox/promises"],
-    ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/needs-you"],
-    ["#/inbox/asks", loc(navOf.conversations()), "#/inbox/needs-you"],
+    ["#/inbox/requests", loc(navOf.conversations()), "#/inbox/chats"],
+    ["#/inbox/asks", loc(navOf.conversations()), "#/inbox/chats"],
     ["#/inbox/my-promises", loc(navOf.myPromises()), "#/inbox/promises"],
     ["#/inbox/conversation/12", loc(navOf.inboxItem("v12")), "#/inbox/item/v12"],
     ["#/inbox/promise/7", loc(navOf.inboxItem("c7")), "#/inbox/item/c7"],
@@ -214,7 +214,7 @@ describe("entry points", () => {
     expect(viewName(loc(navOf.status()))).toBe("Status");
     expect(viewName(loc(navOf.ahead()))).toBe("Backlog › Grid");
     expect(viewName(loc(navOf.ahead("gantt")))).toBe("Backlog › Gantt");
-    expect(viewName(loc(navOf.conversations()))).toBe("Inbox › Needs you");
+    expect(viewName(loc(navOf.conversations()))).toBe("Inbox › From chats");
   });
 });
 
@@ -251,7 +251,7 @@ describe("command menu views", () => {
     const want: Partial<Record<ViewName, string>> = {
       today: "#/day", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/backlog", ahead: "#/backlog/gantt", gaps: "#/backlog", backlog: "#/backlog", status: "#/status", team: "#/week/team",
       planday: "#/week/add", planweek: "#/week/add", commit: "#/week/add", checkin: "#/day/checkin", closeout: "#/day/closeout", focus: "#/focus", settings: "#/settings/you",
-      conversations: "#/inbox/needs-you", requests: "#/inbox/needs-you", my_promises: "#/inbox/promises",
+      conversations: "#/inbox/chats", requests: "#/inbox/chats", my_promises: "#/inbox/promises",
     };
     for (const [v, h] of Object.entries(want)) {
       const r = viewNav(v as ViewName);
@@ -260,21 +260,28 @@ describe("command menu views", () => {
   });
 });
 
-describe("Inbox views and items (IB-1)", () => {
-  it("one list with views: no modes; each view and item has an address that reads back", () => {
+describe("Inbox lists and items (IB-4)", () => {
+  it("three lists, no modes; each list and item has an address that reads back", () => {
     expect(MODES.inbox).toEqual([]);
-    for (const v of ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done", "chatter"] as const) {
+    for (const v of ["chats", "promises", "captures"] as const) {
       const l = loc(navOf.inboxView(v));
       expect(parseHash(hashOf(l))).toEqual(l);
+      expect(hashOf(l)).toBe(`#/inbox/${v}`);
     }
-    expect(hashOf(loc(navOf.inboxView("needs_you")))).toBe("#/inbox/needs-you");
-    for (const k of ["v12", "c7", "f42", "s3", "k9", "d5"]) expect(parseHash(`#/inbox/item/${k}`)?.nav).toEqual(navOf.inboxItem(k));
+    // A row opens in its own list.
+    for (const [k, list] of [["v12", "chats"], ["c7", "promises"], ["f42", "promises"], ["k9", "captures"], ["d5", "captures"]] as const) {
+      const l = parseHash(`#/inbox/item/${k}`)!;
+      expect(l.nav).toEqual({ tab: "inbox", view: list, item: k });
+      expect(parseHash(hashOf(l))).toEqual(l);
+    }
+    // A send is answered on Week (To place).
+    expect(parseHash("#/inbox/item/s3")?.nav).toEqual(navOf.week());
     expect(parseHash("#/inbox/item/x1")).toBeNull();
     expect(parseHash("#/inbox/item/v0")).toBeNull();
     // LP-1: a promise's Close the loop draft (the assistant's link); only promises (c, f) take /loop.
     for (const k of ["c7", "f42"]) {
       const l = parseHash(`#/inbox/item/${k}/loop`)!;
-      expect(l.nav).toEqual({ tab: "inbox", view: null, item: k, loop: true });
+      expect(l.nav).toEqual({ tab: "inbox", view: "promises", item: k, loop: true });
       expect(hashOf(l)).toBe(`#/inbox/item/${k}/loop`);
     }
     expect(parseHash("#/inbox/item/v12/loop")).toBeNull();
@@ -288,25 +295,33 @@ describe("Inbox views and items (IB-1)", () => {
     expect(hashOf(loc(navOf.inboxLate("Fabrikam Inc")))).toBe("#/inbox/promises/late/Fabrikam%20Inc");
     expect(parseHash("#/inbox/promises/late/%E0")).toBeNull();
   });
-  it("old links open the right item or view (they still land)", () => {
+  it("old links land on the nearest list (IB-1's views, the views before them, one item)", () => {
     expect(parseHash("#/inbox/conversation/12")?.nav).toEqual(navOf.inboxItem("v12"));
     expect(parseHash("#/inbox/promise/7")?.nav).toEqual(navOf.inboxItem("c7"));
     expect(parseHash("#/inbox/42")?.nav).toEqual(navOf.inboxItem("f42"));
     expect(hashOf(loc(navOf.inbox(42)))).toBe("#/inbox/item/f42");
-    for (const [h, v] of [["#/inbox/conversations", "needs_you"], ["#/conversations", "needs_you"], ["#/inbox/requests", "needs_you"], ["#/inbox/my-promises", "promises"], ["#/promises", "promises"], ["#/my-promises", "promises"], ["#/inbox/captures", "captures"]] as const) {
+    const old = [
+      ["#/inbox/needs-you", "chats"], ["#/inbox/waiting", "chats"], ["#/inbox/teammates", "chats"], ["#/inbox/done", "chats"], ["#/inbox/chatter", "chats"],
+      ["#/inbox/in-progress", "promises"], ["#/inbox/everything", null],
+      ["#/inbox/conversations", "chats"], ["#/conversations", "chats"], ["#/inbox/requests", "chats"], ["#/inbox/my-promises", "promises"], ["#/promises", "promises"], ["#/my-promises", "promises"], ["#/inbox/captures", "captures"],
+    ] as const;
+    for (const [h, v] of old) {
       const n = parseHash(h)!.nav;
       expect(n.tab === "inbox" && n.view, h).toBe(v);
     }
+    for (const v of ["needs_you", "waiting", "teammates", "done", "chatter", "everything"] as const) expect(navOf.inboxView(v).tab).toBe("inbox");
+    expect(navOf.inboxView("in_progress")).toEqual(navOf.myPromises());
   });
-  it("the bare Inbox is the view I last used; notifications and commands land on Promises and Captures", () => {
+  it("the bare Inbox is the list I used last; notifications and commands land on Promises and Captures", () => {
     expect(parseHash("#/inbox")!.nav).toEqual({ tab: "inbox", view: null, item: null });
     expect(routeLoc({ view: "followup", id: 5 }).loc.nav).toEqual(navOf.inboxItem("f5"));
     expect(routeLoc({ view: "inbox" }).loc.nav).toEqual(navOf.myPromises());
     expect(viewNav("capture").nav).toEqual(navOf.captures());
     expect(viewNav("follow_ups").nav).toEqual(navOf.myPromises());
     expect(viewNav("inbox").nav).toEqual(navOf.inbox());
-    expect(viewName(loc(navOf.captures()))).toBe("Inbox › Captures and drafts");
+    expect(viewName(loc(navOf.captures()))).toBe("Inbox › Captures");
     expect(viewName(loc(navOf.myPromises()))).toBe("Inbox › Promises");
+    expect(viewName(loc(navOf.conversations()))).toBe("Inbox › From chats");
   });
 });
 

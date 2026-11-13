@@ -1,19 +1,16 @@
-// IB-1 slice 2: the detail pane (desktop) and the item sheet (phone) for one Inbox item: what it is, where it came
-// from and when, the summary or what I said, every action (ItemActions, the same set the keys run), the form an action
-// opened, then the item's own body: a conversation's messages like Teams with its linked item and commitments; a
-// promise's words, its item and where it came from; a send's answer row; a capture to sort; a draft to create.
-// Nothing here posts in Teams or sends mail; Close the loop records how I told them (ui/CloseLoop.tsx).
+// IB-1 slice 2, IB-4: one open row of Promises or Captures, in place (and a send, reached from Day's strip): what I
+// said, every action (ItemActions, the same set the keys run), the form an action opened, then the item's own body: a
+// promise's item and where it came from; a send's answer row; a capture to sort; a draft to create. Nothing here posts
+// in Teams or sends mail without Close the loop's own preview (ui/SendLoop.tsx).
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../../actions/types.ts";
 import type { SendView, CommitData } from "../../plan/team-types.ts";
 import type { PersonRef } from "../../plan/person-ref.ts";
-import type { ConversationCard } from "../../plan/conversation-views.ts";
 import { call } from "../api.ts";
 import { SortCapture, captureClients } from "../Capture.tsx";
 import { SendLoop } from "../SendLoop.tsx";
-import { ConvLink, DraftItem, LinkedItem, Messages, NotRequest, SuggestionBox } from "../Conversations.tsx";
+import { DraftItem, LinkedItem, SuggestionBox } from "../Conversations.tsx";
 import { ItemTitleLink } from "../WorkLink.tsx";
-import { MergePane } from "./MergePane.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { WRITING_POLL_MS } from "../createdraft-ctx.ts";
 import { draftRowState, draftRowText } from "../../plan/capture-prepare.ts";
@@ -25,10 +22,9 @@ import { stampText } from "../stamp.ts";
 import { PromiseLink } from "../MyPromises.tsx";
 import { PersonPicker, type PersonValue } from "../PersonPicker.tsx";
 import { IncomingRow } from "../Team.tsx";
-import type { ChatterRow, Entry } from "./data.ts";
+import type { Entry } from "./data.ts";
 import { ItemActions, type Act, type FormId } from "./ItemActions.tsx";
-import { KIND_WORD, lateText, dueWords } from "./model.ts";
-import type { SnoozeChoice } from "../../plan/inbox-items.ts";
+import { lateText, dueWords } from "./model.ts";
 
 /** "Mon 9:00 AM", "today 3:30 PM": when a snooze ends, in my zone. */
 export function wakeWords(at: string, tz: string, today: string): string {
@@ -55,82 +51,47 @@ export type DetailProps = {
   run: (action: string, input: Record<string, unknown>, notice: string, undo?: { action: string; input: Record<string, unknown> }) => Promise<void>;
   /** A form's own call: returns the error to show, or null when it worked (then the form closes and the Inbox reloads). */
   submit: (action: string, input: Record<string, unknown>, notice: string) => Promise<string | null>;
-  /** A conversation's merge candidates (open ones of the same chat) and the merge itself. */
-  mergeOthers?: ConversationCard[];
-  merge?: (id: number, into: ConversationCard) => Promise<void>;
   /** Reads the Inbox again quietly (a draft's AI version still being written). */
   reload?: () => void;
-  /** Slice 3: the Snooze choices to offer now (the list's; Later today only with an hour or more left). */
-  snoozeChoices?: readonly SnoozeChoice[] | undefined;
   phone?: boolean;
   /** LP-1: a send closed the loop (or saved a draft): close the form, say so, read the Inbox again. */
   finished?: (notice: string) => void;
 };
 
-/** The status pill at the top right: late, due, needs you, in progress. */
+/** The status pill: late or due. */
 function Pill({ entry, today }: { entry: Entry; today: string }) {
   const r = entry.row;
   if (r.done) return <span className="ib-pill done">Done</span>;
-  if (r.late && r.due) return <span className="ib-pill late">{`${dueWords(r.due, today).replace(/^Due today$/, "Due today")} · ${lateText(r.due, today)}`}</span>;
+  if (r.late && r.due) return <span className="ib-pill late">{`${dueWords(r.due, today)} · ${lateText(r.due, today)}`}</span>;
   if (r.due && r.kind === "promise") return <span className={`ib-pill${r.due <= today ? " soon" : ""}`}>{dueWords(r.due, today)}</span>;
-  if (r.views.includes("needs_you")) return <span className="ib-pill ask">Needs you</span>;
-  if (r.views.includes("in_progress")) return <span className="ib-pill">In progress</span>;
   return null;
 }
 
-export function Detail(p: DetailProps): ReactNode {
+/** IB-4: an open row's content, in place under its row (`inline`), or on its own (a send from Day's strip). */
+export function Detail(p: DetailProps & { inline?: boolean }): ReactNode {
   const { entry: e } = p;
   const r = e.row;
   const color = clientColor(r.clientKey ?? undefined, p.data.clients);
-  const meta = [r.clientKey ? p.clientName(r.clientKey) : null, r.kind === "promise" ? (r.who ? `For ${r.who}` : null) : r.who, r.where].filter(Boolean);
   return (
-    <article className={`ib-detail${p.phone ? " phone" : ""}`} aria-label={r.title} style={{ "--c": color } as CSSProperties}>
-      <header className="ib-detail-head">
-        <p className="ib-detail-meta">
-          <span className={`ib-kind kind-${r.kind}`}>{KIND_WORD[r.kind]}</span>
-          {meta.map((m, i) => (
-            <span key={i} className={i === 0 && r.clientKey ? "ib-client" : undefined}>
-              {i === 0 && r.clientKey && <span className="dot" aria-hidden="true" />}
-              {m}
-            </span>
-          ))}
-          <Stamp at={r.at} tz={p.tz} today={p.today} />
-        </p>
-        <Pill entry={e} today={p.today} />
-      </header>
-      <h2 className="ib-detail-title" tabIndex={-1}>
-        {r.title || "(no title)"}
-      </h2>
-      {r.mentions?.length ? (
-        <p className="ib-mentions" aria-label="Other clients this mentions">
-          {r.mentions.map((n) => (
-            <span key={n} className="ib-tag tone-plain mention-tag" title="Its messages name another client. Only people in this chat see it.">
-              mentions {n}
-            </span>
-          ))}
-        </p>
-      ) : null}
-      {r.reason && <p className="ib-reason">{r.reason}</p>}
-      {r.snoozedUntil && <p className="ib-snoozed muted">Snoozed until {wakeWords(r.snoozedUntil, p.tz, p.today)}. It's out of your counts until then.</p>}
+    <article className={`ib-detail ib4-open${p.phone ? " phone" : ""}`} aria-label={r.title} style={{ "--c": color } as CSSProperties}>
+      {!p.inline && (
+        <header className="ib-detail-head">
+          <h2 className="ib-detail-title" tabIndex={-1}>
+            {r.title || "(no title)"}
+          </h2>
+          <Pill entry={e} today={p.today} />
+        </header>
+      )}
       <Lead {...p} />
-      {!p.phone && <ItemActions acts={p.acts} label={r.title} />}
+      <ItemActions acts={p.acts} label={r.title} phone={!!p.phone} />
       <FormArea {...p} />
       <Body {...p} />
     </article>
   );
 }
 
-/** Under the title: a conversation's summary, my own words for a chat promise, a capture's text. */
+/** Under the title: my own words for a chat promise. */
 function Lead({ entry: e, tz, today }: DetailProps): ReactNode {
-  if (e.kind === "conversation" && e.card) {
-    const c = e.card;
-    return (
-      <>
-        {c.summary.trim() ? <p className="ib-summary">{c.summary}</p> : <p className="ib-summary muted">Grouped without AI, so there's no summary. The messages are below.</p>}
-        {c.images ? <p className="conv-images muted">{c.images === 1 ? "1\u00a0image" : `${c.images}\u00a0images`}{c.imageNote ? `: ${c.imageNote}` : ""}</p> : null}
-      </>
-    );
-  }
   if (e.kind === "chatPromise" && e.promise?.messages.length)
     return (
       <blockquote className="ib-said">
@@ -163,17 +124,8 @@ function FormArea(p: DetailProps): ReactNode {
     return <SendLoop key={key} promiseKey={key} who={who} demo={!!p.data.demo} compact={!!p.phone} onClosed={(m) => (p.finished ? p.finished(m) : (setForm(null), p.reload?.()))} onCancel={cancel} closeWithout={submit} initialHow={initialHow} />;
   }
   if (form === "due") return <DueForm {...p} />;
-  if (form === "snooze") return <SnoozeForm {...p} />;
   if (form === "who") return <WhoForm {...p} />;
   if (form === "link") {
-    if (e.kind === "conversation" && e.card) {
-      const c = e.card;
-      return (
-        <div className="ib-form">
-          <ConvLink c={c} onCancel={cancel} onPick={(itemId, comment) => void p.submit("conversations.link", { id: c.id, itemId }, `Linked to #${itemId} for everyone on the chat`).then((err) => void (!err && comment && writes && writes.begin(c.clientKey, [{ kind: "conversation_comment", conversationId: c.id, itemId }])))} />
-        </div>
-      );
-    }
     if (e.kind === "chatPromise" && e.promise) {
       const pr = e.promise;
       return (
@@ -184,23 +136,6 @@ function FormArea(p: DetailProps): ReactNode {
     }
   }
   if (form === "draft") return <DraftForm {...p} />;
-  if (form === "not_request" && e.kind === "conversation" && e.card) {
-    const c = e.card;
-    return (
-      <div className="ib-form">
-        <NotRequest onCancel={cancel} onSave={(reason) => void p.submit("conversations.not_request", { id: c.id, ...(reason ? { reason } : {}) }, "Closed for everyone on the chat")} />
-      </div>
-    );
-  }
-  if ((form === "give" || form === "helper") && e.kind === "conversation" && e.card) {
-    const c = e.card;
-    const give = form === "give";
-    return <PersonForm verb={give ? "Give to" : "Add helper"} team={c.shared.team.filter((t) => !give || !t.me)} onCancel={cancel} onPick={(t) => void p.run(give ? "conversations.give" : "conversations.add_helper", { id: c.id, toId: t.id }, give ? `Given to ${t.name}, who is notified` : `${t.name} is helping`, { action: "conversations.undo_ownership", input: { id: c.id } })} />;
-  }
-  if (form === "merge" && e.kind === "conversation" && e.card && p.merge) {
-    const c = e.card;
-    return <MergePane c={c} others={p.mergeOthers ?? []} tz={p.tz} onMerge={p.merge} onCancel={cancel} />;
-  }
   if (form === "sort" && e.kind === "capture" && e.capture)
     return (
       <div className="ib-form">
@@ -214,68 +149,6 @@ function FormArea(p: DetailProps): ReactNode {
       </div>
     );
   return null;
-}
-
-/** Due: today, tomorrow, next Monday, a date, or none. Snoozing is separate and never changes this. */
-/** Part 0: who has it, the same for everyone who sees it: the offer, the owner and helpers, and a short timeline. */
-function WhoHasIt({ c, tz, today, run }: { c: ConversationCard; tz: string; today: string; run: DetailProps["run"] }): ReactNode {
-  const s = c.shared;
-  const undo = { action: "conversations.undo_ownership", input: { id: c.id } };
-  const owner = s.state === "closed" ? (s.owner ? `Closed. ${s.owner.me ? "You" : s.owner.name} had it` : "Closed") : s.owner ? (s.owner.me ? "You're on it" : `${s.owner.name} has this`) : "Nobody yet";
-  return (
-    <section className="ib-card" aria-label="Who has it">
-      <h3 className="ib-section">Who has it</h3>
-      {s.offer && (
-        <p className="ib-offer">
-          {s.offer === "committed" ? "You said you'd do it." : "You replied."} Take this?{" "}
-          <button type="button" className="ib-act primary" onClick={() => void run("conversations.claim", { id: c.id }, "It's yours", undo)}>
-            I'll take it
-          </button>
-        </p>
-      )}
-      <p>{owner}</p>
-      {s.helpers.length > 0 && <p className="muted">Helping: {s.helpers.map((h) => (h.me ? "You" : h.name)).join(", ")}</p>}
-      {s.history.length > 0 && (
-        <ol className="ib-history" aria-label="History">
-          {s.history.slice(-6).map((h, i) => (
-            <li key={i}>
-              {h.text} · <Stamp at={h.at} tz={tz} today={today} />
-            </li>
-          ))}
-        </ol>
-      )}
-      {s.canUndo && (
-        <button type="button" className="link-btn" onClick={() => void run("conversations.undo_ownership", { id: c.id }, "Undone")}>
-          Undo my last change
-        </button>
-      )}
-    </section>
-  );
-}
-
-/** Part 0: Give to… and Add helper: the Cooptimizers on this chat who use FocusTime. */
-function PersonForm({ verb, team, onPick, onCancel }: { verb: string; team: ConversationCard["shared"]["team"]; onPick: (t: ConversationCard["shared"]["team"][number]) => void; onCancel: () => void }): ReactNode {
-  return (
-    <div className="ib-form">
-      <h3 className="ib-section">{verb}</h3>
-      {team.length ? (
-        <ul className="ib-people">
-          {team.map((t) => (
-            <li key={t.id}>
-              <button type="button" className="ib-act" onClick={() => onPick(t)}>
-                {t.me ? "Me" : t.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">Nobody else on this chat uses FocusTime yet.</p>
-      )}
-      <button type="button" className="mini quiet" onClick={onCancel}>
-        Cancel
-      </button>
-    </div>
-  );
 }
 
 function DueForm(p: DetailProps): ReactNode {
@@ -316,32 +189,6 @@ function DueForm(p: DetailProps): ReactNode {
   );
 }
 
-const SNOOZE_WORD: Record<SnoozeChoice, string> = { later: "Later today", tomorrow: "Tomorrow", next_week: "Next week" };
-
-/** Snooze: out of every view and count until then. The due day never changes. */
-function SnoozeForm(p: DetailProps): ReactNode {
-  const { entry: e } = p;
-  const [day, setDay] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const min = Temporal.PlainDate.from(p.today).add({ days: 1 }).toString();
-  const save = async (until: string) => setErr(await p.submit("inbox.snooze", { key: e.row.key, until }, "Snoozed. It's back when the time comes"));
-  return (
-    <form className="ib-form ib-snooze" aria-label="Snooze" onSubmit={(ev) => (ev.preventDefault(), day && void save(day))} onKeyDown={(ev) => ev.key === "Escape" && (ev.stopPropagation(), p.setForm(null))}>
-      <span className="ib-form-label">Snooze until</span>
-      {(p.snoozeChoices ?? ["tomorrow", "next_week"]).map((c, i) => (
-        <button key={c} type="button" className="mini" autoFocus={i === 0} onClick={() => void save(c)}>
-          {SNOOZE_WORD[c]}
-        </button>
-      ))}
-      <input type="date" value={day} min={min} onChange={(ev) => setDay(ev.target.value)} aria-label="Snooze until a day" />
-      <button type="submit" className="mini primary" disabled={!day}>Snooze</button>
-      <button type="button" className="mini quiet" onClick={() => p.setForm(null)}>Cancel</button>
-      <span className="muted ib-form-note">{e.row.due ? "The due day stays as it is." : "It comes back at the start of your day."}</span>
-      {err && <span className="set-problem" role="alert">{err}</span>}
-    </form>
-  );
-}
-
 /** Who it's to: a person from the picker, a name, or nobody (never me). */
 function WhoForm(p: DetailProps): ReactNode {
   const { entry: e } = p;
@@ -371,11 +218,11 @@ function WhoForm(p: DetailProps): ReactNode {
   );
 }
 
-/** Create DevOps item: the conversation's draft (CV-1), or a chat promise's (one made from its messages first, CV-2). */
+/** Create DevOps item for a chat promise: its conversation's draft (one made from its messages first, CV-2). */
 function DraftForm(p: DetailProps): ReactNode {
   const { entry: e } = p;
   const writes = useDevOpsWrite();
-  const [conv, setConv] = useState<number | null>(e.kind === "conversation" ? (e.card?.id ?? null) : e.kind === "chatPromise" ? (e.promise?.conversationId ?? null) : null);
+  const [conv, setConv] = useState<number | null>(e.kind === "chatPromise" ? (e.promise?.conversationId ?? null) : null);
   const [err, setErr] = useState<string | null>(null);
   const promiseId = e.kind === "chatPromise" ? (e.promise?.id ?? null) : null;
   useEffect(() => {
@@ -386,9 +233,9 @@ function DraftForm(p: DetailProps): ReactNode {
   }, [conv, promiseId]);
   if (err) return <p className="set-problem" role="alert">{err}</p>;
   if (conv === null) return <p className="muted">Getting the form ready…</p>;
-  const client = e.kind === "conversation" ? e.card : e.kind === "chatPromise" ? e.promise : null;
+  const client = e.kind === "chatPromise" ? e.promise : null;
   if (!client) return null;
-  const commitmentId = e.kind === "chatPromise" ? promiseId : (e.kind === "conversation" && e.card?.commitments.find((x) => x.mine && x.state === "open" && x.impliesItem && !x.item)?.id) || null;
+  const commitmentId = promiseId;
   return (
     <div className="ib-form">
       <DraftItem c={{ id: conv, clientName: client.clientName, clientKey: client.clientKey }} commitmentId={commitmentId} onCancel={() => p.setForm(null)} onCreate={(change) => (p.setForm(null), void writes?.begin(client.clientKey, [change]))} />
@@ -400,61 +247,6 @@ function DraftForm(p: DetailProps): ReactNode {
 function Body(p: DetailProps): ReactNode {
   const { entry: e, tz } = p;
   const writes = useDevOpsWrite();
-  if (e.kind === "conversation") {
-    const c = e.card;
-    if (!c) return <p className="muted ib-missing">This conversation couldn't be read just now. Try again in a moment.</p>;
-    return (
-      <div className="ib-body two">
-        <section className="ib-messages" aria-label="Messages">
-          <h3 className="ib-section">Messages</h3>
-          <Messages c={c} tz={tz} />
-        </section>
-        <aside className="ib-side">
-          <WhoHasIt c={c} tz={tz} today={p.today} run={p.run} />
-          <section className="ib-card" aria-label="Linked DevOps item">
-            <h3 className="ib-section">Linked DevOps item</h3>
-            {c.item ? <LinkedItem item={c.item} tz={tz} lead="Tracked as" clientKey={c.clientKey} /> : <p>None yet.</p>}
-            {!c.item && c.likely && (
-              <p className="muted">
-                Looks like{" "}
-                <ItemTitleLink clientKey={c.clientKey} id={c.likely.id} url={c.likely.url}>
-                  #{c.likely.id} {c.likely.title ?? ""}
-                </ItemTitleLink>
-              </p>
-            )}
-          </section>
-          {c.commitments.length > 0 && (
-            <section className="ib-card" aria-label="Commitments">
-              <h3 className="ib-section">Commitments</h3>
-              <ul className="ib-commits">
-                {c.commitments.map((k) => (
-                  <li key={k.id}>
-                    <span className={`ib-tag${k.mine ? " ask" : ""}`}>{k.mine ? "You" : k.whoName}</span> {k.what}
-                    {k.dueDate ? <span className="muted"> · {dueWords(k.dueDate, p.today)}</span> : null}
-                    {k.state !== "open" && <span className="muted"> · {k.state === "done" ? "done" : k.state.replace("_", " ")}</span>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          {c.suggestions.filter((s) => s.mine).map((s) => (
-            <SuggestionBox key={s.id} s={s} onPost={(inc) => void writes?.begin(c.clientKey, [s.kind === "comment" ? { kind: "conversation_comment", suggestionId: s.id, ...(inc ? { includeInternal: true } : {}) } : { kind: "description_update", suggestionId: s.id }])} onSkip={() => void p.run("suggestions.skip", { id: s.id }, "Skipped")} />
-          ))}
-          <section className="ib-card" aria-label="History">
-            <h3 className="ib-section">Status</h3>
-            <p>{c.statusLine}</p>
-            {c.updated && c.updated !== "Updated" && <p className="muted">Updated: {c.updated}</p>}
-            {c.closed && (
-              <p className="muted">
-                {c.closed.kind === "resolved" ? "Closed out" : "Not a request"} by {c.closed.by} · <Stamp at={c.closed.at} tz={tz} today={p.today} />
-                {c.closed.reason ? `: ${c.closed.reason}` : ""}
-              </p>
-            )}
-          </section>
-        </aside>
-      </div>
-    );
-  }
   if (e.kind === "chatPromise") {
     const pr = e.promise;
     if (!pr) return <p className="muted ib-missing">This promise couldn't be read just now. Try again in a moment.</p>;
@@ -524,13 +316,12 @@ function Body(p: DetailProps): ReactNode {
     );
   }
   if (e.kind === "send") return <SendBody {...p} />;
-  if (e.kind === "waiting") return <WaitingBody {...p} />;
   if (e.kind === "capture") {
     if (!e.capture) return <p className="muted ib-missing">This capture couldn't be read just now.</p>;
     return (
       <div className="ib-body">
         <p className="ib-summary">{e.capture.text}</p>
-        <p className="muted">Captured {stampText(e.capture.createdAt, tz, p.today)}. Sort it into a promise, a draft story or a draft feature.</p>
+        <p className="muted">Captured {stampText(e.capture.createdAt, tz, p.today)}. Sort it into a story or feature, a to-do for today, or a promise.</p>
       </div>
     );
   }
@@ -590,86 +381,6 @@ function SendBody(p: DetailProps): ReactNode {
       <ul className="ib-send">
         <IncomingRow s={s} clientName={p.clientName(s.clientKey)} past={false} act={act} />
       </ul>
-    </div>
-  );
-}
-
-/**
- * Chatter: one chat's chatter. Never Create DevOps item, as the primary or at all: This is work moves a message into its
- * own conversation first. An admin can mark the chat a Social chat (skips AI for everyone); others see who can and where.
- */
-export function ChatterDetail({ row, tz, color, onWork, chat, admin, onSocial }: {
-  row: ChatterRow; tz: string; color: string; onWork: (m: ChatterRow["messages"][number]) => void;
-  chat?: { name: string; link: string; social: boolean } | undefined; admin: boolean; onSocial: (on: boolean) => void;
-}): ReactNode {
-  const name = chat?.name ?? "this chat";
-  return (
-    <article className="ib-detail" aria-label={row.title} style={{ "--c": color } as CSSProperties}>
-      <header className="ib-detail-head">
-        <p className="ib-detail-meta">
-          <span className="ib-kind">Chatter</span>
-          <span className="ib-client">
-            <span className="dot" aria-hidden="true" />
-            {row.clientName}
-          </span>
-          <span>
-            <Stamp at={row.messages[0]!.at} tz={tz} /> to <Stamp at={row.lastAt} tz={tz} />
-          </span>
-        </p>
-      </header>
-      <h2 className="ib-detail-title" tabIndex={-1}>{row.title}</h2>
-      <p className="ib-summary">
-        {row.messages.length} {row.messages.length === 1 ? "message" : "messages"} filtered as chatter. No question for you, no ask, no promise. They never count toward Needs you.
-      </p>
-      <div className="ib-acts" data-tour="ib-acts" role="group" aria-label={`Actions for ${row.title}`}>
-        {chat?.link && (
-          <a className="ib-act" href={chat.link} target="_blank" rel="noopener noreferrer">
-            Open in Teams
-          </a>
-        )}
-        {admin && (
-          <button type="button" className="ib-act" onClick={() => onSocial(!chat?.social)}>
-            {chat?.social ? `${name} isn't a Social chat` : `Mark ${name} as a Social chat`}
-          </button>
-        )}
-      </div>
-      <p className="muted ib-form-note">
-        {chat?.social
-          ? `${name} is a Social chat: its messages skip AI and are filed here.${admin ? "" : " A FocusTime admin can change that in Admin › Clients."}`
-          : admin
-            ? "A Social chat's messages skip AI entirely and are filed as chatter, for everyone on the chat."
-            : `If ${name} is only social, a FocusTime admin can mark it a Social chat in Admin › Clients. Its messages then skip AI.`}
-      </p>
-      <section className="ib-card" aria-label="Messages">
-        <h3 className="ib-section">Latest messages</h3>
-        <ul className="ib-chatter">
-          {row.messages.slice(-8).map((m) => (
-            <li key={m.messageId}>
-              <strong>{m.author}</strong> <Stamp className="muted" at={m.at} tz={tz} />
-              <p>{m.text}</p>
-              <button type="button" className="mini" onClick={() => onWork(m)}>
-                This is work
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </article>
-  );
-}
-
-/** Slice 3: what I wait on, in plain words. Nothing to answer here; it leaves when they do their part. */
-function WaitingBody({ entry: e, today }: DetailProps): ReactNode {
-  const r = e.row;
-  const who = r.who ?? "Someone";
-  const text =
-    r.kind === "commitment" ? `${who} said they'd do it${r.due ? `, due ${dueWords(r.due, today).replace(/^Due /, "").toLowerCase()}` : ""}${r.late && r.due ? ` (${lateText(r.due, today)})` : ""}.${r.where ? ` In ${r.where}.` : ""}`
-    : r.kind === "sent" ? `You sent it to ${who} for ${r.where ?? "their week"}${r.must ? " as a Must" : ""}. They haven't answered yet.`
-    : `You asked ${who} to look at your week. No reply yet.`;
-  return (
-    <div className="ib-body">
-      <p className="ib-summary">{text}</p>
-      <p className="muted">It leaves Waiting on once they answer or it's done. Snooze it if you don't want to see it for a while.</p>
     </div>
   );
 }

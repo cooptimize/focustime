@@ -86,9 +86,9 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.getByRole("navigation", { name: "Backlog views" }).waitFor();
     await shotAll(page, "nv1-ahead");
 
-    // The Inbox (IB-1): one list with views, no mode switch.
+    // The Inbox (IB-4): three lists in one switch, no mode switch.
     await page.keyboard.press("5");
-    await page.getByRole("navigation", { name: "Inbox views and clients" }).waitFor();
+    await page.getByRole("main", { name: "Inbox" }).getByRole("tablist", { name: "Lists" }).waitFor();
     expect(await page.getByRole("navigation", { name: "Inbox modes" }).count()).toBe(0);
     await shotAll(page, "nv1-inbox");
 
@@ -101,9 +101,9 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       ["#/roadmap", "#/backlog"],
       ["#/roadmap/ahead", "#/backlog/gantt"],
       ["#/ahead/plan", "#/backlog/gantt"],
-      ["#/conversations", "#/inbox/needs-you"],
+      ["#/conversations", "#/inbox/chats"],
       ["#/my-promises", "#/inbox/promises"],
-      ["#/inbox/conversations", "#/inbox/needs-you"],
+      ["#/inbox/conversations", "#/inbox/chats"],
       ["#/inbox/my-promises", "#/inbox/promises"],
       ["#/inbox/conversation/7", "#/inbox/item/v7"],
       ["#/inbox/promise/7", "#/inbox/item/c7"],

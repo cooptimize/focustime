@@ -41,28 +41,27 @@ describe("Promises over both stores", () => {
     expect((await plan.openFollowUps()).map((f) => f.id).sort()).toEqual([a.id, b.id].sort());
   });
 
-  it("a promise found in a chat is c<id> and new until seen; inbox.seen takes only my own keys", async () => {
+  it("a promise found in a chat is c<id> in Promises; inbox.seen takes only my own keys", async () => {
     const { w, run } = await setup();
     const m = await w.say(CHAT, SAM, "2026-11-04T21:00:00Z", "I'll send the totals next week");
     await w.run(CHAT, [m]);
     const k = (await w.convs.commitmentsInChat(CHAT.chatId))[0]!;
-    let list = await run<InboxListData>("inbox.list");
-    expect(list.items.find((i) => i.key === `c${k.id}`)?.views).toContain("needs_you");
+    // IB-4: new isn't a reason to count; only late or due today is.
+    const list = await run<InboxListData>("inbox.list");
+    expect(list.items.find((i) => i.key === `c${k.id}`)?.views).toEqual(["promises"]);
     expect(await run("inbox.seen", { keys: [`c${k.id}`, "c999999", "f999999"] })).toEqual({ seen: 1 });
-    list = await run<InboxListData>("inbox.list");
-    expect(list.items.find((i) => i.key === `c${k.id}`)?.views).not.toContain("needs_you");
   });
 });
 
 describe("one count", () => {
-  it("the badge, the Needs you view's count and the list's own number are the same", async () => {
+  it("IB-4: the badge counts late or due-today promises (and suggestions), never later ones or sends; every number agrees", async () => {
     const { w, plan, run } = await setup({ sends: [{ key: "s1", kind: "send", clientKey: "contoso", at: "2026-11-04T20:00:00Z", done: false, sendState: "waiting" }] });
     await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
     await plan.addFollowUp({ who: null, what: "Later one", due: "2026-12-01", clientKey: "contoso" });
     await w.run(CHAT, [await w.say(CHAT, SAM, "2026-11-04T20:30:00Z", "I'll check the October filter tomorrow")]);
     const list = await run<InboxListData>("inbox.list");
     const badge = await run<{ needsYou: number }>("inbox.count");
-    expect(badge.needsYou).toBeGreaterThanOrEqual(3);
+    expect(badge.needsYou).toBe(1);
     expect(badge.needsYou).toBe(list.counts.needs_you);
     expect(list.needsYou).toBe(list.items.filter((i) => i.views.includes("needs_you")).length);
     expect(list.needsYou).toBe(badge.needsYou);
@@ -140,7 +139,7 @@ describe("slice 2: rows, Hide for me, and promises never read-only", () => {
 });
 
 describe("slice 3: Waiting on, reasons and Snooze", () => {
-  it("someone else's open commitment to me is Waiting on, never Needs you; it goes when they're done", async () => {
+  it("IB-4: someone else's open commitment to me never shows: no Waiting on", async () => {
     const { w, run } = await setup();
     await w.run(CHAT, [await w.say(CHAT, LENA, "2026-11-04T21:00:00Z", "I'll send the October totals tomorrow")]);
     const k = (await w.convs.commitmentsInChat(CHAT.chatId)).find((x) => x.whoName === LENA.displayName)!;
@@ -148,9 +147,7 @@ describe("slice 3: Waiting on, reasons and Snooze", () => {
     expect(row).toBeUndefined();
     await w.convs.updateCommitment(k.id, { toId: SAM.userId!, toName: SAM.displayName });
     row = (await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`);
-    expect(row).toMatchObject({ kind: "commitment", who: LENA.displayName, views: ["waiting"], reason: null });
-    await w.convs.updateCommitment(k.id, { state: "done" });
-    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `c${k.id}`)).toBeUndefined();
+    expect(row).toBeUndefined();
   });
 
   it("each Needs you row says why", async () => {

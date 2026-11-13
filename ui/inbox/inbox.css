@@ -1,0 +1,57 @@
+/* IB-4: the slim Inbox. One column: the switch, the client chips, rows grouped by client that open in place. */
+main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; align-content: start; width: 100%; box-sizing: border-box; padding: 16px max(24px, calc((100% - 960px) / 2)) 40px; min-width: 0; }
+.ib4-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.ib4-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.ib4-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+.ib4-tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 0; border-radius: 6px; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-3); cursor: pointer; }
+.ib4-tab:hover { color: var(--text); }
+.ib4-tab.on { background: var(--raised); color: var(--text); font-weight: 500; }
+.ib4-count { min-width: 1.6em; padding: 0 6px; border-radius: 999px; background: var(--surface); color: var(--text-muted); font-size: var(--fs-2); text-align: center; }
+.ib4-tab.on .ib4-count { color: var(--text); }
+
+.ib4-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ib4-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.ib4-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--text-faint)); }
+.ib4-chip.on { border-color: var(--border-strong); background: var(--raised); color: var(--text); }
+
+.ib4-list { display: grid; gap: 16px; min-width: 0; }
+.ib4-section { margin: 8px 0 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.ib4-group { display: grid; gap: 6px; min-width: 0; }
+.ib4-group-head { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.ib4-rows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.ib4-row { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); min-width: 0; }
+.ib4-row.open { border-color: var(--border-strong); background: var(--raised); }
+.ib4-row-head { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.ib4-swatch { flex: none; width: 4px; align-self: stretch; min-height: 18px; border-radius: 2px; background: var(--c, var(--text-faint)); }
+.ib4-row-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ib4-row-title { font-size: var(--fs-3); font-weight: 500; overflow-wrap: anywhere; }
+.ib4-row-sub { display: grid; gap: 2px; font-size: var(--fs-2); min-width: 0; }
+.ib4-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ib4-chev { flex: none; color: var(--text-faint); }
+.ib4-row > .ib4-open, .ib4-row > .ib-detail { padding: 0 12px 12px 26px; }
+.ib4-open { display: grid; gap: 10px; min-width: 0; }
+.ib4-why { margin: 0; font-size: var(--fs-2); }
+.ib4-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ib4-teams { margin-left: 8px; font-weight: 400; font-size: var(--fs-2); text-transform: none; letter-spacing: 0; }
+
+.ib4-empty { margin: 24px 0; color: var(--text-muted); text-align: center; }
+.ib4-notice, .ib4-not-waiting, .ib4-first-cleared, .ib4-late-note { margin: 0; font-size: var(--fs-2); }
+.ib4-not-waiting, .ib4-first-cleared { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+
+.ib4-foot { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
+.ib4-foot p { margin: 0; }
+.ib4-cleared-toggle { justify-self: start; }
+.ib4-cleared { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ib4-cleared li { display: flex; align-items: flex-start; gap: 10px; padding: 6px 12px; border: 1px dashed var(--border); border-radius: 8px; }
+.ib4-cleared .ib4-row-title { color: var(--text-muted); font-weight: 400; }
+
+.ib4-keys { margin: 0; font-size: var(--fs-2); }
+.ib4-keyhelp ul { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-2); }
+
+@media (max-width: 640px) {
+  main.ib4 { padding: 12px 16px 96px; }
+  .ib4-head { gap: 8px; }
+  .ib4-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; box-sizing: border-box; }
+  .ib4-tab { justify-content: center; flex-wrap: wrap; gap: 2px 6px; min-width: 0; min-height: 44px; padding: 4px; text-align: center; overflow-wrap: anywhere; }
+  .ib4-row > .ib4-open, .ib4-row > .ib-detail { padding: 0 12px 12px; }
+}

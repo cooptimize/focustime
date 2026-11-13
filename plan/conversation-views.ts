@@ -196,7 +196,51 @@ export type PromiseCard = {
   createdAt: string;
 };
 
-export type MyPromisesData = { promises: PromiseCard[]; open: number; today: string; writeClients: string[] };
+export type MyPromisesData = {
+  promises: PromiseCard[];
+  open: number;
+  today: string;
+  writeClients: string[];
+  /** IB-4: the ones that cleared on their own in the last 14 days (shown folded, with Put back). */
+  cleared?: ClearedPromise[];
+  /** IB-4: on the first look after the release, how many older chat promises cleared at once (null: nothing to say). */
+  firstCleared?: number | null;
+};
 
 /** A promise with a due, as Today and Week place it (my day only). */
 export type DayPromise = { id: number; what: string; toName: string | null; clientKey: string; clientName: string; dueAt: string | null; dueDate: string; overdue: boolean };
+
+// ---- IB-4: the slim Inbox ----
+
+/**
+ * One suggestion in From chats: a conversation the sorting step judged to need a DevOps item no one has made, quiet
+ * for 4 working hours. Its proposed title, why (shown on hover), the level in the client's own words, the
+ * conversation's title and 2-line summary, who was in it and when. Members of the chat who follow the client only.
+ */
+export type SuggestionRow = {
+  id: number;
+  clientKey: string;
+  clientName: string;
+  chatName: string;
+  internalChat: boolean;
+  title: string;
+  why: string;
+  level: "child" | "feature" | "epic";
+  levelWord: string;
+  conversationTitle: string;
+  summary: string;
+  people: string[];
+  lastWorkAt: string;
+  link: string;
+  mentions?: string[];
+  canCreate: boolean;
+  /** Images pasted into its messages, for the row's note. */
+  images?: number;
+};
+
+/** The foot of From chats: when the chats were last read, and per client why it can't suggest now (AI off and so on). */
+export type SuggestionsFoot = { lastPoll: string | null; pollMinutes: number; cannot: { clientKey: string; clientName: string; text: string; fix: string | null }[] };
+export type SuggestionsData = { suggestions: SuggestionRow[]; foot: SuggestionsFoot; writeClients: string[] };
+
+/** A promise that cleared on its own in the last 14 days, under "Cleared on their own", with Put back. */
+export type ClearedPromise = { id: number; what: string; toName: string | null; clientKey: string; clientName: string; how: "item" | "expired"; reason: string; clearedAt: string };

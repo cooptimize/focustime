@@ -103,7 +103,7 @@ export function AlsoComment({ on, set, disabled }: { on: boolean; set: (v: boole
   );
 }
 
-export function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: number, comment: boolean) => void; onCancel: () => void }) {
+export function ConvLink({ c, onPick, onCancel }: { c: Pick<ConversationCard, "id" | "likely" | "canCreate" | "clientName" | "clientKey">; onPick: (id: number, comment: boolean) => void; onCancel: () => void }) {
   const [q, setQ] = useState(c.likely ? `#${c.likely.id}` : "");
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [available, setAvailable] = useState(true);

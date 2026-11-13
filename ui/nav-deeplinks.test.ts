@@ -10,7 +10,7 @@ describe("Inbox deep links", () => {
     expect(hashOf({ nav: navOf.conversation(42), overlay: null })).toBe("#/inbox/item/v42");
     expect(hashOf({ nav: navOf.promise(7), overlay: null })).toBe("#/inbox/item/c7");
     // The lists themselves are unchanged.
-    expect(hashOf({ nav: navOf.conversations(), overlay: null })).toBe("#/inbox/needs-you");
+    expect(hashOf({ nav: navOf.conversations(), overlay: null })).toBe("#/inbox/chats");
     expect(hashOf({ nav: navOf.myPromises(), overlay: null })).toBe("#/inbox/promises");
   });
   it("refuses an id that isn't one", () => {

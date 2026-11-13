@@ -1,8 +1,8 @@
 // CV-4 chat images without storage, the main path, in a real (not demo) session on a fake Graph, a fake AI behind the
 // real ai/ service and a fake DevOps. An admin turns on "Send attachments to AI" for the client in Admin › AI; the
 // client pastes three images (one Teams can no longer give); Refresh reads the chat and sends the two readable images
-// with the batch, labelled with their message; their descriptions show on the card ("3 images: ...") and under the
-// thumbnails, read from Teams on view; the third shows "Image in Teams" with Open in Teams. Create DevOps item: the preview
+// with the batch, labelled with their message; the sorting answer judges it needs an item, so once quiet it is a suggestion in From chats
+// (IB-4); the descriptions show under the thumbnails, read from Teams on view; the third shows "Image in Teams" with Open in Teams. Create DevOps item: the preview
 // lists the images with checkboxes, all ticked; one unticked; confirm uploads the rest with my token and links them to
 // the new item. Nothing is stored. Edge cases are unit tests (actions/chat-images, actions/conversation-images,
 // actions/devops-write). Fictional names. Screenshots at 1920, Larger and the phone when FOCUSTIME_SHOTS is set.
@@ -70,12 +70,14 @@ function fakeGraph() {
 const img = (hosted: string, w: number) => `<p><img src="https://graph.microsoft.com/v1.0/chats/${ALLIANCE}/messages/{msg}/hostedContents/${hosted}/$value" width="${w}" height="300" alt="image" itemtype="http://schema.skype.com/AMSImage"></p>`;
 
 /** One conversation; my reply commits to a ticket; a description for each image given (by its label). */
+/** IB-4: the sorting step's judgment (it rides in the same request). */
+const FIX = "Fix the overnight dashboard refresh timeout";
 function answer(c: ProviderCall): string {
   const input = JSON.parse(c.input) as { people: { ref: string; name: string }[]; messages: { ref: string; from: string }[] };
   const me = input.people.find((p) => p.name === "Sam Tester")?.ref ?? "p1";
   const a: UpdateAnswer & { images?: { ref: string; description: string }[] } = {
     messages: input.messages.map((m) => ({ ref: m.ref, kind: "work", conversation: "n1", confident_new_topic: false })),
-    conversations: [{ ref: "n1", title: "Dashboard refresh fails overnight", summary: "Blake pasted the totals chart and the refresh error.\nSam will log a bug.", owner: me, wrapped_up: false, change: "Sam will log a bug", item_change: null, scope_changed: false, likely_item: null,
+    conversations: [{ ref: "n1", title: "Dashboard refresh fails overnight", summary: "Blake pasted the totals chart and the refresh error.\nSam will log a bug.", owner: me, wrapped_up: false, change: "Sam will log a bug", item_change: null, scope_changed: false, likely_item: null, item_needed: { why: "The overnight refresh keeps failing and no item covers it", title: FIX, level: "child" },
       commitments: [{ who: me, what: "Log a bug for the overnight refresh", due: null, to: null, implies_item: true, messages: input.messages.filter((m) => m.from === me).map((m) => m.ref), status_only: false }] }],
   };
   if (c.images) a.images = c.images.map((i) => /^Image (i\d+),/.exec(i.label)![1]!).map((ref) => ({ ref, description: DESCRIPTIONS[ref] ?? "An image" }));
@@ -199,12 +201,11 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       graph.say(BLAKE, `<p>The overnight refresh failed again. Totals and the error:</p>${img(HOSTED.a, 480)}${img(HOSTED.b, 420)}${img(HOSTED.gone, 300)}`, 1);
       graph.say(ME, "<p>Thanks Blake, I'll log a bug for the overnight refresh.</p>", 3);
 
-      // Refresh: one AI request with the two readable images after their message's label.
-      // The Inbox opens a view's first item at once, so Refresh runs from Captures and drafts (no conversation open).
+      // Refresh on From chats: one AI request with the two readable images after their message's label.
       await page.keyboard.press("5");
-      const caps = await openInboxView(page, "captures");
-      await caps.getByRole("button", { name: "Refresh conversations" }).click();
-      await page.getByText("Chats read").first().waitFor();
+      const main = await openInboxView(page, "chats");
+      await main.getByRole("button", { name: "Refresh", exact: true }).click();
+      await main.getByText("Checked your chats").first().waitFor();
       const withImages = calls.filter((c) => c.images?.length);
       expect(withImages).toHaveLength(1);
       expect(withImages[0]!.images!.map((i) => i.label)).toEqual(["Image i1, in message m1:", "Image i2, in message m1:"]);
@@ -212,12 +213,15 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
 
       // Opened, the messages show: read from Teams now with my token; descriptions under the thumbnails; the third: Open in Teams.
       graph.hostedCalls.length = 0;
-      await openInboxView(page, "needs-you");
-      const card = await openInboxItem(page, "Dashboard refresh fails overnight");
-      await card.getByText("3\u00a0images: Bar chart: October totals about 4% under the finance report").waitFor();
+      // IB-4: a suggestion once quiet 4 working hours; the clock is fixed, so its last work message moves to last Thursday.
+      const conv = (await convs.conversations([ALLIANCE])).find((x) => x.title === "Dashboard refresh fails overnight")!;
+      await convs.updateConversation(conv.id, { lastWorkAt: "2026-10-29T15:00:00Z" });
+      await main.getByRole("button", { name: "Refresh", exact: true }).click();
+      const card = await openInboxItem(page, FIX);
       const thread = card.getByRole("list", { name: "The messages" });
       const thumbs = thread.locator(".tm-thumb img");
       await expect.poll(() => thumbs.evaluateAll((xs) => xs.map((x) => (x as HTMLImageElement).naturalWidth))).toEqual([480, 420]);
+      await thread.getByText("Bar chart: October totals about 4% under the finance report").waitFor();
       await thread.getByText("Refresh failed error: gateway timeout after 30 minutes").waitFor();
       const gone = thread.locator(".tm-image-gone");
       await gone.getByText("Image in Teams").waitFor();
@@ -229,7 +233,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       await shotAll(page, "cv4-images-described", card);
 
       // Create DevOps item: the preview lists the images (all ticked); untick the second; confirm attaches the rest.
-      await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
+      await card.getByRole("button", { name: /^Create item/ }).first().click();
       const draft = card.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
       // CV-5: without AI for my draft the form is empty; I type the title.

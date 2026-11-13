@@ -47,7 +47,7 @@ import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
-import { inboxSource, moreInInbox, dueTodayNotUrgent, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
+import { inboxSource, dueTodayNotUrgent, urgentLines, type UrgentLine, type UrgentSource } from "../plan/urgent.ts";
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { canAddWork } from "../plan/days.ts";
 import { aboveBlocks, dayHeadline, nextTodo } from "../plan/dayview.ts";
@@ -189,6 +189,8 @@ export function Day(props: Props) {
   const inStrip = new Set(urgentLines(urgentSources, clockNow, tz).map((l) => l.key));
   const tbEnv = useTimeboxes();
   const dueChips = dueTodayNotUrgent(todayPromises, { now: clockNow, today: date, dayEnd }).filter((p) => !inStrip.has(`c${p.id}`));
+  // IB-4: suggestions from chats waiting for an item: one chip, "From chats · 3", opening that list.
+  const fromChats = target.isToday && nudges ? (props.inbox ?? []).filter((r) => r.kind === "conversation" && r.views.includes("needs_you")).length : 0;
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -340,7 +342,7 @@ export function Day(props: Props) {
   useEffect(() => setProposals((p) => (p && p.date !== date ? null : p)), [date]);
 
   // RF-1: on a computer a source that needs reconnecting is in the status bar only; the phone has no status bar, so it keeps the chip.
-  const chips = mode === "now" && nudges ? <Attention noDue={phone} sources={phone} promises={dueChips} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const chips = mode === "now" && nudges ? <Attention noDue={phone} sources={phone} promises={dueChips} fromChats={fromChats} inStrip={inStrip} onItem={props.onItem} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const toggleTimeline = () => {
     const show = !timelineShown;
     setTlForced(false);
@@ -445,7 +447,7 @@ export function Day(props: Props) {
       {/* WD-2: above the blocks, in this order and nothing else: the urgent strip, one line of chips, the card for the moment. */}
       {aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>
         part === "urgent" ? (
-          <UrgentStrip key={part} sources={urgentSources} now={clockNow} today={date} tz={tz} clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onItem={props.onItem ?? (() => props.onInbox())} needsYou={props.needsYou ?? null} onNeedsYou={props.onNeedsYou} onAskFocus={(u) => void startAsk(u)} />
+          <UrgentStrip key={part} sources={urgentSources} now={clockNow} today={date} tz={tz} clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onItem={props.onItem ?? (() => props.onInbox())} onAskFocus={(u) => void startAsk(u)} />
         ) : part === "chips" ? (
           <div key={part} className="day-chips">{chips}</div>
         ) : (
@@ -595,7 +597,7 @@ export function Day(props: Props) {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ noDue = false, sources = true, promises = [], soon = [], inStrip, onItem, onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; /** RF-1: show sources that need a fix (the phone only; a computer has the status bar). */ sources?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; inStrip?: ReadonlySet<string>; onItem?: ((key: string) => void) | undefined; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
+function Attention({ noDue = false, sources = true, promises = [], soon = [], fromChats = 0, inStrip, onItem, onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; /** RF-1: show sources that need a fix (the phone only; a computer has the status bar). */ sources?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; /** IB-4: suggestions from chats (Inbox › From chats). */ fromChats?: number; inStrip?: ReadonlySet<string>; onItem?: ((key: string) => void) | undefined; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
   // IB-1 slice 4: a late promise I added is in the urgent strip now (the Inbox's rows), so it isn't listed twice.
@@ -603,7 +605,7 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], in
   const down = sources ? causeLines(data.sources, data.devops) : [];
   const vm = vmNeedsToday(useContext(VmCtx).status);
   // NV-1: urgent requests and my promises due are in the urgent strip above this line.
-  if (!due.length && !promises.length && !soon.length && !down.length && !data.expiring.length && !vm) return null;
+  if (!due.length && !promises.length && !soon.length && !fromChats && !down.length && !data.expiring.length && !vm) return null;
   const dueCount = due.length + promises.length;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
@@ -616,6 +618,11 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], in
             </span>
             {names.length > 0 && <span className="att-names">{names.join(" · ")}</span>}
             <span aria-hidden="true">{open ? "⌃" : "›"}</span>
+          </button>
+        )}
+        {fromChats > 0 && (
+          <button type="button" className="att-chip from-chats" onClick={() => (location.hash = "#/inbox/chats")} title="Conversations in your chats that may need a DevOps item">
+            <span className="att-tag">From chats · {fromChats}</span>
           </button>
         )}
         {soon.map((p) => (
@@ -676,14 +683,13 @@ function Attention({ noDue = false, sources = true, promises = [], soon = [], in
 
 /**
  * NV-1: the urgent strip, under what's next: what needs me now, mine only. IB-1 slice 4: its lines are the Inbox's own
- * items (plan/inbox-items.ts `todayLines`): conversations with a request needed now, my promises late or due soon, sends
- * to me waiting for my answer; each opens its item in the Inbox's detail pane. At most 3 lines, the most urgent first;
- * "N more in Inbox" opens Needs you for the rest (the badge's number less the lines shown). An urgent request keeps its Start focus. Hidden when there is nothing.
+ * items (plan/inbox-items.ts `todayLines`); IB-4: my promises late or due soon (each opens in Inbox › Promises) and
+ * sends to me waiting for my answer (each opens Week › Plan). At most 3 lines, the most urgent first, and nothing more:
+ * no conversations, no "more in Inbox" line. Hidden when there is nothing.
  */
-export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needsYou, onNeedsYou, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; clientName: (k: string) => string; onItem: (key: string) => void; needsYou?: number | null; onNeedsYou?: (() => void) | undefined; onAskFocus: (u: UrgentAsk) => void }) {
+export function UrgentStrip({ sources, now, today, tz, clientName, onItem, onAskFocus }: { sources: readonly UrgentSource[]; now: string; today: IsoDate; tz: string; clientName: (k: string) => string; onItem: (key: string) => void; onAskFocus: (u: UrgentAsk) => void }) {
   const lines = urgentLines(sources, now, tz);
   if (!lines.length) return null;
-  const more = moreInInbox(lines, needsYou);
   return (
     <section className="urgent-strip" data-tour="today-urgent" aria-label="Urgent">
       <ul>
@@ -706,11 +712,6 @@ export function UrgentStrip({ sources, now, today, tz, clientName, onItem, needs
           );
         })}
       </ul>
-      {more !== null && onNeedsYou && (
-        <button type="button" className="link-btn us-all" onClick={onNeedsYou}>
-          {more} more in Inbox
-        </button>
-      )}
     </section>
   );
 }
@@ -720,7 +721,6 @@ export function stripLine(l: UrgentLine, o: { today: IsoDate; tz: string; client
   if (l.kind === "other") return { cls: l.source, tag: l.tag, who: l.who || null, what: l.what, late: !!l.overdue };
   const r = l.row;
   const client = r.clientKey ? o.clientName(r.clientKey) : null;
-  if (r.kind === "conversation") return { cls: "conversation", tag: "Needs you now", who: client, what: r.urgent?.title ?? r.title, late: false };
   if (r.kind === "send") return { cls: "sends sent-line", tag: r.must ? "Sent to you · Must" : "Sent to you", who: r.who, what: r.title, late: false };
   const tag = r.late ? `Promise · ${wasDueText({ dueAt: r.dueAt, dueDate: r.due }, o.today, o.tz).replace(/^Was/, "was")}` : r.dueAt ? `Promise · ${clock(r.dueAt, o.tz)}` : "Promise due today";
   return { cls: "promise", tag, who: r.who ?? client, what: r.title, late: r.late };

@@ -24,8 +24,8 @@ async function drafts(page: Page) {
 
 /** IB-1: a draft is a row in Captures and drafts; Edit draft in its detail pane opens the draft editor. */
 async function openDraft(page: Page, title: string): Promise<void> {
-  await page.locator(".ib-row", { hasText: title }).first().click();
-  await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click();
+  await page.locator("li.ib4-row", { hasText: title }).first().click();
+  await page.locator("li.ib4-row.open").getByRole("button", { name: "Edit draft" }).click();
 }
 
 describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo mode)", () => {
@@ -80,11 +80,11 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect(f.locator(".item-lookup.linked").count()).resolves.toBe(1);
     await box(page).press("Enter");
     // IB-1: it's a promise now, a row in the list; its detail pane shows the linked item.
-    const row = page.locator(".ib-row", { has: page.locator(".ib-row-title", { hasText: /^send the export$/i }) });
+    const row = page.locator("li.ib4-row", { has: page.locator(".ib4-row-title", { hasText: /^send the export$/i }) });
     await page.evaluate(() => (location.hash = "#/inbox/promises"));
     await expect.poll(() => row.count()).toBe(1);
     await row.click();
-    await expect.poll(() => page.locator(".ib-pane section[aria-label='Linked DevOps item'] a").count()).toBe(1);
+    await expect.poll(() => page.locator("li.ib4-row.open section[aria-label='Linked DevOps item'] a").count()).toBe(1);
     await openCaptures(page);
     await expect(box(page).inputValue()).resolves.toBe("");
     await expect(checked(page)).resolves.toContain("Decide later");
@@ -130,7 +130,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await box(page).fill("pallet labels look odd");
     await expect(checked(page)).resolves.toContain("Decide later");
     await box(page).press("Enter");
-    await expect.poll(() => page.locator(".ib-row", { hasText: "pallet labels look odd" }).locator(".ib-tag", { hasText: "To sort" }).count()).toBe(1);
+    await expect.poll(() => page.locator("li.ib4-row", { hasText: "pallet labels look odd" }).count()).toBe(1);
     await page.close();
   }, T);
 

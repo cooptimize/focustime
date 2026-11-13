@@ -189,7 +189,7 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
 
       // The draft editor: the same three boxes with the answers; an edit saves.
       await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), d.id);
-      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
+      await page.locator("li.ib4-row.open").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
       const ed = page.locator(".draft-editor");
       await ed.waitFor();
       await threeBoxes(ed);
@@ -205,7 +205,7 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
 
       // Create in DevOps from the draft: the preview shows its answers in plain words.
       await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), d.id);
-      await page.locator(".ib-pane").getByRole("button", { name: "Create in DevOps" }).first().click({ timeout: 30_000 });
+      await page.locator("li.ib4-row.open").getByRole("button", { name: "Create in DevOps" }).first().click({ timeout: 30_000 });
       const pd = preview(page);
       await pd.waitFor({ timeout: 30_000 });
       await expect(pd.textContent()).resolves.toContain("Where: The projects model, a new report page");
@@ -309,7 +309,7 @@ describe.skipIf(!CHROMIUM)("TP-1b: a draft TP-1 saved, and someone who isn't an 
       store.plantBrief(id, json);
 
       await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), id);
-      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
+      await page.locator("li.ib4-row.open").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
       const ed = page.locator(".draft-editor");
       await ed.waitFor();
       await threeBoxes(ed);

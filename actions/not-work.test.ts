@@ -32,7 +32,6 @@ describe("Not work-related", () => {
     expect((await w.convs.placesIn([c.id])).filter((x) => x.role === "work").map((x) => x.messageId).sort()).toEqual([...ids].sort());
     const again = await p.as(LENA).run<ConversationsData>("conversations.list");
     expect(again.chatter.flatMap((g) => g.messages)).toEqual([]);
-    expect((await inboxFacts(p.as(LENA).ctx, cfg)).some((f) => f.key === `v${c.id}`)).toBe(true);
   });
 
   it("learns nothing: a message like it afterwards is sorted as before", async () => {

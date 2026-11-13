@@ -44,11 +44,11 @@ describe.skipIf(!CHROMIUM)("Capture's save button (UI-7)", () => {
     const { page, errors } = await freshPage(h);
     await openApp(page, h);
     await openCaptures(page);
-    await checkLayout(page, ".ib");
+    await checkLayout(page, "main.ib4");
     if (SHOTS) await page.locator(".ib-capture .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-1920.png` });
     await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
     await page.waitForTimeout(150);
-    await checkLayout(page, ".ib");
+    await checkLayout(page, "main.ib4");
     if (SHOTS) await page.locator(".ib-capture .cap-box").screenshot({ path: `${SHOTS}/ui7-capture-larger.png` });
     await page.evaluate(() => document.documentElement.removeAttribute("data-text-size"));
 
@@ -60,8 +60,8 @@ describe.skipIf(!CHROMIUM)("Capture's save button (UI-7)", () => {
     await box.fill("ui7 saved by Enter");
     await box.press("Enter");
     await expect.poll(() => box.inputValue()).toBe("");
-    await expect.poll(() => page.locator(".ib").getByText("ui7 saved by Enter").count()).toBeGreaterThan(0);
-    await expect.poll(() => page.locator(".ib").getByText("ui7 saved by the button").count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator("main.ib4").getByText("ui7 saved by Enter").count()).toBeGreaterThan(0);
+    await expect.poll(() => page.locator("main.ib4").getByText("ui7 saved by the button").count()).toBeGreaterThan(0);
     expect(errors).toEqual([]);
   }, 120_000);
 

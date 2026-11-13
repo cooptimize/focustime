@@ -16,7 +16,6 @@ import { teamNotices } from "../actions/team-actions.ts";
 import type { MeetingNudgeView } from "../actions/meeting-actions.ts";
 import { myLinkedLogins } from "../actions/identities.ts";
 import { storedIdentity } from "../actions/account.ts";
-import { visibleChats } from "../actions/request-actions.ts";
 import { urgentRequests } from "../actions/request-actions.ts";
 import { UNMATCHED_DAYS } from "../plan/asks.ts";
 
@@ -434,56 +433,10 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       log({ source: "plan", op: "asks_cleanup", count: n });
     }
   };
-  // CV-1: my own notices from Conversations: one reminder when a promise of mine that needs a DevOps item has waited
-  // a working day (the shared job marks it), and a quiet note when a teammate took one of mine over. Each goes once.
-  const conversationsTick = async () => {
-    const c = await configOrNull();
-    const port = liveCtx.requests;
-    const store2 = port?.conversations;
-    if (!c || !port || !store2) return;
-    const rc = await requestContext(liveCtx);
-    const me = await rc.me();
-    if (!me) return;
-    const chats = await visibleChats(port.teams.viewer(me), await rc.followed().catch(() => null));
-    const ids = chats.map((x) => x.chatId);
-    const name = (k: string) => c.clientSettings[k]?.name ?? k;
-    const at = instantNow().toString();
-    if (notifier.allows("commitment_item")) {
-      for (const k of await store2.viewer(me).commitmentsBy(ids)) {
-        if (k.state !== "open" || !k.impliesItem || !k.escalatedAt || k.remindedAt) continue;
-        await store2.updateCommitment(k.id, { remindedAt: at });
-        await send(notices.commitmentItem(k.id, name(k.clientKey), k.what, at));
-      }
-    }
-    if (notifier.allows("taken_over")) {
-      for (const chatId of ids) {
-        for (const k of await store2.commitmentsInChat(chatId)) {
-          if (!k.takenFrom || k.takenFrom.toLowerCase() !== me.toLowerCase() || !k.takenAt) continue;
-          if (Date.parse(at) - Date.parse(k.takenAt) > 3 * 86_400_000) continue;
-          if (await store.markOnce(`taken_over_notice:${k.id}`, k.takenAt)) await send(notices.takenOver(k.id, k.whoName.split(/\s+/)[0] || "A teammate", k.what, at));
-        }
-      }
-    }
-    // Part 0: conversations handed to me, and new messages on the ones I have (the last 3 days; each once).
-    const since = Temporal.Instant.from(at).subtract({ hours: 72 }).toString();
-    const view = store2.viewer(me);
-    const titleOf = async (id: number) => (await view.conversation(id))?.title ?? "A conversation";
-    for (const e of await view.handedToMe(since)) {
-      if (e.byUser?.toLowerCase() === me.toLowerCase()) continue;
-      if (e.kind === "reopen") {
-        if (notifier.allows("conversation_activity") && (await store.markOnce("conversation_reopened_notice", String(e.id)))) await send(notices.conversationActivity(`conversation_reopened:${e.id}`, e.note ?? "Reopened", await titleOf(e.conversationId), at));
-      } else if (notifier.allows("conversation_given") && (await store.markOnce("conversation_given_notice", String(e.id)))) await send(notices.conversationGiven(e.id, e.byName.split(/\s+/)[0] || "A teammate", await titleOf(e.conversationId), e.kind === "helper", at));
-    }
-    if (notifier.allows("conversation_activity")) {
-      for (const k of await view.conversations(ids, { openOnly: true })) {
-        if (k.claimedBy?.toLowerCase() !== me.toLowerCase() || !k.claimedAt || Date.parse(k.lastWorkAt) <= Date.parse(k.claimedAt) || Date.parse(k.lastWorkAt) < Date.parse(since)) continue;
-        const last = (await view.placesIn([k.id])).filter((p) => p.role === "work").at(-1);
-        const m = last ? await port.teams.message(last.chatId, last.messageId) : null;
-        if (!m || m.senderId?.toLowerCase() === me.toLowerCase()) continue;
-        if (await store.markOnce("conversation_activity_notice", `${k.id}:${k.lastWorkAt}`)) await send(notices.conversationActivity(`conversation_activity:${k.id}:${k.version}`, `${m.senderName?.split(/\s+/)[0] ?? "Someone"} wrote in one you have`, k.title, at));
-      }
-    }
-  };
+  // CV-1 sent my own notices from Conversations here (a promise waiting for its item, taken over, handed to me, new
+  // messages on one I have). IB-4 removed them: the Inbox no longer chases, and From chats is its count. The tick stays
+  // registered and does nothing.
+  const conversationsTick = async () => {};
   // PV-1: a quiet note, once each, when a teammate took one of my stories with Take one (the last 3 days only).
   const takesTick = async () => {
     const takes = liveCtx.takes;

@@ -99,7 +99,14 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     let fail = false;
     await page.route("**/api/action", async (route) => {
       const res = await route.fetch();
-      if (!(route.request().postData() ?? "").includes('"week.load"')) return route.fulfill({ response: res });
+      const body = route.request().postData() ?? "";
+      // IB-4: the demo's suggestions from chats are their own chip on the attention line; healthy here means none.
+      if (body.includes('"inbox.today"')) {
+        const t = await res.json();
+        if (t?.data) t.data.items = t.data.items.filter((i: { kind: string }) => i.kind !== "conversation");
+        return route.fulfill({ response: res, json: t });
+      }
+      if (!body.includes('"week.load"')) return route.fulfill({ response: res });
       const j = await res.json();
       if (j?.data) {
         j.data.followUps = [];

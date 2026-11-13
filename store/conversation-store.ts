@@ -5,7 +5,7 @@
 // following the client is checked on top, in actions. The unscoped methods are for the poll job, the backfill and
 // expiry only. Every write runs in a transaction. Nothing here logs; message text never comes through here.
 import type { AiLogEntry } from "../ai/types.ts";
-import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type ConversationMerge, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
+import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type ConversationMerge, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type ItemNeeded, checkItemNeeded, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
 import type { HeldMatch } from "../plan/boundary.ts";
 import { firstName, undoableEvent, type EventKind, type EventVia, type OwnershipBefore, type OwnershipEvent, type Person } from "../plan/ownership.ts";
 import { isMember } from "../plan/requests.ts";
@@ -54,6 +54,7 @@ const toConversation = (r: Row): Conversation => ({
   likelyItem: num(r.likely_item),
   mergedInto: num(r.merged_into),
   mentions: json<string[]>(r.mentions_json, []),
+  itemNeeded: checkItemNeeded(json<{ why: string; title: string; level: string } | null>(r.item_needed_json, null)),
   createdAt: instant(r.created_at)!,
   updatedAt: instant(r.updated_at)!,
 });
@@ -201,6 +202,8 @@ export type ConversationPatch = Partial<{
   changeNote: string | null;
   itemChange: { kind: ItemChange; note: string; at: string; scope: boolean } | null;
   likelyItem: number | null;
+  /** IB-4: the sorting step's judgment that it asks for an item (null: no suggestion). */
+  itemNeeded: ItemNeeded | null;
   /** GD-2: the other clients its messages name (keys). */
   mentions: string[];
 }>;
@@ -285,6 +288,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (p.changeNote !== undefined) set("change_note", p.changeNote?.slice(0, 200) ?? null);
         if (p.itemChange !== undefined) (set("item_change_kind", p.itemChange?.kind ?? null), set("item_change_note", p.itemChange?.note.slice(0, 400) ?? null), set("item_change_at", p.itemChange?.at ?? null), set("item_change_scope", p.itemChange?.scope ? 1 : 0));
         if (p.likelyItem !== undefined) set("likely_item", p.likelyItem);
+        if (p.itemNeeded !== undefined) set("item_needed_json", p.itemNeeded ? JSON.stringify(p.itemNeeded) : null);
         if (p.mentions !== undefined) set("mentions_json", p.mentions.length ? JSON.stringify(p.mentions.slice(0, 10)) : null);
         if (o.bump) sets.push("version = version + 1");
         set("updated_at", stamp());

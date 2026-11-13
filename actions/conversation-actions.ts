@@ -23,8 +23,8 @@ import { chatAudience, highlightMatches, mentionedClients, nameList, HELD_LINE, 
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_SCHEMA_STANDARDS, DRAFT_TASK, draftFrom, draftInput, emptyDraft, withStandards, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { STANDARDS_DRAFT } from "../plan/standards.ts";
 import type { StandardsLookup } from "./standards.ts";
-import { isClosed } from "../plan/process.ts";
-import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
+import { isClosed, isCompleted } from "../plan/process.ts";
+import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard, type ClearedPromise, type SuggestionRow, type SuggestionsData, type SuggestionsFoot } from "../plan/conversation-views.ts";
 import { HELD_REASONS, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import { followersOf, type ClientChat, type FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
@@ -33,7 +33,8 @@ import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom,
 import { isMeetingChat, type ConversationStore, type ConversationView } from "../store/conversation-store.ts";
 import { eventLine, firstName, mayHandOff, offerOf, personView, placeOf, sharedState, undoableEvent, type ClaimOffer, type Person } from "../plan/ownership.ts";
 import { PlanError } from "../store/plan-store.ts";
-import { itemKey, type InboxFacts } from "../plan/inbox-items.ts";
+import { itemKey, parseKey, type InboxFacts, type InboxMark } from "../plan/inbox-items.ts";
+import { clearedReason, clearedRecently, clearsAs, isSuggestion, levelWord } from "../plan/slim-inbox.ts";
 import type { TeamsView } from "../store/teams-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -65,6 +66,8 @@ export const CONVERSATION_ACTIONS = [
   "conversations.held_bulk",
   // Part 0: the shared owner. Each applies at once, with Undo.
   "conversations.claim", "conversations.give", "conversations.add_helper", "conversations.release", "conversations.close_out", "conversations.undo_ownership",
+  // IB-4: From chats (suggestions, Dismiss and its Undo) and promises that clear themselves (Put back, the first look's note).
+  "conversations.suggestions", "conversations.dismiss", "conversations.undismiss", "my_promises.put_back", "my_promises.cleared_seen",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -434,60 +437,25 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
 }
 
 /**
- * IB-1: the Inbox's facts from conversations and my chat promises, by the same rules as Needs you and My promises
- * (viewOf, the open states). Conversations I hid stay out (Hide for me lives in conversation_views). No card text.
+ * IB-4: the Inbox's facts from chats: my suggestions (conversations that need an item no one has made) and my chat
+ * promises, settled first (cleared ones are left out). Conversations that aren't suggestions, Waiting on and Chatter no
+ * longer show (their rows are kept). No card text.
  */
 export async function inboxFacts(ctx: ConversationContext, cfg: AppConfig): Promise<InboxFacts[]> {
   const v = await seen(ctx);
   if (!v) return [];
-  const now = Date.parse(ctx.now());
-  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
+  await settlePromises(ctx, v, cfg);
+  const zone = userZone(cfg);
   const out: InboxFacts[] = [];
-  // QF-1: a conversation marked not work-related lives in Chatter (its messages), not in Done.
-  for (const card of await cards(ctx, v, cfg, all.filter((c) => !(c.closedAt && c.closeReason === NOT_WORK)))) {
-    if (card.hidden) continue;
-    const view = viewOf(card);
-    // Who it is with: someone in it who isn't me.
-    const asker = card.participants.find((p) => !p.me)?.name ?? null;
-    const c = all.find((x) => x.id === card.id)!;
-    const workRequest = !card.item && card.primary === "create";
-    // Slice 3: why it needs me, from CV-1's own facts (the order viewOf checks them in).
-    const needsWhy = view !== "needs" ? null
-      : card.mentionsMe ? "mention"
-      : card.commitments.some((k) => k.mine && k.state === "open") ? "committed"
-      : card.suggestions.some((x) => x.mine) ? "suggestion"
-      : same(c.claimedBy, v.me) ? "owner"
-      : card.unclaimed ? "unclaimed"
-      : card.windDown ? "wrapped"
-      : workRequest ? "work"
-      : "new";
-    out.push({
-      key: itemKey("conversation", card.id), kind: "conversation", clientKey: card.clientKey, at: card.lastAt, done: view === "closed", conversationView: view,
-      title: card.title, who: asker, where: card.chatName, itemId: card.item?.id ?? null, mentionsMe: card.mentionsMe,
-      workRequest, needsWhy, ...(card.mentions?.length ? { mentions: card.mentions } : {}), personView: card.shared.view, ownerName: card.shared.owner?.name ?? null,
-    });
-  }
-  // Slice 3, Waiting on: someone else's open commitment made to me, or in a conversation I own.
-  const owned = new Map(all.map((c) => [c.id, same(c.claimedBy, v.me)]));
-  const ownedIds = all.filter((c) => same(c.claimedBy, v.me)).map((c) => c.id);
-  const theirs = new Map<number, Awaited<ReturnType<typeof v.convs.commitmentsIn>>[number]>();
-  for (const k of [...(await v.convs.commitmentsTo(v.promiseChatIds)), ...(await v.convs.commitmentsIn(ownedIds))]) theirs.set(k.id, k);
-  for (const k of theirs.values()) {
-    if (k.state !== "open" || same(k.whoId, v.me) || !(same(k.toId, v.me) || (k.conversationId !== null && owned.get(k.conversationId)))) continue;
-    out.push({
-      key: itemKey("chatPromise", k.id), kind: "commitment", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done: false, waitingOn: true,
-      due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt,
-      title: k.what, who: k.whoName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId,
-    });
+  for (const { c } of await suggestionCandidates(ctx, v, cfg)) {
+    out.push({ key: itemKey("conversation", c.id), kind: "conversation", clientKey: c.clientKey, at: c.lastWorkAt, done: false, conversationView: "needs", title: c.itemNeeded!.title, who: null, where: v.byId.get(c.chatId)?.displayName ?? null, itemId: null, workRequest: true, needsWhy: "work", suggestion: true });
   }
   for (const k of await v.convs.commitmentsBy(v.promiseChatIds)) {
-    // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>).
-    if (k.state === "followup" && k.followUpId !== null) continue;
-    const done = k.state === "done" || k.state === "not_needed";
-    if (done && (!k.updatedAt || now - Date.parse(k.updatedAt) >= closedShownMs(cfg))) continue;
+    // A promise made into a follow-up before IB-1 shows once, as that follow-up (f<id>). Closed ones aren't listed here.
+    if (k.state !== "open" || !same(k.whoId, v.me)) continue;
     out.push({
-      key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done,
-      due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, userZone(cfg)) : null), dueAt: k.dueAt, linked: k.itemId !== null, onWeek: !!k.onToday,
+      key: itemKey("chatPromise", k.id), kind: "promise", clientKey: k.clientKey, at: k.updatedAt ?? k.createdAt, done: false,
+      due: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, zone) : null), dueAt: k.dueAt, linked: k.itemId !== null, onWeek: !!k.onToday,
       title: k.what, who: k.toName, where: v.byId.get(k.chatId)?.displayName ?? null, itemId: k.itemId, fromChat: true,
     });
   }
@@ -548,12 +516,17 @@ async function myPromises(ctx: ConversationContext, cfg: AppConfig): Promise<MyP
   const v = await seen(ctx);
   const today = localToday(ctx.now(), userZone(cfg));
   if (!v) return { promises: [], open: 0, today, writeClients: [] };
+  await settlePromises(ctx, v, cfg);
   const all = await promiseCards(ctx, v, cfg);
   // Overdue and soonest first, then the rest newest first.
   const key = (p: PromiseCard) => p.dueAt ?? (p.dueDate ? `${p.dueDate}T23:59` : p.onToday ? `${p.onToday}T23:59` : "9999");
   all.sort((a, b) => Number(b.state === "open") - Number(a.state === "open") || Number(b.needsItem) - Number(a.needsItem) || key(a).localeCompare(key(b)) || b.createdAt.localeCompare(a.createdAt));
   await closeFollowedUp(ctx, v, all);
-  return { promises: all, open: all.filter((p) => p.state === "open").length, today, writeClients: await ctx.writeClients().catch((): string[] => []) };
+  const { cleared, firstCleared } = await clearedPromises(ctx, v, cfg);
+  const clearedIds = new Set(cleared.map((c) => c.id));
+  // IB-4: a cleared promise shows only under "Cleared on their own", never in the list.
+  const shown = all.filter((p) => !clearedIds.has(p.id));
+  return { promises: shown, open: shown.filter((p) => p.state === "open").length, today, writeClients: await ctx.writeClients().catch((): string[] => []), cleared, firstCleared };
 }
 
 /** A promise made into a follow-up closes when that follow-up does (Not needed when the follow-up wasn't). */
@@ -569,10 +542,148 @@ async function closeFollowedUp(ctx: ConversationContext, v: Seen, all: PromiseCa
   }
 }
 
+// ---- IB-4: promises that clear themselves, and suggestions from chats ----
+
+/** A promise of mine counts as touched by these facts or by a touch mark (due, who, note, my week, an item, Close the loop). */
+const touchedOf = (k: Commitment, m: InboxMark | undefined) => !!m?.touchedAt || !!m?.putBackAt || !!k.onToday || !!k.closeHow || !!k.closeNote || k.followUpId !== null || k.state === "linked" || k.state === "created";
+/** The first look after the release says how many older ones cleared at once (accountState, once per person). */
+const FIRST_CLEARED = "ib4_first_cleared";
+
+/**
+ * IB-4: settles my open chat promises when they are read (no job, no AI): a finished linked item clears one as done;
+ * one found in a chat that I never touched expires 7 days after its due day (or after it was found, without one), as
+ * not needed with the mark "expired" (never done, never broken). Each clearing is recorded in my inbox marks.
+ */
+export async function settlePromises(ctx: ConversationContext, v: Seen, cfg: AppConfig): Promise<void> {
+  if (!ctx.plan) return;
+  const now = ctx.now();
+  const zone = userZone(cfg);
+  const open = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open" && same(k.whoId, v.me));
+  const firstLook = (await ctx.plan.accountState<{ count: number; at: string; seen: boolean }>(FIRST_CLEARED)) === null;
+  let byItem = 0;
+  let expired = 0;
+  if (open.length) {
+    const marks = await ctx.plan.inboxMarks();
+    const live = await liveItems(ctx, cfg, open);
+    for (const k of open) {
+      const key = itemKey("chatPromise", k.id);
+      const m = marks.get(key);
+      const hit = k.itemId ? live.get(`${k.clientKey}:${k.itemId}`) : undefined;
+      const how = clearsAs({ fromChat: true, dueDate: k.dueDate ?? (k.dueAt ? localToday(k.dueAt, zone) : null), createdAt: k.createdAt, item: hit ? { closed: isCompleted(hit.stateCategory), changedAt: hit.changedAt } : null, touched: touchedOf(k, m), putBackAt: m?.putBackAt ?? null }, now, zone);
+      if (!how) continue;
+      await v.convs.updateCommitment(k.id, { state: how === "item" ? "done" : "not_needed" });
+      await ctx.plan.markInbox([key], { cleared: { how, at: now } });
+      if (k.conversationId !== null && ctx.requests) await refreshStatus({ convs: v.store, teams: ctx.requests.teams, homeTenant: await ctx.homeTenant() }, k.conversationId).catch(() => {});
+      if (how === "item") byItem++;
+      else expired++;
+    }
+    if (byItem || expired) ctx.log({ source: "plan", op: "promises_cleared", count: byItem + expired, kind: `item ${byItem}, expired ${expired}` });
+  }
+  // The first look's note: a read that cleared some always writes it; one that cleared none writes only if nothing has
+  // been written since (Day and the Inbox can settle at the same moment), so a count is never overwritten with 0.
+  if (firstLook && byItem + expired > 0) await ctx.plan.setAccountState(FIRST_CLEARED, { count: byItem + expired, at: now, seen: false });
+  else if (firstLook && (await ctx.plan.accountState(FIRST_CLEARED)) === null) await ctx.plan.setAccountState(FIRST_CLEARED, { count: 0, at: now, seen: true });
+}
+
+/** IB-4: my promises that cleared on their own in the last 14 days, newest first, and the first look's count. */
+async function clearedPromises(ctx: ConversationContext, v: Seen, cfg: AppConfig): Promise<{ cleared: ClearedPromise[]; firstCleared: number | null }> {
+  if (!ctx.plan) return { cleared: [], firstCleared: null };
+  const now = ctx.now();
+  const marks = await ctx.plan.inboxMarks();
+  const recent = new Map<number, InboxMark>();
+  for (const [key, m] of marks) {
+    const p = parseKey(key);
+    if (p?.source === "chatPromise" && m.cleared && clearedRecently(m.clearedAt, now)) recent.set(p.id, m);
+  }
+  const cleared: ClearedPromise[] = [];
+  if (recent.size) {
+    for (const k of await v.convs.commitmentsBy(v.promiseChatIds)) {
+      const m = recent.get(k.id);
+      if (!m || !same(k.whoId, v.me) || (k.state !== "done" && k.state !== "not_needed")) continue;
+      cleared.push({ id: k.id, what: k.what, toName: k.toName, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, how: m.cleared!, reason: clearedReason(m.cleared!, k.itemId), clearedAt: m.clearedAt! });
+    }
+  }
+  cleared.sort((a, b) => b.clearedAt.localeCompare(a.clearedAt));
+  const first = await ctx.plan.accountState<{ count: number; at: string; seen: boolean }>(FIRST_CLEARED);
+  return { cleared, firstCleared: first && !first.seen && first.count > 0 ? first.count : null };
+}
+
+/** IB-4: Already covered, Create item and Dismiss leave From chats; these say which for Diagnostics. */
+async function suggestionCandidates(ctx: ConversationContext, v: Seen, cfg: AppConfig): Promise<{ c: Conversation; mark: InboxMark | undefined }[]> {
+  const now = ctx.now();
+  const marks = ctx.plan ? await ctx.plan.inboxMarks() : new Map<string, InboxMark>();
+  const views = ctx.plan ? await ctx.plan.conversationViews() : new Map<number, { hidden: boolean }>();
+  const hours = [{ ...cfg.week.hours, timeZone: userZone(cfg) }];
+  const out: { c: Conversation; mark: InboxMark | undefined }[] = [];
+  for (const c of await v.convs.conversations(v.chats.map((x) => x.chatId))) {
+    if (!c.itemNeeded) continue;
+    const mark = marks.get(itemKey("conversation", c.id));
+    const hidden = views.get(c.id)?.hidden ? now : null;
+    // A snooze from before IB-4 still holds until it ends, here as in the tab's count (viewsOf).
+    if (mark?.snoozedUntil && Date.parse(mark.snoozedUntil) > Date.parse(now)) continue;
+    if (isSuggestion(c, { now, hours, mark: { outcome: mark?.outcome ?? null, hiddenAt: mark?.hiddenAt ?? hidden } })) out.push({ c, mark });
+  }
+  return out;
+}
+
+/** IB-4: From chats: the suggestions I may see now, newest quiet first, and the foot. Marks each shown once (Diagnostics). */
+export async function suggestionsList(ctx: ConversationContext, cfg: AppConfig): Promise<SuggestionsData> {
+  const v = await seen(ctx);
+  const foot = { lastPoll: null as string | null, pollMinutes: cfg.org?.rules.pollMinutes ?? 5, cannot: [] as SuggestionsFoot["cannot"] };
+  if (!v) return { suggestions: [], foot, writeClients: [] };
+  const found = await suggestionCandidates(ctx, v, cfg);
+  const writeClients = await ctx.writeClients().catch((): string[] => []);
+  const name = (k: string) => cfg.clientSettings[k]?.name ?? k;
+  const models = new Map<string, Promise<ProcessModel | null>>();
+  const model = (k: string) => models.get(k) ?? models.set(k, ctx.processModel ? ctx.processModel(cfg, k).catch(() => null) : Promise.resolve(null)).get(k)!;
+  const images = await v.convs.placesIn(found.map((x) => x.c.id)).then(async (ps) => {
+    const n = new Map<number, number>();
+    for (const p of ps) if (p.role === "work" && p.conversationId !== null) {
+      const m = await v.teams.message(p.chatId, p.messageId);
+      if (m?.hasImage) n.set(p.conversationId, (n.get(p.conversationId) ?? 0) + 1);
+    }
+    return n;
+  }).catch(() => new Map<number, number>());
+  const suggestions: SuggestionRow[] = [];
+  for (const { c } of found) {
+    const chat = v.byId.get(c.chatId)!;
+    const s = c.itemNeeded!;
+    const m = await model(c.clientKey);
+    const names = { child: m?.levels.child[0] ?? null, feature: m?.levels.parent[0] ?? null, epic: m?.levels.top[0] ?? null };
+    suggestions.push({
+      id: c.id, clientKey: c.clientKey, clientName: name(c.clientKey), chatName: chat.displayName, internalChat: chat.kind === "delivery",
+      title: s.title, why: s.why, level: s.level, levelWord: levelWord(s.level, names), conversationTitle: c.title, summary: c.summary,
+      people: [...new Set(c.participants.filter((p) => !same(p.id, v.me)).map((p) => first(p.name)))].slice(0, 4), lastWorkAt: c.lastWorkAt, link: teamsLink(chat),
+      ...(c.mentions?.length ? { mentions: c.mentions.map(name) } : {}), canCreate: writeClients.includes(c.clientKey), ...(images.get(c.id) ? { images: images.get(c.id)! } : {}),
+    });
+  }
+  suggestions.sort((a, b) => b.lastWorkAt.localeCompare(a.lastWorkAt));
+  if (ctx.plan) await ctx.plan.markInbox(suggestions.map((x) => itemKey("conversation", x.id)), { suggested: true });
+  // The foot: when the chats were last read, and each client that can't suggest now (AI off, no budget), once.
+  foot.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
+  const seenClient = new Set<string>();
+  for (const p of await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted")) {
+    if (HELD_REASONS.has(p.reason ?? "")) continue;
+    const k = v.byId.get(p.chatId)?.clientKey;
+    if (!k || seenClient.has(k)) continue;
+    seenClient.add(k);
+    const line = unsortedLine(p.reason, name(k));
+    foot.cannot.push({ clientKey: k, clientName: name(k), text: line.text, fix: line.fix });
+  }
+  return { suggestions, foot, writeClients };
+}
+
+/** IB-4: how many suggestions I have now (the tab's count), without building rows. */
+export async function suggestionCount(ctx: ConversationContext, cfg: AppConfig): Promise<number> {
+  const v = await seen(ctx);
+  return v ? (await suggestionCandidates(ctx, v, cfg)).length : 0;
+}
+
 /** My promises with a due (or put on Today), for Today and Week: open ones only (a follow-up made from one replaces it). */
 export async function dayPromises(ctx: ConversationContext, cfg: AppConfig): Promise<DayPromise[]> {
   const v = await seen(ctx);
   if (!v) return [];
+  await settlePromises(ctx, v, cfg);
   const now = ctx.now();
   const today = localToday(now, userZone(cfg));
   const mine = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open" && (k.dueDate || k.onToday));
@@ -912,6 +1023,22 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         ctx.log({ source: "plan", op: "conversation_ownership_undone" });
         return respond();
       }
+      case "conversations.suggestions": {
+        if (!only(input, [])) return bad("conversations.suggestions takes {}");
+        return { ok: true, data: await suggestionsList(ctx, cfg) };
+      }
+      case "conversations.dismiss":
+      case "conversations.undismiss": {
+        // IB-4: Dismiss (or Add as my promise) takes a suggestion out of From chats for me only; Undo brings it back.
+        const o = only(input, ["id"], ["as"]);
+        const c = o && (await conv(o.id));
+        if (!o || !c || (o.as !== undefined && o.as !== "dismissed" && o.as !== "promised")) return bad(`${action} takes { id, as? }`);
+        if (!ctx.plan) return bad("The plan store isn't available", 503);
+        const key = itemKey("conversation", c.id);
+        await ctx.plan.markInbox([key], { outcome: action === "conversations.dismiss" ? ((o.as as "dismissed" | "promised" | undefined) ?? "dismissed") : null });
+        ctx.log({ source: "plan", op: "suggestion_dismissed", kind: action === "conversations.dismiss" ? String(o.as ?? "dismissed") : "undone" });
+        return { ok: true, data: await suggestionsList(ctx, cfg) };
+      }
       case "conversations.hide": {
         const o = only(input, ["id", "hidden"]);
         const c = o && (await conv(o.id));
@@ -972,6 +1099,8 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const k = ks.find((x) => x.id === posInt(o.commitmentId)) ?? ks.find((x) => x.state === "open" && x.impliesItem && same(x.whoId, v.me)) ?? ks.find((x) => x.state === "open" && x.impliesItem);
         if (k && !k.itemId) await v.convs.updateCommitment(k.id, { itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        // IB-4: Already covered, counted in Diagnostics (a create through the write framework counts as created).
+        if (ctx.plan) await ctx.plan.markInbox([itemKey("conversation", c.id)], { outcome: "linked" });
         ctx.log({ source: "plan", op: "conversation_linked" });
         return respond();
       }
@@ -1158,7 +1287,33 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
     }
     // My promises.
     if (!v) return promisesNow();
+    /** IB-4: a touch (due, who, my week, an item, Close the loop) keeps a promise found in a chat from expiring. */
+    const touch = (id: number) => (ctx.plan ? ctx.plan.markInbox([itemKey("chatPromise", id)], { touched: true }) : Promise.resolve(0));
+    if (["my_promises.today", "my_promises.due", "my_promises.who", "my_promises.link", "my_promises.start_draft", "my_promises.close", "my_promises.done", "my_promises.not_needed", "my_promises.reopen"].includes(action)) {
+      const k = await mine(only(input, [], ["id", "on", "due", "who", "whoRef", "itemId", "how", "note"])?.id);
+      if (k) await touch(k.id);
+    }
     switch (action) {
+      case "my_promises.put_back": {
+        // IB-4: a promise that cleared on its own comes back open; that counts as a touch, so it never expires again,
+        // and only an item finished after this clears it.
+        const o = only(input, ["id"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.put_back takes { id }");
+        const mark = ctx.plan ? (await ctx.plan.inboxMarks()).get(itemKey("chatPromise", k.id)) : undefined;
+        if (!mark?.cleared || (k.state !== "done" && k.state !== "not_needed")) return bad("This promise didn't clear on its own", 409);
+        await v.convs.updateCommitment(k.id, { state: "open" });
+        await ctx.plan!.markInbox([itemKey("chatPromise", k.id)], { putBack: true });
+        if (k.conversationId !== null) await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);
+        ctx.log({ source: "plan", op: "promise_put_back" });
+        return promisesNow();
+      }
+      case "my_promises.cleared_seen": {
+        if (!only(input, [])) return bad("my_promises.cleared_seen takes {}");
+        const first = ctx.plan ? await ctx.plan.accountState<{ count: number; at: string; seen: boolean }>(FIRST_CLEARED) : null;
+        if (first && !first.seen) await ctx.plan!.setAccountState(FIRST_CLEARED, { ...first, seen: true });
+        return promisesNow();
+      }
       case "my_promises.list":
         if (!only(input, [])) return bad("my_promises.list takes {}");
         return promisesNow();
@@ -1289,6 +1444,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
         if (c && !c.itemId) {
           await v.convs.updateConversation(c.id, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
+          if (ctx.plan) await ctx.plan.markInbox([itemKey("conversation", c.id)], { outcome: "linked" });
           await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         }
         ctx.log({ source: "plan", op: "promise_linked" });

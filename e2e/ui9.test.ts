@@ -94,30 +94,30 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     await chip(page, MON_AM).focus();
     await page.keyboard.press("Enter");
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/f\d+$/);
-    await expect.poll(() => page.locator(".ib-pane").textContent()).toContain("Cooptimize");
+    await expect.poll(() => page.locator("section.ib4-group", { has: page.locator("li.ib4-row.open") }).getAttribute("aria-label")).toBe("Cooptimize");
 
     // A tap with several: Promises, late ones, Northwind's only.
     await page.keyboard.press("2");
     await chip(page, MON_PM).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/promises/late/Northwind");
-    const rows = page.locator(".ib-row");
+    const rows = page.locator("li.ib4-row");
     await expect.poll(() => rows.count()).toBe(3);
     const list = (await call(page, "inbox.list", {})).data.items as { key: string; clientKey: string | null; late: boolean }[];
     for (const k of await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-key")))) {
       const r = list.find((x) => x.key === k)!;
       expect([r.clientKey, r.late], k!).toEqual(["Northwind", true]);
     }
-    expect(await page.locator(".ib-late-line").textContent()).toContain("Late for Northwind");
+    expect(await page.locator(".ib4-late-note").textContent()).toContain("Late promises for Northwind only");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/inbox-late-northwind.png` });
     // Show all leaves the late filter (and saves nothing).
-    await page.locator(".ib-late-line").getByRole("button", { name: "Show all" }).click();
+    await page.locator(".ib4-late-note").getByRole("button", { name: "Show all promises" }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/inbox/promises");
-    await expect.poll(() => page.locator(".ib-late-line").count()).toBe(0);
+    await expect.poll(() => page.locator(".ib4-late-note").count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("keeping or snoozing a promise updates the chip, with no reload", async () => {
+  it("keeping or closing a promise updates the chip, with no reload", async () => {
     const { page, errors } = await freshPage(h);
     expect((await call(page, "ui.set_show_timelines", { show: false })).ok).toBe(true);
     await lateFor(page, [{ clientKey: "Northwind", what: "Send the cutover notes", due: "2026-10-30" }, { clientKey: "Northwind", what: "Answer the pump question", due: "2026-10-29" }]);
@@ -127,12 +127,12 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
 
     // Keep one: Done in the Inbox, then back to Week.
     await chip(page, MON_AM).click();
-    const pane = page.locator(".ib-pane");
-    await expect.poll(() => pane.textContent()).toContain("Cooptimize");
-    // E is Done (a late promise's main action is Close the loop; Done is its key and under More).
+    const pane = page.locator("li.ib4-row.open");
+    await expect.poll(() => page.locator("section.ib4-group", { has: pane }).getAttribute("aria-label")).toBe("Cooptimize");
+    // D is Done (a late promise's main action is Close the loop; Done is its key).
     const key = (await page.evaluate(() => location.hash)).split("/").pop()!;
     await expect.poll(async () => {
-      await page.locator("body").press("e");
+      await page.locator("body").press("d");
       const items = (await call(page, "inbox.list", {})).data.items as { key: string; done: boolean }[];
       return !items.some((i) => i.key === key && !i.done);
     }).toBe(true);
@@ -140,14 +140,12 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     await expect.poll(() => chipText(page, MON_AM), { timeout: 20_000 }).toBeNull();
     expect(await chipText(page, MON_PM)).toBe("3 late");
 
-    // Snooze one of Northwind's: two left.
+    // Not needed on one of Northwind's (IB-4 has no Snooze): two left.
     await chip(page, MON_PM).click();
-    await expect.poll(() => page.locator(".ib-row").count()).toBe(3);
-    await page.locator(".ib-row").first().click();
-    await pane.getByRole("button", { name: /^More for / }).click();
-    await pane.getByRole("menuitem", { name: "Snooze…" }).click();
-    await pane.getByRole("form", { name: "Snooze" }).getByRole("button", { name: "Tomorrow" }).click();
-    await expect.poll(() => page.locator(".ib-row:not(.ib-snoozed-group .ib-row)").count()).toBeLessThanOrEqual(3);
+    await expect.poll(() => page.locator("li.ib4-row").count()).toBe(3);
+    await page.locator("li.ib4-row .ib4-row-head").first().click();
+    await pane.getByRole("button", { name: /^Not needed/ }).click();
+    await expect.poll(() => page.locator("li.ib4-row").count()).toBe(2);
     await page.keyboard.press("2");
     await expect.poll(() => chipText(page, MON_PM), { timeout: 10_000 }).toBe("2 late");
     expect(await marked(page)).toBe(true);

@@ -249,12 +249,14 @@ describe("AS-3 golden set: more from the same week", () => {
     expect(shown(r)).not.toMatch(/Claims walkthrough/);
   });
 
-  it("\"What am I waiting on?\" and \"Any client calls to review?\": mine only", async () => {
+  it("\"What am I waiting on?\" (IB-4: no list, said plainly) and \"Any client calls to review?\": mine only", async () => {
     const s = setup();
     await s.seed();
     s.question({ topic: "waiting" });
     const w = await s.a.handle("What am I waiting on?");
-    expect(lines(w)).toEqual(["Dana Reyes: Send the sample extract (was due Nov 4)"]);
+    // IB-4: FocusTime keeps no Waiting on list any more; the answer says so instead of "nothing".
+    expect(lines(w)).toEqual([]);
+    expect(w.reply).toMatch(/doesn't keep a list of what others owe you/);
     expectNoLeak(w, s);
     s.question({ topic: "calls" });
     const c = await s.a.handle("Any client calls to review?");

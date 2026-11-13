@@ -1,16 +1,12 @@
-// IB-1 slice 2: one set of actions per Inbox item, wherever it shows (the detail pane, the phone's item sheet, the
-// keys). `actsFor` decides them from the item's state; the primary follows that state: Create DevOps item for a work
-// request or a promise with no item, Close the loop for a late promise, nothing pushy for chatter. The keys run the
-// same Act as its button (J and K move and Enter opens in InboxPage; C, L, F, W, H, N and E here).
+// IB-1 slice 2, IB-4: one set of actions per open row in Promises and Captures (the row open in place, the phone's
+// sheet, the keys). `actsFor` decides them from the item's state; the primary follows that state: Close the loop for a
+// late promise, Create DevOps item for one with no item, Mark done once its item finished, Sort for a capture. From
+// chats has its own actions (ui/inbox/Suggestion.tsx). The keys run the same Act as its button.
 import { useState, type ReactNode } from "react";
-import { PRIMARY_WORD } from "../Conversations.tsx";
 import type { Entry } from "./data.ts";
 
-export type FormId = "close" | "due" | "who" | "link" | "draft" | "not_request" | "sort" | "edit" | "merge" | "snooze" | "give" | "helper";
-export type ActId =
-  | "claim" | "give" | "helper" | "release" | "loop_first"
-  | "create" | "close" | "due" | "who" | "week" | "hide" | "not_needed" | "done" | "link" | "unlink" | "resolve" | "take_over" | "reopen"
-  | "teams" | "not_request" | "not_work" | "sort" | "dismiss" | "edit" | "delete" | "merge" | "prepare" | "snooze" | "wake" | "cancel";
+export type FormId = "close" | "due" | "who" | "link" | "draft" | "sort" | "edit";
+export type ActId = "create" | "close" | "due" | "who" | "week" | "not_needed" | "done" | "link" | "unlink" | "reopen" | "teams" | "sort" | "dismiss" | "edit" | "delete" | "prepare";
 
 /** One action: its words, its key (shown on the button, run by the same key), and whether it's the one primary. */
 export type Act = { id: ActId; label: string; key?: string; primary?: boolean; more?: boolean; href?: string; run: () => void };
@@ -23,86 +19,24 @@ export type ActEnv = {
   editDraft: (draftId: number) => void;
   planWeek: () => void;
   today: string;
-  /** Part 0: opens another Inbox item (a conversation's promise, for Close the loop first). */
-  openItem?: (key: string) => void;
-  /** Whether the open conversation has another open one in its chat to merge into. */
-  canMerge?: boolean;
 };
 
-/** The keys, in the order the key help lists them. */
-export const ITEM_KEYS: readonly { key: string; act: ActId | "next" | "prev" | "open"; does: string }[] = [
-  { key: "J", act: "next", does: "Next item" },
-  { key: "K", act: "prev", does: "Previous item" },
-  { key: "Enter", act: "open", does: "Open the item" },
-  { key: "C", act: "create", does: "Create DevOps item" },
-  { key: "L", act: "close", does: "Close the loop" },
-  { key: "F", act: "due", does: "Change the due day" },
-  { key: "W", act: "week", does: "Put it on my week" },
-  { key: "H", act: "hide", does: "Hide it for me" },
-  { key: "N", act: "not_needed", does: "Not needed" },
-  { key: "E", act: "done", does: "Done" },
+/** IB-4: the keys, in the order the key help lists them. C, L and X answer on From chats; D on Promises. */
+export const ITEM_KEYS: readonly { key: string; does: string }[] = [
+  { key: "J", does: "Next row" },
+  { key: "K", does: "Previous row" },
+  { key: "Enter", does: "Open or close the row" },
+  { key: "C", does: "From chats: Create item" },
+  { key: "L", does: "From chats: Already covered (link it)" },
+  { key: "X", does: "From chats: Dismiss" },
+  { key: "D", does: "Promises: Done" },
 ];
-const KEY_OF: Partial<Record<ActId, string>> = Object.fromEntries(ITEM_KEYS.filter((k) => k.key.length === 1).map((k) => [k.act, k.key]));
-const act = (id: ActId, label: string, run: () => void, o: Partial<Act> = {}): Act => ({ id, label, run, ...(KEY_OF[id] ? { key: KEY_OF[id] } : {}), ...o });
-
-/** QF-1: Not work-related's Undo (its messages back from Chatter, the conversation open again). */
-export const notWorkUndo = (id: number) => ({ action: "conversations.not_work_undo", input: { id } });
+const act = (id: ActId, label: string, run: () => void, o: Partial<Act> = {}): Act => ({ id, label, run, ...(id === "done" ? { key: "D" } : {}), ...o });
 
 /** The actions for one item, primary first. Empty while its source is still loading. */
 export function actsFor(e: Entry, env: ActEnv): Act[] {
-  const acts = baseActs(e, env);
-  // Slice 3: every open item snoozes (never its due); a snoozed one wakes. Not a conversation's closed state or Done.
-  if (!acts.length || e.row.done || (e.kind === "conversation" && e.card?.closed)) return acts;
-  acts.push(e.row.snoozedUntil
-    ? act("wake", "Wake it now", () => void env.run("inbox.snooze", { key: e.row.key, until: null }, "Back in your Inbox"), { more: true })
-    : act("snooze", "Snooze…", () => env.form("snooze"), { more: true }));
-  return acts;
-}
-
-function baseActs(e: Entry, env: ActEnv): Act[] {
   const out: Act[] = [];
-  const hide = (id: string) => act("hide", "Hide for me", () => void env.run("inbox.hide", { key: id, hidden: true }, "Hidden for you", { action: "inbox.hide", input: { key: id, hidden: false } }), { more: true });
   switch (e.kind) {
-    case "conversation": {
-      const c = e.card;
-      if (!c) return [];
-      const open = !c.closed;
-      // Part 0: who has it, the same for everyone who sees it. Each applies at once, with Undo.
-      const sh = c.shared;
-      const undo = { action: "conversations.undo_ownership", input: { id: c.id } };
-      const resolve = () => void env.run("conversations.close_out", { id: c.id }, "Closed out for everyone on the chat", undo);
-      const closeWord = "Close out";
-      const primary: Act | null =
-        c.primary === "create" ? act("create", PRIMARY_WORD.create, () => env.form("draft"), { primary: true })
-        : c.primary === "link" ? act("link", PRIMARY_WORD.link, () => env.form("link"), { primary: true })
-        : c.primary === "resolve" ? act("done", closeWord, resolve, { primary: true })
-        : c.primary === "mark_done" ? act("done", PRIMARY_WORD.mark_done, resolve, { primary: true })
-        : c.primary === "reopen" ? act("reopen", "Reopen", () => void env.run("conversations.reopen", { id: c.id }, "Reopened", undo), { primary: true })
-        : c.primary === "take_over" ? (() => {
-            const k = c.commitments.find((x) => x.state === "open" && x.impliesItem && !x.mine);
-            return k ? act("take_over", PRIMARY_WORD.take_over, () => void env.run("conversations.take_over", { commitmentId: k.id }, `It's yours now. ${k.whoName.split(" ")[0]} is told quietly.`), { primary: true }) : null;
-          })()
-        : null;
-      if (primary) out.push(primary);
-      if (open && !sh.owner) out.push(act("claim", "I'll take it", () => void env.run("conversations.claim", { id: c.id }, "It's yours", undo)));
-      if (open && sh.mayHandOff) out.push(act("give", "Give to…", () => env.form("give")));
-      if (open && sh.owner) out.push(act("helper", "Add helper", () => env.form("helper"), { more: true }));
-      if (open && sh.owner && sh.mayHandOff) out.push(act("release", "Release", () => void env.run("conversations.release", { id: c.id }, "Released: back to Open", undo), { more: true }));
-      const myPromise = c.commitments.find((k) => k.mine && k.state === "open");
-      if (open && myPromise && env.openItem) out.push(act("loop_first", "Close the loop first", () => env.openItem!(`c${myPromise.id}`), { more: true }));
-      if (open && !c.item && c.primary !== "create") out.push(act("create", "Create DevOps item", () => env.form("draft")));
-      if (open && !c.item && c.primary !== "link") out.push(act("link", "Link to item", () => env.form("link")));
-      out.push(act("teams", "Open in Teams", () => {}, { href: c.link }));
-      if (open && c.primary !== "resolve" && c.primary !== "mark_done") out.push(act("done", closeWord, resolve, { more: !sh.owner?.me }));
-      // QF-1: one click, with Undo: its messages go to Chatter and it closes for everyone; nothing is learned.
-      if (open) out.push(act("not_work", "Not work-related", () => void env.run("conversations.not_work", { id: c.id }, "Moved to Chatter for everyone on the chat", notWorkUndo(c.id))));
-      if (open) out.push(act("not_needed", "Not a request", () => env.form("not_request"), { more: true }));
-      if (open && (env.canMerge ?? false)) out.push(act("merge", "Merge into…", () => env.form("merge"), { more: true }));
-      if (c.item) out.push(act("unlink", `Unlink #${c.item.id}`, () => void env.run("conversations.unlink", { id: c.id }, "Unlinked"), { more: true }));
-      if (!open && c.primary !== "reopen") out.push(act("reopen", "Reopen", () => void env.run("conversations.reopen", { id: c.id }, "Reopened", undo), { more: true }));
-      out.push(act("hide", c.hidden ? "Show for me" : "Hide for me", () => void env.run("conversations.hide", { id: c.id, hidden: !c.hidden }, c.hidden ? "Shown again" : "Hidden for you. Nobody else's view changes", { action: "conversations.hide", input: { id: c.id, hidden: c.hidden } }), { more: true }));
-      return out;
-    }
     case "chatPromise": {
       const p = e.promise;
       if (!p) return [];
@@ -121,14 +55,13 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
       out.push(act("who", "Who", () => env.form("who")));
       const onToday = !!p.onToday && p.onToday === env.today;
       out.push(onToday
-        ? act("week", "Take off Today", () => void env.run("my_promises.today", { id: p.id, on: false }, "Off Today"))
-        : act("week", "Add to Today", () => void env.run("my_promises.today", { id: p.id, on: true }, "On Today", { action: "my_promises.today", input: { id: p.id, on: false } })));
+        ? act("week", "Take off my day", () => void env.run("my_promises.today", { id: p.id, on: false }, "Off your day"))
+        : act("week", "Add to my week", () => void env.run("my_promises.today", { id: p.id, on: true }, "On today", { action: "my_promises.today", input: { id: p.id, on: false } })));
       if (first !== markDone) out.push(act("done", "Done", () => void env.run("my_promises.done", { id: p.id }, "Done", undo)));
+      out.push(act("not_needed", "Not needed", () => void env.run("my_promises.not_needed", { id: p.id }, "Not needed", undo)));
       if (!p.item) out.push(act("link", "Link to item", () => env.form("link"), { more: true }));
       else out.push(act("unlink", `Unlink #${p.item.id}`, () => void env.run("my_promises.unlink", { id: p.id }, "Unlinked"), { more: true }));
-      out.push(act("not_needed", "Not needed", () => void env.run("my_promises.not_needed", { id: p.id }, "Not needed", undo), { more: true }));
-      out.push(act("teams", "Open in Teams", () => {}, { href: p.link, more: true }));
-      out.push(hide(e.row.key));
+      if (p.link) out.push(act("teams", "Open in Teams", () => {}, { href: p.link, more: true }));
       return out;
     }
     case "followUp": {
@@ -140,34 +73,18 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
       out.push(act("who", "Who", () => env.form("who")));
       out.push(act("week", "Add to my week", env.planWeek));
       out.push(act("done", "Done", () => void env.run("followup.close", { id: f.id, note: null }, "Done")));
+      out.push(act("not_needed", "Not needed", () => void env.run("followup.not_needed", { id: f.id }, "Closed as not needed")));
       out.push(act("edit", "Edit…", () => env.form("edit"), { more: true }));
-      out.push(act("not_needed", "Not needed", () => void env.run("followup.not_needed", { id: f.id }, "Closed as not needed"), { more: true }));
       if (f.byHand) out.push(act("delete", "Delete", () => void env.run("followup.delete", { id: f.id }, "Deleted"), { more: true }));
-      out.push(hide(e.row.key));
       return out;
     }
     case "send":
-      // Accept, Accept and schedule, Pass to… and Can't this week are the send's own row in the pane (SW-1's).
-      return [hide(e.row.key)];
-    case "waiting": {
-      // Slice 3: what I wait on. Nothing pushy: no primary; Take it over (CV-1's, anyone who sees it), Cancel my send while
-      // it waits (SW-1's), my week for an Ask to look; Hide and Snooze for all.
-      const id = Number(e.row.key.slice(1));
-      const k = e.row.kind;
-      if (k === "commitment") out.push(act("take_over", "Take it over", () => void env.run("conversations.take_over", { commitmentId: id }, `It's yours now. ${(e.row.who ?? "They").split(" ")[0]} is told quietly.`)));
-      if (k === "sent") out.push(act("cancel", "Cancel the send", () => void env.run("send.cancel", { id }, "Send cancelled")));
-      if (k === "ask") out.push(act("week", "Open my week", env.planWeek));
-      out.push(hide(e.row.key));
-      return out;
-    }
+      // Accept, Accept and schedule, Pass to… and Can't this week are the send's own row (SW-1's).
+      return [];
     case "capture": {
       const c = e.capture;
       if (!c) return [];
-      return [
-        act("sort", "Sort", () => env.form("sort"), { primary: true }),
-        act("dismiss", "Dismiss", () => void env.run("capture.route", { id: c.id, as: "dismissed" }, "Dismissed")),
-        hide(e.row.key),
-      ];
+      return [act("sort", "Sort", () => env.form("sort"), { primary: true }), act("delete", "Delete", () => void env.run("capture.route", { id: c.id, as: "dismissed" }, "Deleted"))];
     }
     case "draft": {
       const d = e.draft;
@@ -178,7 +95,6 @@ function baseActs(e: Entry, env: ActEnv): Act[] {
         // CP-1, UI-7: one more AI request for its DevOps version, once a prepare ran (the server says when it can't now).
         ...(d.ai && d.ai.state !== "writing" ? [act("prepare", "Prepare again", () => void env.run("draft.prepare", { id: d.id, again: true }, "Prepared again"), { more: true })] : []),
         act("delete", "Delete draft", () => void env.run("draft.remove", { id: d.id }, "Draft deleted"), { more: true }),
-        hide(e.row.key),
       ];
     }
   }

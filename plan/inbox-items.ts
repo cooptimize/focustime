@@ -41,6 +41,12 @@ export function parseKey(key: string): { source: KeySource; id: number } | null 
 
 /** My marks on an item (inbox_marks): seen, snoozed until an instant, hidden. Absent: none. */
 export type Mark = { seenAt: string | null; snoozedUntil: string | null; hiddenAt: string | null };
+/** IB-4: what I did with a suggestion; how a promise cleared on its own. */
+export type SuggestionOutcome = "created" | "linked" | "dismissed" | "promised";
+export type ClearedHow = "item" | "expired";
+/** The whole row of my marks (IB-1's three plus IB-4's). */
+export type InboxMark = Mark & { suggestedAt: string | null; outcome: SuggestionOutcome | null; outcomeAt: string | null; touchedAt: string | null; cleared: ClearedHow | null; clearedAt: string | null; putBackAt: string | null };
+export type InboxMarkPatch = { seen?: true; snoozedUntil?: string | null; hidden?: boolean; suggested?: true; outcome?: SuggestionOutcome | null; touched?: true; cleared?: { how: ClearedHow; at: string } | null; putBack?: true };
 
 /** What the rules need to know about one item; the server fills it from each source. */
 export type InboxFacts = {
@@ -85,6 +91,8 @@ export type InboxFacts = {
   /** Slice 3, for the Needs you reason: a conversation's own why (CV-1's facts), and whether a promise came from a chat. */
   needsWhy?: "mention" | "work" | "committed" | "owner" | "unclaimed" | "suggestion" | "wrapped" | "new" | null;
   fromChat?: boolean;
+  /** IB-4: a conversation that is a suggestion from chats (it needs an item no one has made). */
+  suggestion?: boolean;
   /**
    * Slice 4: a conversation holding a request the AI sorted as needing someone now (AP-2's urgency "now"), with that
    * request for Today's Start focus. Before slice 4 Today read these on their own (week.load's `requests.urgent`).
@@ -137,18 +145,14 @@ export function lifecycleOf(f: InboxFacts, m: Mark | undefined, today: IsoDate):
 }
 
 /**
- * The one Needs you rule (IB-1): conversations CV-1's rules say need me, sends waiting for my answer, and promises that
- * are new (not seen or acted on) or due today or overdue. Later promises live only in Promises. Captures, drafts and
- * chatter never count. Snoozed and hidden items never count.
+ * The one count rule (IB-4, replacing IB-1's Needs you): suggestions from chats, and my promises that are late or due
+ * today. Captures, drafts, sends and chatter never count. Snoozed and hidden items never count. Zero shows nothing.
  */
 export function needsYou(f: InboxFacts, m: Mark | undefined, today: IsoDate, now: string): boolean {
   if (asleep(m, now) || f.done) return false;
-  if (f.kind === "promise") {
-    if (!triaged(f, m)) return true;
-    return !!f.due && f.due <= today;
-  }
-  const l = lifecycleOf(f, m, today);
-  return l === "needs_you" || l === "new";
+  if (f.kind === "conversation") return !!f.suggestion;
+  if (f.kind === "promise") return isLate(f, today, now) || (!!f.due && f.due <= today);
+  return false;
 }
 
 /** Every view an item shows in (Chatter holds messages, not items, so never here). */
@@ -163,6 +167,9 @@ export function viewsOf(f: InboxFacts, m: Mark | undefined, today: IsoDate, now:
   if (l === "waiting" || f.waitingOn) out.push("waiting");
   if (l === "teammates") out.push("teammates");
   if (f.kind === "capture" || f.kind === "draft") out.push("captures");
+  // IB-4: a send waiting for my answer is in no list (Week's To place answers it) and never counts, but Today's strip
+  // still shows it: it keeps a view so a hidden or snoozed one (no views) stays off the strip.
+  if (f.kind === "send" && f.sendState === "waiting") out.push("waiting");
   return [...new Set(out)];
 }
 
@@ -299,19 +306,16 @@ export function promiseSoon(r: Pick<InboxItemView, "late" | "due" | "dueAt">, o:
 }
 
 /**
- * Today's urgent strip: Inbox rows that are in Needs you and urgent now, in this order: conversations with a request
- * the AI sorted as needed now ("Needs you now"), my promises that are late or due soon (late first, then by time), and
- * sends to me waiting for my answer (Musts first). Every line is a Needs you item, so the strip never shows something
- * the badge doesn't count, and each opens its own item in the Inbox.
+ * Today's urgent strip (IB-4): my promises that are late or due soon (late first, then by time), and sends to me waiting
+ * for my answer (Musts first). Conversations no longer show here; at most 3 lines show, with no "more in Inbox" line.
  */
 export function todayLines(rows: readonly InboxItemView[], o: { today: IsoDate; now: string; dayEnd: string | null }): InboxItemView[] {
-  const needs = rows.filter((r) => r.views.includes("needs_you"));
-  const convs = needs.filter((r) => r.kind === "conversation" && !!r.urgent);
-  const promises = needs
+  const awake = rows.filter((r) => r.views.length > 0 && !r.done);
+  const promises = awake
     .filter((r) => r.kind === "promise" && promiseSoon(r, o))
     .sort((a, b) => Number(b.late) - Number(a.late) || (a.dueAt ?? "9").localeCompare(b.dueAt ?? "9") || (a.due ?? "9").localeCompare(b.due ?? "9"));
-  const sends = needs.filter((r) => r.kind === "send" && r.sendState === "waiting").sort((a, b) => Number(!!b.must) - Number(!!a.must) || b.at.localeCompare(a.at));
-  return [...convs, ...promises, ...sends];
+  const sends = awake.filter((r) => r.kind === "send" && r.sendState === "waiting").sort((a, b) => Number(!!b.must) - Number(!!a.must) || b.at.localeCompare(a.at));
+  return [...promises, ...sends];
 }
 
 /** One promise on Week's rail (plan/rail-promises.ts places it): the Inbox row's key, what, to whom and when. */
@@ -328,8 +332,8 @@ export function railItems(rows: readonly InboxItemView[]): RailItem[] {
 /** What `inbox.today` returns: the badge's number and the rows Today's strip and Week's rail read. */
 export type InboxTodayData = { today: IsoDate; needsYou: number; items: InboxItemView[] };
 
-/** The rows `inbox.today` sends: those in Needs you, and the promises the rail can show. */
-export const forToday = (r: InboxItemView) => r.views.includes("needs_you") || (r.kind === "promise" && !r.done && r.views.length > 0 && (!!r.dueAt || r.late));
+/** The rows `inbox.today` sends (IB-4): suggestions (Day's "From chats" chip), promises the strip and rail can show, sends waiting. */
+export const forToday = (r: InboxItemView) => (r.kind === "conversation" && r.views.includes("needs_you")) || (r.kind === "promise" && !r.done && r.views.length > 0 && (r.views.includes("needs_you") || !!r.dueAt || r.late)) || (r.kind === "send" && r.sendState === "waiting" && r.views.length > 0);
 
 // ---- Slice 3: snooze ----
 

@@ -25,6 +25,11 @@ export const COMMITMENT_STATES = ["open", "followup", "linked", "created", "done
 export type CommitmentState = (typeof COMMITMENT_STATES)[number];
 export const ITEM_CHANGES = ["decision", "root_cause", "scope", "date", "data"] as const;
 export type ItemChange = (typeof ITEM_CHANGES)[number];
+/** IB-4: the level a suggested item would sit at, in the client's own process (never a type name). */
+export const ITEM_LEVELS = ["child", "feature", "epic"] as const;
+export type ItemLevel = (typeof ITEM_LEVELS)[number];
+/** IB-4: the sorting step's judgment that a conversation asks for a DevOps item no one has made yet. */
+export type ItemNeeded = { why: string; title: string; level: ItemLevel };
 
 export type Participant = { id: string; name: string; external: boolean };
 
@@ -67,6 +72,8 @@ export type Conversation = {
   mergedInto: number | null;
   /** GD-2: the other clients its messages name (keys), for the "mentions <client>" tag. Empty for most. */
   mentions?: string[];
+  /** IB-4: the sorting step's judgment that it asks for a DevOps item no one has made yet (null: no suggestion). */
+  itemNeeded?: ItemNeeded | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -324,7 +331,7 @@ export const UPDATE_INSTRUCTIONS = [
   "You keep a consulting team's view of one client's Teams chat up to date. New messages arrive in a batch.",
   "Use only the input. Plain, short English. Never invent refs or ids: use only refs and item ids given in the input.",
   "For every message in messages: kind is work (about the client's work: data, reports, bugs, requests, decisions, deployments, questions about the work) or chatter (weather, sports, jokes, personal plans, greetings). conversation is the ref of the open conversation it continues, or a new ref you make up like n1, n2 for a new topic (several messages may share one new ref), or null for chatter. Respect hint: a hinted message joins that conversation unless you are confident it starts a new topic (then set confident_new_topic true).",
-  "For every conversation you touched (open refs or new ones): title (at most 70 characters, what it is about), summary (2 to 4 short lines: what was asked, what has been found, who is on it, what is next; use people's first names), owner (the person ref of the Cooptimize person on it, or null), wrapped_up (true when it ended with thanks or a clear conclusion and nothing is left to do), change (one short line saying what changed in this batch), item_change (when something meaningful for a DevOps item happened: decision, root_cause, scope, date or data, with a one-line note; otherwise null), scope_changed (true only when what is being asked for clearly changed), likely_item (the id of one open_items entry that is clearly the same work, or null).",
+  "For every conversation you touched (open refs or new ones): title (at most 70 characters, what it is about), summary (2 to 4 short lines: what was asked, what has been found, who is on it, what is next; use people's first names), owner (the person ref of the Cooptimize person on it, or null), wrapped_up (true when it ended with thanks or a clear conclusion and nothing is left to do), change (one short line saying what changed in this batch), item_change (when something meaningful for a DevOps item happened: decision, root_cause, scope, date or data, with a one-line note; otherwise null), scope_changed (true only when what is being asked for clearly changed), likely_item (the id of one open_items entry that is clearly the same work, or null), item_needed (IB-4: when the conversation asks for work that belongs in DevOps, such as a bug, a change, a new report or a data fix, and no open_items entry already covers it: why (one short line saying why it needs an item), title (a DevOps title, at most 80 characters) and level (child for a story or bug sized piece, feature for a bigger body of work, epic only for a large initiative); null when it is a status update, someone saying what they are working on or which item they will pick up next, a question that was answered, scheduling, thanks, or anything already tracked).",
   "commitments: when someone says they will do something (\"I'll look tonight\", \"I'll get this into the dev queue\", \"I'll log a ticket\"): who (person ref), what (an action, at most 80 characters, specific: say what will be done, using the conversation's words), due (YYYY-MM-DD or YYYY-MM-DDTHH:MM in the writer's local time, only when they said when, else null; a later message about when they'll be back can set the time), to (the person ref they answered or mentioned, never the committer, or null), implies_item (true when it means a DevOps item: dev queue, backlog, ticket, bug, story, fix in the next release), messages (the refs of their messages it comes from), status_only (true when it only says where they will be, like \"back online at 7:30\").",
   "Messages from one person close together (the same group) make at most one commitment: merge them.",
 ].join("\n");
@@ -361,6 +368,12 @@ export const UPDATE_SCHEMA: JsonSchema = {
           },
           scope_changed: { type: "boolean" },
           likely_item: { type: ["integer", "null"] },
+          item_needed: {
+            anyOf: [
+              { type: "object", properties: { why: { type: "string" }, title: { type: "string" }, level: { type: "string", enum: [...ITEM_LEVELS] } }, required: ["why", "title", "level"], additionalProperties: false },
+              { type: "null" },
+            ],
+          },
           commitments: {
             type: "array",
             items: {
@@ -379,7 +392,7 @@ export const UPDATE_SCHEMA: JsonSchema = {
             },
           },
         },
-        required: ["ref", "title", "summary", "owner", "wrapped_up", "change", "item_change", "scope_changed", "likely_item", "commitments"],
+        required: ["ref", "title", "summary", "owner", "wrapped_up", "change", "item_change", "scope_changed", "likely_item", "item_needed", "commitments"],
         additionalProperties: false,
       },
     },
@@ -435,6 +448,8 @@ export type UpdateAnswer = {
     item_change: { kind: ItemChange; note: string } | null;
     scope_changed: boolean;
     likely_item: number | null;
+    /** IB-4: optional in older answers (tests, stored replays); the schema sent asks for it. */
+    item_needed?: { why: string; title: string; level: string } | null;
     commitments: { who: string; what: string; due: string | null; to: string | null; implies_item: boolean; messages: string[]; status_only: boolean }[];
   }[];
 };
@@ -533,9 +548,20 @@ export type CheckedUpdate = {
     itemChange: { kind: ItemChange; note: string } | null;
     scopeChanged: boolean;
     likelyItem: number | null;
+    /** IB-4: null when not needed or when the answer's judgment didn't hold together (never rejects the answer). */
+    itemNeeded: ItemNeeded | null;
     commitments: { whoId: string; what: string; due: string | null; toId: string | null; impliesItem: boolean; messageIds: string[]; statusOnly: boolean }[];
   }[];
 };
+
+/** IB-4: a judgment that doesn't hold together (an unknown level, no title) is no suggestion, never a bad answer. */
+export function checkItemNeeded(x: UpdateAnswer["conversations"][number]["item_needed"]): ItemNeeded | null {
+  if (!x || typeof x !== "object") return null;
+  const level = (ITEM_LEVELS as readonly string[]).includes(x.level) ? (x.level as ItemLevel) : null;
+  const title = typeof x.title === "string" ? oneLine(x.title, 80) : "";
+  const why = typeof x.why === "string" ? oneLine(x.why, 160) : "";
+  return level && title ? { why, title, level } : null;
+}
 
 export class BadAnswer extends Error {}
 
@@ -593,6 +619,7 @@ export function checkUpdate(a: UpdateAnswer, refs: Refs, o: { batch: readonly st
       itemChange: c.item_change ? { kind: c.item_change.kind, note: oneLine(c.item_change.note, 300) } : null,
       scopeChanged: c.scope_changed,
       likelyItem: c.likely_item,
+      itemNeeded: c.likely_item !== null ? null : checkItemNeeded(c.item_needed),
       commitments: c.commitments.map((x) => ({ whoId: personId(x.who), what: oneLine(x.what, 120), due: x.due, toId: x.to ? personId(x.to) : null, impliesItem: x.implies_item, messageIds: x.messages.map(anyMessage), statusOnly: x.status_only })),
     };
   });

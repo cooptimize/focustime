@@ -6,10 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { weekConfig } from "../config/defaults.ts";
 import type { MyPromisesData } from "../plan/conversation-views.ts";
-import type { ClientChat } from "../plan/requests.ts";
-import { aClientChat, aClientEntry, aCommitmentAnswer, aConversationUpdate, anAiApp, anAiRules, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
-import { createAi } from "../ai/service.ts";
-import { stubProvider } from "../ai/stub.ts";
+import { aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
 import type { WorkItem } from "../week/types.ts";
 import { conversationAction, dayPromises } from "./conversation-actions.ts";
@@ -131,89 +128,21 @@ describe("Move and Split", () => {
   });
 });
 
-describe("commitments and escalation", () => {
-  it("after one of Evan's working days: Waiting on Evan for everyone, Unclaimed for leads, Take it over tells Evan quietly", async () => {
+describe("IB-4: no chasing, no follow-through", () => {
+  it("a promise waiting for its item is never escalated, and a linked conversation gets no suggested comment", async () => {
     const w = world({ respond: allianceAnswer });
     const c = await alliance(w);
     const p = await people(w, { leads: [SAM.userId!] });
-    // Same day: nothing yet.
-    w.setNow("2026-11-05T15:00:00Z");
-    expect((await upkeep(upkeepDeps(w))).escalated).toBe(0);
-    // Thursday 2:00 PM in Chicago: a working day after Wednesday 1:55 PM.
-    w.setNow("2026-11-05T20:00:00Z");
-    expect((await upkeep(upkeepDeps(w))).escalated).toBe(1);
-    const lena = (await p.as(LENA).run("conversations.list")).needsYou[0]!;
-    expect(lena).toMatchObject({ waiting: { name: "Evan", days: 1 }, statusLine: "Waiting on Evan · 1 day", primary: "take_over" });
-    const sam = await p.as(SAM).run("conversations.list");
-    expect(sam.needsYou.map((x) => x.id)).toEqual([c.id]);
-    expect(sam.needsYou[0]!.unclaimed).toBe(true);
-    const [k] = await w.convs.commitmentsIn([c.id]);
-    await p.as(LENA).run("conversations.take_over", { commitmentId: k!.id });
-    const after = (await w.convs.commitment(k!.id))!;
-    expect(after).toMatchObject({ whoId: LENA.userId, takenBy: LENA.userId, takenFrom: EVAN.userId, escalatedAt: null, state: "open" });
-    expect((await w.convs.conversation(c.id))!.ownerId).toBe(LENA.userId);
-    // Lena's now: in her My promises; Evan's no longer.
-    expect((await p.as(LENA).run<MyPromisesData>("my_promises.list")).promises.map((x) => x.id)).toEqual([k!.id]);
-    expect((await p.as(EVAN).run<MyPromisesData>("my_promises.list")).promises).toEqual([]);
-  });
-});
-
-describe("follow-through", () => {
-  it("one comment suggestion for the item's owner after a 30-minute pause, at most one a day unless it resolves", async () => {
-    const w = world({ respond: allianceAnswer });
-    const c = await alliance(w);
-    const p = await people(w);
     await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
-    await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause is BOM bridging on a measure change", at: "2026-11-04T19:55:00Z", scope: false } });
+    await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause found", at: "2026-11-04T19:55:00Z", scope: true } });
     const items = [aWorkItem({ id: 4101, title: "Movement dashboard refresh", assignedToEmail: "evan@contoso.example" })];
-    w.setNow("2026-11-04T20:10:00Z");
-    expect((await upkeep(upkeepDeps(w, items))).suggestions).toBe(0);
-    w.setNow("2026-11-04T20:40:00Z");
-    expect((await upkeep(upkeepDeps(w, items))).suggestions).toBe(1);
-    const [s] = await w.convs.suggestionsIn([c.id]);
-    expect(s).toMatchObject({ kind: "comment", itemId: 4101, forUser: EVAN.userId, body: "Cause is BOM bridging on a measure change", internal: [] });
-    // Another change the same day: no second one.
-    await w.convs.updateConversation(c.id, { itemChange: { kind: "decision", note: "Fix goes in next sprint", at: "2026-11-04T20:45:00Z", scope: false } });
-    w.setNow("2026-11-04T21:30:00Z");
-    expect((await upkeep(upkeepDeps(w, items))).suggestions).toBe(0);
-    // Resolved: one more, even the same day.
-    await p.as(EVAN).run("suggestions.skip", { id: s!.id });
-    await w.convs.updateConversation(c.id, { itemChange: { kind: "decision", note: "Fix goes in next sprint", at: "2026-11-04T21:00:00Z", scope: false } });
-    await p.as(EVAN).run("conversations.resolve", { id: c.id });
-    expect((await upkeep(upkeepDeps(w, items))).suggestions).toBe(1);
-  });
-
-  it("GD-2: the AI's comment names no other client: replaced, and the suggestion carries the notice", async () => {
-    const w = world({ respond: allianceAnswer });
-    const c = await alliance(w);
-    const p = await people(w);
-    await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
-    await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause is BOM bridging", at: "2026-11-04T19:55:00Z", scope: false } });
-    const items = [aWorkItem({ id: 4101, title: "Movement dashboard refresh", assignedToEmail: "evan@contoso.example" })];
-    const calls: string[] = [];
-    const ai = createAi({ provider: async () => stubProvider({ respond: (x) => (calls.push(x.instructions), JSON.stringify({ lines: ["Same cause as Wingtip had in March"] })) }), app: anAiApp({ provider: "openai", appCapUsd: 100 }), rules: async () => anAiRules({ on: true, allowedClients: ["contoso"] }), guard: async () => ({ directory: [aClientEntry({ key: "wingtip", names: ["Wingtip"], projects: [], itemIds: [] })], homeDomains: ["contoso.example"], forbidden: [] }), log: w.convs.appAiLog, appSpend: { get: async () => 0, add: async () => {} }, now: w.now });
-    w.setNow("2026-11-04T20:40:00Z");
-    expect((await upkeep({ ...upkeepDeps(w, items), ai: async () => ai })).suggestions).toBe(1);
-    expect(calls[0]).toContain("Never name any other client");
-    const [s] = await w.convs.suggestionsIn([c.id]);
-    expect(s).toMatchObject({ body: "Same cause as another client had in March", namesRemoved: true });
-    const l = await p.as(EVAN).run("conversations.list");
-    const card = [...l.needsYou, ...l.inProgress, ...l.teammates, ...l.closed].find((x) => x.id === c.id)!;
-    expect(card.suggestions[0]?.namesRemoved).toBeTruthy();
-  });
-
-  it("internal chat lines are flagged and left out of the comment by default; a scope change also suggests a description", async () => {
-    const w = world({ respond: allianceAnswer });
-    const INTERNAL: ClientChat = aClientChat({ chatId: "19:contoso-team@thread.v2", clientKey: "contoso", kind: "delivery", displayName: "Contoso team (Cooptimize)", members: [EVAN, LENA] });
-    await w.say(INTERNAL, EVAN, "2026-11-04T19:00:00Z", "x");
-    const c = await w.convs.addConversation({ chatId: INTERNAL.chatId, clientKey: "contoso", title: "Scope", summary: "s", participants: [], firstAt: "2026-11-04T19:00:00Z", lastAt: "2026-11-04T19:00:00Z", lastWorkAt: "2026-11-04T19:00:00Z", item: { id: 4101, url: null, title: null } });
-    await w.convs.updateConversation(c.id, { itemChange: { kind: "scope", note: "Also cover the weekly view", at: "2026-11-04T19:00:00Z", scope: true }, ownerId: EVAN.userId! });
-    w.setNow("2026-11-04T20:00:00Z");
-    await upkeep(upkeepDeps(w));
-    const [s, ...rest] = await w.convs.suggestionsIn([c.id]);
-    expect(s).toMatchObject({ kind: "comment", body: "", internal: ["Also cover the weekly view"] });
-    // Internal: no description suggestion either (nothing from it goes to DevOps unless included).
-    expect(rest).toEqual([]);
+    // Days later: nothing escalated, nothing suggested, no AI asked.
+    w.setNow("2026-11-09T20:00:00Z");
+    let asked = 0;
+    expect(await upkeep({ ...upkeepDeps(w, items), ai: async () => (asked++, null) })).toEqual({ escalated: 0, suggestions: 0 });
+    expect(asked).toBe(0);
+    expect(await w.convs.suggestionsIn([c.id])).toEqual([]);
+    for (const k of await w.convs.commitmentsIn([c.id])) expect(k.escalatedAt).toBeNull();
   });
 });
 

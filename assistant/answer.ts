@@ -196,8 +196,8 @@ function promises(ctx: AnswerContext, link: LinkFn, lateOnly: boolean): Composed
 }
 
 function waiting(ctx: AnswerContext, link: LinkFn): Composed {
-  const sections = byClient(ctx, ctx.waiting, (w) => ({ text: `${w.who ? `${w.who}: ` : ""}${w.title}${w.due ? ` (${w.late ? "was due" : "due"} ${dateLabel(w.due)})` : ""}`, link: link(`#/inbox/item/${w.key}`, "Open in the Inbox") }));
-  return { reply: ctx.waiting.length ? `You're waiting on ${plural(ctx.waiting.length, "thing")}${ctx.waiting.some((w) => w.late) ? `, ${ctx.waiting.filter((w) => w.late).length} late` : ""}.` : "You're not waiting on anyone right now.", sections: [...sections, ...notKnown(ctx, "inbox")], suggestions: [], refs: refsOf(ctx, [], [], []), links: [link("#/inbox/waiting", "Open Waiting on")] };
+  // IB-4: FocusTime no longer tracks what other people owe me, so this says so plainly instead of "nothing".
+  return { reply: "FocusTime doesn't keep a list of what others owe you any more. Your own promises are in the Inbox.", sections: [], suggestions: [], refs: refsOf(ctx, [], [], []), links: [link("#/inbox/promises", "Open Promises")] };
 }
 
 function readiness(ctx: AnswerContext, link: LinkFn): Composed {

@@ -189,7 +189,50 @@ export type Diagnostics = {
     extraction: { checked: number; byReason: Record<string, number>; rows: ExtractionRow[] };
   };
   chats: ChatRow[];
+  /** IB-4: the slim Inbox in the window, counts only (optional: older builds' answers have none). */
+  inbox?: InboxCounts;
 };
+
+/** IB-4: suggestions shown to me and what became of them; my chat promises and how they ended. Counts only. */
+export type InboxCounts = {
+  suggestions: { shown: number; created: number; linked: number; dismissed: number; wrappedUp: number; expired: number };
+  promises: { found: number; done: number; byItem: number; expired: number; putBack: number };
+};
+
+/** One suggestion's facts for the count: my mark on it and its conversation now. */
+export type SuggestionFact = { suggestedAt: string; outcome: string | null; itemId: number | null; windDown: boolean; closedAt: string | null; lastWorkAt: string };
+/** One of my chat promises: when it was found, its state now, and my mark's clearing and put back. */
+export type PromiseFact = { createdAt: string; state: string; cleared: "item" | "expired" | null; clearedAt: string | null; putBackAt: string | null };
+
+/**
+ * IB-4: the slim Inbox's counts since `since`. A suggestion counts once, by what happened: Create item (an item with no
+ * Link), Already covered (linked), Dismiss, wrapped up in the chat, or expired (quiet more than 7 days with none of these).
+ * One left open is only "shown". A promise found in the window counts as found; done, cleared and put back count by
+ * when they happened.
+ */
+export function inboxCounts(s: readonly SuggestionFact[], p: readonly PromiseFact[], since: string, now: string): InboxCounts {
+  const after = (t: string | null) => !!t && Date.parse(t) >= Date.parse(since);
+  const week = 7 * 24 * 3600_000;
+  const sug = { shown: 0, created: 0, linked: 0, dismissed: 0, wrappedUp: 0, expired: 0 };
+  for (const x of s) {
+    if (!after(x.suggestedAt)) continue;
+    sug.shown++;
+    if (x.outcome === "linked") sug.linked++;
+    else if (x.outcome === "dismissed") sug.dismissed++;
+    else if (x.itemId !== null) sug.created++;
+    else if (x.windDown || x.closedAt) sug.wrappedUp++;
+    else if (Date.parse(now) - Date.parse(x.lastWorkAt) > week) sug.expired++;
+  }
+  const pr = { found: 0, done: 0, byItem: 0, expired: 0, putBack: 0 };
+  for (const x of p) {
+    if (after(x.createdAt)) pr.found++;
+    if (x.cleared === "item" && after(x.clearedAt)) pr.byItem++;
+    else if (x.cleared === "expired" && after(x.clearedAt)) pr.expired++;
+    else if (x.state === "done" && !x.cleared) pr.done++;
+    if (after(x.putBackAt)) pr.putBack++;
+  }
+  return { suggestions: sug, promises: pr };
+}
 
 export const zeroReasons = (): Record<PromiseReason, number> => Object.fromEntries(PROMISE_REASONS.map((r) => [r, 0])) as Record<PromiseReason, number>;
 export const zeroStatuses = (): Record<ConversationStatus, number> => Object.fromEntries(CONVERSATION_STATUSES.map((s) => [s, 0])) as Record<ConversationStatus, number>;
@@ -205,6 +248,13 @@ export function diagnosticsText(d: Diagnostics): string {
     `Conversations by status: ${pairs(d.promises.byStatus)}`,
     `Committed: ${d.promises.committed}; by reason: ${pairs(d.promises.byReason)}`,
     `Promise-sounding messages of mine, last ${d.days} days: ${d.promises.extraction.checked}; with no commitment of mine, by reason: ${pairs(d.promises.extraction.byReason)}`,
+    "",
+    ...(d.inbox ? [
+      "",
+      `Inbox, last ${d.days} days`,
+      `Suggestions shown: ${d.inbox.suggestions.shown}; created ${d.inbox.suggestions.created}, linked ${d.inbox.suggestions.linked}, dismissed ${d.inbox.suggestions.dismissed}, wrapped up in chat ${d.inbox.suggestions.wrappedUp}, expired ${d.inbox.suggestions.expired}`,
+      `Promises found in chats: ${d.inbox.promises.found}; marked done ${d.inbox.promises.done}, cleared by a finished item ${d.inbox.promises.byItem}, expired untouched ${d.inbox.promises.expired}, put back ${d.inbox.promises.putBack}`,
+    ] : []),
     "",
     `Chatter filter check, last ${d.days} days`,
   ];

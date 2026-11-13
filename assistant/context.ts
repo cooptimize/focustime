@@ -203,7 +203,8 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
       const fromInbox: CtxPromise[] = [];
       for (const r of l.items) {
         if (r.clientKey === null ? client !== null : !ok(r.clientKey)) continue;
-        if (r.views.includes("waiting")) ctx.waiting.push({ key: r.key, clientKey: r.clientKey, title: r.title, who: r.who, due: r.due, late: !!r.late });
+        // IB-4: only someone's commitment to me is waiting on them (a send waiting for my own answer isn't).
+        if (r.views.includes("waiting") && r.kind === "commitment") ctx.waiting.push({ key: r.key, clientKey: r.clientKey, title: r.title, who: r.who, due: r.due, late: !!r.late });
         if (r.views.includes("promises") && r.clientKey && !r.done && (r.late || inP(period, r.due) || (!!r.due && period.from <= d.today && r.due <= period.to)))
           fromInbox.push({ id: Number(/(\d+)$/.exec(r.key)?.[1] ?? 0), key: r.key, clientKey: r.clientKey, what: r.title, to: r.who, due: r.dueAt ?? r.due ?? "", late: !!r.late });
       }

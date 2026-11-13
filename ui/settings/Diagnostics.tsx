@@ -102,6 +102,36 @@ export function DiagnosticsPanel() {
             </ul>
           )}
 
+          {d.inbox && (
+            <>
+              <h4>Inbox, last {d.days} days</h4>
+              <ul className="dx-counts" aria-label="Suggestions from chats">
+                <li className="dx-counts-head">
+                  <span>Suggestions shown</span>
+                  <span className="num">{d.inbox.suggestions.shown}</span>
+                </li>
+                {([["Created an item", d.inbox.suggestions.created], ["Already covered", d.inbox.suggestions.linked], ["Dismissed", d.inbox.suggestions.dismissed], ["Wrapped up in the chat", d.inbox.suggestions.wrappedUp], ["Expired", d.inbox.suggestions.expired]] as const).map(([w, n]) => (
+                  <li key={w}>
+                    <span>{w}</span>
+                    <span className="num">{n}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="dx-counts" aria-label="Promises from chats">
+                <li className="dx-counts-head">
+                  <span>Promises found in chats</span>
+                  <span className="num">{d.inbox.promises.found}</span>
+                </li>
+                {([["Marked done", d.inbox.promises.done], ["Cleared by a finished item", d.inbox.promises.byItem], ["Expired untouched", d.inbox.promises.expired], ["Put back", d.inbox.promises.putBack]] as const).map(([w, n]) => (
+                  <li key={w}>
+                    <span>{w}</span>
+                    <span className="num">{n}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
           <h4>Chatter filter check, last {d.days} days</h4>
           {!d.chats.length && <p className="muted">No registered chats you're in.</p>}
           {d.chats.length > 0 && (

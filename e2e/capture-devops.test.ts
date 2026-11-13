@@ -108,15 +108,15 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       const d = (await drafts(page))[0]!;
       expect(d).toMatchObject({ clientKey: "Adatum", title: "Invoice export for finance as csv" });
       // IB-1: the draft is a row in Captures and drafts; its pane says what it needs.
-      const row = page.locator(".ib-row", { hasText: "Invoice export for finance" }).first();
+      const row = page.locator("li.ib4-row", { hasText: "Invoice export for finance" }).first();
       await row.click();
-      await expect.poll(() => page.locator(".ib-pane .dw-draft-state").textContent()).toBe("Ready to create");
-      await expect(row.locator(".ib-row-title").textContent()).resolves.toContain("Invoice export for finance");
+      await expect.poll(() => page.locator("li.ib4-row.open .dw-draft-state").textContent()).toBe("Ready to create");
+      await expect(row.locator(".ib4-row-title").textContent()).resolves.toContain("Invoice export for finance");
       await shotBoth(page, "cp1-capture-toast-drafts", page.locator(".ib-capture .cap-box"));
 
       // UI-7, IB-1: the pane's ⋯ has Prepare again (one more request) and Delete.
       const before = prepares;
-      const pane = page.locator(".ib-pane");
+      const pane = page.locator("li.ib4-row.open");
       await pane.getByRole("button", { name: /^More for/ }).click();
       await expect(pane.getByRole("menuitem", { name: "Delete draft" }).count()).resolves.toBe(1);
       await pane.getByRole("menuitem", { name: "Prepare again" }).click();
@@ -135,7 +135,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
 
       // QC-1: Create in DevOps on a draft's row goes straight to the write framework's preview, in my own words.
       await row.click();
-      await page.locator(".ib-pane").getByRole("button", { name: "Create in DevOps" }).click();
+      await page.locator("li.ib4-row.open").getByRole("button", { name: "Create in DevOps" }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
       await preview.waitFor();
       await expect(preview.locator(".dw-client").textContent()).resolves.toContain("Creating in Adatum's DevOps");

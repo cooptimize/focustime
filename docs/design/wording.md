@@ -203,3 +203,16 @@ The words below are no longer shown: the New form, the draft editor and the card
 - **Move…** beside the parent and in the card's ⋯; "Now under: …", "Find a feature", **No parent**, "(now)", "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.", then **Preview**.
 - The owner's note: **"<name> edited #<id>"**. The preview: "Assigned to <name>, not you. They get a quiet note in FocusTime that you edited it."
 - The write log: **Edited**, **Moved**, **Undo: edit put back**, **Undo: moved back**.
+
+## IB-4 words (Nov 12)
+
+- The Inbox's lists: **From chats**, **Promises**, **Captures**, each with its count. Never "Needs you", "Waiting on", "In progress", "Handled by teammates", "Chatter" or "Everything" in what a person reads now.
+- A suggestion's actions: **Create item**, **Already covered**, **Dismiss** (toast **"Dismissed for you"** with **Undo**); under ⋯ **Add as my promise**, **This isn't work** (toast "Not work: closed for everyone on the chat", with Undo), **Open in Teams**. Its line: **"Why it needs an item: …"** and **"Suggested as a story: “…”"** (the client's own type name).
+- The foot of From chats: **"Chats last checked 9:25 AM. A conversation shows here once it has been quiet for 4 working hours."** with **Refresh**; **"Northwind can't get suggestions now: AI is off for FocusTime."** with its fix.
+- A conversation that isn't a suggestion: **"This conversation isn't waiting for anything."** with Open in Teams.
+- Promises' foot: **"Cleared on their own · 2"**; each line says why: **"#2216 was finished"**, **"Not touched for 7 days"**, with **Put back** (toast "Put back: it stays until you close it"). The first look: **"3 older promises from chats were cleared."** with **Show**.
+- The late filter from Week: **"Late promises for Northwind only."** with **Show all promises**.
+- Captures' sections: **To sort** and **Drafts**.
+- Empty states: **"Nothing from your chats needs an item."**, **"No promises open."**, **"Nothing to sort."**
+- Day's chip: **"From chats · 2"**.
+- Retired from visible copy: "N more in Inbox", "Up for grabs", "Asked you", "You're on it", "Teammate has it", "I'll take it", "Give to…", "Add helper", "Release", "Take it over", "Waiting on <Name>", "Unclaimed", "Snooze…", "Wake it now", "Hide for me", "Not a request", "Not work-related", "Merge into…", "N messages held back", "Sort unsorted", "Filtered as chatter (N)", "Post comment or Skip".

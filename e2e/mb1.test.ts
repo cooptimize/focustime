@@ -1,6 +1,6 @@
 // MB-1: the phone overhaul in the browser, demo mode (Mon Nov 2, 9:30 AM), at 360 and 390 px with the iPhone's 17 px
 // root font: the bottom bar (Today, Week, Capture, Inbox, Ask; no Backlog) and the computer's tabs unchanged; Ahead's
-// notice and Open anyway; the Now card; the urgent strip capped at 3 with "N more in Inbox"; the to-do sheet (Done,
+// notice and Open anyway; the Now card; the urgent strip capped at 3; the to-do sheet (Done,
 // Move to tomorrow, Snooze, Add time, each with Undo where it changes my plan; focus kept inside, Esc, focus back);
 // Week rows at 360 with the title on its own line; the status sheet and no source footer on the phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.close();
   }, T);
 
-  it("Today: the Now card, one heading over the urgent strip (3 lines at most, then N more in Inbox), to-dos by block, Next up", async () => {
+  it("Today: the Now card, one heading over the urgent strip (3 lines at most), to-dos by block, Next up", async () => {
     const page = await phonePage(h, 390);
     await planMonday(page);
     await at(page, "#/today");
@@ -88,7 +88,8 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     // The urgent strip: one heading, at most 3 lines, then the rest in the Inbox; no second "Promises due" list.
     expect(await page.locator(".ph-urgent-head").textContent()).toBe("Needs you");
     expect(await page.locator(".urgent-strip .us-item").count()).toBeLessThanOrEqual(3);
-    expect(await page.locator(".urgent-strip .us-all").textContent()).toMatch(/^\d+ more in Inbox$/);
+    // IB-4: no "N more in Inbox" line; the Inbox's own count is on its tab.
+    expect(await page.locator(".urgent-strip .us-all").count()).toBe(0);
     expect(await page.getByRole("heading", { name: /Promises due/i }).count()).toBe(0);
     // To-dos by block: the long title keeps two lines, the second line says time, size and client.
     expect(await page.locator(".ph-block-head").allTextContents()).toEqual([expect.stringMatching(/^Cooptimize/), expect.stringMatching(/^Northwind/)]);

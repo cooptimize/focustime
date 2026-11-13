@@ -82,7 +82,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await page.locator(".ah-row .ah-fix").first().waitFor({ timeout: 30_000 });
       await check("Backlog › Needs attention");
       await go(page, "#/inbox/promises");
-      await page.locator(".ib-row").first().waitFor();
+      await page.locator("li.ib4-row").first().waitFor();
       await check("Inbox");
       for (const s of SECTIONS) {
         await go(page, `#/settings/${s}`);
@@ -113,8 +113,8 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await check("Timebox…");
       await page.locator("[role=dialog]").getByRole("button", { name: "Cancel" }).click();
       await go(page, "#/inbox/captures");
-      await page.locator(".ib-row", { hasText: "Filter presets" }).first().click();
-      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click();
+      await page.locator("li.ib4-row", { hasText: "Filter presets" }).first().click();
+      await page.locator("li.ib4-row.open").getByRole("button", { name: "Edit draft" }).click();
       await page.locator(".draft-editor").waitFor();
       await check("draft editor");
       expect(errors).toEqual([]);
@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const before = await fontOf(page, ".settings .set-hint");
     await page.getByRole("radio", { name: "Larger" }).check();
     await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
-    for (const [hash, sel] of [["#/today", ".day-view .half.card"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.block-panel .bp-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
+    for (const [hash, sel] of [["#/today", ".day-view .half.card"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.block-panel .bp-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib4-row-title"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");
@@ -183,23 +183,23 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.close();
   }, T);
 
-  it("Inbox (IB-1): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips", async () => {
+  it("Inbox (IB-4): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, "#/inbox/promises");
-    await page.locator(".ib-row").first().waitFor();
-    const rows = await page.locator(".ib-row").evaluateAll((rs) => rs.map((r) => r.querySelectorAll(".ib-tag").length));
+    await page.locator("li.ib4-row").first().waitFor();
+    const rows = await page.locator("li.ib4-row").evaluateAll((rs) => rs.map((r) => r.querySelectorAll(".ib-tag").length));
     expect(rows.length).toBeGreaterThan(1);
     // IB-2: the status tag, and at most one more that says what it doesn't (late, due, an item).
     for (const n of rows) expect(n).toBeLessThanOrEqual(2);
-    await page.locator(".ib-row").first().click();
-    await expect(page.locator(".ib-pane .ib-acts .ib-act.primary").count()).resolves.toBe(1);
-    const text = (await page.locator("main.ib").textContent()) ?? "";
+    await page.locator("li.ib4-row").first().click();
+    await expect(page.locator("li.ib4-row.open .ib-acts .ib-act.primary").count()).resolves.toBe(1);
+    const text = (await page.locator("main.ib4").textContent()) ?? "";
     expect(text).not.toMatch(/new today|added by me/i);
     // A capture: Sort opens the kind chips.
     await go(page, "#/inbox/captures");
-    await page.locator(".ib-row", { has: page.locator(".ib-tag", { hasText: "To sort" }) }).first().click();
-    await page.locator(".ib-pane").getByRole("button", { name: "Sort" }).click();
-    await expect(page.locator(".ib-pane .cap-sort [role=radio]").count()).resolves.toBe(4);
+    await page.locator('li.ib4-row[data-key^="k"] .ib4-row-head').first().click();
+    await page.locator("li.ib4-row.open").getByRole("button", { name: "Sort" }).click();
+    await expect(page.locator("li.ib4-row.open .cap-sort [role=radio]").count()).resolves.toBe(4);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

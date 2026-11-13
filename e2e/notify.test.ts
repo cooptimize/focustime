@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expectView("today", ".today-view");
     // A promise I added (a follow-up before IB-1) opens the Inbox with it open in the detail pane.
     const id = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "followups.list", input: {} }) }).then((r) => r.json()).then((j) => j.data.followUps[0].id as number));
-    await expectView(`followup:${id}`, `.ib-row.open[data-key="f${id}"]`);
+    await expectView(`followup:${id}`, `li.ib4-row.open[data-key="f${id}"]`);
     // My VM: Today with the VM chip's menu open.
     await expectView("vm", '.menu-list[role="menu"]');
     await expect(page.locator(".menu-list").textContent()).resolves.toContain("Choose another VM");

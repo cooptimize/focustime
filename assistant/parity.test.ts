@@ -62,7 +62,7 @@ const CASES: Case[] = [
   { covers: "commitments", name: "commitments", text: "What did people commit to on Tailspin?", script: (s) => s.action(["commitments"], {}, call(["commitments", { person: null }]), say("Here's what they said.")) },
   { covers: "status", name: "the status report", text: "Write my status updates", script: (s) => s.action(["status"], {}, call(["status", {}]), say("Here's the report.")) },
   { covers: "sends", name: "sends", text: "What's the state of my sends?", script: (s) => s.action(["sends"], {}, call(["sends", {}]), say("Here are your sends.")) },
-  { covers: "inbox", name: "the inbox", text: "What needs me?", script: (s) => s.action(["inbox"], {}, call(["inbox", { view: "promises" }]), say("Here's your Inbox.")) },
+  { covers: "inbox", name: "the inbox", text: "What's in my inbox?", script: (s) => s.action(["inbox"], {}, call(["inbox", { view: "chats" }]), call(["inbox", { view: "promises" }]), say("Here's your Inbox.")) },
   { covers: "link_search", name: "link search", text: "Which Tailspin item should my promise link to?", script: inboxThen((s) => s.action(["inbox", "link_search"], {}, call(["inbox", { view: "promises" }]), call(["link_search", { conversationId: null, promiseId: 41, query: "stale" }]), say("Here are the items."))) },
   { covers: "close_loop", name: "close the loop", text: "Close the loop with Dana", script: (s) => s.action(["close_loop"], {}, call(["close_loop", { who: "Dana", about: null }]), say("Here's the draft.")) },
   // AS-1, AS-2: every change, previewed and confirmed.
@@ -79,11 +79,9 @@ const CASES: Case[] = [
   { covers: "capture", name: "a capture", text: "Remember to check the nightly job", script: (s) => s.action(["capture"], {}, call(["capture", { text: "check the nightly job", as: "sort_later" }]), say("Here it is.")) },
   { covers: "move_plan", name: "a move by day", text: "Move all the items I have on my Wednesday PM block to Friday AM", script: (s) => s.action(["move_plan"], {}, call(["move_plan", { fromDate: WED, fromHalf: "PM", toDate: FRI, toHalf: "AM", which: "all" }]), say("Here's the move.")) },
   { covers: "item_update", name: "a compound update", text: "Mark #8101 as complete and add a comment that the flags are live", script: (s) => s.action(["item_update"], {}, call(["item_update", { itemId: 8101, done: true, comment: "The flags are live.", target: null }]), say("Here it is.")) },
-  { covers: "unlink", name: "unlink", text: "Take the link off my Tailspin promise to Dana", script: inboxThen((s) => s.action(["inbox", "unlink"], {}, call(["inbox", { view: "in_progress" }]), call(["unlink", { conversationId: null, promiseId: 42 }]), say("Here it is."))) },
-  { covers: "link_comment", name: "a linked comment", text: "Comment on #8101 from my Tailspin promise with the chat link", script: inboxThen((s) => s.action(["inbox", "link_comment"], {}, call(["inbox", { view: "in_progress" }]), call(["link_comment", { conversationId: null, promiseId: 42, itemId: 8101, text: null }]), say("Here it is."))) },
+  { covers: "unlink", name: "unlink", text: "Take the link off my Tailspin promise to Dana", script: inboxThen((s) => s.action(["inbox", "unlink"], {}, call(["inbox", { view: "promises" }]), call(["unlink", { conversationId: null, promiseId: 42 }]), say("Here it is."))) },
+  { covers: "link_comment", name: "a linked comment", text: "Comment on #8101 from my Tailspin promise with the chat link", script: inboxThen((s) => s.action(["inbox", "link_comment"], {}, call(["inbox", { view: "promises" }]), call(["link_comment", { conversationId: null, promiseId: 42, itemId: 8101, text: null }]), say("Here it is."))) },
   { covers: "inbox_seen", name: "mark seen", text: "I've seen my promises", script: inboxThen((s) => s.action(["inbox", "inbox_seen"], {}, call(["inbox", { view: "promises" }]), call(["inbox_seen", { keys: ["chatPromise:41"] }]), say("Here it is."))) },
-  { covers: "snooze", name: "snooze", text: "Snooze that promise until tomorrow", script: inboxThen((s) => s.action(["inbox", "snooze"], {}, call(["inbox", { view: "promises" }]), call(["snooze", { key: "chatPromise:41", until: "tomorrow" }]), say("Here it is."))) },
-  { covers: "conversation_owner", name: "taking a conversation", text: "I'll take that Tailspin conversation", script: inboxThen((s) => s.action(["inbox", "conversation_owner"], {}, call(["inbox", { view: "needs_you" }]), call(["conversation_owner", { conversationId: 41, change: "claim", person: null }]), say("Here it is."))) },
   { covers: "plan_deployment", name: "a deployment", text: "Plan a Tailspin deployment Saturday nine to eleven", script: (s) => s.action(["plan_deployment"], {}, call(["plan_deployment", { date: "2026-11-14", start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here it is.")) },
   // A multi-action request.
   { covers: "comment", name: "two changes in one request", text: "Comment on #8101 that it's ready and move #8102's target", script: (s) => s.action(["comment", "ahead_change"], {}, call(["comment", { itemId: 8101, text: "Ready." }], ["ahead_change", { itemId: 8102, field: "target", value: "2026-12-01" }]), say("Here they are.")) },
@@ -111,7 +109,7 @@ const CASES: Case[] = [
 /** Covered by the Undo test below: it needs a write made first. */
 const COVERED_BELOW: readonly ToolName[] = ["write_undo"];
 
-const READS = new Set(["week.load", "ahead.load", "status.load", "inbox.list", "meeting.mine", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "deploy.items", "conversations.search_items", "loop.find", "devops.done_offer", "devops.undo_offer", "wrapup.offer", "wrapup.preview"]);
+const READS = new Set(["week.load", "ahead.load", "status.load", "inbox.list", "conversations.suggestions", "meeting.mine", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "deploy.items", "conversations.search_items", "loop.find", "devops.done_offer", "devops.undo_offer", "wrapup.offer", "wrapup.preview"]);
 const writesOf = (s: World) => s.ran.filter((r) => !READS.has(r.action)).map((r) => JSON.parse(JSON.stringify(r).replace(/"previewId":"pv\d+"/g, '"previewId":"pv"')) as unknown);
 
 const world = (o: Parameters<typeof setup>[0]) => setup({ standards, ...o });

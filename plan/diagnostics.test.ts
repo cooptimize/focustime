@@ -2,7 +2,7 @@
 // text (counts only).
 import { describe, expect, it } from "vitest";
 import type { MessagePlace } from "./conversations.ts";
-import { chatOutcomes, chatterKind, diagnosticsText, extractionReason, extractionRetry, promiseReason, zeroReasons, zeroStatuses, type CommitmentFact, type Diagnostics } from "./diagnostics.ts";
+import { chatOutcomes, chatterKind, diagnosticsText, extractionReason, inboxCounts, extractionRetry, promiseReason, zeroReasons, zeroStatuses, type CommitmentFact, type Diagnostics } from "./diagnostics.ts";
 
 const ME = { id: "ME-ID", name: "Evan Ford" };
 const k = (id: number, whoId: string | null, whoName: string, state: CommitmentFact["state"] = "open"): CommitmentFact => ({ id, whoId, whoName, state });
@@ -79,5 +79,32 @@ describe("diagnosticsText", () => {
     expect(t).toContain("Committed: 2; by reason: shown 1, my_name_other_id 1");
     expect(t).toContain("Chat 1 (customer): 3 messages");
     expect(t).toContain("chatter: keyword rule 1, AI 1");
+  });
+});
+
+describe("IB-4: the Inbox counts", () => {
+  const NOW = "2026-11-12T18:00:00Z";
+  const SINCE = "2026-10-29T18:00:00Z";
+  const sug = (o: Partial<Parameters<typeof inboxCounts>[0][number]> = {}) => ({ suggestedAt: "2026-11-10T15:00:00Z", outcome: null, itemId: null, windDown: false, closedAt: null, lastWorkAt: "2026-11-09T15:00:00Z", ...o });
+  const pr = (o: Partial<Parameters<typeof inboxCounts>[1][number]> = {}) => ({ createdAt: "2026-11-05T15:00:00Z", state: "open", cleared: null, clearedAt: null, putBackAt: null, ...o });
+  it("each suggestion counts once, by what became of it; older ones are left out", () => {
+    const c = inboxCounts([
+      sug({ itemId: 4, outcome: "linked" }), sug({ itemId: 5 }), sug({ outcome: "dismissed" }), sug({ windDown: true }),
+      sug({ lastWorkAt: "2026-11-02T15:00:00Z" }), sug(), sug({ suggestedAt: "2026-10-01T15:00:00Z", outcome: "dismissed" }),
+    ], [], SINCE, NOW);
+    expect(c.suggestions).toEqual({ shown: 6, created: 1, linked: 1, dismissed: 1, wrappedUp: 1, expired: 1 });
+  });
+  it("promises: found, done by me, cleared by an item, expired, put back", () => {
+    const c = inboxCounts([], [
+      pr(), pr({ state: "done" }), pr({ state: "done", cleared: "item", clearedAt: "2026-11-08T15:00:00Z" }),
+      pr({ state: "not_needed", cleared: "expired", clearedAt: "2026-11-11T15:00:00Z" }), pr({ putBackAt: "2026-11-11T16:00:00Z" }),
+      pr({ createdAt: "2026-10-01T15:00:00Z" }),
+    ], SINCE, NOW);
+    expect(c.promises).toEqual({ found: 5, done: 1, byItem: 1, expired: 1, putBack: 1 });
+  });
+  it("the copy text has the counts and no titles", () => {
+    const d: Diagnostics = { at: NOW, days: 14, promises: { byStatus: zeroStatuses(), committed: 0, byReason: zeroReasons(), rows: [], extraction: { checked: 0, byReason: {}, rows: [] } }, chats: [], inbox: inboxCounts([sug({ outcome: "dismissed" })], [pr()], SINCE, NOW) };
+    expect(diagnosticsText(d)).toMatch(/Suggestions shown: 1; created 0, linked 0, dismissed 1/);
+    expect(diagnosticsText(d)).toMatch(/Promises found in chats: 1; marked done 0/);
   });
 });

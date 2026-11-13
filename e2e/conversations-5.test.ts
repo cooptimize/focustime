@@ -1,13 +1,16 @@
-// CV-5, the main path, in a real (not demo) session on fake Teams rows and a fake DevOps. A conversation In discussion
-// (Create used to be under ⋯ only) leads with Create DevOps item; AI isn't on, so the form is empty and I fill it in;
-// the preview says who will see it; confirm creates it once, and the card moves to In progress with the item's live
-// state. A promise that implied no item (it had no Create at all) leads with Create DevOps item too; Link to item
-// searches the client's items in scope, with "Also add a comment" going through the comment's own preview; the
-// promise stays open with its item; when the item closes in DevOps it shows Item closed with Mark done, never done by
-// itself. Edge cases are unit tests (actions/conversation-create, actions/devops-write). Fictional names. Screenshots
-// at 1920 and 1366, light and dark, Larger, and the phone when FOCUSTIME_SHOTS is set.
+// CV-5, the main path, in a real (not demo) session on fake Teams rows and a fake DevOps. A suggestion in From chats
+// (IB-4) leads with Create item; AI isn't on, so the form is empty and I fill it in; the preview says who will see it;
+// confirm creates it once, and it leaves From chats. A promise that implied no item leads with Create DevOps item; Link
+// to item searches the client's items in scope, with "Also add a comment" going through the comment's own preview; the
+// promise stays open with its item; when the item finishes in DevOps the promise clears on its own as done (IB-4), and
+// Put back brings it back. Edge cases are unit tests (actions/conversation-create, actions/slim-inbox,
+// actions/devops-write). Fictional names. Screenshots at 1920 and 1366, light and dark, Larger, and the phone when
+// FOCUSTIME_SHOTS is set.
 import type { Locator, Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+/** IB-4: what the sorting step suggested for the conversation. */
+const SUGGESTED = "Reprofile the sales view so it opens in under 5 seconds";
 import { IDENTITY_KEY } from "../actions/account.ts";
 import type { AheadItem } from "../actions/types.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
@@ -109,6 +112,8 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       { chatId: CHAT, messageId: "1730000000002", conversationId: c.id, role: "work", reason: null, placedBy: "ai", at: "2026-11-02T14:33:00Z" },
     ]);
     await convs.updateConversation(c.id, { status: "discussion", ownerId: ME });
+    // IB-4: the sorting step judged it needs an item, and it has been quiet since last Thursday: a suggestion.
+    await convs.updateConversation(c.id, { itemNeeded: { why: "The sales view is too slow and no item covers it", title: SUGGESTED, level: "child" }, lastWorkAt: "2026-10-29T15:00:00Z" });
     const k = await convs.addCommitment({ conversationId: null, chatId: CHAT, clientKey: "Adatum", whoId: ME, whoName: "Sam Tester", toId: BLAKE, toName: "Blake Novak", what: "Sort out the date formats this week", dueAt: null, dueDate: null, impliesItem: false, messageIds: ["1730000000003"], reason: "test" });
     ctx.requests = { teams, conversations: convs, users: async () => [{ id: ME, name: "Sam Tester", deleted: false }], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) };
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
@@ -119,18 +124,19 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       page.setDefaultTimeout(60_000);
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
-      // The old address still opens the Inbox (IB-1: Needs you).
+      // The old address still opens the Inbox (IB-4: From chats).
       await page.goto(`${app.url}#/inbox/conversations`);
       await page.locator(".topbar").waitFor();
-      await page.getByRole("main", { name: "Inbox" }).waitFor();
+      const main = page.getByRole("main", { name: "Inbox" });
+      await main.waitFor();
 
-      // Before: In discussion, Create DevOps item is the main button (it was Resolve, with Create under ⋯).
-      const card = await openInboxItem(page, "Reprofile the sales view");
-      await card.locator(".ib-act.primary", { hasText: /^Create DevOps item/ }).waitFor();
+      // Before: a suggestion, Create item is the main button.
+      const card = await openInboxItem(page, SUGGESTED);
+      await card.locator(".ib-act.primary", { hasText: /^Create item/ }).waitFor();
       await shots(page, "cv5-conversation-before", card);
 
       // The form, empty without AI; I fill it in; the preview says who will see it; confirm creates it once.
-      await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
+      await card.getByRole("button", { name: /^Create item/ }).first().click();
       const draft = card.getByRole("form", { name: "Create DevOps item" });
       await draft.getByText(/Not drafted by AI/).waitFor();
       expect(await draft.getByRole("textbox", { name: /^Title/ }).inputValue()).toBe("");
@@ -147,18 +153,17 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       expect(made.fields["System.Title"]).toBe("Reprofile the sales view to load under 5 seconds");
       expect(dv.writes().filter((w) => w.method === "POST" && w.url.includes("workitems/$"))).toHaveLength(1);
 
-      // After: In progress, with the item's live state.
-      await openInboxView(page, "in-progress");
-      const progress = await openInboxItem(page, "Reprofile the sales view");
-      await progress.getByText(new RegExp(`#${made.id} Reprofile the sales view to load under 5 seconds`)).waitFor();
-      await progress.getByText(/· Sam Tester · changed/).waitFor();
-      await shots(page, "cv5-conversation-after", progress);
+      // After: tracked, so it leaves From chats.
+      await expect.poll(async () => (await convs.conversation(c.id))!.itemId).toBe(made.id);
+      await openInboxView(page, "chats");
+      await main.getByText("Nothing from your chats needs an item.").waitFor();
+      await shots(page, "cv5-conversation-after", main);
 
       // A promise that implied no item: Create DevOps item leads (it had no Create before).
       await openInboxView(page, "promises");
       const promise = await openInboxItem(page, "Sort out the date formats this week");
       await promise.locator(".ib-act.primary", { hasText: /^Create DevOps item/ }).waitFor();
-      await promise.getByRole("button", { name: /^Add to Today/ }).waitFor();
+      await promise.getByRole("button", { name: /^Add to my week/ }).waitFor();
       await shots(page, "cv5-promise-before", promise);
 
       // Link to item, with "Also add a comment": the link is FocusTime's; the comment has its own preview.
@@ -175,18 +180,21 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       expect((await convs.commitment(k.id))!).toMatchObject({ state: "open", itemId: 438 });
       await promise.getByText(/Linked to/).waitFor();
       await promise.getByText(/· Active · Sam Tester/).waitFor();
-      await promise.getByRole("button", { name: /^Add to Today/ }).waitFor();
+      await promise.getByRole("button", { name: /^Add to my week/ }).waitFor();
       await shots(page, "cv5-promise-after", promise);
 
-      // The item closes in DevOps: Item closed, Mark done; the promise stays open until I say so.
+      // IB-4: the item finishes in DevOps, so the promise clears on its own as done, with Put back.
       dv.items.get(438)!.fields["System.State"] = "Closed";
       await page.reload();
       await page.locator(".topbar").waitFor();
-      await promise.locator(".ib-detail-title", { hasText: "Sort out the date formats this week" }).waitFor();
-      await promise.getByText("Item closed").first().waitFor();
-      await promise.locator(".ib-act.primary", { hasText: /^Mark done/ }).waitFor();
+      await main.locator(".ib4-cleared-toggle").click();
+      const cleared = main.locator("ul.ib4-cleared li", { hasText: "Sort out the date formats this week" });
+      await cleared.getByText(/#438 was finished/).waitFor();
+      expect((await convs.commitment(k.id))!.state).toBe("done");
+      await shots(page, "cv5-promise-item-closed", main);
+      await cleared.getByRole("button", { name: "Put back" }).click();
+      await main.locator("li.ib4-row .ib4-row-title", { hasText: "Sort out the date formats this week" }).waitFor();
       expect((await convs.commitment(k.id))!.state).toBe("open");
-      await shots(page, "cv5-promise-item-closed", promise);
       expect(errors).toEqual([]);
     } finally {
       await app.close();

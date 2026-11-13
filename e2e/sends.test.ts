@@ -54,14 +54,14 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
   it("Today's line, Accept, Send to… a Must, the Sent list and Team", async () => {
     const { page, errors } = await freshPage(h);
     // IB-1 slice 4: a send waiting for me is its own line (the Inbox's rows), the Must first, after the late promises; the
-    // strip shows 3 lines, so the other send is in "N more in Inbox". The line opens that send in the detail pane.
+    // strip shows 3 lines at most (IB-4: no "N more in Inbox" line). The line opens Week, where sends are answered.
     const lines = page.locator(".sent-line");
     await lines.first().waitFor({ timeout: 30_000 });
     await expect(lines.first().locator(".us-tag").textContent()).resolves.toBe("Sent to you · Must");
-    await expect(page.locator(".urgent-strip .us-all").textContent()).resolves.toMatch(/^\d+ more in Inbox$/);
+    await expect(page.locator(".urgent-strip .us-all").count()).resolves.toBe(0);
     await lines.filter({ hasText: "Loyalty points" }).locator(".us-line").click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/s\d+$/);
-    await page.locator(".ib-pane .ib-detail-title", { hasText: "Loyalty points" }).waitFor();
+    // IB-4: sends are answered on Week (To place), so the line opens Week.
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/week/);
     await commit(page);
     // WD-1 review: sends to answer are under To place, You sent in the folded group at the bottom; both unfolded.
     await page.locator("aside.block-panel .aw-sends section.team-group").waitFor({ timeout: 30_000 });
