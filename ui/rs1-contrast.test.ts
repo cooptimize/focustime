@@ -92,6 +92,21 @@ describe("RS-1 tokens: contrast", () => {
       expect(low).toEqual([]);
     });
 
+    it(`${name}: a switch reads: muted and full text on its track, full text on the lifted side, and the two differ`, () => {
+      const low: string[] = [];
+      for (const s of ["--bg", "--surface", "--raised"]) {
+        const track = toHex(over(color(t, t["--track"]!), color(t, t[s]!)));
+        const lift = toHex(color(t, t["--lift"]!));
+        for (const text of ["--text", "--text-muted"]) {
+          const c = contrast(toHex(color(t, t[text]!)), track);
+          if (c < 4.5) low.push(`${text} on the track over ${s}: ${c.toFixed(2)}`);
+        }
+        if (contrast(toHex(color(t, t["--text"]!)), lift) < 4.5) low.push(`--text on --lift`);
+        if (contrast(track, lift) < 1.08) low.push(`the lifted side on the track over ${s}: ${contrast(track, lift).toFixed(2)}`);
+      }
+      expect(low).toEqual([]);
+    });
+
     it(`${name}: the quiet line sits between the surface and the control outline`, () => {
       const [line, surface, strong] = ["--line", "--surface", "--border-strong"].map((k) => toLab(color(t, t[k]!))[0]!);
       expect(Math.abs(line! - surface!)).toBeGreaterThan(0.01);
