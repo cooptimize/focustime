@@ -75,6 +75,12 @@ describe("light formatting: HTML to text and back", () => {
     expect(editingOf('<div style="text-align: center">centred</div>', "html")).toMatchObject({ editable: false, why: "other" });
     expect(editingOf("<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>", "html")).toMatchObject({ editable: false, why: "other" });
     expect(editingOf("<h4>deep</h4>", "html")).toMatchObject({ editable: false, why: "other" });
+    // Review 2: a named character it doesn't read, and an item with a line beside a block, are refused, not merged.
+    expect(editingOf("<div>Pages 1&ndash;5, the client&rsquo;s</div>", "html")).toMatchObject({ editable: false, why: "other" });
+    expect(editingOf("<div>Fish &amp; chips&nbsp;&lt;3 &#8211; ok</div>", "html")).toMatchObject({ editable: true });
+    expect(editingOf("<ul><li>Step one<div>details</div></li></ul>", "html")).toMatchObject({ editable: false, why: "other" });
+    expect(editingOf("<ul><li><div>Step one</div>details</li></ul>", "html")).toMatchObject({ editable: false, why: "other" });
+    expect(editingOf("<ul><li><div>Step one</div></li></ul>", "html")).toMatchObject({ editable: true, text: "- Step one" });
   });
   it("a Markdown-stored field is passed through and written back as Markdown", () => {
     const md = "# Plan\n\n- **one**\n- two\n\nSee [x](https://example.com)";

@@ -43,7 +43,7 @@ export type DemoItem = {
 };
 /** DV-2: what a teammate can change in the demo's DevOps (see `teammate`). */
 export type TeammateChange =
-  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null }
+  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null; /** ED-1: a teammate rewrites the description. */ description?: string }
   | { create: { type: string; title: string; parent?: number | null; assignee?: string | null; target?: string | null; /** In the project, outside the scope (another team's area). */ outsideScope?: boolean } };
 /** DV-2: a teammate's change from a request's input, or null when it isn't one. */
 export function parseTeammate(v: unknown): TeammateChange | null {
@@ -57,8 +57,8 @@ export function parseTeammate(v: unknown): TeammateChange | null {
     if (!str(c.type) || !str(c.title) || !opt(c.parent, (x) => x === null || Number.isInteger(x)) || !opt(c.assignee, (x) => x === null || str(x)) || !opt(c.target, day) || !opt(c.outsideScope, (x) => typeof x === "boolean")) return null;
     return { create: { type: c.type as string, title: c.title as string, ...(c.parent !== undefined ? { parent: c.parent as number | null } : {}), ...(c.assignee !== undefined ? { assignee: c.assignee as string | null } : {}), ...(c.target !== undefined ? { target: c.target as string | null } : {}), ...(c.outsideScope ? { outsideScope: true } : {}) } };
   }
-  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day)) return null;
-  return { id: o.id as number, ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
+  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day) || !opt(o.description, str)) return null;
+  return { id: o.id as number, ...(o.description !== undefined ? { description: o.description as string } : {}), ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
 }
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
@@ -347,6 +347,7 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     if (c.state !== undefined) setField(it, "System.State", c.state);
     if (c.assignee !== undefined) setField(it, "System.AssignedTo", c.assignee ?? "", c.assignee === null);
     if (c.target !== undefined) setField(it, T, c.target ?? null, c.target === null);
+    if (c.description !== undefined) setField(it, "System.Description", c.description);
     bump(it);
     return { ok: true, id: it.id };
   }

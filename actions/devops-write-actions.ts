@@ -1482,7 +1482,9 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         // ED-1: an append to the acceptance criteria is logged under its own label.
         const key = Object.keys(entry.after)[0] ?? "Description";
         const curHtml = String(item.fields[field] ?? "");
-        if (htmlToText(curHtml).trim() !== htmlToText(entry.after[key] ?? "").trim()) throw new Refused(`DevOps shows another ${key.toLowerCase()} on #${item.id} now. Undo would overwrite it`, 409, "changed");
+        // Compared as the stored text itself (spacing between tags aside), so a changed image, a table cell or words past
+        // what a text read keeps all count as someone else's change (review 2).
+        if (sameStored(curHtml) !== sameStored(entry.after[key] ?? "")) throw new Refused(`DevOps shows another ${key.toLowerCase()} on #${item.id} now. Undo would overwrite it`, 409, "changed");
         const md = Array.isArray(entry.ops) && entry.ops.some((p) => p.path === `/multilineFieldsFormat/${field}`);
         return { ...u, op: "undo_description", ops: [...descriptionOps(item.rev, field, entry.before[key] ?? ""), ...(md ? [{ op: "add" as const, path: `/multilineFieldsFormat/${field}`, value: "markdown" }] : [])], rev: item.rev, before: { [key]: curHtml }, after: { [key]: entry.before[key] ?? null }, field };
       }
@@ -1694,6 +1696,7 @@ async function appendText(env: Env, o: Obj, memo: Map<string, Promise<unknown>>)
     notes: ["Adds your text at the end. Nothing already there changes, the table or image included.", ...(owner ? [owner] : [])],
   };
 }
+const sameStored = (v: string) => v.replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
 const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Object.keys(now).every((k) => (now[k] ?? null) === asCurrent(e, k, e.after[k]));
 
 /**

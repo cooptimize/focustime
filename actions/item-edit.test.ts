@@ -186,6 +186,10 @@ describe("ED-1 item_edit", () => {
     const u = await lead.write({ kind: "undo", writeId: r.entry.id });
     expect(u.confirmed).toBe(true);
     expect(lead.dv.items.get(502)!.fields["System.Description"]).toBe("<table><tr><td>a</td></tr></table>");
+    // Review 2: a teammate's change only a text read would miss (a table cell) refuses the undo.
+    const r2 = await lead.write({ kind: "description_update", itemId: 502, rev: rev(lead, 502), text: "More." });
+    lead.dv.touch(502, { "System.Description": String(lead.dv.items.get(502)!.fields["System.Description"]).replace("<td>a</td>", '<td>a</td><td><img src="https://example.com/x.png"></td>') });
+    expect(await lead.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r2.entry.id } })).toMatchObject({ status: 409, code: "changed" });
   });
   it("fonts and colors: flagged in the preview", async () => {
     s.dv.touch(500, { "System.Description": '<div><span style="font-family: Segoe UI; color: #333">Old words</span></div>' });

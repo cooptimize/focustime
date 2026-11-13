@@ -92,16 +92,18 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
     return () => window.removeEventListener(CARD_STALE_EVENT, on);
   }, [clientKey, itemId, load]);
   const card = read?.access ? read.card : null;
-  const loadOffer = useCallback(async (): Promise<EditOffer | null> => {
+  const readOffer = useCallback(async (): Promise<EditOffer | null> => {
     try {
-      const r = await call<{ offer: EditOffer | null }>("devops.edit_offer", { clientKey, itemId });
-      setOffer(r.offer);
-      return r.offer;
+      return (await call<{ offer: EditOffer | null }>("devops.edit_offer", { clientKey, itemId })).offer;
     } catch {
-      setOffer(null);
       return null;
     }
   }, [clientKey, itemId]);
+  const loadOffer = useCallback(async (): Promise<EditOffer | null> => {
+    const o = await readOffer();
+    setOffer(o);
+    return o;
+  }, [readOffer]);
   const canWrite = !!card?.canWrite;
   const readAt = card?.readAt;
   // While Edit is open the offer it read stays the base (its revision guards the save); a newer one waits for Save.
@@ -140,9 +142,13 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
   };
   const cancelEdit = () => (dirty ? setDiscard("cancel") : endEdit());
   const requestClose = () => (dirty ? setDiscard("close") : onClose());
-  /** Save: one preview of the parts that changed, guarded by the revision Edit read. */
+  /**
+   * Save: one preview of the parts I changed since Edit opened (against the offer Edit read, which stays put while the
+   * boxes are open), guarded by the revision. Save again sends the same parts at the newer revision, so a field a
+   * teammate changed that I didn't touch is never written back (review 2).
+   */
   const saveEdit = (against?: EditOffer) => {
-    const base = against ?? offer;
+    const base = offer;
     if (!base || !draft || !writes) return;
     const rev = against ? against.rev : draft.rev;
     const parts = changedParts(base, draft);
@@ -160,7 +166,8 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
         }
         // A newer version in DevOps: show what it is now and keep my words.
         if (r.code === "changed" || r.sent) {
-          const now = await loadOffer();
+          // Read without replacing the base: the boxes and my words stay as they are.
+          const now = await readOffer();
           if (now && now.rev !== rev) return void setStale(now);
         }
         if (r.error) setEditError(r.error);
@@ -355,7 +362,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                 <CardMore items={[...(canMove ? [{ label: "Move…", run: () => (endEdit(), setEdit("move")) }] : []), { label: "Copy DevOps link", run: () => void copyWorkLink(card.url) }]} />
               </div>
               {edit === "move" && offer && <MoveEditor offer={offer} clientKey={clientKey} onCancel={() => setEdit(null)} onPreview={(parentId) => writeAt({ kind: "reparent", itemId: offer.itemId, rev: offer.rev, parentId })} />}
-              {stale && draft && <ChangedSince now={stale} onUse={() => (setDraft({ ...draft, rev: stale.rev }), setOffer(stale), setStale(null), saveEdit(stale))} />}
+              {stale && draft && <ChangedSince now={stale} onUse={() => (setDraft({ ...draft, rev: stale.rev }), setStale(null), saveEdit(stale))} />}
               {editError && <p className="wrap-error" role="alert">{editError}</p>}
               {edit === "comment" && <CommentEditor onCancel={() => setEdit(null)} onPreview={(text) => write([{ kind: "comment", itemId: card.id, text }])} />}
               {edit === "state" && <StateEditor card={card} onCancel={() => setEdit(null)} onPreview={(state) => write([{ kind: "state", itemId: card.id, state }])} />}

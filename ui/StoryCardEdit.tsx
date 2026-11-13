@@ -20,7 +20,8 @@ export const draftOf = (o: EditOffer, acceptanceOpen = false): EditDraft => ({ r
 /** The parts that differ from what Edit read (only these go in the patch). */
 export function changedParts(o: EditOffer, d: EditDraft): { title?: string; description?: string; acceptance?: string } {
   const out: { title?: string; description?: string; acceptance?: string } = {};
-  if (d.title.replace(/\s+/g, " ").trim() !== o.title) out.title = d.title;
+  const one = (t: string) => t.replace(/\s+/g, " ").trim();
+  if (one(d.title) !== one(o.title)) out.title = d.title;
   if (o.description?.editable && d.description.replace(/\s+$/, "") !== o.description.text.replace(/\s+$/, "")) out.description = d.description;
   if (o.acceptance?.editable && d.acceptance.replace(/\s+$/, "") !== o.acceptance.text.replace(/\s+$/, "")) out.acceptance = d.acceptance;
   return out;

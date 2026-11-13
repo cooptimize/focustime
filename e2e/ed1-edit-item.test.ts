@@ -182,7 +182,8 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     // Stored as Markdown: kept as Markdown.
     await expect(card.locator(".sc-tools-note").first().textContent()).resolves.toContain("Markdown");
     await card.getByRole("textbox", { name: "Title" }).fill("Map of stores near me");
-    await teammate(page, "Northwind", { id: 1151, state: "Active" });
+    // A teammate rewrites the description (which I don't touch) while I fix the title.
+    await teammate(page, "Northwind", { id: 1151, state: "Active", description: "Show the stores near the customer on a map, nearest first." });
     await card.getByRole("button", { name: "Save", exact: true }).click();
     const banner = card.locator(".sc-changed");
     await banner.waitFor();
@@ -195,6 +196,11 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     await banner.getByRole("button", { name: "Save again" }).click();
     await confirmPreview(page);
     await expect.poll(() => card.getByRole("heading", { level: 2 }).textContent()).toContain("Map of stores near me");
+    // Save again sent only my title: the teammate's description stands (review 2).
+    const now = await call(page, "devops.edit_offer", { clientKey: "Northwind", itemId: 1151 });
+    expect(now.data.offer.description.text).toBe("Show the stores near the customer on a map, nearest first.");
+    const mine = (await log(page)).filter((e) => e.itemId === 1151 && e.op === "item_edit" && e.status === "confirmed");
+    expect(mine.map((e) => Object.keys(e.after))).toEqual([["Title"]]);
     // Undo puts it back, and is refused once it changed again.
     expect(errors).toEqual([]);
     await page.close();

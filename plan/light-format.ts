@@ -321,14 +321,18 @@ function htmlBlocks(html: string): Walk {
       // An item is one line of inline text (one wrapping div or p is fine), then at most one more list level.
       const c: Inline[] = [];
       const sub: (typeof k)[] = [];
-      let wrappers = 0;
+      // A wrapper is fine only as the item's whole line: text beside it (or a second one) would merge two lines.
+      let wrapped = false;
+      const filled = () => c.some((y) => y.t !== "text" || y.s.trim());
       for (const x of k.kids) {
         if (!("text" in x) && (x.tag === "ul" || x.tag === "ol")) sub.push(x);
         else if (!("text" in x) && (x.tag === "div" || x.tag === "p")) {
           attrsOk(x.tag, x.attrs);
-          if (++wrappers > 1 && c.some((y) => y.t !== "text" || y.s.trim())) no("other");
+          if (wrapped || filled()) no("other");
+          wrapped = true;
           inline(x.kids, c);
         } else if (sub.length && ("text" in x ? x.text.trim() : true)) no("other");
+        else if (wrapped && ("text" in x ? x.text.trim() : true)) no("other");
         else inline([x], c);
       }
       if (c.some((x) => x.t === "text" && x.s.includes("\n") && x.s.trim())) {
@@ -501,6 +505,8 @@ export function editingOf(stored: string | null | undefined, format: FieldFormat
     return { editable: true, format, text: v, lossy: false };
   }
   if (!v.trim()) return { editable: true, format, text: "", lossy: false };
+  // A named character FocusTime doesn't read (&ndash;, &rsquo; …) would be written back as its letters: not a box.
+  if (/&[a-z][a-z0-9]*;/i.test(v.replace(/&(amp|lt|gt|quot|apos|nbsp);/gi, ""))) return { editable: false, format, why: "other" };
   const w = htmlBlocks(v);
   if (w.refuse) return { editable: false, format, why: w.refuse };
   const text = blocksText(w.blocks);
