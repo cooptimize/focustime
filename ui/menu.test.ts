@@ -1,5 +1,6 @@
 import { legacyHours } from "../config/schema.ts";
 import { describe, expect, it } from "vitest";
+import { menuIcon } from "./menu-icons.ts";
 import { ACTION_NAMES } from "../actions/registry.ts";
 import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
@@ -529,5 +530,21 @@ describe("Start a call (CW-1)", () => {
     expect(items(step).map((i) => [i.label, i.hint])).toEqual([["Start a call in Fabrikam Delivery", "fabrikam"], ["Join the call in Fabrikam Collaboration", "live now · fabrikam"], ["Start a call in Internal Delivery", "Internal"]]);
     expect(commandList(withCalls({ cowork: { available: true, chats: [] } }).e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/delivery chat/);
     expect(commandList(env().e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/aren't available/);
+  });
+});
+
+describe("RS-1: an icon before every item", () => {
+  it("every command and every ⋯ menu item gets an icon that says what it does, never the plain dot", () => {
+    const e = env().e;
+    const steps: MenuStep[] = [
+      { title: "Commands", items: commandList({ ...e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }], showPatterns: () => {} }) },
+      slotMenu(e, "2026-11-03", "AM"),
+      dayMenu(e, "2026-11-03"),
+      pickMenu(e, pick),
+      itemMenu(e, "internal", item(1)),
+    ];
+    const plain: string[] = [];
+    for (const s of steps) if ("items" in s) for (const it of s.items) if (menuIcon(it) === "dot") plain.push(`${s.title}: ${it.label} (${it.action ?? it.id})`);
+    expect(plain).toEqual([]);
   });
 });

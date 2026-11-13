@@ -24,6 +24,7 @@ import { PlanCtx } from "./planview.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { pickDragged, useDragSource, WeekDnd } from "./WeekStories.tsx";
+import { Icon } from "./icons.tsx";
 
 type SuggestData = { picks: Pick[]; cleared: string[] };
 /** UI-B's split of the unfinished to-dos (the dashed cards went in SG-1; `cards` stays empty). */
@@ -386,7 +387,7 @@ export function ListRow({ pick }: { pick: Pick }) {
   return (
     <li className="flw-row" {...drag}>
       <span className="flw-row-inner">
-        {drag.draggable && <span className="drag-handle" aria-hidden="true" title="Drag onto a block">⋮⋮</span>}
+        {drag.draggable && <span className="drag-handle" aria-hidden="true" title="Drag onto a block"><Icon name="grip" /></span>}
         {pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} decorative />}
         <span className="pr-title">{pick.title}</span>
         <span className="pr-note">from {shortDate(pick.date)}</span>

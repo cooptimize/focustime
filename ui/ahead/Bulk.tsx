@@ -10,6 +10,7 @@ import { call } from "../api.ts";
 import { DateField } from "../DatePicker.tsx";
 import { useAhead } from "./Ahead.tsx";
 import type { Row } from "./model.ts";
+import { Icon } from "../icons.tsx";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
@@ -170,8 +171,8 @@ export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[];
               Undo
             </button>
           )}
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={() => setToast(null)}>
-            ×
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={() => setToast(null)}>
+            <Icon name="close" />
           </button>
         </div>
       )}

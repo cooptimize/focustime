@@ -4,6 +4,7 @@
 // chats has its own actions (ui/inbox/Suggestion.tsx). The keys run the same Act as its button.
 import { useState, type ReactNode } from "react";
 import type { Entry } from "./data.ts";
+import { Icon } from "../icons.tsx";
 
 export type FormId = "close" | "due" | "who" | "link" | "draft" | "sort" | "edit";
 export type ActId = "create" | "close" | "due" | "who" | "week" | "not_needed" | "done" | "link" | "unlink" | "reopen" | "teams" | "sort" | "dismiss" | "edit" | "delete" | "prepare";
@@ -123,7 +124,7 @@ export function ItemActions({ acts, phone = false, label }: { acts: readonly Act
       {more.length > 0 && (
         <span className="fu-more">
           <button type="button" className="ib-act quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for ${label}`} onClick={() => setMenu((v) => !v)}>
-            ⋯
+            <Icon name="more" />
           </button>
           {menu && (
             <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>

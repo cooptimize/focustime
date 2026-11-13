@@ -18,6 +18,7 @@ import { PV_BREAKDOWN_EVENT } from "./menu.ts";
 import { usePhone } from "./viewport.ts";
 import { takeOffPick } from "./takeoff.ts";
 import { takeOffRule } from "../plan/blockpanel.ts";
+import { Icon } from "./icons.tsx";
 
 /** The drag type for a story or a planned pick moving between Week's blocks. */
 export const STORY_DRAG = "application/x-focustime-story";
@@ -265,8 +266,8 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
               Undo
             </button>
           )}
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={() => setToast(null)}>
-            ×
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={() => setToast(null)}>
+            <Icon name="close" />
           </button>
         </div>
       )}

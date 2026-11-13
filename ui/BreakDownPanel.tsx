@@ -23,6 +23,7 @@ import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown,
 import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 type Size = "XS" | "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
@@ -636,8 +637,8 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
                 <TypeIcon clientKey={clientKey} type={draft.storyType} />
                 <input className="bd-title" aria-label="Title" value={c.title} maxLength={120} disabled={sent} onChange={(e) => set(c.id, { title: e.target.value })} />
                 <span className="bd-move">
-                  <button type="button" className="mini" aria-label="Move up" disabled={i === 0} onClick={() => move(i, i - 1)}>↑</button>
-                  <button type="button" className="mini" aria-label="Move down" disabled={i === draft.cards.length - 1} onClick={() => move(i, i + 1)}>↓</button>
+                  <button type="button" className="mini icon-btn small" aria-label="Move up" disabled={i === 0} onClick={() => move(i, i - 1)}><Icon name="arrow-up" /></button>
+                  <button type="button" className="mini icon-btn small" aria-label="Move down" disabled={i === draft.cards.length - 1} onClick={() => move(i, i + 1)}><Icon name="arrow-down" /></button>
                 </span>
                 {!sent && (
                   <button type="button" className="mini" onClick={() => set(c.id, { keep: false }, true)}>
@@ -751,7 +752,7 @@ function Acceptance({ items, disabled, onChange }: { items: string[]; disabled: 
       )}
       {!disabled && (
         <button type="button" className="link-btn bd-ac-add" onClick={() => (onChange([...items, ""]), setFocusAt(items.length))}>
-          + Add a criterion
+          <Icon name="add" /> Add a criterion
         </button>
       )}
     </div>

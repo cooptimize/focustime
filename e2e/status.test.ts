@@ -33,7 +33,7 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     if (SHOTS) await shotBoth(page, "sr1-status-1920");
     const supplier = page.getByRole("article", { name: "Supplier onboarding" });
     await expect.poll(() => supplier.locator(".st-badge").textContent()).toBe("No update yet");
-    await supplier.getByRole("button", { name: "+ Add a line" }).click();
+    await supplier.getByRole("button", { name: "Add a line" }).click();
     await supplier.getByRole("textbox", { name: "New line for Supplier onboarding" }).fill("Sign-up form designed; review with purchasing on Friday.");
     await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("1 line to push");
     await page.getByRole("button", { name: "Push all" }).click();

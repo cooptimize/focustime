@@ -5,6 +5,7 @@
 import type React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { placePopover } from "./popover-place.ts";
+import { Icon } from "./icons.tsx";
 
 export type PopoverKeys = {
   /** Enter (not Shift+Enter) anywhere in the popover, unless a control handled it first (preventDefault). */
@@ -190,7 +191,7 @@ export function FilterList({ options, current, onPick, label, placeholder, empty
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(o.key)}
           >
-            <span className="fl-check" aria-hidden="true">{o.key === current ? "✓" : ""}</span>
+            <span className="fl-check">{o.key === current && <Icon name="done" />}</span>
             {o.lead}
             {o.sub ? (
               <span className="fl-two">

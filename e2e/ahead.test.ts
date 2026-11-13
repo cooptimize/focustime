@@ -47,7 +47,9 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     // "+ date" only on hover or focus. Never a dash.
     await expect(row(page, "Order history export").locator(".ah-col-size").getAttribute("title")).resolves.toBe("Not in Portal's process");
     const supplierDates = row(page, "Supplier onboarding").locator(".ah-col-dates");
-    await expect(supplierDates.locator(".ah-add").textContent()).resolves.toBe("+ date");
+    // RS-1: the Add icon and the word (it was "+ date").
+    expect(await supplierDates.locator(".ah-add svg[data-icon=add]").count()).toBe(1);
+    await expect(supplierDates.locator(".ah-add").textContent().then((t) => t?.trim())).resolves.toBe("date");
     const shown = () => supplierDates.locator(".ah-add").evaluate((e) => getComputedStyle(e).opacity);
     await page.mouse.move(2, 2);
     await expect.poll(shown).toBe("0");

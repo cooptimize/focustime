@@ -4,6 +4,7 @@ import { useContext } from "react";
 import type { Tier } from "../../plan/ahead-model.ts";
 import { atLevel, collapseAll, expandAll, LEVELS, type Fold } from "../../plan/gantt-tree.ts";
 import { MenuCtx } from "../Menus.tsx";
+import { Icon } from "../icons.tsx";
 
 export function LevelControl({ fold, setFold, names }: { fold: Fold; setFold: (f: Fold) => void; names: Record<Tier, string> }) {
   const { open } = useContext(MenuCtx);
@@ -35,7 +36,7 @@ export function LevelControl({ fold, setFold, names }: { fold: Fold; setFold: (f
             });
           }}
         >
-          ⋯
+          <Icon name="more" />
         </button>
       </span>
     </span>

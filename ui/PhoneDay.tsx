@@ -15,6 +15,7 @@ import { countdown, timerLeft } from "./NowStrip.tsx";
 import { todoLine, useTodoSheet } from "./TodoSheet.tsx";
 import { userZone } from "../week/zone.ts";
 import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
+import { Icon } from "./icons.tsx";
 
 const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -107,7 +108,7 @@ export function PhoneNowCard({ card, data, pick, nowMs, nameOf, tickable, onStar
 }
 
 /** Today's to-dos, grouped by block: a checkbox, the title on its own line (two at most), then time, size and client. */
-export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: "+ Add" on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
+export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: Add on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
   const sheet = useTodoSheet();
   const tz = userZone(data);
   const start = (p: Pick) => data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt)?.start ?? null;
@@ -147,7 +148,7 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
             {!mine.length && <BlockSuggestions date={s.date} half={s.half} where="phone" />}
             {onAdd && !over && !s.off && !s.pto && (
               <button type="button" className="add-work add-row ph-add" onClick={() => onAdd(s.half)} aria-label={`Add to ${client ? nameOf(client) : "this block"}`}>
-                + Add
+                <Icon name="add" /> Add
               </button>
             )}
           </div>

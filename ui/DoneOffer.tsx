@@ -9,6 +9,7 @@ import type { DevOpsPreview, DevOpsResult, DoneOffer, UndoOffer } from "../actio
 import { ActionRefusal, call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { commentPlaceholder, LEFT_PICKS, parseLeftText } from "../plan/wrapup.ts";
+import { Icon } from "./icons.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
@@ -124,8 +125,8 @@ function DoneOfferCard({ card, setCard, previewFor, onDone }: { card: Card; setC
           <button type="button" className="mini" onClick={() => (close(), void writes?.begin(offer.clientKey, [{ kind: "undo", writeId: result.entry.id }]))}>
             Undo
           </button>
-          <button type="button" className="mini quiet" aria-label="Dismiss" onClick={close}>
-            ×
+          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={close}>
+            <Icon name="close" />
           </button>
         </div>
       </div>
@@ -300,7 +301,7 @@ export function DoneBatch({ offers, dayWords, onDone }: { offers: DoneOffer[]; d
                 </div>
               )}
               {p && <span className={"error" in p ? "db-fail" : "db-pv muted"}>{"error" in p ? p.error : p.previews.length ? p.summary : (p.refused[0]?.error ?? p.nothing[0] ?? "Nothing to change in DevOps")}</span>}
-              {r.result && <span className={r.result.ok ? "db-ok" : "db-fail"}>{r.result.ok ? `✓ ${r.result.message}` : r.result.message}</span>}
+              {r.result && <span className={r.result.ok ? "db-ok" : "db-fail"}>{r.result.ok && <><Icon name="done" /> </>}{r.result.message}</span>}
             </li>
           );
         })}

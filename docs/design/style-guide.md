@@ -1,6 +1,6 @@
 # FocusTime style guide (proposal)
 
-Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); a desktop-theme option was dropped in A1 (the hosted app has no desktop theme). It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md).
+Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); a desktop-theme option was dropped in A1 (the hosted app has no desktop theme). It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md). RS-1 (Nov 13) restyled the controls, icons and rows (section 11) and corrected sections 3 to 6 where it changed them; colors, the font and every layout stayed.
 
 ## 1. Principles
 
@@ -87,6 +87,14 @@ A theme is one file that assigns every semantic and domain token. Switching a th
 | `--focus` | `#B2D235` | `#00416B` | `#7EA2FF` | focus ring |
 | `--shadow-1` | `0 1px 2px #0007` | `0 1px 2px #10202B14` | `0 1px 2px #0006` | cards |
 | `--shadow-pop` | `0 12px 32px #0009` | `0 12px 32px #10202B2E` | `0 12px 32px #0008` | menus, dialogs |
+| `--wash-1` | text at 4% | text at 4% | text at 2% (4% dark) | hover on a control or a row (RS-1) |
+| `--wash-2` | text at 8% | text at 8% | text at 3% (8% dark) | pressed; a status pill's fill |
+| `--wash-accent` | accent at 13% | accent at 9% | accent at 4% (14% dark) | the chosen one: the active tab, the selected row, a chip that is on |
+| `--wash-risk`, `--wash-watch`, `--wash-ok` | the state at 14% | 14% | 14% | a state's pill (At risk, late, On track) |
+| `--line` | between `--surface` and `--border-strong` (60%) | same | same | every line that isn't a block card's: buttons, inputs, menus, dialogs |
+| `--track`, `--lift` | text at 7%; text at 18% on the surface | text at 7%; `--surface` | text at 7%; `--surface` | a switch's track and its chosen side |
+
+The washes are derived (`color-mix` with transparent), so they sit on any surface. Their strengths are per theme: the strongest that keep muted and faint text at AA on the page, a card and a menu (`ui/rs1-contrast.test.ts`); when a wash and text don't pass together, the wash is weakened, never the text color changed.
 
 ### 3.3 Domain tokens
 
@@ -144,9 +152,9 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 |---|---|---|---|
 | `--fs-4` = base + 2 | 15 | 600 | page, panel and dialog titles |
 | `--fs-3` = base | 13 | 600 | client names on cards, the next pick's title |
-| `--fs-3` | 13 | 500 | buttons, Plan chip, + Add work |
+| `--fs-3` | 13 | 500 | buttons, tabs, a switch's sides, Add |
 | `--fs-3` | 13 | 400 | body: pick titles, rows, follow-ups, dialog text |
-| `--fs-2` = base − 1 | 12 | 500 | pills, badges and tags (At risk, Due today, Next, Draft), field labels |
+| `--fs-2` = base − 1 | 12 | 500 | pills, badges and tags (At risk, Due today, Next, Draft), field labels, small buttons |
 | `--fs-2` | 12 | 400 | meta: time ranges, counts, hints (muted), status bar |
 | `--fs-1` = base − 2 | 11 | 500 | rail labels and hour marks, size chips |
 | `--fs-1` | 11 | 600 | section labels, uppercase +0.06em (MUSTS, THIS WEEK, AGENDA, BLOCKS) |
@@ -163,7 +171,7 @@ Uppercase is for section labels only, never for tags, chips or pills. Headings, 
 
 `--text-scale` (base / 13) multiplies spacing that pairs with text: pixel line heights, text row heights (`calc(20px * var(--text-scale))`, or `min-height` so rows grow), square text buttons and Today's day timeline. Outer layout widths, the top bar icons and the brand mark never scale. A new row height next to text uses `calc(Npx * var(--text-scale))`; a new font size uses a token, never a number.
 
-**Spacing:** 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32. **Radius:** 6 (controls), 10 (menus, pills), 14 (cards, panels). **Hit targets:** 28 px minimum for pointer, the whole card row for menus.
+**Spacing:** 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32. RS-1's four named steps: 24 between sections and for page side gutters (`--space-section`), 16 between cards (`--space-card`), 8 between controls in a row (`--space-control`), 2 between rows in a list (`--space-row`). **Radius (RS-1):** controls fully rounded (`--radius-control`), inputs, rows and a switch's sides 8 (`--radius-input`), menus 12 (`--radius-menu`), dialogs 16 (`--radius-dialog`), cards and panels as before (12 to 14). **Control heights (RS-1):** 32 (`--h-control`) and 28 inside cards and rows (`--h-small`), both scaled with the text; icons 16 (`--icon`), scaled too. **Hit targets:** 28 px minimum for pointer, the whole card row for menus.
 
 **Density:**
 
@@ -206,17 +214,17 @@ Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px
 | **Pick card** | checkbox, title, size chip (S/M/L), ⋯ | planned, done (strike + faint), carried over ("from Tue"), other client (warning tag) | size chip: S about 1 h, M about 2 h, L a block |
 | **Risk pill** | "At risk · <short reason>" | at risk, too much planned (amber), fits | the reason is on the pill (0 clicks); full sentences in the detail panel |
 | **Source status bar** | all live: a green dot and Refresh only; otherwise per cause: dot, name, state word, its data's age, fix button | live (quiet), cached (age), failed (cause), sample, needs sign-in | identical failures are grouped into one line with one fix; age only beside a stale or failed source (U3) |
-| **Top nav** | glyph, views (Week, Plan the day, Plan the week / Check-in / Close out as "soon"), week nav, Now strip, Refresh, Commands, Settings | active view (underline in `--action`), disabled "soon" | |
+| **Top bar** | mark and name; the tabs (Day, Week, Backlog, Status, Inbox), each an icon and its word in a 32 high pill, no box around the group; the VM chip (a quiet pill with its dot); Focus, Capture and Ask (outlined, an icon and the word); More (a round icon button); the photo | active tab: the accent wash and full-strength text; the others muted; counts small quiet numbers | one row down to 1024 px |
 | **Command menu** | search, grouped list (views, week, sources, Plan the day, picks, work items), shortcut on the right, steps for targets | empty ("Nothing matches"), step with back | built from the action registry |
-| **Buttons** | primary (`--action`), secondary (outline), quiet (text), mini | hover, active (pressed 1 px), disabled (40%, cursor default), busy (spinner + label) | one primary per panel |
-| **Inputs** | label above, 32 px field, inline hint | focus ring, invalid (risk border + message under) | |
-| **Menus** | title row, items with hint, submenu arrow, disabled with reason | active row tint, disabled reason inline | popover above dialogs |
+| **Buttons** | pills (section 11): filled (`--action`), outlined (the quiet line), quiet (no line, muted text), small (28 high) | hover (a faint wash), pressed (a stronger wash), disabled (as before, cursor default), busy (label) | one filled button per screen |
+| **Inputs** | label above, 32 px field (scaled), 8 radius, the quiet line, inline hint | focus (the accent line plus the focus ring), invalid (risk border + message under) | |
+| **Menus** | 12 radius; title row; rows 32 high with an icon before every item, the shortcut at the right in the keyboard chip, a chevron for a next step; group labels plain muted text | active row: the accent wash; disabled reason inline | popover above dialogs; dialogs 16 radius |
 | **Toast / inline error** | inline next to what failed; toast only for background actions | info, success (rare), error with retry | errors name the cause and the fix |
 
 ## 6. Interaction rules
 
-- **Focus visibility:** a 2 px ring in `--focus` with a 2 px `--surface` gap (`box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus)`). Never removed; `:focus-visible` only for pointer users.
-- **Hover vs selected vs active:** hover lifts the background to `--raised`; selected is the focus ring (the keyboard cursor); active (pressed) darkens 1 step and moves 1 px. A selected block keeps its ring even when the pointer is elsewhere.
+- **Focus visibility:** a 2 px ring in `--focus`, 2 px off the control (an outline, so it never takes the wash's place). Never removed; `:focus-visible` only for pointer users. It stays on everything that can take focus, on every wash.
+- **Hover vs selected vs active (RS-1):** hover is the faint wash (`--wash-1`), pressed the stronger one (`--wash-2`), both instant; the chosen one (the active tab, the selected or keyboard row, a chip that is on) has the accent wash. A block card's selection is still the ring (`--selected`), kept when the pointer is elsewhere.
 - **Keyboard map:**
 
 | Key | Does |
@@ -226,7 +234,7 @@ Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px
 | Tab / Shift+Tab | (proposed) items inside the selected half-day only, then the next region |
 | F6 | (proposed) next region: top bar, grid, panel, status bar |
 | O | (proposed) open the top pick or work item of the selected half-day in Edge |
-| Shift+F10 / Menu | the ⋯ menu of what has focus |
+| Shift+F10 / Menu | the More (⋯) menu of what has focus |
 | P (or I) | Plan the day |
 | C | commit (in Plan the day) |
 | T | today |
@@ -282,8 +290,8 @@ The product owner (Nov 11): "What am I supposed to be looking at right now?" Des
 - **One time format.** A range is `9:00–12:30` (an en dash, no spaces, no AM or PM; `shortRange` in `ui/labels.ts`), in cards, the panel, the rail and the timeline. A single time is `9:30`. An all-day event says "All day". Words like "until 12:30" only in sentences.
 - **Two date forms.** Long: "Tue, Nov 3" (headers of one day: Day, the panel, a promise's due date). Short, inside a week: "Tue 3" (Week's day headers). Nothing else.
 - **One name per thing.** "Needs stories" (never "Needs breakdown"), "unfinished" (never "not done" for a to-do left from a past day), "to place" for unfinished to-dos with no block yet, "Holiday" for an observed holiday (its own name in its cell), "PTO" for time off, "Cards" and "Timeline" for the two layouts. `docs/design/wording.md` has the list.
-- **One control style per job.** The screen's main action is a filled button (`--action`); per-block actions (+ Add in a block, + time, Review, Keep) are quiet links that show their edge on hover and focus; a switch between two layouts is a segmented pair (Cards | Timeline) with `aria-pressed`; a status is a pill, never a button look.
-- **One main button per screen.** The header's + Add on Day and on Week, at every width, is the only filled button in the header. Start focus shows once (on Day, on the block under way's card, not in the panel too).
+- **One control style per job.** The screen's main action is a filled button (`--action`); per-block actions (Add in a block, time, Review, Keep) are quiet links that show their edge on hover and focus; a switch between two layouts is one soft track with the chosen side lifted (Cards | Timeline, section 11) with `aria-pressed`; a status is a pill with no line, never a button look.
+- **One main button per screen.** The header's Add (the Add icon and the word) on Day and on Week, at every width, is the only filled button in the header. Start focus shows once (on Day, on the block under way's card, not in the panel too).
 - **No other repeated control.** A control that would repeat on every row shows on hover and focus (⋯, the time link on rows that have one), never hidden from the keyboard or a screen reader.
 - **Targets.** Every button, link and checkbox is at least 28 × 28 px on a computer and 44 × 44 px on the phone (`--target`); a small chip draws its pill inside the bigger box. Exempt: items drawn by time on the rail and the timeline (their height is their length), listed in `docs/open-questions.md`.
 - **No partly shown lines (PS-2).** A target is never made by padding a box that clips text (or by giving it a minimum height): a clip cuts at the padding edge, so the next line shows as a sliver. Size it with a transparent border, an outer box around an inner clip, or a pseudo-element; a line shows whole or not at all (`clippedLines` in `e2e/ps1-audit.ts`).
@@ -297,3 +305,49 @@ The product owner (Nov 11): "What am I supposed to be looking at right now?" Des
 - **Time placement (WK-5).** On Week's cards a to-do's time and size sit on one line under its title ("10:30–11:30 · 1h"); the title never shares its line with a chip. On Day and in the block panel, which have the width, the time stays at the right of the row.
 - **Timeboxed order (WK-5).** A card's to-dos are in clock order: feature groups by their first timed to-do, timed rows by start, untimed ones after; "No feature" is a group like any other.
 - **The phone.** Nothing sits under the raised capture button at the end of a scroll; no layout switch on the phone's Week.
+
+## 11. Controls, icons and rows (RS-1, Nov 13)
+
+The product owner looked at another product's interface as a style reference and asked to borrow its control styling, "not color and exact font... but just button styling and spacing and menu/tab stuff, icons", then to blend the old look back in where it was better: Week is a map people scan by client color and shape, so block cards keep their strong edges. What was wrong before: every row sat in its own box, so a list of 40 rows read as 40 demands; controls came in several shapes; and back, next, more, add and close were text characters in small boxes. These rules apply in all three themes, at all three text sizes and on the phone. Colors, the font, every word, layout and behavior are as they were. `e2e/rs1.test.ts` measures what can be measured; `/styleguide` shows every control.
+
+**Buttons are pills.** Fully rounded, 32 high at the Default text size and scaled with it, 14 side padding, the body size at weight 500.
+
+| Kind | Look | For |
+|---|---|---|
+| Filled | the action color, white text | the screen's one main action (section 10) |
+| Outlined | a 1 px line (`--line`), no fill | everything else you press that isn't in a row |
+| Quiet | no line, muted text | secondary actions and actions inside rows |
+| Small | 28 high, the meta size (12) | actions inside cards and rows |
+
+Hover is a faint wash, pressed a slightly stronger one, both instant. Disabled as before. A link in a sentence stays a link (underlined, no pill).
+
+**Icon-only buttons** are round, 32 (28 inside cards and rows, 44 on the phone), no line, a muted icon, the same washes. Only for back, next, more, close, add to this block, remove and the format buttons. Each has a name for screen readers and a tooltip. The close button keeps its 44 px target; what shows is the round 32.
+
+**Tabs** have no box around the group. Each tab is an icon and its label in a 32 high pill; the active tab has the accent wash and full-strength text, the others are muted; counts are small quiet numbers after the label; Status's dot stays. On the phone's bottom bar each tab is its icon over its label. The icons say what each tab is for: one day, the week in columns, the backlog's indented list, bars, a tray.
+
+**Switches** between two or three views (Cards and Timeline, Grid and Gantt, Mine, Contributing and Everyone, the Inbox's three lists, the New form's Level, Status's two sides, No wrap and Wrap in Code, Customers and All accounts) are one soft rounded track (`--track`) with the chosen side lifted (`--lift`, a small shadow). Each announces its state as it did (`aria-pressed`, `aria-current`, a tab's `aria-selected`, a radio's `aria-checked`, Code's switch named Wrap).
+
+**Pills: outlined means press.**
+
+- A status (Today, Due Sun, 1 day late, At risk, On track, Stale, a size that only tells, Read only, Rule) has no line: a wash, with color only for a state that needs it (late and stale in the watch color, at risk in the risk color, on track in the ok color, today and now in the accent).
+- Anything you can press that looks like a chip (client filters, Needs attention, a date or person chip that opens a picker, a size you can change, Capture's kinds) has a line when off and its wash when on.
+
+**Inputs and selects** are 32 high and scaled, 8 radius, the quiet line, the accent line when focused plus the focus ring.
+
+**Menus and the command menu** have a 12 radius, rows 32 high, an icon before every item (`ui/menu-icons.ts`: the item's own, else from its action, its words, then its group), the shortcut at the right in the keyboard chip, group labels as plain muted text (no capitals), the active row with the accent wash. Dialogs have a 16 radius.
+
+**The top bar.** The VM chip is a quiet pill with its dot; Focus, Capture and Ask are outlined with an icon and their word; More is a round icon button; the photo is as it was.
+
+**Icons.** One family for FocusTime's own things (`ui/icons.tsx`, by name; drawn by Lucide, ISC, only the icons named there in the bundle): 16 px at the Default text size and scaled with it, a 1.5 px stroke at every size, rounded ends, the color of the text beside it, never colored on its own except by a state it sits in. An icon beside a word is hidden from screen readers; an icon alone has a name. No text character acts as a control or a mark (no ‹ › ⋯ + × ▸ ▾ ✓): each is its icon, with the name it had. Arrows inside sentences ("→ Thu") stay text. Not part of the family, on purpose: the DevOps type icons (their shapes and colors are the project's), the brand marks and Lumen, a person's photo.
+
+| Group | Names |
+|---|---|
+| Tabs | day, week, backlog, status, inbox |
+| Top bar | focus, capture, ask, more, vm, code, settings |
+| Actions | add, edit, move, copy, link, search, filter, refresh, done, close, loop (Close the loop), time, open, closed, back, next, preview, ai, remove, undo, grip, bold, italic, bullets, numbers |
+| Things | promise, chats (From chats), to-sort (a capture to sort), meeting, call, personal, all-day, pto, holiday, catchup, standing, risk, folder, file, repo, people |
+
+**Rows.** A list row is one line, 32 high and scaled, 8 radius, with 2 between rows and no box, border or left stripe of its own. Hover is the faint wash; the selected or keyboard row has the accent wash; a row that opens in place becomes one quiet card while it is open. A row that needs a second line keeps it, and nothing is cut to make a row one line (section 10's rules on whole lines and minimum widths stand). Applied to the Inbox's three lists, Day's promise lines above the blocks, the block panel's lists, the Backlog grid's rows (no lines between rows; its column heads stay), Status's lines, Settings and Admin rows and their side list, the command menu and Code's tree. To-do rows inside block cards keep their structure and spacing: only their pills, small buttons and icons changed.
+
+**What stays strong.** Block cards on Day, Week and the phone keep the client edge, the visible border (`--border`, not the quiet line), the selected ring, their header and their to-do rows' structure. Section labels on screens and panels (On this block, Assigned to you, column heads) stay small uppercase.
+

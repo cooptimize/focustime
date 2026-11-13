@@ -10,6 +10,8 @@ import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { useScopedTab } from "./scope.ts";
 import { StatusMark } from "./StatusMark.tsx";
+import { Icon } from "./icons.tsx";
+import { menuIcon } from "./menu-icons.ts";
 
 type Opener = (at: { x: number; y: number }, step: MenuStep) => void;
 export type MenuApi = { env: MenuEnv | null; open: Opener };
@@ -43,7 +45,7 @@ export function MoreButton({ label, onClick }: { label: string; onClick: (e: Rea
       onDoubleClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      ⋯
+      <Icon name="more" />
     </button>
   );
 }
@@ -208,15 +210,15 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
               onMouseEnter={() => !it.disabled && setActive(i)}
               onClick={() => void choose(it, push).then((close) => close && onDone())}
             >
+              {/* RS-1: an icon before every item: its work item type, the check of a chosen one, or what it does. */}
+              <span className="menu-icon">{it.typeIcon ? <TypeIcon clientKey={it.typeIcon.clientKey} type={it.typeIcon.type} /> : <Icon name={it.checked ? "done" : menuIcon(it)} />}</span>
               <span className="menu-label">
-                {it.checked && <span aria-hidden="true">✓ </span>}
-                {it.typeIcon && <><TypeIcon clientKey={it.typeIcon.clientKey} type={it.typeIcon.type} />{" "}</>}
                 {it.label}
                 {it.mark && <>{" "}<StatusMark tone={it.mark.tone} text={it.mark.text} /></>}
                 {it.disabled && !popup && <span className="menu-why"> · {it.disabled}</span>}
               </span>
               {it.hint && <span className="menu-hint">{it.hint.length <= 5 ? <kbd>{it.hint}</kbd> : it.hint}</span>}
-              {it.next && <span className="menu-arrow" aria-hidden="true">›</span>}
+              {it.next && <span className="menu-arrow"><Icon name="next" /></span>}
             </button>
           </li>
         );
@@ -296,7 +298,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
         <div className="menu-title">
           {canBack && (
             <button type="button" className="menu-back" onClick={back} aria-label="Back">
-              ‹
+              <Icon name="back" />
             </button>
           )}
           <span>{step.title}</span>
@@ -340,12 +342,13 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
         <div className="command-head">
           {canBack && (
             <button type="button" className="menu-back" onClick={back} aria-label="Back">
-              ‹
+              <Icon name="back" />
             </button>
           )}
           {"items" in step ? (
             <input
               ref={input}
+              className="plain-input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={canBack ? step.title : "Type a command or search…"}

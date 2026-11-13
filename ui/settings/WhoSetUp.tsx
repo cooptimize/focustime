@@ -15,6 +15,7 @@ import { shortDate } from "../labels.ts";
 import type { InviteAccessView, InvitePreviewView, InviteResultView, EmailSplit } from "../../actions/invite-types.ts";
 import type { ChannelAccess } from "../../actions/loop-types.ts";
 import { invitedLine, matchesFilter, NAME_TOKEN, mailtoLink, outlookComposeLink, personalize, SETUP_FILTERS, setupCounts, teamsChatLink, validEmail, type SetupFilter, type SetupRow } from "../../plan/invite.ts";
+import { Icon } from "../icons.tsx";
 
 type SetupData = {
   people: SetupRow[];
@@ -27,7 +28,7 @@ type Via = "teams" | "outlook" | "email" | "copy";
 function Mark({ yes, label }: { yes: boolean; label: string }) {
   return yes ? (
     <span className="adm-ok" aria-label={`${label}: yes`}>
-      ✓ Yes
+      <Icon name="done" /> Yes
     </span>
   ) : (
     <span className="muted" aria-label={`${label}: no`}>
@@ -345,7 +346,7 @@ export function InviteSheet({ people, invite, onClose, onInvited }: { people: Se
         <ul className="sl-parts">
           {r.items.map((it, i) => (
             <li key={i} className={it.ok ? "ok" : "bad"}>
-              {it.ok ? "✓ " : "✗ "}
+              <Icon name={it.ok ? "done" : "close"} label={it.ok ? "Done" : "Failed"} />{" "}
               <strong>{it.names.join(", ")}</strong>: {it.line}
               {it.link && it.ok && (
                 <>

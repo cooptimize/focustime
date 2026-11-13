@@ -25,6 +25,7 @@ import { useTodoSheet } from "./TodoSheet.tsx";
 import { DevOpsWork } from "./work.ts";
 import { isResolved } from "../plan/process.ts";
 import { RowFormCtx } from "./weekctx.ts";
+import { Icon } from "./icons.tsx";
 
 export const PICK_DRAG = "application/x-focustime-pick";
 
@@ -77,7 +78,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const sheet = useTodoSheet();
   const more = sheet ? (
     <button type="button" className="more-btn ph-more" aria-label={`More for ${pick.title}`} aria-haspopup="dialog" onClick={(e) => (e.stopPropagation(), sheet(pick))} onDoubleClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      ⋯
+      <Icon name="more" />
     </button>
   ) : (
     menu.button(`More for ${pick.title}`)
@@ -119,7 +120,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     if (planD)
       return (
         <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ph-row ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? {})} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
-          handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
+          handle={<Icon name={pick.status === "done" ? "done" : "grip"} />} titleText={pick.title}
           icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
           title={titleNode}>
           {line2}
@@ -173,7 +174,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     // U6: Plan the day's row is the shared planning row (ui/plan/PlanRow.tsx).
     return (
       <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
-        handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
+        handle={<Icon name={pick.status === "done" ? "done" : "grip"} />} titleText={pick.title}
         icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
         title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
         badges={<>{resolved && <ResolvedMark state={resolved.state} />}{extra}{badge}</>}

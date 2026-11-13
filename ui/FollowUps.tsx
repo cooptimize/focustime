@@ -19,6 +19,7 @@ import { call } from "./api.ts";
 import { HOW_LABEL } from "./CloseLoop.tsx";
 import { SendLoop } from "./SendLoop.tsx";
 import { stampText } from "./stamp.ts";
+import { Icon } from "./icons.tsx";
 export { HOW_LABEL };
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
@@ -145,8 +146,8 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
               </button>
             )}
             <span className="fu-more">
-              <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${l.what}`} onClick={() => setMenu((v) => !v)}>
-                ⋯
+              <button type="button" className="mini quiet icon-btn small" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${l.what}`} onClick={() => setMenu((v) => !v)}>
+                <Icon name="more" />
               </button>
               {menu && (
                 <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>

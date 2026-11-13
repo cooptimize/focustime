@@ -6,6 +6,7 @@
 // docs/settings.md has how to use it.
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
+import { Icon } from "./icons.tsx";
 
 /** Below this width the rail becomes its own list page (the phone's layout). */
 export const NARROW_MAX_PX = 900;
@@ -111,7 +112,7 @@ export function PanelShell(p: PanelShellProps) {
               >
                 <span>{it.label}</span>
                 {it.hint && <span className="ps-hint">{it.hint}</span>}
-                {p.phone && <span className="ps-chev" aria-hidden="true">›</span>}
+                {p.phone && <span className="ps-chev"><Icon name="next" /></span>}
               </a>
             ))}
           </div>
@@ -123,8 +124,8 @@ export function PanelShell(p: PanelShellProps) {
   const header = (
     <header className="ps-head">
       {p.onBack ? (
-        <button type="button" className="ps-back" onClick={p.onBack}>
-          <span aria-hidden="true">‹</span> {p.backLabel ?? "Back"}
+        <button type="button" className="ps-back quiet" onClick={p.onBack}>
+          <Icon name="back" /> {p.backLabel ?? "Back"}
         </button>
       ) : null}
       <div className="ps-titles">

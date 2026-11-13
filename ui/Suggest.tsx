@@ -11,6 +11,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import { useSuggest, type SuggestApi } from "./Carry.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { useDragSource } from "./WeekStories.tsx";
+import { Icon } from "./icons.tsx";
 
 /**
  * After a Keep or Clear the focused row goes; focus moves to the block's next suggestion, else the block itself (or
@@ -81,10 +82,10 @@ function SuggestRow({ s, sg, tabIndex, panel }: { s: Suggestion; sg: SuggestApi;
         {s.needsBreakdown && <span className="sug-needs">Needs stories</span>}
       </button>
       <button type="button" className={panel ? "mini sug-keep" : "sug-plus"} tabIndex={tabIndex} title="Keep it on this block" aria-label={`Keep ${s.title}`} onClick={(e) => act(e, keep)}>
-        {panel ? "Keep" : "+"}
+        {panel ? "Keep" : <Icon name="add" />}
       </button>
       <button type="button" className="sug-x" tabIndex={tabIndex} title="Not this one this week" aria-label={`Clear ${s.title}`} onClick={(e) => act(e, () => void sg.clear({ scope: "item", date: s.at.date, key: s.key }, s.title))}>
-        ×
+        <Icon name="close" />
       </button>
     </li>
   );

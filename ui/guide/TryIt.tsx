@@ -7,6 +7,7 @@ import { useReducedMotion } from "../brand/motion.ts";
 import { SIZING, TRY, type ExampleColor, type TryItId } from "./content.ts";
 import { sandbox } from "./sandbox.ts";
 import { Rich } from "./Rich.tsx";
+import { Icon } from "../icons.tsx";
 
 const tint = (c: ExampleColor): CSSProperties => ({ ["--c" as string]: `var(--client-${c})` });
 
@@ -65,7 +66,7 @@ function DragTry() {
   };
   const chip = (x: (typeof t.todos)[number]) => (
     <li key={x.id} className="try-todo" data-slide={x.id} draggable onDragStart={(e) => (e.dataTransfer.setData("text/plain", x.id), (e.dataTransfer.effectAllowed = "move"))}>
-      <span className="try-grip" aria-hidden="true">⋮⋮</span>
+      <span className="try-grip"><Icon name="grip" /></span>
       <span className="try-todo-title">{x.title}</span>
       <span className="guide-tag">{x.size}</span>
       <span className="try-moves">
@@ -224,7 +225,7 @@ function SizingTry() {
           <div className="stack" aria-label={SIZING.stackLabel}>
             {sb.chips.map((chip, i) => (
               <button key={i} type="button" className={stories[i] ? "" : "unsized"} aria-label={SIZING.remove(chip)} onClick={() => setStories((x) => x.filter((_, j) => j !== i))}>
-                {chip} ✕
+                {chip} <Icon name="close" />
               </button>
             ))}
           </div>

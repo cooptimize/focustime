@@ -67,7 +67,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await shotAll(page, "nv1-today-plan-card");
 
     // WD-2: + Add on the card opens the block panel on Day, on one of today's blocks, the cursor in its Add box.
-    await planCard.getByRole("button", { name: "+ Add" }).click();
+    await planCard.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => hash(page)).toMatch(/^#\/day\/2026-11-02\/(AM|PM)$/);
     await expect.poll(() => tab(page).textContent()).toMatch(/^Day/);
     await expect.poll(() => page.locator("aside.block-panel").getAttribute("data-block-panel")).toMatch(/^2026-11-02\|/);

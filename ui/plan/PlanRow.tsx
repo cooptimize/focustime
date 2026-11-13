@@ -2,6 +2,7 @@
 // on the right the size chip (a pick) or "1 block" with a stepper on hover (a week item), and ⋯ on hover. Same height,
 // hover and selection colors everywhere. PickRow's "plan" density and Plan the week's rows are built on it.
 import type { HTMLAttributes, ReactNode } from "react";
+import { Icon } from "../icons.tsx";
 
 type Props = Omit<HTMLAttributes<HTMLLIElement>, "title"> & {
   className?: string | undefined;
@@ -24,7 +25,7 @@ type Props = Omit<HTMLAttributes<HTMLLIElement>, "title"> & {
   "data-pick"?: number | undefined;
 };
 
-export function PlanRow({ className = "", handle = "⋮⋮", handleTitle, icon, title, titleText, badges, right, hover, children, ...li }: Props) {
+export function PlanRow({ className = "", handle = <Icon name="grip" />, handleTitle, icon, title, titleText, badges, right, hover, children, ...li }: Props) {
   return (
     <li {...li} className={`pl-row ${className}`} data-plan="row">
       {handle !== null && (

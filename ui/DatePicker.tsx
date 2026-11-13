@@ -6,6 +6,7 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CellPopover } from "./CellPopover.tsx";
 import { dayText, monthGrid, parseTypedDate, quickPicks } from "./dateinput.ts";
+import { Icon } from "./icons.tsx";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const monthTitle = (y: number, m: number) => Temporal.PlainDate.from({ year: y, month: m, day: 1 }).toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -94,14 +95,14 @@ export function DatePicker({ value, onChange, today, label, clearable = true, on
       </div>
       <div className="dp-cal" ref={cal}>
         <div className="dp-nav">
-          <button type="button" className="dp-step" aria-label="Previous month" onClick={() => step(-1)}>
-            ‹
+          <button type="button" className="dp-step icon-btn small" aria-label="Previous month" onClick={() => step(-1)}>
+            <Icon name="back" />
           </button>
           <span className="dp-month" aria-live="polite">
             {monthTitle(month.y, month.m)}
           </span>
-          <button type="button" className="dp-step" aria-label="Next month" onClick={() => step(1)}>
-            ›
+          <button type="button" className="dp-step icon-btn small" aria-label="Next month" onClick={() => step(1)}>
+            <Icon name="next" />
           </button>
         </div>
         <table className="dp-grid" role="grid" aria-label={monthTitle(month.y, month.m)}>
@@ -170,7 +171,7 @@ export function DateField({ value, onChange, label, today, placeholder = "Any", 
     <>
       <button ref={btn} type="button" className={`date-field${value ? "" : " empty"} ${className}`} aria-label={`${label}: ${value ? longDay(value) : "none"}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => (setDraft(value), setOpen(!open))}>
         <span>{value ? dayText(value, today) : placeholder}</span>
-        <span className="date-field-icon" aria-hidden="true">▾</span>
+        <span className="date-field-icon"><Icon name="open" /></span>
       </button>
       {open && (
         <CellPopover anchor={btn.current} title={label} onSave={() => save()} onCancel={close} className="dp-pop">

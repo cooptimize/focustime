@@ -14,6 +14,7 @@ import { aboutLine, type Build } from "./About.tsx";
 import { ActionRefusal, call } from "./api.ts";
 import { FEEDBACK_KINDS, KIND_LABEL, type FeedbackKind, type Where } from "../plan/feedback.ts";
 import { WRITES_HREF, type FeedbackPreview, type FeedbackSent, type FeedbackSetup, type FeedbackStatus } from "../actions/feedback-types.ts";
+import { Icon } from "./icons.tsx";
 
 /** "Chrome 141 on Windows": the browser and system from the user agent, nothing more. */
 export function browserName(ua: string): string {
@@ -110,7 +111,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
         <div className="command-head">
           {(step.kind === "preview" || step.kind === "error") && (
             <button ref={step.kind === "error" ? primary : undefined} type="button" className="menu-back" onClick={() => setStep({ kind: "write" })} disabled={busy} aria-label="Back" title="Back to your text">
-              ‹
+              <Icon name="back" />
             </button>
           )}
           <span className="command-step-title">{step.kind === "preview" ? "Send feedback: preview" : "Send feedback"}</span>

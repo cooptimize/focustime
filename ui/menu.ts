@@ -46,6 +46,8 @@ export type MenuItem = {
   mark?: { tone: "amber" | "red"; text: string };
   /** BL-1: an on/off item (Callouts, Show the whole project): a menuitemcheckbox, its `checked` read out. */
   toggle?: boolean;
+  /** RS-1: the item's icon, from the one family, when what it does doesn't already say (ui/menu-icons.ts). */
+  icon?: IconName;
   /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
   typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
@@ -62,6 +64,7 @@ export type MenuItem = {
 };
 /** FN-1: the one label for copying a work item's link, in every item's ⋯ menu. */
 import { newWords } from "../plan/quick-create.ts";
+import type { IconName } from "./icons.tsx";
 export const COPY_LINK = "Copy DevOps link";
 /** A row menu's header: a label naming the row it was opened from, never an action (D459). */
 export type MenuHead = { text: string; full: string };

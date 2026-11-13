@@ -1,6 +1,6 @@
 // /styleguide (step 6b slice 5): tokens and core components, live in each theme, from fixture data only (no
 // sources, no client data). The switcher here only previews: Settings > Display saves the theme.
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { legacyHours, THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { samplePatterns, sampleOutlook, sampleGoogle, SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import type { SourceSummary, TimerView } from "../actions/types.ts";
@@ -8,7 +8,10 @@ import type { NowStrip as Strip } from "../plan/now.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import type { FlexSession } from "../week/types.ts";
+import { CloseButton } from "./CloseButton.tsx";
+import { Icon, ICON_NAMES, type IconName } from "./icons.tsx";
 import { KEYS } from "./keys.ts";
+import { menuIcon } from "./menu-icons.ts";
 import { NowStrip, TopTimer } from "./NowStrip.tsx";
 import { PlanCtx } from "./planview.ts";
 import { StatusBar } from "./StatusBar.tsx";
@@ -148,6 +151,26 @@ const TYPE_SCALE: [string, number, string, boolean][] = [
   ["--fs-1", 600, "Section labels", true],
 ];
 
+/** RS-1: the button kinds of style guide section 11, each shown at rest, hover, pressed, focus and disabled. */
+const SG_BUTTONS: { name: string; cls: string; word: string; icon?: IconName; filled?: boolean }[] = [
+  { name: "Filled: the screen's one main action", cls: "done-btn", word: "Add", icon: "add", filled: true },
+  { name: "Outlined: everything else you press", cls: "", word: "Outlined" },
+  { name: "Outlined, with an icon", cls: "top-btn", word: "Capture", icon: "capture" },
+  { name: "Quiet: secondary, and inside rows", cls: "quiet", word: "Quiet" },
+  { name: "Small: inside cards and rows", cls: "mini", word: "Small" },
+  { name: "Small, accented", cls: "mini primary", word: "Accept" },
+  { name: "Small, quiet", cls: "mini quiet", word: "Not today" },
+  { name: "Small, filled", cls: "start-focus", word: "Start focus", filled: true },
+];
+const SG_MENU: { label: string; cls?: string; key?: string; why?: string; next?: boolean }[] = [
+  { label: "Mark done", cls: "active", key: "X" },
+  { label: "Size M", cls: "checked" },
+  { label: "Move", next: true },
+  { label: "Copy link" },
+  { label: "Move to Friday", why: "no working hours" },
+  { label: "Drop", cls: "danger" },
+];
+
 export function StyleGuide() {
   const [theme, setTheme] = useState<Theme>(() => {
     const q = new URLSearchParams(location.search).get("theme");
@@ -259,43 +282,116 @@ export function StyleGuide() {
         </div>
       </section>
 
-      <section className="sg-section">
-        <h2>Controls</h2>
+      <section className="sg-section" data-sg="controls">
+        <h2>Controls, icons and rows (RS-1)</h2>
+        <p className="muted">Style guide section 11: every control in every state. Hover and pressed are drawn as they look; the washes are instant.</p>
+
+        <h3>Buttons</h3>
+        {SG_BUTTONS.map((b) => (
+          <div key={b.name} className="sg-states">
+            <span className="sg-state-name">{b.name}</span>
+            <button type="button" className={b.cls}>{b.icon && <Icon name={b.icon} />} {b.word}</button>
+            <button type="button" className={b.cls} style={b.filled ? { filter: "brightness(1.08)" } : { background: "var(--wash-1)" }}>Hover</button>
+            <button type="button" className={b.cls} style={b.filled ? { filter: "brightness(0.95)" } : { background: "var(--wash-2)" }}>Pressed</button>
+            <button type="button" className={b.cls} style={{ outline: "2px solid var(--focus)", outlineOffset: 2 }}>Focus</button>
+            <button type="button" className={b.cls} disabled>Disabled</button>
+          </div>
+        ))}
+
+        <h3>Icon-only buttons</h3>
         <div className="sg-row">
-          <button type="button" className="top-btn">Button</button>
-          <button type="button" className="top-btn" aria-current="page">Current</button>
-          <button type="button" className="top-btn" disabled>Disabled</button>
-          <button type="button" className="mini">Mini</button>
-          <button type="button" className="mini primary">Primary</button>
-          <kbd>Ctrl K</kbd>
-          <span className="soon-tag">soon</span>
-          <span className="fit fits">fits, 1h spare</span>
-          <span className="fit tight">tight, 20m spare</span>
-          <span className="fit over">over by 30m</span>
-          <span className="pto-pill full">PTO · Sample day off</span>
-          <span className="weekend-note">Today is Sat, Nov 7 · showing next week</span>
+          {(["back", "next", "more", "close", "add", "remove", "bold", "italic", "bullets", "numbers", "link"] as const).map((n) => (
+            <button key={n} type="button" className="icon-btn" aria-label={n} title={n}><Icon name={n} /></button>
+          ))}
+          <button type="button" className="icon-btn" aria-label="Hover" title="Hover" style={{ background: "var(--wash-1)", color: "var(--text)" }}><Icon name="more" /></button>
+          <button type="button" className="icon-btn" aria-label="Pressed" title="Pressed" style={{ background: "var(--wash-2)", color: "var(--text)" }}><Icon name="more" /></button>
+          <button type="button" className="icon-btn" aria-label="Focus" title="Focus" style={{ outline: "2px solid var(--focus)", outlineOffset: 2 }}><Icon name="more" /></button>
+          <button type="button" className="icon-btn" aria-label="Disabled" title="Disabled" disabled><Icon name="more" /></button>
+          <button type="button" className="icon-btn small" aria-label="Small" title="Small, inside cards and rows"><Icon name="more" /></button>
+          <CloseButton onClose={noop} />
         </div>
+
+        <h3>Tabs</h3>
+        <div className="sg-row">
+          <nav className="views" aria-label="Sample tabs">
+            {(["day", "week", "backlog", "status", "inbox"] as const).map((t, i) => (
+              <button key={t} type="button" className="view-tab" aria-current={i === 1 ? "page" : undefined} style={i === 2 ? { background: "var(--wash-1)", color: "var(--text)" } : undefined}>
+                <Icon name={t} />
+                {{ day: "Day", week: "Week", backlog: "Backlog (hover)", status: "Status", inbox: "Inbox" }[t]}
+                {t === "inbox" && <span className="count">6</span>}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <h3>Switches</h3>
+        <div className="sg-row">
+          <span className="day-switch" role="group" aria-label="Sample: cards or timeline">
+            <button type="button" aria-pressed={true}>Cards</button>
+            <button type="button" aria-pressed={false}>Timeline</button>
+          </span>
+          <span className="rm-seg" role="group" aria-label="Sample: whose">
+            <button type="button" aria-pressed={false}>Mine</button>
+            <button type="button" aria-pressed={true}>Contributing</button>
+            <button type="button" aria-pressed={false}>Everyone</button>
+          </span>
+          <nav className="mode-switch" aria-label="Sample: views">
+            <button type="button" className="ms-btn" aria-current="page">Grid</button>
+            <button type="button" className="ms-btn">Gantt</button>
+          </nav>
+        </div>
+
+        <h3>Pills: outlined means press</h3>
+        <div className="sg-row">
+          <span className="today-pill">Today</span>
+          <span className="due-badge later">Due Sun</span>
+          <span className="due-badge was_due">1 day late</span>
+          <span className="status-pill at_risk">At risk</span>
+          <span className="status-pill on_track">On track</span>
+          <span className="status-pill watch">Stale</span>
+          <span className="size-chip static">M</span>
+          <span className="adm-kind">Rule</span>
+          <span className="status-chip">Read only</span>
+          <span className="muted">a status: a wash, no line</span>
+        </div>
+        <div className="sg-row">
+          <button type="button" className="rm-chip" aria-pressed={false} style={{ "--c": "var(--client-teal)" } as CSSProperties}><span className="swatch small" style={{ "--c2": "var(--client-teal)" } as CSSProperties} />Client, off</button>
+          <button type="button" className="rm-chip" aria-pressed={true} style={{ "--c": "var(--client-teal)" } as CSSProperties}><span className="swatch small" style={{ "--c2": "var(--client-teal)" } as CSSProperties} />Client, on</button>
+          <button type="button" className="chip-btn" aria-pressed={false}>Decide later</button>
+          <button type="button" className="chip-btn on" aria-pressed={true}>Promise</button>
+          <button type="button" className="size-chip">M</button>
+          <button type="button" className="carry-chip">→ Wed</button>
+          <span className="muted">a chip to press: a line when off, its wash when on</span>
+        </div>
+
+        <h3>Inputs</h3>
+        <div className="sg-row">
+          <input type="text" placeholder="Text" aria-label="Sample text" />
+          <input type="text" defaultValue="Focused" aria-label="Sample focused" style={{ borderColor: "var(--accent)", outline: "2px solid var(--focus)", outlineOffset: 1 }} />
+          <input type="text" defaultValue="Not right" aria-invalid="true" aria-label="Sample invalid" />
+          <input type="text" defaultValue="Disabled" disabled aria-label="Sample disabled" />
+          <select aria-label="Sample select" defaultValue="b"><option value="a">One</option><option value="b">Two</option></select>
+          <button type="button" className="date-field"><span>Nov 6</span><span className="date-field-icon"><Icon name="open" /></span></button>
+        </div>
+
+        <h3>Menus and dialogs</h3>
         <div className="sg-row">
           <ul className="popup-menu sg-static menu-list" role="menu" aria-label="Sample menu">
             <li className="menu-group">To-do</li>
-            <li role="menuitem" className="menu-item active">
-              <span className="menu-label">Mark done</span>
-              <span className="menu-hint">
-                <kbd>X</kbd>
-              </span>
-            </li>
-            <li role="menuitem" className="menu-item checked">
-              <span className="menu-label">Size M</span>
-            </li>
-            <li role="menuitem" className="menu-item" aria-disabled="true">
-              <span className="menu-label">
-                Move to Friday<span className="menu-why"> · no working hours</span>
-              </span>
-            </li>
-            <li role="menuitem" className="menu-item danger">
-              <span className="menu-label">Drop</span>
-            </li>
+            {SG_MENU.map((m) => (
+              <li key={m.label} role="menuitem" className={`menu-item${m.cls ? ` ${m.cls}` : ""}`} aria-disabled={m.why ? true : undefined}>
+                <span className="menu-icon"><Icon name={m.cls === "checked" ? "done" : menuIcon({ label: m.label })} /></span>
+                <span className="menu-label">{m.label}{m.why && <span className="menu-why"> · {m.why}</span>}</span>
+                {m.key && <span className="menu-hint"><kbd>{m.key}</kbd></span>}
+                {m.next && <span className="menu-arrow"><Icon name="next" /></span>}
+              </li>
+            ))}
           </ul>
+          <div className="cap-dialog sg-dialog" role="group" aria-label="Sample dialog">
+            <div className="cap-dialog-head"><h2>A dialog</h2><CloseButton onClose={noop} /></div>
+            <p className="muted">16 radius, the quiet line. One filled button.</p>
+            <div className="sg-row"><button type="button" className="done-btn">Save</button><button type="button" className="quiet">Cancel</button></div>
+          </div>
           <dl className="key-list sg-keys">
             {KEYS.slice(0, 8).map((k) => (
               <Fragment key={k.does}>
@@ -308,6 +404,33 @@ export function StyleGuide() {
               </Fragment>
             ))}
           </dl>
+        </div>
+
+        <h3>Rows</h3>
+        <ul className="sg-rows" aria-label="Sample rows">
+          <li><span className="swatch small" style={{ "--c2": "var(--client-violet)" } as CSSProperties} /><span className="sg-row-title">A row at rest: one line, no box</span><span className="due-badge later">Due Fri</span><Icon name="next" /></li>
+          <li className="hover"><span className="swatch small" style={{ "--c2": "var(--client-violet)" } as CSSProperties} /><span className="sg-row-title">Hover: the faint wash</span><span className="due-badge was_due">1 day late</span><Icon name="next" /></li>
+          <li className="selected"><span className="swatch small" style={{ "--c2": "var(--client-teal)" } as CSSProperties} /><span className="sg-row-title">Selected, or the keyboard's row: the accent wash</span><Icon name="next" /></li>
+          <li className="open"><span className="swatch small" style={{ "--c2": "var(--client-ochre)" } as CSSProperties} /><span className="sg-row-title">Open in place: one quiet card while it is open<span className="muted sg-row-sub">A second line stays when the row needs one.</span></span><Icon name="up" /></li>
+        </ul>
+
+        <h3>Icons</h3>
+        <p className="muted">One family (ui/icons.tsx), by name. 16 px at the Default text size, a 1.5 px stroke, the color of the text beside it.</p>
+        <ul className="sg-icons" aria-label="Icons by name">
+          {ICON_NAMES.map((n) => (
+            <li key={n}><Icon name={n} /><code>{n}</code></li>
+          ))}
+        </ul>
+
+        <h3>Other marks</h3>
+        <div className="sg-row">
+          <kbd>Ctrl K</kbd>
+          <span className="soon-tag">soon</span>
+          <span className="fit fits">fits, 1h spare</span>
+          <span className="fit tight">tight, 20m spare</span>
+          <span className="fit over">over by 30m</span>
+          <span className="pto-pill full">PTO · Sample day off</span>
+          <span className="weekend-note">Today is Sat, Nov 7 · showing next week</span>
         </div>
       </section>
 

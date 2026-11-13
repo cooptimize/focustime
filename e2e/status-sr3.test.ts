@@ -62,14 +62,14 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     await expect.poll(() => atlas.locator(".st-pending-line").count()).toBe(2);
     await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("3 lines to push");
     // Esc on an empty line drops it.
-    await atlas.getByRole("button", { name: "+ Add a line" }).click();
+    await atlas.getByRole("button", { name: "Add a line" }).click();
     await atlas.getByRole("textbox").press("Escape");
     await expect.poll(() => atlas.locator(".st-pending-line").count()).toBe(2);
     // Dismiss hides the suggestion.
     await internal.getByRole("button", { name: "Dismiss" }).click();
     await expect.poll(() => internal.locator(".st-sugg").count()).toBe(0);
     // Tab from a + Add a line goes to the next feature's.
-    await internal.getByRole("button", { name: "+ Add a line" }).focus();
+    await internal.getByRole("button", { name: "Add a line" }).focus();
     const from = await activeFeature(page);
     await page.keyboard.press("Tab");
     await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-add-line"))).toBe(true);
@@ -112,7 +112,7 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     await page.getByRole("combobox", { name: "Client report" }).selectOption({ label: "Northwind report" });
     await page.getByRole("heading", { name: "Northwind report" }).waitFor({ timeout: 30_000 });
     await expect.poll(() => page.locator(".st-pto li.st-holiday").allTextContents()).toEqual(["Founders Day (observed) · Thu, Nov 12", "Holiday · Mon, Nov 16"]);
-    await page.getByRole("button", { name: "+ Add a feature" }).click();
+    await page.getByRole("button", { name: "Add a feature" }).click();
     const pop = page.getByRole("dialog", { name: /^Add a feature/ });
     await pop.waitFor();
     const before = await page.locator(".st-report .st-features > .st-feature").count();
@@ -167,7 +167,7 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     expect(small).toBe(0);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr3-phone-390.png`, fullPage: true });
     await harbor.getByRole("button", { name: "Use", exact: true }).click();
-    await harbor.getByRole("button", { name: "+ Add a line" }).click();
+    await harbor.getByRole("button", { name: "Add a line" }).click();
     await harbor.getByRole("textbox").fill("Card scan works on the tablet too.");
     await harbor.getByRole("textbox").press("Escape");
     await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("2 lines to push");

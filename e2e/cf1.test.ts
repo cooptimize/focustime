@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     const card = page.locator(".today-view").getByText("Nothing on today yet").first();
     await card.waitFor({ timeout: 30_000 });
     expect(oldWords(await page.locator(".today-view").innerText())).toEqual([]);
-    await page.locator(".today-view .moment-card").getByRole("button", { name: "+ Add" }).click();
+    await page.locator(".today-view .moment-card").getByRole("button", { name: "Add", exact: true }).click();
     const panel = page.locator("aside.block-panel");
     await panel.waitFor({ timeout: 30_000 });
     // WD-2: it opens on Day, on one of today's blocks.

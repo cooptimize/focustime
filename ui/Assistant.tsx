@@ -11,6 +11,7 @@ import { VOICE_MAX_BYTES, VOICE_MAX_SECONDS } from "../assistant/types.ts";
 import { call, csrfToken } from "./api.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { Icon } from "./icons.tsx";
 
 type Gate = { assistant: "ok" | "off" | "not_set_up"; voice: { on: boolean; message: string | null } };
 type Entry = { id: string; role: "me" | "assistant"; text: string; cards: Card[]; proposals: Proposal[]; links: Link[] };
@@ -217,10 +218,7 @@ function MicButton(p: { large: boolean; state: VoiceState; left: number; disable
         }
       }}
     >
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
-        <rect x="9" y="3" width="6" height="11" rx="3" fill={rec ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" />
-        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      </svg>
+      <Icon name="mic" />
       {p.large && <span>{rec ? `Release to stop · ${p.left}s` : "Hold to talk"}</span>}
     </button>
   );
@@ -392,12 +390,12 @@ function CardView({ card, onOpen, onAnswer, skew }: { card: Card; onOpen: (href:
       return (
         <div className="as-card block">
           <p className="as-card-head"><span className="as-client">{card.clientName}</span> <b>{card.date} {card.half}</b> <span className="as-meta">{card.time} · {card.status}</span></p>
-          {card.picks.length > 0 && <ul className="as-children">{card.picks.map((p) => <li key={p.id} className={p.done ? "done" : undefined}>{p.done ? "✓ " : ""}{p.title} <span className="as-meta">{p.size}</span></li>)}</ul>}
+          {card.picks.length > 0 && <ul className="as-children">{card.picks.map((p) => <li key={p.id} className={p.done ? "done" : undefined}>{p.done && <><Icon name="done" /> </>}{p.title} <span className="as-meta">{p.size}</span></li>)}</ul>}
           {go(card.link)}
         </div>
       );
     case "pick":
-      return <div className="as-card pick"><p className="as-card-head"><span className="as-client">{card.clientName}</span> {card.done ? "✓ " : ""}<b>{card.title}</b> <span className="as-meta">{card.date} {card.half}{card.time ? ` · ${card.time}` : ""}</span></p>{go(card.link)}</div>;
+      return <div className="as-card pick"><p className="as-card-head"><span className="as-client">{card.clientName}</span> {card.done && <><Icon name="done" /> </>}<b>{card.title}</b> <span className="as-meta">{card.date} {card.half}{card.time ? ` · ${card.time}` : ""}</span></p>{go(card.link)}</div>;
     case "send":
       return <div className="as-card send"><p className="as-card-head"><span className="as-client">{card.clientName}</span> <b>{card.title}</b></p><p className="as-meta">{card.from} to {card.to} · {card.tier === "must" ? "Must" : "Suggested"} · week of {card.weekStart} · {card.state}</p>{go(card.link)}</div>;
     case "promise":
@@ -537,7 +535,7 @@ function ProposalView({ proposal: p, skew, onChange, onChanged }: { proposal: Pr
         <ul className="as-parts">
           {out.parts.map((x) => (
             <li key={x.label} className={x.ok ? "ok" : "warn"}>
-              <span aria-hidden="true">{x.ok ? "✓" : "✗"}</span> <b>{x.label}</b>: {x.message}
+              <Icon name={x.ok ? "done" : "close"} /> <b>{x.label}</b>: {x.message}
               {x.undo && writes && p.clientKey && <> <button type="button" className="link-btn" onClick={() => void writes.begin(p.clientKey!, [{ kind: "undo", writeId: x.undo!.id }])}>Undo</button></>}
             </li>
           ))}

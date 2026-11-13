@@ -16,6 +16,7 @@ import { MenuCtx } from "./Menus.tsx";
 import { copyWorkLink, WorkLink } from "./WorkLink.tsx";
 import { createContext } from "react";
 import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
+import { Icon } from "./icons.tsx";
 
 /** Step 16.3: presence for the people on the Roadmap (by display name: DevOps gives names only), read once for the view. */
 const PresenceCtx = createContext<(p: { name: string; email: string | null }) => { word: import("../plan/presence.ts").PresenceWord | null; photo: string | null }>(() => ({ word: null, photo: null }));
@@ -252,8 +253,8 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
   return (
     <li className={`dl-row rm-row st-${r.status.state}`} onContextMenu={(e) => env && show(e)}>
       <div className="rm-top">
-        <button type="button" className="rm-expand" aria-expanded={open} aria-controls={storiesId} aria-label={`${open ? "Hide" : "Show"} ${noun[1]} of ${r.title}`} onClick={() => setOpen(!open)} disabled={!r.stories.length}>
-          {open ? "▾" : "▸"}
+        <button type="button" className="rm-expand icon-btn small" aria-expanded={open} aria-controls={storiesId} aria-label={`${open ? "Hide" : "Show"} ${noun[1]} of ${r.title}`} onClick={() => setOpen(!open)} disabled={!r.stories.length}>
+          <Icon name={open ? "open" : "closed"} />
         </button>
         <StateBadge state={r.status.state} />
         <div className="dl-main">
@@ -303,7 +304,7 @@ function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops:
         <Trend points={r.trend} noun={noun[1]} />
         {env && (
           <button type="button" className="more" aria-label={`More for ${r.title}`} onClick={show}>
-            ⋯
+            <Icon name="more" />
           </button>
         )}
       </div>

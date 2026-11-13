@@ -9,6 +9,7 @@ import { causeLines, notConnected, SOURCE_NAMES, sourceKey, sourceLabel, stateOf
 import { devopsSummary, workStatusLabel } from "./work.ts";
 import { updatedAgo } from "./refresh.ts";
 import { useReturnFocus } from "./CloseButton.tsx";
+import { Icon } from "./icons.tsx";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -53,7 +54,7 @@ export function PhoneSheet({ label, title, onClose, children, className = "" }: 
         <div className="ph-sheet-head">
           <h2 className="ph-sheet-title">{title ?? label}</h2>
           <button type="button" className="ph-sheet-close" aria-label="Close" onClick={onClose}>
-            ×
+            <Icon name="close" />
           </button>
         </div>
         {children}

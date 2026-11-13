@@ -1,5 +1,6 @@
 // UI-3: the one close control for dialogs and side panels, and the hook that puts focus back where they were opened.
 import { useEffect, useState, type Ref } from "react";
+import { Icon } from "./icons.tsx";
 
 /**
  * A quiet × at the top right of a dialog or panel header: a 44 px tap target, the focus ring, aria-label "Close" and
@@ -9,9 +10,7 @@ import { useEffect, useState, type Ref } from "react";
 export function CloseButton({ onClose, disabled = false, title = "Close (Esc)", buttonRef }: { onClose: () => void; disabled?: boolean; title?: string; buttonRef?: Ref<HTMLButtonElement> }) {
   return (
     <button ref={buttonRef} type="button" className="x-close" onClick={onClose} disabled={disabled} aria-label="Close" title={title}>
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-      </svg>
+      <Icon name="close" />
     </button>
   );
 }

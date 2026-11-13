@@ -8,6 +8,7 @@ import { useState } from "react";
 import { countWords } from "../../plan/patterns/analysis.ts";
 import type { Results } from "../../plan/patterns/results.ts";
 import type { TypeChange, TypeList } from "../../plan/patterns/types.ts";
+import { Icon } from "../icons.tsx";
 
 type Version = { version: string; number: number; at: string; by: string | null; why: string | null; change: TypeChange | null };
 type SuggestionRow = { name: string; meaning: string; count: number; clients: Record<string, number> };
@@ -118,7 +119,7 @@ export function RequestTypes({ data, busy, results, act }: { data: Data; busy: b
         ))}</tbody>
       </table>
       <div className="set-inline pat-buttons">
-        <button type="button" className="mini" disabled={busy} onClick={() => setDraft(blank("add"))}>+ Add a type</button>
+        <button type="button" className="mini" disabled={busy} onClick={() => setDraft(blank("add"))}><Icon name="add" /> Add a type</button>
       </div>
       <p className="set-hint">A rename or an edit costs nothing: labels follow the type, not its wording. Adding, merging or removing a type says before you save how many items would need labeling again; Estimate prices them.</p>
       {draft && <ChangeForm list={list} draft={draft} set={setDraft} busy={busy} act={act} onDone={() => setDraft(null)} />}

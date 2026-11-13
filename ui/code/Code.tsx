@@ -17,6 +17,7 @@ import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
 import type { CodeEntry, CodeFileView, CodeRepoView } from "../../plan/code.ts";
 import "./code.css";
+import { Icon } from "../icons.tsx";
 
 export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null };
 type Client = { clientKey: string; name: string; color: string | null; mine: boolean; locked: boolean };
@@ -70,9 +71,7 @@ async function copy(text: string): Promise<boolean> {
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <svg className={`ah-chev-svg${open ? " open" : ""}`} viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <Icon name="closed" className={`ah-chev-svg${open ? " open" : ""}`} />
   );
 }
 
@@ -145,7 +144,7 @@ function ClientPicker({ clients, current, onPick }: { clients: Client[]; current
         <Swatch color={current?.color ?? null} />
         <span>{current?.name ?? "Choose a client"}</span>
         <span className="cv-picker-caret" aria-hidden="true">
-          ▾
+          <Icon name="open" />
         </span>
       </button>
       {open && (
@@ -242,6 +241,7 @@ function Tree({ root, folders, open, selected, onToggle, onFile }: { root: Folde
             ) : (
               <span className="ah-chev-space" aria-hidden="true" />
             )}
+            <Icon name={r.e.folder ? "folder" : "file"} className="cv-kind" />
             <span className={r.e.folder ? "cv-folder" : "cv-file"}>{r.e.name}</span>
           </li>,
           isOpen ? <li key={`${r.e.path}\u0000note`} role="none" className="cv-tree-gap">{children(r)}</li> : null,
@@ -389,8 +389,12 @@ function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileV
             Copy link
           </button>
           {text !== null && (
-            <label className="cv-switch">
-              <input type="checkbox" role="switch" checked={wrap} onChange={(e) => setWrap(e.target.checked)} /> Wrap
+            // RS-1: No wrap | Wrap, the two sides of one switch. It is the same checkbox (a switch named Wrap, on or off)
+            // for the keyboard and a screen reader; the two words are what a pointer presses.
+            <label className="cv-switch cv-wrap-switch">
+              <input type="checkbox" role="switch" className="sr-only" aria-label="Wrap" checked={wrap} onChange={(e) => setWrap(e.target.checked)} />
+              <span aria-hidden="true" className={wrap ? undefined : "on"} onClick={(e) => (e.preventDefault(), setWrap(false))}>No wrap</span>
+              <span aria-hidden="true" className={wrap ? "on" : undefined} onClick={(e) => (e.preventDefault(), setWrap(true))}>Wrap</span>
             </label>
           )}
           {squashed && (

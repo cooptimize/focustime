@@ -12,14 +12,12 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { WorkLink } from "./WorkLink.tsx";
+import { Icon } from "./icons.tsx";
 
 /** The eye: a Watching row's mark beside its type icon. */
 export function EyeIcon({ title }: { title?: string }) {
   return (
-    <svg className="eye-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden={title ? undefined : true} role={title ? "img" : undefined} aria-label={title}>
-      <path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <circle cx="8" cy="8" r="2" fill="currentColor" />
-    </svg>
+    <Icon name="preview" className="eye-icon" {...(title ? { label: title } : {})} />
   );
 }
 

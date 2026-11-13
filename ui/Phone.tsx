@@ -9,6 +9,7 @@ import { urgentFollowUps } from "../plan/today.ts";
 import { captureClients } from "./Capture.tsx";
 import { FollowUpRow } from "./FollowUps.tsx";
 import { userZone } from "../week/zone.ts";
+import { Icon, type IconName } from "./icons.tsx";
 
 /**
  * MB-1: the phone's bar: Today, Week, Capture (the raised + in the middle), Inbox and Ask. Ahead is made for a bigger
@@ -16,39 +17,9 @@ import { userZone } from "../week/zone.ts";
  */
 export type BottomTab = "today" | "week" | "inbox";
 
-/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, a tray, a speech bubble. */
-const BB_ICONS: Record<BottomTab | "ask", ReactNode> = {
-  today: (
-    <>
-      <rect x="4" y="5" width="16" height="15" rx="2.5" />
-      <path d="M4 10h16M9 3v4M15 3v4" />
-      <circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none" />
-    </>
-  ),
-  week: (
-    <>
-      <rect x="3" y="5" width="4" height="6" rx="1" />
-      <rect x="10" y="5" width="4" height="6" rx="1" />
-      <rect x="17" y="5" width="4" height="6" rx="1" />
-      <rect x="3" y="13" width="4" height="6" rx="1" />
-      <rect x="10" y="13" width="4" height="6" rx="1" />
-      <rect x="17" y="13" width="4" height="6" rx="1" />
-    </>
-  ),
-  inbox: (
-    <>
-      <path d="M4 13l2.5-7.5h11L20 13v5.5H4z" />
-      <path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20" />
-    </>
-  ),
-  ask: <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-8l-4 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z" />,
-};
-
-const icon = (k: BottomTab | "ask") => (
-  <svg className="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {BB_ICONS[k]}
-  </svg>
-);
+/** The bottom bar's icons, from the one family (RS-1), in the tab's text color: the same ones the desktop's tabs have. */
+const BB_ICONS: Record<BottomTab | "ask", IconName> = { today: "day", week: "week", inbox: "inbox", ask: "ask" };
+const icon = (k: BottomTab | "ask") => <Icon name={BB_ICONS[k]} className="bb-icon" />;
 
 export function BottomBar({ current, inboxCount, onTab, onCapture, onAsk, askOpen = false, captureOpen = false }: {
   current: BottomTab | "ahead" | null;
@@ -72,9 +43,7 @@ export function BottomBar({ current, inboxCount, onTab, onCapture, onAsk, askOpe
       {tab("week", "Week")}
       <span className="bb-capture-slot">
         <button type="button" className="bb-capture" aria-label="Capture" aria-expanded={captureOpen} title="Quick capture: one line, saved at once" onClick={onCapture}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
+          <Icon name="add" />
         </button>
       </span>
       {tab("inbox", "Inbox", inboxCount > 0 && <span className="bb-count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>)}

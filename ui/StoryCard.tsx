@@ -20,6 +20,7 @@ import { CARD_STALE_EVENT, copyWorkLink, openItemCard, type ItemCardTarget } fro
 import type { EditOffer } from "../actions/types.ts";
 import { lookHtml } from "../plan/light-format.ts";
 import { CantEdit, CardMore, ChangedSince, changedParts, draftOf, isDirty, LightEditor, MoveEditor, type EditDraft } from "./StoryCardEdit.tsx";
+import { Icon } from "./icons.tsx";
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
 
@@ -374,7 +375,7 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
                   <ul className="sc-list">
                     {card.todos.map((t) => (
                       <li key={`t${t.id}`}>
-                        {t.status === "done" ? "✓ " : ""}
+                        {t.status === "done" && <><Icon name="done" /> </>}
                         {dayText(t.date).replace(/, \d{4}$/, "")} {t.half === "EVE" ? "evening" : t.half}
                         {t.timebox ? ` · ${t.timebox}` : ""}
                         {t.status !== "done" && t.leftMinutes ? ` · about ${durText(t.leftMinutes)}` : ""}

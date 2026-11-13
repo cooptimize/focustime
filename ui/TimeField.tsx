@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CellPopover } from "./CellPopover.tsx";
 import { nearestStep, parseTypedTime, quarterHours, time12 } from "./timeinput.ts";
+import { Icon } from "./icons.tsx";
 
 export function TimeField({ value, onChange, label, className = "" }: { value: string; onChange: (t: string) => void; label: string; className?: string }) {
   const [open, setOpen] = useState(false);
@@ -14,7 +15,7 @@ export function TimeField({ value, onChange, label, className = "" }: { value: s
     <>
       <button ref={btn} type="button" className={`date-field time-field ${className}`} aria-label={`${label}: ${value ? time12(value) : "none"}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span>{value || "Choose"}</span>
-        <span className="date-field-icon" aria-hidden="true">▾</span>
+        <span className="date-field-icon"><Icon name="open" /></span>
       </button>
       {open && <TimePop anchor={btn.current} label={label} value={value} onSave={save} onCancel={close} />}
     </>

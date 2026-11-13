@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActionRefusal, call } from "../api.ts";
 import { SignInAgainButton } from "../Reopen.tsx";
 import type { SeriesView } from "../../plan/meeting-views.ts";
+import { Icon } from "../icons.tsx";
 
 type ListData = { meetings: SeriesView[]; people: { id: string; name: string }[] };
 type Candidate = { eventId: string; subject: string; organizerName: string | null; organizer: "home" | "other" | "unknown"; when: string; outside: number; match: boolean };
@@ -111,7 +112,7 @@ function SeriesCard({ m, people, act }: { m: SeriesView; people: ListData["peopl
           {m.reviewers.map((r) => (
             <span key={r.id} className="mtg-chip">
               {r.name}
-              {m.reviewers.length > 1 && <button type="button" className="chip-x" aria-label={`Remove ${r.name}`} onClick={() => reviewers(m.reviewers.filter((x) => x.id !== r.id).map((x) => x.id))}>×</button>}
+              {m.reviewers.length > 1 && <button type="button" className="chip-x" aria-label={`Remove ${r.name}`} onClick={() => reviewers(m.reviewers.filter((x) => x.id !== r.id).map((x) => x.id))}><Icon name="close" /></button>}
             </span>
           ))}
         </span>

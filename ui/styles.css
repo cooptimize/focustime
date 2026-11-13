@@ -25,6 +25,19 @@
   --fs-3: var(--text-base); /* body: picks, rows, buttons */
   --fs-4: calc(var(--text-base) + 2px); /* titles: page, panel and dialog titles */
 
+  /* RS-1: control sizes, radii and spacing (style guide section 11). Heights and the icon scale with the text. */
+  --h-control: calc(32px * var(--text-scale)); /* buttons, tabs, inputs, menu rows, list rows */
+  --h-small: calc(28px * var(--text-scale)); /* buttons inside cards and rows */
+  --icon: calc(16px * var(--text-scale));
+  --radius-control: 999px; /* buttons, tabs, pills, chips */
+  --radius-input: 8px; /* inputs, selects, list rows, a switch's track */
+  --radius-menu: 12px;
+  --radius-dialog: 16px;
+  --space-section: 24px; /* between sections, page side gutters */
+  --space-card: 16px; /* between cards */
+  --space-control: 8px; /* between controls in a row */
+  --space-row: 2px; /* between rows in a list */
+
   /* 1. Primitives: Cooptimize (brand, style guide section 3.1) */
   --p-navy-900: #00416b;
   --p-navy-300: #6fb0e3;
@@ -169,6 +182,18 @@
   --risk: var(--p-co-red-300);
   --watch: var(--p-co-amber-300);
   --ok: var(--p-co-green-300);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  /* Strengths are per theme: the strongest that keep muted and faint text at AA on the page, a card and a menu
+     (ui/rs1-contrast.test.ts). */
+  --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 13%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
+  --track: color-mix(in oklab, var(--text) 7%, transparent); /* a switch's track */
+  --lift: color-mix(in oklab, var(--text) 18%, var(--surface)); /* its chosen side */
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-300);
   --code-string: var(--p-co-green-300);
@@ -246,6 +271,16 @@
   --risk: var(--p-co-red-700);
   --watch: var(--p-co-amber-700);
   --ok: var(--p-co-green-700);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 9%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 11%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 12%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
+  --track: color-mix(in oklab, var(--text) 7%, transparent); /* a switch's track */
+  --lift: var(--surface); /* its chosen side */
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-700);
   --code-string: var(--p-co-green-700);
@@ -311,6 +346,16 @@
   --risk: var(--p-red-700);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
+  /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
+  --wash-1: color-mix(in oklab, var(--text) 2%, transparent);
+  --wash-2: color-mix(in oklab, var(--text) 3%, transparent);
+  --wash-accent: color-mix(in oklab, var(--accent) 4%, transparent);
+  --wash-risk: color-mix(in oklab, var(--risk) 14%, transparent);
+  --wash-watch: color-mix(in oklab, var(--watch) 14%, transparent);
+  --wash-ok: color-mix(in oklab, var(--ok) 14%, transparent);
+  --line: color-mix(in oklab, var(--border-strong) 60%, var(--surface));
+  --track: color-mix(in oklab, var(--text) 7%, transparent); /* a switch's track */
+  --lift: var(--surface); /* its chosen side */
   /* RB-1: Code's syntax colors (ui/code/code.css). */
   --code-keyword: var(--p-co-sky-700);
   --code-string: var(--p-co-green-700);
@@ -369,6 +414,10 @@
     --risk: var(--p-red-300);
     --watch: var(--p-amber-300);
     --ok: var(--p-green-300);
+    --wash-1: color-mix(in oklab, var(--text) 4%, transparent);
+    --wash-2: color-mix(in oklab, var(--text) 8%, transparent);
+    --wash-accent: color-mix(in oklab, var(--accent) 14%, transparent);
+    --lift: color-mix(in oklab, var(--text) 18%, var(--surface));
     /* RB-1: Code's syntax colors (ui/code/code.css). */
     --code-keyword: var(--p-co-sky-300);
     --code-string: var(--p-co-green-300);
@@ -421,16 +470,21 @@ kbd {
   margin-right: 3px;
 }
 
+/* RS-1: a button is a pill, outlined unless its class fills it or makes it quiet: 32 high at the Default text size
+   (18 of text, 6 above and below, the line), scaled with the text. Hover is a faint wash, pressed a stronger one. */
 button {
   font: inherit;
+  font-weight: 500;
+  line-height: calc(18px * var(--text-scale));
   color: inherit;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: calc(6px * var(--text-scale)) 14px;
   cursor: pointer;
 }
-button:hover { border-color: var(--text-faint); }
+:where(button):where(:not(:disabled)):hover { background: var(--wash-1); }
+:where(button):where(:not(:disabled)):active { background: var(--wash-2); }
 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .muted { color: var(--text-faint); }
@@ -793,10 +847,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .state.signin { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
 .state.state-link { border: 0; font: inherit; font-weight: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .state.state-link:disabled { cursor: default; text-decoration: none; }
-.mini { padding: 1px 8px; font-size: var(--fs-2); border-radius: 6px; margin-left: 2px; }
-.mini.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.mini.quiet { border-color: transparent; color: var(--text-faint); background: transparent; }
-.mini.quiet:hover { border-color: var(--border-strong); color: var(--text-muted); }
+/* RS-1: the small button, for actions inside cards and rows: 28 high (16 of text, 5 above and below, the line). */
+.mini { padding: calc(5px * var(--text-scale)) 12px; line-height: calc(16px * var(--text-scale)); font-size: var(--fs-2); margin-left: 2px; }
+.mini.primary { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); color: var(--accent); }
+.mini.quiet { border-color: transparent; color: var(--text-muted); background: transparent; }
+.mini.quiet:hover { color: var(--text); }
 .dchat button:disabled { opacity: 0.5; cursor: default; }
 .state.sample { color: var(--sample); background: color-mix(in oklab, var(--sample) 13%, var(--surface)); }
 .sample-note { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
@@ -6066,7 +6121,11 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .adm-standards-table th, .adm-standards-table td { padding: 4px 8px 4px 0; vertical-align: top; }
 .adm-standards-path { color: var(--text-muted); overflow-wrap: anywhere; }
 .names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
-.names-removed::before { content: "ⓘ "; }
+.names-removed::before {
+  content: ""; display: inline-block; width: var(--icon); height: var(--icon); margin-right: 4px; vertical-align: calc(-3px * var(--text-scale)); background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 /* CW-1: a co-working call live in a client's delivery chat: one line, who started it, Join (opens Teams). */
 .live-calls { display: grid; gap: 4px; min-width: 0; }
 .live-call { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 8px; border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 6px; background: color-mix(in oklab, var(--ok) 8%, transparent); }
@@ -7001,3 +7060,378 @@ main.grid:not(.narrow):not(.day-only) { transition: grid-template-columns 180ms 
 .half.past .past-rows .past-moved .po-note { color: var(--text); }
 .day.folded .fold-half { cursor: pointer; }
 
+
+/* ==========================================================================================================
+   RS-1: controls, icons and rows, calmer and consistent (docs/design/style-guide.md section 11). Applied here,
+   last, so it wins. Colors, the font, every layout and every word are as they were. Block cards keep their client
+   edge, their border and the selected ring; only the pills, small buttons and icons inside them change.
+   ========================================================================================================== */
+
+/* ---- A1. Buttons ------------------------------------------------------------------------------------------- */
+/* Every button that brought its own corners is a pill. */
+:root :is(.top-btn, .commit, .ib-act, .big, .focus-btn, .cap-send, .mini, .done-btn, .start-focus, .add-work-head, .signin-btn, .st-add, .as-send, .tt-bar button, .tour-nav button, .an-acts button, .ph-status-acts button) { border-radius: var(--radius-control); }
+/* Outlined, by the names the screens gave their own: the quiet line, no fill, the body size at 500. */
+:root :is(.top-btn, .ib-act:not(.primary), .focus-btn:not(.primary), .cap-send) { border: 1px solid var(--line); background: transparent; font-size: var(--fs-3); font-weight: 500; }
+:root :is(.top-btn, .ib-act, .commit, .done-btn, .add-work-head) { min-height: var(--h-control); padding-block: 0; padding-inline: 14px; font-size: var(--fs-3); }
+:root :is(.top-btn, .ib-act:not(.primary), .focus-btn:not(.primary), .cap-send, .mini:not(.primary):not(.quiet)):where(:not(:disabled)):hover { background: var(--wash-1); border-color: var(--line); }
+:root :is(.top-btn, .ib-act:not(.primary), .focus-btn:not(.primary), .mini:not(.primary):not(.quiet)):where(:not(:disabled)):active { background: var(--wash-2); }
+/* Filled: the screen's one main action. Weight 500 like every button; the fill is what marks it. */
+:root :is(.done-btn, .add-work-head, .start-focus, .ib-act.primary, .focus-btn.primary, .pd-actions .commit, .wd-actions .commit, .signin-btn) { border: 1px solid var(--action); background: var(--action); color: var(--on-action); font-weight: 500; }
+:root :is(.done-btn, .add-work-head, .start-focus, .ib-act.primary, .focus-btn.primary, .pd-actions .commit, .wd-actions .commit, .signin-btn):where(:not(:disabled)):hover { background: var(--action); filter: brightness(1.08); }
+:root .start-focus { min-height: var(--h-small); padding-block: 0; padding-inline: 12px; }
+/* Small and accented: the accent's line and text, its wash on hover. */
+:root .mini.primary:where(:not(:disabled)):hover { background: var(--wash-accent); }
+:root .mini { font-weight: 500; }
+:root .mini.danger { border-color: color-mix(in oklab, var(--risk) 45%, var(--line)); }
+:root .mini.danger:where(:not(:disabled)):hover { background: var(--wash-risk); }
+/* Quiet: no line, muted text; the wash shows it can be pressed. */
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet) { border-color: transparent; background: transparent; color: var(--text-muted); }
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet):where(:not(:disabled)):hover { background: var(--wash-1); border-color: transparent; color: var(--text); }
+:root :is(.mini.quiet, button.quiet:not(.link-btn), .today-timebox, .ib-act.quiet):where(:not(:disabled)):active { background: var(--wash-2); }
+/* A link stays a link: no pill, no wash. */
+:root .link-btn, :root .link-btn:hover, :root .link-btn:active { border-radius: 4px; background: none; font-weight: inherit; line-height: inherit; }
+button:disabled { cursor: default; }
+/* An icon and its word sit 6 apart in a button that lays its parts out in a row. */
+:root :is(.top-btn, .add-work-head, .done-btn, .ib-act, .commit, .mini, .start-focus) { gap: 6px; }
+
+/* ---- A2. Icon-only buttons: round, no line, a muted icon, the same washes ------------------------------------ */
+:root :is(.icon-btn, .more-btn, .top-more, .pd-step button, .day-step, .menu-back, .aw-plus:not(.done), .sug-plus, .sug-x, .ah-chev, .chip-x, .ph-sheet-close, .sc-tool) {
+  display: inline-grid; place-items: center; flex: none; width: var(--h-control); min-width: var(--h-control); height: var(--h-control); min-height: 0; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); line-height: 1; letter-spacing: 0;
+}
+:root :is(.icon-btn, .more-btn, .top-more, .pd-step button, .day-step, .menu-back, .aw-plus:not(.done), .sug-plus, .sug-x, .ah-chev, .chip-x, .ph-sheet-close, .sc-tool):where(:not(:disabled)):hover,
+:root :is(.more-btn, .top-more)[aria-expanded="true"] { background: var(--wash-1); border: 0; color: var(--text); }
+:root :is(.icon-btn, .more-btn, .top-more, .pd-step button, .day-step, .menu-back, .aw-plus:not(.done), .sug-plus, .sug-x, .ah-chev, .chip-x, .ph-sheet-close, .sc-tool):where(:not(:disabled)):active { background: var(--wash-2); }
+/* Inside cards and rows the round button is the small size (the target on Day and Week, 44 on the phone). */
+:root :is(.more-btn, .aw-plus:not(.done), .sug-plus, .sug-x, .ah-chev, .chip-x, .icon-btn.small, .sc-tool) { width: var(--h-small); min-width: var(--h-small); height: var(--h-small); }
+:root :is(.page-head, .today-head, .ah-toolbar, .st-head) > .more-btn, :root .mode-area .more-btn { width: var(--h-control); min-width: var(--h-control); height: var(--h-control); }
+:root .app.phone :is(.more-btn, .icon-btn, .day-step, .pd-step button, .ph-sheet-close) { width: var(--tap, 44px); min-width: var(--tap, 44px); height: var(--tap, 44px); }
+/* The close button keeps its 44 px target; what shows is the round 32. */
+:root .x-close { background: transparent; }
+:root .x-close::before { content: ""; position: absolute; width: var(--h-control); height: var(--h-control); border-radius: 50%; }
+:root .x-close { position: relative; }
+:root .x-close:hover:not(:disabled) { background: transparent; color: var(--text); }
+:root .x-close:hover:not(:disabled)::before { background: var(--wash-1); }
+:root .x-close:active:not(:disabled)::before { background: var(--wash-2); }
+
+/* ---- A3. Tabs: no box around the group; each tab an icon and its label in a pill ------------------------------ */
+:root .views { gap: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+:root .view-tab { min-height: var(--h-control); padding: 0 12px; gap: 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
+:root .view-tab:hover:not(:disabled) { background: var(--wash-1); color: var(--text); }
+:root .view-tab[aria-current="page"] { background: var(--wash-accent); color: var(--text); box-shadow: none; }
+/* Counts are small quiet numbers after the label. */
+:root .view-tab .count { margin-left: 0; padding: 0; border-radius: 0; background: none; color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; line-height: inherit; }
+:root .view-tab[aria-current="page"] .count { color: var(--text); }
+
+/* ---- A4. A switch between two or three views: one soft track, the chosen side lifted ------------------------- */
+:root :is(.mode-switch, .day-switch, .rm-seg, .ib4-switch, .seg, .cv-wrap-switch) {
+  display: inline-flex; gap: 2px; padding: 2px; border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); overflow: visible; box-shadow: none;
+}
+:root :is(.mode-switch .ms-btn, .day-switch button, .rm-seg button, .ib4-tab, .seg-btn, .cv-wrap-switch span) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--h-small); min-width: 0; padding: 0 12px; border: 0; border-radius: var(--radius-input);
+  background: transparent; color: var(--text-muted); font-weight: 500; line-height: 1.2; white-space: nowrap; box-shadow: none; cursor: pointer;
+}
+/* Each switch keeps the text size it had: the body size, or the meta size for the smaller ones. */
+:root :is(.mode-switch .ms-btn, .rm-seg button, .ib4-tab) { font-size: var(--fs-3); }
+:root :is(.day-switch button, .mode-switch .seg-btn, .seg .seg-btn, .cv-wrap-switch span) { font-size: var(--fs-2); }
+:root :is(.mode-switch .seg-btn, .seg .seg-btn) { min-height: calc(24px * var(--text-scale)); }
+:root :is(.mode-switch .ms-btn, .day-switch button, .rm-seg button, .ib4-tab, .seg-btn):where(:not(:disabled)):hover { background: transparent; color: var(--text); }
+:root :is(.mode-switch .ms-btn[aria-current="page"], .mode-switch .ms-btn[aria-pressed="true"], .day-switch button[aria-pressed="true"], .rm-seg button[aria-pressed="true"], .ib4-tab.on, .seg-btn.on, .cv-wrap-switch span.on) {
+  background: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1);
+}
+:root .rm-seg button + button, :root .day-switch button + button { border-left: 0; }
+:root .mode-switch .count, :root .ib4-count { padding: 0; min-width: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: var(--fs-2); font-weight: 500; }
+
+/* ---- A5. Pills -------------------------------------------------------------------------------------------------
+   A status has no line: a wash, with color only for a state that needs it. The transparent line keeps its size. */
+:root :is(.status-pill, .due-badge, .today-pill, .status-chip, .bd-chip, .mtg-chip, .st-badge, .cal-tag, .adm-mark, .soon-tag, .state:not(.state-link)) {
+  border: 1px solid transparent; background: var(--wash-2); color: var(--text-muted); font-weight: 500;
+}
+:root :is(.status-pill.at_risk, .due-badge.overdue, .due-badge.today) { background: var(--wash-risk); color: var(--risk); }
+:root :is(.status-pill.too_much, .status-pill.watch, .due-badge.tomorrow, .due-badge.was_due, .due-badge.overdue-amber, .st-badge) { background: var(--wash-watch); color: var(--watch); }
+:root .due-badge.today { color: color-mix(in oklab, var(--risk) 50%, var(--watch)); background: color-mix(in oklab, var(--wash-risk) 50%, var(--wash-watch)); }
+:root .status-pill.on_track { background: var(--wash-ok); color: var(--ok); }
+:root :is(.today-pill, .cal-tag.now, .cal-tag.next) { background: var(--wash-accent); color: var(--accent); }
+:root .state.live { background: var(--wash-ok); color: var(--ok); }
+:root .state.sample { background: color-mix(in oklab, var(--sample) 13%, transparent); color: var(--sample); }
+:root .state.cached { background: var(--wash-watch); color: var(--watch); }
+:root :is(.state.error, .state.signin) { background: var(--wash-risk); color: var(--risk); }
+/* Late is a state too: the watch wash, no edge of its own. It opens the late promises, so it keeps its hover. */
+:root .late-chip { border: 1px solid transparent; border-radius: var(--radius-control); background: var(--wash-watch); color: var(--watch); font-weight: 500; }
+:root .late-chip:hover { background: color-mix(in oklab, var(--watch) 18%, transparent); }
+/* Anything you can press that looks like a chip has a line when off and its wash when on. */
+:root :is(.chip-btn, .rm-chip, .ib4-chip, .ah-chip-btn, button.ah-chip, .dp-chip, .as-chip, button.att-chip, .att-chip.urgent, .att-chip.promise, .carry-chip, .vm-chip) {
+  border: 1px solid var(--line); border-radius: var(--radius-control); background: transparent; font-weight: 500;
+}
+:root :is(.chip-btn, .rm-chip, .ib4-chip, .ah-chip-btn, button.ah-chip, .dp-chip, .as-chip, button.att-chip, .carry-chip, .vm-chip):where(:not(:disabled)):hover { background: var(--wash-1); border-color: var(--line); }
+:root :is(.chip-btn, .rm-chip)[aria-pressed="true"] { border-color: transparent; background: color-mix(in oklab, var(--c, var(--accent)) 16%, transparent); color: var(--text); font-weight: 500; }
+:root :is(.ib4-chip.on, .dp-chip.on, .chip-btn.on, .chip-btn[aria-checked="true"], .cap-box-kinds .chip-btn[aria-checked="true"]) { border-color: transparent; background: var(--wash-accent); color: var(--text); font-weight: 500; }
+/* A size: pressed to change it, so it has a line (its pill is drawn inside its target on Day, Week and the panel);
+   where it only tells (.static), a wash and no line. */
+:root .size-chip { border-radius: var(--radius-control); font-weight: 500; }
+:root .size-chip:not(.static):where(:not(:disabled)):hover { background: transparent; }
+:root :is(main.grid, .day-view, aside.block-panel) .size-chip::before { border-color: var(--line); }
+:root :is(main.grid, .day-view, aside.block-panel) .size-chip:not(.static):hover::before { border-color: var(--line); background: var(--wash-1); }
+:root :is(main.grid, .day-view, aside.block-panel) .size-chip.static::before { border-color: transparent; background: var(--wash-2); }
+:root .size-chip.static:not(:is(main.grid, .day-view, aside.block-panel) *) { border-color: transparent; background: var(--wash-2); }
+:root .size-chip:not(.static):not(:is(main.grid, .day-view, aside.block-panel) *) { border: 1px solid var(--line); background: transparent; }
+:root .carry-chip { color: var(--text-muted); }
+
+/* ---- A6. Inputs and selects: 32 high, 8 radius, a quiet line, the accent line when focused plus the ring ------ */
+:root :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select):not(.plain-input),
+:root :is(.date-field, .select-field, .cv-picker-btn) {
+  min-height: var(--h-control); padding-block: 0; border: 1px solid var(--line); border-radius: var(--radius-input); background: transparent; color: var(--text); font-weight: 400;
+}
+:root textarea:not(.plain-input) { border: 1px solid var(--line); border-radius: var(--radius-input); background: transparent; }
+:root :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select, textarea):not(.plain-input):focus-visible,
+:root :is(.date-field, .select-field, .cv-picker-btn):focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 1px; }
+:root :is(input, select, textarea):not(.plain-input)[aria-invalid="true"], :root :is(input, select, textarea):not(.plain-input)[aria-invalid="true"]:focus-visible { border-color: var(--risk); }
+:root .cell-pop input:not(.plain-input)[aria-invalid="true"] { border-color: var(--watch); }
+:root :is(.date-field, .select-field, .cv-picker-btn):hover { background: var(--wash-1); border-color: var(--line); }
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], input[type="url"], input[type="password"], select, textarea) { padding-inline: 10px; font: inherit; color: inherit; }
+/* The command menu's search is the dialog's own head (.plain-input): no box of its own. */
+
+/* ---- A7. Menus, the command menu and dialogs -------------------------------------------------------------- */
+:root :is(.popup-menu, .cell-pop, .command-menu, .cv-picker-pop, .person-picker-pop) { border: 1px solid var(--line); border-radius: var(--radius-menu); }
+:root .menu-item { min-height: var(--h-control); padding: 0 10px; gap: 10px; border: 0; border-radius: var(--radius-input); background: transparent; font-weight: 400; line-height: 1.3; }
+:root .menu-item.active { background: var(--wash-accent); }
+:root .menu-item:where(:not([aria-disabled="true"])):hover { background: var(--wash-1); }
+:root .menu-item.active:hover { background: var(--wash-accent); }
+/* Group labels are plain muted text, no capitals. */
+:root .menu-group { padding: 8px 10px 2px; font-size: var(--fs-2); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+:root :is(.cap-dialog, .write-dialog, .dialog, .ph-dialog, [role="dialog"].sheet-dialog) { border-color: var(--line); border-radius: var(--radius-dialog); }
+
+/* ---- A8. The top bar ------------------------------------------------------------------------------------------- */
+:root .vm-chip { min-height: var(--h-control); padding: 0 12px; color: var(--text-muted); font-weight: 400; }
+:root .vm-chip:hover { color: var(--text); }
+:root .top-more { width: var(--h-control); height: var(--h-control); font-size: var(--fs-3); }
+:root .top-actions { gap: var(--space-control); align-items: center; }
+
+/* ---- A9. Spacing ----------------------------------------------------------------------------------------------- */
+:root .mode-area { gap: var(--space-control); }
+
+/* ---- B. Icons: one family (ui/icons.tsx), 16 px at the Default text size and scaled with it, a 1.5 px stroke at
+   every size, the color of the text beside it. An icon is never colored on its own, only by the state it sits in. */
+.ft-icon { flex: none; display: inline-block; width: var(--icon); height: var(--icon); margin-block: calc(-2px * var(--text-scale)); vertical-align: calc(-3px * var(--text-scale)); stroke-width: 1.5px; fill: none; color: inherit; }
+/* In a menu the icon sits in its own column, muted until the row is the one under the pointer or the keys. */
+.menu-icon { flex: none; display: inline-grid; place-items: center; width: var(--icon); height: var(--icon); color: var(--text-muted); }
+.menu-item.active .menu-icon, .menu-item.danger .menu-icon, .menu-item.checked .menu-icon { color: inherit; }
+.menu-item[aria-disabled="true"] .menu-icon { color: var(--text-faint); }
+.menu-icon .type-icon { display: inline-grid; place-items: center; font-size: var(--icon); line-height: 1; }
+.menu-arrow { display: inline-grid; place-items: center; color: var(--text-muted); }
+/* Where a text character used to set the size, the icon keeps the family's. */
+:root :is(.x-close, .ah-chev, .as-mic, .bb-capture, .more-btn, .top-more) .ft-icon { width: var(--icon); height: var(--icon); }
+:root .as-mic.large .ft-icon { width: calc(var(--icon) * 1.5); height: calc(var(--icon) * 1.5); }
+:root .as-mic.on .ft-icon rect { fill: currentColor; }
+:root .bb-capture .ft-icon { width: 26px; height: 26px; stroke-width: 2px; }
+:root .bb-icon { width: 24px; height: 24px; }
+:root .date-field-icon { display: inline-grid; place-items: center; color: var(--text-muted); }
+:root .date-field-icon .ft-icon, :root .pt-cal { width: calc(14px * var(--text-scale)); height: calc(14px * var(--text-scale)); }
+:root :is(.ps-chev, .ib4-chev, .us-go, .fl-check, .aw-plus.done, .gd-mark, .pl-handle, .drag-handle, .try-grip, .hs-step, .ms-done, .deploy-icon) { display: inline-grid; place-items: center; }
+:root :is(.pl-handle, .drag-handle, .try-grip) .ft-icon { color: var(--text-faint); }
+:root .pl-row.done .pl-handle .ft-icon { color: var(--ok); }
+:root .pl-handle { width: var(--icon); }
+:root .deploy-icon { vertical-align: calc(-3px * var(--text-scale)); }
+:root .ms-done { color: var(--ok); }
+/* A fold line's chevron and a button's icon sit on the text's line. */
+:root :is(.pl-fold, .link-btn, .mini, .add-work) > .ft-icon:first-child { margin-right: 2px; }
+@media (prefers-reduced-motion: reduce) { .ft-icon { transition: none; } }
+
+/* ---- C. Rows: one line, 32 high, 8 radius, 2 apart, no box, border or stripe of their own. Hover is the faint
+   wash; the selected or keyboard row has the accent wash; a row that opens in place is one quiet card while open.
+   A row that needs a second line keeps it. To-do rows inside block cards keep their structure and spacing. */
+/* Row-like buttons: a row's corners, never a pill's. */
+:root :is(.pl-fold, .due-open, .day-open, .nl-time, .sug-take, .pt-add, .ah-client-fold, .add-work.add-row, .st-text, .cv-crumb, .ph-todo-main, .ib4-row-head, .us-line, .att-open, .brand-home, .day-tab, .find-item, .ps-hit, .cv-client-opt, .as-row, .dw-row) { border-radius: var(--radius-input); }
+:root :is(.pl-fold, .due-open, .day-open, .pt-add):where(:not(:disabled)):hover { background: transparent; }
+/* The Inbox's three lists. */
+:root .ib4-rows { gap: var(--space-row); }
+:root .ib4-row { border: 1px solid transparent; border-radius: var(--radius-input); background: transparent; }
+:root .ib4-row-head { min-height: var(--h-control); padding: 6px 10px; border: 0; background: transparent; font-weight: 400; line-height: 1.4; }
+:root .ib4-row:not(.open) > .ib4-row-head:hover { background: var(--wash-1); }
+:root .ib4-row:not(.open) > .ib4-row-head:active { background: var(--wash-2); }
+:root .ib4-row.open { border-color: var(--line); border-radius: var(--radius-menu); background: var(--surface); }
+:root .ib4-row.open > .ib4-row-head:hover { background: transparent; }
+:root .ib4-row > .ib4-open, :root .ib4-row > .ib-detail { padding: 0 10px 10px 28px; }
+/* The client is a small swatch at the start of the row, not an edge down its side. */
+:root .ib4-swatch { flex: none; align-self: flex-start; width: 8px; min-height: 0; height: 8px; margin-top: calc(0.7em - 4px); border-radius: 3px; }
+:root .ib4-chev { color: var(--text-faint); }
+:root .ib4-cleared li { border: 0; border-radius: var(--radius-input); padding: 6px 10px; }
+:root :is(.ib4-not-waiting, .ib4-first-cleared) { border-color: var(--line); }
+/* Day's promise lines above the blocks. */
+:root .us-item { gap: var(--space-control); }
+:root .urgent-strip ul { display: grid; gap: var(--space-row); }
+:root .us-line { min-height: var(--h-control); align-items: center; padding: 4px 10px; border: 0; background: transparent; font-weight: 400; line-height: 1.4; }
+:root .us-line:hover { background: var(--wash-1); }
+:root .us-line:active { background: var(--wash-2); }
+:root .us-line > .ft-icon { color: var(--text-muted); }
+/* The block panel's lists (On this block, Assigned to you, Promises, More in the client, To place) and search results. */
+:root aside.block-panel :is(.aw-row, .pick-row) { min-height: var(--h-control); border-radius: var(--radius-input); }
+:root aside.block-panel :is(.aw-row, .pick-row):hover { background: var(--wash-1); }
+:root .bp-result.hl { background: var(--wash-accent); box-shadow: none; }
+/* The Backlog grid: no lines between rows; its column heads stay. */
+:root .ah-grid .ah-cell { border-bottom: 0; }
+:root .ah-grid tbody tr.ah-row > .ah-cell:first-child { border-radius: var(--radius-input) 0 0 var(--radius-input); }
+:root .ah-grid tbody tr.ah-row > .ah-cell:last-child { border-radius: 0 var(--radius-input) var(--radius-input) 0; }
+/* Hover is drawn over the cell, not as its fill: a cell's fill says something (a change to save, AH-1). */
+:root .ah-grid tbody tr.ah-row:not(.sel):not(.highlighted):hover > .ah-cell { box-shadow: inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-edit:hover { box-shadow: inset 0 -2px 0 var(--selected), inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch), inset 0 0 0 100vmax var(--wash-1); }
+:root .ah-grid tbody tr.ah-row:hover > .ah-cell.ah-editing { box-shadow: inset 0 0 0 2px var(--focus); }
+:root .ah-grid tbody tr.ah-row.sel > .ah-cell, :root .ah-grid tbody tr.ah-row.highlighted > .ah-cell { background: var(--wash-accent); }
+:root .ah-grid th { border-bottom-color: var(--line); }
+/* Status: a feature's lines with no rule between features. */
+:root .st-feature + .st-feature { border-top-color: transparent; border-radius: var(--radius-input); }
+/* Settings and Admin: the side list, and rows that open a page. */
+:root .ps-item { min-height: var(--h-control); align-items: center; padding: 0 10px; border-radius: var(--radius-input); }
+:root .ps-item:hover { background: var(--wash-1); color: var(--text); }
+:root .ps-item[aria-current="page"] { background: var(--wash-accent); color: var(--text); font-weight: 500; box-shadow: none; }
+:root .set-client-row { border-color: transparent; border-radius: var(--radius-input); min-height: var(--h-control); padding-block: 6px; }
+:root .set-client-row:hover { background: var(--wash-1); }
+:root .adm-table th, :root .adm-table td { border-bottom-color: transparent; }
+:root .adm-table thead th { border-bottom-color: var(--line); }
+:root .adm-table tbody tr:hover > * { background: var(--wash-1); }
+
+/* ---- RS-1: fits and exceptions ------------------------------------------------------------------------------- */
+/* "+ time" on a to-do's row is a quiet link with a small plus: the row's title keeps its room. */
+:root .pt-add .ft-icon { width: calc(12px * var(--text-scale)); height: calc(12px * var(--text-scale)); vertical-align: calc(-1px * var(--text-scale)); margin-right: 0; }
+/* A story card's state is a status: a wash, no ring. */
+:root .sc-state { box-shadow: none; background: var(--wash-2); color: var(--text-muted); font-weight: 500; }
+:root .sc-state.tone-active { background: var(--wash-accent); color: var(--accent); }
+:root :is(.sc-state.tone-resolved, .sc-state.tone-done) { background: var(--wash-ok); color: var(--ok); }
+/* The running timer and the photo keep the top bar's height. */
+:root .top-timer { min-height: var(--h-control); padding-block: 0; }
+:root .person-chip { width: var(--h-control); height: var(--h-control); padding: 0; }
+/* The phone: the same shapes inside the same layout. The header's row keeps the switch, Timebox my day and Add on
+   one line, so the switch's sides are a little closer; top bar buttons have no line. */
+:root .app.phone :is(.status-dot-btn, .top-btn.top-more, .phone-capture, .phone-assistant) { border: 0; background: none; }
+:root .app.phone .mode-area .day-switch button { padding: 0 8px; }
+:root .app.phone .mode-area .add-work-head { padding-inline: 10px; }
+:root .app.phone .mode-area { gap: 6px; }
+:root .app.phone .bb-tab { border-radius: 0; }
+/* Day and Week give every button a 28 px target (PS-1); the header's main button and Day's promise lines are 32. */
+:root .mode-area :is(.add-work-head, .done-btn) { height: var(--h-control); }
+:root .day-view .urgent-strip .us-item .us-line { min-height: var(--h-control); }
+/* A narrower window (a laptop at 1280, a half screen at 1024): the top bar keeps one row with every tab's icon and
+   word, by sitting a little closer. */
+@media (max-width: 1320px) {
+  :root .topbar { gap: 10px; }
+  :root .views { gap: 0; }
+  :root .view-tab { padding: 0 8px; gap: 5px; }
+  :root .top-actions { gap: 6px; }
+  :root .topbar .top-btn:not(.top-more) { padding-inline: 10px; }
+  :root .vm-chip { padding: 0 10px; }
+}
+/* A Gantt marker's flag is small, like the count beside it. */
+:root .pa-marker .ft-icon { width: calc(11px * var(--text-scale)); height: calc(11px * var(--text-scale)); margin-block: 0; }
+/* The Backlog's rows keep their height: what sits in a row (its chevron, New under) reaches into the row's padding. */
+:root :is(.ah-row, .pa-row, .bl-row) .ah-new-under { margin-block: -5px; }
+:root .ah-chev { align-self: center; margin-block: -5px; }
+:root .pa-label .ah-chev, :root .cv-tree-row .ah-chev { margin-block: 0; min-height: 0; }
+/* Admin: Customers | All accounts is a switch; Rule and Default are statuses. */
+:root .adm-filter { display: inline-flex; gap: 2px; padding: 2px; border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); }
+:root .adm-filter button { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; }
+:root .adm-filter button:hover { background: transparent; color: var(--text); }
+:root .adm-filter button[aria-checked="true"] { background: var(--lift); color: var(--text); box-shadow: var(--shadow-1); }
+:root .adm-kind { border: 0; background: var(--wash-2); color: var(--text-muted); }
+/* Status: My features | <Client> report is a switch too (the client's side is a list to choose from). */
+:root .st-scope { border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); padding: 2px; gap: 2px; }
+:root .st-scope .ms-btn, :root .st-scope .st-scope-pick { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background-color: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
+:root .st-scope .ms-btn[aria-pressed="true"], :root .st-scope .st-scope-pick.on { background-color: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1); }
+/* A fold drawn by the browser (details) gets the family's chevron in place of the browser's triangle. */
+:root summary { list-style: none; cursor: pointer; }
+:root summary::-webkit-details-marker { display: none; }
+:root summary::before {
+  content: ""; display: inline-block; width: var(--icon); height: var(--icon); margin-right: 4px; vertical-align: calc(-3px * var(--text-scale)); background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 120ms ease-out;
+}
+:root details[open] > summary::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { :root summary::before { transition: none; } }
+/* A Backlog chevron's target is the row's full height (BL-1); what shows on hover is the round 28. */
+:root .ah-row .ah-chev, :root .pa-row .ah-chev, :root .bl-row .ah-chev { position: relative; align-self: stretch; height: auto; min-height: var(--h-small); border-radius: var(--radius-input); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:where(:not(:disabled)):hover, :root :is(.ah-row, .pa-row, .bl-row) .ah-chev:where(:not(:disabled)):active { background: transparent; }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev::before { content: ""; position: absolute; left: 50%; top: 50%; width: var(--h-small); height: var(--h-small); border-radius: 50%; transform: translate(-50%, -50%); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:hover::before { background: var(--wash-1); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev:active::before { background: var(--wash-2); }
+:root :is(.ah-row, .pa-row, .bl-row) .ah-chev > * { position: relative; }
+/* The close button's target stays the whole 44 px square (UI-3); only what shows is round. */
+:root .x-close { border-radius: var(--radius-input); }
+/* The phone: Day's VM line wraps inside its chip, never past the screen's edge. */
+:root .app.phone .attention-line { flex-wrap: wrap; min-width: 0; }
+:root .app.phone .attention-line .att-chip { flex-wrap: wrap; max-width: 100%; min-width: 0; white-space: normal; row-gap: 4px; border-radius: var(--radius-dialog); }
+/* The panel's Start focus (on hover, on the next to-do) is one line. */
+:root .dp-start { flex: none; white-space: nowrap; }
+
+/* ---- E. The /styleguide page's RS-1 samples -------------------------------------------------------------------- */
+.sg-states { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); margin-bottom: var(--space-control); }
+.sg-state-name { flex: 0 0 260px; font-size: var(--fs-2); color: var(--text-muted); }
+.sg-states .done-btn, .sg-states .start-focus { border: 1px solid var(--action); }
+.sg-states .done-btn { min-height: var(--h-control); padding-inline: 14px; }
+.sg-rows { list-style: none; margin: 0; padding: 0; max-width: 720px; display: grid; gap: var(--space-row); }
+.sg-rows li { display: flex; align-items: center; gap: 10px; min-height: var(--h-control); padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius-input); }
+.sg-rows li.hover { background: var(--wash-1); }
+.sg-rows li.selected { background: var(--wash-accent); }
+.sg-rows li.open { border-color: var(--line); border-radius: var(--radius-menu); background: var(--wash-1); padding-block: 8px; }
+.sg-rows .sg-row-title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sg-rows .sg-row-sub { font-size: var(--fs-2); }
+.sg-rows .swatch.small { background: var(--c2); }
+.sg-rows li > .ft-icon { color: var(--text-faint); }
+.sg-icons { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; }
+.sg-icons li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.sg-icons li .ft-icon { color: var(--text); }
+.sg-dialog { width: 300px; max-height: none; }
+.sg-row { align-items: center; }
+/* On the phone the header's Add keeps the weight it had, so the phone's screens carry no more text styles than
+   before (U5 counts them). */
+:root .app.phone .mode-area .add-work-head { font-weight: 600; }
+/* A running timer's words give way before the top bar wraps: the countdown always shows, its to-do's title shortens. */
+:root .top-timer { max-width: clamp(150px, calc(100vw - 1212px), 340px); min-width: 0; }
+/* A cell you can change shows the family's Open chevron on hover (it was a "▾" character). */
+:root .ah-cell.ah-edit:not(.ah-editing):hover::after {
+  content: ""; width: calc(12px * var(--text-scale)); height: calc(12px * var(--text-scale)); background: var(--text-faint);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:root .ah-cell.ah-edit:not(.ah-editing):has(.ah-add):hover::after { content: none; }
+
+/* ---- RS-1 review 1 ------------------------------------------------------------------------------------------- */
+/* Status's Edit | Preview is a switch like the others. */
+:root .st-toggle { border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); padding: 2px; gap: 2px; }
+:root .st-toggle .ms-btn { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
+:root .st-toggle .ms-btn[aria-pressed="true"] { background: var(--lift); color: var(--text); font-weight: 500; box-shadow: var(--shadow-1); }
+/* A small button inside a row keeps the row's title its room (the side padding it had). */
+:root :is(.pick-row, .aw-row, .pl-row) .mini { padding-inline: 8px; }
+/* A whole-day cell's icon sits above its name, so the name wraps as it did. */
+:root .whole-label > .ft-icon { display: block; margin: 0 0 4px; }
+/* The largest text sizes: the top bar keeps one row on a laptop by sitting closer, and the VM chip says its state in
+   one word sooner (its full words are in its title and menu). */
+@media (max-width: 1500px) {
+  :root[data-text-size="large"] .topbar { gap: 10px; }
+  :root[data-text-size="large"] .views { gap: 0; }
+  :root[data-text-size="large"] .view-tab { padding: 0 8px; gap: 5px; }
+  :root[data-text-size="large"] .top-actions { gap: 6px; }
+  :root[data-text-size="large"] .topbar .top-btn:not(.top-more) { padding-inline: 10px; }
+}
+@media (max-width: 1700px) {
+  :root[data-text-size="larger"] .topbar { gap: 8px; }
+  :root[data-text-size="larger"] .views { gap: 0; }
+  :root[data-text-size="larger"] .view-tab { padding: 0 7px; gap: 4px; }
+  :root[data-text-size="larger"] .top-actions { gap: 6px; }
+  :root[data-text-size="larger"] .topbar .top-btn:not(.top-more) { padding-inline: 9px; gap: 4px; }
+  :root[data-text-size="larger"] .topbar .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  :root[data-text-size="larger"] .topbar .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+
+/* ---- RS-1 review 2 ------------------------------------------------------------------------------------------- */
+/* The phone: every round button in a sheet or a row is a 44 px target. */
+:root .app.phone :is(.aw-plus:not(.done), .sug-plus, .sug-x, .sc-tool, .icon-btn.small), :root .block-panel.sheet :is(.aw-plus:not(.done), .sug-plus, .sug-x) { width: var(--tap, 44px); min-width: var(--tap, 44px); height: var(--tap, 44px); }
+/* A chip's remove sits inside its chip. */
+:root .chip-x { width: calc(20px * var(--text-scale)); min-width: 0; height: calc(20px * var(--text-scale)); }
+/* Status: a suggested line and a line being edited keep their own edges. */
+:root .st-box.st-suggested textarea { border: 1px dashed var(--accent); }
+:root .st-box.st-editing textarea { border-color: var(--accent); }
+/* A toast's words are a row, not a pill; the settings' Back is a quiet button. */
+:root :is(.nt-main, .hs-value) { border-radius: var(--radius-input); }
+:root .as-mic { border: 1px solid var(--line); background: transparent; }
+:root .as-mic.on { border-color: var(--risk); }

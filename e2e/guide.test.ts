@@ -163,7 +163,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await page.locator('[data-add="L"]').click();
     expect(await fit.textContent()).toBe(sandbox([...SIZING.start, "L"], SIZING.block).fit.text);
     await page.locator('[data-add="unsized"]').click();
-    expect(await page.locator(".stack button").last().textContent()).toBe("Size? · 1h ✕");
+    expect(await page.locator(".stack button").last().textContent().then((t) => t?.trim())).toBe("Size? · 1h");
     // Leave and come back: everything starts over.
     await go(page, "today");
     await go(page, "week");

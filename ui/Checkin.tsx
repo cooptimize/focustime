@@ -17,6 +17,7 @@ import { formatDuration } from "../week/format.ts";
 import { DevOpsWork } from "./work.ts";
 import { dayName } from "./PickReview.tsx";
 import { SelectField } from "./SelectField.tsx";
+import { Icon } from "./icons.tsx";
 
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -135,7 +136,7 @@ function WalkOn({ data, date, blocks, picks, act }: { data: WeekLoadData; date: 
       <p className="ci-walkon">
         <span className="tw-label">Walked in</span>
         <button type="button" className="link-btn" onClick={() => setOpen(true)}>
-          + Add walk-on work
+          <Icon name="add" /> Add walk-on work
         </button>
       </p>
     );

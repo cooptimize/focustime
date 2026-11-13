@@ -12,6 +12,7 @@ import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
 import { callLabel, type MineData } from "./calls.ts";
 import { clientColor } from "../labels.ts";
+import { Icon } from "../icons.tsx";
 
 type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; canConfirm: boolean; canWrite: boolean };
 type Preview = Pick<DevOpsPreview, "previewId" | "key" | "op" | "summary" | "item" | "identity" | "fields" | "visibility" | "mentions">;
@@ -189,7 +190,7 @@ function BackHead({ onBack, title, sub }: { onBack: () => void; title: string; s
   return (
     <header className="page-head">
       <div className="ph-title">
-        <button type="button" className="mini quiet" onClick={onBack} aria-label="Back to client calls">‹ Calls</button>
+        <button type="button" className="mini quiet" onClick={onBack} aria-label="Back to client calls"><Icon name="back" /> Calls</button>
         <h2>{title}</h2>
         {sub && <span className="muted">{sub}</span>}
       </div>
