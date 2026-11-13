@@ -22,7 +22,6 @@ import { StatusRows } from "./StatusRows.tsx";
 import { ScopeField, type ClientScopeRow } from "./AdminScope.tsx";
 import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 import { WhoSetUp } from "./WhoSetUp.tsx";
-import { AdminTemplates } from "./AdminTemplates.tsx";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -31,11 +30,12 @@ export const ADMIN_UI_SECTIONS = [
   ["admin-people", "People"],
   ["admin-organization", "Organization"],
   ["admin-standards", "Standards"],
-  ["admin-templates", "Work templates"],
   ["admin-status", "Status"],
   ["admin-audit", "Audit"],
 ] as const;
 export type AdminUiSection = (typeof ADMIN_UI_SECTIONS)[number][0];
+/** TP-1b: Admin sections taken out of the app (Work templates). An old address opens Admin's first page. */
+export const RETIRED_ADMIN_SECTIONS: readonly string[] = ["admin-templates"];
 export const isAdminSection = (s: string): s is AdminUiSection => ADMIN_UI_SECTIONS.some(([id]) => id === s);
 
 /** Whether the signed-in person is a FocusTime admin (null while asking). */
@@ -1623,8 +1623,6 @@ export function AdminSection({ id, admin }: { id: AdminUiSection; admin: boolean
       return <AdminOrganization />;
     case "admin-standards":
       return <AdminStandards />;
-    case "admin-templates":
-      return <AdminTemplates />;
     case "admin-status":
       return <AdminStatus />;
     case "admin-audit":

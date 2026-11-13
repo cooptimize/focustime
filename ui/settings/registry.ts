@@ -97,7 +97,6 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "level", section: "planning", label: "Your level", keywords: ["guidance", "consultant", "senior", "lead"] },
   { id: "break-down-offered", section: "planning", label: "Offer Break down", old: ["Break down", "Draft stories"] },
   { id: "readiness-nudges", section: "planning", label: "Readiness nudges", keywords: ["flags"] },
-  { id: "work-templates", section: "planning", label: "Work templates", keywords: ["request type", "four lines", "hints", "examples", "new form"] },
   { id: "count-unsized", section: "planning", label: "Count unsized work as", old: ["Unsized", "Size? hours"] },
   { id: "shortest-useful-time", section: "planning", label: "Shortest useful time per size", old: ["Shortest useful time, S", "Shortest useful time, M", "Shortest useful time, L"], keywords: ["timebox my day", "minimum"] },
   { id: "carry-over", section: "planning", label: "Carry-over (days back)", old: ["Carry-over"], keywords: ["unfinished"] },
@@ -196,12 +195,15 @@ export const OLD_SECTIONS: Readonly<Record<string, { section: string; setting?: 
 export const sectionOf = (id: string): SectionDef | undefined => SECTIONS.find((s) => s.id === id);
 export const settingOf = (id: string): SettingDef | undefined => SETTINGS.find((s) => s.id === id);
 
+/** TP-1b: settings taken out of the app (Work templates' read-only view): an old address opens its section's top. */
+export const RETIRED_SETTINGS: readonly string[] = ["work-templates"];
+
 /** Where an address's section and setting open: old ids mapped, unknown ones null. */
 export function resolveSettings(section: string, setting?: string | null): { section: string; setting: string | null } | null {
   const old = OLD_SECTIONS[section];
   if (old) return { section: old.section, setting: setting ?? old.setting ?? null };
   if (!sectionOf(section)) return null;
-  return { section, setting: setting ?? null };
+  return { section, setting: setting && !RETIRED_SETTINGS.includes(setting) ? setting : null };
 }
 
 export type SearchHit = { section: string; setting: string | null; label: string; where: string; matched: string | null };

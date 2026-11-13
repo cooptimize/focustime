@@ -40,8 +40,7 @@ import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
-import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
-import { TemplatesReadOnly } from "./settings/AdminTemplates.tsx";
+import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
@@ -210,8 +209,10 @@ function SearchResults({ q, hits, onGo }: { q: string; hits: SearchHit[]; onGo: 
 }
 
 /** The section and setting an address opens: old ids mapped; "" is the rail (a list on the phone, Profile otherwise). */
-function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean): { current: string | null; setting: string | null } {
+function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean, admin: boolean | null): { current: string | null; setting: string | null } {
   if (section === "") return { current: list ? null : "you", setting: null };
+  // TP-1b: a retired Admin page: Admin's first page, or Profile for someone who isn't an admin.
+  if (RETIRED_ADMIN_SECTIONS.includes(section)) return { current: admin === false ? "you" : ADMIN_UI_SECTIONS[0][0], setting: null };
   if (isAdminSection(section)) return { current: section, setting: null };
   const r = resolveSettings(section, setting);
   if (!r || (sectionOf(r.section)?.demoOnly && !demo)) return { current: "you", setting: null };
@@ -228,7 +229,7 @@ export function Settings(props: Props) {
   const list = useNarrow() || phone;
   const admin = useAdmin();
   const devLoop = useDeveloperLoop();
-  const { current, setting } = placeOf(props.section, props.setting, list, props.demo);
+  const { current, setting } = placeOf(props.section, props.setting, list, props.demo, admin);
   const reload = useCallback(async () => {
     try {
       setData(await call<SettingsData>("settings.load", {}));
@@ -283,7 +284,7 @@ export function Settings(props: Props) {
   const client = current === "client" ? (data?.clients.find((c) => c.key === setting) ?? null) : null;
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
-  const description = inAdmin ? (current === "admin-templates" ? "Team settings for everyone in FocusTime. Save with one line of why; each change is logged in Admin › Audit." : "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit.") : def?.description;
+  const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
   const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
@@ -395,9 +396,6 @@ function SectionBody(p: BodyProps) {
       return (
         <>
           <GuidanceForm {...p} />
-          <Group title="Work templates" sid="work-templates">
-            <TemplatesReadOnly />
-          </Group>
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
           <CollabForm {...p} />
