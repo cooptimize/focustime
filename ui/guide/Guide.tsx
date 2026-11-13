@@ -1,14 +1,16 @@
-// UI-5: the in-app Guide (#/guide/<section>), on ST-1's panel shell (./GuideFrame.tsx). Start here and Your first day
-// are the 10-minute path; then one section per tab and area, each the same shape: one line on what it's for, what you
-// do there (with a link to the place and a Show me tour), a try-it or an animation where one helps, and "How it works"
-// folded. Every word is in ./content.ts; keys come from ui/keys.ts. Example data only, labeled as such.
+// UI-5, rebuilt by GU-1: the in-app Guide (#/guide/<section>), on ST-1's panel shell (./GuideFrame.tsx). Start here and
+// Your first day are the 10-minute path; then one section per tab, in the app's tab order, and one per area, each the
+// same shape: one line on what it's for, what you do there (with a link to the place and a Show me tour), a try-it
+// where one helps, and "How it works" folded. Every word is in ./content.ts; keys come from ui/keys.ts; controls are
+// named as the app names them, with the app's own icon (Rich's {icon:name}). Example data only, labeled as such.
+// The look is the app's (docs/design/style-guide.md section 11): rows, not boxes; pills; one filled button at most.
 // Lumen: Start here's unroll, a tour's end and this footer (docs/design/brand.md).
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Checklist } from "../../actions/guide-actions.ts";
 import { Lumen } from "../brand/Brand.tsx";
 import { KEYS } from "../keys.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
-import { AREA_UI, AREAS, DEVOPS, FIRST_DAY, FOOTER, QUESTION_POOL, RENAMED, SEARCH, SECTION_LINES, SHORTCUTS, START, TECH_DOCS_LINK, TRY, type AreaBody, type Do, type Extra } from "./content.ts";
+import { AREA_UI, AREAS, DEVOPS, FIRST_DAY, FOOTER, QUESTION_POOL, RENAMED, RENAMED_ROWS, SEARCH, SECTION_LINES, SHORTCUTS, START, TECH_DOCS_LINK, TRY, type AreaBody, type Do, type Extra } from "./content.ts";
 import { GuideFrame, useGuideList } from "./GuideFrame.tsx";
 import { SearchBox, searchEntries, SearchResults } from "./Search.tsx";
 import { Keys, plainText, Rich } from "./Rich.tsx";
@@ -40,7 +42,8 @@ function ShowMe({ tour, onTour }: { tour: string; onTour: ((id: string) => void)
   const t = tourById(tour);
   if (!t || !onTour) return null;
   return (
-    <button type="button" className="quiet ga-show" onClick={() => onTour(t.id)} aria-label={`${START.showMe}: ${t.title}`}>
+    <button type="button" className="mini ga-show" onClick={() => onTour(t.id)} aria-label={`${START.showMe}: ${t.title}`}>
+      <Icon name="preview" />
       {START.showMe}
     </button>
   );
@@ -51,15 +54,18 @@ function DoCard({ d, onTour, signedIn }: { d: Do; onTour: ((id: string) => void)
   const tour = d.tour && onTour && tourById(d.tour);
   return (
     <li className="ga-do">
-      <b>{d.title}</b>
-      <span className="ga-text">
-        <Rich text={d.text} />
+      <span className="ga-do-body">
+        <b>{d.title}</b>
+        <span className="ga-text">
+          <Rich text={d.text} />
+        </span>
       </span>
       {(link || tour) && (
         <span className="ga-links">
           {link && (
             <a href={d.go!.href} className="ga-go">
               {d.go!.label}
+              <Icon name="next" />
             </a>
           )}
           {d.tour && <ShowMe tour={d.tour} onTour={onTour} />}
@@ -216,6 +222,7 @@ function FirstDay({ checklist, onTour, signedIn }: { checklist: (() => Promise<C
                 {signedIn && (
                   <a href={c.go.href} className="ga-go">
                     {c.go.label}
+                    <Icon name="next" />
                   </a>
                 )}
                 {c.tour && <ShowMe tour={c.tour} onTour={onTour} />}
@@ -249,10 +256,12 @@ function Renamed() {
           </tr>
         </thead>
         <tbody>
-          {RENAMED.rows.map(([was, now]) => (
+          {RENAMED_ROWS.map(([was, now]) => (
             <tr key={was}>
               <td>{was}</td>
-              <td>{now}</td>
+              <td>
+                <Rich text={now} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -269,14 +278,14 @@ export type Hit = { section: SectionId; title: string; text: string; q?: string 
 export function guideIndex(): Hit[] {
   const out: Hit[] = [];
   for (const s of SECTIONS) out.push({ section: s.id, title: s.name, text: SECTION_LINES[s.id] ?? "" });
-  for (const st of [...START.day.steps, ...START.week.steps]) out.push({ section: "start", title: st.name, text: st.text });
+  for (const st of [...START.day.steps, ...START.week.steps]) out.push({ section: "start", title: st.name, text: plainText(st.text) });
   for (const [id, body] of Object.entries(AREAS) as [SectionId, AreaBody][]) {
     for (const d of body.does) out.push({ section: id, title: d.title, text: plainText(d.text) });
     for (const q of body.faqs) out.push({ section: id, title: q, text: plainText(ANSWER.get(q) ?? ""), q });
   }
   for (const c of Object.values(FIRST_DAY.checks)) out.push({ section: "first-day", title: c.title, text: c.text });
   for (const q of FIRST_DAY.faqs) out.push({ section: "first-day", title: q, text: plainText(ANSWER.get(q) ?? ""), q });
-  for (const [was, now] of RENAMED.rows) out.push({ section: "renamed", title: `${was} → ${now}`, text: "" });
+  for (const [was, now] of RENAMED_ROWS) out.push({ section: "renamed", title: `${was} → ${plainText(now)}`, text: "" });
   return out;
 }
 

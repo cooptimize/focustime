@@ -13,8 +13,8 @@ const KEEP: Record<string, RegExp> = {
   "sources/graph/write.ts": /^export const MARKER_PROP = "String \{[0-9a-f-]+\} Name CoopilotId";$/,
   "plan/timebox.ts": /^const LEGACY_BODY_TAG = "Timebox planned in Coopilot\.";$/,
   // The Entra and Dataverse registrations keep their display names (R1): the starter config names them as they are.
-  // UI-5: the Guide's Renamed table names the old name once.
-  "ui/guide/content.ts": /^\["Coopilot", "FocusTime"\],$/,
+  // UI-5: the Guide's Renamed table names the old name once (GU-1: its rows moved to ui/guide/retired.ts).
+  "ui/guide/retired.ts": /^\{ was: "Coopilot", now: "FocusTime", match: \/\\bCoopilot\\b\/ \},$/,
   "config/starter.ts": /^# .*"Coopilot (Dataverse Reader|Desktop)"/,
 };
 /** The rename itself: it has to name the old folders and keyring service. */

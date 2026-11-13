@@ -4,7 +4,11 @@
 import type { ReactNode } from "react";
 import { PanelShell, useNarrow, type RailGroup } from "../PanelShell.tsx";
 import { usePhone } from "../viewport.ts";
-import { CONTENTS, SECTION_GROUPS, SECTIONS, type SectionId } from "./sections.ts";
+import { Icon, type IconName } from "../icons.tsx";
+import { CONTENTS, SECTION_GROUPS, SECTIONS, TAB_SECTIONS, type SectionId } from "./sections.ts";
+
+/** GU-1: a tab's section carries the tab's own icon in the rail (the names the top bar uses, ui/App.tsx TAB_ICONS). */
+export const TAB_ICON: Record<"today" | "week" | "ahead" | "status" | "inbox", IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox" };
 
 /** Whether the rail is its own list page (a phone or a narrow window). */
 export function useGuideList(): boolean {
@@ -30,7 +34,11 @@ export function GuideFrame(p: {
   const groups: RailGroup[] = SECTION_GROUPS.map((g) => ({
     id: g.id,
     label: g.label,
-    items: SECTIONS.filter((s) => s.group === g.id).map((s) => ({ id: s.id, label: s.name, href: `#/guide/${s.id}` })),
+    items: SECTIONS.filter((s) => s.group === g.id).map((s) => {
+      const tab = TAB_SECTIONS[s.id];
+      // The shell draws a hint after the label; guide.css puts this one before it.
+      return { id: s.id, label: s.name, href: `#/guide/${s.id}`, ...(tab ? { hint: <Icon name={TAB_ICON[tab]} /> } : {}) };
+    }),
   }));
   return (
     <PanelShell

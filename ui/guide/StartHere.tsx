@@ -1,11 +1,13 @@
 // UI-5: Start here. What FocusTime is for, the day in five steps, the week in three, and the two things that never
 // change. The WeekMark unrolls once as the section opens (the brand's own Unroll; reduced motion shows its end), and
-// a proposal card turns into "Done ✓ · Undo" once when it scrolls into view (CSS, under 600 ms; reduced motion: the
+// a proposal card turns into "Done · Undo" once when it scrolls into view (CSS, under 600 ms; reduced motion: the
 // end state, still). Show me starts a tour on the person's own screens; signed out there are none, so it says so.
 import { useEffect, useRef, useState } from "react";
 import { Unroll } from "../brand/Brand.tsx";
 import { useReducedMotion } from "../brand/motion.ts";
+import { Icon } from "../icons.tsx";
 import { START } from "./content.ts";
+import { Rich } from "./Rich.tsx";
 import { tourById } from "./tours.ts";
 
 function Proposal() {
@@ -30,7 +32,10 @@ function Proposal() {
           <span className="gs-confirm">{p.confirm}</span>
         </span>
         <span className="gs-done">
-          <span className="gs-tick">{p.done}</span>
+          <span className="gs-tick">
+            <Icon name="done" />
+            {p.done}
+          </span>
           <span className="gs-undo">{p.undo}</span>
         </span>
       </div>
@@ -67,7 +72,9 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
             <span className="gs-n" aria-hidden="true">{n + 1}</span>
             <span className="gs-step">
               <b>{s.name}</b>
-              <span>{s.text}</span>
+              <span>
+                <Rich text={s.text} />
+              </span>
               {s.teams && <span className="gs-teams">{START.day.teams}</span>}
             </span>
           </li>
@@ -83,10 +90,13 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
               <span className="gs-n" aria-hidden="true">{n + 1}</span>
               <b>{s.name}</b>
               <span className="gs-where">{s.where}</span>
-              <span className="gs-text">{s.text}</span>
+              <span className="gs-text">
+                <Rich text={s.text} />
+              </span>
               <span className="gs-show">
                 {tour && onTour ? (
-                  <button type="button" className="primary" onClick={() => onTour(tour.id)} aria-label={`${START.showMe}: ${tour.title}`}>
+                  <button type="button" className="mini ga-show" onClick={() => onTour(tour.id)} aria-label={`${START.showMe}: ${tour.title}`}>
+                    <Icon name="preview" />
                     {START.showMe}
                   </button>
                 ) : tour ? (

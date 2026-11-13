@@ -1,4 +1,5 @@
-// UI-5: the Guide's "Show me" tours, as data. A tour opens a real screen and walks through it one element at a time:
+// UI-5 (GU-1: every step checked against the screen it points at, controls by their app name and icon): the Guide's
+// "Show me" tours, as data. A tour opens a real screen and walks through it one element at a time:
 // it only highlights and explains, never clicks, types or writes (ui/guide/tour/Tour.tsx blocks the page under it).
 // Each step points at a `data-tour` hook on the real screen (listed in docs/guide.md). Where the screen has nothing
 // there yet (no From last week, no client with blocks), the step shows a small example drawing instead.
@@ -7,17 +8,12 @@ import type { Nav } from "../nav.ts";
 
 /** The example drawings a step can show in place of an empty highlight (ui/guide/tour/Illustrations.tsx). */
 export type IllustrationId =
-  | "pw-grid"
-  | "pw-carry"
-  | "pw-card"
-  | "pw-add"
-  | "pw-next"
   | "todo-drag"
   | "done-offer"
   | "urgent"
   | "closeout"
   | "ib-item"
-  | "gaps-row"
+  | "attention-row"
   | "pending"
   | "ask-answer"
   | "ask-move"
@@ -32,6 +28,7 @@ export type TourStep = {
   /** Another screen this step (and the ones after it) is on: the tour moves the page there, an address change only. */
   at?: Nav;
   title: string;
+  /** The step's words; Rich marks ({icon:add}, {b:Today}) are drawn by the tour card. */
   text: string;
   /** Shown when the target isn't on screen, or (`emptyWhen`) is there with nothing in it. Without it the step is skipped. */
   example?: IllustrationId;
@@ -79,14 +76,14 @@ const PLAN_WEEK: Tour = {
     {
       target: "aw-features",
       title: "Assigned to you",
-      text: "Your features and stories for this client, in backlog order, each story under its feature and saying where it is. More in the client, below, has everyone else's. + puts a row on this block, or drag it onto any block. Drag a to-do from a block back onto the panel to take it off the plan.",
+      text: "Your features and stories for this client, in backlog order, each story under its feature and saying where it is. More in the client, below, has everyone else's. {icon:add} Add to this block puts a row on it, or drag the row onto any block. Drag a to-do from a block back onto the panel to take it off the plan.",
       example: "todo-drag",
       phone: "skip",
     },
     {
       target: "aw-box",
       title: "One box to add",
-      text: "Type to search this client's work and your promises. Up and Down move, Enter takes the highlighted row. The last rows are always New to-do and New draft story, so with no match Enter makes a to-do.",
+      text: "Type to search this client's work and your promises. Up and Down move, Enter takes the highlighted row. The rows for something new (New to-do, New draft story) are always at the end, so with no match Enter makes a to-do.",
       phone: "skip",
     },
   ],
@@ -100,10 +97,10 @@ const BOARD: Tour = {
   start: { tab: "week", mode: "board", week: null, add: null },
   section: "week",
   steps: [
-    { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with Friday as catch-up. Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it to open its panel.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
+    { target: "wk-block", title: "A block", text: "Week shows this week's half-day blocks, Monday to Friday, with one day for catch-up (Friday unless your week is set up differently). Each is half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why, like a dentist at noon. Click it to open its panel.", phone: { text: "Half a day for one client, from Focus Time in Dataverse. It says when it's at risk and why. Tap it for that client's stories." } },
     { target: "wk-timeline", title: "Cards or Timeline", text: "Timeline shows the hours beside each block: meetings, free time and the line for now. Cards gives the to-dos the whole width. B switches.", phone: "skip" },
-    { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a story from a block's list onto any of that client's blocks this week. The block shows its free time as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
-    { title: "Check it off", text: "Tick a to-do when it's done. When it has a DevOps item you can change, FocusTime asks whether to set it done there too: Confirm, or Not now.", example: "done-offer" },
+    { target: "wk-todo", title: "Put a to-do on a block", text: "Drag a to-do onto another of that client's blocks this week, or a story from the panel onto a block. The block shows its free time as you drag; each drop has Undo.", example: "todo-drag", phone: { text: "Tap a block, then Add to… on a story. Long-press a to-do to move it." } },
+    { title: "Check it off", text: "Tick a to-do when it's done. When it has a DevOps item you can change, Wrap it up opens: Finished or Made progress, a preview, then Confirm. Skip DevOps keeps only the tick.", example: "done-offer" },
     { target: "wk-carry", title: "To place", text: "The line above the week counts what's waiting: unfinished work, last week's and anything a teammate sent. Review opens it in the block's panel. Nothing moves until you place it." },
   ],
   end: { line: "That's Week. One screen, with a block's panel beside it.", tryIt: "Try it yourself: the Guide's Week section has a block to drag stories onto." },
@@ -114,13 +111,13 @@ const TODAY: Tour = {
   title: "Day, focus and close out",
   summary: "What's urgent, the moment of the day and the day's blocks.",
   start: { tab: "today", flow: null, date: null },
-  section: "today",
+  section: "day",
   steps: [
-    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: requests sorted as urgent, promises late or due within 2 hours, and work sent to you. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent" },
-    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
+    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: promises late or due within 2 hours, and work sent to you that waits for your answer. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent" },
+    { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with {icon:add} Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
     { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
-    { target: "today-days", title: "Any day", text: "‹ › step to another day, and Today comes back. Today and later take work; a past day lets you tick what got done and move the rest forward.", phone: "skip" },
+    { target: "today-days", title: "Any day", text: "{icon:back} Previous day and {icon:next} Next day step to another day, and {b:Today} comes back. The day that is today and later days take work; a past day lets you tick what got done and move the rest forward.", phone: "skip" },
   ],
   end: { line: "That's Day. Most days it's the only screen you need.", tryIt: "Try it yourself: Add on one of today's blocks." },
 };
@@ -135,7 +132,7 @@ const INBOX: Tour = {
     { target: "ib-rail", title: "Three lists", text: "From chats, Promises and Captures, each with its count. The chips under them choose clients. FocusTime remembers the list you used last." },
     { target: "ib-list", title: "From chats", text: "A conversation shows here when it asks for work no DevOps item covers yet, after it has been quiet for 4 working hours. Hover a row to see why. Click it to open the messages in place." },
     { target: "ib-acts", title: "Create item, Already covered, Dismiss", text: "Create item (C) fills a new item from the conversation and shows a preview first. Already covered (L) links one that exists. Dismiss (X) takes it off your list only.", example: "ib-item" },
-    { target: "ib-keys", title: "Promises clear themselves", text: "What you said you'd do in a chat lands in Promises. When its item is finished, or it sat untouched 7 days past due, it clears on its own, and Put back brings it back. J and K move, Enter opens, D marks done.", phone: "skip" },
+    { target: "ib-keys", title: "The keys, and Promises", text: "This line lists the keys: J and K move, Enter opens a row, and each action has its letter. In Promises, the second list, what you said you'd do in a chat clears on its own when its item is finished, or after 7 days untouched past due; Put back brings it back.", phone: "skip" },
   ],
   end: { line: "That's the Inbox. Most days it's a few rows, and they go away on their own.", tryIt: "Try it yourself: open a row in From chats." },
 };
@@ -149,7 +146,7 @@ const AHEAD: Tour = {
   steps: [
     { target: "modes-ahead", title: "Grid and Gantt", text: "Grid is a table you edit in place, client by client in each backlog's order. Gantt is the same items on a timeline: drag a bar to move its dates. P switches." },
     { target: "ah-owner", title: "Mine, Contributing, Everyone", text: "Choose whose items show. FocusTime remembers your choice for each client.", phone: "skip" },
-    { target: "ah-attention", title: "Needs attention", text: "Only the items with something to fix: missing stories, a target date, an owner or a size, or stale. Each has its fix beside it, and Skip. Work from the top.", phone: "skip" },
+    { target: "ah-attention", title: "Needs attention", text: "Only the items with something to fix: missing stories, a target date, an owner or a size, or stale. Each has its fix beside it, and Skip. Work from the top.", example: "attention-row", phone: "skip" },
     { target: "ah-filter", title: "Filter", text: "Epic, dates and the levels shown. One level as a list shows each client's backlog in its own rank order, with the rank number.", phone: "skip" },
     { target: "ah-pending", title: "Changes wait until you save", text: "Every edit collects here. Review shows before and after; Save writes them to DevOps, with Undo. Someone else's change since shows both.", example: "pending" },
   ],
@@ -176,7 +173,7 @@ const STATUS: Tour = {
   title: "Status",
   summary: "This week's lines for Monday's status report.",
   start: { tab: "status" },
-  section: "week",
+  section: "status",
   steps: [
     { target: "tab-status", title: "Status", text: "Status is its own tab (4): what Monday's report will say for your features, by client." },
     { target: "st-toggle", title: "Edit and Preview", text: "Preview shows the report as its email will read: a heading per feature, each comment this week a bullet with its author." },

@@ -29,7 +29,7 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
     expect(shown["Close out"]).toEqual(["E"]);
     expect(shown["Open a block (A puts the cursor in Add)"]).toEqual(["A", "W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
-    expect(shown["Next or previous client"]).toEqual(["J", "K"]);
+    expect(shown["Next or previous row in the Inbox"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);
   });
   it("every key in the copy comes from keys.ts", () => {
@@ -75,7 +75,7 @@ describe("the sizing sandbox uses plan/estimate.ts and plan/fit.ts (E2: hours)",
   it("the legend is exactly its four lines", () => {
     expect(C.SIZING.legend.map((l) => l.replace(/\{b:([^}]*)\}/g, "$1"))).toEqual([
       "S 1h · M 2h · L 4h",
-      "Sizing is optional. An unsized story counts as 1h until you size it. Change that in Settings › Planning.",
+      "Sizing is optional. An unsized story counts as 1h until you size it. Change that in Settings › Today and Week.",
       "Hours are a guide, not a limit. Plan what you like; what doesn't get done moves forward.",
       "Features are their stories added up, or your estimate until they're sized.",
     ]);
@@ -91,10 +91,10 @@ describe("estimates in the Guide are hours (E2)", () => {
   });
   it("the new questions are there", () => {
     const qs = Object.fromEntries(C.QUESTION_POOL.map((x) => [x.q, x.a]));
-    expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 1h so the plan still adds up (change that in Settings › Planning), and nothing waits on a size. Size them when you know.");
+    expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 1h so the plan still adds up (change that in Settings › Today and Week), and nothing waits on a size. Size them when you know.");
     expect(qs["What's a block, then?"]).toBe("Where you work: a half-day set aside for a client in Focus Time. How much work fits is measured in hours.");
-    expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? ⋯ › Send feedback, or message the FocusTime team in Teams.");
-    expect(qs["How do I send an idea, a problem or a question?"]).toMatch(/^⋯ › Send feedback, .*message the FocusTime team in Teams\.$/);
+    expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? {icon:more} More › Send feedback on a computer, or message the FocusTime team in Teams.");
+    expect(qs["How do I send an idea, a problem or a question?"]).toMatch(/^\{icon:more\} More › Send feedback, .*message the FocusTime team in Teams\.$/);
   });
 });
 

@@ -1,3 +1,6 @@
+// GU-1 changed here only what its renamed, added and moved sections need: the section order (Today is Day; Status is a
+// section), the budgets' keys (day; a Status budget; Renamed's rows are counted in app-names.test.ts), the retired
+// questions map (gone: Renamed is the one list of old names), and the old addresses.
 // UI-5: the rebuilt Guide's sections. Every link opens a real place, every question has one home, every tour named
 // exists, the words stay plain and within budget, no real person is named, and search finds what the Guide says.
 import { isAdminSection } from "../settings/Admin.tsx";
@@ -8,7 +11,7 @@ import { SECTIONS as SETTINGS_SECTIONS, SETTINGS } from "../settings/registry.ts
 import * as C from "./content.ts";
 import { guideIndex, searchGuide } from "./Guide.tsx";
 import { plainText } from "./Rich.tsx";
-import { SECTIONS } from "./sections.ts";
+import { OLD_SECTIONS, sectionFor, SECTIONS } from "./sections.ts";
 import { TOURS, tourById } from "./tours.ts";
 
 const strings = (v: unknown): string[] => (typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(strings) : v && typeof v === "object" ? Object.values(v).flatMap(strings) : []);
@@ -17,10 +20,19 @@ const areaIds = Object.keys(C.AREAS) as (keyof typeof C.AREAS)[];
 const allDoes = [...Object.values(C.AREAS).flatMap((a) => a.does), ...Object.values(C.FIRST_DAY.checks)];
 
 describe("the sections", () => {
-  it("are in nav order: Start here, Your first day, the four tabs, then the rest, with Renamed last", () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "today", "week", "ahead", "inbox", "writing", "capture", "assistant", "ask", "teams", "calls", "code", "settings", "renamed"]);
+  it("are in nav order: Start here, Your first day, the five tabs in the app's order, then the rest, with Renamed last", () => {
+    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "day", "week", "ahead", "status", "inbox", "writing", "capture", "assistant", "ask", "teams", "calls", "code", "settings", "renamed"]);
     for (const s of SECTIONS) expect(C.SECTION_LINES[s.id], s.id).toBeTruthy();
     for (const id of areaIds) expect(SECTIONS.some((s) => s.id === id), id).toBe(true);
+  });
+  it("old addresses still open where their content is now (#/guide/today is Day)", () => {
+    expect(sectionFor("today")).toBe("day");
+    expect(sectionFor("day")).toBe("day");
+    for (const [old, now] of Object.entries(OLD_SECTIONS)) {
+      expect(SECTIONS.some((s) => s.id === now), old).toBe(true);
+      expect(sectionFor(old), old).toBe(now);
+    }
+    expect(sectionFor("nothing-like-this")).toBe("start");
   });
   it("each area: one line on what it's for, 2 to 5 things you do, then How it works", () => {
     for (const id of areaIds) {
@@ -32,7 +44,7 @@ describe("the sections", () => {
     }
   });
   it("stays within the approved budgets (visible words; How it works is folded)", () => {
-    const budget: Record<string, number> = { today: 200, week: 300, ahead: 250, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 90, settings: 200 };
+    const budget: Record<string, number> = { day: 200, week: 300, ahead: 250, status: 150, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 90, settings: 200 };
     for (const id of areaIds) expect(words([C.AREAS[id].lead, C.AREAS[id].does]), id).toBeLessThanOrEqual(budget[id]! * 1.1);
     expect(words(C.START)).toBeLessThanOrEqual(300);
     // Your first day: the checklist and its seven to eight day-one questions, read open.
@@ -40,7 +52,7 @@ describe("the sections", () => {
     expect(firstDay).toBeLessThanOrEqual(650 * 1.25);
     expect(C.FIRST_DAY.faqs.length).toBeGreaterThanOrEqual(5);
     expect(C.FIRST_DAY.faqs.length).toBeLessThanOrEqual(8);
-    expect(words(C.RENAMED)).toBeLessThanOrEqual(120);
+    expect(words(C.RENAMED)).toBeLessThanOrEqual(60);
   });
 });
 
@@ -52,9 +64,8 @@ describe("every question has exactly one home", () => {
     expect(placed.length).toBe(new Set(placed).size);
     expect(C.QUESTION_POOL.length).toBe(new Set(C.QUESTION_POOL.map((x) => x.q)).size);
   });
-  it("no question in the pool is lost: it's placed, or retired with where its answer went", () => {
-    for (const { q } of C.QUESTION_POOL) expect(placed.includes(q) || q in C.RETIRED_QUESTIONS, q).toBe(true);
-    for (const q of Object.keys(C.RETIRED_QUESTIONS)) expect(placed.includes(q), q).toBe(false);
+  it("no question in the pool is lost: every one is placed", () => {
+    for (const { q } of C.QUESTION_POOL) expect(placed.includes(q), q).toBe(true);
   });
   it("Close the loop is LP-1's one entry, placed in the Inbox", () => {
     expect(C.AREAS.inbox.faqs).toContain(C.CLOSE_THE_LOOP.q);

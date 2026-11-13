@@ -1,13 +1,16 @@
 // UI-5: the Guide's try-it sandboxes. Each is self-contained: its example data is in the page (content.ts TRY and
 // SIZING), it keeps its state in React only, and it calls no action and no server. Leaving the section resets it.
 // Motion is CSS or the Web Animations API, under 600 ms, and none under reduced motion (the end state shows at once).
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+// GU-1: drawn with the app's own pieces where there is one (the Cards and Timeline switch, the urgent strip's lines,
+// buttons, pills and icons), so a control here looks and is named as it is on the screen it teaches.
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { StorySize } from "../../plan/estimate.ts";
 import { useReducedMotion } from "../brand/motion.ts";
 import { SIZING, TRY, type ExampleColor, type TryItId } from "./content.ts";
 import { sandbox } from "./sandbox.ts";
 import { Rich } from "./Rich.tsx";
 import { Icon } from "../icons.tsx";
+import { CardsTimelineSwitch } from "../ModeSwitch.tsx";
 
 const tint = (c: ExampleColor): CSSProperties => ({ ["--c" as string]: `var(--client-${c})` });
 
@@ -17,7 +20,8 @@ function Frame({ id, title, sub, onReset, children }: { id: TryItId; title: stri
       <div className="try-head">
         <h4 id={`try-${id}`}>{title}</h4>
         {onReset && (
-          <button type="button" className="link-btn" onClick={onReset}>
+          <button type="button" className="mini quiet" onClick={onReset}>
+            <Icon name="undo" />
             {TRY.reset}
           </button>
         )}
@@ -71,12 +75,12 @@ function DragTry() {
       <span className="guide-tag">{x.size}</span>
       <span className="try-moves">
         {where[x.id] ? (
-          <button type="button" className="link-btn" onClick={() => move(x.id, null)}>
+          <button type="button" className="mini quiet" onClick={() => move(x.id, null)}>
             {t.back}
           </button>
         ) : (
           t.blocks.map((b) => (
-            <button key={b.id} type="button" className="link-btn" onClick={() => move(x.id, b.id)}>
+            <button key={b.id} type="button" className="mini quiet" onClick={() => move(x.id, b.id)}>
               {t.moveTo(b.label)}
             </button>
           ))
@@ -139,9 +143,7 @@ function TimelineTry() {
   return (
     <Frame id="timeline" title={t.title} sub={t.sub}>
       <div className="try-tl-bar">
-        <button type="button" className={`try-toggle${on ? " on" : ""}`} aria-pressed={on} onClick={() => setOn((x) => !x)}>
-          {t.toggle}
-        </button>
+        <CardsTimelineSwitch shown={on} onToggle={() => setOn((x) => !x)} />
       </div>
       <div className={`try-tl${on ? " with-rail" : ""}`} style={tint(b.color)}>
         <div className="try-block-head">
@@ -214,11 +216,12 @@ function SizingTry() {
           </div>
           <div className="adds">
             {sizes.map((s) => (
-              <button key={s ?? "unsized"} type="button" className="quiet" data-add={s ?? "unsized"} onClick={() => sb.minutes < SIZING.maxMinutes && setStories((x) => [...x, s])}>
-                + {SIZING.add(s)}
+              <button key={s ?? "unsized"} type="button" className="mini" data-add={s ?? "unsized"} onClick={() => sb.minutes < SIZING.maxMinutes && setStories((x) => [...x, s])}>
+                <Icon name="add" />
+                {SIZING.add(s)}
               </button>
             ))}
-            <button type="button" className="quiet" data-clear onClick={() => setStories([])}>
+            <button type="button" className="mini quiet" data-clear onClick={() => setStories([])}>
               {SIZING.clear}
             </button>
           </div>
@@ -257,10 +260,7 @@ function InboxTry() {
           <div className="try-label">{t.list}</div>
           {t.items.map((x) => (
             <button key={x.id} type="button" role="option" aria-selected={open === x.id} className="try-row" onClick={() => (setOpen(x.id), setPressed(false))}>
-              <span className="try-row-top">
-                <b>{x.title}</b>
-                <span className="try-kind">{x.kind}</span>
-              </span>
+              <b>{x.title}</b>
               <span className="try-why">
                 {x.client} · {x.why}
               </span>
@@ -276,9 +276,16 @@ function InboxTry() {
               <b className="try-pane-title">{item.title}</b>
               <p>{item.summary}</p>
               <div className="try-why">{item.why}</div>
-              <button type="button" className="primary" onClick={() => setPressed(true)}>
-                {item.main}
-              </button>
+              <div className="try-actions">
+                <button type="button" className="mini primary" onClick={() => setPressed(true)}>
+                  {item.main}
+                </button>
+                {t.others.map((o) => (
+                  <button key={o} type="button" className="mini quiet" onClick={() => setPressed(true)}>
+                    {o}
+                  </button>
+                ))}
+              </div>
               {pressed && <p className="try-note">{t.note}</p>}
             </>
           ) : (
@@ -333,7 +340,7 @@ function AssistantTry() {
           }}
         >
           <input aria-label={t.box} placeholder={t.box} value={q} onChange={(e) => setQ(e.target.value)} />
-          <button type="submit" className="primary">
+          <button type="submit" className="mini">
             {t.send}
           </button>
         </form>
@@ -354,17 +361,20 @@ function AssistantTry() {
                   <div className="try-who">{x.reply.who}</div>
                   {x.state === "open" ? (
                     <div className="try-actions">
-                      <button type="button" className="primary" onClick={() => set(i, "done")}>
+                      <button type="button" className="mini primary" onClick={() => set(i, "done")}>
                         {t.confirm}
                       </button>
-                      <button type="button" className="quiet" onClick={() => set(i, "cancelled")}>
+                      <button type="button" className="mini quiet" onClick={() => set(i, "cancelled")}>
                         {t.cancel}
                       </button>
                     </div>
                   ) : x.state === "done" ? (
                     <div className="try-done">
-                      <span className="gs-tick">{t.done}</span>
-                      <button type="button" className="link-btn" onClick={() => set(i, "open")}>
+                      <span className="gs-tick">
+                        <Icon name="done" />
+                        {t.done}
+                      </span>
+                      <button type="button" className="mini quiet" onClick={() => set(i, "open")}>
                         {t.undo}
                       </button>
                     </div>
@@ -396,41 +406,27 @@ export function TryIt({ id }: { id: TryItId }) {
   }
 }
 
-// ---------- Today's urgent strip, collapsing to "N more in Inbox" (an animation, once in view) ----------
+// ---------- Day's urgent strip: the app's own lines (ui/Day.tsx UrgentStrip), with example data, never pressed ----------
 
 export function UrgentStrip() {
   const t = TRY.urgent;
-  const reduced = useReducedMotion();
-  const box = useRef<HTMLDivElement>(null);
-  const [played, setPlayed] = useState(false);
-  const [run, setRun] = useState(0);
-  useEffect(() => {
-    const el = box.current;
-    if (!el || reduced || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && (setPlayed(true), io.disconnect()), { threshold: 0.6 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [reduced]);
-  const state = reduced ? "done still" : played ? "play" : "";
-  const extra = t.rows.length - 3;
   return (
-    <div ref={box} className="try-urgent-wrap" role="img" aria-label={`${t.label}: the 3 most urgent, then ${t.more(extra)}`}>
-      <div key={run} className={`try-urgent ${state}`} aria-hidden="true">
-        {t.rows.map((r, i) => (
-          <div key={r.text} className={`try-u-row ${r.tone}${i >= 3 ? " extra" : ""}`}>
-            <i />
-            <span className="try-u-text">{r.text}</span>
-            <span className="try-u-meta">{r.meta}</span>
-          </div>
-        ))}
-        <div className="try-u-more">{t.more(extra)}</div>
+    <figure className="try-urgent-wrap" aria-label={t.label}>
+      <div className="urgent-strip try-urgent">
+        <ul>
+          {t.rows.map((r) => (
+            <li key={r.text} className={`us-item us-${r.icon === "send" ? "sends" : "promise"}`}>
+              <span className="us-line">
+                <Icon name={r.icon} />
+                <span className="us-tag">{r.tag}</span>
+                <span className="us-who">{r.who}</span>
+                <span className="us-what">{r.text}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <span className="try-note">{t.label}</span>
-      {!reduced && (
-        <button type="button" className="link-btn" onClick={() => (setPlayed(true), setRun((n) => n + 1))}>
-          {t.replay}
-        </button>
-      )}
-    </div>
+      <figcaption className="try-note">{t.label}</figcaption>
+    </figure>
   );
 }

@@ -1,3 +1,5 @@
+// GU-1 changed here only: the Day section's id (was today), the old address #/guide/today, the footer's words
+// (More › Send feedback), and the Timeline try-it, which now uses the app's own Cards and Timeline switch.
 // UI-5: the rebuilt Guide in a browser, on ST-1's panel shell. Every section opens at 1920 and phone width, dark and
 // light, with no page errors and no sideways scroll; old addresses land on their new section; search finds and opens;
 // the try-its work, start over when you leave and call nothing on the server; Your first day shows states only (never
@@ -78,7 +80,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
           await page.evaluate(() => (location.hash = "#/guide/contents"));
           await expect.poll(() => guide.locator(".ps-rail .ps-item").count()).toBe(SECTIONS.length);
           await guide.locator(".ps-rail .ps-item").nth(2).click();
-          await guide.locator(".guide-body[data-section='today']").waitFor();
+          await guide.locator(".guide-body[data-section='day']").waitFor();
           await guide.locator(".ps-back").click();
           await guide.locator(".ps-rail").waitFor();
         }
@@ -88,7 +90,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
           expect(await noSidewaysScroll(page), s.id).toEqual({ page: true, body: true, wide: [] });
         }
         expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(THEMES[theme]);
-        expect(await guide.locator(".guide-footer").textContent()).toContain("⋯ › Send feedback");
+        expect(await guide.locator(".guide-footer").textContent()).toContain("More › Send feedback");
         // Esc goes back to where you were; ? opens and closes it.
         await page.keyboard.press("Escape");
         await guide.waitFor({ state: "detached" });
@@ -103,7 +105,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
   it("old addresses land on their new section; an unknown one on Start here", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h);
     await openGuide(page);
-    for (const [old, now] of [["basics", "start"], ["sizing", "week"], ["keys", "settings"], ["asks", "inbox"], ["questions", "first-day"], ["nope", "start"]] as const) {
+    for (const [old, now] of [["today", "day"], ["basics", "start"], ["sizing", "week"], ["keys", "settings"], ["asks", "inbox"], ["questions", "first-day"], ["nope", "start"]] as const) {
       await page.evaluate((x) => (location.hash = `#/guide/${x}`), old);
       await page.locator(`main.guide .guide-body[data-section='${now}']`).waitFor({ timeout: 10_000 });
     }
@@ -152,10 +154,10 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await expect.poll(() => mon.locator(".try-todo").count()).toBe(2);
     expect(await mon.locator(".try-fit").textContent()).toBe(TRY.drag.fit(360, 180));
     expect(await mon.locator(".try-fit.amber").count()).toBe(0);
-    // Timeline: the toggle says its state.
-    const tl = page.locator("[data-try='timeline'] [aria-pressed]");
+    // Timeline: the app's own Cards and Timeline switch (GU-1), each side saying its state.
+    const tl = page.locator("[data-try='timeline']").getByRole("button", { name: "Timeline", exact: true });
     expect(await tl.getAttribute("aria-pressed")).toBe("true");
-    await tl.click();
+    await page.locator("[data-try='timeline']").getByRole("button", { name: "Cards", exact: true }).click();
     expect(await tl.getAttribute("aria-pressed")).toBe("false");
     // Sizing: the words are the block panel's free time (QT-1).
     const fit = page.getByTestId("guide-fit");
@@ -165,10 +167,10 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await page.locator('[data-add="unsized"]').click();
     expect(await page.locator(".stack button").last().textContent().then((t) => t?.trim())).toBe("Size? · 1h");
     // Leave and come back: everything starts over.
-    await go(page, "today");
+    await go(page, "day");
     await go(page, "week");
     expect(await page.locator("[data-try='drag'] .try-block .try-todo").count()).toBe(0);
-    expect(await page.locator("[data-try='timeline'] [aria-pressed]").getAttribute("aria-pressed")).toBe("true");
+    expect(await page.locator("[data-try='timeline']").getByRole("button", { name: "Timeline", exact: true }).getAttribute("aria-pressed")).toBe("true");
     expect(await page.getByTestId("guide-fit").textContent()).toBe(sandbox(SIZING.start, SIZING.block).fit.text);
 
     // Inbox: a row opens the pane; its main button only says what would happen.
@@ -180,7 +182,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await ib.locator(".try-pane .primary").click();
     await ib.locator(".try-pane .try-note").waitFor();
 
-    // The assistant, scripted: a move proposal, Confirm, Done ✓ and Undo; Cancel changes nothing.
+    // The assistant, scripted: a move proposal, Confirm, Done and Undo; Cancel changes nothing.
     await go(page, "assistant");
     const as = page.locator("[data-try='assistant']");
     await as.getByRole("textbox", { name: TRY.assistant.box }).fill("move the export stories to friday");
