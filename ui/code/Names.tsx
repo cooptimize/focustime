@@ -5,7 +5,7 @@
 // kept in the browser's storage; the lists live in the panel's memory while it is open.
 import { useMemo, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, shareCap, type Kind, type NameHit, type RepoThings, type Thing } from "../../plan/code-kinds.ts";
+import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, shareCap, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
 import { SEARCH_MAX } from "../../plan/code.ts";
 
 export type NamesFailure = { message: string; code: string | null };
@@ -33,6 +33,8 @@ export const NAMES_TEXT = {
   showAll: (n: number) => `Show all ${n.toLocaleString()}`,
   cut: (repo: string, max: number) => `${repo}: only the first ${max.toLocaleString()} file names were read.`,
   showInFiles: "Show in files",
+  files: "Files",
+  insideOf: (name: string, tables: boolean) => (tables ? `Tables of ${name}` : `Inside ${name}`),
 } as const;
 
 function list(names: string[]): string {
@@ -45,6 +47,8 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 // ---------- By kind ----------
 
 type Row = Thing & { repoId: string; repoName: string };
+/** What an item opens to: a model's tables, or (RB-4) the things inside it (a warehouse's tables, views and procedures). */
+const kidsOf = (t: Thing): ThingInside[] => (t.tables ? t.tables.map((tb) => ({ name: tb.name, file: tb.file, kind: t.kind, detail: "Table" })) : (t.inside ?? []));
 /** A group shows this many rows until Show all. */
 const GROUP_SHOWN = 50;
 
@@ -59,7 +63,7 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
   const words = searchWords(filter);
   const tableHit = (name: string) => words.length > 0 && words.every((w) => name.toLowerCase().includes(w));
   const shown = useMemo(
-    () => (words.length ? rows.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)) || (t.tables ?? []).some((tb) => tableHit(tb.name))) : rows),
+    () => (words.length ? rows.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)) || kidsOf(t).some((tb) => tableHit(tb.name))) : rows),
     [rows, filter], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const groups = groupThings(shown);
@@ -93,16 +97,18 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
               <ul className="cv-things">
                 {things.map((t) => {
                   const key = `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
-                  // While filtering, a model shows the tables that match (all of them when it is opened by hand).
-                  const hits = (t.tables ?? []).filter((tb) => tableHit(tb.name));
-                  const tables = hits.length && !openModels.has(key) ? hits : (t.tables ?? []);
+                  // While filtering, an item shows the tables or things inside that match (all of them when opened by hand).
+                  const kids = kidsOf(t);
+                  const hits = kids.filter((tb) => tableHit(tb.name));
+                  const tables = hits.length && !openModels.has(key) ? hits : kids;
+                  const kidsLabel = NAMES_TEXT.insideOf(t.name, !!t.tables);
                   const tablesOpen = openModels.has(key) || hits.length > 0;
                   const on = selected.repoId === t.repoId && selected.path === t.file;
                   return (
                     <li key={key} className="cv-thing">
                       <div className={`cv-thing-row${on ? " selected" : ""}`}>
                         {tables.length ? (
-                          <button type="button" className="cv-thing-caret" aria-expanded={tablesOpen} aria-label={`Tables of ${t.name}`} title={`Tables of ${t.name}`} onClick={() => setOpenModels((s) => flip(s, key))}>
+                          <button type="button" className="cv-thing-caret" aria-expanded={tablesOpen} aria-label={kidsLabel} title={kidsLabel} onClick={() => setOpenModels((s) => flip(s, key))}>
                             <Icon name="closed" className={`ah-chev-svg${tablesOpen ? " open" : ""}`} />
                           </button>
                         ) : (
@@ -118,15 +124,15 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
                         </button>
                       </div>
                       {tablesOpen && (
-                        <ul className="cv-tables" aria-label={`Tables of ${t.name}`}>
+                        <ul className="cv-tables" aria-label={kidsLabel}>
                           {tables.map((tb) => {
                             const tbOn = selected.repoId === t.repoId && selected.path === tb.file;
                             return (
                               <li key={tb.file}>
                                 <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} onClick={() => onOpen(t.repoId, tb.file)}>
-                                  <Icon name="table" className="cv-kind" />
+                                  <Icon name={t.tables || tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
                                   <span className="cv-thing-name">{tb.name}</span>
-                                  <span className="cv-thing-detail">Table</span>
+                                  <span className="cv-thing-detail">{tb.detail}</span>
                                 </button>
                               </li>
                             );
@@ -230,7 +236,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
   const byClient = useMemo(() => {
     const found = run.targets.map((c) => {
       const r = run.results.get(c.clientKey);
-      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
+      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? []).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
     });
     // Over the limit, clients take what is left in order; each still says how many it has.
     const shown = shareCap(found.map((f) => f.length), SEARCH_MAX);
@@ -278,14 +284,15 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
                 {p}
               </p>
             ))}
-            {groupThings(g.hits.map((h) => ({ ...h, kind: h.thing.kind }))).map((k) => (
-              <div key={k.kind} className="cv-result-kind">
+            {/* RB-4: the named things by kind, then any other file found by its own name, under Files. */}
+            {[...groupThings(g.hits.filter((h) => !h.asFile)).map((k) => ({ key: k.kind as string, label: k.label, things: k.things })), ...(g.hits.some((h) => h.asFile) ? [{ key: "files", label: NAMES_TEXT.files, things: g.hits.filter((h) => h.asFile) }] : [])].map((k) => (
+              <div key={k.key} className="cv-result-kind" data-code-result-kind={k.key}>
                 <div className="cv-group-head">{k.label}</div>
                 <ul className="cv-things">
                   {k.things.map((h) => (
-                    <li key={`${h.repoId}\u0000${h.file}\u0000${h.table ? "t" : ""}`}>
+                    <li key={`${h.repoId}\u0000${h.file}`}>
                       <button type="button" className="cv-hit" data-code-hit={h.name} onClick={() => onOpen(g.client.clientKey, h.repoId, h.file)}>
-                        <Icon name={h.table ? "table" : KIND_ICON[h.thing.kind]} className="cv-kind" />
+                        <Icon name={h.asFile ? "file" : h.table || h.detail.startsWith("Table") ? "table" : KIND_ICON[h.kind]} className="cv-kind" />
                         <span className="cv-thing-name">{h.name}</span>
                         <span className="cv-thing-detail">
                           {h.detail}

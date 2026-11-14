@@ -12,6 +12,12 @@
 //   3. SQL: each .sql file, and a .sqlproj project file.
 //   4. Notebooks not found above, by their file type.
 //   5. Everything else is Other, with the language Code already knows for the file.
+//
+// RB-4: nothing the tree shows is missed. Inside an item's folder a file that rules 3 and 4 would name is a thing of
+// its own (a warehouse's tables, views and procedures; a notebook file), listed under its own kind and inside its
+// item; and every other file inside an item is kept by its path (`files`), so a search for a file's own name always
+// finds that file. A folder above Tables, Views and the like is said to be a schema only where the path shows one:
+// inside an item, under a SQL project, or in a two-part file name (dbo.Orders.sql).
 import { languageOf, LANG_NAMES } from "./code-languages.ts";
 import type { CodeRepoView } from "./code.ts";
 
@@ -31,6 +37,8 @@ export const KIND_GROUPS: Readonly<Record<Kind, string>> = {
 };
 
 export type ThingTable = { name: string; file: string };
+/** RB-4: something inside an item that is a thing of its own (a warehouse's table): what By kind opens the item to. */
+export type ThingInside = { name: string; file: string; kind: Kind; detail: string };
 export type Thing = {
   kind: Kind;
   name: string;
@@ -42,10 +50,16 @@ export type Thing = {
   file: string;
   /** A semantic model's tables, where the layout keeps one file per table. */
   tables?: ThingTable[];
+  /** RB-4: the things inside an item (they are also things of their own, under their own kind). */
+  inside?: ThingInside[];
+  /** RB-4: for a thing inside an item, the item in words ("Sales warehouse"). */
+  item?: string;
 };
+/** RB-4: a file inside an item that is no thing of its own: found only by its own name, under Files. */
+export type RepoFile = { file: string; kind: Kind; detail: string };
 
 /** One repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
-export type RepoThings = { repo: CodeRepoView; things: Thing[]; cut: boolean; problem: string | null };
+export type RepoThings = { repo: CodeRepoView; things: Thing[]; /** RB-4: the files inside items that are no thing of their own. */ files: RepoFile[]; cut: boolean; problem: string | null };
 
 // ---------- 1. Fabric items ----------
 
@@ -184,11 +198,26 @@ const unescapeName = (s: string): string => s.replace(/&#(\d{1,7});/g, (m, n: st
 });
 const byName = (a: Thing, b: Thing) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 
+/** "Sales" and "Warehouse" → "Sales warehouse"; a label that starts with capitals keeps them ("Ledger SQL database"). */
+const itemWords = (name: string, label: string): string => `${name} ${/^[A-Z][a-z]/.test(label) ? label[0]!.toLowerCase() + label.slice(1) : label}`;
+
+/** A repo sorted: its things, and the files inside items that are no thing of their own. */
+export type RepoSort = { things: Thing[]; files: RepoFile[] };
+
+/** A repo's things alone (see sortRepo). */
+export const thingsOf = (paths: readonly string[]): Thing[] => sortRepo(paths).things;
+
 /**
- * A repo's things, from its file paths ("/a/b.sql", as Find reads them). Every file belongs to exactly one thing or to
- * a Fabric item's folder. Sorted by group, then name.
+ * A repo's things, from its file paths ("/a/b.sql", as Find reads them). Every file is a thing's own file, a model's
+ * table, or one of `files`. Things sorted by group, then name.
  */
-export function thingsOf(paths: readonly string[]): Thing[] {
+export function sortRepo(paths: readonly string[]): RepoSort {
+  const { things, files } = sortAll(paths);
+  return { things, files };
+}
+
+function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> } {
+  const itemThings = new Set<Thing>();
   // Each folder's own files (lower case, to look a marker up) and the files that sit directly in it.
   const filesIn = new Map<string, Set<string>>();
   for (const p of paths) {
@@ -231,6 +260,30 @@ export function thingsOf(paths: readonly string[]): Thing[] {
     dirs.forEach((d, i) => factoryDirs.set(d, { row: rows[i]!, synapse }));
   }
 
+  // Folders holding a SQL project file: a folder between one of them and Tables, Views and the like is a schema.
+  const projectDirs = new Set<string>();
+  for (const [d, names] of filesIn) for (const n of names) if (n.endsWith(".sqlproj")) projectDirs.add(d);
+  const underProject = (dir: string): boolean => projectDirs.has(dir) || (dir !== "/" && underProject(dirOf(dir)));
+  /** Rules 3 and 4 for one file: a SQL object, script or project, or a notebook by its file type; else null. */
+  const named = (p: string, item: string | null): Thing | null => {
+    const dir = dirOf(p);
+    const name = baseOf(p);
+    const ext = extOf(name);
+    if (ext === "sql") {
+      const object = SQL_OBJECT_FOLDERS.find(([re]) => re.test(baseOf(dir)));
+      if (!object) return { kind: "sql", name: stem(name), detail: "SQL script", folder: dir, file: p };
+      // The schema, only where the path shows one (RB-4): the folder above, inside an item or under a SQL project and
+      // not that item's or project's own folder; else the first part of a two-part name. "/sql/Tables/x.sql" is a Table.
+      const above = dirOf(dir);
+      const two = /^([A-Za-z_][\w ]*)\.[^.]+$/.exec(stem(name));
+      const schema = above !== "/" && above !== item && !projectDirs.has(above) && (item || underProject(above)) ? baseOf(above) : two ? two[1]! : null;
+      return { kind: "sql", name: stem(name), detail: schema ? `${object[1]} in ${schema}` : object[1], folder: dir, file: p };
+    }
+    if (ext === "sqlproj") return { kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p };
+    const notebook = NOTEBOOK_EXT[ext];
+    return notebook ? { kind: "notebook", name: stem(name), detail: notebook, folder: dir, file: p } : null;
+  };
+
   const items = new Map<string, string[]>();
   const out: Thing[] = [];
   for (const p of paths) {
@@ -243,29 +296,14 @@ export function thingsOf(paths: readonly string[]): Thing[] {
       continue;
     }
     const name = baseOf(p);
-    const ext = extOf(name);
     const factory = factoryDirs.get(dir);
-    if (factory && ext === "json") {
+    if (factory && extOf(name) === "json") {
       out.push({ kind: factory.row[1], name: stem(name), detail: `${factory.synapse ? "Synapse" : "Data factory"} ${factory.row[2]}`, folder: dir, file: p });
       continue;
     }
-    if (ext === "sql") {
-      const object = SQL_OBJECT_FOLDERS.find(([re]) => re.test(baseOf(dir)));
-      const schema = object && dirOf(dir) !== "/" ? baseOf(dirOf(dir)) : null;
-      out.push({ kind: "sql", name: stem(name), detail: object ? (schema ? `${object[1]} in ${schema}` : object[1]) : "SQL script", folder: dir, file: p });
-      continue;
-    }
-    if (ext === "sqlproj") {
-      out.push({ kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p });
-      continue;
-    }
-    const notebook = NOTEBOOK_EXT[ext];
-    if (notebook) {
-      out.push({ kind: "notebook", name: stem(name), detail: notebook, folder: dir, file: p });
-      continue;
-    }
-    out.push({ kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
+    out.push(named(p, null) ?? { kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
   }
+  const rest: RepoFile[] = [];
 
   for (const [dir, files] of items) {
     const folder = baseOf(dir);
@@ -300,11 +338,47 @@ export function thingsOf(paths: readonly string[]): Thing[] {
         thing.detail = `${label} · ${tables.length} table${tables.length === 1 ? "" : "s"}`;
       }
     }
+    // RB-4: a file inside the item that would be a thing anywhere else is one here too (never the item's own
+    // content file, like a notebook's notebook-content.sql), and every other file is kept by its path.
+    const words = itemWords(name, label);
+    const inner: Thing[] = [];
+    const taken = new Set<string>([thing.file, ...(thing.tables ?? []).map((t) => t.file)]);
+    inside.forEach((f, i) => {
+      const p = files[i]!;
+      if (taken.has(p)) return;
+      const own = f.toLowerCase();
+      const t = TYPE_BY_FILE.some(([re]) => re.test(own)) || OPEN_FIRST.some((re) => re.test(own)) ? null : named(p, dir);
+      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words });
+      else rest.push({ file: p, kind, detail: `File in ${words}` });
+    });
+    if (inner.length) {
+      inner.sort(byName);
+      thing.inside = inner.map((t) => ({ name: t.name, file: t.file, kind: t.kind, detail: t.detail.split(" · ")[0]! }));
+      if (!thing.tables) thing.detail = `${label} · ${inner.length} inside`;
+      out.push(...inner);
+    }
+    itemThings.add(thing);
     out.push(thing);
   }
 
   const order = new Map(KINDS.map((k, i) => [k, i]));
-  return out.sort((a, b) => order.get(a.kind)! - order.get(b.kind)! || byName(a, b));
+  rest.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+  return { things: out.sort((a, b) => order.get(a.kind)! - order.get(b.kind)! || byName(a, b)), files: rest, itemThings };
+}
+
+/**
+ * RB-4: what each file of a repo is, for a list of files (Search inside files): its kind and a few words, by the same
+ * rules. An item's own file is "File in <item>"; a model's table "Table in <model>"; anything else what the thing is.
+ */
+export function fileLabels(paths: readonly string[]): Map<string, { kind: Kind; detail: string }> {
+  const sorted = sortAll(paths);
+  const m = new Map<string, { kind: Kind; detail: string }>();
+  for (const f of sorted.files) m.set(f.file, { kind: f.kind, detail: f.detail });
+  for (const t of sorted.things) {
+    m.set(t.file, { kind: t.kind, detail: sorted.itemThings.has(t) ? `File in ${itemWords(t.name, t.detail.split(" · ")[0]!)}` : t.detail });
+    for (const tb of t.tables ?? []) m.set(tb.file, { kind: t.kind, detail: `Table in ${t.name}` });
+  }
+  return m;
 }
 
 /** Things by group, in the groups' order; empty groups left out. */
@@ -323,15 +397,17 @@ export function groupThings<T extends { kind: Kind }>(things: readonly T[]): { k
 /** The words of a search: lower case, split on spaces, at most 8. */
 export const searchWords = (q: string): string[] => q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
 
-/** One search result: a thing, or one table of a semantic model. */
-export type NameHit = { thing: Thing; table: ThingTable | null; name: string; detail: string; file: string };
+/** One search result: a thing, one table of a semantic model, or (RB-4) a file found by its own name. */
+export type NameHit = { kind: Kind; name: string; detail: string; file: string; table: boolean; /** Listed under Files, after the named things. */ asFile: boolean };
 
 /**
  * Things whose name, file name or folder names hold every word, in any order, ignoring case. A model's table is a
  * result of its own when its own name matches (its model's folder doesn't make every table a match). Results whose
- * name matches come before those found only by a folder's name. Names only: nothing here ever sees a file's content.
+ * name matches come before those found only by a folder's name. RB-4: last, any other file whose own name matches
+ * (`files`, the files inside items), so nothing the tree shows is missed. Names only: nothing here ever sees a
+ * file's content.
  */
-export function searchThings(things: readonly Thing[], q: string, kind: Kind | null = null): NameHit[] {
+export function searchThings(things: readonly Thing[], q: string, kind: Kind | null = null, files: readonly RepoFile[] = []): NameHit[] {
   const words = searchWords(q);
   if (!words.length) return [];
   const has = (text: string) => {
@@ -342,10 +418,12 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
   const byFolder: NameHit[] = [];
   for (const t of things) {
     if (kind && t.kind !== kind) continue;
-    if (has(`${t.name} ${t.file}`)) (has(`${t.name} ${baseOf(t.file)}`) ? byName : byFolder).push({ thing: t, table: null, name: t.name, detail: t.detail.split(" · ")[0]!, file: t.file });
-    for (const tb of t.tables ?? []) if (has(`${tb.name} ${baseOf(tb.file)}`)) byName.push({ thing: t, table: tb, name: tb.name, detail: `Table in ${t.name}`, file: tb.file });
+    if (has(`${t.name} ${t.file}`)) (has(`${t.name} ${baseOf(t.file)}`) ? byName : byFolder).push({ kind: t.kind, name: t.name, detail: t.item ? t.detail : t.detail.split(" · ")[0]!, file: t.file, table: false, asFile: false });
+    for (const tb of t.tables ?? []) if (has(`${tb.name} ${baseOf(tb.file)}`)) byName.push({ kind: t.kind, name: tb.name, detail: `Table in ${t.name}`, file: tb.file, table: true, asFile: false });
   }
-  return [...byName, ...byFolder];
+  const byFile: NameHit[] = [];
+  for (const f of files) if ((!kind || f.kind === kind) && has(baseOf(f.file))) byFile.push({ kind: f.kind, name: baseOf(f.file), detail: f.detail, file: f.file, table: false, asFile: true });
+  return [...byName, ...byFolder, ...byFile];
 }
 
 /**

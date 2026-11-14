@@ -13,6 +13,8 @@
 // (plan/code-kinds.ts). No file is opened for either. Each request names one client, and the browser matches the words
 // itself, so the words typed never reach the server. One row per client ("Listed by kind", "Searched names") is
 // written before any name is returned; no row, no names.
+// RB-4: both also carry the paths of the files inside items that are no thing of their own (plan/code-kinds.ts), so a
+// search for a file's own name finds any file the tree shows.
 // Repo opened (its top folder), File opened and Find used are written to the view log (code_views) with who, when, the
 // client, the repo and the path, never content; a file's row is written before its text is returned, and if it can't
 // be written the text isn't returned. This is the one deliberate exception to "one client's data never shows outside
@@ -24,7 +26,7 @@ import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
-import { thingsOf, type RepoThings } from "../plan/code-kinds.ts";
+import { sortRepo, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
 export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search"] as const;
@@ -176,16 +178,16 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
         const r = repos[n]!;
         const v = repoView(r);
         if (v.state !== "ok") {
-          out[n] = { repo: v, things: [], cut: false, problem: null };
+          out[n] = { repo: v, things: [], files: [], cut: false, problem: null };
           continue;
         }
         try {
           const f = await git.files(client.clientKey, r);
           read = true;
-          out[n] = { repo: v, things: thingsOf(f.paths), cut: f.cut, problem: null };
+          out[n] = { repo: v, ...sortRepo(f.paths), cut: f.cut, problem: null };
         } catch (e) {
           const f = failure(e instanceof CodeFailure ? e.reason : "error", client.name);
-          out[n] = { repo: v, things: [], cut: false, problem: f.ok ? null : f.error };
+          out[n] = { repo: v, things: [], files: [], cut: false, problem: f.ok ? null : f.error };
         }
       }
     };
