@@ -54,6 +54,23 @@ describe.skipIf(!CHROMIUM)("BL-2: Backlog in rank order (browser, demo mode)", (
       await page.getByRole("button", { name: "Grid", exact: true }).click();
       await page.locator(".ah-client").first().waitFor({ timeout: 30_000 });
     }
+    // Review 1: Left on a story opened under its feature goes back to the feature; its name comes before its last change.
+    await pickLevel(page, "Features");
+    const feat = client(page, "Atlas Freight").locator(".ah-row.depth-0", { hasText: "Shipment tracking dashboard" });
+    await feat.locator(".ah-chev").first().click();
+    const kid = client(page, "Atlas Freight").locator(".ah-row.depth-1").first();
+    const kidCell = kid.locator(".ah-col-item, [role=gridcell][tabindex]").first();
+    await kidCell.focus();
+    await expect(kidCell.getAttribute("aria-label")).resolves.toMatch(/^[^.]+ #\d+ /);
+    await page.keyboard.press("ArrowLeft");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Rank 1\. .*Shipment tracking dashboard/);
+    // A story under no feature is listed after the ranked features and says why.
+    await expect(client(page, "Atlas Freight").locator(".ah-row", { hasText: "Rate table import" }).locator(".ah-loose").textContent()).resolves.toBe("Not under any features");
+    // A client with nothing at the level says so (Harbor Health has no epics).
+    await only(page, "Harbor Health");
+    await pickLevel(page, "Epics");
+    await expect(client(page, "Harbor Health").locator(".ah-client-order").textContent()).resolves.toMatch(/No epics in .+: what's here is listed below/);
+    await only(page, "Atlas Freight");
     // The demo's point: Atlas's epics rank one way and their features another.
     await pickLevel(page, "Features");
     await expect(gridRanked(page, "Atlas Freight").then((g) => g.map(([, t]) => t))).resolves.toEqual(["Shipment tracking dashboard", "Delivery time estimates", "Carrier rate alerts"]);

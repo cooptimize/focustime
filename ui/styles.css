@@ -4526,6 +4526,7 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 /* The title on one or two lines, #id right after it. */
 .ah-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .ah-item .ah-ro { flex: none; }
+.ah-item .ah-loose { flex: none; font-size: var(--fs-1); }
 .ah-row.tier-epic .ah-item a, .ah-row.tier-epic .ah-item { font-weight: 600; }
 .ah-row.context { opacity: 0.6; }
 .ah-row.highlighted td { background: color-mix(in oklab, var(--selected) 16%, transparent); }

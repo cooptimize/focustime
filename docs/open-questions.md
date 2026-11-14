@@ -1013,3 +1013,12 @@ From the IT review (TD-1):
 - When a row's parent is not an epic (a story's feature), its label puts the Epic filter on that feature, and the chip says "Feature: <title>". The filter field is still called epic in the code and the address (`e=`). Should it be renamed to parent?
 - The Backlog view's presence note (`aheadPresence`) does not include the level, since the level is kept in the browser and not on the server.
 - Found while testing, not changed: in the demo, the review panel's Saved list (writes since the panel opened) stays empty, because the demo's server clock is Nov 2 and the browser's is today, and the list compares the two. Writes land and show in Settings › Activity. Real use has one clock. Should the list compare against the server's own time?
+- From review 1, left as they are (not the rank rule, or wider than BL-2):
+  - A client with no backlog order (listed by target date) still shows its numbers under "Rank". The header says "by target date (no backlog order)". Should the column say so too, or show no numbers?
+  - The Gantt shows rank numbers only in each row's accessible name. Should it show them, as the Grid does?
+  - Counts read differently: the header's items, Showing N of M, Select all N shown, and a client's "N need attention", which counts every level and ignores search. One count rule for Backlog?
+  - A target date set with "+1 week" shows a half-day ("Nov 9 PM") in the cell and in Review.
+  - The keyboard: Home and End do nothing in the Grid; Tab from a cell goes on to the next row's link rather than leaving the grid.
+  - A screen reader reads a client's heading line whole, with "Select all N shown in <client>" twice, and the Select all box has no name when focused.
+  - Review lists every client's staged changes, also those of clients not shown.
+  - The Filter button's count differs between the Grid and the Gantt at the same level.

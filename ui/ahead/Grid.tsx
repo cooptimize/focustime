@@ -26,7 +26,7 @@ import { ageDays, ageText, isStale } from "../../plan/backlog.ts";
 import { NEED_ACTION, statusOf, statusWords, type Status } from "../../plan/backlog-status.ts";
 import type { FixEntry } from "../../plan/fixnext.ts";
 import { skipEnds, type Skips } from "../../plan/readiness.ts";
-import { isOpenRow, setRow } from "../../plan/gantt-tree.ts";
+import { isOpenRow, levelRank, setRow } from "../../plan/gantt-tree.ts";
 import { WorkLink } from "../WorkLink.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { Avatar, usePhotos } from "../Presence.tsx";
@@ -152,6 +152,13 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
     setFocus({ key: r.key, col: c });
     cells.current.get(cellKey(r.key, c))?.focus();
   };
+  /** BL-2: the row a row is opened under (the nearest row above it at a smaller depth), to go back to with Left. */
+  const upOf = (r: (typeof flat)[number]) => {
+    if (!r.depth) return null;
+    const i = flat.findIndex((x) => x.key === r.key);
+    for (let j = i - 1; j >= 0; j--) if (flat[j]!.depth < r.depth) return () => backTo(flat[j]!.key, "item");
+    return null;
+  };
   // A notice opened one item: show it, focused.
   useEffect(() => {
     if (!a.focusItem) return;
@@ -217,7 +224,7 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
               {c.lead && <span className="muted">· you're a lead here</span>}
               {c.status === "ok" && shape === "list" && g.level && (
                 <span className="muted ah-client-order" title={g.rankedBy === "target" ? `${c.project ?? c.clientName} has no backlog order field in DevOps` : `${a.view.names[g.level]} in ${c.project ?? c.clientName}'s own backlog order, as DevOps ranks them`}>
-                  · {g.rankedBy === "target" ? `${a.view.names[g.level]} by target date (no backlog order)` : `${a.view.names[g.level]}, in backlog order`}
+                  · {rows.length > 0 && !rows.some(({ r }) => r.depth === 0 && r.tier === g.level) ? `No ${a.view.names[g.level].toLowerCase()} in ${c.project ?? c.clientName}: what's here is listed below` : g.rankedBy === "target" ? `${a.view.names[g.level]} by target date (no backlog order)` : `${a.view.names[g.level]}, in backlog order`}
                 </span>
               )}
               {c.status === "ok" && shape !== "list" && g.rankedBy === "target" && (
@@ -261,6 +268,7 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
                       backTo={(col) => backTo(r.key, col)}
                       cellOf={(col) => cells.current.get(cellKey(r.key, col)) ?? null}
                       move={move}
+                      up={upOf(r)}
                       reg={(col, el) => void (el ? cells.current.set(cellKey(r.key, col), el) : cells.current.delete(cellKey(r.key, col)))}
                       highlighted={a.focusItem === r.item.id}
                       cols={COLS}
@@ -287,9 +295,9 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
   );
 }
 
-function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, reg, highlighted, cols, dots, selected, pick, shape, skip }: {
+function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, up, reg, highlighted, cols, dots, selected, pick, shape, skip }: {
   r: GridRow; g: GridGroup; kids: boolean; open: boolean; toggle: (open?: boolean) => void; focus: { key: string; col: Col } | null; first: boolean; editing: Col | null;
-  setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; backTo: (c: Col) => void; cellOf: (c: Col) => HTMLElement | null; move: (dr: number, dc: number) => void; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
+  setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; backTo: (c: Col) => void; cellOf: (c: Col) => HTMLElement | null; move: (dr: number, dc: number) => void; /** The row this one is opened under, if any. */ up: (() => void) | null; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
   cols: readonly Col[]; dots: boolean; selected: boolean; pick: ((range: boolean) => void) | null; shape: GridShape; skip: ((k: string) => void) | undefined;
 }) {
   const a = useAhead();
@@ -330,6 +338,8 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     // On the Item cell, Left collapses and Right expands (then they move between cells as before).
     else if (e.key === "ArrowRight" && col === "item" && kids && !open) toggle(true);
     else if (e.key === "ArrowLeft" && col === "item" && kids && open) toggle(false);
+    // BL-2: Left on a row opened under another (and not open itself) goes to that row, as in a tree.
+    else if (e.key === "ArrowLeft" && col === "item" && up) up();
     else if (e.key === "ArrowRight") move(0, 1);
     else if (e.key === "ArrowLeft") move(0, -1);
     else if (e.key === " " && pick) pick(e.shiftKey);
@@ -426,7 +436,9 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     </span>
   );
   const parent = shape === "list" && r.depth === 0 ? (r.parent ?? null) : null;
-  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.lastWords ? `Last change ${r.lastWords}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${parent ? `, in ${parent.type} ${parent.title}` : ""}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
+  /** BL-2 review: a row below the level with nothing at the level above it, listed after the ranked rows: says why. */
+  const loose = shape === "list" && r.depth === 0 && !!g.level && levelRank(r.tier) > levelRank(g.level) ? `Not under any ${a.view.names[g.level].toLowerCase()}` : null;
+  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${parent ? `, in ${parent.type} ${parent.title}` : ""}${loose ? `. ${loose}` : ""}${r.lastWords ? `. Last change ${r.lastWords}` : ""}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
   return (
     <tr
       role="row"
@@ -474,6 +486,11 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                       <TypeIcon clientKey={c.clientKey} type={parent.type} className="ah-type-icon" />
                       <span className="ah-parent-text">{parent.title}</span>
                     </button>
+                  )}
+                  {loose && (
+                    <span className="muted ah-loose" title={`Listed after the ranked ${a.view.names[g.level!].toLowerCase()}, in its own order`}>
+                      {loose}
+                    </span>
                   )}
                   {!r.editable && !r.context && (
                     <span className="ah-ro" title={c.note}>
