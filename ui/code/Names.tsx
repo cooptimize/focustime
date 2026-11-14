@@ -21,7 +21,7 @@ export const NAMES_TEXT = {
   names: "Names",
   inside: "Inside files",
   searchInside: "Search inside files",
-  insideNote: "Asks each client's DevOps which files hold the words. FocusTime reads no file to search it.",
+  insideNote: "Each client's DevOps is asked which files hold the words. FocusTime reads no file to search it.",
   insideHelp: 'Plain words find files with all of them. "A phrase in quotes", a * at the end of a word, AND, OR and NOT work too.',
   insideStart: "Type what to look for, then press Enter or Search. A table or column name finds every file that uses it.",
   insideAsking: (done: number, all: number) => `Asked ${done} of ${all} client${all === 1 ? "" : "s"}`,
