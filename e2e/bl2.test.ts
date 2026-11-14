@@ -106,6 +106,29 @@ describe.skipIf(!CHROMIUM)("BL-2: Backlog in rank order (browser, demo mode)", (
     await opened("#/backlog?fl=story&l=feature", "Features");
     await opened("#/backlog/stories", "Stories");
     await opened("#/backlog?l=epic", "Epics");
+    // Review 2: an old saved "one level as a list" becomes the level once, but a link's own l= wins over it; either way
+    // it is dropped from the saved filters.
+    const saved = ((await call(page, "ahead.filters", {})).data as { filters: Record<string, unknown> }).filters;
+    expect((await call(page, "ahead.set_filters", { filters: { ...saved, flat: "story" } })).ok).toBe(true);
+    await opened("#/backlog?l=epic", "Epics");
+    await expect.poll(async () => ((await call(page, "ahead.filters", {})).data as { filters: Record<string, unknown> }).filters.flat).toBeUndefined();
+    expect((await call(page, "ahead.set_filters", { filters: { ...saved, flat: "story" } })).ok).toBe(true);
+    await opened("#/backlog", "Stories");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("review 2: Needs attention shows a story's gap under its feature at the default level, and the level stays Features", async () => {
+    const { page, errors } = await freshPage(h);
+    await page.evaluate(() => (localStorage.removeItem("focustime.ahead.view.fold"), localStorage.removeItem("focustime.ahead.view.attention.fold")));
+    await page.reload();
+    await go(page, "#/backlog");
+    await only(page, "Northwind Foods");
+    await page.getByRole("button", { name: /^Needs attention/ }).click();
+    await expect.poll(() => client(page, "Northwind Foods").locator(".ah-row", { hasText: "Points balance page" }).count()).toBe(1);
+    await page.getByRole("button", { name: /^Needs attention/ }).click();
+    await expect(levelPressed(page, "Features")).resolves.toBe("true");
+    await expect(client(page, "Northwind Foods").locator(".ah-row", { hasText: "Points balance page" }).count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

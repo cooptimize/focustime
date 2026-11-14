@@ -180,15 +180,19 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
       expect(f!, v).toBeGreaterThanOrEqual(e!);
       expect(s!, v).toBeGreaterThan(e!);
     }
-    // Needs attention at Epics: a closed row; its chevron and the keys open and close it.
+    // Needs attention at Epics: its rows start open whatever the level (BL-2 review 2: a gap is never hidden under a
+    // closed row); its chevron and the keys close and open them.
     await view(page, "Grid");
     await page.getByRole("button", { name: /^Needs attention/ }).click();
-    const closed = page.locator(".ah-client .ah-row", { has: page.locator(".ah-chev[aria-expanded=false]") }).first();
-    await closed.waitFor({ timeout: 30_000 });
-    const key = await closed.getAttribute("data-key");
+    const opened = page.locator(".ah-client .ah-row", { has: page.locator(".ah-chev[aria-expanded=true]") }).first();
+    await opened.waitFor({ timeout: 30_000 });
+    await expect(page.locator(".ah-client .ah-chev[aria-expanded=false]").count()).resolves.toBe(0);
+    const key = await opened.getAttribute("data-key");
     const row = page.locator(`.ah-row[data-key="${key}"]`);
     const item = row.locator(".ah-col-item");
     await item.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("false");
     await page.keyboard.press("ArrowRight");
     await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("true");
     await page.keyboard.press("ArrowDown");

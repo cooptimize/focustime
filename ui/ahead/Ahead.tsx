@@ -33,7 +33,7 @@ import { fixRows, PER_CLIENT } from "../../plan/fixnext.ts";
 import { gridLayout, useWindowScale } from "./layout.ts";
 import { AHEAD_ADDRESS, queryOf, setAheadQuery, type AheadPreset } from "../nav.ts";
 import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-view.ts";
-import { atLevel, isFold, levelNames, levelRank, type Fold } from "../../plan/gantt-tree.ts";
+import { atLevel, expandAll, isFold, levelNames, levelRank, type Fold } from "../../plan/gantt-tree.ts";
 import { isBool, usePref } from "./prefs.ts";
 import { AttentionLine, Toolbar, type AheadViewState } from "./Toolbar.tsx";
 import { kindCounts, progressText, startHere, type Skips } from "../../plan/readiness.ts";
@@ -171,20 +171,21 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   // AH-7: a fresh read brings my skips (and this week's fixes) from the server again.
   useEffect(() => setSkipOverride(null), [load?.skips]);
   useEffect(() => {
-    const fromLink = (mine: AheadFilters) => {
+    // A link's filters, then BL-2: "One level as a list" is gone, so a saved one (or a link's) becomes the level listed,
+    // once. Saved in one call when either changed anything, so the two can't land out of order.
+    const arrive = (mine: AheadFilters) => {
       const f = withQuery(mine, DEFAULT_FILTERS, linked.current);
-      if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
-      return f;
-    };
-    // BL-2: "One level as a list" is gone: a saved one (or a link's) becomes the level listed, once.
-    const unflat = (x: AheadFilters) => {
-      if (!x.flat) return x;
-      setFold(atLevel(x.flat));
-      const { flat: _f, ...rest } = x;
+      if (!f.flat) {
+        if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
+        return f;
+      }
+      // A link's own level (l=) wins over an old saved one.
+      if (!linked.current?.level) setFold(atLevel(f.flat));
+      const { flat: _f, ...rest } = f;
       void call("ahead.set_filters", { filters: rest }).catch(() => null);
       return rest;
     };
-    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(unflat(fromLink(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) }))), () => setFiltersRaw(unflat(fromLink(pageFilters ?? DEFAULT_FILTERS))));
+    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(arrive(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(arrive(pageFilters ?? DEFAULT_FILTERS)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
@@ -291,6 +292,8 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
       const r = all.find((x) => x.item.id === id);
       if (!r) continue;
       revealed.current = id;
+      // Needs attention shows an item under its parents whatever the level: nothing to change there.
+      if (filters?.gaps) return;
       if (levelRank(r.tier) < levelRank(fold.level)) return void setFold(atLevel(r.tier));
       const open: Record<string, boolean> = {};
       for (let p = all.find((x) => x.item.id === r.item.parentId); p && levelRank(p.tier) >= levelRank(fold.level); p = all.find((x) => x.item.id === p!.item.parentId)) open[p.key] = true;
@@ -401,7 +404,17 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const startNow = startOn && attention && mode === "grid" && starts.size > 0;
   // The level names from every row of the clients shown (the levels above the list too).
   const names = useMemo(() => levelNames(load ? load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).map((c) => ({ rows: buildRows(load, c) })) : []), [load, f.clients]);
-  const view: AheadViewState = { fold, setFold, names, callouts, setCallouts };
+  // BL-2 review 2: Needs attention lists each gap under its parents, so its rows keep their own carets, all open until
+  // closed: a gap is never hidden under a row closed at the level listed. The level stays the one picked.
+  const [attFold, setAttFold] = usePref<Fold>("view.attention.fold", isFold, expandAll(DEFAULT_LEVEL));
+  const shownFold: Fold = attention ? { ...attFold, level: fold.level } : fold;
+  const setShownFold = (v: Fold | ((old: Fold) => Fold)) => {
+    if (!attention) return setFold(v);
+    const n = typeof v === "function" ? v(shownFold) : v;
+    if (n.level !== fold.level) setFold(atLevel(n.level));
+    setAttFold(n.level !== fold.level ? expandAll(n.level) : n);
+  };
+  const view: AheadViewState = { fold: shownFold, setFold: setShownFold, names, callouts, setCallouts };
   const shape: GridShape = attention ? "attention" : "list";
   const rankedBy = (c: { orderField?: string | null }) => (c.orderField ? ("backlog" as const) : ("target" as const));
   /** BL-1, BL-2: the Grid's groups for its shape (the level as a ranked list, or Needs attention). */

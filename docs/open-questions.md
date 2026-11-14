@@ -1022,3 +1022,8 @@ From the IT review (TD-1):
   - A screen reader reads a client's heading line whole, with "Select all N shown in <client>" twice, and the Select all box has no name when focused.
   - Review lists every client's staged changes, also those of clients not shown.
   - The Filter button's count differs between the Grid and the Gantt at the same level.
+- From review 2, left as they are:
+  - The Gantt at Stories has no feature rows, so the Free time row's "Crowded month" and the features' "can't reach the target" callouts don't show there (they do at Features and Epics, where features are rows). Should the Gantt at Stories still count the features behind the stories?
+  - The parent label's filter on a story's feature puts a feature in the Epic filter (`e=`). The chip says "Feature: <title>", but Filter's Epic picker lists only epics, so it shows none chosen. Same question as renaming the field to parent.
+  - With no backlog order field a project lists by target date, so staging a new target date moves the row (on save, as DevOps would order it too).
+
