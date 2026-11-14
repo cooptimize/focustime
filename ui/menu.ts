@@ -1229,6 +1229,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
     case "ui.set_inbox":
+    case "ui.set_code_sql_group":
     case "inbox.hide":
     case "inbox.snooze":
     case "inbox.looked":

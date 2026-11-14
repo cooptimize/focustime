@@ -210,6 +210,7 @@ export const ACTIONS = [
   { name: "ui.set_inbox", title: "Inbox view, clients and grouping", group: "Display", target: "none", summary: "The Inbox's view, the clients it shows and how it groups them; remembered for you" },
   { name: "ui.set_show_timelines", title: "Timeline", group: "Display", target: "none", shortcut: "B", summary: "Show or hide the hour rail beside each card on Week; hidden, cards use their full width and list their meetings; saved for you" },
   { name: "ui.set_today_timeline", aka: ["Timeline on Today"], title: "Timeline on Day", group: "Display", target: "none", shortcut: "B", summary: "Show or hide Day's hour timeline, where to-dos are timeboxed by dragging; off is the list; saved for you" },
+  { name: "ui.set_code_sql_group", title: "Code: group SQL objects by schema or by type", group: "Display", target: "none", summary: "How Code's By kind lists a database's SQL objects: by schema then type, or by type then schema; remembered for you" },
   { name: "ui.set_week_days", title: "Days on Week", group: "Display", target: "none", summary: "Show or hide the catch-up day and weekend days on Week (the person's own setting)" },
   { name: "ui.set_show_personal", title: "Personal events", group: "Display", target: "none", shortcut: "G", summary: "Show or hide personal events on Week and Day; they still count in risk and free time; saved in config" },
   { name: "hours.set_day", title: "Set working hours for a day", group: "Time", target: "day", summary: "Other hours for one day, a split day or a lunch change" },

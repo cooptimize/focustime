@@ -671,6 +671,20 @@ export function App() {
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
+  // RB-5: Code's Group by switch for a database's SQL objects, the person's own ([ui] code_sql_group). A demo
+  // session's choice stays in the demo's memory.
+  const [codeSqlGroup, setCodeSqlGroup] = useState<"schema" | "type">("schema");
+  useEffect(() => {
+    if (data?.ui.codeSqlGroup) setCodeSqlGroup(data.ui.codeSqlGroup);
+  }, [data?.ui.codeSqlGroup]);
+  const saveCodeSqlGroup = useCallback(async (group: "schema" | "type") => {
+    setCodeSqlGroup(group);
+    try {
+      await call("ui.set_code_sql_group", { group }, { background: true });
+    } catch {
+      // The list is drawn as chosen for now; the choice just isn't remembered.
+    }
+  }, []);
   // TY-1: Today's Timeline switch; the phone keeps its own, off until asked, so it keeps MB-1's layout.
   const [dayTimeline, setDayTimeline] = useState(false);
   const dayTimelineRef = useRef(dayTimeline);
@@ -2120,6 +2134,8 @@ export function App() {
         <Suspense fallback={null}>
           <CodePanel
             at={codeAt}
+            sqlGroup={codeSqlGroup}
+            onSqlGroup={(g) => void saveCodeSqlGroup(g)}
             onGo={(next, opts) => {
               const to = { nav: loc.nav, overlay: { kind: "code" as const, ...next } };
               if (opts?.replace) history.replaceState(null, "", hashOf(to));

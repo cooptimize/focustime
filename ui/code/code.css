@@ -188,3 +188,27 @@
 .cv-stepper { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-2); }
 .cv-stepper > span { min-width: 5ch; font-variant-numeric: tabular-nums; }
 .panel-shell.phone.code-panel .cv-hit-count { flex-basis: auto; }
+
+/* RB-5: a database's SQL objects in folders. One-line rows on the app's washes, indented by level; no boxes. */
+.cv-sql { min-width: 0; }
+.cv-sql-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 6px 4px 28px; color: var(--text-muted); font-size: var(--fs-2); }
+.cv-sql-all { display: inline-flex; gap: 2px; margin-left: auto; }
+.cv-sql-all-btn { padding: 2px 6px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-1); white-space: nowrap; cursor: pointer; }
+.cv-sql-all-btn:hover:not(:disabled) { background: var(--wash-1); color: var(--text); }
+.cv-sql-all-btn:disabled { color: var(--text-faint); cursor: default; }
+.cv-sql-all-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-sql-tree { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.cv-sql-row { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: var(--h-small); padding: 0 6px 0 calc(6px + var(--lvl) * 18px); border-radius: var(--radius-input); color: var(--text); font-size: var(--fs-3); cursor: pointer; }
+.cv-sql-row.folder { padding-left: calc(6px + (var(--lvl) - 1) * 18px); }
+.cv-sql-row:hover { background: var(--wash-1); }
+.cv-sql-row.selected { background: var(--wash-accent); }
+.cv-sql-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-sql-row.folder .cv-thing-name { font-weight: 500; }
+.cv-sql-row .ah-chev-svg { flex: none; color: var(--text-muted); }
+.cv-sql-more { color: var(--accent); font-size: var(--fs-2); }
+.cv-sql-in-item { padding-left: 22px; }
+.cv-sql-in-item .cv-sql-bar { padding-left: 6px; }
+.panel-shell.phone.code-panel .cv-sql-row { min-height: 44px; font-size: var(--fs-4); }
+.panel-shell.phone.code-panel .cv-sql-all-btn { min-height: 44px; padding-inline: 10px; font-size: var(--fs-2); }
+.panel-shell.phone.code-panel .cv-sql-bar { padding-left: 8px; row-gap: 8px; }
+.panel-shell.phone.code-panel .cv-sql-in-item { padding-left: 8px; }

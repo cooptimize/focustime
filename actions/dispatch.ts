@@ -42,7 +42,7 @@ import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { colorCss, DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, INBOX_GROUPINGS, INBOX_GROUPS, INBOX_SORTS, INBOX_VIEW_NAMES, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { CODE_SQL_GROUPS, colorCss, DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, INBOX_GROUPINGS, INBOX_GROUPS, INBOX_SORTS, INBOX_VIEW_NAMES, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -2139,6 +2139,16 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show" && k !== "phone") || typeof i.show !== "boolean" || (i.phone !== undefined && typeof i.phone !== "boolean")) return bad("input must be { show: boolean, phone?: boolean }");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
       const r = await ctx.writeConfig((text) => setValue(text, "ui", i.phone ? "today_timeline_phone" : "today_timeline", i.show as boolean, "Display (TY-1): the Timeline switch on Day."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
+    case "ui.set_code_sql_group": {
+      // RB-5: Code's Group by switch for a database's SQL objects (Schema or Type). Saved in [ui] code_sql_group, the
+      // person's own; a new key, so an older build skips it (BH-1). It changes how a list is drawn and nothing else.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "group") || !(CODE_SQL_GROUPS as readonly unknown[]).includes(i.group)) return bad('input must be { group: "schema" | "type" }');
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "code_sql_group", i.group as string, "Display (RB-5): Code lists a database's SQL objects by schema then type, or by type then schema."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }

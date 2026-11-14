@@ -1,0 +1,47 @@
+// RB-5: the tree By kind draws for a database's SQL objects, rendered to markup: a folder starts closed unless it is
+// the only one at its level, a folder with more than 100 objects shows 100 and Show all, and the filter opens every
+// folder. Invented names only.
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { SqlTree, SQL_FOLDER_SHOWN, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+
+const row = (schema: string | null, sqlType: SqlRow["sqlType"], name: string): SqlRow => ({ name, file: `/${schema ?? "x"}/${sqlType}/${name}.sql`, repoId: "r1", sqlType, ...(schema ? { schema } : {}) });
+const memo = (open: Record<string, boolean> = {}, whole: string[] = []): SqlTreeMemo => ({ open: new Map(Object.entries(open)), whole: new Set(whole) });
+const render = (objects: SqlRow[], m: SqlTreeMemo = memo(), extra: Partial<Parameters<typeof SqlTree>[0]> = {}) =>
+  renderToStaticMarkup(createElement(SqlTree, { id: "t", label: "SQL objects", objects, grouping: "schema", onGrouping: () => {}, filtering: false, selected: { repoId: null, path: null }, onOpen: () => {}, memo: m, onMemo: () => {}, attr: "data-code-thing", ...extra }));
+const lines = (html: string) => [...html.matchAll(/<li[^>]*aria-level="(\d)"[^>]*>.*?<\/li>/g)].map((m) => `${m[1]} ${m[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}`);
+
+describe("SqlTree (RB-5 B)", () => {
+  const many = [...Array.from({ length: 150 }, (_, i) => row("kiln", "table", `T${String(i).padStart(3, "0")}`)), row("kiln", "view", "vAll"), row("yard", "table", "Stack")];
+  it("folders start closed; a level with one folder starts open", () => {
+    expect(lines(render(many))).toEqual(["1 kiln 151", "1 yard 1"]);
+    // One schema: it is open, and its one type under it too.
+    expect(lines(render([row("yard", "table", "Stack"), row("yard", "table", "Pile")]))).toEqual(["1 yard 2", "2 Tables 2", "3 Pile", "3 Stack"]);
+  });
+  it("a folder with more than 100 objects shows 100 and Show all; then all of them", () => {
+    const open = { "t|schema|s:kiln": true, "t|schema|s:kiln/t:table": true };
+    const shown = lines(render(many, memo(open)));
+    expect(shown.slice(0, 3)).toEqual(["1 kiln 151", "2 Tables 150", "3 T000"]);
+    expect(shown.filter((l) => /^3 T\d/.test(l)).length).toBe(SQL_FOLDER_SHOWN);
+    expect(shown).toContain("3 Show all 150");
+    const all = lines(render(many, memo(open, ["t|schema|s:kiln/t:table"])));
+    expect(all.filter((l) => /^3 T\d/.test(l)).length).toBe(150);
+    expect(all.some((l) => l.includes("Show all"))).toBe(false);
+  });
+  it("while filtering every folder is open, whatever was closed by hand", () => {
+    const hits = [row("kiln", "view", "vAll"), row("yard", "table", "Stack")];
+    expect(lines(render(hits, memo({ "t|schema|s:kiln": false }), { filtering: true }))).toEqual(["1 kiln 1", "2 Views 1", "3 vAll", "1 yard 1", "2 Tables 1", "3 Stack"]);
+  });
+  it("with databases the database is the first level, and each says its count", () => {
+    const html = render([], memo(), { databases: [{ key: "a", label: "Kiln warehouse", objects: many }, { key: "b", label: "Yard SQL project", objects: [row("yard", "table", "Stack")] }] });
+    expect(lines(html)).toEqual(["1 Kiln warehouse 152", "1 Yard SQL project 1"]);
+  });
+  it("a folder says its name and count to a screen reader, and one row takes Tab", () => {
+    const html = render(many);
+    expect(html).toContain('aria-label="kiln, 151"');
+    expect(html).toContain('role="tree"');
+    expect([...html.matchAll(/tabindex="0"/g)].length).toBe(1);
+    expect(html).toContain('aria-pressed="true" data-sql-group-btn="schema"');
+  });
+});

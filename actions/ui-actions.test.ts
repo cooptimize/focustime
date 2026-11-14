@@ -28,7 +28,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, inbox: DEFAULT_INBOX } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# FocusTime configuration.");
@@ -131,5 +131,24 @@ describe("ui.tour_offer (G1): the tour link on a first Today, once per person", 
     const t = setup();
     expect(await dispatch(t.c, { action: "ui.tour_offer", input: {} })).toEqual({ ok: true, data: { show: false } });
     for (const input of [{ done: false }, { done: true, x: 1 }, [], "yes"]) expect((await dispatch(t.c, { action: "ui.tour_offer", input })).ok, JSON.stringify(input)).toBe(false);
+  });
+});
+
+describe("ui.set_code_sql_group (RB-5)", () => {
+  it("starts on Schema; saves the person's choice in [ui] code_sql_group and returns it", async () => {
+    const t = setup();
+    expect(parseConfig(readFileSync(t.path, "utf8"))).toMatchObject({ ok: true, config: { ui: { codeSqlGroup: "schema" } } });
+    expect(await dispatch(t.c, { action: "ui.set_code_sql_group", input: { group: "type" } })).toMatchObject({ ok: true, data: { ui: { codeSqlGroup: "type" } } });
+    expect(readFileSync(t.path, "utf8")).toContain('code_sql_group = "type"');
+    expect(await dispatch(t.c, { action: "ui.set_code_sql_group", input: { group: "schema" } })).toMatchObject({ ok: true, data: { ui: { codeSqlGroup: "schema" } } });
+  });
+  it("refuses anything but schema or type, and extra fields; a file with another value says which field", async () => {
+    const t = setup();
+    for (const input of [{ group: "name" }, { group: "type", clientKey: "Contoso" }, { group: 1 }, {}, null, "type"]) expect(await dispatch(t.c, { action: "ui.set_code_sql_group", input })).toMatchObject({ ok: false, status: 400 });
+    const bad = parseConfig('[ui]\ncode_sql_group = "flat"\n');
+    expect(bad.ok ? [] : bad.errors.filter((e) => e.field.startsWith("ui."))).toEqual([{ field: "ui.code_sql_group", message: 'Must be "schema" or "type"' }]);
+  });
+  it("says so when settings can't be saved", async () => {
+    expect(await dispatch(setup(false).c, { action: "ui.set_code_sql_group", input: { group: "type" } })).toMatchObject({ ok: false, status: 503 });
   });
 });
