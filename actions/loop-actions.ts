@@ -212,7 +212,7 @@ async function channelsFor(ctx: LoopContext, r: Resolved, item: LoopDraftView["i
   };
   const comment: LoopChannelOption = {
     channel: "devops", label: "Comment", where: item ? `#${item.id}` : "A DevOps item",
-    available: !!item && item.canComment, reason: !item ? "Link the promise to a DevOps item first" : item.canComment ? null : "Enable DevOps writes for this client in Settings › Clients",
+    available: !!item && item.canComment, reason: !item ? "Link the promise to a DevOps item first" : item.canComment ? null : "Enable DevOps writes for this client in Settings › DevOps",
     access: { state: "ready" },
   };
   const call: LoopChannelOption = { channel: "call", label: "Call", where: "A reminder only: nothing is sent", available: !!rec, reason: rec ? null : r.noRecipient, access: { state: "ready" } };
@@ -575,7 +575,7 @@ async function runSend(ctx: LoopContext, plan: PlanStore, p: LoopPromise, h: Hel
     const res = r.ok ? (r.data as DevOpsResult | undefined) ?? null : null;
     if (!r.ok || !res?.entry) return fail(s, new SendFailure("error", !r.ok ? r.error : "DevOps didn't answer"));
     const back = await plan.updateLoopSend(s.id, { state: res.confirmed ? "sent" : "unconfirmed", writeId: res.entry.id, link: res.url ?? null, sentAt: ctx.now(), error: res.confirmed ? null : res.message });
-    if (!res.confirmed) return { send: sendView(back), message: `${res.message}. Retry it from Settings › Data › DevOps writes.`, ok: false, parts: [], closed: false, retry: false };
+    if (!res.confirmed) return { send: sendView(back), message: `${res.message}. Retry it from Settings › Activity.`, ok: false, parts: [], closed: false, retry: false };
     return done(back);
   }
   const sender = await ctx.sender();

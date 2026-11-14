@@ -245,14 +245,14 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       const values: [string, number][] = [];
       if (v.stalledDays !== undefined) values.push(["stalled_days", int(v.stalledDays, "roadmap.stalled_days")]);
       if (v.watchWeeks !== undefined) values.push(["watch_weeks", int(v.watchWeeks, "roadmap.watch_weeks")]);
-      return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Backlog states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
     }
     case "ahead": {
       // BH-1: Settings › Ahead. Written as given; parseConfig checks the range.
       only(v, ["staleWeeks"], "ahead");
       const values: [string, number][] = [];
       if (v.staleWeeks !== undefined) values.push(["stale_weeks", int(v.staleWeeks, "ahead.stale_weeks")]);
-      return (text) => values.reduce((t, [k, val], i) => setValue(t, "ahead", k, val, i === 0 ? "Ahead (BH-1): an open item with no change in DevOps for this many weeks is stale in Backlog." : undefined), text);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "ahead", k, val, i === 0 ? "Backlog (BH-1): an open item with no change in DevOps for this many weeks is stale in Backlog." : undefined), text);
     }
     case "asks": {
       // AP-1: Settings > Clients > Asks. ADM-1: these are the person's own phrases, added on top of the team's (they
@@ -262,7 +262,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.requestPhrases !== undefined) values.push(["request_phrases", strList(v.requestPhrases, "asks.request_phrases").map((x) => x.trim()).filter(Boolean)]);
       if (v.ackPhrases !== undefined) values.push(["ack_phrases", strList(v.ackPhrases, "asks.ack_phrases").map((x) => x.trim()).filter(Boolean)]);
       if (v.promisePhrases !== undefined) values.push(["promise_phrases", strList(v.promisePhrases, "asks.promise_phrases").map((x) => x.trim()).filter(Boolean)]);
-      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Requests (AP-1, ADM-1): my own phrases, on top of the team's." : undefined), removeValue(text, "asks", "poll_minutes"));
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Client chats (AP-1, ADM-1): my own phrases, on top of the team's." : undefined), removeValue(text, "asks", "poll_minutes"));
     }
     case "ai": {
       // ADM-1: AI is an admin decision (Admin › AI): only how far back Draft stories looks is a person's own.

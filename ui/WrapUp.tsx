@@ -436,7 +436,7 @@ export function WrapUpSheet({ data, onClose, onDone, notice, progressLeft = null
                   ))}
                 </ul>
                 <p className="muted wrap-as">
-                  As {preview.previews[0]!.identity.replace(/\s*<[^>]*>$/, "")}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Data.
+                  As {preview.previews[0]!.identity.replace(/\s*<[^>]*>$/, "")}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Activity.
                 </p>
               </>
             ) : (

@@ -75,9 +75,9 @@ describe("timeboxes (local)", () => {
     await t.run("timebox.update", { id: timebox.id, start: `${D}T10:00:00-05:00`, end: `${D}T11:00:00-05:00` });
     const st = await t.run<WriteState>("write.status", {});
     expect(st.access).toBe("read_only");
-    expect(st.message).toMatch(/Reconnect Outlook in Settings > Connections/);
+    expect(st.message).toMatch(/Reconnect Outlook in Settings › Accounts and calendars/);
     const r = await t.fail("write.preview", { uid: timebox.uid });
-    expect([r.status, r.error]).toEqual([409, expect.stringMatching(/Reconnect Outlook in Settings > Connections.*still work locally/)]);
+    expect([r.status, r.error]).toEqual([409, expect.stringMatching(/Reconnect Outlook in Settings › Accounts and calendars.*still work locally/)]);
     expect(t.g.calls).toEqual([]);
     expect(await t.run("timebox.remove", { id: timebox.id })).toMatchObject({ timebox: null });
   });

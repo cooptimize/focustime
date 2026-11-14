@@ -1111,7 +1111,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (!o || !c || !v) return bad("No such conversation", 404);
         if (!c.itemId) return respond();
         const id = c.itemId;
-        if (await createdHere(ctx, id, { conversationId: c.id, commitmentId: null })) return bad(`#${id} was created in DevOps from this conversation. Undo it from Settings > Data > Audit log`, 409, "created");
+        if (await createdHere(ctx, id, { conversationId: c.id, commitmentId: null })) return bad(`#${id} was created in DevOps from this conversation. Undo it from Settings › Activity`, 409, "created");
         await v.convs.updateConversation(c.id, { item: null, changeNote: `Unlinked from #${id}` }, { bump: true });
         for (const k of await v.convs.commitmentsIn([c.id])) if (k.itemId === id && (k.state === "open" || k.state === "linked")) await v.convs.updateCommitment(k.id, { state: "open", itemId: null, itemUrl: null, itemTitle: null });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
@@ -1457,7 +1457,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (!o || !k) return bad("my_promises.unlink takes { id }");
         if (!k.itemId) return promisesNow();
         const id = k.itemId;
-        if (k.state === "created" || (await createdHere(ctx, id, { conversationId: null, commitmentId: k.id }))) return bad(`#${id} was created in DevOps from this promise. Undo it from Settings > Data > Audit log`, 409, "created");
+        if (k.state === "created" || (await createdHere(ctx, id, { conversationId: null, commitmentId: k.id }))) return bad(`#${id} was created in DevOps from this promise. Undo it from Settings › Activity`, 409, "created");
         await v.convs.updateCommitment(k.id, { state: k.state === "linked" ? "open" : k.state, itemId: null, itemUrl: null, itemTitle: null });
         const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
         if (c?.itemId === id && !(await createdHere(ctx, id, { conversationId: c.id, commitmentId: null }))) {
@@ -1481,7 +1481,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const o = only(input, ["id"]);
         const k = o && (await mine(o.id));
         if (!k) return bad("No such promise", 404);
-        if (k.state === "created") return bad(`#${k.itemId} was created in DevOps. Undo it from Settings > Data > Audit log`, 409);
+        if (k.state === "created") return bad(`#${k.itemId} was created in DevOps. Undo it from Settings › Activity`, 409);
         if (k.state === "followup") return bad("This promise is a follow-up now: change it in the Inbox", 409);
         await v.convs.updateCommitment(k.id, { state: "open", closeHow: null, closeNote: null, ...(k.state === "linked" ? { itemId: null, itemUrl: null, itemTitle: null } : {}) });
         if (k.conversationId !== null) await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);

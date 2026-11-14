@@ -113,7 +113,7 @@ export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
 
 const ACCESS: Record<NonNullable<ChatsData["reason"]>, string> = {
   signed_out: "Sign in with Microsoft to pick a chat.",
-  consent: "FocusTime isn't allowed to read your Teams chat names and members yet. It needs the Microsoft permission Chat.ReadBasic: see Settings > Connections.",
+  consent: "FocusTime isn't allowed to read your Teams chat names and members yet. It needs the Microsoft permission Chat.ReadBasic: see Settings › Accounts and calendars.",
   unavailable: "Teams couldn't be reached. Refresh to try again.",
 };
 

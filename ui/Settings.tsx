@@ -491,7 +491,7 @@ function SectionBody(p: BodyProps) {
             <label>
               <input type="checkbox" checked={p.weekDays.weekend} onChange={(e) => p.setWeekDays({ weekend: e.target.checked })} /> Show weekend
             </label>
-            <span className="set-hint">With Show weekend on, weekend days show when something is on them (or always, with Every weekend day in Week's ⋯). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.</span>
+            <span className="set-hint">With Show weekend on, weekend days show when something is on them (or always, with Every weekend day under Week's View options). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.</span>
           </fieldset>
           <fieldset className="set-choice" data-setting="reduce-motion">
             <legend>Motion</legend>
@@ -597,7 +597,7 @@ function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
       </div>
       <h3 data-setting="one-day-changes">One-day changes</h3>
       {h.overrides.length === 0 ? (
-        <p className="muted">None. Set a day's own hours from its ⋯ menu in the week.</p>
+        <p className="muted">None. Set a day's own hours from its Actions menu on Week.</p>
       ) : (
         <ul className="set-list">
           {h.overrides.map((o) => (
@@ -726,7 +726,7 @@ function PlanningForm(p: FormProps) {
         <div className="set-grid">
           {numField(a, "carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
         </div>
-        <AutoField a={a} k="suggest" label="Suggest work for empty blocks" hint="Today's and your next working day's empty blocks offer to-dos: unfinished ones first, then your backlog. Nothing is planned until you keep it. Also in Week's and Day's ⋯ as Suggestions.">
+        <AutoField a={a} k="suggest" label="Suggest work for empty blocks" hint="Today's and your next working day's empty blocks offer to-dos: unfinished ones first, then your backlog. Nothing is planned until you keep it. Also under Week's and Day's View options as Suggestions.">
           <label className="set-check">
             <input type="checkbox" checked={a.v.suggest} onChange={(e) => a.change("suggest", e.target.checked)} /> Suggest
           </label>
@@ -767,7 +767,7 @@ function PlanningForm(p: FormProps) {
           ))}
         </div>
       </Group>
-      <Group title="Plan ahead rituals" sid="rituals">
+      <Group title="Look-ahead rituals" sid="rituals">
         <AheadRituals />
       </Group>
     </>
@@ -810,7 +810,7 @@ function GuidanceForm(p: FormProps) {
     initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null, planShare: mine.planShare ?? null },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "draftStories" ? "Break down offered" : k === "readinessNudges" ? "Readiness nudges" : "Plan up to"),
+    label: (k) => (k === "draftStories" ? "Break down offered" : k === "readinessNudges" ? "Needs attention nudges" : "Plan up to"),
   });
   if (!org) return null;
   const team = org.levelGuidance;
@@ -832,9 +832,9 @@ function GuidanceForm(p: FormProps) {
             <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Break down on features that need stories
           </label>
         </AutoField>
-        <AutoField a={a} k="readinessNudges" label="Readiness nudges" hint={<>The ⚑ flags in Plan ahead. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
+        <AutoField a={a} k="readinessNudges" label="Needs attention nudges" hint={<>The ⚑ flags in Backlog's Gantt. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
           <label className="set-check">
-            <input type="checkbox" checked={a.v.readinessNudges ?? team.readinessNudges} onChange={(e) => a.change("readinessNudges", e.target.checked)} /> Show readiness nudges
+            <input type="checkbox" checked={a.v.readinessNudges ?? team.readinessNudges} onChange={(e) => a.change("readinessNudges", e.target.checked)} /> Show Needs attention nudges
           </label>
         </AutoField>
       </div>
@@ -855,7 +855,7 @@ function AheadRituals() {
       <li>
         <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.
       </li>
-      <li className="muted">Both open Plan ahead; switch them in Notifications.</li>
+      <li className="muted">Both open Backlog › Gantt; switch them in Notifications.</li>
     </ul>
   );
 }
@@ -1210,7 +1210,7 @@ function NotifyForm(p: FormProps) {
       </AutoField>
       <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">
         <label className="set-check">
-          <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
+          <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent requests through
         </label>
       </AutoField>
       </Group>

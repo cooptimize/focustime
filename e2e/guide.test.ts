@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
   it("old addresses land on their new section; an unknown one on Start here", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h);
     await openGuide(page);
-    for (const [old, now] of [["today", "day"], ["basics", "start"], ["sizing", "week"], ["keys", "settings"], ["asks", "inbox"], ["questions", "first-day"], ["nope", "start"]] as const) {
+    for (const [old, now] of [["today", "day"], ["ahead", "backlog"], ["backlog", "backlog"], ["basics", "start"], ["sizing", "week"], ["keys", "settings"], ["asks", "inbox"], ["questions", "first-day"], ["nope", "start"]] as const) {
       await page.evaluate((x) => (location.hash = `#/guide/${x}`), old);
       await page.locator(`main.guide .guide-body[data-section='${now}']`).waitFor({ timeout: 10_000 });
     }
@@ -121,7 +121,7 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await page.locator(".gsr-hit").first().waitFor();
     expect(await page.locator(".gsr-hit .gsr-in").first().textContent()).toContain("Backlog");
     await box.press("Enter");
-    await page.locator("main.guide .guide-body[data-section='ahead']").waitFor();
+    await page.locator("main.guide .guide-body[data-section='backlog']").waitFor();
     await box.fill("chat images");
     await page.locator(".gsr-hit").first().waitFor();
     await box.press("ArrowDown");

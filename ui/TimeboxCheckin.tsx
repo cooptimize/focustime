@@ -284,7 +284,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
       <p className="db-foot">
         {pending.length > 0 && <button type="button" className="mini primary tc-btn" disabled={busy} onClick={() => void confirm()}>{busy ? "Writing…" : `Confirm ${pending.length}`}</button>}
         {!sent && <button type="button" className="mini quiet tc-btn" disabled={busy} onClick={() => { close(); setList(null); }}>Skip</button>}
-        <span className="muted">{sent ? "Undo is also in Settings › Data." : "Written as you, each only if the item hasn't changed in DevOps since."}</span>
+        <span className="muted">{sent ? "Undo is also in Settings › Activity." : "Written as you, each only if the item hasn't changed in DevOps since."}</span>
       </p>
     </div>
   );

@@ -271,7 +271,7 @@ export function StyleGuide() {
 
       <section className="sg-section">
         <h2>Type scale</h2>
-        <p className="muted">Today and Week: four sizes and three weights. Uppercase only for section labels.</p>
+        <p className="muted">Day and Week: four sizes and three weights. Uppercase only for section labels.</p>
         <div className="sg-type">
           {TYPE_SCALE.map(([fs, w, use, upper]) => (
             <div key={`${fs}-${w}`} className="sg-type-row">

@@ -21,12 +21,14 @@ const allDoes = [...Object.values(C.AREAS).flatMap((a) => a.does), ...Object.val
 
 describe("the sections", () => {
   it("are in nav order: Start here, Your first day, the five tabs in the app's order, then the rest, with Renamed last", () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "day", "week", "ahead", "status", "inbox", "writing", "capture", "assistant", "ask", "teams", "calls", "code", "settings", "renamed"]);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "day", "week", "backlog", "status", "inbox", "writing", "capture", "assistant", "ask", "teams", "calls", "code", "settings", "renamed"]);
     for (const s of SECTIONS) expect(C.SECTION_LINES[s.id], s.id).toBeTruthy();
     for (const id of areaIds) expect(SECTIONS.some((s) => s.id === id), id).toBe(true);
   });
   it("old addresses still open where their content is now (#/guide/today is Day)", () => {
     expect(sectionFor("today")).toBe("day");
+    // NM-1: Backlog's section is #/guide/backlog; #/guide/ahead still opens it.
+    expect([sectionFor("ahead"), sectionFor("backlog")]).toEqual(["backlog", "backlog"]);
     expect(sectionFor("day")).toBe("day");
     for (const [old, now] of Object.entries(OLD_SECTIONS)) {
       expect(SECTIONS.some((s) => s.id === now), old).toBe(true);
@@ -44,7 +46,7 @@ describe("the sections", () => {
     }
   });
   it("stays within the approved budgets (visible words; How it works is folded)", () => {
-    const budget: Record<string, number> = { day: 200, week: 300, ahead: 250, status: 150, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 90, settings: 200 };
+    const budget: Record<string, number> = { day: 200, week: 300, backlog: 250, status: 150, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 90, settings: 200 };
     for (const id of areaIds) expect(words([C.AREAS[id].lead, C.AREAS[id].does]), id).toBeLessThanOrEqual(budget[id]! * 1.1);
     expect(words(C.START)).toBeLessThanOrEqual(300);
     // Your first day: the checklist and its seven to eight day-one questions, read open.
@@ -137,7 +139,7 @@ describe("plain words", () => {
 describe("search", () => {
   const index = guideIndex();
   it("finds a section, a thing you do and a question, the title matches first", () => {
-    expect(searchGuide("stale", index)[0]).toMatchObject({ section: "ahead" });
+    expect(searchGuide("stale", index)[0]).toMatchObject({ section: "backlog" });
     expect(searchGuide("close the loop", index).some((h) => h.q === C.CLOSE_THE_LOOP.q)).toBe(true);
     expect(searchGuide("timeline", index).some((h) => h.section === "week")).toBe(true);
     expect(searchGuide("sort later", index)[0]).toMatchObject({ section: "renamed" });

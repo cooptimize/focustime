@@ -212,7 +212,7 @@ export function collapse(held: readonly Notice[], at: string): Notice | null {
   // Titles on one line: notification popups show about three lines.
   const names = held.slice(0, MAX_LINES).map((n) => n.title);
   if (held.length > MAX_LINES) names.push(`${held.length - MAX_LINES} more`);
-  const lines = [names.join(" · "), routes.size === 1 ? "Click to open." : "Click to open Today."];
+  const lines = [names.join(" · "), routes.size === 1 ? "Click to open." : "Click to open Day."];
   return {
     kind: "held",
     key: `held:${held.map((n) => n.key).join("|")}`.slice(0, 500),
@@ -252,7 +252,7 @@ export const notices = {
   }),
   /** Step 17: every other Thursday after Done in Plan the week, and the first Thursday of the month (Roadmap › Plan ahead). */
   planAhead: (key: string, at: string): Notice => ({ kind: "plan_ahead", key, title: "Look ahead 4 weeks", body: "Next week is planned. Time to look 4 weeks ahead: blocks per week and dates.\nClick to open Backlog's Gantt.", buttons: [open("Open Gantt")], route: "ahead", at, ref: key }),
-  direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Plan ahead.`, buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
+  direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Backlog's Gantt.`, buttons: [open("Open Gantt")], route: "ahead", at, ref: key }),
   timerEnd: (breakOver: boolean, label: string, startedAt: string, at: string): Notice => ({
     kind: "timer",
     key: `timer:${startedAt}`,

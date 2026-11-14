@@ -191,7 +191,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   // The panel's draft that this form placed, until it is created: closing keeps it on the block, said once.
   const placedHere = useRef(false);
   const close = () => {
-    if (placedHere.current) notify("Kept on the block as a draft. Create it in DevOps from its ⋯, or drop it");
+    if (placedHere.current) notify("Kept on the block as a draft. Create it in DevOps from its More menu, or drop it");
     onClose();
   };
   // The answers go only when something is in them (a title-only create sends what it always did), or to clear a draft's.

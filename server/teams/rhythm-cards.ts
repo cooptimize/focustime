@@ -120,7 +120,7 @@ export function briefCard(m: BriefModel, publicUrl: string): Card {
     for (const p of b.picks.slice(0, MAX.picks)) body.push(pickLine(p, [], m, true));
     if (b.picks.length > MAX.picks) body.push(muted(`${b.picks.length - MAX.picks} more to-dos`));
   }
-  if (m.more) body.push(muted(`${m.more} more block${m.more === 1 ? "" : "s"} in Today`));
+  if (m.more) body.push(muted(`${m.more} more block${m.more === 1 ? "" : "s"} on Day`));
   if (m.promises.length) {
     body.push(text("Promises due today", { weight: "Bolder", spacing: "Medium" }));
     for (const p of m.promises.slice(0, MAX.list)) body.push(text(`• ${p}`, { spacing: "Small" }));

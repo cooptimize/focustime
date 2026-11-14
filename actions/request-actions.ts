@@ -312,7 +312,7 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         if (!k) return bad("requests.reopen takes { chatId, messageId }");
         const hit = await mine(k);
         if (!hit) return bad("No such request", 404);
-        if (hit.r.status === "created") return bad(`#${hit.r.itemId} was created in DevOps. Undo it from Settings > Data > Audit log; the request opens again`, 409, "created");
+        if (hit.r.status === "created") return bad(`#${hit.r.itemId} was created in DevOps. Undo it from Settings › Activity; the request opens again`, 409, "created");
         if (hit.r.status !== "open") {
           await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status: "open" });
           ctx.log({ source: "plan", op: "request_reopened", kind: hit.r.status });

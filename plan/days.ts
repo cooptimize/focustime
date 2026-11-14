@@ -21,7 +21,7 @@ export const monToThu: HasHours = (date) => isPlanWorkday(Temporal.PlainDate.fro
 export function dayRule(date: IsoDate, today: IsoDate, pto: { titles: readonly string[] } | null, hasHours: boolean = monToThu(date)): DayRule {
   if (pto) return { ok: false, kind: "pto", reason: `${dayLabel(date)} is a PTO day${pto.titles.length ? ` (${pto.titles.join(", ")})` : ""}. Nothing can be planned on it` };
   if (!hasHours)
-    return { ok: false, kind: "no_hours", reason: `${dayLabel(date)} has no working hours, so there is nothing to plan. Give it working hours (its ⋯ menu or Settings) or add a flex session` };
+    return { ok: false, kind: "no_hours", reason: `${dayLabel(date)} has no working hours, so there is nothing to plan. Give it working hours (its Actions menu on Week, or Settings) or add a flex session` };
   return { ok: true, access: date < today ? "past" : "plan" };
 }
 

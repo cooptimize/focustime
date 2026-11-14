@@ -203,8 +203,8 @@ function waiting(ctx: AnswerContext, link: LinkFn): Composed {
 function readiness(ctx: AnswerContext, link: LinkFn): Composed {
   const sections = byClient(ctx, ctx.gaps, (g) => ({ text: `#${g.id} ${g.title}: ${gapText(g.gaps)}${g.target ? ` (target ${dateLabel(g.target)})` : ""}${g.why === "planned" ? ", you have to-dos under it" : ""}`, link: link(`#/backlog/item/${g.id}`, `Open #${g.id} in Backlog`) }));
   const n = ctx.gaps.length;
-  const reply = n ? `${plural(n, "item isn't", "items aren't")} ready for ${ctx.period.label}.` : `Everything dated or planned for ${ctx.period.label} has its stories, a target date, an owner and a size${ctx.unknown.some((u) => u.startsWith("Ahead")) ? ", as far as I can tell (Ahead couldn't be read)" : ""}.`;
-  return { reply, sections: [...sections, ...notKnown(ctx, "ahead")], suggestions: [], refs: refsOf(ctx, [], ctx.gaps.map((g) => ({ clientKey: g.clientKey, id: g.id, title: g.title })), []), links: [link("#/ahead/fix", "Open Needs attention")] };
+  const reply = n ? `${plural(n, "item isn't", "items aren't")} ready for ${ctx.period.label}.` : `Everything dated or planned for ${ctx.period.label} has its stories, a target date, an owner and a size${ctx.unknown.some((u) => u.startsWith("Backlog")) ? ", as far as I can tell (Backlog couldn't be read)" : ""}.`;
+  return { reply, sections: [...sections, ...notKnown(ctx, "backlog")], suggestions: [], refs: refsOf(ctx, [], ctx.gaps.map((g) => ({ clientKey: g.clientKey, id: g.id, title: g.title })), []), links: [link("#/ahead/fix", "Open Needs attention")] };
 }
 
 function deployments(ctx: AnswerContext, link: LinkFn): Composed {

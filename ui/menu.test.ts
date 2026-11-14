@@ -137,6 +137,17 @@ describe("command menu (built from the action registry)", () => {
     for (const id of ["view.plan", "view.planday", "view.planweek", "view.checkin", "view.closeout", "view.planday_date"]) expect(list.find((c) => c.id === id), id).toBeDefined();
     expect(list.find((c) => c.action === "checkin.done")).toBeDefined();
   });
+  // NM-1: a command's label uses today's name; its old names still find it.
+  it("the command menu finds each renamed command by its old names", () => {
+    const list = commandList(env().e);
+    const found = (typed: string) => filterCommands(list, typed).map((c) => c.action);
+    for (const [typed, action] of [["today", "view.today"], ["board", "view.week"], ["roadmap", "view.roadmap"], ["ahead", "view.roadmap"], ["plan ahead", "view.ahead"], ["plan ahead", "roadmap.ahead"], ["fix next", "view.gaps"], ["gaps", "view.gaps"], ["readiness", "view.gaps"], ["week › status", "view.status"], ["plan today", "view.planday"], ["plan the day", "planday.start"], ["plan the week", "view.planweek"], ["commit", "view.planweek"], ["timeline on today", "ui.set_today_timeline"], ["add a promise to today", "my_promises.today"], ["requests", "requests.list"], ["asks", "requests.list"], ["draft stories", "stories.prepare"], ["needs help from", "collab.candidates"]] as const) expect(found(typed), typed).toContain(action);
+    // And the labels themselves say today's names.
+    const label = (action: string) => list.find((c) => c.id === action)!.label;
+    expect([label("roadmap.ahead"), label("ui.set_today_timeline"), label("my_promises.today"), label("requests.list"), label("inbox.today")]).toEqual(["Backlog › Gantt: the next 12 weeks", "Timeline on Day", "Add a promise to Day", "From chats", "Inbox items for Day and Week"]);
+    expect(list.filter((c) => c.group === "Requests")).toEqual([]);
+  });
+
   it("searches by words in any order", () => {
     const list = commandList(env().e);
     expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove", "pick.undrop"]);

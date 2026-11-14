@@ -47,8 +47,8 @@ describe("planning words (UI-7)", () => {
   it("the key legend and Ahead's pending line", () => {
     expect(KEYS.filter((k) => WORD.test(k.does)).map((k) => k.does)).toEqual([]);
     // WD-1: W and P open Week with the Add work panel (there is no Plan mode).
-    expect(KEYS.find((k) => k.keys.includes("W"))?.does).toMatch(/^Week with the block panel open/);
-    expect(KEYS.find((k) => k.keys.includes("P"))?.does).toMatch(/^Week with the block panel open/);
+    expect(KEYS.find((k) => k.keys.includes("W"))?.does).toMatch(/^Week with the block's panel open/);
+    expect(KEYS.find((k) => k.keys.includes("P"))?.does).toMatch(/^Week with the block's panel open/);
     expect(pendingText(3)).toBe("3 changes to save");
   });
   it("CF-1: searching commit or confirm finds no Confirm command", () => {

@@ -148,7 +148,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   if (o.seen !== undefined && typeof o.seen !== "boolean") return bad("seen must be true or false");
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store isn't available", 503);
-  if (!ctx.weeks) return bad("Plan ahead isn't available here", 503);
+  if (!ctx.weeks) return bad("Backlog's Gantt isn't available here", 503);
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
   const today = localToday(ctx.now(), userZone(cfg));

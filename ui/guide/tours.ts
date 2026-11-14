@@ -142,7 +142,7 @@ const AHEAD: Tour = {
   title: "Backlog",
   summary: "Every client's DevOps on one screen: edit, clean up and organize.",
   start: { tab: "ahead", mode: "grid" },
-  section: "ahead",
+  section: "backlog",
   steps: [
     { target: "modes-ahead", title: "Grid and Gantt", text: "Grid is a table you edit in place, client by client in each backlog's order. Gantt is the same items on a timeline: drag a bar to move its dates. P switches." },
     { target: "ah-owner", title: "Mine, Contributing, Everyone", text: "Choose whose items show. FocusTime remembers your choice for each client.", phone: "skip" },

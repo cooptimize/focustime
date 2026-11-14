@@ -286,7 +286,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
             {result ? "Close" : "Not now"}
           </button>
-          <span className="muted">{p.kind === "rsvp" && !p.undo && p.fields.some((f) => f.label === "Your response" && f.before === "No response yet") ? "Logged in Settings > Data. No undo: a first response can't be taken back." : "Logged in Settings > Data, with Undo."}</span>
+          <span className="muted">{p.kind === "rsvp" && !p.undo && p.fields.some((f) => f.label === "Your response" && f.before === "No response yet") ? "Logged in Settings › Activity. No undo: a first response can't be taken back." : "Logged in Settings › Activity, with Undo."}</span>
         </div>
       </div>
     </div>

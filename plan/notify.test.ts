@@ -68,11 +68,11 @@ describe("collapse", () => {
     expect(collapse([n], at)).toBe(n);
     expect(collapse([], at)).toBeNull();
   });
-  it("several become one that lists them, without buttons, opening Today", () => {
+  it("several become one that lists them, without buttons, opening Day", () => {
     const list = [notices.checkin("2026-11-02", at), notices.vmOff("2026-11-02", "vm-demo", at), notices.followUps("2026-11-02", [{ id: 4, what: "Send the spec", overdue: false }], at)!];
     const one = collapse(list, at)!;
     expect(one).toMatchObject({ kind: "held", title: "While you were focused (3)", buttons: [], route: "today" });
-    expect(one.body.split("\n")).toEqual(["Check-in · Your VM is off · Promise due", "Click to open Today."]);
+    expect(one.body.split("\n")).toEqual(["Check-in · Your VM is off · Promise due", "Click to open Day."]);
   });
   it("lists four and says how many more; one shared view opens that view", () => {
     const list = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"].map((d) => notices.checkin(d, at));
@@ -160,7 +160,7 @@ describe("the Plan ahead rituals (step 17)", () => {
     expect(gate("plan_ahead", { ...f, focusRunning: true })).toBe("hold");
     expect(RITUAL_KINDS).toEqual(expect.arrayContaining(["plan_ahead", "direction"]));
     const n = notices.direction("direction:2026-12", "2026-12-03", "2026-12-03T14:30:00Z");
-    expect([n.title, n.body, n.route]).toEqual(["Direction review", "First Thursday of December: look 8 to 12 weeks ahead.\nClick to open Plan ahead.", "ahead"]);
+    expect([n.title, n.body, n.route]).toEqual(["Direction review", "First Thursday of December: look 8 to 12 weeks ahead.\nClick to open Backlog's Gantt.", "ahead"]);
     expect(parseRoute("ahead")).toEqual({ view: "ahead" });
   });
 });

@@ -1,4 +1,6 @@
-// GU-1: the names FocusTime no longer uses, in one place. The Guide's Renamed section is this list (one row per old
+// GU-1: the names FocusTime no longer uses, in one place. NM-1: the app's own words are held to the same list by
+// scripts/words-guard.ts (`npm run guards`), so an old name can't come back on a screen either.
+// GU-1: The Guide's Renamed section is this list (one row per old
 // name, with where it lives now); the Guide's search finds every one; and ui/guide/app-names.test.ts fails when Guide
 // text outside Renamed uses one. A step that changes a name or a control adds its old name here and fixes the Guide in
 // the same pull request (docs/guide.md).
@@ -48,7 +50,8 @@ export const RETIRED: readonly Retired[] = [
   { was: "Captures and drafts", now: "Inbox › Captures", match: /\bCaptures and drafts\b/ },
   { was: "Request type and the four lines", now: "The three questions, in the New form", match: /\b[Rr]equest types?\b|\bfour lines\b/ },
   { was: "Settings › Data (Undo and logs)", now: "Settings › Activity", match: /Settings › Data\b/ },
-  { was: "Settings › Planning", now: "Settings › Today and Week", match: /Settings › Planning\b/ },
+  { was: "Settings › Planning", now: "Settings › Day and Week", match: /Settings › Planning\b/ },
+  { was: "Settings › Today and Week", now: "Settings › Day and Week", match: /Settings › Today and Week\b/ },
   { was: "Settings › Connections", now: "Settings › Accounts and calendars", match: /Settings › Connections\b/ },
 ];
 
@@ -56,11 +59,11 @@ export const RETIRED: readonly Retired[] = [
 export const RENAMED_ROWS: readonly (readonly [string, string])[] = RETIRED.map((r) => [r.was, r.now] as const);
 
 /**
- * "Today" is still a word: the day that is today, the Today button and pill, a time ("Today 4:07 PM"), the quick date,
- * and the app's own Settings section "Today and Week". Only these uses are allowed outside Renamed; anything else is
- * the old tab name.
+ * "Today" is still a word: the day that is today, the Today button and pill, a time ("Today 4:07 PM") and the quick
+ * date. Only these uses are allowed outside Renamed; anything else is the old tab name. (NM-1: Settings' section is
+ * Day and Week now, so its allowance is gone.)
  */
-export const TODAY_ALLOWED: readonly RegExp[] = [/\{b:Today\}/g, /Settings › Today and Week/g, /Today \d{1,2}:\d\d/g, /\(Today, Tomorrow/g, /\bToday pill\b/g];
+export const TODAY_ALLOWED: readonly RegExp[] = [/\{b:Today\}/g, /Today \d{1,2}:\d\d/g, /\(Today, Tomorrow/g, /\bToday pill\b/g];
 
 /** Controls written as characters (the app shows icon buttons with names): ⋯ ‹ › × ✓ ✕ and a lone +. */
 export const CONTROL_CHARS = /[⋯‹×✕✓✗]|(?<![A-Za-z'’)>] )›(?! [A-Z<{])|(?<![A-Za-z0-9+])\+(?![0-9A-Za-z+])/u;

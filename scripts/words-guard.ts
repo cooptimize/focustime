@@ -189,8 +189,8 @@ const NAMES_SKIPPED = (f: string) => f.startsWith("ui/guide/") || f === "ui/Road
 /** "Pick" is left to `saysPick` above, which knows pick the code name from pick as choose. */
 const NAMES = RETIRED.filter((r) => r.match && !r.was.startsWith("Pick"));
 
-/** A control written as a character: ⋯ ‹ ✕, × that isn't between two numbers, › that isn't in a path, "+ Word" or a + on its own in text. */
-const CONTROL: readonly RegExp[] = [/[⋯‹✕]/u, /(?<![\d}])\s?×\s?(?![\d$])/u, /›(?! [A-Za-z<{$])|(?<![A-Za-z'’)>}] )›/u, /(?<![A-Za-z0-9+] ?)\+ (?=[A-Z][a-z])/u];
+/** A control written as a character: ⋯ ‹ ✕, × that isn't between two numbers, › that isn't in a path (Day › Close out), and "+ Word". */
+const CONTROL: readonly RegExp[] = [/[⋯‹✕]/u, /(?<![\d}])\s?×\s?(?![\d$])/u, /›(?! [A-Za-z<{$]| $)|(?<!(?:^|[A-Za-z'’)>}]) )›/u, /(?<![A-Za-z0-9+] ?)\+ (?=[A-Z][a-z])/u];
 
 export type Allowed = { re: RegExp; file?: RegExp; why: string };
 /**
@@ -210,7 +210,6 @@ export const NAMES_ALLOWED: readonly Allowed[] = [
   { re: /\bCoopilot\b/g, file: /^(host\/local\/rename\.ts|plan\/timebox\.ts|config\/starter\.ts)$/, why: "the rename's own notice, and the old marker text still recognised on Outlook events" },
   { re: /^Follow-up$/, file: /^actions\/plan-actions\.ts$/, why: "a stored type name on a to-do made from a promise, never drawn as a label" },
   { re: /^×$/u, file: /^ui\/Feedback\.tsx$/, why: "a screen size, 1920×1080" },
-  { re: /^ › $/, why: "joins the parts of a path built from names: Day › Close out" },
 ];
 
 /** Strings on a line that sit in a field for old names: `old: [...]`, `aka: [...]`, `keywords: [...]`. */
@@ -227,7 +226,7 @@ const CODE_TEXT = (t: string) => SQL.test(t) || /^\.{0,2}\/|\.(tsx?|css|md)$/.te
 export function namesIn(text: string, f = ""): string[] {
   if (CODE_TEXT(text)) return [];
   // "Settings > Data" is the same path as "Settings › Data".
-  let t = text.replace(/\b(Settings|Admin|Week|Inbox|Today|Ahead|Backlog|Day) > (?=[A-Z])/g, "$1 › ");
+  let t = text.replace(/\b(Settings|Admin|Week|Inbox|Today|Ahead|Backlog|Day) (?:>|&gt;) (?=[A-Z])/g, "$1 › ");
   for (const a of NAMES_ALLOWED) if (!a.file || a.file.test(f)) t = t.replace(a.re, " ");
   const out = NAMES.filter((r) => r.match!.test(t)).map((r) => r.was);
   if (CONTROL.some((re) => re.test(t))) out.push("a control as a character");

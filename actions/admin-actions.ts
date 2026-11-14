@@ -707,7 +707,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.personId !== "string" || typeof i.confirmName !== "string") return bad("admin.remove_person takes { personId, confirmName }");
       const id = i.personId.toLowerCase();
-      if (id === me.id.toLowerCase()) return bad("You can't remove yourself. Another admin can, or use Settings › Data › Delete my data.", 400, "self");
+      if (id === me.id.toLowerCase()) return bad("You can't remove yourself. Another admin can, or use Settings › Your data › Delete my data.", 400, "self");
       const person = (await ops.people()).find((u) => u.id.toLowerCase() === id);
       if (!person) return bad("No such person in FocusTime", 404);
       const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();

@@ -256,7 +256,7 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
           <button type="button" className="mini quiet icon-btn small" onClick={() => onDate(prev)} aria-label="Previous day" title="Previous day"><Icon name="back" /></button>
           <button type="button" className="mini quiet icon-btn small" onClick={() => onDate(next)} disabled={!st || next > st.today} aria-label="Next day" title="Next day"><Icon name="next" /></button>
         </span>
-        <button type="button" className="done-btn" disabled={!st} onClick={() => void done()} title={st?.closedOutAt ? "Back to Today (Esc)" : "Close out this day, then back to Today"}>
+        <button type="button" className="done-btn" disabled={!st} onClick={() => void done()} title={st?.closedOutAt ? "Back to Day (Esc)" : "Close out this day, then back to Day"}>
           Done
         </button>
       </div>

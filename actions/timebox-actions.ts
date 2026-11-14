@@ -169,7 +169,7 @@ const SUMMARY: Record<SyncOp, string> = { create: "Create an Outlook event", upd
 const RSVP_SUMMARY: Record<RsvpResponse, string> = { accepted: "Accept the meeting", tentativelyAccepted: "Answer Tentative to the meeting", declined: "Decline the meeting" };
 const summaryOf = (kind: WriteKind, op: SyncOp) => (kind === "event" ? "Change your own Outlook event" : kind === "invite" ? (op === "delete" ? "Cancel the help invite" : "Send a help invite") : SUMMARY[op]);
 
-const NO_WRITE = "FocusTime can't change your Outlook calendar yet. Reconnect Outlook in Settings > Connections and allow calendar changes. Your timeboxes still work locally.";
+const NO_WRITE = "FocusTime can't change your Outlook calendar yet. Reconnect Outlook in Settings › Accounts and calendars and allow calendar changes. Your timeboxes still work locally.";
 
 export async function timeboxAction(ctx: TimeboxContext, action: TimeboxAction, input: unknown): Promise<ActionResponse> {
   try {

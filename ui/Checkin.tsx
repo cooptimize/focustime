@@ -111,7 +111,7 @@ export function CheckinFoot({ data, date, blocks, picks, act, onAsks }: { data: 
       {blocks.length > 0 && <WalkOn data={data} date={date} blocks={blocks} picks={picks} act={act} />}
       {(data.requests?.pastUrgency ?? 0) > 0 && (
         <p className="ci-asks">
-          <button type="button" className="link-btn" onClick={onAsks} title="Requests still open after their urgency (now: 2 hours; this week: Friday)">
+          <button type="button" className="link-btn" onClick={onAsks} title="Urgent requests still open after their urgency (now: 2 hours; this week: Friday)">
             Walked in, not resolved ({data.requests.pastUrgency})
           </button>
         </p>

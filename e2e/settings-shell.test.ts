@@ -137,7 +137,7 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await page.keyboard.press("Escape");
     await expect.poll(() => hash(page)).toBe("#/week");
     // Old ids from before ST-1 open their new place (bookmarks, notifications, the Guide).
-    for (const [old, title, setting] of [["risk", "Today and Week", "risk-rules"], ["standing", "Working hours", "standing-blocks"], ["roadmap", "Backlog", null], ["setup", "Profile", "setup"], ["demo", "Your data", "demo-reset"]] as const) {
+    for (const [old, title, setting] of [["risk", "Day and Week", "risk-rules"], ["standing", "Working hours", "standing-blocks"], ["roadmap", "Backlog", null], ["setup", "Profile", "setup"], ["demo", "Your data", "demo-reset"]] as const) {
       await openAt(page, "#/week", `#/settings/${old}`);
       await head(page).filter({ hasText: title }).waitFor();
       if (setting) await page.locator(`.ps-body [data-setting="${setting}"]`).first().waitFor();

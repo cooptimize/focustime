@@ -178,13 +178,13 @@ export function AheadNotice({ onOpen, onToday }: { onOpen: () => void; onToday: 
   return (
     <main className="ahead-notice" aria-label="Backlog">
       <h1>Backlog is made for a bigger screen</h1>
-      <p className="muted">Grid, Gantt, Gaps and Backlog need room for the whole roadmap. Open FocusTime on a computer to plan ahead.</p>
+      <p className="muted">Grid, Gantt and Needs attention need room for the whole backlog. Open FocusTime on a computer to plan ahead.</p>
       <div className="an-acts">
         <button type="button" className="primary" onClick={onOpen}>
           Open anyway
         </button>
         <button type="button" onClick={onToday}>
-          Back to Today
+          Back to Day
         </button>
       </div>
     </main>
