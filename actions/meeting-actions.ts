@@ -450,7 +450,7 @@ async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig,
   const kept = ps.filter((p) => keep.has(p.id));
   if (!kept.length) return bad("Tick at least one proposal, or skip them all", 409);
   const writes = kept.filter((p) => p.kind !== "commitment");
-  if (writes.length && !(await ctx.canWrite(series.clientKey).catch(() => false))) return bad("Enable DevOps writes for this client in Settings › Clients first", 409);
+  if (writes.length && !(await ctx.canWrite(series.clientKey).catch(() => false))) return bad("Enable DevOps writes for this client in Settings › DevOps first", 409);
   const plan = ctx.plan;
   const changes: Record<string, unknown>[] = [];
   const draftOnly: { proposalId: number; title: string; message: string }[] = [];
@@ -469,7 +469,7 @@ async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig,
         draftId = d.id;
         await store.updateProposal(p.id, { result: { draftId } });
       }
-      if (b.parentId === null) draftOnly.push({ proposalId: p.id, title: b.title, message: "Saved as your draft: put it under a feature or epic in Inbox › Captures and drafts, then create it" });
+      if (b.parentId === null) draftOnly.push({ proposalId: p.id, title: b.title, message: "Saved as your draft: put it under a feature or epic in Inbox › Captures, then create it" });
       else changes.push({ kind: "create", draftId, type: b.type, key: `p${p.id}` });
     }
   }
@@ -484,7 +484,7 @@ async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig,
     refused = [...refused, ...d.refused];
     nothing = [...nothing, ...d.nothing];
   }
-  const commitments = kept.flatMap((p) => (p.body.kind === "commitment" ? [{ proposalId: p.id, who: p.body.who, side: p.body.side, what: p.body.what, due: p.body.due, shows: p.body.side === "cooptimize" ? `In ${p.body.who === "" ? "their" : `${p.body.who.split(/\s+/)[0]}'s`} Promises, for them to keep or dismiss` : "In your Waiting on" }] : []));
+  const commitments = kept.flatMap((p) => (p.body.kind === "commitment" ? [{ proposalId: p.id, who: p.body.who, side: p.body.side, what: p.body.what, due: p.body.due, shows: p.body.side === "cooptimize" ? `In ${p.body.who === "" ? "their" : `${p.body.who.split(/\s+/)[0]}'s`} Promises, for them to keep or dismiss` : "Noted with this call" }] : []));
   return { ok: true, data: { previews, refused, nothing, draftOnly, commitments, skip: ps.filter((p) => !keep.has(p.id)).map((p) => p.id) } };
 }
 
@@ -537,7 +537,7 @@ async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, inp
         what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
       });
       await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id }, decidedBy: me, decidedAt: at });
-      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Waiting on ${b.who}` });
+      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Noted with this call: ${b.who}` });
     } else if (b.kind === "gap" && b.parentId === null && p.result?.draftId) {
       await store.updateProposal(p.id, { state: "confirmed", decidedBy: me, decidedAt: at });
       results.push({ proposalId: p.id, ok: true, message: "Saved as your draft" });

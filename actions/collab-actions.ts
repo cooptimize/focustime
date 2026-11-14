@@ -204,7 +204,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
         availability = await ol.schedule.schedule(ask, startIso, endIso, tz);
       } catch (e) {
         if (e instanceof NetworkError) return bad("Outlook unreachable, so free/busy can't be checked", 503);
-        return bad("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings > Connections", 502);
+        return bad("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings › Accounts and calendars", 502);
       }
       for (const a of availability) if (a.problem) problems.push(`${c.candidates.find((x) => x.email === a.email)?.name ?? a.email}: ${a.problem}`);
       // My focus blocks for this client in the range: slots inside them rank first (step 13.5).
@@ -251,7 +251,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const ol = cfg.outlook ? ctx.outlook(cfg) : null;
       if (!ol?.write) return bad("Outlook isn't set up", 409);
       const access = await ol.write.access();
-      if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : "FocusTime can't send invites yet. Reconnect Outlook in Settings > Connections and allow calendar changes.", 409);
+      if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : "FocusTime can't send invites yet. Reconnect Outlook in Settings › Accounts and calendars and allow calendar changes.", 409);
       const clientName = cfg.clientSettings[clientKey]?.name ?? clientKey;
       const url = devopsUrl(o.url);
       const f = inviteFields({ clientName, itemTitle: title, url, note, start, end, people: named, teams });

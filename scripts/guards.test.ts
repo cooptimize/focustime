@@ -57,6 +57,12 @@ describe("one guard script (HK-1)", () => {
     expect(r.stderr).toMatch(/1 words hit.*\n\s+ui\/words\.ts:1/);
   });
 
+  it("fails on a retired name or a control written as a character in text people read (NM-1)", () => {
+    const d = repo();
+    writeFileSync(join(d, "ui/keys2.ts"), 'export const does = "Actions (⋯) for what has focus";\nexport const tip = "Back to Today";\nexport const ok = { label: "Day", aka: ["Today"] };\n');
+    expect(runGuards(d).hits.map((h) => h.at.split(": ").slice(0, 2).join(": "))).toEqual(["ui/keys2.ts:1: a control as a character", "ui/keys2.ts:2: Today (the tab)"]);
+  });
+
   it("fails on a type name used as code in ui/, tracked or not", () => {
     const d = repo();
     writeFileSync(join(d, "ui/kind.ts"), 'export const isFeature = (t: { type: string }) => t.type === "Feature";\n');

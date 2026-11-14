@@ -258,7 +258,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
   // ⋯: what isn't about adding. Start (or Join) a call in the client's chats, and Timebox this day.
   const menu = useMenu((env): MenuStep => {
-    const boxOff = mode !== "add" ? (mode === "past" ? "A past day keeps its record" : "Nothing to timebox on a day off") : data.timeboxSettings.enabled === false ? "Timeboxing is off in Settings › Planning" : null;
+    const boxOff = mode !== "add" ? (mode === "past" ? "A past day keeps its record" : "Nothing to timebox on a day off") : data.timeboxSettings.enabled === false ? "Timeboxing is off in Settings › Day and Week" : null;
     const timebox: MenuItem = { id: "timebox-day", label: "Timebox this day", hint: "a time for each to-do", ...(boxOff ? { disabled: boxOff } : {}), run: () => onTimebox?.(at.date) };
     const order: MenuItem = { id: "sort", label: sort === "backlog" ? "Sort by target date" : "Sort by backlog order", hint: sort === "backlog" ? "now: backlog order" : "now: target date", run: () => { const next: ListSort = sort === "backlog" ? "target" : "backlog"; setSort(next); writePanelSort(next); } };
     return { title, items: [...callItems(env, clientKey), timebox, ...(mode === "add" ? [order] : [])] };

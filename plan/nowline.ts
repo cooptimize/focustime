@@ -33,26 +33,21 @@ export function insideHours(hours: View, now: string): boolean {
 export type NowSpot =
   /** On the rail of the block under way, at a fraction of the rail. */
   | { kind: "rail"; half: "AM" | "PM" | "EVE"; at: number }
-  /** A PTO or catch-up day drawn as one cell, inside the day's hours: a thinner line at a fraction of the day's range. */
-  | { kind: "whole"; at: number }
   /** NL-1: today, but no block is under way (before the first, after the last, or between two): nothing draws a mark.
+   * NM-1: a day drawn as one cell (PTO, a catch-up day with no working hours) has no block, so it is always this.
    * Kept apart from null so a block that has ended still reads as past. */
   | { kind: "none" };
 
 /**
  * Where today's line goes in a day column; null when the day isn't today. `whole` says the day is one cell. NL-1: a
  * block gets the line only while the clock is inside its own hours (start to end, the end belonging to the next block);
- * before the first block, after the last and in a gap between two there is no line anywhere (`none`).
+ * before the first block, after the last and in a gap between two there is no line anywhere (`none`). NM-1: a cell that
+ * isn't a block (a PTO day, a catch-up day with no working hours) never gets one: the line ran across its title.
  */
 export function nowSpot(day: DayLike, now: string, tz: string, whole: boolean): NowSpot | null {
   if (day.date !== dateIn(now, tz)) return null;
   const rails = [["AM", day.am], ["PM", day.pm], ...(day.eve ? [["EVE", day.eve] as const] : [])] as const;
-  if (whole) {
-    const hours = { start: rails[0][1].start, end: rails[rails.length - 1]![1].end };
-    if (!insideHours(hours, now)) return { kind: "none" };
-    const [first, last] = [ms(rails[0][1].view.start), ms(rails[rails.length - 1]![1].view.end)];
-    return { kind: "whole", at: Math.min(1, Math.max(0, (ms(now) - first) / Math.max(1, last - first))) };
-  }
+  if (whole) return { kind: "none" };
   for (const [half, slot] of rails) {
     // A half with no working hours (a workday with none) keeps nominal bounds for its shape; it is never under way.
     if (slot.off || !insideHours(slot, now)) continue;

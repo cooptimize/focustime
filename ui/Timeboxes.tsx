@@ -286,7 +286,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
             {result ? "Close" : "Not now"}
           </button>
-          <span className="muted">{p.kind === "rsvp" && !p.undo && p.fields.some((f) => f.label === "Your response" && f.before === "No response yet") ? "Logged in Settings > Data. No undo: a first response can't be taken back." : "Logged in Settings > Data, with Undo."}</span>
+          <span className="muted">{p.kind === "rsvp" && !p.undo && p.fields.some((f) => f.label === "Your response" && f.before === "No response yet") ? "Logged in Settings › Activity. No undo: a first response can't be taken back." : "Logged in Settings › Activity, with Undo."}</span>
         </div>
       </div>
     </div>
@@ -372,7 +372,7 @@ function BatchWriteDialog({ batch, onConfirm, onClose }: { batch: Batch; onConfi
             {error}
           </p>
         )}
-        {tried && left > 0 && <p className="set-problem" role="alert">{left === 1 ? "One change didn't go through." : `${left} changes didn't go through.`} The others are done. Try again, or use Retry in Settings &gt; Data.</p>}
+        {tried && left > 0 && <p className="set-problem" role="alert">{left === 1 ? "One change didn't go through." : `${left} changes didn't go through.`} The others are done. Try again, or use Retry in Settings › Activity.</p>}
         <div className="wd-actions">
           <button ref={first} type="button" className="commit" disabled={busy || left === 0 || (tried && retryable === 0)} onClick={onConfirm}>
             {busy ? "Writing and checking…" : tried ? "Try the rest again" : label(rows.length)}
@@ -380,7 +380,7 @@ function BatchWriteDialog({ batch, onConfirm, onClose }: { batch: Batch; onConfi
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
             {tried ? "Close" : "Not now"}
           </button>
-          <span className="muted">Each one is logged in Settings &gt; Data, with its own Undo.</span>
+          <span className="muted">Each one is logged in Settings › Activity, with its own Undo.</span>
         </div>
       </div>
     </div>

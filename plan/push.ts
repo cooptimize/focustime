@@ -17,7 +17,7 @@ export const PUSH_GENERIC: Record<string, { title: string; body: string }> = {
   timer: { title: "Focus", body: "Your session ended." },
   meeting: { title: "Meeting soon", body: "A meeting starts in 5 minutes." },
   vm: { title: "Your VM", body: "Your VM needs a look." },
-  followups: { title: "Follow-ups due", body: "You have follow-ups due." },
+  followups: { title: "Promises due", body: "You have promises due." },
   expiry: { title: "Expiring soon", body: "Something in Settings expires soon." },
   held: { title: "While you were focused", body: "A few things came up." },
   test: { title: "FocusTime", body: "Notifications reach this device." },

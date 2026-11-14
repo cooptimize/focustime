@@ -771,7 +771,7 @@ export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
       case "show_as":
         return { ...base, hint: SHOW_AS_LABEL[(e.showAs ?? "busy") as OutlookShowAs] ?? e.showAs, next: () => ({ title: `Show "${e.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: (e.showAs ?? "busy") === v, run: () => env.editEvent({ id, showAs: v }) })) }) };
       case "cancel":
-        return invite?.writeId ? { ...base, hint: `${invite.names.join(", ")} get a cancellation; preview first`, danger: true, run: () => env.undoWrite(invite.writeId!) } : { ...base, disabled: "Cancel it from Settings > Data (Undo)" };
+        return invite?.writeId ? { ...base, hint: `${invite.names.join(", ")} get a cancellation; preview first`, danger: true, run: () => env.undoWrite(invite.writeId!) } : { ...base, disabled: "Cancel it from Settings › Activity (Undo)" };
       case "open":
         return { ...base, run: () => env.openOutlook(x.webLink ?? outlookDay(date)) };
       default:
@@ -1162,7 +1162,7 @@ export function timerStep(env: MenuEnv): MenuStep {
         { id: "focus", label: nx ? "Plain timer" : "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
         // Step 16.3: deep focus sets Teams to Do not disturb (plain focus: Busy). On the next pick when there is one.
         { id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", action: "timer.start", next: () => lengthStep("Deep focus for", nx ? suggestMinutes(nx.size, p.sizes, nx.remainingMinutes) : p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m, deep: true, ...(nx ? { pickId: nx.id } : {}) })) },
-        { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
+        { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings › Focus" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
         { id: "pick", label: nx ? "Another to-do…" : "Timebox a to-do…", action: "timer.start", next: () => choosePick(env, "Focus on which to-do?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
       ],
     };
@@ -1419,7 +1419,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.openSettings("clients") };
     case "permissions.status": return { run: () => env.openSettings("connections", "permissions") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
-    case "presence.people": return { disabled: "Shown next to Cooptimizers in Ask to collaborate, Who and Roadmap" };
+    case "presence.people": return { disabled: "Shown next to Cooptimizers in Ask to collaborate, Who and Backlog" };
     case "presence.log": return { run: () => env.openSettings("activity", "teams-log") };
     case "playlist.open": return { run: () => env.openSettings("focus", "playlists") };
     case "data.export": return { run: env.exportPlan };

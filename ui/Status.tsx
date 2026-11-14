@@ -1089,7 +1089,7 @@ function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { bat
           <button ref={first} type="button" className="commit" disabled={push.busy || !n} onClick={onConfirm}>{push.busy ? "Writing and checking…" : flagged ? `${label} as written` : label}</button>
         ) : null}
         <button type="button" className="mini quiet" disabled={push.busy} onClick={onClose}>{push.results ? "Close" : "Not now"}</button>
-        <span className="muted">Each line is its own write, logged in Settings &gt; Data with Undo.</span>
+        <span className="muted">Each line is its own write, logged in Settings › Activity with Undo.</span>
       </div>
     </Modal>
   );

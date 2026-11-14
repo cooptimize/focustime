@@ -57,6 +57,23 @@ describe("Settings registry", () => {
     expect(searchSettings("zzqx")).toEqual([]);
   });
 
+  // NM-1: the renamed section and settings are found by their new names and by every old one.
+  it("search finds each renamed section and setting by its old name and its new one", () => {
+    const section = (q: string) => searchSettings(q).find((h) => h.setting === null);
+    expect(section("day and week")).toMatchObject({ section: "planning", label: "Day and Week", matched: null });
+    for (const old of ["today and week", "planning", "risk rules"]) expect(section(old), old).toMatchObject({ section: "planning", label: "Day and Week" });
+    expect(section("Today and Week")!.matched).toBe("Today and Week");
+    const setting = (q: string, id: string) => searchSettings(q).find((h) => h.setting === id);
+    expect(setting("needs attention nudges", "readiness-nudges")).toMatchObject({ label: "Needs attention nudges", matched: null, where: "Day and Week" });
+    expect(setting("readiness nudges", "readiness-nudges")).toMatchObject({ label: "Needs attention nudges", matched: "Readiness nudges" });
+    expect(setting("look-ahead rituals", "rituals")).toMatchObject({ label: "Look-ahead rituals", matched: null });
+    for (const old of ["plan ahead rituals", "look ahead 4 weeks", "direction review"]) expect(setting(old, "rituals"), old).toMatchObject({ label: "Look-ahead rituals" });
+    expect(setting("let urgent asks through", "urgent-during-focus")).toMatchObject({ label: "Urgent requests during focus" });
+    // Old names live only in `old` (and keywords): no label or description carries one.
+    for (const s of SECTIONS) expect(`${s.label} ${s.description}`, s.id).not.toMatch(/\bToday and\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b/);
+    for (const s of SETTINGS) expect(s.label, s.id).not.toMatch(/\bToday\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b|\bGaps\b|\bFix next\b/);
+  });
+
   it("hides developer-loop rows outside it and demo rows outside a demo", () => {
     expect(searchSettings("style guide").some((h) => h.setting === "style-guide")).toBe(false);
     expect(searchSettings("style guide", { dev: true }).some((h) => h.setting === "style-guide")).toBe(true);

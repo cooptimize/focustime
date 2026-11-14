@@ -444,11 +444,11 @@ function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
 function FixGapsField({ c, saver }: { c: ClientRow; saver: Saver }) {
   const scope = `client:${c.key}`;
   const on = saver.shown(scope, "fix_gaps", c.fixGaps ?? [...GAP_KINDS]);
-  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: what Gaps counts`);
+  const save = (v: GapKind[]) => void saver.save(scope, "fix_gaps", GAP_KINDS.filter((k) => v.includes(k)), `${c.key}: what Needs attention counts`);
   return (
     <div className="set-form adm-fixgaps">
-      <AField label="What Gaps counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Backlog's Needs attention counts only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
-        <span className="adm-switches" role="group" aria-label={`${c.key}: what Gaps counts`}>
+      <AField label="What Needs attention counts" kind="Rule" s={saver.status(scope, "fix_gaps")} retry={() => save(on)} hint="Backlog's Needs attention counts only these for this client. Turn off Unsized for a client that doesn't size in DevOps.">
+        <span className="adm-switches" role="group" aria-label={`${c.key}: what Needs attention counts`}>
           {GAP_KINDS.map((k) => (
             <label key={k} className="adm-switch">
               <input type="checkbox" role="switch" checked={on.includes(k)} aria-label={`${c.key}: count ${GAP_WORDS[k]}`} onChange={(e) => save(e.target.checked ? [...on, k] : on.filter((x) => x !== k))} /> {GAP_WORDS[k]}
@@ -729,7 +729,7 @@ function AdminConversations() {
   );
   return (
     <div className="set-form">
-      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Clients, but never removes the team's.</p>
+      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Client chats, but never removes the team's.</p>
       <div className="set-grid">
         {list("conv.request_phrases", "Request phrases", data.requestPhrases, "A client's message with one of these becomes a request. Commas between them.")}
         {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never a request.")}
@@ -1261,8 +1261,8 @@ function AdminOrganization() {
         <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
           <NumInput label="Counts as in use (minutes)" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
         </AField>
-        <AField label="Needs attention looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Readiness top N")} hint="10 to 100, for epics, features and stories each. Backlog's Needs attention also shows what's dated in the next 4 weeks and the features and epics each person owns.">
-          <NumInput label="Needs attention looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Readiness top N")} />
+        <AField label="Needs attention looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Needs attention top N")} hint="10 to 100, for epics, features and stories each. Backlog's Needs attention also shows what's dated in the next 4 weeks and the features and epics each person owns.">
+          <NumInput label="Needs attention looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Needs attention top N")} />
         </AField>
       </div>
       <h3>Send feedback</h3>
@@ -1302,13 +1302,13 @@ function AdminOrganization() {
       <SaveMark s={saver.status(o, "org.new_person")} retry={() => saveNp({})} />
       {saver.status(o, "org.feedback") && <SaveMark s={saver.status(o, "org.feedback")} retry={() => saveFb({})} />}
       <h3>By level</h3>
-      <p className="muted">Each level's defaults; a person may change any of these for themselves (Settings › Planning, Reset to team default). They never block anything.</p>
+      <p className="muted">Each level's defaults; a person may change any of these for themselves (Settings › Day and Week, Reset to team default). They never block anything.</p>
       <table className="adm-table">
         <thead>
           <tr>
             <th scope="col">Level</th>
             <th scope="col">Break down offered</th>
-            <th scope="col">Readiness nudges</th>
+            <th scope="col">Needs attention nudges</th>
           </tr>
         </thead>
         <tbody>
@@ -1322,8 +1322,8 @@ function AdminOrganization() {
                   <SaveMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Break down")} />
                 </td>
                 <td>
-                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: readiness nudges`} checked={saver.shown(scope, "readiness_nudges", g.readinessNudges)} onChange={(e) => void saver.save(scope, "readiness_nudges", e.target.checked, `${data.levelNames[lv]}: readiness nudges`)} />
-                  <SaveMark s={saver.status(scope, "readiness_nudges")} retry={() => void saver.save(scope, "readiness_nudges", g.readinessNudges, "Readiness nudges")} />
+                  <input type="checkbox" aria-label={`${data.levelNames[lv]}: Needs attention nudges`} checked={saver.shown(scope, "readiness_nudges", g.readinessNudges)} onChange={(e) => void saver.save(scope, "readiness_nudges", e.target.checked, `${data.levelNames[lv]}: readiness nudges`)} />
+                  <SaveMark s={saver.status(scope, "readiness_nudges")} retry={() => void saver.save(scope, "readiness_nudges", g.readinessNudges, "Needs attention nudges")} />
                 </td>
               </tr>
             );
@@ -1399,7 +1399,7 @@ function AdminStatus() {
         </div>
         <div className="set-field">
           <span className="set-label">Teams and DevOps permissions</span>
-          <span className="set-value">Per person, in Settings › Connections (Microsoft permissions and DevOps write access).</span>
+          <span className="set-value">Per person: Microsoft permissions in Settings › Accounts and calendars, DevOps write access in Settings › DevOps.</span>
         </div>
       </div>
       {data.jobs && data.jobs.length > 0 && (

@@ -104,7 +104,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
     const sources = r.ok ? (r.data as { sources: { source: string; status: string; message?: string; fixAction?: string; itemCount: number; sample?: boolean }[] }).sources : [];
     for (const s of sources.filter((x) => x.source === "outlook" || x.source === "google")) {
       expect(s).toMatchObject({ status: "misconfigured", fixAction: "open_settings", itemCount: 0 });
-      expect(s.message).toMatch(/isn't set up yet\. Set it up in Settings > Connections/);
+      expect(s.message).toMatch(/isn't set up yet\. Set it up in Settings › Accounts and calendars/);
       expect(s.sample).toBeFalsy();
     }
   });

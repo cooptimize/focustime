@@ -12,7 +12,7 @@ export const SECTIONS = [
   { id: "first-day", name: "Your first day", group: "start" },
   { id: "day", name: "Day", group: "tabs" },
   { id: "week", name: "Week", group: "tabs" },
-  { id: "ahead", name: "Backlog", group: "tabs" },
+  { id: "backlog", name: "Backlog", group: "tabs" },
   { id: "status", name: "Status", group: "tabs" },
   { id: "inbox", name: "Inbox", group: "tabs" },
   { id: "writing", name: "Writing work a builder can use", group: "more" },
@@ -32,11 +32,12 @@ export type SectionId = (typeof SECTIONS)[number]["id"];
  * GU-1: the five tab sections, in the app's own tab order, with the tab each stands for (ui/nav.ts `TABS`), so the rail
  * can draw the tab's icon and a test can check every tab has a section.
  */
-export const TAB_SECTIONS: Readonly<Record<string, "today" | "week" | "ahead" | "status" | "inbox">> = { day: "today", week: "week", ahead: "ahead", status: "status", inbox: "inbox" };
+export const TAB_SECTIONS: Readonly<Record<string, "today" | "week" | "ahead" | "status" | "inbox">> = { day: "today", week: "week", backlog: "ahead", status: "status", inbox: "inbox" };
 
-/** Older addresses, from bookmarks and old links, to where that content lives now (G1's chapters; GU-1: Today is Day). */
+/** Older addresses, from bookmarks and old links, to where that content lives now (G1's chapters; GU-1: Today is Day; NM-1: Ahead is Backlog). */
 export const OLD_SECTIONS: Readonly<Record<string, SectionId>> = {
   today: "day",
+  ahead: "backlog",
   basics: "start",
   rhythm: "start",
   sizing: "week",

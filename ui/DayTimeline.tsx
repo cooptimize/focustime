@@ -373,7 +373,7 @@ export function DayTimeline(props: Props) {
           <OutLine kind="early" items={whole ? [] : day.early.map((p) => p.event)} tz={tz} />
           {whole ? (
             <div className="tt-off">
-              <WholeDay day={day} band={band} kind={whole} tz={tz} selected={false} refAm={() => {}} refPm={() => {}} onOpen={whole === "catchup" && props.onOpen ? () => props.onOpen!("AM") : () => {}} dayLabel={dayLabel} now={null} />
+              <WholeDay day={day} band={band} kind={whole} tz={tz} selected={false} refAm={() => {}} refPm={() => {}} onOpen={whole === "catchup" && props.onOpen ? () => props.onOpen!("AM") : () => {}} dayLabel={dayLabel} />
             </div>
           ) : (
             blocks.map((s) => {

@@ -965,3 +965,38 @@ From the IT review (TD-1):
   - A tour's ring can run a few pixels past the window's edge where its target touches the edge (Add work step 2, Week step 5): the tour layer's own drawing, unchanged here.
   - Backlog shows a "Start here" chip beside Why these? that the Guide doesn't mention; what it does wasn't clear in the demo.
   - Not checked on a real screen by either review: Writing, Capture, the assistant, Ask, Teams, Client calls and Code beyond their links; anything past the first preview of a write; drag and drop.
+
+## NM-1
+
+- Left as it was from STEP 0.3's list, and why, is the last table of `docs/ux/nm1/words.md`. The ones that need a decision:
+  - The command menu still lists the commands of the Inbox before it was slimmed: a group "Conversations" (Give a conversation to someone, Take it over, Merge…) and, under "From chats", "Resolve a request", "Sort a request again", "Show a hidden request" and others. Each only opens Inbox › From chats. Should they be hidden, like Team's commands (`HIDDEN_FOR_NOW`), or removed with their actions?
+  - Admin › Clients calls a client's chats "Delivery chats" (and "Delivery team"); Settings calls them Client chats. Not on the Renamed list's patterns. Should Admin follow Settings?
+  - `docs/demo/script.md`, `docs/demo/README.md` and `scripts/demo-walkthrough.mjs` describe the demo as it was on Nov 2 and Nov 9 (Today, Ahead, Fix next · 7, the Inbox's Needs you rail). Renaming words would not make their steps true, so the names guard skips them. Rewrite the script for today's app, or mark both as dated and keep them as history?
+- A commitment from the client's side on a client call ("Dana will send the test accounts") was shown as going to "your Waiting on". That list went with IB-4. Confirm still stores it (a commitment with nobody at Cooptimize as its owner), and no screen lists it. The words now say "noted with this call". Where should it show: on the call's review only, or as something the person can follow up?
+- The Settings pointer for chat reading: `plan/permissions.ts` says "Settings > Clients: Add a chat to allow it" for the Chat.Read permission. Chats are added in Admin › Clients by an admin. Left as it was, since what a person without admin should do there isn't clear from the code.
+- Anything in C found still in use: none. Each proof is in `docs/ux/nm1/dead-parts.md`.
+- The now mark on a PTO day or a holiday went with the catch-up day's: all three are one cell, not a block, and the rule given was "a cell that isn't a block gets no now mark". Before, a PTO day's hatched cell had the thin line inside working hours. Is that wanted for PTO too?
+- Not in this step, as seen in the demo (nothing changed):
+  - A to-do's title on a block's card: on Week, clicking the title of "Export orders to CSV" on its card opened nothing; no story card, and the address stayed `#/week`. The same title in the block's panel opens its story card.
+  - Close from Settings opened out of the Guide: from `#/guide/settings`, opening `#/settings/display` and closing Settings (Esc or Close) lands on Day (`#/day`), not back in the Guide.
+- Unused, noticed along the way (nothing removed):
+  - `ui/Roadmap.tsx`: nothing imports it. It still says "Roadmap".
+  - `plan/work-templates.ts` and `store/work-templates-store.ts`: no screen or action imports them since TP-1b; the store and its table remain.
+  - `conversationsTick` in `server/ticks.ts` is an empty function still registered as the tick part `conversation_notices` (it sent the four kinds removed here).
+  - `escalationHours` in `actions/dispatch.ts` has one caller left (Snooze in the Inbox); `PollPerson.openItems` and `pipelineAi` lost a caller with the job and are still used by the pipeline.
+  - Tables TD-1 already listed as kept but unread (`chat_messages`, `asks`, `delivery_chats`, `dedupe_log`); the columns the upkeep job once wrote (`escalated_at` on commitments, the follow-through suggestions) have been written by nothing since IB-4.
+  - Stored settings unread: a person's `[notify]` switches for the four removed kinds.
+  - The action registry's summaries are shown nowhere (the command menu shows titles); they were brought up to date with the titles anyway.
+- The config file's comments written beside a setting (`"Display (U5.1): show personal events on Week and Day."`) now use today's names; an existing file keeps the comment it has.
+- `docs/architecture.md` still describes the upkeep job and the removed kinds in its history of CV-1 and IB-1; TD-1 left that file alone and so does this step.
+- From review 1 (someone who knows only today's names, with only the demo), seen and left:
+  - "Team" as a place: a tooltip on Ask a lead to look ("Sends a link to your planned Harbor features in Team"), Admin › People ("leads, Team and notes"), and a command menu group "Team". Team is hidden for now (WD-1). Should these words go while it is?
+  - "request" as a thing: Settings › Client chats ("My request phrases", "Client chats read for requests", "becomes a request when"), Admin › Conversations ("Request phrases", "Keep messages that aren't requests"), Admin › AI ("Sorting requests"), Admin › Status. The Inbox shows no requests; the phrases still drive what is picked out as urgent. What should they be called?
+  - The command menu's "loop update" commands (Draft a loop update, Send the loop update shown, Loop updates sent) beside "Close the loop".
+  - Admin › Conversations: "Closed conversations stay shown (days)" with the hint "In Inbox › Conversations › Closed, then they're no longer listed." The Inbox has no Closed list. Does the rule still do anything a person sees?
+  - The command menu: "Backlog › stories in each client's rank order" (a filter, written as a view) and "Settings · Coming soon" although Settings exists.
+  - The phone's Week accessible name starts "Day view" (it shows one day at a time). The phone's day bar draws ← and → as the buttons' text (their names are Previous day and Next day). A hint says "The ⚑ flags in Backlog's Gantt". Backlog's status column shows "+1" for a second reason, and the Focus screen's button is "+15": counts and an amount, left alone.
+  - Pointers it could not place: Chat.Read's "Settings > Clients: Add a chat to allow it" (above); the Guide's Day section says the focus screen has "Done, +15 and Stop" where a plain timer shows Finish, +15 and Stop (a timer on a to-do was not checked).
+  - Drawing: on Day with a block's panel open, the source status row opened from the dot at the bottom left is covered at its right end by the panel ("DevOps 4 of 4" cut off). On Day's Timeline the "1h 45m free" pill sits on the 10 AM hour line.
+  - Settings' search shows the old name after "was" on each result found by one, as it did before.
+

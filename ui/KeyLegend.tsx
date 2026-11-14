@@ -40,7 +40,7 @@ export function KeyLegend({ onClose }: { onClose: () => void }) {
             </Fragment>
           ))}
         </dl>
-        <div className="command-foot muted">Every key is also a command menu entry (Ctrl K) or a ⋯ menu item.</div>
+        <div className="command-foot muted">Every key is also a command menu entry (Ctrl K) or an item in a More or Actions menu.</div>
       </div>
     </div>
   );

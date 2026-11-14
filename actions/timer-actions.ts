@@ -157,7 +157,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
           return respond(started, await openList());
         }
         const m = minutes ?? (kind === "focus" ? planning.focusMinutes : planning.breakMinutes);
-        if (!m) return bad("Breaks are set to 0 minutes in Settings > Planning", 409);
+        if (!m) return bad("Breaks are set to 0 minutes in Settings › Focus", 409);
         await finish();
         const started = (await save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m, deep })));
         return respond(started, await openList());

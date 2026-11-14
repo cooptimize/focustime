@@ -38,7 +38,6 @@ Every piece of background work has a name in `BACKGROUND` (`config/background-po
 | Job | What it does |
 |---|---|
 | `requests_poll` | Reads every registered client chat with a follower's own sign-in, every 5 minutes in followers' working hours, then sorts new messages with AI; records co-working calls (`chat_calls`) |
-| `conversations_upkeep` | Runs after each chat read and does nothing: no escalation, reminder or follow-through draft is made |
 | `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass |
 | `devops_poll` | Central DevOps reads: each client's changed items, once for everyone, with a change log |
 | `people_refresh` | People, levels and client leads from Dataverse into the directory, once a day; ends sessions of anyone now known as a guest |

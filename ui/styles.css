@@ -6142,16 +6142,12 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .live-call .lc-join { flex: none; display: inline-flex; align-items: center; padding: 2px 12px; border-radius: 99px; background: var(--ok); color: var(--bg); font-size: var(--fs-2); font-weight: 600; text-decoration: none; }
 .live-call .lc-join:hover, .live-call .lc-join:focus-visible { filter: brightness(1.08); }
 .now-live { margin: 6px 0; }
-.dp-calls .lc-starts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.dp-calls .lc-start { font-size: var(--fs-2); color: var(--accent); }
-.dp-calls .lc-start::before { content: "☎ "; color: var(--text-muted); }
 @media (prefers-reduced-motion: no-preference) {
   .live-call .lc-dot { animation: lc-pulse 2s ease-in-out infinite; }
 }
 @keyframes lc-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--ok) 10%, transparent); } }
-/* The phone: Join and Start a call are 44px targets; the line wraps rather than scrolling sideways. */
-.app.phone .live-call .lc-join, .app.phone .dp-calls .lc-start { min-height: 44px; min-width: 44px; justify-content: center; }
-.app.phone .dp-calls .lc-start { display: inline-flex; align-items: center; }
+/* The phone: Join is a 44px target; the line wraps rather than scrolling sideways. */
+.app.phone .live-call .lc-join { min-height: 44px; min-width: 44px; justify-content: center; }
 :root[data-reduce-motion] .live-call .lc-dot { animation: none; }
 
 /* DP-2: what a deployment moves: the checkboxes, the row's chip, the list editor and the time picker. */

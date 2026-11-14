@@ -59,7 +59,7 @@ describe("calendar editing tiers (FocusTime only edits what it created or what o
   it("without write access nothing is editable and the reason says how to allow it", () => {
     const x = eventEdit(ol, facts(), false);
     expect(x.actions.filter((a) => a.allowed).map((a) => a.id)).toEqual(["open"]);
-    expect(x.actions.find((a) => a.id === "move")!.reason).toMatch(/Settings > Connections/);
+    expect(x.actions.find((a) => a.id === "move")!.reason).toMatch(/Settings › Accounts and calendars/);
     expect(eventEdit({ source: "google", allDay: false }, null, true).actions.every((a) => !a.allowed)).toBe(true);
   });
 

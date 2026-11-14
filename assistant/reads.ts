@@ -43,7 +43,7 @@ async function data<T>(r: Promise<ActionResponse>): Promise<T | string> {
 }
 
 function pickCard(d: ReadDeps, p: Pick): PickCard {
-  return { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: d.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: d.link(p.date === d.today ? "#/day" : `#/week/day/${p.date}/${p.half}`, p.date === d.today ? "Open Today" : `Open ${dayName(p.date)}`) };
+  return { kind: "pick", id: p.id, clientKey: p.clientKey, clientName: d.clientName(p.clientKey), title: p.title, date: p.date, half: p.half === "PM" ? "PM" : "AM", time: null, done: p.status === "done", link: d.link(p.date === d.today ? "#/day" : `#/week/day/${p.date}/${p.half}`, p.date === d.today ? "Open Day" : `Open ${dayName(p.date)}`) };
 }
 
 /** assistant.today: now (the next pick and what's on), today (open picks, follow-ups and promises due), tonight. */
@@ -70,7 +70,7 @@ export async function todayRead(d: ReadDeps, when: "now" | "today" | "tonight", 
     facts.picks = list.map((p) => ({ pickId: p.id, title: p.title, half: halfName(p.half) }));
   }
   const due = w.followUps.filter((f) => ok(f.clientKey) && f.due !== null && f.due <= d.today);
-  if (when !== "now") for (const f of due) cards.push({ kind: "note", text: `Follow-up: ${f.what}${f.who ? ` (${f.who})` : ""}${f.due! < d.today ? ", overdue" : ", due today"}`, link: d.link(`#/inbox/${f.id}`, "Open the follow-up") });
+  if (when !== "now") for (const f of due) cards.push({ kind: "note", text: `Promise: ${f.what}${f.who ? ` (${f.who})` : ""}${f.due! < d.today ? ", overdue" : ", due today"}`, link: d.link(`#/inbox/${f.id}`, "Open the promise") });
   const endOfDay = hoursOn(w.hours, d.today).main?.end ?? "17:00";
   const proms = (w.promises ?? []).filter((p) => ok(p.clientKey) && (p.overdue || p.dueDate <= d.today)).filter((p) => when !== "tonight" || (p.dueAt !== null && Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(d.zone).toPlainTime().toString({ smallestUnit: "minute" }) >= endOfDay));
   if (when !== "now") for (const p of proms) cards.push({ kind: "promise", id: p.id, clientKey: p.clientKey, clientName: p.clientName, who: "You", what: p.what, toWhom: p.toName, due: p.dueAt ?? p.dueDate, link: d.link(`#/inbox/promise/${p.id}`, "Open the promise") } satisfies PromiseCard);

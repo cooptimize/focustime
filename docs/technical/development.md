@@ -59,7 +59,6 @@ Every package in `package.json`, what FocusTime uses it for and its license. A n
 | `@azure/identity` | The app's managed identity: Azure SQL and Key Vault tokens, the Teams bot's credential (`server/main.ts`, `store/sql/sqlserver.ts`) | MIT |
 | `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono` | The UI's fonts, served with the app (`ui/fonts.css`) | OFL-1.1 |
 | `@microsoft/teams.apps`, `@microsoft/teams.api` | The Teams bot: receiving and sending in a person's 1:1 chat (`server/teams/sdk.ts`) | MIT |
-| `@microsoft/teams.cards` | Installed with the Teams SDK; nothing imports it (the bot's cards are plain JSON) | MIT |
 | `ical.js` | Reading calendars added by link (`sources/ics/parse.ts`) | MPL-2.0 |
 | `lucide-react` | The UI's icons, through one module (`ui/icons.tsx`) | ISC |
 | `mssql` | The SQL Server driver for the plan store (`store/sql/sqlserver.ts`) | MIT |

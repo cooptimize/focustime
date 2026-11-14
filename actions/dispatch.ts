@@ -2100,7 +2100,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show") || typeof i.show !== "boolean") return bad("input must be { show: boolean }");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
-      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_personal", i.show as boolean, "Display (U5.1): show personal events on Week and Today."));
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_personal", i.show as boolean, "Display (U5.1): show personal events on Week and Day."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
@@ -2126,7 +2126,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show") || typeof i.show !== "boolean") return bad("input must be { show: boolean }");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
-      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_timelines", i.show as boolean, "Display (WK-2): the hour rail beside each card's to-dos on Week's Board."));
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_timelines", i.show as boolean, "Display (WK-2): the hour rail beside each card's to-dos on Week."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
@@ -2135,7 +2135,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show" && k !== "phone") || typeof i.show !== "boolean" || (i.phone !== undefined && typeof i.phone !== "boolean")) return bad("input must be { show: boolean, phone?: boolean }");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
-      const r = await ctx.writeConfig((text) => setValue(text, "ui", i.phone ? "today_timeline_phone" : "today_timeline", i.show as boolean, "Display (TY-1): the Timeline switch on Today."));
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", i.phone ? "today_timeline_phone" : "today_timeline", i.show as boolean, "Display (TY-1): the Timeline switch on Day."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }

@@ -40,7 +40,6 @@ export type BackgroundEntry = {
 export const BACKGROUND = {
   // App jobs (server/scheduler.ts).
   requests_poll: { what: "Reading registered client chats every 5 minutes, then sorting them with AI", touches: "Teams (followers' delegated Chat.Read), AI", effect: "reads", kind: "job", outside: "never", onDemand: "Refresh in the Inbox reads your own chats once, with your sign-in" },
-  conversations_upkeep: { what: "Conversation upkeep after each chat read: escalation, reminders, follow-through drafts", touches: "DevOps (read), AI", effect: "ai", kind: "job", outside: "never" },
   meeting_capture: { what: "Meeting capture: laying out registered calls, looking for transcripts, the AI pass", touches: "Graph (reviewers' delegated calendars and transcripts), AI", effect: "reads", kind: "job", outside: "never", onDemand: "Check now on a registered call (Admin › Clients › Meetings) looks for its transcript once, with your sign-in" },
   devops_poll: { what: "The DevOps store: each client's items read once for everyone", touches: "DevOps (the company read PAT)", effect: "reads", kind: "job", outside: "in_use" },
   people_refresh: { what: "People, levels and client leads from Dataverse, once a day", touches: "Dataverse (the app's own access)", effect: "reads", kind: "job", outside: "always" },
@@ -95,8 +94,8 @@ export function backgroundPolicy(env: Record<string, string | undefined>): Backg
   const pollOverride = env.FOCUSTIME_REQUESTS_POLL?.trim().toLowerCase() ?? "";
   const pollOn = production ? (pollOverride || "on") === "on" : pollOverride === "on";
   const allows = (name: string, o: { optIn?: boolean; inUse?: boolean } = {}): boolean => {
-    // The chat poll and its upkeep follow the override in both environments (production is unchanged).
-    if (name === "requests_poll" || name === "conversations_upkeep") return pollOn;
+    // The chat poll follows the override in both environments (production is unchanged).
+    if (name === "requests_poll") return pollOn;
     if (production) return true;
     if (!isBackgroundName(name)) return false;
     const e: BackgroundEntry = BACKGROUND[name];

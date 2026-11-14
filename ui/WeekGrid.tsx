@@ -216,7 +216,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       <main
         className={`grid narrow${timeline ? "" : " no-timeline"}`}
         role="group"
-        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details."
+        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens the block's panel."
         // P1: on a touch screen a sideways swipe changes the day.
         onTouchStart={(e) => (swipe.x = e.touches[0]!.clientX, swipe.y = e.touches[0]!.clientY)}
         onTouchEnd={(e) => {
@@ -272,7 +272,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
         className={`grid ${layout} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}${timeline ? "" : " no-timeline"}`}
         style={{ gridTemplateColumns: tracks, ...(fit ? { "--rail-w": `${fit.railPx}px` } : {}) } as CSSProperties}
         role="group"
-        aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
+        aria-label="Week grid. Arrow keys move between half-days, Enter opens the block's panel."
         data-focus-day={focusAll >= 0 ? week.days[focusAll]!.date : undefined}
       >
         {idx.map((i, k) =>
@@ -424,7 +424,6 @@ function DayColumn(props: { /** WD-2: Day draws the column with no header (Day h
           refPm={refFor("PM")}
           onOpen={(focus) => props.onOpen({ dayIndex, half: "AM" }, focus)}
           dayLabel={dayLabel}
-          now={spot?.kind === "whole" ? { at: spot.at, label: nowLabel, onClick: toNow } : null}
         />
       ) : (
         rows.map((half, k) =>
@@ -496,7 +495,7 @@ export function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: re
  * U3 (D387): a PTO day is one hatched cell labeled PTO, with its timed calendar items as plain lines (all-day ones are chips, D406); a day with no working
  * hours (Friday) is one dashed "Catch-up" column with the work moved there and its calendar items.
  */
-export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; band: EveningBand | null; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
+export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: { day: Day; band: EveningBand | null; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string }) {
   const plan = useContext(PlanCtx);
   const samples = useContext(SampleSources);
   // All-day events are chips under the day header (D406); the cell lists only timed events.
@@ -522,7 +521,6 @@ export function WholeDay({ day, band, kind, tz, selected, refAm, refPm, onOpen, 
       aria-pressed={selected}
       onClick={(e) => !interactive(e) && onOpen()}
     >
-      {now && <NowLine at={now.at} label={now.label} thin onClick={now.onClick} />}
       <div className="whole-label" title={kind === "pto" && day.pto ? ptoLabel(day.pto) : undefined}>
         {/* RS-1: what kind of day off it is, as an icon before its name (a holiday, PTO, the catch-up day). */}
         <Icon name={kind === "pto" ? (day.pto?.holiday ? "holiday" : "pto") : "catchup"} /> {label}
@@ -670,7 +668,7 @@ function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, sele
       <div className="day-allday empty" />
       <div className="day-out early empty" />
       {whole || day.kind === "weekend" ? (
-        <FoldHalf day={day} half="AM" whole={whole ?? "catchup"} name={marks[0]!.name} count={marks[0]!.n} colors={colors} now={spot?.kind === "whole" ? spot.at : null} nowLabel={nowLabel} onOpen={onOpen} />
+        <FoldHalf day={day} half="AM" whole={whole ?? "catchup"} name={marks[0]!.name} count={marks[0]!.n} colors={colors} now={null} nowLabel={nowLabel} onOpen={onOpen} />
       ) : (
         rows.map((h, k) => (h === null ? <div key={`gap-${k}`} className="half-gap" aria-hidden="true" /> : <FoldHalf key={h} day={day} half={h} whole={null} name={foldName(day, h, null)} count={count(h)} colors={colors} now={at(h)} nowLabel={nowLabel} onOpen={onOpen} />))
       )}

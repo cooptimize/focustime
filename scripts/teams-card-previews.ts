@@ -80,7 +80,7 @@ const cards: [string, Card][] = [
   ...rhythmCards,
   ["proposal", proposalCard(proposal)],
   ["changed", proposalCard({ ...proposal, id: "p-2", changes: [{ field: "Target date", before: "Nov 7", after: "Nov 6" }] }, { again: "Someone changed the target date since. Here's the new preview." })],
-  ["done", doneCard({ title: proposal.title, message: "Target date is Nov 6 now.", undo: { label: "Undo", proposalId: "p-1", writeId: 77 }, links: [{ label: "Open in Ahead", url: `${URL_}/#/ahead` }] }, URL_)],
+  ["done", doneCard({ title: proposal.title, message: "Target date is Nov 6 now.", undo: { label: "Undo", proposalId: "p-1", writeId: 77 }, links: [{ label: "Open in Backlog", url: `${URL_}/#/ahead` }] }, URL_)],
   ["failed", failedCard(proposal.title, "Only the feature's owner or a client lead can move its dates.")],
   ["expired", expiredCard(proposal.title)],
   ["cancelled", cancelledCard(proposal.title)],

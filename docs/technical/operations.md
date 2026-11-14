@@ -51,7 +51,6 @@ One pure module decides it: `config/background-policy.ts`. `server/main.ts` comp
 | Work (policy name) | Started from | Outside system | What it does | Prod | Test site (dev, local) |
 |---|---|---|---|---|---|
 | Chat poll (`requests_poll`) | App job, every 5 min in followers' working hours | Teams (followers' delegated Chat.Read), AI | Reads registered chats, sorts them with AI | Runs | Off. Refresh in the Inbox reads your own chats once with your sign-in. `FOCUSTIME_REQUESTS_POLL=on` declares a watch period |
-| Conversation upkeep (`conversations_upkeep`) | After each chat poll | None | Nothing: `actions/conversation-upkeep.ts` returns at once | Runs, does nothing | Off |
 | Meeting capture (`meeting_capture`) | App job: lay out registered calls, look for transcripts, the AI pass | Graph (reviewers' calendars and transcripts), AI | Reads transcripts, spends AI | Runs | Off. Check now on a registered call looks once with your sign-in |
 | Held messages re-sorted (`held_recheck`) | Once per build at start, and when an admin edits a client's names | AI | Spends AI | Runs | Off: held messages stay held |
 | Reminders and notices (`notices`) | Each person's ticks | None (the in-app list) | Messages a person (see [Reminders](#reminders)) | Runs | Only for someone who switched on "Send me reminders and Teams messages from this test site" |
@@ -92,8 +91,6 @@ Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each k
 | Look asked, Look replied | A teammate asked me to look at their week; my ask was answered |
 | Status report | Monday's status report is coming and my features need updates |
 | Client call to review | A registered client call I review has proposals |
-
-Four kinds are in the notifier's list and still have switches, but nothing sends them now: `commitment_item`, `taken_over`, `conversation_given` and `conversation_activity`. The switches for the first two still show in Settings (open question).
 
 The Teams bot sends its own rhythm (brief, check-in, close out, nudges, client calls) only with "Let FocusTime message me in Teams" and that kind on, all off by default.
 

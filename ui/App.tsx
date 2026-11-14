@@ -150,10 +150,10 @@ function storedLoc(): Loc | null {
 const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
-  week: "The week's blocks, with Add work beside them",
-  ahead: "Features, epics and stories ahead: Grid, Gantt, Readiness and Backlog",
-  inbox: "What needs you: promises, conversations, sends, captures and drafts",
-  status: "Monday's status report: this week's feature updates",
+  week: "Week: the week's blocks, with a block's panel beside them",
+  ahead: "Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention",
+  inbox: "Inbox: From chats, Promises and Captures",
+  status: "Status: this week's feature updates for Monday's status report",
 };
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -1880,7 +1880,7 @@ export function App() {
       // Week counts the week's personal events, Today today's.
       const n = personalCount(base === "today" ? data.week.days.filter((d) => d.date === data.planDay.date) : data.week.days);
       return (
-        <button type="button" className="status-chip personal-hidden" onClick={() => void saveShowPersonal(true)} title="Personal events are hidden on Week and Today. They still count in risk and free time. Click or press G to show them">
+        <button type="button" className="status-chip personal-hidden" onClick={() => void saveShowPersonal(true)} title="Personal events are hidden on Week and Day. They still count in risk and free time. Click or press G to show them">
           {n} personal hidden
         </button>
       );
@@ -2313,7 +2313,7 @@ export function App() {
             <p className="hidden-days-note">
               <span role="status">{hiddenWords}</span>
               <span aria-hidden="true"> · </span>
-              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label="Show hidden days" title="Shows them until you leave Week; the setting is in Week's ⋯">
+              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label="Show hidden days" title="Shows them until you leave Week; the setting is under Week's View options">
                 Show
               </button>
             </p>

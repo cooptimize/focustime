@@ -61,8 +61,6 @@ export type PollDeps = {
   teams: TeamsStore;
   /** CV-1: the shared conversations (absent: the AP-1 rules, for older callers and tests). */
   conversations?: ConversationStore;
-  /** CV-1: escalation, reminders and follow-through, after the chats are read (actions/conversation-upkeep.ts). */
-  upkeep?: (now: string) => Promise<void>;
   users: () => Promise<FocusUser[]>;
   person: (userId: string) => Promise<PollPerson | null>;
   homeTenant: () => Promise<string | null>;
@@ -106,10 +104,9 @@ export function peopleOnce(deps: Pick<PollDeps, "person">) {
 /**
  * One cycle: every due chat (or, on Refresh, the given ones whatever the hour), read once with the first follower's
  * token that works. Never throws for a chat; returns counts. ENV-1, a Refresh on a test site: `onlyAs` reads with that
- * one person's sign-in and nobody else's (a chat they can't read is left as it was, not marked for reconnecting), and
- * `upkeep: false` runs no conversation upkeep.
+ * one person's sign-in and nobody else's (a chat they can't read is left as it was, not marked for reconnecting).
  */
-export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: readonly string[]; onlyAs?: string; upkeep?: boolean } = {}): Promise<CycleResult> {
+export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: readonly string[]; onlyAs?: string } = {}): Promise<CycleResult> {
   const out: CycleResult = { polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 };
   const now = deps.now();
   const instant = Temporal.Instant.from(now);
@@ -183,7 +180,6 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
 
   if (out.polled) await deps.teams.expire(instant.subtract({ hours: live.retentionDays * 24 }).toString()).catch(() => 0);
   if (out.polled) await deps.teams.expireCalls(instant.subtract({ hours: CALL_KEEP_HOURS }).toString()).catch(() => 0);
-  if (deps.upkeep && o.upkeep !== false) await deps.upkeep(now).catch(() => deps.log({ source: "plan", op: "conversations_upkeep", kind: "failed" }));
   deps.log({ source: "plan", op: "requests_poll", kind: o.force ? "refresh" : "cycle", count: out.polled });
   deps.log({ source: "plan", op: "requests_poll_messages", count: out.messages });
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });

@@ -7,7 +7,12 @@ import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review", "conversation_given", "conversation_activity"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review"] as const;
+/**
+ * NM-1: kinds nothing sends any more (IB-4 took out what sent them). A person's saved choice for one stays in the store,
+ * unread: the settings reader skips these keys instead of calling them unknown.
+ */
+export const RETIRED_KINDS: readonly string[] = ["commitment_item", "taken_over", "conversation_given", "conversation_activity"];
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -25,8 +30,6 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   followups: "Promises due",
   expiry: "Expiring secrets",
   asks: "Urgent requests",
-  commitment_item: "DevOps item not created yet",
-  taken_over: "Someone took over your promise",
   story_taken: "Someone took your story",
   sent_to_you: "Work sent to your week",
   send_answered: "Answers to work you sent",
@@ -38,8 +41,6 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   item_edited: "Someone edited your item",
   status_report: "Monday's status report",
   meeting_review: "Client calls to review",
-  conversation_given: "A conversation handed to you",
-  conversation_activity: "New on a conversation you have",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when nothing is on today yet.",
@@ -55,8 +56,6 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   followups: "Once a workday when promises are due today or overdue.",
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
   asks: "When AI sorts a request from a client chat you are in as needing someone now.",
-  commitment_item: "Once, when a promise in a client chat needs a DevOps item and a working day has passed without one.",
-  taken_over: "When a teammate takes over something you said you'd do in a client chat.",
   story_taken: "When a teammate takes a DevOps story assigned to you with Take one in FocusTime.",
   sent_to_you: "When a teammate sends a feature or story to your week.",
   send_answered: "When someone accepts, passes on or can't take work you sent.",
@@ -68,8 +67,6 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   item_edited: "When a teammate changes the title, description or acceptance criteria of a DevOps item you own on its story card in FocusTime, once a day per item.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
   meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
-  conversation_given: "When a teammate gives you a conversation or adds you as a helper.",
-  conversation_activity: "When someone writes in a conversation you have, or asks again on one you closed.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
 export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved", "item_edited"]);
@@ -212,7 +209,7 @@ export function collapse(held: readonly Notice[], at: string): Notice | null {
   // Titles on one line: notification popups show about three lines.
   const names = held.slice(0, MAX_LINES).map((n) => n.title);
   if (held.length > MAX_LINES) names.push(`${held.length - MAX_LINES} more`);
-  const lines = [names.join(" · "), routes.size === 1 ? "Click to open." : "Click to open Today."];
+  const lines = [names.join(" · "), routes.size === 1 ? "Click to open." : "Click to open Day."];
   return {
     kind: "held",
     key: `held:${held.map((n) => n.key).join("|")}`.slice(0, 500),
@@ -252,7 +249,7 @@ export const notices = {
   }),
   /** Step 17: every other Thursday after Done in Plan the week, and the first Thursday of the month (Roadmap › Plan ahead). */
   planAhead: (key: string, at: string): Notice => ({ kind: "plan_ahead", key, title: "Look ahead 4 weeks", body: "Next week is planned. Time to look 4 weeks ahead: blocks per week and dates.\nClick to open Backlog's Gantt.", buttons: [open("Open Gantt")], route: "ahead", at, ref: key }),
-  direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Plan ahead.`, buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
+  direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Backlog's Gantt.`, buttons: [open("Open Gantt")], route: "ahead", at, ref: key }),
   timerEnd: (breakOver: boolean, label: string, startedAt: string, at: string): Notice => ({
     kind: "timer",
     key: `timer:${startedAt}`,
@@ -288,9 +285,6 @@ export const notices = {
   },
   /** AP-2: an ask AI sorted as needing me now, once per ask. */
   urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent request from ${clientName}`, body: `${title}\nClick to open Conversations.`, buttons: [open("Open Conversations")], route: "conversations", at }),
-  /** CV-1: one reminder to the committer, a working day after a promise that needs a DevOps item. */
-  commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open Promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
-  /** CV-1: told quietly, once, that a teammate took a promise over. */
   /** PV-1: told quietly, once, that a teammate took one of my stories (Take one). Never the item's title. */
   storyTaken: (id: number, byName: string, itemId: number, at: string): Notice => ({ kind: "story_taken", key: `story_taken:${id}`, title: `${byName} took #${itemId}`, body: "It's assigned to them in DevOps now. Nothing more for you to do.", buttons: [open("Open Week")], route: "week", at }),
   /** SW-1: work sent to my week, once per send and recipient. */
@@ -320,11 +314,6 @@ export const notices = {
     route: `meeting:${occurrenceId}`,
     at,
   }),
-  takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
-  /** Part 0: handed to me: given, or added as a helper. */
-  conversationGiven: (eventId: number, byName: string, title: string, helper: boolean, at: string): Notice => ({ kind: "conversation_given", key: `conversation_given:${eventId}`, title: helper ? `${byName} added you as a helper` : `${byName} gave this to you`, body: `${title}\nClick to open it.`, buttons: [open("Open Inbox")], route: "conversations", at }),
-  /** Part 0: something new on one I have (a new message, or someone asking again on one I closed). */
-  conversationActivity: (key: string, heading: string, title: string, at: string): Notice => ({ kind: "conversation_activity", key, title: heading, body: `${title}\nIt stays with you.`, buttons: [open("Open Inbox")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length
       ? { kind: "expiry", key: `expiry:${date}`, title: lines.length === 1 ? "Expiring soon" : `${lines.length} expiring soon`, body: lines.slice(0, 3).map((l) => l.text).join("\n"), buttons: [open("Open Settings")], route: `settings:${lines[0]!.section}`, at }

@@ -21,7 +21,7 @@ type Done = { results: { proposalId: number; ok: boolean; message: string }[]; l
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const KIND_HEAD: Record<ProposalBody["kind"], string> = { gap: "New in DevOps", commitment: "Promises and Waiting on", comment: "Comments on DevOps items" };
+const KIND_HEAD: Record<ProposalBody["kind"], string> = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on DevOps items" };
 const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
 
 export function Meetings({ occurrence, onOpen, onClose, colors }: { occurrence: number | null; onOpen: (id: number | null) => void; onClose: () => void; colors: Record<string, string> }) {
@@ -156,7 +156,7 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
         <section className="mtg-done" role="status" aria-label="What was done">
           <h3>{done.results.filter((x) => x.ok).length} done{done.results.some((x) => !x.ok) ? `, ${done.results.filter((x) => !x.ok).length} didn't go through` : ""}</h3>
           <ul>{done.results.map((x) => <li key={x.proposalId} className={x.ok ? undefined : "problem"}>{x.message}</li>)}</ul>
-          <p className="muted">Undo any DevOps change in Settings › Data.</p>
+          <p className="muted">Undo any DevOps change in Settings › Activity.</p>
         </section>
       )}
       {(["gap", "commitment", "comment"] as const).map((kind) => {
@@ -172,7 +172,7 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
       {o.state === "ready" && !r.proposals.length && <p className="muted">Nothing to propose from this call.</p>}
       {editable && open.length > 0 && (
         <div className="mtg-bar">
-          <span role="status">{ticked.length} of {open.length} ticked{writes && !r.canWrite ? " · Enable DevOps writes for this client in Settings › Clients first" : ""}</span>
+          <span role="status">{ticked.length} of {open.length} ticked{writes && !r.canWrite ? " · Enable DevOps writes for this client in Settings › DevOps first" : ""}</span>
           <span className="mtg-bar-actions">
             <button type="button" className="mini" onClick={() => setKeep(new Set())} disabled={!ticked.length}>Untick all</button>
             <button type="button" className="mini primary" disabled={!ticked.length || (writes > 0 && !r.canWrite) || prep?.busy} onClick={() => void startConfirm()}>
@@ -221,9 +221,9 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; tic
   const save = () => text.trim() && text.trim() !== main && onEdit({ [field]: text.trim() });
   const where =
     b.kind === "gap" ? `${b.type}${b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ", not under a feature yet (saved as your draft)"}`
-    : b.kind === "commitment" ? `${b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "in your Waiting on"}`
+    : b.kind === "commitment" ? `${b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
     : `${NOTE[b.note]} on #${b.itemId} ${b.itemTitle}`;
-  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "client" ? "Added to your Waiting on" : "Added to Promises") : "Done")) : p.state === "skipped" ? "Skipped" : p.state === "failed" ? (p.result?.message ?? "Didn't go through") : null;
+  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "client" ? "Noted with this call" : "Added to Promises") : "Done")) : p.state === "skipped" ? "Skipped" : p.state === "failed" ? (p.result?.message ?? "Didn't go through") : null;
   return (
     <article className={`mtg-prop ${p.state}`}>
       <label className="mtg-tick">
@@ -291,7 +291,7 @@ function ConfirmDialog({ prep, skipped, onCancel, onConfirm }: { prep: { busy: b
             )}
             {d.commitments.length > 0 && (
               <section>
-                <h4>Promises and Waiting on</h4>
+                <h4>Promises</h4>
                 <ul>{d.commitments.map((c) => <li key={c.proposalId}>{c.who}: {c.what}{c.due ? ` · due ${dayLabel(c.due)}` : ""} <span className="muted">({c.shows})</span></li>)}</ul>
               </section>
             )}

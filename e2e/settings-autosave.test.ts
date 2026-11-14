@@ -88,7 +88,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     // Leaving with that field still wrong doesn't drop it silently: Settings stays and the field is focused.
     await settingsSection(page, "focus").catch(() => undefined);
     await page.waitForTimeout(400);
-    await expect(page.locator(".ps-head h2").textContent()).resolves.toBe("Today and Week");
+    await expect(page.locator(".ps-head h2").textContent()).resolves.toBe("Day and Week");
 
     // A network error: "Couldn't save. Retry", and Retry saves once the network is back.
     await page.route("**/api/action", async (route) => ((route.request().postData() ?? "").includes('"settings.save"') ? route.abort() : route.continue()));
@@ -132,7 +132,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     expect(layout).toMatchObject({ inner: "auto", scrolled: true, page: 0 });
     expect(layout.navTop).toBeGreaterThanOrEqual(0);
     expect(layout.width).toBeLessThanOrEqual(1100);
-    await expect(page.locator('.ps-rail [aria-current="page"] span').first().textContent()).resolves.toBe("Today and Week");
+    await expect(page.locator('.ps-rail [aria-current="page"] span').first().textContent()).resolves.toBe("Day and Week");
     await page.close();
   }, T);
 

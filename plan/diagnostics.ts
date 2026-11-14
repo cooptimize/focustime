@@ -27,7 +27,7 @@ export const PROMISE_REASON_WORDS: Record<PromiseReason, string> = {
   who_unknown: "The commitment has no person id",
   my_name_other_id: "My name, but another person id (a second account or a guest copy)",
   same_first_name_other_user: "Another FocusTime user with my first name",
-  filtered: "My promise exists but Promises and Needs you leave it out",
+  filtered: "My promise exists but the Inbox leaves it out",
 };
 
 /** A gap is a reason that isn't "shown" or "someone else". */

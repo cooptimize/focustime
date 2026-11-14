@@ -4,14 +4,11 @@
 // the committer's working days, Unclaimed for leads, Take it over; follow-through suggestions; and My promises with the
 // Wingtip promise on Today. Fictional names (the repo's names rule).
 import { describe, expect, it } from "vitest";
-import { weekConfig } from "../config/defaults.ts";
 import type { MyPromisesData } from "../plan/conversation-views.ts";
-import { aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer, aWorkItem } from "../test/builders/index.ts";
+import { aClientChat, aCommitmentAnswer, aConversationUpdate, anUpdateAnswer } from "../test/builders/index.ts";
 import { BLAKE, CHAT, allianceAnswer, EVAN, LENA, SAM, world, ZONE } from "../test/conversations.ts";
-import type { WorkItem } from "../week/types.ts";
 import { conversationAction, dayPromises } from "./conversation-actions.ts";
 import { cfg, OUTSIDER, people, type W } from "../test/conversation-people.ts";
-import { upkeep } from "./conversation-upkeep.ts";
 import { applyOrg } from "../config/org-apply.ts";
 import { resolveRules } from "../config/org.ts";
 
@@ -28,12 +25,6 @@ async function alliance(w: W) {
   const [c] = await w.convs.conversations([CHAT.chatId]);
   return c!;
 }
-
-const upkeepDeps = (w: W, items: WorkItem[] = []) => ({
-  teams: w.teams, convs: w.convs, now: w.now(), defaultHours: { ...weekConfig.hours, timeZone: ZONE },
-  hoursOf: async () => ({ hours: { ...weekConfig.hours, timeZone: ZONE }, ptoDays: new Set<string>() }),
-  items: async () => items, userByEmail: async (e: string) => (e === "evan@contoso.example" ? EVAN.userId! : null), ai: async () => null, clientName: async () => "Contoso Supply", log: () => {},
-});
 
 describe("views", () => {
   it("the committer has it in Needs you with one primary action; until someone claims it a teammate sees it as Up for grabs", async () => {
@@ -135,12 +126,9 @@ describe("IB-4: no chasing, no follow-through", () => {
     const p = await people(w, { leads: [SAM.userId!] });
     await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
     await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause found", at: "2026-11-04T19:55:00Z", scope: true } });
-    const items = [aWorkItem({ id: 4101, title: "Movement dashboard refresh", assignedToEmail: "evan@contoso.example" })];
-    // Days later: nothing escalated, nothing suggested, no AI asked.
+    // Days later, after another pass over the chat: nothing escalated, nothing suggested (NM-1: no job runs after a read).
     w.setNow("2026-11-09T20:00:00Z");
-    let asked = 0;
-    expect(await upkeep({ ...upkeepDeps(w, items), ai: async () => (asked++, null) })).toEqual({ escalated: 0, suggestions: 0 });
-    expect(asked).toBe(0);
+    await w.run(CHAT, []);
     expect(await w.convs.suggestionsIn([c.id])).toEqual([]);
     for (const k of await w.convs.commitmentsIn([c.id])) expect(k.escalatedAt).toBeNull();
   });

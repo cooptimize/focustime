@@ -272,7 +272,7 @@ export const ORG_SPECS = {
   "devops.poll_minutes": { kind: "rule", area: "organization", label: "DevOps check interval (minutes)", builtin: 1, parse: intIn(1, 30, "minutes") },
   // AH-3: Fix next looks at the top N of each backlog (epics, features, stories, each on its own), plus what's dated in
   // the next 4 weeks and what I own or lead.
-  "ahead.fix_top_n": { kind: "rule", area: "organization", label: "Fix next looks at the top N of each backlog", builtin: 30, parse: intIn(10, 100, "items") },
+  "ahead.fix_top_n": { kind: "rule", area: "organization", label: "Needs attention looks at the top N of each backlog", builtin: 30, parse: intIn(10, 100, "items") },
   // KB-1: where the standards are read from (public GitHub, read only). An empty branch is the repo's default branch.
   "standards.repo_url": { kind: "rule", area: "organization", label: "Standards repo", builtin: DEFAULT_STANDARDS_REPO, parse: standardsRepo },
   "standards.branch": { kind: "rule", area: "organization", label: "Standards branch", builtin: "", parse: standardsBranch },
@@ -322,7 +322,7 @@ export const CLIENT_SPECS = {
   } },
   // AH-3: the gaps Fix next (and Ahead's Readiness) counts for this client; all four by default. Turning Unsized off
   // suits a client that doesn't size in DevOps.
-  fix_gaps: { kind: "rule", area: "clients", label: "Gaps Fix next counts", builtin: [...GAP_KINDS] as GapKind[], parse: (v) => {
+  fix_gaps: { kind: "rule", area: "clients", label: "What Needs attention counts", builtin: [...GAP_KINDS] as GapKind[], parse: (v) => {
     if (!Array.isArray(v) || v.some((x) => typeof x !== "string" || !(GAP_KINDS as readonly string[]).includes(x))) throw new OrgInputError(`A list of gaps from: ${GAP_KINDS.join(", ")}`);
     return GAP_KINDS.filter((k) => v.includes(k));
   } },
@@ -342,7 +342,7 @@ export type ClientKeyName = keyof typeof CLIENT_SPECS;
 export type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number; /** PL-1: % of a client's block hours left unplanned for walk-ins (the level's default; a person sets it per client). */ keepOpen: number };
 export const LEVEL_SPECS = {
   draft_stories: { kind: "level", area: "levels", label: "Break down offered", builtin: true, parse: bool },
-  readiness_nudges: { kind: "level", area: "levels", label: "Readiness nudges in Plan ahead", builtin: true, parse: bool },
+  readiness_nudges: { kind: "level", area: "levels", label: "Needs attention nudges", builtin: true, parse: bool },
   // "plan_share": the share of a client's free time Plan the week plans up to before the amber over line. Named so a
   // later per-client "Keep open" share can join it (planned up to = free × plan share × (1 − keep open)).
   plan_share: { kind: "level", area: "levels", label: "Plan up to (% of free time)", builtin: 100, parse: intIn(50, 100, "percent") },

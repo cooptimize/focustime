@@ -429,7 +429,7 @@ export function DevOpsAction({ clientKey, label, onRun, className = "mini" }: { 
   if (!env) return null;
   if (!env.can(clientKey))
     return (
-      <button type="button" className={`${className} quiet dw-enable`} onClick={() => env.enable(clientKey)} title={`DevOps is read-only for this client until you add your own write PAT in Settings > Clients`}>
+      <button type="button" className={`${className} quiet dw-enable`} onClick={() => env.enable(clientKey)} title={`DevOps is read-only for this client until you add your own write PAT in Settings › DevOps`}>
         Enable DevOps writes
       </button>
     );

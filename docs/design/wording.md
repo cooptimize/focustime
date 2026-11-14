@@ -158,7 +158,7 @@ The words below are no longer shown: the New form, the draft editor and the card
 - **Keep**, **Keep all**: make the offer an ordinary to-do (a feature: placed on the block). The notice says "Kept <title>" or "Kept 3 to-dos for Tuesday", with Undo.
 - **Clear**: a row, "not this one this week"; a block, "no suggestions on this block for the rest of the day"; a day, "no suggestions on Tuesday". The notice says "Cleared …" with Undo.
 - **"3 suggestions are in your blocks."**: the morning card's line under "Nothing on today yet", with Keep all.
-- **Suggestions**: the switch in Day's and Week's ⋯; **Suggest work for empty blocks** in Settings › Planning.
+- **Suggestions**: the switch under Day's and Week's View options; **Suggest work for empty blocks** in Settings › Day and Week.
 - Retired: the dashed "From Mon" cards' Keep here, "N unfinished to-dos suggested in your next blocks · Keep all · Review".
 
 ## PS-1 words (Nov 11)
@@ -216,3 +216,19 @@ The words below are no longer shown: the New form, the draft editor and the card
 - Empty states: **"Nothing from your chats needs an item."**, **"No promises open."**, **"Nothing to sort."**
 - Day's chip: **"From chats · 2"**.
 - Retired from visible copy: "N more in Inbox", "Up for grabs", "Asked you", "You're on it", "Teammate has it", "I'll take it", "Give to…", "Add helper", "Release", "Take it over", "Waiting on <Name>", "Unclaimed", "Snooze…", "Wake it now", "Hide for me", "Not a request", "Not work-related", "Merge into…", "N messages held back", "Sort unsorted", "Filtered as chatter (N)", "Post comment or Skip".
+
+## NM-1 words (Nov 13)
+
+The app's own words use the names the screens use. A string a person reads never uses a name on the Renamed list (`ui/guide/retired.ts`) and never writes a control as a character (⋯ ‹ › × or a lone +): `npm run guards` fails on one. An old name lives on only where people search: a setting's `old` names, a command's `aka`, search `keywords`, and the Renamed list. A word that is also an ordinary word ("Today" the day, "Loop closed") is on the guard's short allow list with its reason (`NAMES_ALLOWED` in `scripts/words-guard.ts`).
+
+- A control is named: **More** (the top bar's menu, a to-do's or a row's menu), **View options** (Week's and Day's), **Actions** (a day's menu on Week, a suggestion's), **Previous**, **Next**, **Add**, **Close**. A path reads "More › Send feedback", "Settings › Activity".
+- Tab tooltips, one line each: **"Day: what's next, what's urgent and the day's blocks"**, **"Week: the week's blocks, with a block's panel beside them"**, **"Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention"**, **"Status: this week's feature updates for Monday's status report"**, **"Inbox: From chats, Promises and Captures"**.
+- Settings: the section **Day and Week** (was Today and Week); **Needs attention nudges** with the switch "Show Needs attention nudges" (was Readiness nudges); **Look-ahead rituals** (was Plan ahead rituals), "Both open Backlog › Gantt"; **"Let urgent requests through"** (was Let urgent asks through).
+- Admin rules: **"Needs attention looks at the top N of each backlog"**, **"What Needs attention counts"**, **"Needs attention nudges"** (the level column).
+- **Back to Day** on the phone's Backlog notice, the Focus screen and Close out. The notice: "Grid, Gantt and Needs attention need room for the whole backlog."
+- Where a line points at Settings it names the section as it is today: **Settings › Activity** (Undo, Retry, what was logged), **Settings › Your data** (Export, Delete), **Settings › Accounts and calendars** (Outlook, Microsoft permissions), **Settings › DevOps** (a write PAT), **Settings › Focus** (break length), **Settings › Day and Week** (timeboxing, the level's defaults), **Settings › AI and assistant** (the assistant's history).
+- The key list's Inbox row: "Inbox: what needs you, in three lists: From chats, Promises and Captures". Its rows say "a block's panel", never "the block panel" or "Add work" for the panel.
+- Notices: "Click to open Day.", "Click to open Backlog's Gantt." with **Open Gantt**; the push title **"Promises due"**. Teams: "N more blocks on Day".
+- Client calls: the heading **Promises**; a commitment from the client's side reads **"noted with this call"** (was "in your Waiting on").
+- The command menu: the group **From chats** (was Requests), "Backlog › Gantt: the next 12 weeks" (was Plan ahead), "Timeline on Day", "Add a promise to Day", "Inbox items for Day and Week".
+

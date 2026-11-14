@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "./schema.ts";
 import { settingsEdit } from "./settings.ts";
+import { RETIRED_KINDS } from "../plan/notify.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
@@ -20,6 +21,28 @@ describe("[notify]", () => {
     expect(p.config.notify.kinds).toMatchObject({ checkin: false, vm: false, closeout: true });
     expect(p.config.notify).toMatchObject({ quiet: "off", quietPto: false });
     expect(text).toContain("[notify]");
+  });
+
+  // NM-1: four kinds were removed (nothing sent them). A choice someone saved for one stays in their settings, unread.
+  it("a saved choice for a removed kind is kept and skipped: the settings still load, and a later save leaves it alone", () => {
+    const saved = `${TOML}\n[notify]\ncommitment_item = false\ntaken_over = false\nconversation_given = true\nconversation_activity = false\ncheckin = false\n`;
+    // Not an error even where unknown fields are errors, and not listed as ignored either.
+    const strict = parseConfig(saved, { strict: true });
+    expect(strict.ok ? [] : strict.errors).toEqual([]);
+    const p = parseConfig(saved);
+    expect(p.ok ? (p.ignored ?? []) : p.errors).toEqual([]);
+    if (!p.ok) return;
+    expect(p.config.notify.kinds.checkin).toBe(false);
+    for (const k of RETIRED_KINDS) expect(k in p.config.notify.kinds, k).toBe(false);
+    // Saving another switch keeps the old lines where they were (nothing is deleted or migrated).
+    const text = settingsEdit("notify", { kinds: { vm: false } })(saved);
+    for (const line of ["commitment_item = false", "taken_over = false", "conversation_given = true", "conversation_activity = false"]) expect(text).toContain(line);
+    expect(parseConfig(text).ok).toBe(true);
+    // A removed kind can't be switched any more, and a field nobody ever had is still refused.
+    expect(() => settingsEdit("notify", { kinds: { taken_over: true } })).toThrow();
+    const never = parseConfig(`${TOML}\n[notify]\nnever_was = true\n`);
+    expect(never.ok && never.ignored).toEqual(["notify.never_was"]);
+    expect(parseConfig(`${TOML}\n[notify]\nnever_was = true\n`, { strict: true }).ok).toBe(false);
   });
 
   it("TB-1: Let FocusTime message me in Teams is off unless the person turns it on", () => {

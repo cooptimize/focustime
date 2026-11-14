@@ -1011,3 +1011,12 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **The assistant.** `assistant/allowlist.ts` (the inbox tool's lists, no snooze or ownership tools), `assistant/reads.ts` (`inboxRead`), `assistant/context.ts`.
 - **Demo.** `sources/demo/` seeds two suggestions, one conversation that isn't, and two promises that clear on the first look.
 - **Tests.** `plan/slim-inbox.test.ts`, `actions/slim-inbox.test.ts`, `plan/diagnostics.test.ts`, `server/demo-inbox.test.ts`; e2e `e2e/ib4-inbox.test.ts`, and the conversation, close the loop, capture and Day tests moved to the three lists. Screenshots: `scripts/screenshot-ib4.ts` into `docs/ux/ib4/`.
+
+## NM-1: the app's own names, and dead parts removed (Nov 13)
+
+- **The guard.** `scripts/words-guard.ts`: `namesIn`, `namesHits`, `NAMES_ALLOWED` (ordinary words that are also old names, each with its reason), `codePieces` with a looser JSX pass for this check; run by `scripts/guards.ts` as the guard "old names" beside names, desktop, process and words. It reads the Renamed list from `ui/guide/retired.ts`.
+- **The words.** Strings only, across `ui/`, `actions/`, `plan/`, `config/`, `assistant/`, `server/teams/` and `public/legal.html`; the before and after of each is `docs/ux/nm1/words.md`. `ui/settings/registry.ts` holds each renamed label's old names; `actions/registry.ts` and `ui/menu.ts` hold each command's (`aka`).
+- **The Guide.** `ui/guide/sections.ts`: the Backlog section's id is `backlog`, with `ahead` in `OLD_SECTIONS`; `TAB_SECTIONS` maps it to the tab's code name `ahead`.
+- **Removed.** `actions/conversation-upkeep.ts`; `PollDeps.upkeep` and `pollCycle`'s `upkeep` option (`actions/request-poll.ts`); the `conversations_upkeep` row in `config/background-policy.ts`; four kinds, their labels, hints and builders in `plan/notify.ts` (`RETIRED_KINDS` lists them so `config/schema.ts` skips a saved switch); the Client chats group in `ui/Settings.tsx`'s Notifications; `@microsoft/teams.cards` from `package.json`; five selectors in `ui/styles.css`.
+- **The now mark.** `plan/nowline.ts`: `nowSpot` answers `none` for a day drawn as one cell; `WholeDay` in `ui/WeekGrid.tsx` no longer takes a `now`.
+- **Tests.** `scripts/words-guard.test.ts`, `scripts/guards.test.ts`, `ui/settings/registry.test.ts`, `ui/menu.test.ts`, `plan/notify.test.ts`, `config/notify.test.ts`, `config/background-policy.test.ts`, `plan/nowline.test.ts`, `e2e/nm1-now-mark.test.ts`; `e2e/nm1-shots.test.ts` takes the screenshots in `docs/ux/nm1/` (only with `NM1_SHOTS=<folder>`).

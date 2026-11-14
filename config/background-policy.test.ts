@@ -36,7 +36,7 @@ describe("which environment is production", () => {
 
   it("outside production: the never list never runs, opt_in only for the person who opted in, in_use only in use", () => {
     const p = backgroundPolicy({ FOCUSTIME_ENV: "dev" });
-    const never: BackgroundName[] = ["requests_poll", "conversations_upkeep", "meeting_capture", "teams_status", "held_recheck", "vm_autostart", "coop_mailbox"];
+    const never: BackgroundName[] = ["requests_poll", "meeting_capture", "teams_status", "held_recheck", "vm_autostart", "coop_mailbox"];
     for (const n of never) expect(p.allows(n, { optIn: true, inUse: true }), n).toBe(false);
     for (const n of ["notices", "web_push", "teams_rhythm"] as const) {
       expect(p.allows(n), n).toBe(false);
@@ -62,10 +62,12 @@ describe("which environment is production", () => {
 });
 
 describe("FOCUSTIME_REQUESTS_POLL, the watch period override", () => {
-  it("on outside production: the chat poll and its upkeep run, and it is a watch period", () => {
+  it("on outside production: the chat poll runs, and it is a watch period", () => {
     const p = backgroundPolicy({ FOCUSTIME_ENV: "dev", FOCUSTIME_REQUESTS_POLL: "on" });
     expect(p.allows("requests_poll")).toBe(true);
-    expect(p.allows("conversations_upkeep")).toBe(true);
+    // NM-1: the upkeep job that ran after each read is gone; its name is no longer background work anywhere.
+    expect(p.allows("conversations_upkeep")).toBe(false);
+    expect(BACKGROUND_NAMES as readonly string[]).not.toContain("conversations_upkeep");
     expect(p.watchPeriod).toBe(true);
     // It opens the chat poll only.
     expect(p.allows("meeting_capture")).toBe(false);
@@ -100,6 +102,17 @@ describe("the scheduler's jobs", () => {
     for (const n of literal) expect(isBackgroundName(n), n).toBe(true);
     for (const n of [MEETING_JOB, RETENTION_JOB, STANDARDS_JOB, OWNERSHIP_BACKFILL_JOB, "people_refresh"]) expect(isBackgroundName(n), n).toBe(true);
     expect(src).toMatch(/policy: background,/);
+  });
+
+  // NM-1: the policy lists exactly what can run on its own: no entry for work that no longer exists.
+  it("every name in the policy is used by something that runs (reserved names apart)", () => {
+    const files = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}/${e.name}`) : /\.ts$/.test(e.name) && !/\.test\.ts$/.test(e.name) ? [`${dir}/${e.name}`] : []));
+    const code = ["server", "actions", "store", "sources"].flatMap(files).map((f) => readFileSync(join(root, f), "utf8")).join("\n");
+    for (const n of BACKGROUND_NAMES) {
+      if (BACKGROUND[n].kind === "reserved") continue;
+      expect(code.includes(`"${n}"`), `${n} is in the policy but nothing runs under that name`).toBe(true);
+    }
+    expect(code).not.toContain('"conversations_upkeep"');
   });
 
   it("production keeps every job, in order, the same objects", () => {

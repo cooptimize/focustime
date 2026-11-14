@@ -46,7 +46,7 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
         <p className="focus-kind">Nothing running</p>
         <div className="focus-actions">
           <button ref={main} type="button" className="focus-btn primary" onClick={onStart}>Start focus</button>
-          <button type="button" className="focus-btn" onClick={onClose}>Back to Today</button>
+          <button type="button" className="focus-btn" onClick={onClose}>Back to Day</button>
         </div>
       </main>
     );
@@ -101,8 +101,8 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
         </div>
       )}
       {sound && <div className="focus-sound">{sound}</div>}
-      <button type="button" className="link-btn focus-back" onClick={onClose} title="Back to Today (Esc); the timer keeps running">
-        Back to Today, the timer keeps running
+      <button type="button" className="link-btn focus-back" onClick={onClose} title="Back to Day (Esc); the timer keeps running">
+        Back to Day, the timer keeps running
       </button>
     </main>
   );

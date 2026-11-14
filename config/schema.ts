@@ -7,7 +7,7 @@ import { DEFAULT_AHEAD, type AheadSettings } from "../plan/backlog.ts";
 import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
 import { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "../ai/types.ts";
 import type { Guidance, OrgView } from "./org-apply.ts";
-import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
+import { DEFAULT_NOTIFY, NOTIFY_KINDS, RETIRED_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { CLOSEOUT_MINUTES, HM, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 
 /** TB-2: the In Teams switches as [notify] keys. */
@@ -692,6 +692,8 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         if ((NOTIFY_KINDS as readonly string[]).includes(k)) {
           if (typeof t[k] !== "boolean") err(`notify.${k}`, "Must be true or false");
           else notify.kinds[k as NotifyKind] = t[k] as boolean;
+        } else if (RETIRED_KINDS.includes(k)) {
+          // NM-1: a switch for a notice nothing sends any more. The saved choice stays where it is and is not read.
         } else if (k === "quiet") {
           if (t.quiet !== "outside_hours" && t.quiet !== "off") err("notify.quiet", 'Must be "outside_hours" or "off"');
           else notify.quiet = t.quiet;

@@ -333,7 +333,7 @@ export function DoneBatch({ offers, dayWords, onDone }: { offers: DoneOffer[]; d
               {busy ? "Reading…" : `Preview ${todo.length || ""}`.trim()}
             </button>
           ))}
-        <span className="muted">{done < n ? (previews ? "Nothing is written until Confirm; each only if the item hasn't changed in DevOps since. " : "Nothing is written before the preview. ") : ""}Undo is in Settings › Data.</span>
+        <span className="muted">{done < n ? (previews ? "Nothing is written until Confirm; each only if the item hasn't changed in DevOps since. " : "Nothing is written before the preview. ") : ""}Undo is in Settings › Activity.</span>
       </p>
     </div>
   );
