@@ -63,6 +63,10 @@ describe("namesHits", () => {
   it("finds strings and JSX text, and leaves comments alone", () => {
     expect(namesHits("ui/x.tsx", '// Today, the tab\nconst a = "Back to Today";\n<p>Open Ahead</p>\n<span title="in Week\'s ⋯">x</span>\n').map((h) => h.line)).toEqual([2, 3, 4]);
   });
+  it("finds JSX text that holds brackets or a colon, and text that ends its line", () => {
+    const src = '<div className="foot">Every key is also a command menu entry (Ctrl K) or a ⋯ menu item.</div>\n<p className="muted">\n  On iPhone, add FocusTime to your home screen first (⋯ › Install app), then open it.\n</p>\n<p>\n  As {who}, in {client}\'s DevOps. Undo is in Settings › Data.\n</p>\n<p>Open it from More › Install app (on iPhone).</p>\n';
+    expect(namesHits("ui/x.tsx", src).map((h) => h.line)).toEqual([1, 3, 6]);
+  });
   it("old names stay where people search for them: old, aka and keywords", () => {
     const src = '{ id: "planning", label: "Day and Week", old: ["Today and Week", "Planning"] },\n{ id: "v", label: "Day", aka: ["Today"] },\n{ id: "r", label: "Needs attention nudges", keywords: ["Readiness nudges"] },\n{ id: "bad", label: "Today and Week" },\n';
     expect(namesHits("ui/settings/registry.ts", src).map((h) => h.line)).toEqual([4]);

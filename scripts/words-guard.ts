@@ -65,7 +65,7 @@ type Piece = { line: number; text: string; bare: boolean };
  * .tsx the JSX text. A tiny tokenizer (strings, templates with `${}`, comments, regex literals), so a quote in a
  * comment or a regex never flips the rest of the file.
  */
-export function codePieces(src: string, tsx: boolean): Piece[] {
+export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text that holds brackets or ends its line: "(Ctrl K) or a ⋯ menu item." */ loose = false): Piece[] {
   const out: Piece[] = [];
   const code: string[] = []; // the code with strings and comments blanked, per line, for JSX text
   let line = 1, i = 0, cur = "";
@@ -144,6 +144,10 @@ export function codePieces(src: string, tsx: boolean): Piece[] {
       for (const m of l.matchAll(/[\w"'}\/]>([^<>{}=;()|&]*)/g)) if (/[A-Za-z]/.test(m[1]!)) push(m[1]!, k + 1, false);
       // text between a {expression} and the next tag or expression: {n} picks</span>, {n} pick{n === 1 ? ...
       for (const m of l.matchAll(/\}([^<>{}=;()|&:]*)(?=[<{])/g)) if (/[A-Za-z]/.test(m[1]!)) push(m[1]!, k + 1, false);
+      // NM-1: text between two tags or expressions whatever it holds, and text that runs to the end of its line.
+      if (loose) for (const m of l.matchAll(/[\w"'}\/]>([^<>{}]*)(?=[<{]|$)/g)) if (/[A-Za-z]{2}/.test(m[1]!) && m[1]!.trim().split(/\s+/).length >= 2 && !/[=;]|=>|\b(const|return|typeof)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
+      // NM-1: a line of JSX text with brackets or a colon in it: "On iPhone, add FocusTime to your home screen first (More".
+      if (loose && /^\s*[A-Z][^<>{}=;]*$/.test(l) && l.trim().split(/\s+/).length >= 4 && !/=>|^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);
       // NM-1: text after an {expression} to the end of the line: {name}'s DevOps. Undo is in Settings
       for (const m of l.matchAll(/\}([^<>{}=;()|&:]*)$/g)) if (m[1]!.trim().split(/\s+/).length >= 3 && !/^\s*(as|from|else|satisfies|catch|finally|while)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
       if (/^\s*[A-Za-z][^<>{}=;()|&:]*$/.test(l) && l.trim().split(/\s+/).length >= 3 && !/^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);
@@ -240,7 +244,7 @@ export function namesHits(f: string, text: string): { line: number; says: string
   const add = (line: number, says: string[]) => { if (says.length) by.set(line, new Set([...(by.get(line) ?? []), ...says])); };
   const lines = text.split("\n");
   if (/\.(ts|tsx|mjs)$/.test(f)) {
-    for (const p of codePieces(text, f.endsWith(".tsx"))) {
+    for (const p of codePieces(text, f.endsWith(".tsx"), true)) {
       if (p.bare && oldNamesOn(lines[p.line - 1] ?? "").has(p.text)) continue;
       add(p.line, namesIn(p.text, f));
     }

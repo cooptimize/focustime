@@ -75,4 +75,4 @@ focus on the title, focus return and the phone layout. Styles are `.panel-shell`
 
 ## Settings added since (a record)
 
-- **Suggest work for empty blocks** (SG-1): Settings › Planning, id `suggest-empty-blocks`, config `[plan] suggest_empty_blocks`, on by default. The same switch is Suggestions in Day's and Week's ⋯ (it saves the same setting). Off, nothing is loaded or computed.
+- **Suggest work for empty blocks** (SG-1): Settings › Day and Week, id `suggest-empty-blocks`, config `[plan] suggest_empty_blocks`, on by default. The same switch is Suggestions under Day's and Week's View options (it saves the same setting). Off, nothing is loaded or computed.

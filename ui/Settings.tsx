@@ -1375,7 +1375,7 @@ function PushDevices() {
       {!st.available ? (
         <p className="muted">{st.reason}</p>
       ) : support === "ios-install" ? (
-        <p className="muted">On iPhone, add FocusTime to your home screen first (⋯ › Install app), then open it from there to turn this on.</p>
+        <p className="muted">On iPhone, add FocusTime to your home screen first (More › Install app), then open it from there to turn this on.</p>
       ) : support === "unsupported" ? (
         <p className="muted">This browser can't get push notifications. In-app notifications still work.</p>
       ) : (
