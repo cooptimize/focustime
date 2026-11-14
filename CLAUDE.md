@@ -151,7 +151,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Focus sounds | Sounds made in the app (brown, pink, rain, binaural alpha and beta) that play only while focus runs, plus saved Spotify or YouTube playlists and optional music pause where the host can control players (Settings › Focus) |
 | Deep focus | A focus session that sets the person's Teams status to Do not disturb instead of Busy |
 | Teams status | The person's Teams presence while focus runs: Busy (plain focus, per Settings › Focus) or Do not disturb (deep focus), ending at the time left plus 5 minutes, back to automatic when the session stops, ends or pauses; left alone after the person changes it in Teams. Never from a test site |
-| Backlog | The third tab (3, `#/backlog`, code name `ahead`): every client's DevOps on one screen, to edit, clean up and organize, as a Grid or a Gantt, with one row of filters (Clients, People, Needs attention, Search, Filter for Epic, Dates and Levels, and More for Expand all, Collapse all, Callouts, Show the whole project). One status chip per row, tick rows for the bulk bar. Every edit through the change set; never reorders DevOps |
+| Backlog | The third tab (3, `#/backlog`, code name `ahead`): every client's DevOps on one screen, to edit, clean up and organize, as a Grid or a Gantt, with one row of filters (Clients, People, Needs attention, Search, Filter for Epic, Dates and Levels, and More for Expand all, Collapse all, Callouts, Show the whole project). BL-2: Levels chooses what is listed (Epics, Features or Stories; Features by default): each client's items at that level in that level's own backlog order with the rank number, never grouped by the level above, each row's parent as a label that filters by it, each row opening to what is one level under it; a project with no backlog order by target date. Grid and Gantt alike; Needs attention keeps its own order. One status chip per row, tick rows for the bulk bar. Every edit through the change set; never reorders DevOps |
 | Grid | Backlog's first view: features and epics per client with one state each (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Done) and a plain reason ("9 stories open, about 3 close a week, 2 weeks left"); Trend building under 7 days of counts. Filter › Levels › One level as a list shows one level in backlog order |
 | Gantt | Backlog's second view (`#/backlog/gantt`): bars from DevOps Start and Target Date (solid) or estimated (hatched, "est."), a diamond for the target, weeks with their free hours, months to week 12 |
 | Needs attention | Backlog's filter: only the items I may change with something to fix (missing stories, a target date, an owner, a size, or Stale), near the top of each backlog (the Rule's top N per tier), dated in the next 4 weeks, or features and epics I own; each with its fix and Skip; its count on the chip; each client can turn a kind off. `#/backlog/attention` turns it on |
@@ -254,7 +254,8 @@ Older names still found in decisions, specs and the command menu, with what they
 | Roadmap, Ahead | Backlog |
 | Plan ahead | Backlog's Gantt |
 | Fix next, Gaps, Readiness | Needs attention |
-| Backlog (mode) | Backlog › Filter › Levels › One level as a list |
+| Backlog (mode) | Backlog › Filter › Levels › Stories |
+| One level as a list | Backlog › Filter › Levels (every level is listed in its own rank order since BL-2) |
 | Look-ahead (the week view), Board | Week |
 | Plan the day, Plan today, Add work (panel), Detail panel, Your stories, Planning layout, Add pane, Type box, Week grid | The block panel |
 | Plan the week, Plan (mode), Commit, Week plan | Week with the block panel |

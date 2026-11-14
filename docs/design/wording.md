@@ -186,7 +186,7 @@ The words below are no longer shown: the New form, the draft editor and the card
 - The tab is **Backlog** (never Ahead in what a person reads; Ahead is the code name). Its views are **Grid** and **Gantt**.
 - The toolbar, left to right: the client chips, **People** (Mine, Contributing, Everyone), **Needs attention** with its count, **Search**, **Filter** with a count ("Filter · 2"), then **⋯** ("More: rows and view"). Never "Readiness", "Not ready only" or "Mixed".
 - People across clients that differ names who gets what: **"Everyone for Northwind Foods, Mine for the rest"**.
-- The line under the toolbar only off the defaults: **"Showing 33 of 583"**, then one chip per filter ("Needs attention", "Needs stories", "Stale", "Stories only, in rank order", "Next 4 weeks"), each with ×, and **Clear filters**.
+- The line under the toolbar only off the defaults: **"Showing 33 of 583"**, then one chip per filter ("Needs attention", "Needs stories", "Stale", "Next 4 weeks"), each with ×, and **Clear filters**.
 - Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
 - The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
 - The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.
@@ -231,4 +231,16 @@ The app's own words use the names the screens use. A string a person reads never
 - Notices: "Click to open Day.", "Click to open Backlog's Gantt." with **Open Gantt**; the push title **"Promises due"**. Teams: "N more blocks on Day".
 - Client calls: the heading **Promises**; a commitment from the client's side reads **"noted with this call"** (was "in your Waiting on").
 - The command menu: the group **From chats** (was Requests), "Backlog › Gantt: the next 12 weeks" (was Plan ahead), "Timeline on Day", "Add a promise to Day", "Inbox items for Day and Week".
+
+## BL-2 words (Nov 14)
+
+Backlog lists the level chosen in Filter › Levels, in that level's own rank order.
+
+- Filter › **Levels**: **Epics**, **Features**, **Stories** (each in the client's process's own words); each button's tooltip **"Features, in rank order"**. No checkbox under it.
+- A client's header says what is listed and how: **"Features, in backlog order"**, or for a project with no order field **"Features by target date (no backlog order)"**.
+- The Item column's heading **"Rank · Item"**; the rank number before each row at the level (its tooltip **"Rank 3 in this backlog"** and the last change in DevOps); rows under it have none.
+- A row's parent is a quiet label at the end of its title (its type's icon and title); its tooltip **"In Epic #3305. Show only what's under it"**. Pressing it sets the Epic filter, whose chip names the parent's type when it isn't an epic (**"Feature: Shipment tracking dashboard"**).
+- The command menu: **"Backlog: every client's DevOps in rank order, Grid"**, **"Backlog: stories in rank order"**.
+- After a create at a level that isn't listed: **"Created #5101. Not shown here: Levels lists features"**.
+- Retired: "One level as a list", "Stories only, in rank order" (the chip), "Show down to features" (the old Levels tooltip).
 

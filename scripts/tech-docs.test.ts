@@ -131,6 +131,7 @@ const RETIRED: [string, RegExp][] = [
   ["the Detail panel, Add work panel, Your stories", /\b(Detail panel|Add work panel|Your stories)\b/],
   ["Delivery chats", /\bDelivery chats?\b|\bDelivery team chat\b|\bCustomer collaboration chat\b/],
   ["Needs help from", /\bNeeds help from\b/],
+  ["One level as a list", /\bone level as a list\b/i],
   ["old Settings sections", /\bSettings › (Connections|Data|Planning|Roadmap|Ahead|AI)\b/],
   ["the ⋯ menu", /⋯/],
 ];

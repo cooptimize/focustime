@@ -76,7 +76,7 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Day | `ui/Day.tsx`, `ui/DayTimeline.tsx`, `ui/PhoneDay.tsx` | `week.load`, `inbox.today` | `plan/blockpanel.ts`, `plan/timeline.ts`, `plan/cardfold.ts` |
 | Week | `ui/WeekGrid.tsx`, `ui/BlockCard.tsx` | `week.load` | `week/`, `plan/weekdays.ts`, `plan/evening.ts`, `plan/boardsuggest.ts` |
 | Block panel | `ui/BlockPanel.tsx` | `week.load`, its Add box's searches | `plan/blockpanel.ts`, `plan/addwork.ts` |
-| Backlog | `ui/ahead/` (`Ahead.tsx`, `Grid.tsx`, `Gantt.tsx`, `Toolbar.tsx`, `Bulk.tsx`) | `ahead.load`, `ahead.people` | `plan/gantt-tree.ts`, `plan/ahead-view.ts`, `plan/backlog-status.ts`, `plan/readiness.ts`, `plan/fixnext.ts` |
+| Backlog | `ui/ahead/` (`Ahead.tsx`, `Grid.tsx`, `Gantt.tsx`, `Toolbar.tsx`, `Bulk.tsx`) | `ahead.load`, `ahead.people` | `plan/backlog-list.ts`, `plan/gantt-tree.ts`, `plan/ahead-view.ts`, `plan/backlog-status.ts`, `plan/readiness.ts`, `plan/fixnext.ts` |
 | Status | `ui/Status.tsx`, `ui/StatusMark.tsx` | `status.load`, `status.report` | `plan/status-report.ts`, `plan/status-dot.ts` |
 | Inbox | `ui/inbox/` | `conversations.suggestions`, `inbox.list`, `capture.load` | `plan/slim-inbox.ts`, `plan/inbox-items.ts` |
 | Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
@@ -126,8 +126,8 @@ The week, risks, free time and estimates are pure code in `week/` and `plan/`: n
 
 ## Backlog
 
-- **One tree, two views.** Grid and Gantt fold the same tree (`plan/gantt-tree.ts`): a level for the whole tree (Epics, Features, Stories, named from the process), per-row chevrons, and a collapsed row's roll-up. The Gantt (`ui/ahead/Gantt.tsx`) draws status as the bar's look (`barTreatment` in `plan/gantt.ts`) and one callout per row.
-- **One row of filters.** `ui/ahead/Toolbar.tsx`: Clients, People, Needs attention, Search, Filter (Epic, Dates, Levels, one level as a list) and More. The filters are in the plan store (`ahead.filters`), the level and chevrons in the browser, all mirrored in the address (`plan/ahead-view.ts`).
+- **One list, two views.** Grid and Gantt read the same rows (`plan/backlog-list.ts`): the level chosen in Filter › Levels (Epics, Features, Stories, named from the process; Features by default) in that level's own backlog order (the process's order field, else target date) with each row's rank number and parent, never grouped by the level above; each row followed by what is one level under it, in that level's order. Filters remove rows and never reorder them. Per-row chevrons, Expand all and Collapse all, and a collapsed row's roll-up are in `plan/gantt-tree.ts`. Needs attention keeps its own order (`plan/fixnext.ts`). The Gantt (`ui/ahead/Gantt.tsx`) draws status as the bar's look (`barTreatment` in `plan/gantt.ts`) and one callout per row.
+- **One row of filters.** `ui/ahead/Toolbar.tsx`: Clients, People, Needs attention, Search, Filter (Epic, Dates, Levels) and More. The filters are in the plan store (`ahead.filters`), the level and chevrons in the browser, all mirrored in the address (`plan/ahead-view.ts`).
 - **Needs attention.** Items I may change that miss stories, a target date, an owner or a size, or are stale, near the top of each backlog, each with its fix and Skip (`plan/fixnext.ts`, `plan/readiness.ts`). Skips last 14 days (`ahead_skips` in `kv`); fixes saved this week are counted (`ahead_fixed`).
 - **The change set.** Edits (start, target, size, assignee, state) wait in `ahead_changes` and `ahead_state_changes` until Save, which writes one DevOps `fields` patch per item through the write framework. Review shows conflicts only for fields changed in DevOps since they were staged. The bulk bar over ticked rows stages the same changes (`ahead.stage_bulk`). Backlog never reorders DevOps.
 
