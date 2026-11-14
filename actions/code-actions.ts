@@ -24,7 +24,7 @@ import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
-import { thingsOf, type Thing } from "../plan/code-kinds.ts";
+import { thingsOf, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
 export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search"] as const;
@@ -34,7 +34,7 @@ export type CodeAction = (typeof CODE_ACTIONS)[number];
 export type CodeRefusal = "guest" | "domain" | "automation" | "signed_out" | "unknown";
 
 /** RB-2: one repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
-export type CodeRepoThings = { repo: CodeRepoView; things: Thing[]; cut: boolean; problem: string | null };
+export type CodeRepoThings = RepoThings;
 
 export type CodeClientRef = { clientKey: string; name: string; color: string | null };
 

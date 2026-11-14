@@ -170,6 +170,8 @@ export type MenuEnv = {
   showPatterns?: () => void;
   /** RB-1: open Code (#/code), on a client when one is named. Absent: signed out. */
   showCode?: (clientKey: string | null) => void;
+  /** RB-2: open Code on Search names across clients, the box focused. Absent: signed out, or Code isn't for this account. */
+  searchCode?: () => void;
   /** RB-1: the clients Code lists ("Code: <client>" each), once they are loaded. Never a repo or a file. */
   codeClients?: readonly { clientKey: string; name: string }[];
   /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
@@ -1776,6 +1778,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     // DOC-1: each Technical docs page by name ("Technical docs: Security"); the registry's docs.access opens the Overview.
     ...DOC_PAGES.filter((p) => p.id !== "overview").map((p) => ({ id: `ui.docs.${p.id}`, action: "docs.access", group: "Help", label: `Technical docs: ${p.label}`, aka: ["technical", "docs", ...p.aka], ...(env.showDocs ? { run: () => env.showDocs!(p.id) } : { disabled: "Sign in to read the Technical docs" }) })),
     // RB-1: "Code: <client>" for each client Code lists (never a repo, a folder or a file).
+    // RB-2: "Code: search names" opens Code with the search box focused. The menu itself never shows names or results.
+    ...(env.searchCode ? [{ id: "ui.code.search", action: "code.clients", group: "Code", label: "Code: search names", aka: ["code search", "find in code", "search repos", "find a report", "find a pipeline", "find a model", "search names"], run: () => env.searchCode!() }] : []),
     ...(env.showCode ? (env.codeClients ?? []).map((c) => ({ id: `ui.code.${c.clientKey}`, action: "code.clients", group: "Code", label: `Code: ${c.name}`, aka: ["code", "repo", "repos", "git"], run: () => env.showCode!(c.clientKey) })) : []),
     { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];

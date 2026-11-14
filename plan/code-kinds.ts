@@ -13,6 +13,7 @@
 //   4. Notebooks not found above, by their file type.
 //   5. Everything else is Other, with the language Code already knows for the file.
 import { languageOf, LANG_NAMES } from "./code-languages.ts";
+import type { CodeRepoView } from "./code.ts";
 
 export const KINDS = ["report", "model", "pipeline", "notebook", "dataflow", "lake", "sql", "fabric", "other"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -42,6 +43,9 @@ export type Thing = {
   /** A semantic model's tables, where the layout keeps one file per table. */
   tables?: ThingTable[];
 };
+
+/** One repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
+export type RepoThings = { repo: CodeRepoView; things: Thing[]; cut: boolean; problem: string | null };
 
 // ---------- 1. Fabric items ----------
 
