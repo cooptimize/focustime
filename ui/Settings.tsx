@@ -1192,7 +1192,6 @@ function NotifyForm(p: FormProps) {
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
         {group("Other", ["vm", "followups", "expiry", "asks"])}
-        {group("Client chats", ["commitment_item", "taken_over"])}
         {group("Monday's status report", ["status_report"])}
         {group("Client calls", ["meeting_review"])}
       </div>

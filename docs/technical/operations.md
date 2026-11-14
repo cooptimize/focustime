@@ -93,8 +93,6 @@ Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each k
 | Status report | Monday's status report is coming and my features need updates |
 | Client call to review | A registered client call I review has proposals |
 
-Four kinds are in the notifier's list and still have switches, but nothing sends them now: `commitment_item`, `taken_over`, `conversation_given` and `conversation_activity`. The switches for the first two still show in Settings (open question).
-
 The Teams bot sends its own rhythm (brief, check-in, close out, nudges, client calls) only with "Let FocusTime message me in Teams" and that kind on, all off by default.
 
 ## Deploys

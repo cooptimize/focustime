@@ -275,7 +275,7 @@ Older names still found in decisions, specs and the command menu, with what they
 | ⋯ (the menu) | More |
 | Use AI (personal) | AI for FocusTime (the team's) |
 
-Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have on a week's list (Send to… keeps its own Must), Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). Notification kinds still listed but never sent: `commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`.
+Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have on a week's list (Send to… keeps its own Must), Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). Four notification kinds nothing sent were removed in NM-1 (`commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`); a saved choice for one stays in the store, unread.
 
 ## Working style
 

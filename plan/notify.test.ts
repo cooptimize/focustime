@@ -1,7 +1,9 @@
 // Step 15.5: notifications: per-kind switches, quiet hours, holding during focus, collapsing, routes, texts.
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { legacyHours } from "../config/schema.ts";
-import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, noticeDone, notices, parseRoute, RITUAL_KINDS, routeText, type DoneFacts, type GateFacts, type Notice, type NotifyKind } from "./notify.ts";
+import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, KIND_HINT, KIND_LABEL, noticeDone, notices, NOTIFY_KINDS, parseRoute, RETIRED_KINDS, RITUAL_KINDS, routeText, type DoneFacts, type GateFacts, type Notice, type NotifyKind } from "./notify.ts";
 
 const NY = "America/New_York";
 const facts = (over: Partial<GateFacts> = {}, kinds: Partial<Record<NotifyKind, boolean>> = {}): GateFacts => ({
@@ -178,5 +180,36 @@ describe("urgent asks (AP-2)", () => {
     expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent request from Fabrikam", route: "conversations" });
     expect(parseRoute(n.route)).toEqual({ view: "conversations" });
     expect(parseRoute("asks")).toEqual({ view: "asks" });
+  });
+});
+
+// NM-1: the list of kinds is exactly what can be sent. A kind with no builder, a builder nothing calls, or a removed
+// kind coming back fails here.
+describe("the kinds are what can be sent", () => {
+  const root = join(import.meta.dirname, "..");
+  const own = readFileSync(join(root, "plan/notify.ts"), "utf8");
+  const builders = own.slice(own.indexOf("export const notices = {"), own.indexOf("\n};", own.indexOf("export const notices = {")));
+  const files = (dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}/${e.name}`) : /\.ts$/.test(e.name) && !/\.test\.ts$/.test(e.name) ? [`${dir}/${e.name}`] : []));
+  const callers = ["server", "actions", "plan"].flatMap(files).filter((f) => f !== "plan/notify.ts").map((f) => readFileSync(join(root, f), "utf8")).join("\n");
+
+  it("every kind has a builder, and every builder is called by something that runs", () => {
+    for (const k of NOTIFY_KINDS) expect(builders, k).toContain(`"${k}"`);
+    const names = [...builders.matchAll(/^  ([a-zA-Z]+): \(/gm)].map((m) => m[1]!);
+    expect(names.length).toBeGreaterThan(20);
+    for (const n of names) expect(callers, n).toMatch(new RegExp(`\\bnotices\\.${n}\\(`));
+    // Every kind a builder makes is on the list (or is the test and held notices, which have no switch).
+    for (const m of builders.matchAll(/kind: (?:[^,"]*\? )?"([a-z_]+)"(?: : "([a-z_]+)")?/g)) for (const k of [m[1], m[2]]) if (k) expect([...NOTIFY_KINDS, "test", "held"], k).toContain(k);
+  });
+
+  it("the removed kinds are gone from the list, the labels and the builders, and each kind still has a label and a hint", () => {
+    expect(RETIRED_KINDS).toEqual(["commitment_item", "taken_over", "conversation_given", "conversation_activity"]);
+    for (const k of RETIRED_KINDS) {
+      expect(NOTIFY_KINDS as readonly string[], k).not.toContain(k);
+      expect(builders, k).not.toContain(`"${k}"`);
+      expect(Object.keys(KIND_LABEL), k).not.toContain(k);
+    }
+    expect(Object.keys(KIND_LABEL).sort()).toEqual([...NOTIFY_KINDS].sort());
+    expect(Object.keys(KIND_HINT).sort()).toEqual([...NOTIFY_KINDS].sort());
+    expect(Object.keys(DEFAULT_NOTIFY.kinds).sort()).toEqual([...NOTIFY_KINDS].sort());
   });
 });
