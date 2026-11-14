@@ -76,7 +76,21 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     // The SQL kind keeps it.
     await panel(page).getByLabel("Kind").selectOption("sql");
     expect(await hits(page)).toEqual(["SalesLine", "usp_LoadSalesLine"]);
+    // Review 1: so does the warehouse's own kind, and a kind it isn't says so with a way out.
+    await panel(page).getByLabel("Kind").selectOption("lake");
+    expect(await hits(page)).toEqual(["SalesLine", "usp_LoadSalesLine"]);
+    await panel(page).getByLabel("Kind").selectOption("report");
+    expect(await results.locator("[data-code-progress]").textContent()).toBe("No name of that kind matches. Try All kinds.");
     await panel(page).getByLabel("Kind").selectOption("");
+    // Review 1: a table typed with its schema, and a folder inside an item.
+    await box.fill("fact.SalesLine");
+    await box.press("Enter");
+    await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "1 result");
+    expect(await hits(page)).toEqual(["SalesLine"]);
+    await box.fill("roles");
+    await box.press("Enter");
+    await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "1 result");
+    expect(await hits(page)).toEqual(["Store managers.tmdl"]);
     // A file that is no thing of its own is found by its own name, last, under Files.
     await box.fill("definition.pbism");
     await box.press("Enter");
@@ -84,8 +98,8 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(await results.locator(".cv-group-head").allTextContents()).toEqual(["Files"]);
     expect(await results.locator('[data-code-hit="definition.pbism"] .cv-thing-detail').textContent()).toBe("File in Sales semantic model · sales-analytics");
     // Test 8: a names search sends no request that carries the words.
-    expect(sent.filter((s) => /salesline|pbism/i.test(s.body))).toEqual([]);
-    expect(sent.filter((s) => s.action === "code.search").map((s) => s.body)).toEqual([JSON.stringify({ action: "code.search", input: { clientKey: "Northwind" } }), JSON.stringify({ action: "code.search", input: { clientKey: "Northwind" } })]);
+    expect(sent.filter((s) => /salesline|pbism|roles/i.test(s.body))).toEqual([]);
+    expect(sent.filter((s) => s.action === "code.search").map((s) => s.body)).toEqual(Array.from({ length: 4 }, () => JSON.stringify({ action: "code.search", input: { clientKey: "Northwind" } })));
 
     // By kind: the warehouse opens to its tables, views and procedures, and they also count under SQL.
     await go(page, "#/code/Northwind/kinds");
@@ -119,7 +133,7 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await box.waitFor();
     await page.waitForFunction(() => document.activeElement?.hasAttribute("data-code-search"));
     expect(await panel(page).getByRole("group", { name: "What to search" }).locator("[aria-pressed=true]").textContent()).toBe("Inside files");
-    expect(await panel(page).locator("[data-code-search-note]").textContent()).toContain('"A phrase in quotes", a * at the end of a word, AND, OR and NOT work too.');
+    expect(await panel(page).locator("[data-code-search-note]").textContent()).toContain('as whole words. "A phrase in quotes", a * at the end of a word, and AND, OR and NOT in capitals work too.');
     // Nothing is asked while typing.
     await page.keyboard.type("Watermarks");
     await page.waitForTimeout(300);
@@ -158,6 +172,31 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await results.locator('[data-code-result-client="Cooptimize"]').scrollIntoViewIfNeeded();
     if (SHOTS) await results.locator('[data-code-result-client="Cooptimize"]').screenshot({ path: `${SHOTS}/04-no-code-search-dark.png` });
 
+    // Review 1: a table typed with its schema finds the files that write it with brackets; clients with nothing are named.
+    await box.fill("dbo.Orders");
+    await box.press("Enter");
+    await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "4 files. 3 of 5 clients could be searched.");
+    expect(await results.locator("[data-code-nothing-in]").textContent()).toBe("Nothing in Atlas and Tailspin.");
+    await results.locator('[data-code-result-client="Northwind"] [data-code-hit="vSales.sql"]').click();
+    await panel(page).locator(".cv-file-view").waitFor();
+    // One match, drawn across the file's colored pieces: "dbo].[Orders" inside "[dbo].[Orders]".
+    expect((await panel(page).locator(".cv-file-view mark.cv-mark").allTextContents()).join("")).toBe("dbo].[Orders");
+    expect(await panel(page).locator("[data-code-match-at]").textContent()).toBe("1 of 1");
+    await panel(page).locator("[data-code-back-to-results]").click();
+    await results.waitFor();
+    // A warehouse's files pass the SQL kind and the warehouse's.
+    await panel(page).getByLabel("Kind").selectOption("lake");
+    expect(await hits(page)).toEqual(["usp_LoadSalesLine.sql"]);
+    await panel(page).getByLabel("Kind").selectOption("");
+    // A quote left open is refused in plain words, never "no file".
+    await box.fill('"Orders');
+    await box.press("Enter");
+    await results.locator('[data-code-result-client="Northwind"] [data-code-result-failed="bad_query"]').waitFor();
+    expect(await results.locator("[data-code-progress]").textContent()).toBe("");
+    await box.fill("Watermarks");
+    await box.press("Enter");
+    await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "10 files. 3 of 5 clients could be searched.");
+
     // The kind narrows what is shown without asking again (nothing was cut).
     const asked = sent.filter((s) => s.action === "code.inside").length;
     await panel(page).getByLabel("Kind").selectOption("pipeline");
@@ -167,11 +206,12 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
 
     // The words went only in the search's own requests, one per client a person may read, never for the team-only one.
     const searches = sent.filter((s) => s.action === "code.inside");
-    expect(searches.map((s) => s.body).sort()).toEqual(["Atlas", "Cooptimize", "Harbor", "Northwind", "Tailspin"].map((k) => JSON.stringify({ action: "code.inside", input: { clientKey: k, words: "Watermarks" } })).sort());
+    expect(searches.filter((s) => s.body.includes('"Watermarks"')).map((s) => s.body).sort()).toEqual(["Atlas", "Atlas", "Cooptimize", "Cooptimize", "Harbor", "Harbor", "Northwind", "Northwind", "Tailspin", "Tailspin"].map((k) => JSON.stringify({ action: "code.inside", input: { clientKey: k, words: "Watermarks" } })).sort());
+    expect(searches.every((s) => !s.body.includes("Fabrikam"))).toBe(true);
     expect(sent.filter((s) => /watermarks/i.test(s.body) && s.action !== "code.inside")).toEqual([]);
     expect(await hash(page)).toBe("#/code/~inside");
     const stored = await page.evaluate(() => JSON.stringify([{ ...localStorage }, { ...sessionStorage }]));
-    expect(stored).not.toMatch(/watermark|usp_|~inside/i);
+    expect(stored).not.toMatch(/watermark|orders|usp_|~inside/i);
     expect(errors).toEqual([]);
   });
 
@@ -206,17 +246,18 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(await hash(page)).toBe(`#/code/Northwind/${SALES}/%2Fsql%2Fetl%2FStoredProcedures%2Fusp_LoadOrders.sql`);
     expect(await panel(page).locator("[data-code-title]").getAttribute("data-code-title")).toBe("Northwind");
     // Every match of the words, found in the opened text, and the stepper moves between them.
-    expect(await file.locator("mark.cv-mark").allTextContents()).toEqual(["Orders", "Orders", "Orders", "Orders"]);
+    // Whole words, as the search matched them: the "Orders" in usp_LoadOrders isn't one.
+    expect(await file.locator("mark.cv-mark").allTextContents()).toEqual(["Orders", "Orders", "Orders"]);
     const at = file.locator("[data-code-match-at]");
-    expect(await at.textContent()).toBe("1 of 4");
+    expect(await at.textContent()).toBe("1 of 3");
     expect(await file.locator("mark.cv-mark.on").getAttribute("data-code-mark")).toBe("0");
     await file.getByRole("button", { name: "Next match" }).focus();
     await page.keyboard.press("Enter");
-    expect(await at.textContent()).toBe("2 of 4");
+    expect(await at.textContent()).toBe("2 of 3");
     expect(await file.locator("mark.cv-mark.on").getAttribute("data-code-mark")).toBe("1");
     await file.getByRole("button", { name: "Previous match" }).click();
     await file.getByRole("button", { name: "Previous match" }).click();
-    expect(await at.textContent()).toBe("4 of 4");
+    expect(await at.textContent()).toBe("3 of 3");
     // The file is still text, drawn the same way: the whole line reads as it did.
     expect(await file.locator(".cv-line").first().textContent()).toBe("CREATE PROCEDURE [etl].[usp_LoadOrders]");
     await shots(page, "05-result-opened-matches-marked");

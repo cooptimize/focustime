@@ -328,14 +328,17 @@ function Find({ load, names, cut, max, onOpen }: { load: () => void; names: stri
 
 /** RB-4: the matches of a search's words in a file's lines: per line, where they are and the first one's number. */
 type Marks = { byLine: Map<number, { ranges: [number, number][]; first: number }>; count: number };
-function marksOf(lines: Line[], terms: readonly { text: string }[]): Marks {
+function marksOf(lines: Line[], terms: readonly { text: string; prefix?: boolean }[]): Marks {
   const byLine = new Map<number, { ranges: [number, number][]; first: number }>();
   let count = 0;
-  if (terms.length)
+  // Whole words first, as code search matches; if the file has none, anywhere in a word, so something is marked.
+  for (const anywhere of [false, true]) {
+    if (!terms.length || count) break;
     lines.forEach((l, i) => {
-      const ranges = termRanges(l.map((s) => s.text).join(""), terms);
+      const ranges = termRanges(l.map((s) => s.text).join(""), terms, anywhere);
       if (ranges.length) (byLine.set(i, { ranges, first: count }), (count += ranges.length));
     });
+  }
   return { byLine, count };
 }
 

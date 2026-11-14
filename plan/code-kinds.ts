@@ -17,7 +17,7 @@
 // its own (a warehouse's tables, views and procedures; a notebook file), listed under its own kind and inside its
 // item; and every other file inside an item is kept by its path (`files`), so a search for a file's own name always
 // finds that file. A folder above Tables, Views and the like is said to be a schema only where the path shows one:
-// inside an item, under a SQL project, or in a two-part file name (dbo.Orders.sql).
+// inside an item or under a SQL project.
 import { languageOf, LANG_NAMES } from "./code-languages.ts";
 import type { CodeRepoView } from "./code.ts";
 
@@ -54,9 +54,13 @@ export type Thing = {
   inside?: ThingInside[];
   /** RB-4: for a thing inside an item, the item in words ("Sales warehouse"). */
   item?: string;
+  /** RB-4: for a thing inside an item, the item's kind: the kind filter finds a warehouse's table under either. */
+  itemKind?: Kind;
+  /** RB-4: a SQL object's schema, where the path shows one: "dim.Store" finds it too. */
+  schema?: string;
 };
 /** RB-4: a file inside an item that is no thing of its own: found only by its own name, under Files. */
-export type RepoFile = { file: string; kind: Kind; detail: string };
+export type RepoFile = { file: string; kind: Kind; detail: string; /** The item's folder: a folder inside it is found by name too. */ item: string };
 
 /** One repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
 export type RepoThings = { repo: CodeRepoView; things: Thing[]; /** RB-4: the files inside items that are no thing of their own. */ files: RepoFile[]; cut: boolean; problem: string | null };
@@ -273,11 +277,11 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       const object = SQL_OBJECT_FOLDERS.find(([re]) => re.test(baseOf(dir)));
       if (!object) return { kind: "sql", name: stem(name), detail: "SQL script", folder: dir, file: p };
       // The schema, only where the path shows one (RB-4): the folder above, inside an item or under a SQL project and
-      // not that item's or project's own folder; else the first part of a two-part name. "/sql/Tables/x.sql" is a Table.
+      // not that item's or project's own folder. "/sql/Tables/x.sql" is a Table. A dot in the file's name says nothing
+      // ("Orders.v2.sql").
       const above = dirOf(dir);
-      const two = /^([A-Za-z_][\w ]*)\.[^.]+$/.exec(stem(name));
-      const schema = above !== "/" && above !== item && !projectDirs.has(above) && (item || underProject(above)) ? baseOf(above) : two ? two[1]! : null;
-      return { kind: "sql", name: stem(name), detail: schema ? `${object[1]} in ${schema}` : object[1], folder: dir, file: p };
+      const schema = above !== "/" && above !== item && !projectDirs.has(above) && (item || underProject(above)) ? baseOf(above) : null;
+      return { kind: "sql", name: stem(name), detail: schema ? `${object[1]} in ${schema}` : object[1], folder: dir, file: p, ...(schema ? { schema } : {}) };
     }
     if (ext === "sqlproj") return { kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p };
     const notebook = NOTEBOOK_EXT[ext];
@@ -348,8 +352,8 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       if (taken.has(p)) return;
       const own = f.toLowerCase();
       const t = TYPE_BY_FILE.some(([re]) => re.test(own)) || OPEN_FIRST.some((re) => re.test(own)) ? null : named(p, dir);
-      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words });
-      else rest.push({ file: p, kind, detail: `File in ${words}` });
+      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words, itemKind: kind });
+      else rest.push({ file: p, kind, detail: `File in ${words}`, item: dir });
     });
     if (inner.length) {
       inner.sort(byName);
@@ -370,12 +374,12 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
  * RB-4: what each file of a repo is, for a list of files (Search inside files): its kind and a few words, by the same
  * rules. An item's own file is "File in <item>"; a model's table "Table in <model>"; anything else what the thing is.
  */
-export function fileLabels(paths: readonly string[]): Map<string, { kind: Kind; detail: string }> {
+export function fileLabels(paths: readonly string[]): Map<string, { kind: Kind; detail: string; itemKind?: Kind }> {
   const sorted = sortAll(paths);
-  const m = new Map<string, { kind: Kind; detail: string }>();
+  const m = new Map<string, { kind: Kind; detail: string; itemKind?: Kind }>();
   for (const f of sorted.files) m.set(f.file, { kind: f.kind, detail: f.detail });
   for (const t of sorted.things) {
-    m.set(t.file, { kind: t.kind, detail: sorted.itemThings.has(t) ? `File in ${itemWords(t.name, t.detail.split(" · ")[0]!)}` : t.detail });
+    m.set(t.file, { kind: t.kind, detail: sorted.itemThings.has(t) ? `File in ${itemWords(t.name, t.detail.split(" · ")[0]!)}` : t.detail, ...(t.itemKind ? { itemKind: t.itemKind } : {}) });
     for (const tb of t.tables ?? []) m.set(tb.file, { kind: t.kind, detail: `Table in ${t.name}` });
   }
   return m;
@@ -393,9 +397,9 @@ export function groupThings<T extends { kind: Kind }>(things: readonly T[]): { k
 }
 
 /** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */
-export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null };
+export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null; /** For a file inside an item, the item's kind. */ itemKind?: Kind };
 /** RB-4: one client's answer to a search inside files. */
-export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps counted in all. */ total: number; /** DevOps has more files than the ones here. */ more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to the kind's file type. */ narrowed: boolean };
+export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps counted in all. */ total: number; /** DevOps has more files than the ones here. */ more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to the kind's file type. */ narrowed: boolean; /** Files DevOps found that aren't on their repo's default branch, or in a repo that isn't read: not listed. */ notListed: number };
 
 /**
  * RB-4: a kind DevOps's code search can narrow by itself, by file type (its documented "ext:" filter). Only where the
@@ -410,15 +414,29 @@ export const KIND_EXT: Readonly<Partial<Record<Kind, string>>> = { sql: "sql" };
  */
 export function insideTerms(q: string): { text: string; prefix: boolean }[] {
   const out: { text: string; prefix: boolean }[] = [];
+  // After NOT: the next term is ruled out, or the whole bracket when one opens right after it.
   let not = false;
-  for (const m of q.matchAll(/"((?:[^"\\]|\\.)*)"|[^\s()]+/g)) {
+  let depth = 0;
+  let notDepth: number | null = null;
+  // A filter with its value (ext:sql, path:"a b"), a phrase in quotes, a bracket, a word, or a quote left open.
+  for (const m of q.matchAll(/[A-Za-z]+:(?:"[^"]*"|\S+)|"((?:[^"\\]|\\.)*)"|[()]|[^\s()"]+|"/g)) {
     const phrase = m[1];
     const raw = m[0];
-    const skip = not;
+    if (raw === "(") {
+      depth++;
+      if (not) (notDepth = depth), (not = false);
+      continue;
+    }
+    if (raw === ")") {
+      if (notDepth === depth) notDepth = null;
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    const skip = not || notDepth !== null;
     not = false;
     if (phrase === undefined) {
       if (raw === "NOT") { not = true; continue; }
-      if (["AND", "OR", "NEAR", "BEFORE", "AFTER"].includes(raw)) continue;
+      if (raw === '"' || ["AND", "OR", "NEAR", "BEFORE", "AFTER"].includes(raw)) continue;
       // A filter (ext:sql, path:"a b", file:x*) narrows where to look; it isn't a word in the file.
       if (/^[A-Za-z]+:/.test(raw)) continue;
     }
@@ -431,12 +449,27 @@ export function insideTerms(q: string): { text: string; prefix: boolean }[] {
   return out;
 }
 
-/** RB-4: where the terms are in one line of an opened file, ignoring case: [start, end) pairs, merged, in order. */
-export function termRanges(line: string, terms: readonly { text: string }[]): [number, number][] {
+/**
+ * RB-4: where the terms are in one line of an opened file, ignoring case: [start, end) pairs, merged, in order. A
+ * term is whole words, as code search matches them ("id" isn't in "valid"); one with a * at its end may start a longer
+ * word. `anywhere` drops the word edges, for a file where nothing matched as whole words.
+ */
+export function termRanges(line: string, terms: readonly { text: string; prefix?: boolean }[], anywhere = false): [number, number][] {
   const lower = line.toLowerCase();
   if (lower.length !== line.length) return [];
   const found: [number, number][] = [];
-  for (const t of terms) for (let i = lower.indexOf(t.text); i >= 0; i = lower.indexOf(t.text, i + t.text.length)) found.push([i, i + t.text.length]);
+  for (const t of terms) {
+    // A term is its words in a row with anything but a letter, a digit or an underscore between them, so "dbo.Orders"
+    // is found in "[dbo].[Orders]" and a phrase across its punctuation.
+    const parts = t.text.split(/[^a-z0-9_]+/).filter(Boolean);
+    if (!parts.length) continue;
+    const body = parts.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^a-z0-9_]+");
+    const re = new RegExp(anywhere ? body : `(?<![a-z0-9_])${body}${t.prefix ? "[a-z0-9_]*" : "(?![a-z0-9_])"}`, "g");
+    for (let m = re.exec(lower); m; m = re.exec(lower)) {
+      found.push([m.index, m.index + m[0].length]);
+      if (!m[0].length) re.lastIndex++;
+    }
+  }
   found.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const out: [number, number][] = [];
   for (const r of found) {
@@ -450,7 +483,7 @@ export function termRanges(line: string, terms: readonly { text: string }[]): [n
 // ---------- searching names ----------
 
 /** The words of a search: lower case, split on spaces, at most 8. */
-export const searchWords = (q: string): string[] => q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+export const searchWords = (q: string): string[] => q.toLowerCase().split(/\s+/).map((w) => w.replace(/\*+$/, "")).filter(Boolean).slice(0, 8);
 
 /** One search result: a thing, one table of a semantic model, or (RB-4) a file found by its own name. */
 export type NameHit = { kind: Kind; name: string; detail: string; file: string; table: boolean; /** Listed under Files, after the named things. */ asFile: boolean };
@@ -471,14 +504,29 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
   };
   const byName: NameHit[] = [];
   const byFolder: NameHit[] = [];
+  // A path typed with its slashes is looked for in the whole path; else a table or a file inside an item is found by
+  // the folders inside its item, never by the item's own folder (which would make everything in it a match).
+  const slashy = words.some((w) => w.includes("/"));
   for (const t of things) {
-    if (kind && t.kind !== kind) continue;
-    if (has(`${t.name} ${t.file}`)) (has(`${t.name} ${baseOf(t.file)}`) ? byName : byFolder).push({ kind: t.kind, name: t.name, detail: t.item ? t.detail : t.detail.split(" · ")[0]!, file: t.file, table: false, asFile: false });
-    for (const tb of t.tables ?? []) if (has(`${tb.name} ${baseOf(tb.file)}`)) byName.push({ kind: t.kind, name: tb.name, detail: `Table in ${t.name}`, file: tb.file, table: true, asFile: false });
+    // A thing inside an item passes its own kind's filter and its item's (a warehouse's table under SQL and under
+    // Lakehouses and warehouses).
+    if (kind && t.kind !== kind && t.itemKind !== kind) continue;
+    // A SQL object is found as schema.name too ("dim.Store", "[dim].[Store]").
+    const alias = t.schema ? ` ${t.schema}.${t.name} [${t.schema}].[${t.name}]` : "";
+    if (has(`${t.name} ${t.file}${alias}`)) (has(`${t.name} ${baseOf(t.file)}${alias}`) ? byName : byFolder).push({ kind: t.kind, name: t.name, detail: t.item ? t.detail : t.detail.split(" · ")[0]!, file: t.file, table: false, asFile: false });
+    for (const tb of t.tables ?? []) {
+      const hit = has(`${tb.name} ${baseOf(tb.file)}`) ? byName : has(`${tb.name} ${slashy ? tb.file : tb.file.slice(t.folder.length)}`) ? byFolder : null;
+      hit?.push({ kind: t.kind, name: tb.name, detail: `Table in ${t.name}`, file: tb.file, table: true, asFile: false });
+    }
   }
   const byFile: NameHit[] = [];
-  for (const f of files) if ((!kind || f.kind === kind) && has(baseOf(f.file))) byFile.push({ kind: f.kind, name: baseOf(f.file), detail: f.detail, file: f.file, table: false, asFile: true });
-  return [...byName, ...byFolder, ...byFile];
+  const byFileFolder: NameHit[] = [];
+  for (const f of files) {
+    if (kind && f.kind !== kind) continue;
+    const hit = has(baseOf(f.file)) ? byFile : has(slashy ? f.file : f.file.slice(f.item.length)) ? byFileFolder : null;
+    hit?.push({ kind: f.kind, name: baseOf(f.file), detail: f.detail, file: f.file, table: false, asFile: true });
+  }
+  return [...byName, ...byFolder, ...byFile, ...byFileFolder];
 }
 
 /**

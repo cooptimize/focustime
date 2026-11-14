@@ -137,16 +137,40 @@ describe("RB-4: things inside an item", () => {
     expect(at("/sql/stock/Tables/Bin.sql").detail).toBe("Table in stock"); // under a SQL project
     expect(at("/sql/Tables/Crate.sql").detail).toBe("Table"); // the project's own folder isn't a schema
     expect(at("/loose/Tables/Hook.sql").detail).toBe("Table"); // no project: "loose" is only a folder
-    expect(thingsOf(["/db/Tables/ops.Shift.sql"])[0]!.detail).toBe("Table in ops"); // a two-part name
+    // Review 2: a dot in the file's name says nothing about a schema.
+    for (const p of ["/db/Tables/ops.Shift.sql", "/db/Tables/Crate.v2.sql", "/db/Tables/v1.2_move.sql"]) expect(thingsOf([p])[0]!.detail, p).toBe("Table");
     expect(thingsOf(["/W.Warehouse/.platform", "/W.Warehouse/Tables/Lot.sql"]).find((t) => t.name === "Lot")!.detail).toBe("Table · W warehouse");
   });
   it("a file found only by its own name comes last, as a file in its item", () => {
     const hits = searchThings(things, "definition", null, files);
-    expect(hits.at(-1)).toMatchObject({ asFile: true, name: "definition.pbism", detail: "File in Trips semantic model", kind: "model" });
+    expect(hits.filter((h) => h.asFile)[0]).toMatchObject({ name: "definition.pbir", detail: "File in Trips report", kind: "report" });
+    expect(hits.find((h) => h.name === "definition.pbism")).toMatchObject({ asFile: true, detail: "File in Trips semantic model", kind: "model" });
     expect(hits.findIndex((h) => h.asFile)).toBeGreaterThan(0);
     // The kind filter keeps a file with its item's kind.
     expect(searchThings(things, "page.json", "report", files).map((h) => h.file)).toEqual(["/ws/Trips.Report/definition/pages/overview/page.json"]);
     expect(searchThings(things, "page.json", "sql", files)).toEqual([]);
+  });
+  it("review 1: a warehouse's table passes the SQL kind and its item's kind; schema.name finds it; a * at the end is ignored", () => {
+    const pallet = "/ws/Depot.Warehouse/dim/Tables/Pallet.sql";
+    for (const kind of [null, "sql", "lake"] as const) expect(searchThings(things, "Pallet", kind, files).map((h) => h.file), String(kind)).toContain(pallet);
+    expect(searchThings(things, "Pallet", "report", files)).toEqual([]);
+    for (const q of ["dim.Pallet", "[dim].[Pallet]", "DIM.pallet", "Pall*"]) expect(searchThings(things, q, null, files).map((h) => h.file), q).toContain(pallet);
+    expect(searchThings(things, "fin.Pallet", null, files)).toEqual([]);
+  });
+  it("review 1: a folder inside an item finds the files and tables in it, after the names; the item's own folder doesn't", () => {
+    const f = (q: string) => searchThings(things, q, null, files).map((h) => h.file);
+    expect(f("roles")).toEqual(["/ws/Trips.SemanticModel/definition/roles/Readers.tmdl"]);
+    expect(f("StaticResources")).toEqual(["/ws/Trips.Report/StaticResources/banner.png"]);
+    expect(f("tables")).toContain("/ws/Trips.SemanticModel/definition/tables/Journey.tmdl");
+    expect(f("pages")).toEqual(["/ws/Trips.Report/definition/pages/overview/page.json"]);
+    // The item's own folder name finds the item, not everything in it.
+    expect(f("Trips.Report")).toEqual(["/ws/Trips.Report/definition/report.json"]);
+    // A path typed with its slashes is looked for in the whole path.
+    expect(f("Trips.SemanticModel/definition/tables/Journey.tmdl")).toEqual(["/ws/Trips.SemanticModel/definition/tables/Journey.tmdl"]);
+    expect(f("ws/Trips.Report/definition/pages")).toEqual(["/ws/Trips.Report/definition/pages/overview/page.json"]);
+    // Names first: a file named for the word comes before one that only sits in a folder named for it.
+    const hits = searchThings(things, "definition", null, files);
+    expect(hits.findIndex((h) => h.name === "definition.pbism")).toBeLessThan(hits.findIndex((h) => h.name === "page.json"));
   });
   it("A5: searching any file's own name finds that file", () => {
     for (const p of INSIDE_REPO) expect(find(INSIDE_REPO, p.slice(p.lastIndexOf("/") + 1)), p).toContain(p);
@@ -154,7 +178,7 @@ describe("RB-4: things inside an item", () => {
   it("every file has a label for a list of files", () => {
     const labels = fileLabels(INSIDE_REPO);
     expect([...labels.keys()].sort()).toEqual([...INSIDE_REPO].sort());
-    expect(labels.get("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toEqual({ kind: "sql", detail: "Stored procedure in dim · Depot warehouse" });
+    expect(labels.get("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toEqual({ kind: "sql", detail: "Stored procedure in dim · Depot warehouse", itemKind: "lake" });
     expect(labels.get("/ws/Trips.Report/definition/report.json")).toEqual({ kind: "report", detail: "File in Trips report" });
     expect(labels.get("/ws/Trips.SemanticModel/definition/tables/Journey.tmdl")).toEqual({ kind: "model", detail: "Table in Trips" });
     expect(labels.get("/adf/pipeline/pl_move.json")).toEqual({ kind: "pipeline", detail: "Data factory pipeline" });
@@ -179,5 +203,23 @@ describe("RB-4: the words of a search inside files, to mark in an opened file", 
     expect(termRanges("INSERT INTO dim.Pallet SELECT * FROM stage.pallet;", insideTerms("pallet"))).toEqual([[16, 22], [43, 49]]);
     expect(termRanges("fill rate rate", insideTerms('"fill rate" rate'))).toEqual([[0, 9], [10, 14]]);
     expect(termRanges("nothing here", insideTerms("pallet"))).toEqual([]);
+  });
+  it("review 2: a word is a whole word, as code search matches it; a * lets it start a longer one", () => {
+    expect(termRanges("valid width id [id] row_id", insideTerms("id"))).toEqual([[12, 14], [16, 18]]);
+    expect(termRanges("usp_FillPallet usp_Fill", insideTerms("usp_Fill*"))).toEqual([[0, 14], [15, 23]]);
+    expect(termRanges("EXEC usp_FillPallet", insideTerms("pallet"))).toEqual([]);
+    // Anywhere in a word, for a file where nothing matched as a whole word.
+    expect(termRanges("EXEC usp_FillPallet", insideTerms("pallet"), true)).toEqual([[13, 19]]);
+    // A term that starts or ends with a bracket or a dot has no edge to keep there.
+    expect(termRanges("FROM [dim].[Pallet] p", insideTerms("[dim].[Pallet]"))).toEqual([[6, 18]]);
+    // Review 1: a table typed with its schema is marked whatever brackets the file writes it with.
+    expect(termRanges("FROM [dim].[Pallet] p JOIN dim.Pallet q", insideTerms("dim.Pallet"))).toEqual([[6, 18], [27, 37]]);
+    expect(termRanges("MERGE [dbo].[Crate] AS t", insideTerms('"merge dbo.crate"'))).toEqual([[0, 18]]);
+  });
+  it("review 2: a filter's quoted value, a bracket after NOT and a quote left open are never words to mark", () => {
+    expect(texts('Pallet path:"etl jobs"')).toEqual(["pallet"]);
+    expect(texts("NOT (Crate OR Bin) Pallet")).toEqual(["pallet"]);
+    expect(texts("Pallet NOT (Crate (Bin OR Hook)) Lot")).toEqual(["pallet", "lot"]);
+    expect(texts('"unclosed phrase')).toEqual(["unclosed", "phrase"]);
   });
 });

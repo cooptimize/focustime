@@ -55,6 +55,14 @@ describe("the demo's fake of DevOps's code search (RB-4 B)", () => {
     expect(sql.length).toBeLessThan(all.length);
     expect(sql.every((p) => p.endsWith(".sql"))).toBe(true);
   });
+  it("review 1: a table typed with its schema is found whatever brackets the file writes it with; a quote left open is refused", async () => {
+    expect(await paths("Northwind", "dbo.Orders")).toEqual(await paths("Northwind", "[dbo].[Orders]"));
+    expect((await paths("Northwind", "dbo.Orders")).length).toBe(4);
+    expect(await paths("Atlas", "etl.Watermarks")).toEqual(await paths("Atlas", "[etl].[Watermarks]"));
+    expect(await git.search("Northwind", '"SalesLine', 10)).toEqual({ count: 0, hits: [], info: 3 });
+    // A phrase counts what the opened file will mark.
+    expect((await git.search("Northwind", '"SalesLine"', 100)).hits.find((h) => h.path.endsWith("usp_LoadSalesLine.sql"))!.matches).toBe(3);
+  });
   it("returns at most the number asked for and still counts the rest; a * at the start of a word is DevOps's code 4", async () => {
     const r = await git.search("Northwind", "Orders", 2);
     expect(r.hits).toHaveLength(2);

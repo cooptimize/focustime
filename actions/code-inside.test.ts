@@ -81,7 +81,7 @@ describe("what it asks and what comes back", () => {
     expect([...d.ops].sort()).toEqual(["files Contoso", "repos Contoso", "search Contoso"]);
     expect(JSON.parse(d.bodies[0]!)).toEqual({ searchText: WORDS, $skip: 0, $top: INSIDE_MAX, includeFacets: false, includeSnippet: false });
     expect(r.data.files).toEqual([
-      { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[2], kind: "sql", detail: "Stored procedure in dim · Depot warehouse", matches: 3 },
+      { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[2], kind: "sql", detail: "Stored procedure in dim · Depot warehouse", matches: 3, itemKind: "lake" },
       { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[4], kind: "pipeline", detail: "Data factory pipeline", matches: 1 },
     ]);
     expect(r.data).toMatchObject({ total: 2, more: false, indexing: false, narrowed: false });
@@ -90,12 +90,28 @@ describe("what it asks and what comes back", () => {
     const d = devops(() => ({ body: { count: 1, infoCode: 0, results: [{ ...hit(1, 1, PATHS[2]!, 1), content: "SELECT secret_column FROM x", snippet: "secret_column", hits: [{ line: "secret_column" }] }] } }));
     const r = await inside(ctx(d.git).c, "Contoso");
     expect(JSON.stringify(r)).not.toContain("secret_column");
-    expect(Object.keys((r as Ok).data.files[0]!).sort()).toEqual(["detail", "kind", "matches", "path", "repoId", "repoName"]);
+    expect(Object.keys((r as Ok).data.files[0]!).sort()).toEqual(["detail", "itemKind", "kind", "matches", "path", "repoId", "repoName"]);
   });
   it("drops a file from a repo that isn't this client's, and one found only on another branch", async () => {
     const d = devops(() => ({ body: { count: 3, infoCode: 0, results: [hit(1, 1, PATHS[2]!, 1), hit(2, 1, PATHS[2]!, 1), hit(1, 2, PATHS[1]!, 1, { versions: [{ branchName: "feature/x" }] })] } }));
     const r = (await inside(ctx(d.git).c, "Contoso")) as Ok;
     expect(r.data.files.map((f) => [f.repoId, f.path])).toEqual([[repoId(1, 1), PATHS[2]]]);
+    // They are counted, never named, so the screen can say some files aren't listed.
+    expect(r.data.notListed).toBe(2);
+  });
+  it("review 2: a file DevOps names no branch for isn't listed (the default branch must be said), and is counted", async () => {
+    const d = devops(() => ({ body: { count: 2, infoCode: 0, results: [hit(1, 1, PATHS[2]!, 1), hit(1, 1, PATHS[1]!, 1, { versions: [] })] } }));
+    const r = (await inside(ctx(d.git).c, "Contoso")) as Ok;
+    expect(r.data.files.map((f) => f.path)).toEqual([PATHS[2]]);
+    expect(r.data.notListed).toBe(1);
+  });
+  it("review 2: when the narrowing request fails or isn't taken, the first answer stands", async () => {
+    for (const second of [{ status: 429 }, { status: 400 }, { body: { count: 0, infoCode: 3, results: [] } }] as Search[]) {
+      const d = devops((_c, b) => (b.searchText.endsWith(" ext:sql") ? second : { body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[4]!, 1)] } }));
+      const r = (await inside(ctx(d.git).c, "Contoso", { kind: "sql" })) as Ok;
+      expect(r.ok).toBe(true);
+      expect(r.data).toMatchObject({ narrowed: false, more: true, files: [{ path: PATHS[4] }] });
+    }
   });
   it("says there are more when DevOps counted more than it returned, or trimmed the number asked for", async () => {
     const more = devops(() => ({ body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[2]!, 1)] } }));
@@ -176,6 +192,12 @@ describe("the view log", () => {
     await inside(c.c, "Contoso");
     await inside(c.c, "Adatum");
     expect(order).toEqual(["row", "search", "row", "search"]);
+    // The row is before the repo list too: the first thing asked of DevOps comes after it.
+    const first: string[] = [];
+    const d2 = devops();
+    const git2: CodeGit = { ...d2.git, repos: async (k) => (first.push("repos"), d2.git.repos(k)) };
+    await inside(ctx(git2, { order: first }).c, "Contoso");
+    expect(first.slice(0, 2)).toEqual(["row", "repos"]);
     expect(c.views).toEqual([
       { actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "", path: "", event: "inside_searched" },
       { actorId: ME.id, actorName: ME.name, clientKey: "Adatum", repoId: "", repoName: "", path: "", event: "inside_searched" },
@@ -184,7 +206,8 @@ describe("the view log", () => {
   it("no row, no search: when the row can't be written DevOps isn't asked", async () => {
     const d = devops();
     expect(await inside(ctx(d.git, { views: "fail" }).c, "Contoso")).toMatchObject({ ok: false, status: 503, code: "not_logged", error: CODE_TEXT.insideNotLogged });
-    expect(d.ops.filter((o) => o.startsWith("search"))).toEqual([]);
+    // Review 2: nothing at all is asked of that client's DevOps, not even its repo list.
+    expect(d.ops).toEqual([]);
   });
 });
 

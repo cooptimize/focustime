@@ -190,6 +190,20 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   if (!(await open(client.clientKey))) return bad(CODE_TEXT.teamOnly(client.name), 403, "team_only");
   if (!ctx.git) return bad(CODE_TEXT.notHere, 404, "not_here");
 
+  // RB-4: Search inside files. What was typed is checked, then the row is written, before anything is asked of this
+  // client's DevOps (its repo list included). Never the words.
+  if (action === "code.inside") {
+    // eslint-disable-next-line no-control-regex
+    if (typeof i.words !== "string" || !i.words.trim() || i.words.length > INSIDE_WORDS_MAX || /[\u0000-\u001f\u007f]/.test(i.words)) return bad(CODE_TEXT.badWords, 400, "bad_words");
+    if (i.kind !== undefined && i.kind !== null && !(KINDS as readonly unknown[]).includes(i.kind)) return bad("kind is one of the kinds", 400, "bad_kind");
+    try {
+      if (!ctx.views) throw new Error("no view log");
+      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: "inside_searched" });
+    } catch {
+      return bad(CODE_TEXT.insideNotLogged, 503, "not_logged");
+    }
+  }
+
   // 4. The client's own repos (the list is read with its token; the memory holds it 5 minutes).
   let repos: GitRepo[];
   try {
@@ -240,18 +254,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   // RB-4: Search inside files. DevOps's own code search is asked which files hold the words; no file is read.
   if (action === "code.inside") {
     const git = ctx.git;
-    // eslint-disable-next-line no-control-regex
-    if (typeof i.words !== "string" || !i.words.trim() || i.words.length > INSIDE_WORDS_MAX || /[\u0000-\u001f\u007f]/.test(i.words)) return bad(CODE_TEXT.badWords, 400, "bad_words");
-    if (i.kind !== undefined && i.kind !== null && !(KINDS as readonly unknown[]).includes(i.kind)) return bad("kind is one of the kinds", 400, "bad_kind");
-    const words = i.words.trim();
+    const words = (i.words as string).trim();
     const kind = (i.kind ?? null) as Kind | null;
-    // The row first: this client's DevOps is about to be asked. Never the words.
-    try {
-      if (!ctx.views) throw new Error("no view log");
-      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: "inside_searched" });
-    } catch {
-      return bad(CODE_TEXT.insideNotLogged, 503, "not_logged");
-    }
     try {
       let answer = await git.search(client.clientKey, words, INSIDE_MAX);
       // Codes from the documentation: 3 invalid request, 4 a wildcard at the start of a word, 5, 19 and 20 a mix
@@ -264,18 +268,20 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       const ext = kind ? KIND_EXT[kind] : undefined;
       let narrowed = false;
       if (ext && answer.count > answer.hits.length && balanced(words)) {
-        const again = await git.search(client.clientKey, `(${words}) ext:${ext}`, INSIDE_MAX);
-        if (again.info === 0 || again.info === 8) (answer = again), (narrowed = true);
+        // If DevOps is busy or doesn't take this form, the first answer stands.
+        const again = await git.search(client.clientKey, `(${words}) ext:${ext}`, INSIDE_MAX).catch(() => null);
+        if (again && (again.info === 0 || again.info === 8)) (answer = again), (narrowed = true);
       }
       const byId = new Map(repos.filter((r) => !r.disabled && r.defaultBranch).map((r) => [r.id, r]));
-      // Only this client's own repos, and only a file on its repo's default branch.
+      // Only this client's own repos, and only a file DevOps says is on its repo's default branch. The rest are
+      // counted, so the screen can say some files aren't listed, never named.
       const kept = answer.hits.filter((h) => {
         const r = byId.get(h.repoId);
-        return !!r && (!h.branches.length || h.branches.includes(r.defaultBranch!));
+        return !!r && h.branches.includes(r.defaultBranch!);
       });
       // What each file is, from its repo's file names (the read By kind uses, from memory when it is there). A repo
       // whose names can't be read still lists its files, each sorted by its own path alone.
-      const labels = new Map<string, Map<string, { kind: Kind; detail: string }>>();
+      const labels = new Map<string, ReturnType<typeof fileLabels>>();
       const wanted = [...new Set(kept.map((h) => h.repoId))];
       let next = 0;
       const worker = async () => {
@@ -291,10 +297,10 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       };
       await Promise.all(Array.from({ length: Math.min(NAMES_REPOS_AT_ONCE, wanted.length) }, worker));
       const files: CodeInsideFile[] = kept.map((h) => {
-        const l = labels.get(h.repoId)?.get(h.path) ?? { kind: "other" as Kind, detail: "File" };
-        return { repoId: h.repoId, repoName: byId.get(h.repoId)!.name, path: h.path, kind: l.kind, detail: l.detail, matches: h.matches };
+        const l: { kind: Kind; detail: string; itemKind?: Kind } = labels.get(h.repoId)?.get(h.path) ?? { kind: "other", detail: "File" };
+        return { repoId: h.repoId, repoName: byId.get(h.repoId)!.name, path: h.path, kind: l.kind, detail: l.detail, matches: h.matches, ...(l.itemKind ? { itemKind: l.itemKind } : {}) };
       });
-      const data: CodeInsideAnswer = { client, files, total: answer.count, more: answer.count > answer.hits.length || answer.info === 8, indexing, narrowed };
+      const data: CodeInsideAnswer = { client, files, total: answer.count, more: answer.count > answer.hits.length || answer.info === 8, indexing, narrowed, notListed: answer.hits.length - kept.length };
       return { ok: true, data };
     } catch (e) {
       // A fixed phrase by reason: an error's own message is never passed on (it could hold the words).

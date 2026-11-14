@@ -656,14 +656,23 @@ const ORGS: Record<string, { org: string; project: string }> = {
 const NO_CODE_SEARCH = new Set(["Cooptimize"]);
 
 /**
- * RB-4: a small stand-in for DevOps's code search, for the demo and the tests: plain words (all of them), a phrase in
- * quotes, a * at the end of a word, AND, OR, NOT, brackets left out, and ext:, file: and path: filters. A * at the
- * start of a word answers with DevOps's code for it (4). Only text files are looked at; the count is of files.
+ * RB-4: a small stand-in for DevOps's code search, for the demo and the tests: plain words (all of them, as whole
+ * words), a phrase in quotes, a * at the end of a word, AND, OR, NOT, brackets left out, and ext:, file: and path:
+ * filters. A word or phrase is its words in a row whatever punctuation sits between them ("dbo.Orders" is found in
+ * "[dbo].[Orders]"). A * at the start of a word answers with DevOps's code for it (4), a quote left open with its
+ * code for a request it can't read (3). Only text files are looked at; the count is of files.
  */
 export function demoSearch(repos: readonly DemoRepo[], text: string, top: number): GitSearchAnswer {
   type Term = { not: boolean; /** A filter narrows where to look; it isn't a match in the file. */ filter: boolean; test: (path: string, body: string, tokens: readonly string[]) => number };
   const groups: Term[][] = [[]];
   let not = false;
+  if ((text.match(/"/g) ?? []).length % 2) return { count: 0, hits: [], info: 3 };
+  /** How many times the words sit in a row in the file's words; the last may be the start of a longer word. */
+  const inARow = (parts: readonly string[], startOnly: boolean) => (tokens: readonly string[]) => {
+    let n = 0;
+    for (let i = 0; i + parts.length <= tokens.length; i++) if (parts.every((p, k) => (startOnly && k === parts.length - 1 ? tokens[i + k]!.startsWith(p) : tokens[i + k] === p))) n++;
+    return n;
+  };
   for (const m of text.matchAll(/([A-Za-z]+):("[^"]*"|\S+)|"([^"]*)"|[^\s()]+/g)) {
     const raw = m[0];
     if (m[1] === undefined && m[3] === undefined) {
@@ -679,14 +688,14 @@ export function demoSearch(repos: readonly DemoRepo[], text: string, top: number
       const glob = (s: string) => (v.endsWith("*") ? s.startsWith(v.slice(0, -1)) : s === v);
       test = fn === "ext" ? (p) => (p.toLowerCase().endsWith(`.${v}`) ? 1 : 0) : fn === "file" ? (p) => (glob(nameOf(p).toLowerCase()) || nameOf(p).toLowerCase().includes(v.replace(/\*$/, "")) ? 1 : 0) : fn === "path" ? (p) => (p.toLowerCase().includes(v.replace(/\*/g, "")) ? 1 : 0) : () => 0;
     } else if (m[3] !== undefined) {
-      const phrase = m[3].toLowerCase();
-      test = (_p, body) => (phrase ? body.split(phrase).length - 1 : 0);
+      const count = inARow(m[3].toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean), false);
+      test = (_p, _b, tokens) => count(tokens);
     } else {
       const word = raw.toLowerCase();
-      const start = word.endsWith("*") ? word.slice(0, -1) : null;
       const parts = word.split(/[^a-z0-9_]+/).filter(Boolean);
-      // A word with a dot or a bracket in it ("dim.Store") is looked for as it is written; a plain word as a whole word.
-      test = start !== null ? (_p, _b, tokens) => tokens.filter((t) => t.startsWith(start)).length : parts.length > 1 ? (_p, body) => body.split(word).length - 1 : (_p, _b, tokens) => tokens.filter((t) => t === word).length;
+      if (!parts.length) continue;
+      const count = inARow(parts, word.endsWith("*"));
+      test = (_p, _b, tokens) => count(tokens);
     }
     groups[groups.length - 1]!.push({ not, filter: m[1] !== undefined, test });
     not = false;

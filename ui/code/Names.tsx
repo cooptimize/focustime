@@ -22,17 +22,22 @@ export const NAMES_TEXT = {
   inside: "Inside files",
   searchInside: "Search inside files",
   insideNote: "Each client's DevOps is asked which files hold the words. FocusTime reads no file to search it.",
-  insideHelp: 'Plain words find files with all of them. "A phrase in quotes", a * at the end of a word, AND, OR and NOT work too.',
+  insideHelp: 'Plain words find files with all of them, as whole words. "A phrase in quotes", a * at the end of a word, and AND, OR and NOT in capitals work too.',
   insideStart: "Type what to look for, then press Enter or Search. A table or column name finds every file that uses it.",
   insideAsking: (done: number, all: number) => `Asked ${done} of ${all} client${all === 1 ? "" : "s"}`,
   insideResults: (n: number) => (n === 0 ? "No file holds those words." : `${n} file${n === 1 ? "" : "s"}`),
   insideNone: "No file holds those words.",
-  insideNoneOfKind: "No file of that kind holds those words.",
+  insideNoneOfKind: "No file of that kind holds those words. Try All kinds.",
+  insideNothingIn: (names: string[]) => `Nothing in ${list(names)}.`,
   insideMore: (shown: number, total: number) => `Showing the first ${shown} of ${total.toLocaleString()}. Narrow your search.`,
+  insideMoreKind: (n: number, first: number, total: number) => `${n} of this kind in the first ${first} of ${total.toLocaleString()} files. Narrow your search.`,
   insideKindChanged: "Press Search again to look for this kind in the whole search.",
+  insideNarrowed: (kind: string) => `DevOps was asked for ${kind} files only, by file type.`,
+  insideNarrowedOther: "This search was narrowed to one kind. Press Search again to look for this one.",
+  insideNotListed: (n: number) => `${n} more file${n === 1 ? " isn't" : "s aren't"} listed: DevOps found ${n === 1 ? "it" : "them"} on another branch.`,
   insideIndexing: "DevOps is still indexing this client's code, so some files may be missing.",
   insideScope: "Only each repo's default branch is searched. Forks aren't searched.",
-  matches: (n: number | null) => (n === null ? "" : n === 0 ? "its name matches" : `${n} match${n === 1 ? "" : "es"}`),
+  matches: (n: number | null) => (n === null || n === 0 ? "" : `${n} match${n === 1 ? "" : "es"}`),
   searchStart: "Type a name, then press Enter or Search. Folder names count too.",
   backToResults: "Back to results",
   thisClient: "This client",
@@ -40,6 +45,7 @@ export const NAMES_TEXT = {
   allKinds: "All kinds",
   reading: (done: number, all: number) => `Read ${done} of ${all} client${all === 1 ? "" : "s"}`,
   results: (n: number) => (n === 0 ? "No name matches." : `${n} result${n === 1 ? "" : "s"}`),
+  resultsNoneOfKind: "No name of that kind matches. Try All kinds.",
   narrow: `Showing the first ${SEARCH_MAX}. Narrow your search.`,
   leftOut: (names: string[]) => `Left out: ${list(names)}. Only ${names.length === 1 ? "its team" : "each one's team"} can read its code.`,
   noneToRead: "There is no client here whose code you can read.",
@@ -67,7 +73,7 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 type Row = Thing & { repoId: string; repoName: string };
 /** What an item opens to: a model's tables, or (RB-4) the things inside it (a warehouse's tables, views and procedures). */
-const kidsOf = (t: Thing): ThingInside[] => (t.tables ? t.tables.map((tb) => ({ name: tb.name, file: tb.file, kind: t.kind, detail: "Table" })) : (t.inside ?? []));
+const kidsOf = (t: Thing): ThingInside[] => [...(t.tables ?? []).map((tb) => ({ name: tb.name, file: tb.file, kind: t.kind, detail: "Table" })), ...(t.inside ?? [])];
 /** A group shows this many rows until Show all. */
 const GROUP_SHOWN = 50;
 
@@ -149,7 +155,7 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
                             return (
                               <li key={tb.file}>
                                 <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} onClick={() => onOpen(t.repoId, tb.file)}>
-                                  <Icon name={t.tables || tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
+                                  <Icon name={tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
                                   <span className="cv-thing-name">{tb.name}</span>
                                   <span className="cv-thing-detail">{tb.detail}</span>
                                 </button>
@@ -290,7 +296,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
   return (
     <div className="cv-results" data-code-results="" onKeyDown={onKey}>
       <p className="cv-note cv-results-status" role="status" data-code-progress="">
-        {!run.targets.length ? NAMES_TEXT.noneToRead : reading ? `${NAMES_TEXT.reading(done, run.targets.length)}…` : NAMES_TEXT.results(byClient.total)}
+        {!run.targets.length ? NAMES_TEXT.noneToRead : reading ? `${NAMES_TEXT.reading(done, run.targets.length)}…` : byClient.total === 0 && kind ? NAMES_TEXT.resultsNoneOfKind : NAMES_TEXT.results(byClient.total)}
         {!reading && byClient.total > SEARCH_MAX ? ` ${NAMES_TEXT.narrow}` : ""}
       </p>
       {run.leftOut.length > 0 && (
@@ -366,7 +372,8 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
     const r = run.results.get(c.clientKey) ?? "waiting";
     if (r === "waiting") return { client: c, state: "waiting" as const };
     if ("message" in r) return { client: c, state: "failed" as const, failure: r };
-    const files = kind ? r.files.filter((f) => f.kind === kind) : r.files;
+    // A file inside an item passes its own kind's filter and its item's.
+    const files = kind ? r.files.filter((f) => f.kind === kind || f.itemKind === kind) : r.files;
     const byRepo = new Map<string, { name: string; files: InsideFile[] }>();
     for (const f of files) {
       const g = byRepo.get(f.repoId);
@@ -377,6 +384,7 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
   });
   const total = groups.reduce((n, g) => n + (g.state === "ok" ? g.files.length : 0), 0);
   const answered = groups.filter((g) => g.state === "ok").length;
+  const nothingIn = groups.flatMap((g) => (g.state === "ok" && !g.files.length && !g.answer.indexing && !g.answer.more && !g.answer.narrowed && !g.answer.notListed ? [g.client.name] : []));
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const all = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-code-hit]")];
@@ -396,10 +404,16 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
           {NAMES_TEXT.leftOut(run.leftOut.map((c) => c.name))}
         </p>
       )}
+      {/* The clients that answered with nothing are named, so "nothing" is never read into a client that wasn't asked. */}
+      {!asking && total > 0 && nothingIn.length > 0 && (
+        <p className="cv-note" data-code-nothing-in="">
+          {NAMES_TEXT.insideNothingIn(nothingIn)}
+        </p>
+      )}
       {groups.map((g) => {
         if (g.state === "waiting") return null;
         // A client that answered with nothing shows no group when another has results; alone, the status line says it.
-        if (g.state === "ok" && !g.files.length && !g.answer.indexing && !g.answer.more) return null;
+        if (g.state === "ok" && !g.files.length && !g.answer.indexing && !g.answer.more && !g.answer.narrowed && !g.answer.notListed) return null;
         return (
           <section key={g.client.clientKey} className="cv-result-client" data-code-result-client={g.client.clientKey} aria-label={g.client.name}>
             <h3 className="cv-result-head">
@@ -411,10 +425,17 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
             {g.state === "ok" && g.answer.indexing && <p className="cv-note problem" data-code-indexing="">{NAMES_TEXT.insideIndexing}</p>}
             {g.state === "ok" && g.answer.more && (
               <p className="cv-note" data-code-more="">
-                {NAMES_TEXT.insideMore(Math.min(g.answer.files.length, INSIDE_MAX), g.answer.total)}
-                {kind !== run.kind ? ` ${NAMES_TEXT.insideKindChanged}` : ""}
+                {kind && !g.answer.narrowed ? NAMES_TEXT.insideMoreKind(g.files.length, Math.min(g.answer.files.length, INSIDE_MAX), g.answer.total) : NAMES_TEXT.insideMore(Math.min(g.answer.files.length, INSIDE_MAX), g.answer.total)}
+                {kind !== run.kind && !g.answer.narrowed ? ` ${NAMES_TEXT.insideKindChanged}` : ""}
               </p>
             )}
+            {/* A search DevOps narrowed to one kind's file type holds only that kind: say so, and under another kind say to search again. */}
+            {g.state === "ok" && g.answer.narrowed && (
+              <p className="cv-note" data-code-narrowed="">
+                {kind === run.kind && run.kind ? NAMES_TEXT.insideNarrowed(KIND_GROUPS[run.kind]) : NAMES_TEXT.insideNarrowedOther}
+              </p>
+            )}
+            {g.state === "ok" && g.answer.notListed > 0 && <p className="cv-note" data-code-not-listed="">{NAMES_TEXT.insideNotListed(g.answer.notListed)}</p>}
             {g.state === "ok" &&
               g.repos.map(([repoId, repo]) => (
                 <div key={repoId} className="cv-result-kind" data-code-result-repo={repo.name}>
@@ -429,7 +450,7 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
                             <span className="cv-thing-name">{name}</span>
                             <span className="cv-thing-detail">{f.detail}</span>
                             <span className="cv-hit-count" data-code-matches="">{NAMES_TEXT.matches(f.matches)}</span>
-                            <span className="cv-hit-where">{f.path}</span>
+                            <span className="cv-hit-where" title={f.path}>{f.path}</span>
                           </button>
                         </li>
                       );
