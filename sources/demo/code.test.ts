@@ -3,7 +3,7 @@
 // own files in the documented query forms. Everything here is invented.
 import { describe, expect, it } from "vitest";
 import { demoCodeGit, demoSearch } from "./code.ts";
-import { fileLabels, searchThings, sortRepo } from "../../plan/code-kinds.ts";
+import { fileLabels, NO_SCHEMA, searchThings, sortRepo, sqlDatabases, sqlTree } from "../../plan/code-kinds.ts";
 
 const git = demoCodeGit();
 const CLIENTS = ["Northwind", "Atlas", "Cooptimize", "Fabrikam", "Tailspin"];
@@ -20,15 +20,34 @@ describe("names in the demo's repos (RB-4 A)", () => {
     const sales = (await reposOf("Northwind")).find((r) => r.repo.name === "sales-analytics")!;
     const { things } = sortRepo(sales.paths);
     const gold = things.find((t) => t.name === "Gold")!;
-    expect(gold).toMatchObject({ kind: "lake", detail: "Warehouse · 4 inside" });
-    expect(gold.inside!.map((x) => [x.name, x.detail])).toEqual([["SalesLine", "Table in fact"], ["Store", "Table in dim"], ["usp_LoadSalesLine", "Stored procedure in fact"], ["vStoreRegion", "View in dim"]]);
-    expect(things.find((t) => t.name === "Returns")).toMatchObject({ kind: "fabric", detail: "SQL database · 3 inside" });
+    expect(gold).toMatchObject({ kind: "lake", detail: "Warehouse · 22 inside" });
+    expect(gold.inside!.filter((x) => x.schema === "fact").map((x) => [x.name, x.detail])).toEqual([["Returns", "Table in fact"], ["SalesLine", "Table in fact"], ["usp_LoadSalesLine", "Stored procedure in fact"], ["vDailySales", "View in fact"]]);
+    expect(things.find((t) => t.name === "Returns" && t.kind === "fabric")).toMatchObject({ detail: "SQL database · 9 inside" });
     const sql = things.filter((t) => t.kind === "sql").map((t) => [t.name, t.detail]);
     expect(sql).toContainEqual(["Store", "Table in dim · Gold warehouse"]);
     expect(sql).toContainEqual(["usp_CloseReturn", "Stored procedure in ops · Returns SQL database"]);
     // The table is found by name, with and without the SQL kind.
     const { files } = sortRepo(sales.paths);
     for (const kind of [null, "sql"] as const) expect(searchThings(things, "SalesLine", kind, files).map((h) => h.file)).toContain("/lake/Gold.Warehouse/fact/Tables/SalesLine.sql");
+  });
+});
+
+describe("the demo's databases have enough to group (RB-5 C1)", () => {
+  it("the warehouse and the SQL database: four schemas each, every type, a name in two schemas, a schema's own definition, a loose script", async () => {
+    const sales = (await reposOf("Northwind")).find((r) => r.repo.name === "sales-analytics")!;
+    const sql = sortRepo(sales.paths).things.filter((t) => t.kind === "sql");
+    for (const [db, schemas] of [["Gold warehouse", ["dim", "fact", "rpt", "stg", NO_SCHEMA]], ["Returns SQL database", ["audit", "ops", "ref", "stg", NO_SCHEMA]]] as const) {
+      const objects = sql.filter((t) => t.dbName === db);
+      expect(sqlTree(objects, "schema").folders.map((f) => f.label), db).toEqual(schemas);
+      expect(sqlTree(objects, "type").folders.map((f) => f.label), db).toEqual(expect.arrayContaining(["Tables", "Views", "Stored procedures", "Functions", "Schemas", "Scripts"]));
+    }
+    const gold = sql.filter((t) => t.dbName === "Gold warehouse");
+    expect(sqlTree(gold, "type").folders.map((f) => `${f.label} ${f.count}`)).toEqual(["Tables 7", "Views 4", "Stored procedures 3", "Functions 2", "Schemas 2", "Security 1", "Shared queries 1", "SQL projects 1", "Scripts 1"]);
+    expect(gold.filter((t) => t.name === "Store").map((t) => `${t.schema}.${t.name} ${t.sqlType}`).sort()).toEqual(["dim.Store table", "stg.Store table"]);
+    expect(gold.find((t) => t.file.endsWith("/Security/stg.sql"))).toMatchObject({ sqlType: "schema", schema: "stg" });
+    expect(gold.find((t) => t.name === "PostDeployment")).toMatchObject({ sqlType: "script" });
+    // Three databases in one client: the SQL group puts the database first.
+    expect(sqlDatabases(sql.map((t) => ({ ...t, repoId: sales.repo.id, repoName: sales.repo.name })), false).databases.map((d) => d.label)).toEqual(["Gold warehouse", "Returns SQL database", "Warehouse SQL project"]);
   });
 });
 

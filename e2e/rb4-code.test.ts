@@ -106,9 +106,13 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await panel(page).locator("[data-code-kinds]").waitFor();
     const lake = panel(page).locator('[data-code-kind="lake"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
-    expect(await lake.locator("[data-code-table]").evaluateAll((els) => els.map((e) => `${e.getAttribute("data-code-table")}: ${e.querySelector(".cv-thing-detail")?.textContent}`))).toEqual(["SalesLine: Table in fact", "Store: Table in dim", "usp_LoadSalesLine: Stored procedure in fact", "vStoreRegion: View in dim"]);
+    // RB-5: what is inside is a tree, by schema then type; the table's row sits under fact › Tables.
+    expect(await lake.locator("[data-sql-folder]").evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toEqual(["dim", "fact", "rpt", "stg", "No schema"]);
+    await lake.locator('[data-sql-folder="fact"]').click();
+    await lake.locator('[data-sql-folder="Tables"]').click();
+    expect(await lake.locator("[data-code-table]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-table")))).toEqual(["Returns", "SalesLine"]);
     const sql = panel(page).locator('[data-code-kind="sql"]');
-    expect(await sql.locator('[data-code-thing="Store"] .cv-thing-detail').textContent()).toBe("Table in dim · Gold warehouse · sales-analytics");
+    expect(await sql.locator('[data-sql-folder="Gold warehouse · sales-analytics"] .cv-kind-count').textContent()).toBe("22");
     // A model still opens to its tables.
     await panel(page).locator('[data-code-kind="model"]').getByRole("button", { name: "Tables of Sales" }).click();
     expect(await panel(page).locator('[data-code-kind="model"] [data-code-table]').evaluateAll((els) => els.map((e) => e.getAttribute("data-code-table")))).toEqual(["Date", "Sales", "Store"]);

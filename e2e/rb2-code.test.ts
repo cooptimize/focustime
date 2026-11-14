@@ -72,8 +72,9 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await panel(page).locator(".cv-kind-head .cv-kind-label").allTextContents()).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses and warehouses", "SQL", "Other Fabric items", "Other"]);
     expect(await group(page, "report").locator("[data-code-thing]").allTextContents()).toEqual(["SalesReport · sales-analytics", "Store visitsReport · store-portal"]);
     expect(await group(page, "lake").locator(".cv-thing-name").allTextContents()).toEqual(["Bronze", "Gold"]);
-    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics", "SQL database · 3 inside · sales-analytics"]);
-    expect(await group(page, "sql").locator(".cv-thing-detail").allTextContents()).toContain("Stored procedure in etl · sales-analytics");
+    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics", "SQL database · 9 inside · sales-analytics"]);
+    // RB-5: the SQL group is a tree, the client's databases first.
+    expect(await group(page, "sql").locator("[data-sql-folder]").evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toContain("Warehouse SQL project · sales-analytics");
     // Names only: the repos and By kind's one read, never a folder or a file.
     expect([...new Set(sent.map((s) => s.action).filter((a) => a.startsWith("code.")))]).toEqual(["code.clients", "code.repos", "code.kinds"]);
     await shots(page, "01-by-kind");
