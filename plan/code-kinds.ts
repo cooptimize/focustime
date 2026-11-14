@@ -149,6 +149,19 @@ const SQL_OBJECT_FOLDERS: readonly (readonly [folder: RegExp, label: string])[] 
 
 const NOTEBOOK_EXT: Readonly<Record<string, string>> = { ipynb: "Jupyter notebook" };
 
+// ---------- 5. Other ----------
+
+/** A file type Code colors as something broader, said by its own name. One row per type. */
+const OTHER_LABELS: Readonly<Record<string, string>> = { html: "HTML", htm: "HTML", svg: "SVG", csv: "CSV" };
+/** What an Other file is: the language Code knows for it, else its type ("PNG file"), else "File". */
+function otherLabel(name: string): string {
+  const ext = extOf(name);
+  if (OTHER_LABELS[ext]) return OTHER_LABELS[ext]!;
+  const lang = languageOf(name);
+  if (lang !== "plain") return LANG_NAMES[lang];
+  return ext === "txt" ? LANG_NAMES.plain : ext ? `${ext.toUpperCase()} file` : "File";
+}
+
 // ---------- the rules ----------
 
 const dirOf = (p: string): string => {
@@ -251,7 +264,7 @@ export function thingsOf(paths: readonly string[]): Thing[] {
       out.push({ kind: "notebook", name: stem(name), detail: notebook, folder: dir, file: p });
       continue;
     }
-    out.push({ kind: "other", name, detail: LANG_NAMES[languageOf(name)], folder: dir, file: p });
+    out.push({ kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
   }
 
   for (const [dir, files] of items) {
@@ -314,8 +327,9 @@ export const searchWords = (q: string): string[] => q.toLowerCase().split(/\s+/)
 export type NameHit = { thing: Thing; table: ThingTable | null; name: string; detail: string; file: string };
 
 /**
- * Things whose name, file name or folder names hold every word, in any order, ignoring case. A model's tables are
- * results of their own. Names only: nothing here ever sees a file's content.
+ * Things whose name, file name or folder names hold every word, in any order, ignoring case. A model's table is a
+ * result of its own when its own name matches (its model's folder doesn't make every table a match). Results whose
+ * name matches come before those found only by a folder's name. Names only: nothing here ever sees a file's content.
  */
 export function searchThings(things: readonly Thing[], q: string, kind: Kind | null = null): NameHit[] {
   const words = searchWords(q);
@@ -324,13 +338,14 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
     const t = text.toLowerCase();
     return words.every((w) => t.includes(w));
   };
-  const out: NameHit[] = [];
+  const byName: NameHit[] = [];
+  const byFolder: NameHit[] = [];
   for (const t of things) {
     if (kind && t.kind !== kind) continue;
-    if (has(`${t.name} ${t.file}`)) out.push({ thing: t, table: null, name: t.name, detail: t.detail.split(" · ")[0]!, file: t.file });
-    for (const tb of t.tables ?? []) if (has(`${tb.name} ${tb.file}`)) out.push({ thing: t, table: tb, name: tb.name, detail: `Table in ${t.name}`, file: tb.file });
+    if (has(`${t.name} ${t.file}`)) (has(`${t.name} ${baseOf(t.file)}`) ? byName : byFolder).push({ thing: t, table: null, name: t.name, detail: t.detail.split(" · ")[0]!, file: t.file });
+    for (const tb of t.tables ?? []) if (has(`${tb.name} ${baseOf(tb.file)}`)) byName.push({ thing: t, table: tb, name: tb.name, detail: `Table in ${t.name}`, file: tb.file });
   }
-  return out;
+  return [...byName, ...byFolder];
 }
 
 /**

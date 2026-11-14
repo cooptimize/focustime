@@ -183,6 +183,12 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await panel(page).locator(".cv-file-view").waitFor();
     expect(await hash(page)).toBe("#/code/Northwind/a1b2c3d4-0001-4000-8000-00000000a001/%2Fpipelines%2FClean%20orders.Notebook%2Fnotebook-content.py");
     expect(await panel(page).locator("[data-code-title]").getAttribute("data-code-title")).toBe("Northwind");
+    // Review 1: the opened file has its own way back to the results; the browser's Back does the same.
+    await panel(page).locator("[data-code-back-to-results]").click();
+    await results.waitFor();
+    expect(await hash(page)).toBe("#/code/~search");
+    await page.goBack();
+    await panel(page).locator(".cv-file-view").waitFor();
     // Back returns to the results, as they were.
     await page.goBack();
     await results.waitFor();
@@ -216,14 +222,16 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await results.locator("[data-code-hit]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-hit")))).toEqual(["pl_copy_shipments"]);
     await panel(page).getByRole("group", { name: "Where to search" }).getByRole("button", { name: "All clients" }).click();
     await panel(page).getByRole("button", { name: "Search", exact: true }).click();
-    await results.locator('[data-code-result-client="Tailspin"]').waitFor();
+    await page.waitForFunction(() => location.hash === "#/code/~search" && /^\d+ results?$/.test(document.querySelector("[data-code-progress]")?.textContent ?? ""));
+    // Tailspin's pipeline copies flights, so only Atlas has this one; Harbor still says why it couldn't be read.
+    expect(await results.locator("[data-code-result-client]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-result-client")))).toEqual(["Atlas", "Harbor"]);
     expect(await hash(page)).toBe("#/code/~search");
     // Review 2: Back to the client's own search never shows the wider search's names under that client's name.
     await page.goBack();
     expect(await hash(page)).toBe("#/code/Atlas/search");
     await panel(page).locator(".cv-search-page").waitFor();
     expect(await panel(page).locator("[data-code-result-client]").count()).toBe(0);
-    expect(await panel(page).locator(".cv-search-page .cv-note").last().textContent()).toBe("Type a name, then press Enter or Search.");
+    expect(await panel(page).locator(".cv-search-page .cv-note").last().textContent()).toBe("Type a name, then press Enter or Search. Folder names count too.");
     expect(errors).toEqual([]);
   });
 
@@ -245,7 +253,15 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await box.press("Enter");
     await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
     expect(await noSidewaysScroll(page)).toBe(true);
+    // Review 1: the phone's search page says what is logged too.
+    expect(await panel(page).locator(".cv-search-page [data-code-log-line]").textContent()).toContain("searching names are logged too");
     await shots(page, "11-phone-search");
+    // A result's file goes Back to the results, not to the repo's tree.
+    await panel(page).locator('[data-code-hit="Sales"]').first().click();
+    await panel(page).locator(".cv-file-view").waitFor();
+    await panel(page).getByRole("button", { name: /Results/ }).first().click();
+    await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
+    expect(await hash(page)).toBe("#/code/~search");
     expect(errors).toEqual([]);
   });
 

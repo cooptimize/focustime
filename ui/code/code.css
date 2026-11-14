@@ -171,3 +171,8 @@
 .panel-shell.phone.code-panel .cv-hit { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
 .panel-shell.phone.code-panel .cv-hit-where { flex-basis: 100%; text-align: left; }
 .panel-shell.phone.code-panel .cv-search-page, .panel-shell.phone.code-panel .cv-start { padding-top: 12px; }
+/* Review 1: By kind's rows carry a name, what it is and the repo, so its side is wider than the tree's; on the phone a
+   result's path wraps so the file's name shows, and the file's folder isn't said twice. */
+.panel-shell.code-panel.kinds:not(.phone) { grid-template-columns: clamp(320px, 30vw, 480px) minmax(0, 1fr); }
+.panel-shell.phone.code-panel .cv-hit-where { white-space: normal; overflow-wrap: anywhere; }
+.panel-shell.phone.code-panel .cv-lives > span { display: none; }

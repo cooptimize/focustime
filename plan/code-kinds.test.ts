@@ -128,7 +128,10 @@ describe("SQL, notebooks and the rest", () => {
     expect(pick(t, "explore")).toMatchObject({ kind: "notebook", detail: "Jupyter notebook" });
     expect(pick(t, "deploy.ps1")).toMatchObject({ kind: "other", detail: "PowerShell" });
     expect(pick(t, "azure-pipelines.yml")!.detail).toBe("YAML");
-    expect(pick(t, "LICENSE")!.detail).toBe("Plain text");
+    expect(pick(t, "LICENSE")!.detail).toBe("File");
+    // Review 1: a file Code can't name a language for says its type, never "Plain text".
+    const odd = thingsOf(["/a/map.png", "/a/old.parquet", "/a/Model.pbix", "/a/page.html", "/a/rows.csv", "/a/notes.txt"]);
+    expect(odd.map((x) => [x.name, x.detail])).toEqual([["map.png", "PNG file"], ["Model.pbix", "PBIX file"], ["notes.txt", "Plain text"], ["old.parquet", "PARQUET file"], ["page.html", "HTML"], ["rows.csv", "CSV"]]);
   });
   it("groups come in their order and an empty group doesn't show", () => {
     const t = thingsOf(["/z.sql", "/A.Report/.platform", "/n.ipynb"]);
@@ -159,6 +162,10 @@ describe("searching names", () => {
     expect(searchThings(things, "orders load").map((h) => h.name)).toEqual(["pl_load_orders"]);
     expect(searchThings(things, "dbo").map((h) => h.name)).toEqual(["Orders"]);
     expect(searchThings(things, "   ")).toEqual([]);
+  });
+  it("names first, then things found only by a folder's name; a table only by its own name (review 1)", () => {
+    const t = thingsOf(["/db/etl/StoredProcedures/usp_Load.sql", "/ws/Store visits.SemanticModel/.platform", "/ws/Store visits.SemanticModel/definition/tables/Date.tmdl", "/ws/Store visits.SemanticModel/definition/tables/Store.tmdl", "/ws/Store list.Dataflow/.platform"]);
+    expect(searchThings(t, "store").map((h) => [h.name, h.detail])).toEqual([["Store visits", "Semantic model"], ["Store", "Table in Store visits"], ["Store list", "Dataflow"], ["usp_Load", "Stored procedure in etl"]]);
   });
   it("a model's table is a result of its own", () => {
     expect(searchThings(things, "date")).toMatchObject([{ name: "Date", detail: "Table in Retail", file: "/ws/Retail.SemanticModel/definition/tables/Date.tmdl" }]);

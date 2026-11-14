@@ -519,7 +519,7 @@ const sales = (): Record<string, Content> => ({
 const ingest = (): Record<string, Content> => ({
   "/README.md": README("Freight ingest").replace(/## What's here[\s\S]*?## Deploy/, "## What's here\n\n- `adf/`: the Data Factory pipelines, datasets and linked services\n- `sql/`: watermark scripts\n\n## Deploy"),
   "/adf/pipeline/pl_copy_shipments.json": ADF_PIPELINE,
-  "/adf/pipeline/pl_load_orders.json": ADF_PIPELINE.replace(/shipments/g, "orders").replace(/Shipments/g, "Orders"),
+  "/adf/pipeline/pl_load_orders.json": ADF_PIPELINE.replace("pl_copy_shipments", "pl_load_orders").replace(/shipments/g, "orders").replace(/Shipments/g, "Orders"),
   "/adf/dataflow/df_clean_freight.json": `{\n  "name": "df_clean_freight",\n  "properties": { "type": "MappingDataFlow", "typeProperties": { "sources": [], "sinks": [], "transformations": [] } }\n}\n`,
   "/adf/trigger/tr_daily.json": `{\n  "name": "tr_daily",\n  "properties": { "type": "ScheduleTrigger", "typeProperties": { "recurrence": { "frequency": "Day", "interval": 1 } } }\n}\n`,
   "/adf/publish_config.json": `{ "publishBranch": "adf_publish" }\n`,
@@ -528,6 +528,9 @@ const ingest = (): Record<string, Content> => ({
   "/sql/etl/Tables/Watermarks.sql": "CREATE TABLE [etl].[Watermarks]\n(\n    [TableName] SYSNAME      NOT NULL PRIMARY KEY,\n    [LoadedAt]  DATETIME2(3) NULL\n);\n",
   "/azure-pipelines.yml": PIPELINE_YML.replace("sql/*", "adf/*"),
 });
+/** Tailspin's repo: the same shape of work as the freight one, under its own names (flights, not shipments). */
+const flights = (): Record<string, Content> => Object.fromEntries(Object.entries(ingest()).map(([path, c]) => [path.replace(/shipments/g, "flights").replace("df_clean_freight", "df_clean_delays"), typeof c === "string" ? c.replace(/shipments/g, "flights").replace(/Shipments/g, "Flights").replace(/Freight/g, "Flight").replace(/freight/g, "flight") : c]));
+
 const internal = (): Record<string, Content> => ({
   "/README.md": "# Delivery toolkit\n\nShared scripts the team reuses across projects (demo).\n",
   "/scripts/New-Workspace.ps1": DEPLOY_PS1.replace("Publishes the report and the semantic model", "Creates a workspace and assigns a capacity"),
@@ -545,7 +548,7 @@ const REPOS: Record<string, DemoRepo[] | "needs_code_read"> = {
   Cooptimize: [{ id: "a1b2c3d4-0004-4000-8000-00000000a004", name: "delivery-toolkit", files: internal() }],
   Fabrikam: [{ id: "a1b2c3d4-0005-4000-8000-00000000a005", name: "fiber-reporting", files: sales() }],
   // A customer the demo's person isn't on, readable by the whole company: the case Code is for.
-  Tailspin: [{ id: "a1b2c3d4-0007-4000-8000-00000000a007", name: "flight-data", files: ingest() }],
+  Tailspin: [{ id: "a1b2c3d4-0007-4000-8000-00000000a007", name: "flight-data", files: flights() }],
   Harbor: "needs_code_read",
 };
 const ORGS: Record<string, { org: string; project: string }> = {

@@ -447,6 +447,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   const [scopeAll, setScopeAll] = useState(false);
   const [run, setRun] = useState<SearchRun | null>(null);
   const runId = useRef(0);
+  /** The file on screen was opened from the search's results: Back to results shows, and the phone's Back goes there. */
+  const [fromRun, setFromRun] = useState(false);
   const view = at.view ?? "files";
 
   useEffect(() => {
@@ -567,6 +569,11 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     />
   );
   const kindsState = at.clientKey ? kinds.get(at.clientKey) : undefined;
+  // A file opened from the results keeps its way back until the person goes somewhere else in Code.
+  useEffect(() => {
+    if (view !== "files" || !at.path) setFromRun(false);
+  }, [view, at.path, at.clientKey]);
+  const toResults = () => run && onGo({ clientKey: run.scope, repoId: null, path: null, view: "search" });
 
   // The file in the address.
   useEffect(() => {
@@ -620,7 +627,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
         <>
           <ClientPicker clients={list} current={client} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
           {view !== "search" && client && !client.locked && searchBox}
-          {view !== "search" && client && !client.locked && (
+          {view !== "search" && client && !client.locked && Array.isArray(repoList) && repoList.length > 0 && (
             <div className="seg cv-views" role="group" aria-label="View">
               <button type="button" className={`seg-btn${view === "files" ? " on" : ""}`} aria-pressed={view === "files"} data-code-view="files" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path })}>
                 Files
@@ -679,7 +686,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       <div className="cv-search-page">
         {searchBox}
         {/* A search shows only where it was made: one client's results never sit under another client's name. */}
-        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => onGo({ clientKey, repoId, path: file })} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
+        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => (onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun(true), 0))} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
+        {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
       </div>
     );
   else if (!at.clientKey) body = (
@@ -687,6 +695,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       {searchBox}
       <p className="cv-lead">{TEXT.pickClient}</p>
       <ClientList clients={list} current={null} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
+      {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
     </div>
   );
   else if (!client) body = <p className="cv-state" data-code-state="no_client">That client isn't in FocusTime.</p>;
@@ -717,6 +726,13 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   else
     body = (
       <>
+        {fromRun && run && view === "files" && !phone && (
+          <p className="cv-lives">
+            <button type="button" className="mini" data-code-back-to-results="" onClick={toResults}>
+              {NAMES_TEXT.backToResults}
+            </button>
+          </p>
+        )}
         {view === "kinds" && (
           <p className="cv-lives" data-code-lives="">
             <span>
@@ -750,13 +766,13 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   return (
     <PanelShell
       name={TEXT.name}
-      className="code-panel"
+      className={`code-panel${view === "kinds" ? " kinds" : ""}`}
       groups={[]}
       current={showBody ? (at.path ?? "code") : null}
       onPick={() => {}}
       onClose={onClose}
-      onBack={phone && view === "search" ? () => onGo({ clientKey: at.clientKey, repoId: null, path: null }) : phone && at.path ? () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) }) : null}
-      backLabel={view === "search" ? (client?.name ?? TEXT.name) : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.name)}
+      onBack={phone && fromRun && run && view === "files" && at.path ? toResults : phone && view === "search" ? () => onGo({ clientKey: at.clientKey, repoId: null, path: null }) : phone && at.path ? () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) }) : null}
+      backLabel={fromRun && run && view === "files" ? "Results" : view === "search" ? (client?.name ?? TEXT.name) : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.name)}
       title={title}
       railOverride={phone && (!at.clientKey || view === "search") ? <></> : left}
       phone={phone}

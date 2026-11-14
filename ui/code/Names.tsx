@@ -14,7 +14,8 @@ export type NamesClient = { clientKey: string; name: string; color: string | nul
 export const NAMES_TEXT = {
   search: "Search names",
   searchNote: "Searches names only. Measures, columns and report pages live inside files and aren't searched.",
-  searchStart: "Type a name, then press Enter or Search.",
+  searchStart: "Type a name, then press Enter or Search. Folder names count too.",
+  backToResults: "Back to results",
   thisClient: "This client",
   allClients: "All clients",
   allKinds: "All kinds",
@@ -92,8 +93,10 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
               <ul className="cv-things">
                 {things.map((t) => {
                   const key = `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
-                  const tables = t.tables ?? [];
-                  const tablesOpen = openModels.has(key) || tables.some((tb) => tableHit(tb.name));
+                  // While filtering, a model shows the tables that match (all of them when it is opened by hand).
+                  const hits = (t.tables ?? []).filter((tb) => tableHit(tb.name));
+                  const tables = hits.length && !openModels.has(key) ? hits : (t.tables ?? []);
+                  const tablesOpen = openModels.has(key) || hits.length > 0;
                   const on = selected.repoId === t.repoId && selected.path === t.file;
                   return (
                     <li key={key} className="cv-thing">
