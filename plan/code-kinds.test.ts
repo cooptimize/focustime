@@ -165,7 +165,7 @@ describe("searching names", () => {
   });
   it("names first, then things found only by a folder's name; a table only by its own name (review 1)", () => {
     const t = thingsOf(["/db/etl/StoredProcedures/usp_Load.sql", "/ws/Store visits.SemanticModel/.platform", "/ws/Store visits.SemanticModel/definition/tables/Date.tmdl", "/ws/Store visits.SemanticModel/definition/tables/Store.tmdl", "/ws/Store list.Dataflow/.platform"]);
-    expect(searchThings(t, "store").map((h) => [h.name, h.detail])).toEqual([["Store visits", "Semantic model"], ["Store", "Table in Store visits"], ["Store list", "Dataflow"], ["usp_Load", "Stored procedure in etl"]]);
+    expect(searchThings(t, "store").map((h) => [h.name, h.detail])).toEqual([["Store visits", "Semantic model"], ["Store", "Table in Store visits"], ["Store list", "Dataflow"], ["usp_Load", "Stored procedure"]]);
   });
   it("a model's table is a result of its own", () => {
     expect(searchThings(things, "date")).toMatchObject([{ name: "Date", detail: "Table in Retail", file: "/ws/Retail.SemanticModel/definition/tables/Date.tmdl" }]);

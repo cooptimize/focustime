@@ -2,7 +2,7 @@
 // default branch, keeps a path in a query value, reads at most 1 MB + 1 byte, maps a token without Code (read) to a
 // plain reason, goes through the limiter, and never puts a path, a repo name or content in a log line or an error.
 import { describe, expect, it } from "vitest";
-import { ALLOWED, buildUrl, createGitReader, GitFailure, type GitRepo, type GitTarget } from "./git.ts";
+import { ALLOWED, buildSearch, buildUrl, createGitReader, GitFailure, SEARCH_FIELDS, type GitRepo, type GitTarget } from "./git.ts";
 import { Pat } from "./pat.ts";
 import type { LogRecord } from "../../log/logger.ts";
 import { TEXT_MAX_BYTES } from "../../plan/code.ts";
@@ -142,5 +142,90 @@ describe("refusals", () => {
     expect(e).toBeInstanceOf(GitFailure);
     const all = JSON.stringify(logs) + String((e as Error).message) + String((e as Error).stack);
     for (const s of ["secret-folder", "payroll", "warehouse", "Contoso", "contoso", "secret-token-value", "Data Platform"]) expect(all).not.toContain(s);
+  });
+});
+
+// RB-4: the one more allowed request, DevOps's own code search.
+describe("the code search request (RB-4)", () => {
+  const WORDS = "zzqx_planted_words";
+  const answer = (results: unknown[], extra: Record<string, unknown> = {}) => json({ count: results.length, results, infoCode: 0, ...extra });
+  const hit = (path: string, o: Record<string, unknown> = {}) => ({ fileName: path.slice(path.lastIndexOf("/") + 1), path, repository: { id: REPO.id, name: "warehouse", type: "git" }, project: { name: "Data Platform" }, versions: [{ branchName: "main", changeId: COMMIT }], matches: { content: [{ charOffset: 3, length: 5 }, { charOffset: 40, length: 5 }], fileName: [] }, ...o });
+
+  it("builds only the documented POST: the search address, the client's own organization and project, five fields", () => {
+    const { url, body } = buildSearch(T, WORDS, 100);
+    const u = new URL(url);
+    expect(u.origin).toBe("https://almsearch.dev.azure.com");
+    expect(u.pathname).toBe("/contoso/Data%20Platform/_apis/search/codesearchresults");
+    expect([...u.searchParams.entries()]).toEqual([["api-version", "7.1"]]);
+    expect(url).not.toContain(WORDS);
+    const b = JSON.parse(body) as Record<string, unknown>;
+    expect(Object.keys(b).sort()).toEqual([...SEARCH_FIELDS].sort());
+    expect(b).toEqual({ searchText: WORDS, $skip: 0, $top: 100, includeFacets: false, includeSnippet: false });
+  });
+  it("throws before a request for anything else", () => {
+    expect(() => buildSearch({ ...T, org: "evil.example.com/x" }, WORDS, 10)).toThrow();
+    for (const org of [".", "..", "a/b", "a?b", "a#b", ""]) expect(() => buildSearch({ ...T, org }, WORDS, 10), org).toThrow();
+    for (const project of [".", "..", "a/../b", "a\\b", "", " . "]) expect(() => buildSearch({ ...T, project }, WORDS, 10), project).toThrow();
+    for (const top of [0, -1, 101, 1.5, Number.NaN]) expect(() => buildSearch(T, WORDS, top), String(top)).toThrow();
+    for (const text of ["", "   ", "a\nb", "x".repeat(300)]) expect(() => buildSearch(T, text, 10)).toThrow();
+    expect(() => buildSearch(T, 5 as never, 10)).toThrow();
+    // An error from the builder never repeats the words.
+    try {
+      buildSearch({ ...T, org: ".." }, WORDS, 10);
+    } catch (e) {
+      expect(String(e)).not.toContain(WORDS);
+    }
+  });
+  it("sends one POST with the token only in the header, through the limiter, and reads paths, repos, branches and counts", async () => {
+    const f = fake(() => answer([hit("/db/Procs/usp_Load.sql"), hit("/other.sql", { versions: [{ branchName: "refs/heads/feature/x" }], matches: null }), hit("/../escape.sql"), { path: "/x.sql", repository: { id: "not-a-guid" } }], { count: 9, infoCode: 8 }));
+    const r = await f.reader.search(T, WORDS, 100);
+    expect(r).toEqual({ count: 9, info: 8, hits: [{ repoId: REPO.id, path: "/db/Procs/usp_Load.sql", branches: ["main"], matches: 2 }, { repoId: REPO.id, path: "/other.sql", branches: ["feature/x"], matches: null }] });
+    expect(f.calls).toHaveLength(1);
+    const c = f.calls[0]!;
+    expect(c.init.method).toBe("POST");
+    expect(new URL(c.url).origin).toBe("https://almsearch.dev.azure.com");
+    expect(c.url).not.toContain("secret-token-value");
+    expect(c.url).not.toContain(WORDS);
+    expect((c.init.headers as Record<string, string>).authorization).toMatch(/^Basic /);
+    expect(JSON.parse(String(c.init.body))).toMatchObject({ searchText: WORDS, includeSnippet: false });
+    expect(f.limiter.before).toEqual(["Contoso"]);
+    expect(f.limiter.after).toEqual([200]);
+    // The log line: the read's name, a status and a duration. Never the words, a path or the token.
+    expect(f.logs).toHaveLength(1);
+    expect(f.logs[0]).toMatchObject({ source: "devops", op: "code_search", status: 200 });
+    const logged = JSON.stringify(f.logs);
+    for (const secret of [WORDS, "usp_Load", "secret-token-value", "contoso"]) expect(logged).not.toContain(secret);
+  });
+  it.each([
+    [404, "no_code_search"],
+    [400, "bad_query"],
+    [401, "needs_code_read"],
+    [403, "needs_code_read"],
+    [203, "needs_code_read"],
+    [302, "needs_code_read"],
+    [429, "busy"],
+    [503, "busy"],
+    [500, "error"],
+  ])("a %i is the plain reason %s, with nothing of the answer or the words in it", async (status, reason) => {
+    const f = fake(() => new Response(status === 302 ? null : JSON.stringify({ message: `could not parse ${WORDS}` }), { status, headers: { "content-type": "application/json" } }));
+    const e = await f.reader.search(T, WORDS, 100).then(() => null, (x: unknown) => x);
+    expect(e).toBeInstanceOf(GitFailure);
+    expect((e as GitFailure).reason).toBe(reason);
+    expect(String(e) + JSON.stringify(f.logs)).not.toContain(WORDS);
+    expect(String(e) + JSON.stringify(f.logs)).not.toContain("secret-token-value");
+  });
+  it("a sign-in page answered with 200 means the token can't read code; a network error is unreachable", async () => {
+    const page = fake(() => new Response("<html>Sign in</html>", { status: 200, headers: { "content-type": "text/html" } }));
+    await expect(page.reader.search(T, WORDS, 10)).rejects.toMatchObject({ reason: "needs_code_read" });
+    const down = fake(() => {
+      throw new Error(`connect failed for ${WORDS}`);
+    });
+    const e = await down.reader.search(T, WORDS, 10).then(() => null, (x: unknown) => x);
+    expect((e as GitFailure).reason).toBe("unreachable");
+    expect(String(e) + JSON.stringify(down.logs)).not.toContain(WORDS);
+  });
+  it("the Git reads still can't reach the search address, and the search can't reach Git's", () => {
+    for (const op of Object.keys(ALLOWED)) expect(ALLOWED[op as keyof typeof ALLOWED].path.includes("search")).toBe(false);
+    expect(new URL(buildSearch(T, "x", 1).url).pathname.includes("/_apis/git/")).toBe(false);
   });
 });

@@ -15,11 +15,16 @@ export const PATH_MAX = 1_024;
 
 /**
  * What happened, for the view log (C1). Opening and closing folders isn't logged. RB-2: "Listed by kind" and
- * "Searched names" are one row per client whose file names were read, with no repo and no path.
+ * "Searched names" are one row per client whose file names were read, with no repo and no path. RB-4: "Searched inside
+ * files" is one row per client whose DevOps was asked, with no repo, no path and never the words.
  */
-export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used", "kinds_listed", "names_searched"] as const;
+export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used", "kinds_listed", "names_searched", "inside_searched"] as const;
 export type CodeEvent = (typeof CODE_EVENTS)[number];
-export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used", kinds_listed: "Listed by kind", names_searched: "Searched names" };
+export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files" };
+/** RB-4: a search inside files shows at most this many files for a client (one request's worth; never paged). */
+export const INSIDE_MAX = 100;
+/** RB-4: the words of a search inside files are at most this long. */
+export const INSIDE_WORDS_MAX = 200;
 /** RB-2: By kind and Search names read a client's repos this many at a time. */
 export const NAMES_REPOS_AT_ONCE = 4;
 /** RB-2: a search across clients asks for this many clients at a time. */

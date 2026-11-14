@@ -12,6 +12,11 @@
 // three at a time, and lists what it finds by client. The words typed never leave the browser and are never in the
 // address.
 //
+// RB-4: the search box switches Names · Inside files. Inside files asks each client's DevOps code search which files
+// hold the words (the one search whose words go through FocusTime's server); its results are files, never lines. A
+// file opened from them has every match of the words marked, found in the opened text itself, with a "1 of 4"
+// stepper. The words live in this panel's memory only, never in the address or the browser's storage.
+//
 // A file is always drawn as text: each colored piece is a text node in a span (ui/code/highlight.ts), never markup,
 // so an .html or .svg file shows its source and nothing in it runs. Nothing of the code is kept in the browser's
 // storage: folder lists, names and file text live only in this panel's memory while it is open.
@@ -22,12 +27,12 @@ import { LANG_NAMES, languageOf, tooLargeToColor } from "./languages.ts";
 import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
 import { SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
-import type { Kind, RepoThings } from "../../plan/code-kinds.ts";
-import { ByKind, NAMES_TEXT, SearchBox, SearchResults, type SearchRun } from "./Names.tsx";
+import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings } from "../../plan/code-kinds.ts";
+import { ByKind, InsideResults, NAMES_TEXT, SearchBox, SearchResults, type InsideRun, type SearchRun } from "./Names.tsx";
 import "./code.css";
 import { Icon } from "../icons.tsx";
 
-export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" };
+export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" };
 type KindsState = "loading" | { repos: RepoThings[]; max: number } | Failure;
 type Client = { clientKey: string; name: string; color: string | null; mine: boolean; locked: boolean };
 type Failure = { message: string; code: string | null };
@@ -58,6 +63,10 @@ const TEXT = {
   plainLarge: "Coloring is off for large files.",
   copied: "Copied",
   copyFailed: "Couldn't copy. Select the text and copy it instead.",
+  matchOf: (n: number, all: number) => `${n} of ${all}`,
+  noMarks: "DevOps found the words in this file, but none is marked here: it may match them in another way.",
+  prevMatch: "Previous match",
+  nextMatch: "Next match",
   error: "Something went wrong. Try again in a moment.",
 } as const;
 
@@ -317,22 +326,67 @@ function Find({ load, names, cut, max, onOpen }: { load: () => void; names: stri
   );
 }
 
-function Lines({ lines, wrap }: { lines: Line[]; wrap: boolean }) {
+/** RB-4: the matches of a search's words in a file's lines: per line, where they are and the first one's number. */
+type Marks = { byLine: Map<number, { ranges: [number, number][]; first: number }>; count: number };
+function marksOf(lines: Line[], terms: readonly { text: string; prefix?: boolean }[]): Marks {
+  const byLine = new Map<number, { ranges: [number, number][]; first: number }>();
+  let count = 0;
+  // Whole words first, as code search matches; if the file has none, anywhere in a word, so something is marked.
+  for (const anywhere of [false, true]) {
+    if (!terms.length || count) break;
+    lines.forEach((l, i) => {
+      const ranges = termRanges(l.map((s) => s.text).join(""), terms, anywhere);
+      if (ranges.length) (byLine.set(i, { ranges, first: count }), (count += ranges.length));
+    });
+  }
+  return { byLine, count };
+}
+
+/** One line's colored pieces with the matches marked: each piece is still a text node, cut where a match starts or ends. */
+function markedLine(l: Line, m: { ranges: [number, number][]; first: number }, current: number): ReactNode[] {
+  const out: ReactNode[] = [];
+  let at = 0;
+  l.forEach((s, j) => {
+    const end = at + s.text.length;
+    const cls = s.kinds ? s.kinds.map((k) => `tk-${k}`).join(" ") : undefined;
+    let from = at;
+    const push = (to: number, hit: number | null) => {
+      if (to <= from) return;
+      const text = s.text.slice(from - at, to - at);
+      const piece = cls ? <span className={cls}>{text}</span> : text;
+      out.push(hit === null ? <span key={`${j}-${from}`}>{piece}</span> : <mark key={`${j}-${from}`} className={`cv-mark${hit === current ? " on" : ""}`} data-code-mark={hit}>{piece}</mark>);
+      from = to;
+    };
+    m.ranges.forEach(([a, b], n) => {
+      if (b <= from || a >= end) return;
+      push(Math.max(a, from), null);
+      push(Math.min(b, end), m.first + n);
+    });
+    push(end, null);
+    at = end;
+  });
+  return out;
+}
+
+function Lines({ lines, wrap, marks, current }: { lines: Line[]; wrap: boolean; marks?: Marks; current?: number }) {
   return (
     <div className={`cv-code${wrap ? " wrap" : ""}`} role="region" aria-label="File contents" tabIndex={0}>
       <code className="cv-lines">
-        {lines.map((l, i) => (
-          <span key={i} className="cv-line">
-            <span className="cv-ln" data-n={i + 1} aria-hidden="true" />
-            <span className="cv-lt">{l.length ? l.map((s, j) => (s.kinds ? <span key={j} className={s.kinds.map((k) => `tk-${k}`).join(" ")}>{s.text}</span> : s.text)) : <br />}</span>
-          </span>
-        ))}
+        {lines.map((l, i) => {
+          const m = marks?.byLine.get(i);
+          return (
+            <span key={i} className="cv-line">
+              <span className="cv-ln" data-n={i + 1} aria-hidden="true" />
+              <span className="cv-lt">{!l.length ? <br /> : m ? markedLine(l, m, current ?? -1) : l.map((s, j) => (s.kinds ? <span key={j} className={s.kinds.map((k) => `tk-${k}`).join(" ")}>{s.text}</span> : s.text))}</span>
+            </span>
+          );
+        })}
       </code>
     </div>
   );
 }
 
-function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileView; repo: CodeRepoView; onFolder: (path: string) => void; clientName: string; phone: boolean }) {
+function FileView({ file, repo, onFolder, clientName, phone, words }: { file: CodeFileView; repo: CodeRepoView; onFolder: (path: string) => void; clientName: string; phone: boolean; /** RB-4: the words of the search inside files this file was opened from, to mark. */ words?: string | null }) {
   // A phone wraps by default: sideways scrolling a narrow box is the harder way to read.
   const [wrap, setWrap] = useState(phone);
   const [formatOn, setFormatOn] = useState(false);
@@ -346,13 +400,22 @@ function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileV
   const shown = formatted?.ok ? formatted.text : text;
   const large = !!shown && tooLargeToColor(shown);
   const lines = useMemo(() => (shown === null ? [] : large ? plainLines(shown) : colorize(shown, lang)), [shown, large, lang]);
+  // RB-4: the matches are found here, in the text that was opened, never taken from the search's answer.
+  const marks = useMemo(() => (words ? marksOf(lines, insideTerms(words)) : null), [lines, words]);
+  const [hit, setHit] = useState(0);
+  const view = useRef<HTMLDivElement>(null);
+  useEffect(() => setHit(0), [file.path, words, formatOn]);
+  useEffect(() => {
+    if (marks?.count) view.current?.querySelector(`[data-code-mark="${hit}"]`)?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [marks, hit]);
+  const step = (by: number) => marks?.count && setHit((h) => (h + by + marks.count) % marks.count);
   const say = (ok: boolean) => {
     setToast(ok ? TEXT.copied : TEXT.copyFailed);
     setTimeout(() => setToast(null), 2000);
   };
   const parts = file.path.split("/").filter(Boolean);
   return (
-    <div className="cv-file-view" data-code-file={file.path} data-lang={lang}>
+    <div className="cv-file-view" data-code-file={file.path} data-lang={lang} ref={view}>
       <div className="cv-file-head">
         <nav className="cv-crumbs" aria-label="Path">
           <button type="button" className="cv-crumb" onClick={() => onFolder("/")}>
@@ -417,12 +480,27 @@ function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileV
       {formatted && !formatted.ok && <p className="cv-note problem">{formatted.reason}</p>}
       {file.kind === "lfs" && <p className="cv-note">{TEXT.lfs}</p>}
       {large && <p className="cv-note" data-code-plain="">{TEXT.plainLarge}</p>}
+      {marks && text !== null && (
+        marks.count ? (
+          <div className="cv-stepper" role="group" aria-label="Matches" data-code-stepper="">
+            <span role="status" data-code-match-at="">{TEXT.matchOf(hit + 1, marks.count)}</span>
+            <button type="button" className="icon-btn" aria-label={TEXT.prevMatch} title={TEXT.prevMatch} onClick={() => step(-1)}>
+              <Icon name="arrow-up" />
+            </button>
+            <button type="button" className="icon-btn" aria-label={TEXT.nextMatch} title={TEXT.nextMatch} data-code-next-match="" onClick={() => step(1)}>
+              <Icon name="arrow-down" />
+            </button>
+          </div>
+        ) : (
+          <p className="cv-note" data-code-no-marks="">{TEXT.noMarks}</p>
+        )
+      )}
       {text === null ? (
         <p className="cv-state" data-code-state={file.kind}>
           {file.kind === "binary" ? TEXT.binary(file.sizeText) : file.kind === "image" ? TEXT.image(file.sizeText) : TEXT.tooLarge(file.sizeText)}
         </p>
       ) : (
-        <Lines lines={lines} wrap={wrap} />
+        <Lines lines={lines} wrap={wrap} {...(marks?.count ? { marks, current: hit } : {})} />
       )}
       <span className="sr-only">{`${clientName}: ${file.path}`}</span>
     </div>
@@ -432,7 +510,7 @@ function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileV
 export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; onClose: () => void }) {
   const phone = useNarrow();
   const [clients, setClients] = useState<Client[] | Failure | null>(null);
-  const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words.");
+  const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.");
   const [repos, setRepos] = useState<Map<string, CodeRepoView[] | Failure | "loading">>(new Map());
   const [folders, setFolders] = useState<Map<string, Folder>>(new Map());
   const [open, setOpen] = useState<Map<string, Set<string>>>(new Map());
@@ -447,9 +525,18 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   const [scopeAll, setScopeAll] = useState(false);
   const [run, setRun] = useState<SearchRun | null>(null);
   const runId = useRef(0);
-  /** The file on screen was opened from the search's results: Back to results shows, and the phone's Back goes there. */
-  const [fromRun, setFromRun] = useState(false);
+  /** The file on screen was opened from a search's results: Back to results shows, and the phone's Back goes there. */
+  const [fromRun, setFromRun] = useState<false | "search" | "inside">(false);
   const view = at.view ?? "files";
+  // RB-4: the search inside files under way, and whether the box is set to it (the address says so on a search page).
+  const [inRun, setInRun] = useState<InsideRun | null>(null);
+  const [insideMode, setInsideMode] = useState(view === "inside");
+  useEffect(() => {
+    if (view === "search" || view === "inside") setInsideMode(view === "inside");
+  }, [view]);
+  const searching = view === "search" || view === "inside";
+  /** The words to mark in the file on screen: those of the search inside files it was opened from. */
+  const [markAt, setMarkAt] = useState<{ key: string; words: string } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -527,7 +614,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   useEffect(() => setScopeAll(false), [at.clientKey]);
   const loaded = clients !== null;
   useEffect(() => {
-    if (view !== "search" || !loaded) return;
+    if (!searching || !loaded) return;
     // After the shell has put focus on its title (and a menu that opened Code has given focus back).
     const t = setTimeout(() => document.querySelector<HTMLElement>("[data-code-search]")?.focus(), 60);
     return () => clearTimeout(t);
@@ -539,6 +626,25 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     const inScope = list.filter((c) => all || c.clientKey === at.clientKey);
     const targets = inScope.filter((c) => !c.locked);
     const id = ++runId.current;
+    if (insideMode) {
+      // RB-4: Inside files. Each client's DevOps is asked once, a few at a time; the words go only in these requests.
+      const words = q.trim();
+      setInRun({ q: words, kind, scope: all ? null : at.clientKey, targets, leftOut: inScope.filter((c) => c.locked), results: new Map(targets.map((c) => [c.clientKey, "waiting" as const])) });
+      const put = (k: string, v: InsideAnswer | Failure) => runId.current === id && setInRun((r) => (r ? { ...r, results: new Map(r.results).set(k, v) } : r));
+      let next = 0;
+      const worker = async () => {
+        for (let n = next++; n < targets.length && runId.current === id; n = next++) {
+          const k = targets[n]!.clientKey;
+          await call<InsideAnswer>("code.inside", { clientKey: k, words, ...(kind ? { kind } : {}) }).then(
+            (r) => put(k, r),
+            (e) => put(k, failureOf(e)),
+          );
+        }
+      };
+      for (let i = 0; i < SEARCH_CLIENTS_AT_ONCE; i++) void worker();
+      onGo({ clientKey: all ? null : at.clientKey, repoId: null, path: null, view: "inside" });
+      return;
+    }
     setRun({ q, scope: all ? null : at.clientKey, targets, leftOut: inScope.filter((c) => c.locked), results: new Map(targets.map((c) => [c.clientKey, "waiting" as const])) });
     const put = (k: string, v: RepoThings[] | Failure) => runId.current === id && setRun((r) => (r ? { ...r, results: new Map(r.results).set(k, v) } : r));
     let next = 0;
@@ -566,6 +672,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       disabled={!Array.isArray(clients)}
       onSearch={search}
       onDown={() => document.querySelector<HTMLElement>("[data-code-hit]")?.focus()}
+      inside={insideMode}
+      onInside={(v) => (setInsideMode(v), searching && onGo({ clientKey: at.clientKey, repoId: null, path: null, view: v ? "inside" : "search" }, { replace: true }))}
     />
   );
   const kindsState = at.clientKey ? kinds.get(at.clientKey) : undefined;
@@ -573,7 +681,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   useEffect(() => {
     if (view !== "files" || !at.path) setFromRun(false);
   }, [view, at.path, at.clientKey]);
-  const toResults = () => run && onGo({ clientKey: run.scope, repoId: null, path: null, view: "search" });
+  const backRun = fromRun === "inside" ? inRun : fromRun === "search" ? run : null;
+  const toResults = () => backRun && fromRun && onGo({ clientKey: backRun.scope, repoId: null, path: null, view: fromRun });
 
   // The file in the address.
   useEffect(() => {
@@ -626,8 +735,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       ) : (
         <>
           <ClientPicker clients={list} current={client} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
-          {view !== "search" && client && !client.locked && searchBox}
-          {view !== "search" && client && !client.locked && Array.isArray(repoList) && repoList.length > 0 && (
+          {!searching && client && !client.locked && searchBox}
+          {!searching && client && !client.locked && Array.isArray(repoList) && repoList.length > 0 && (
             <div className="seg cv-views" role="group" aria-label="View">
               <button type="button" className={`seg-btn${view === "files" ? " on" : ""}`} aria-pressed={view === "files"} data-code-view="files" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path })}>
                 Files
@@ -681,12 +790,33 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   let body: ReactNode;
   if (failedClients) body = null;
   else if (clients === null) body = <p className="cv-note" role="status">Loading…</p>;
+  else if (view === "inside")
+    body = (
+      <div className="cv-search-page">
+        {searchBox}
+        {inRun && inRun.scope === (at.clientKey ?? null) ? (
+          <InsideResults
+            run={inRun}
+            kind={kind}
+            onOpen={(clientKey, repoId, file) => {
+              // The file opens through code.file, logged as a file open before its text is returned, as any file is.
+              setMarkAt({ key: `${clientKey}\u0000${repoId}\u0000${file}`, words: inRun.q });
+              onGo({ clientKey, repoId, path: file });
+              setTimeout(() => setFromRun("inside"), 0);
+            }}
+          />
+        ) : (
+          <p className="cv-note">{NAMES_TEXT.insideStart}</p>
+        )}
+        {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
+      </div>
+    );
   else if (view === "search")
     body = (
       <div className="cv-search-page">
         {searchBox}
         {/* A search shows only where it was made: one client's results never sit under another client's name. */}
-        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => (onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun(true), 0))} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
+        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => (onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
         {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
       </div>
     );
@@ -726,7 +856,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   else
     body = (
       <>
-        {fromRun && run && view === "files" && !phone && (
+        {fromRun && backRun && view === "files" && !phone && (
           <p className="cv-lives">
             <button type="button" className="mini" data-code-back-to-results="" onClick={toResults}>
               {NAMES_TEXT.backToResults}
@@ -743,7 +873,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
             </button>
           </p>
         )}
-        <FileView file={fileState.file} repo={repo} clientName={client.name} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path }), openFolder(path)) : openFolder} phone={phone} />
+        <FileView file={fileState.file} repo={repo} clientName={client.name} words={fromRun === "inside" && markAt?.key === rk(at.path!) ? markAt.words : null} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path }), openFolder(path)) : openFolder} phone={phone} />
       </>
     );
 
@@ -762,7 +892,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     </span>
   );
   // A phone shows the client and the tree first (the shell's list page), then the file as its own page with Back.
-  const showBody = !phone || !!at.path || !at.clientKey || view === "search";
+  const showBody = !phone || !!at.path || !at.clientKey || searching;
   return (
     <PanelShell
       name={TEXT.name}
@@ -771,14 +901,14 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
       current={showBody ? (at.path ?? "code") : null}
       onPick={() => {}}
       onClose={onClose}
-      onBack={phone && fromRun && run && view === "files" && at.path ? toResults : phone && view === "search" ? () => onGo({ clientKey: at.clientKey, repoId: null, path: null }) : phone && at.path ? () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) }) : null}
-      backLabel={fromRun && run && view === "files" ? "Results" : view === "search" ? (client?.name ?? TEXT.name) : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.name)}
+      onBack={phone && fromRun && backRun && view === "files" && at.path ? toResults : phone && searching ? () => onGo({ clientKey: at.clientKey, repoId: null, path: null }) : phone && at.path ? () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) }) : null}
+      backLabel={fromRun && backRun && view === "files" ? "Results" : searching ? (client?.name ?? TEXT.name) : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.name)}
       title={title}
-      railOverride={phone && (!at.clientKey || view === "search") ? <></> : left}
+      railOverride={phone && (!at.clientKey || searching) ? <></> : left}
       phone={phone}
       pageKey={`${view}/${at.clientKey ?? ""}/${at.repoId ?? ""}/${at.path ?? ""}`}
     >
-      {phone && at.clientKey && !at.path && view !== "search" ? left : body}
+      {phone && at.clientKey && !at.path && !searching ? left : body}
     </PanelShell>
   );
 }

@@ -6,7 +6,14 @@
 //   files   GET {org}/{project}/_apis/git/repositories/{repo}/items?scopePath=/&recursionLevel=Full&<branch>   (Find)
 //   file    GET {org}/{project}/_apis/git/repositories/{repo}/items?path=<path>&includeContentMetadata=true&<branch>
 //           then the same path pinned to the commit that answered, as bytes (Accept: application/octet-stream)
-// Only these can be built (ALLOWED, like sources/azure/client.ts): anything else throws before a request is sent.
+// RB-4 adds one more, for Search inside files, on DevOps's own search address:
+//   search  POST https://almsearch.dev.azure.com/{org}/{project}/_apis/search/codesearchresults?api-version=7.1
+//           with a body of exactly searchText, $skip 0, $top, includeFacets false and includeSnippet false
+// It asks DevOps's code search (Microsoft's Code Search extension, where the client's organization has it) which files
+// hold the words. FocusTime reads no file for it and asks for no snippet: the answer is file paths, repo ids, branch
+// names and match counts. The words go in the body only, never in the address, a log line or an error.
+// Only these can be built (ALLOWED and buildSearch, like sources/azure/client.ts): anything else throws before a
+// request is sent.
 // The organization, project and repo come from the caller's target and the client's own repo list, never from the
 // browser; a path travels only as a query value. Git LFS pointers are never resolved (resolveLfs is never sent).
 // Nothing read here is logged: the log line carries the read's name, a status and a duration, never a path, a repo
@@ -14,7 +21,7 @@
 import { API_VERSION, type Limiter } from "./source.ts";
 import type { Pat } from "./pat.ts";
 import type { Logger } from "../../log/logger.ts";
-import { branchName, cleanPath, FIND_MAX, FOLDER_MAX, nameOf, REPO_ID, sortEntries, TEXT_MAX_BYTES, type CodeEntry } from "../../plan/code.ts";
+import { branchName, cleanPath, FIND_MAX, FOLDER_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, nameOf, REPO_ID, sortEntries, TEXT_MAX_BYTES, type CodeEntry } from "../../plan/code.ts";
 
 /** One client's DevOps as the reader needs it: from Dataverse at fetch time; nothing from the browser. */
 export type GitTarget = { clientKey: string; org: string; project: string; pat: Pat };
@@ -25,7 +32,12 @@ export type GitFileList = { commit: string | null; paths: string[]; cut: boolean
 export type GitFileMeta = { commit: string; isBinary: boolean; isImage: boolean };
 export type GitBytes = { size: number | null; /** At most TEXT_MAX_BYTES + 1 bytes; null when the size alone says it's too large. */ bytes: Uint8Array | null };
 
-export type GitFailureReason = "needs_code_read" | "not_found" | "busy" | "unreachable" | "error";
+/** RB-4: one file DevOps's code search found: where it is, the branches it was found on and how many matches it has. */
+export type GitSearchHit = { repoId: string; path: string; branches: string[]; /** Null when DevOps didn't say. */ matches: number | null };
+/** RB-4: a code search's answer: the total DevOps counted, the files it returned and its info code (0 is fine). */
+export type GitSearchAnswer = { count: number; hits: GitSearchHit[]; info: number };
+
+export type GitFailureReason = "needs_code_read" | "not_found" | "busy" | "unreachable" | "error" | /** RB-4 */ "no_code_search" | "bad_query";
 /** A failed read. The message is a fixed phrase: never a path, a repo name, an organization or a body. */
 export class GitFailure extends Error {
   readonly reason: GitFailureReason;
@@ -81,6 +93,29 @@ export function buildUrl(t: Pick<GitTarget, "org" | "project">, op: GitOp, repo:
   return url.toString();
 }
 
+/** RB-4: the one address a code search goes to. */
+export const SEARCH_ORIGIN = "https://almsearch.dev.azure.com";
+/** RB-4: the only fields a code search's body can hold. */
+export const SEARCH_FIELDS = ["searchText", "$skip", "$top", "includeFacets", "includeSnippet"] as const;
+
+/**
+ * RB-4: builds the one allowed code search request, or throws (nothing is sent): a POST to DevOps's search address for
+ * the client's own organization and project, with the words and how many files to return. No snippet is ever asked
+ * for. Exported for the tests.
+ */
+export function buildSearch(t: Pick<GitTarget, "org" | "project">, text: string, top: number): { url: string; body: string } {
+  if (!ORG.test(t.org) || /^\.+$/.test(t.org)) throw new Error("not an organization name");
+  if (!t.project || t.project.length > 200 || /[\u0000-\u001f\u007f/\\]/.test(t.project) || /^\.+$/.test(t.project.trim())) throw new Error("not a project name");
+  // eslint-disable-next-line no-control-regex
+  if (typeof text !== "string" || !text.trim() || text.length > INSIDE_WORDS_MAX + 40 || /[\u0000-\u001f\u007f]/.test(text)) throw new Error("not a search text");
+  if (!Number.isInteger(top) || top < 1 || top > INSIDE_MAX) throw new Error("not an allowed number of results");
+  const path = `/${encodeURIComponent(t.org)}/${encodeURIComponent(t.project)}/_apis/search/codesearchresults`;
+  const url = new URL(`${SEARCH_ORIGIN}${path}`);
+  url.search = new URLSearchParams({ "api-version": API_VERSION }).toString();
+  if (url.origin !== SEARCH_ORIGIN || url.pathname !== path) throw new Error("not the client's organization and project");
+  return { url: url.toString(), body: JSON.stringify({ searchText: text, $skip: 0, $top: top, includeFacets: false, includeSnippet: false }) };
+}
+
 // ---------- the reader ----------
 
 export type GitReaderDeps = { fetch: typeof fetch; log: Logger; limiter?: Limiter; timeoutMs?: number };
@@ -131,10 +166,61 @@ export function createGitReader(d: GitReaderDeps) {
     }
   }
 
+  /** RB-4: the code search request. The words are in the body only; the log line carries a status and a duration. */
+  async function search(t: GitTarget, text: string, top: number): Promise<GitSearchAnswer> {
+    const { url, body } = buildSearch(t, text, top);
+    try {
+      d.limiter?.before(t.clientKey);
+    } catch {
+      throw new GitFailure("busy");
+    }
+    const started = performance.now();
+    let res: Response;
+    try {
+      res = await d.fetch(url, { method: "POST", headers: { accept: "application/json", "content-type": "application/json", authorization: t.pat.basicAuth() }, body, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    } catch {
+      d.log({ source: "devops", op: "code_search", kind: "network" });
+      throw new GitFailure("unreachable");
+    }
+    d.log({ source: "devops", op: "code_search", status: res.status, durationMs: performance.now() - started });
+    d.limiter?.after(t.clientKey, res.status, res.headers);
+    const json = (res.headers.get("content-type") ?? "").includes("application/json");
+    if (!res.ok || res.status === 203 || !json) {
+      // The body is never read: it could repeat the words.
+      await res.body?.cancel().catch(() => undefined);
+      if (res.status === 429 || res.status === 503) throw new GitFailure("busy");
+      if (res.status === 401 || res.status === 203 || res.status === 403 || (res.status >= 300 && res.status < 400) || res.type === "opaqueredirect" || res.ok) throw new GitFailure("needs_code_read");
+      // The documentation doesn't say what an organization without the Code Search extension answers. Not found is
+      // read as "no code search here"; a refused request as a search DevOps couldn't run as written.
+      if (res.status === 404) throw new GitFailure("no_code_search");
+      if (res.status === 400) throw new GitFailure("bad_query");
+      throw new GitFailure("error");
+    }
+    let r: { count?: unknown; infoCode?: unknown; results?: unknown };
+    try {
+      r = (await res.json()) as typeof r;
+    } catch {
+      throw new GitFailure("error");
+    }
+    const hits: GitSearchHit[] = [];
+    let listed = 0;
+    for (const x of Array.isArray(r.results) ? (r.results as { path?: unknown; repository?: { id?: unknown } | null; versions?: unknown; matches?: { content?: unknown } | null }[]) : []) {
+      listed++;
+      const repoId = typeof x?.repository?.id === "string" && REPO_ID.test(x.repository.id) ? x.repository.id.toLowerCase() : null;
+      const p = cleanPath(x?.path);
+      if (!repoId || !p || p === "/") continue;
+      const branches = (Array.isArray(x.versions) ? (x.versions as { branchName?: unknown }[]) : []).flatMap((v) => (typeof v?.branchName === "string" && v.branchName ? [branchName(v.branchName)!] : []));
+      hits.push({ repoId, path: p, branches, matches: Array.isArray(x.matches?.content) ? x.matches.content.length : null });
+    }
+    const count = typeof r.count === "number" && Number.isFinite(r.count) && r.count >= 0 ? Math.floor(r.count) : listed;
+    return { count: Math.max(count, listed), hits, info: typeof r.infoCode === "number" && Number.isInteger(r.infoCode) ? r.infoCode : 0 };
+  }
+
   const branchQuery = (branch: string) => ({ "versionDescriptor.version": branch, "versionDescriptor.versionType": "branch" });
   const items = (v: { value?: RawItem[] } | null) => (Array.isArray(v?.value) ? v!.value : []);
 
   return {
+    search,
     /** The repos in the client's registered project, A to Z. */
     async repos(t: GitTarget): Promise<GitRepo[]> {
       const r = await json<{ value?: { id?: unknown; name?: unknown; defaultBranch?: unknown; isDisabled?: unknown; webUrl?: unknown }[] }>(t, "repos", null, {});

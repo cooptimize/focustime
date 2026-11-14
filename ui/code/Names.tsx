@@ -3,17 +3,41 @@
 // Both work from file and folder names only (plan/code-kinds.ts): no file is opened to sort or search. The words
 // typed stay here in the browser: the server is asked only for a client's names, one client at a time. Nothing is
 // kept in the browser's storage; the lists live in the panel's memory while it is open.
+//
+// RB-4: the search box has a switch, Names · Inside files. Inside files asks each client's DevOps code search which
+// files hold the words (code.inside): for that search, and only that one, the words go through FocusTime's server to
+// DevOps. Its results are files, never lines: no text of a file shows until a person opens it.
 import { useMemo, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, shareCap, type Kind, type NameHit, type RepoThings, type Thing } from "../../plan/code-kinds.ts";
-import { SEARCH_MAX } from "../../plan/code.ts";
+import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, shareCap, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
+import { INSIDE_MAX, INSIDE_WORDS_MAX, SEARCH_MAX } from "../../plan/code.ts";
 
 export type NamesFailure = { message: string; code: string | null };
 export type NamesClient = { clientKey: string; name: string; color: string | null; locked: boolean };
 
 export const NAMES_TEXT = {
   search: "Search names",
-  searchNote: "Searches names only. Measures, columns and report pages live inside files and aren't searched.",
+  searchNote: "Searching names. To find where a table or column is used, switch to Inside files.",
+  names: "Names",
+  inside: "Inside files",
+  searchInside: "Search inside files",
+  insideNote: "Each client's DevOps is asked which files hold the words. FocusTime reads no file to search it.",
+  insideHelp: 'Plain words find files with all of them, as whole words. "A phrase in quotes", a * at the end of a word, and AND, OR and NOT in capitals work too.',
+  insideStart: "Type what to look for, then press Enter or Search. A table or column name finds every file that uses it.",
+  insideAsking: (done: number, all: number) => `Asked ${done} of ${all} client${all === 1 ? "" : "s"}`,
+  insideResults: (n: number) => (n === 0 ? "No file holds those words." : `${n} file${n === 1 ? "" : "s"}`),
+  insideNone: "No file holds those words.",
+  insideNoneOfKind: "No file of that kind holds those words. Try All kinds.",
+  insideNothingIn: (names: string[]) => `Nothing in ${list(names)}.`,
+  insideMore: (shown: number, total: number) => `Showing the first ${shown} of ${total.toLocaleString()}. Narrow your search.`,
+  insideMoreKind: (n: number, first: number, total: number) => `${n} of this kind in the first ${first} of ${total.toLocaleString()} files. Narrow your search.`,
+  insideKindChanged: "Press Search again to look for this kind in the whole search.",
+  insideNarrowed: (kind: string) => `DevOps was asked for ${kind} files only, by file type.`,
+  insideNarrowedOther: "This search was narrowed to one kind. Press Search again to look for this one.",
+  insideNotListed: (n: number) => `${n} more file${n === 1 ? " isn't" : "s aren't"} listed: DevOps found ${n === 1 ? "it" : "them"} on another branch.`,
+  insideIndexing: "DevOps is still indexing this client's code, so some files may be missing.",
+  insideScope: "Only each repo's default branch is searched. Forks aren't searched.",
+  matches: (n: number | null) => (n === null || n === 0 ? "" : `${n} match${n === 1 ? "" : "es"}`),
   searchStart: "Type a name, then press Enter or Search. Folder names count too.",
   backToResults: "Back to results",
   thisClient: "This client",
@@ -21,6 +45,7 @@ export const NAMES_TEXT = {
   allKinds: "All kinds",
   reading: (done: number, all: number) => `Read ${done} of ${all} client${all === 1 ? "" : "s"}`,
   results: (n: number) => (n === 0 ? "No name matches." : `${n} result${n === 1 ? "" : "s"}`),
+  resultsNoneOfKind: "No name of that kind matches. Try All kinds.",
   narrow: `Showing the first ${SEARCH_MAX}. Narrow your search.`,
   leftOut: (names: string[]) => `Left out: ${list(names)}. Only ${names.length === 1 ? "its team" : "each one's team"} can read its code.`,
   noneToRead: "There is no client here whose code you can read.",
@@ -33,6 +58,8 @@ export const NAMES_TEXT = {
   showAll: (n: number) => `Show all ${n.toLocaleString()}`,
   cut: (repo: string, max: number) => `${repo}: only the first ${max.toLocaleString()} file names were read.`,
   showInFiles: "Show in files",
+  files: "Files",
+  insideOf: (name: string, tables: boolean) => (tables ? `Tables of ${name}` : `Inside ${name}`),
 } as const;
 
 function list(names: string[]): string {
@@ -45,6 +72,8 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 // ---------- By kind ----------
 
 type Row = Thing & { repoId: string; repoName: string };
+/** What an item opens to: a model's tables, or (RB-4) the things inside it (a warehouse's tables, views and procedures). */
+const kidsOf = (t: Thing): ThingInside[] => [...(t.tables ?? []).map((tb) => ({ name: tb.name, file: tb.file, kind: t.kind, detail: "Table" })), ...(t.inside ?? [])];
 /** A group shows this many rows until Show all. */
 const GROUP_SHOWN = 50;
 
@@ -59,7 +88,7 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
   const words = searchWords(filter);
   const tableHit = (name: string) => words.length > 0 && words.every((w) => name.toLowerCase().includes(w));
   const shown = useMemo(
-    () => (words.length ? rows.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)) || (t.tables ?? []).some((tb) => tableHit(tb.name))) : rows),
+    () => (words.length ? rows.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)) || kidsOf(t).some((tb) => tableHit(tb.name))) : rows),
     [rows, filter], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const groups = groupThings(shown);
@@ -93,16 +122,18 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
               <ul className="cv-things">
                 {things.map((t) => {
                   const key = `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
-                  // While filtering, a model shows the tables that match (all of them when it is opened by hand).
-                  const hits = (t.tables ?? []).filter((tb) => tableHit(tb.name));
-                  const tables = hits.length && !openModels.has(key) ? hits : (t.tables ?? []);
+                  // While filtering, an item shows the tables or things inside that match (all of them when opened by hand).
+                  const kids = kidsOf(t);
+                  const hits = kids.filter((tb) => tableHit(tb.name));
+                  const tables = hits.length && !openModels.has(key) ? hits : kids;
+                  const kidsLabel = NAMES_TEXT.insideOf(t.name, !!t.tables);
                   const tablesOpen = openModels.has(key) || hits.length > 0;
                   const on = selected.repoId === t.repoId && selected.path === t.file;
                   return (
                     <li key={key} className="cv-thing">
                       <div className={`cv-thing-row${on ? " selected" : ""}`}>
                         {tables.length ? (
-                          <button type="button" className="cv-thing-caret" aria-expanded={tablesOpen} aria-label={`Tables of ${t.name}`} title={`Tables of ${t.name}`} onClick={() => setOpenModels((s) => flip(s, key))}>
+                          <button type="button" className="cv-thing-caret" aria-expanded={tablesOpen} aria-label={kidsLabel} title={kidsLabel} onClick={() => setOpenModels((s) => flip(s, key))}>
                             <Icon name="closed" className={`ah-chev-svg${tablesOpen ? " open" : ""}`} />
                           </button>
                         ) : (
@@ -118,15 +149,15 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
                         </button>
                       </div>
                       {tablesOpen && (
-                        <ul className="cv-tables" aria-label={`Tables of ${t.name}`}>
+                        <ul className="cv-tables" aria-label={kidsLabel}>
                           {tables.map((tb) => {
                             const tbOn = selected.repoId === t.repoId && selected.path === tb.file;
                             return (
                               <li key={tb.file}>
                                 <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} onClick={() => onOpen(t.repoId, tb.file)}>
-                                  <Icon name="table" className="cv-kind" />
+                                  <Icon name={tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
                                   <span className="cv-thing-name">{tb.name}</span>
-                                  <span className="cv-thing-detail">Table</span>
+                                  <span className="cv-thing-detail">{tb.detail}</span>
                                 </button>
                               </li>
                             );
@@ -155,24 +186,36 @@ export function ByKind({ repos, max, selected, onOpen }: { repos: RepoThings[]; 
 
 // ---------- Search names ----------
 
-/** The box: the words, where to look, a kind, and Search. Nothing is read until Enter or Search. */
-export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, onDown }: { q: string; onQ: (v: string) => void; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; onDown: () => void }) {
+/** The box: the words, what to search (names or inside files), where to look, a kind, and Search. Nothing is read until Enter or Search. */
+export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, onDown, inside, onInside }: { q: string; onQ: (v: string) => void; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; onDown: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
+  const ready = inside ? q.trim().length > 0 : searchWords(q).length > 0;
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!disabled && searchWords(q).length) onSearch();
+    if (!disabled && ready) onSearch();
   };
+  const label = inside ? NAMES_TEXT.searchInside : NAMES_TEXT.search;
   return (
-    <form className="cv-search" role="search" aria-label={NAMES_TEXT.search} onSubmit={submit}>
+    <form className="cv-search" role="search" aria-label={label} onSubmit={submit}>
+      <div className="cv-search-row">
+        <div className="seg" role="group" aria-label="What to search">
+          <button type="button" className={`seg-btn${inside ? "" : " on"}`} aria-pressed={!inside} data-code-mode="names" onClick={() => onInside(false)}>
+            {NAMES_TEXT.names}
+          </button>
+          <button type="button" className={`seg-btn${inside ? " on" : ""}`} aria-pressed={inside} data-code-mode="inside" onClick={() => onInside(true)}>
+            {NAMES_TEXT.inside}
+          </button>
+        </div>
+      </div>
       <div className="cv-search-row">
         <input
           type="search"
           className="cv-find-input cv-search-input"
           data-code-search=""
-          placeholder={NAMES_TEXT.search}
-          aria-label={NAMES_TEXT.search}
+          placeholder={label}
+          aria-label={label}
           aria-describedby="cv-search-note"
           value={q}
-          maxLength={200}
+          maxLength={INSIDE_WORDS_MAX}
           autoComplete="off"
           onChange={(e) => onQ(e.target.value)}
           onKeyDown={(e) => {
@@ -180,7 +223,7 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
             else if (e.key === "Escape" && q) (e.preventDefault(), e.stopPropagation(), onQ(""));
           }}
         />
-        <button type="submit" className="mini cv-search-go" disabled={disabled || !searchWords(q).length}>
+        <button type="submit" className="mini cv-search-go" disabled={disabled || !ready}>
           Search
         </button>
       </div>
@@ -204,8 +247,8 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
           ))}
         </select>
       </div>
-      <p id="cv-search-note" className="cv-search-note">
-        {NAMES_TEXT.searchNote}
+      <p id="cv-search-note" className="cv-search-note" data-code-search-note="">
+        {inside ? `${NAMES_TEXT.insideNote} ${NAMES_TEXT.insideHelp}` : NAMES_TEXT.searchNote}
       </p>
     </form>
   );
@@ -230,7 +273,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
   const byClient = useMemo(() => {
     const found = run.targets.map((c) => {
       const r = run.results.get(c.clientKey);
-      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
+      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? []).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
     });
     // Over the limit, clients take what is left in order; each still says how many it has.
     const shown = shareCap(found.map((f) => f.length), SEARCH_MAX);
@@ -253,7 +296,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
   return (
     <div className="cv-results" data-code-results="" onKeyDown={onKey}>
       <p className="cv-note cv-results-status" role="status" data-code-progress="">
-        {!run.targets.length ? NAMES_TEXT.noneToRead : reading ? `${NAMES_TEXT.reading(done, run.targets.length)}…` : NAMES_TEXT.results(byClient.total)}
+        {!run.targets.length ? NAMES_TEXT.noneToRead : reading ? `${NAMES_TEXT.reading(done, run.targets.length)}…` : byClient.total === 0 && kind ? NAMES_TEXT.resultsNoneOfKind : NAMES_TEXT.results(byClient.total)}
         {!reading && byClient.total > SEARCH_MAX ? ` ${NAMES_TEXT.narrow}` : ""}
       </p>
       {run.leftOut.length > 0 && (
@@ -278,14 +321,15 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
                 {p}
               </p>
             ))}
-            {groupThings(g.hits.map((h) => ({ ...h, kind: h.thing.kind }))).map((k) => (
-              <div key={k.kind} className="cv-result-kind">
+            {/* RB-4: the named things by kind, then any other file found by its own name, under Files. */}
+            {[...groupThings(g.hits.filter((h) => !h.asFile)).map((k) => ({ key: k.kind as string, label: k.label, things: k.things })), ...(g.hits.some((h) => h.asFile) ? [{ key: "files", label: NAMES_TEXT.files, things: g.hits.filter((h) => h.asFile) }] : [])].map((k) => (
+              <div key={k.key} className="cv-result-kind" data-code-result-kind={k.key}>
                 <div className="cv-group-head">{k.label}</div>
                 <ul className="cv-things">
                   {k.things.map((h) => (
-                    <li key={`${h.repoId}\u0000${h.file}\u0000${h.table ? "t" : ""}`}>
+                    <li key={`${h.repoId}\u0000${h.file}`}>
                       <button type="button" className="cv-hit" data-code-hit={h.name} onClick={() => onOpen(g.client.clientKey, h.repoId, h.file)}>
-                        <Icon name={h.table ? "table" : KIND_ICON[h.thing.kind]} className="cv-kind" />
+                        <Icon name={h.asFile ? "file" : h.table || h.detail.startsWith("Table") ? "table" : KIND_ICON[h.kind]} className="cv-kind" />
                         <span className="cv-thing-name">{h.name}</span>
                         <span className="cv-thing-detail">
                           {h.detail}
@@ -303,6 +347,121 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
           </section>
         );
       })}
+    </div>
+  );
+}
+
+// ---------- Search inside files (RB-4) ----------
+
+export type InsideRun = {
+  /** The words as they were searched: only to mark them in a file opened from the results. Never stored. */
+  q: string;
+  /** The kind the search was made with (DevOps may have narrowed to it). */
+  kind: Kind | null;
+  scope: string | null;
+  targets: NamesClient[];
+  leftOut: NamesClient[];
+  results: ReadonlyMap<string, "waiting" | InsideAnswer | NamesFailure>;
+};
+
+/** Files by client, then repo. Each row is a file: its name, what it is, how many matches, its path. Never a line of it. */
+export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kind | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
+  const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
+  const asking = done < run.targets.length;
+  const groups = run.targets.map((c) => {
+    const r = run.results.get(c.clientKey) ?? "waiting";
+    if (r === "waiting") return { client: c, state: "waiting" as const };
+    if ("message" in r) return { client: c, state: "failed" as const, failure: r };
+    // A file inside an item passes its own kind's filter and its item's.
+    const files = kind ? r.files.filter((f) => f.kind === kind || f.itemKind === kind) : r.files;
+    const byRepo = new Map<string, { name: string; files: InsideFile[] }>();
+    for (const f of files) {
+      const g = byRepo.get(f.repoId);
+      if (g) g.files.push(f);
+      else byRepo.set(f.repoId, { name: f.repoName, files: [f] });
+    }
+    return { client: c, state: "ok" as const, answer: r, files, repos: [...byRepo.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, "en", { sensitivity: "base" })) };
+  });
+  const total = groups.reduce((n, g) => n + (g.state === "ok" ? g.files.length : 0), 0);
+  const answered = groups.filter((g) => g.state === "ok").length;
+  const nothingIn = groups.flatMap((g) => (g.state === "ok" && !g.files.length && !g.answer.indexing && !g.answer.more && !g.answer.narrowed && !g.answer.notListed ? [g.client.name] : []));
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const all = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-code-hit]")];
+    const i = all.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === "ArrowDown" ? all[i + 1] : i <= 0 ? document.querySelector<HTMLElement>("[data-code-search]") : all[i - 1];
+    if (next) (e.preventDefault(), next.focus());
+  };
+  return (
+    <div className="cv-results" data-code-inside-results="" onKeyDown={onKey}>
+      <p className="cv-note cv-results-status" role="status" data-code-progress="">
+        {/* "No file holds those words" is said only when at least one client answered; a client that couldn't says so below. */}
+        {!run.targets.length ? NAMES_TEXT.noneToRead : asking ? `${NAMES_TEXT.insideAsking(done, run.targets.length)}…` : answered ? (total === 0 && kind ? NAMES_TEXT.insideNoneOfKind : NAMES_TEXT.insideResults(total)) : ""}
+        {!asking && answered > 0 && answered < run.targets.length ? `${total === 0 ? "" : "."} ${answered} of ${run.targets.length} clients could be searched.` : ""}
+      </p>
+      {run.leftOut.length > 0 && (
+        <p className="cv-note" data-code-left-out="">
+          {NAMES_TEXT.leftOut(run.leftOut.map((c) => c.name))}
+        </p>
+      )}
+      {/* The clients that answered with nothing are named, so "nothing" is never read into a client that wasn't asked. */}
+      {!asking && total > 0 && nothingIn.length > 0 && (
+        <p className="cv-note" data-code-nothing-in="">
+          {NAMES_TEXT.insideNothingIn(nothingIn)}
+        </p>
+      )}
+      {groups.map((g) => {
+        if (g.state === "waiting") return null;
+        // A client that answered with nothing shows no group when another has results; alone, the status line says it.
+        if (g.state === "ok" && !g.files.length && !g.answer.indexing && !g.answer.more && !g.answer.narrowed && !g.answer.notListed) return null;
+        return (
+          <section key={g.client.clientKey} className="cv-result-client" data-code-result-client={g.client.clientKey} aria-label={g.client.name}>
+            <h3 className="cv-result-head">
+              <span className="cv-swatch" style={{ background: colorVar(g.client.color) }} aria-hidden="true" />
+              {g.client.name}
+              {g.state === "ok" && <span className="cv-kind-count">{g.files.length}</span>}
+            </h3>
+            {g.state === "failed" && <p className="cv-note problem" data-code-result-failed={g.failure.code ?? "error"}>{g.failure.message}</p>}
+            {g.state === "ok" && g.answer.indexing && <p className="cv-note problem" data-code-indexing="">{NAMES_TEXT.insideIndexing}</p>}
+            {g.state === "ok" && g.answer.more && (
+              <p className="cv-note" data-code-more="">
+                {kind && !g.answer.narrowed ? NAMES_TEXT.insideMoreKind(g.files.length, Math.min(g.answer.files.length, INSIDE_MAX), g.answer.total) : NAMES_TEXT.insideMore(Math.min(g.answer.files.length, INSIDE_MAX), g.answer.total)}
+                {kind !== run.kind && !g.answer.narrowed ? ` ${NAMES_TEXT.insideKindChanged}` : ""}
+              </p>
+            )}
+            {/* A search DevOps narrowed to one kind's file type holds only that kind: say so, and under another kind say to search again. */}
+            {g.state === "ok" && g.answer.narrowed && (
+              <p className="cv-note" data-code-narrowed="">
+                {kind === run.kind && run.kind ? NAMES_TEXT.insideNarrowed(KIND_GROUPS[run.kind]) : NAMES_TEXT.insideNarrowedOther}
+              </p>
+            )}
+            {g.state === "ok" && g.answer.notListed > 0 && <p className="cv-note" data-code-not-listed="">{NAMES_TEXT.insideNotListed(g.answer.notListed)}</p>}
+            {g.state === "ok" &&
+              g.repos.map(([repoId, repo]) => (
+                <div key={repoId} className="cv-result-kind" data-code-result-repo={repo.name}>
+                  <div className="cv-group-head">{repo.name}</div>
+                  <ul className="cv-things">
+                    {repo.files.map((f) => {
+                      const name = f.path.slice(f.path.lastIndexOf("/") + 1);
+                      return (
+                        <li key={f.path}>
+                          <button type="button" className="cv-hit cv-inside-hit" data-code-hit={name} onClick={() => onOpen(g.client.clientKey, f.repoId, f.path)}>
+                            <Icon name={f.detail.startsWith("Table") ? "table" : f.detail.startsWith("File") ? "file" : KIND_ICON[f.kind]} className="cv-kind" />
+                            <span className="cv-thing-name">{name}</span>
+                            <span className="cv-thing-detail">{f.detail}</span>
+                            <span className="cv-hit-count" data-code-matches="">{NAMES_TEXT.matches(f.matches)}</span>
+                            <span className="cv-hit-where" title={f.path}>{f.path}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+          </section>
+        );
+      })}
+      {!asking && run.targets.length > 0 && <p className="cv-note cv-inside-scope" data-code-inside-scope="">{NAMES_TEXT.insideScope}</p>}
     </div>
   );
 }

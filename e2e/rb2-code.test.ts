@@ -72,7 +72,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await panel(page).locator(".cv-kind-head .cv-kind-label").allTextContents()).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses and warehouses", "SQL", "Other Fabric items", "Other"]);
     expect(await group(page, "report").locator("[data-code-thing]").allTextContents()).toEqual(["SalesReport · sales-analytics", "Store visitsReport · store-portal"]);
     expect(await group(page, "lake").locator(".cv-thing-name").allTextContents()).toEqual(["Bronze", "Gold"]);
-    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics"]);
+    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics", "SQL database · 3 inside · sales-analytics"]);
     expect(await group(page, "sql").locator(".cv-thing-detail").allTextContents()).toContain("Stored procedure in etl · sales-analytics");
     // Names only: the repos and By kind's one read, never a folder or a file.
     expect([...new Set(sent.map((s) => s.action).filter((a) => a.startsWith("code.")))]).toEqual(["code.clients", "code.repos", "code.kinds"]);
@@ -134,7 +134,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     const box = panel(page).getByRole("searchbox", { name: "Search names" });
     await box.waitFor();
     await page.waitForFunction(() => document.activeElement?.hasAttribute("data-code-search"));
-    expect(await panel(page).locator(".cv-search-note").textContent()).toBe("Searches names only. Measures, columns and report pages live inside files and aren't searched.");
+    expect(await panel(page).locator(".cv-search-note").textContent()).toBe("Searching names. To find where a table or column is used, switch to Inside files.");
     // Nothing is read while typing.
     await page.keyboard.type("orders");
     await page.waitForTimeout(300);
@@ -254,7 +254,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
     expect(await noSidewaysScroll(page)).toBe(true);
     // Review 1: the phone's search page says what is logged too.
-    expect(await panel(page).locator(".cv-search-page [data-code-log-line]").textContent()).toContain("searching names are logged too");
+    expect(await panel(page).locator(".cv-search-page [data-code-log-line]").textContent()).toContain("searching are logged too");
     await shots(page, "11-phone-search");
     // A result's file goes Back to the results, not to the repo's tree.
     await panel(page).locator('[data-code-hit="Sales"]').first().click();

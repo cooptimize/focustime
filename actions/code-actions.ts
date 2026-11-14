@@ -13,6 +13,14 @@
 // (plan/code-kinds.ts). No file is opened for either. Each request names one client, and the browser matches the words
 // itself, so the words typed never reach the server. One row per client ("Listed by kind", "Searched names") is
 // written before any name is returned; no row, no names.
+// RB-4: both also carry the paths of the files inside items that are no thing of their own (plan/code-kinds.ts), so a
+// search for a file's own name finds any file the tree shows.
+// RB-4 adds code.inside (Search inside files): it asks DevOps's own code search which files of one client's project
+// hold the words (sources/devops/git.ts search). FocusTime reads no file for it: the answer is file paths and match
+// counts, and each file's kind comes from the same file names By kind reads. The words pass through here to DevOps
+// and are never stored, logged, put in an error or the view log, or returned. One row ("Searched inside files", no
+// repo, no path, no words) is written before DevOps is asked; no row, no search. No text of a file is returned: a
+// file is shown only when a person opens it (code.file), logged as a file open.
 // Repo opened (its top folder), File opened and Find used are written to the view log (code_views) with who, when, the
 // client, the repo and the path, never content; a file's row is written before its text is returned, and if it can't
 // be written the text isn't returned. This is the one deliberate exception to "one client's data never shows outside
@@ -23,11 +31,11 @@ import type { ActionResponse } from "./types.ts";
 import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts";
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
-import { cleanPath, FIND_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
-import { thingsOf, type RepoThings } from "../plan/code-kinds.ts";
+import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type Kind, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
-export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search"] as const;
+export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside"] as const;
 export type CodeAction = (typeof CODE_ACTIONS)[number];
 
 /** Why someone isn't let in at all (step 1). */
@@ -35,6 +43,10 @@ export type CodeRefusal = "guest" | "domain" | "automation" | "signed_out" | "un
 
 /** RB-2: one repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
 export type CodeRepoThings = RepoThings;
+
+/** RB-4: one client's answer to a search inside files (plan/code-kinds.ts InsideAnswer), with the client. */
+export type CodeInsideFile = InsideFile;
+export type CodeInsideAnswer = InsideAnswer & { client: CodeClientRef };
 
 export type CodeClientRef = { clientKey: string; name: string; color: string | null };
 
@@ -72,7 +84,12 @@ export const CODE_TEXT = {
   notLogged: "The file wasn't opened because FocusTime couldn't record that you opened it. Try again in a moment.",
   namesNotLogged: "The names weren't read because FocusTime couldn't record that you read them. Try again in a moment.",
   notHere: "Code isn't available here.",
-  logLine: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words.",
+  logLine: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.",
+  noCodeSearch: (name: string) => `${name}'s DevOps doesn't have code search turned on, so FocusTime can't search inside its files. An administrator of that DevOps organization can add Microsoft's Code Search extension to it.`,
+  indexing: (name: string) => `DevOps is still indexing ${name}'s code, so there is nothing to search yet. Try again later.`,
+  badQuery: "DevOps couldn't run that search as written. Check the quotes and brackets, and put a * only at the end of a word.",
+  badWords: "Type what to look for, up to 200 characters.",
+  insideNotLogged: "The search wasn't run because FocusTime couldn't record that you searched. Try again in a moment.",
 } as const;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -94,9 +111,27 @@ function failure(reason: CodeFailureReason, name: string): ActionResponse {
       return bad(CODE_TEXT.unreachable(name), 503, "unreachable");
     case "not_found":
       return bad(CODE_TEXT.notFound, 404, "not_found");
+    case "no_code_search":
+      return bad(CODE_TEXT.noCodeSearch(name), 409, "no_code_search");
+    case "bad_query":
+      return bad(CODE_TEXT.badQuery, 400, "bad_query");
     case "error":
       return bad(CODE_TEXT.error(name), 502, "error");
   }
+}
+
+/** RB-4: the words can sit inside brackets without changing what they mean: quotes and brackets close. */
+function balanced(q: string): boolean {
+  let depth = 0;
+  let quoted = false;
+  for (let n = 0; n < q.length; n++) {
+    const c = q[n];
+    if (c === "\\" && quoted) n++;
+    else if (c === '"') quoted = !quoted;
+    else if (!quoted && c === "(") depth++;
+    else if (!quoted && c === ")" && --depth < 0) return false;
+  }
+  return depth === 0 && !quoted;
 }
 
 const repoView = (r: GitRepo): CodeRepoView => ({ id: r.id, name: r.name, defaultBranch: r.defaultBranch, state: r.disabled ? "disabled" : r.defaultBranch ? "ok" : "empty" });
@@ -113,7 +148,7 @@ export function devopsLink(repo: GitRepo, path: string): string | null {
 export async function codeAction(ctx: CodeContext, action: CodeAction, input: unknown): Promise<ActionResponse> {
   const i = obj(input ?? {});
   if (!i) return bad("input must be an object");
-  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey"], "code.search": ["clientKey"] };
+  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"] };
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
 
@@ -155,6 +190,20 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   if (!(await open(client.clientKey))) return bad(CODE_TEXT.teamOnly(client.name), 403, "team_only");
   if (!ctx.git) return bad(CODE_TEXT.notHere, 404, "not_here");
 
+  // RB-4: Search inside files. What was typed is checked, then the row is written, before anything is asked of this
+  // client's DevOps (its repo list included). Never the words.
+  if (action === "code.inside") {
+    // eslint-disable-next-line no-control-regex
+    if (typeof i.words !== "string" || !i.words.trim() || i.words.length > INSIDE_WORDS_MAX || /[\u0000-\u001f\u007f]/.test(i.words)) return bad(CODE_TEXT.badWords, 400, "bad_words");
+    if (i.kind !== undefined && i.kind !== null && !(KINDS as readonly unknown[]).includes(i.kind)) return bad("kind is one of the kinds", 400, "bad_kind");
+    try {
+      if (!ctx.views) throw new Error("no view log");
+      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: "inside_searched" });
+    } catch {
+      return bad(CODE_TEXT.insideNotLogged, 503, "not_logged");
+    }
+  }
+
   // 4. The client's own repos (the list is read with its token; the memory holds it 5 minutes).
   let repos: GitRepo[];
   try {
@@ -176,16 +225,16 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
         const r = repos[n]!;
         const v = repoView(r);
         if (v.state !== "ok") {
-          out[n] = { repo: v, things: [], cut: false, problem: null };
+          out[n] = { repo: v, things: [], files: [], cut: false, problem: null };
           continue;
         }
         try {
           const f = await git.files(client.clientKey, r);
           read = true;
-          out[n] = { repo: v, things: thingsOf(f.paths), cut: f.cut, problem: null };
+          out[n] = { repo: v, ...sortRepo(f.paths), cut: f.cut, problem: null };
         } catch (e) {
           const f = failure(e instanceof CodeFailure ? e.reason : "error", client.name);
-          out[n] = { repo: v, things: [], cut: false, problem: f.ok ? null : f.error };
+          out[n] = { repo: v, things: [], files: [], cut: false, problem: f.ok ? null : f.error };
         }
       }
     };
@@ -200,6 +249,63 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       }
     }
     return { ok: true, data: { client, repos: out, max: FIND_MAX } };
+  }
+
+  // RB-4: Search inside files. DevOps's own code search is asked which files hold the words; no file is read.
+  if (action === "code.inside") {
+    const git = ctx.git;
+    const words = (i.words as string).trim();
+    const kind = (i.kind ?? null) as Kind | null;
+    try {
+      let answer = await git.search(client.clientKey, words, INSIDE_MAX);
+      // Codes from the documentation: 3 invalid request, 4 a wildcard at the start of a word, 5, 19 and 20 a mix
+      // code search doesn't take; 2 and 6 indexing hasn't started; 1, 7 and 9 indexing is under way.
+      if ([3, 4, 5, 19, 20].includes(answer.info)) return failure("bad_query", client.name);
+      const indexing = [1, 2, 6, 7, 9].includes(answer.info);
+      if (indexing && !answer.hits.length) return bad(CODE_TEXT.indexing(client.name), 409, "indexing");
+      // More files than one answer holds, and a kind DevOps can narrow by file type: ask it to, so the limit isn't
+      // spent on files the kind would hide. Only its documented form, and only when the words can sit in brackets.
+      const ext = kind ? KIND_EXT[kind] : undefined;
+      let narrowed = false;
+      if (ext && answer.count > answer.hits.length && balanced(words)) {
+        // If DevOps is busy or doesn't take this form, the first answer stands.
+        const again = await git.search(client.clientKey, `(${words}) ext:${ext}`, INSIDE_MAX).catch(() => null);
+        if (again && (again.info === 0 || again.info === 8)) (answer = again), (narrowed = true);
+      }
+      const byId = new Map(repos.filter((r) => !r.disabled && r.defaultBranch).map((r) => [r.id, r]));
+      // Only this client's own repos, and only a file DevOps says is on its repo's default branch. The rest are
+      // counted, so the screen can say some files aren't listed, never named.
+      const kept = answer.hits.filter((h) => {
+        const r = byId.get(h.repoId);
+        return !!r && h.branches.includes(r.defaultBranch!);
+      });
+      // What each file is, from its repo's file names (the read By kind uses, from memory when it is there). A repo
+      // whose names can't be read still lists its files, each sorted by its own path alone.
+      const labels = new Map<string, ReturnType<typeof fileLabels>>();
+      const wanted = [...new Set(kept.map((h) => h.repoId))];
+      let next = 0;
+      const worker = async () => {
+        for (let n = next++; n < wanted.length; n = next++) {
+          const id = wanted[n]!;
+          const own = kept.filter((h) => h.repoId === id).map((h) => h.path);
+          try {
+            labels.set(id, fileLabels([...new Set([...(await git.files(client.clientKey, byId.get(id)!)).paths, ...own])]));
+          } catch {
+            labels.set(id, fileLabels(own));
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(NAMES_REPOS_AT_ONCE, wanted.length) }, worker));
+      const files: CodeInsideFile[] = kept.map((h) => {
+        const l: { kind: Kind; detail: string; itemKind?: Kind } = labels.get(h.repoId)?.get(h.path) ?? { kind: "other", detail: "File" };
+        return { repoId: h.repoId, repoName: byId.get(h.repoId)!.name, path: h.path, kind: l.kind, detail: l.detail, matches: h.matches, ...(l.itemKind ? { itemKind: l.itemKind } : {}) };
+      });
+      const data: CodeInsideAnswer = { client, files, total: answer.count, more: answer.count > answer.hits.length || answer.info === 8, indexing, narrowed, notListed: answer.hits.length - kept.length };
+      return { ok: true, data };
+    } catch (e) {
+      // A fixed phrase by reason: an error's own message is never passed on (it could hold the words).
+      return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+    }
   }
 
   if (typeof i.repoId !== "string" || !REPO_ID.test(i.repoId)) return bad(CODE_TEXT.noRepo, 404, "no_repo");
