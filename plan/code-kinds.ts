@@ -392,6 +392,11 @@ export function groupThings<T extends { kind: Kind }>(things: readonly T[]): { k
   return KINDS.filter((k) => by.has(k)).map((k) => ({ kind: k, label: KIND_GROUPS[k], things: by.get(k)! }));
 }
 
+/** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */
+export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null };
+/** RB-4: one client's answer to a search inside files. */
+export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps counted in all. */ total: number; /** DevOps has more files than the ones here. */ more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to the kind's file type. */ narrowed: boolean };
+
 /**
  * RB-4: a kind DevOps's code search can narrow by itself, by file type (its documented "ext:" filter). Only where the
  * type says the kind well enough; the other kinds are narrowed in FocusTime after the answer. One row per kind.

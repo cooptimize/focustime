@@ -32,7 +32,7 @@ import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
-import { fileLabels, KIND_EXT, KINDS, sortRepo, type Kind, type RepoThings } from "../plan/code-kinds.ts";
+import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type Kind, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
 export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside"] as const;
@@ -44,10 +44,9 @@ export type CodeRefusal = "guest" | "domain" | "automation" | "signed_out" | "un
 /** RB-2: one repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
 export type CodeRepoThings = RepoThings;
 
-/** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */
-export type CodeInsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null };
-/** RB-4: one client's answer to a search inside files. `more`: DevOps has more files than the ones here. */
-export type CodeInsideAnswer = { client: CodeClientRef; files: CodeInsideFile[]; total: number; more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to this kind's file type. */ narrowed: boolean };
+/** RB-4: one client's answer to a search inside files (plan/code-kinds.ts InsideAnswer), with the client. */
+export type CodeInsideFile = InsideFile;
+export type CodeInsideAnswer = InsideAnswer & { client: CodeClientRef };
 
 export type CodeClientRef = { clientKey: string; name: string; color: string | null };
 

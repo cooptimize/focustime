@@ -17,6 +17,9 @@ describe("Code's addresses", () => {
     [{ clientKey: "Northwind", repoId: REPO, path: "/m/x.tmdl", view: "kinds" as const }, `#/code/Northwind/kinds/${REPO}/%2Fm%2Fx.tmdl`],
     [{ clientKey: "Northwind", repoId: null, path: null, view: "search" as const }, "#/code/Northwind/search"],
     [{ clientKey: null, repoId: null, path: null, view: "search" as const }, "#/code/~search"],
+    // RB-4: the search set to Inside files.
+    [{ clientKey: "Northwind", repoId: null, path: null, view: "inside" as const }, "#/code/Northwind/inside"],
+    [{ clientKey: null, repoId: null, path: null, view: "inside" as const }, "#/code/~inside"],
   ])("%j is %s, there and back", (at, hash) => {
     expect(codeHash(at)).toBe(hash);
     expect(code(hash)).toEqual({ kind: "code", ...at });
@@ -25,6 +28,9 @@ describe("Code's addresses", () => {
     expect(code("#/code/~search/orders")).toBeNull();
     expect(code("#/code/Northwind/search/orders")).toBeNull();
     expect(code("#/code/~search?q=orders")).toBeNull();
+    expect(code("#/code/~inside/orders")).toBeNull();
+    expect(code("#/code/Northwind/inside/orders")).toBeNull();
+    expect(code("#/code/~inside?q=orders")).toBeNull();
   });
   it("a path that leaves the repo is refused in By kind too", () => {
     expect(code(`#/code/Northwind/kinds/${REPO}/${encodeURIComponent("/../x")}`)).toBeNull();

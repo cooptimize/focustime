@@ -88,7 +88,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null; /** RB-2: By kind, or Search names (no client: every client). Absent: Files. */ view?: "kinds" | "search" } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null; /** RB-2: By kind, or Search names (no client: every client). RB-4: "inside" is the search set to Inside files. Absent: Files. */ view?: "kinds" | "search" | "inside" } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -263,10 +263,11 @@ export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.i
 /**
  * RB-1: Code's address. The repo is its id (never its name); the path is one encoded part. RB-2: a client's By kind is
  * #/code/<client>/kinds (with a file open, #/code/<client>/kinds/<repo id>/<path>); Search names is
- * #/code/<client>/search inside a client and #/code/~search across clients. The words searched are never in it.
+ * #/code/<client>/search inside a client and #/code/~search across clients; RB-4: the same with "inside" for the
+ * search set to Inside files. The words searched are never in it.
  */
-export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" }): string {
-  if (o.view === "search") return o.clientKey ? `#/code/${encodeURIComponent(o.clientKey)}/search` : "#/code/~search";
+export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" }): string {
+  if (o.view === "search" || o.view === "inside") return o.clientKey ? `#/code/${encodeURIComponent(o.clientKey)}/${o.view}` : `#/code/~${o.view}`;
   if (!o.clientKey) return "#/code";
   const c = `#/code/${encodeURIComponent(o.clientKey)}${o.view === "kinds" ? "/kinds" : ""}`;
   if (!o.repoId) return c;
@@ -278,14 +279,15 @@ function parseCode(hash: string): Loc | null {
   if (hash.length > 1400) return null;
   const all = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
   if (all.length > 4) return null;
-  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: "kinds" | "search"): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path, ...(view ? { view } : {}) } });
+  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: "kinds" | "search" | "inside"): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path, ...(view ? { view } : {}) } });
   if (!all.length) return at(null, null, null);
-  // "~search" is never a client's key (CLIENT_KEY has no "~"): the search across clients.
-  if (all[0] === "~search") return all.length === 1 ? at(null, null, null, "search") : null;
+  // "~search" and "~inside" are never a client's key (CLIENT_KEY has no "~"): the search across clients.
+  if (all[0] === "~search" || all[0] === "~inside") return all.length === 1 ? at(null, null, null, all[0] === "~search" ? "search" : "inside") : null;
   try {
     const clientKey = decodeURIComponent(all[0]!);
     if (!CLIENT_KEY.test(clientKey)) return null;
-    if (all[1] === "search") return all.length === 2 ? at(clientKey, null, null, "search") : null;
+    // A repo's id is never "search" or "inside".
+    if (all[1] === "search" || all[1] === "inside") return all.length === 2 ? at(clientKey, null, null, all[1]) : null;
     // A repo's id is never "kinds": the client's things by kind, with or without a file open.
     const view = all[1] === "kinds" ? ("kinds" as const) : undefined;
     const parts = view ? [all[0]!, ...all.slice(2)] : all;

@@ -356,7 +356,7 @@ export function App() {
   const docsAccess = useCallback(() => call<DocsAccess>("docs.access", {}), []);
   const openCode = useCallback((clientKey: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey, repoId: null, path: null } })), [go]);
   // RB-2: Code on Search names across clients (the command menu's "Code: search names").
-  const openCodeSearch = useCallback(() => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey: null, repoId: null, path: null, view: "search" } })), [go]);
+  const openCodeSearch = useCallback((inside = false) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey: null, repoId: null, path: null, view: inside ? "inside" : "search" } })), [go]);
   // RB-1: the clients Code can open, for the command menu's "Code: <client>", read a few seconds after start or when the
   // command menu first opens (names only, never DevOps). Empty for anyone Code isn't for (an automation account): then no Code
   // entry anywhere. Until it's read, ⋯ › Code shows, and the panel says why when it can't open.
@@ -1622,7 +1622,7 @@ export function App() {
       showKeys: () => setKeysOpen(true),
       showGuide: (section) => openGuide(section ?? null),
       showDocs: (page, heading) => openDocs(page ?? null, heading ?? null),
-      ...(codeList && !codeList.length ? {} : { showCode: (k: string | null) => openCode(k), searchCode: openCodeSearch, codeClients: codeList ?? [] }),
+      ...(codeList && !codeList.length ? {} : { showCode: (k: string | null) => openCode(k), searchCode: () => openCodeSearch(), searchCodeInside: () => openCodeSearch(true), codeClients: codeList ?? [] }),
       startTour: (id) => {
         const t = tourById(id);
         if (t) go(() => ({ nav: t.start, overlay: { kind: "tour", id: t.id } }));

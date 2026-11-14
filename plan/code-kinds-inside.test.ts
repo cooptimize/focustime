@@ -2,7 +2,7 @@
 // the file sits inside an item's folder: RB-2 folded everything under an item into the item. Every name here is
 // invented. Each case in the first two groups failed on main (they were committed first as tests expected to fail).
 import { describe, expect, it } from "vitest";
-import { fileLabels, searchThings, sortRepo, thingsOf, type Kind } from "./code-kinds.ts";
+import { fileLabels, insideTerms, searchThings, sortRepo, termRanges, thingsOf, type Kind } from "./code-kinds.ts";
 
 /** An invented repo with every layout the rules know, and files inside each kind of item. */
 export const INSIDE_REPO = [
@@ -159,5 +159,25 @@ describe("RB-4: things inside an item", () => {
     expect(labels.get("/ws/Trips.SemanticModel/definition/tables/Journey.tmdl")).toEqual({ kind: "model", detail: "Table in Trips" });
     expect(labels.get("/adf/pipeline/pl_move.json")).toEqual({ kind: "pipeline", detail: "Data factory pipeline" });
     expect(labels.get("/docs/guide.md")).toEqual({ kind: "other", detail: "Markdown" });
+  });
+});
+
+describe("RB-4: the words of a search inside files, to mark in an opened file", () => {
+  const texts = (q: string) => insideTerms(q).map((t) => t.text);
+  it("plain words and phrases in quotes, lower case", () => {
+    expect(texts('dim.Pallet "fill rate" Lot')).toEqual(["dim.pallet", "fill rate", "lot"]);
+  });
+  it("leaves out the operators, what NOT rules out, and filters", () => {
+    expect(texts("Pallet AND Crate OR Bin NOT Hook ext:sql path:db/Tables file:usp*")).toEqual(["pallet", "crate", "bin"]);
+    expect(texts('Pallet NOT "old pallet" NEAR Lot')).toEqual(["pallet", "lot"]);
+    expect(texts("(Pallet OR Crate) usp_Fill")).toEqual(["pallet", "crate", "usp_fill"]);
+  });
+  it("a * at the end of a word marks the start of a word", () => {
+    expect(insideTerms("usp_Fill*")).toEqual([{ text: "usp_fill", prefix: true }]);
+  });
+  it("finds every match in a line, any case, merged where they touch", () => {
+    expect(termRanges("INSERT INTO dim.Pallet SELECT * FROM stage.pallet;", insideTerms("pallet"))).toEqual([[16, 22], [43, 49]]);
+    expect(termRanges("fill rate rate", insideTerms('"fill rate" rate'))).toEqual([[0, 9], [10, 14]]);
+    expect(termRanges("nothing here", insideTerms("pallet"))).toEqual([]);
   });
 });

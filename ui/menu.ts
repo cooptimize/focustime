@@ -172,6 +172,8 @@ export type MenuEnv = {
   showCode?: (clientKey: string | null) => void;
   /** RB-2: open Code on Search names across clients, the box focused. Absent: signed out, or Code isn't for this account. */
   searchCode?: () => void;
+  /** RB-4: open Code on the search set to Inside files, the box focused. The menu never shows results. */
+  searchCodeInside?: () => void;
   /** RB-1: the clients Code lists ("Code: <client>" each), once they are loaded. Never a repo or a file. */
   codeClients?: readonly { clientKey: string; name: string }[];
   /** UI-5: start a Show me tour over its screen (#/guide/tour/<id>). */
@@ -1781,6 +1783,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     // RB-1: "Code: <client>" for each client Code lists (never a repo, a folder or a file).
     // RB-2: "Code: search names" opens Code with the search box focused. The menu itself never shows names or results.
     ...(env.searchCode ? [{ id: "ui.code.search", action: "code.clients", group: "Code", label: "Code: search names", aka: ["code search", "find in code", "search repos", "find a report", "find a pipeline", "find a model", "search names"], run: () => env.searchCode!() }] : []),
+    // RB-4: "Code: search inside files" opens Code with the switch set to Inside files and the box focused.
+    ...(env.searchCodeInside ? [{ id: "ui.code.inside", action: "code.clients", group: "Code", label: "Code: search inside files", aka: ["search code", "search inside files", "find in files", "grep", "where is it used", "find a column", "find a table", "code search"], run: () => env.searchCodeInside!() }] : []),
     ...(env.showCode ? (env.codeClients ?? []).map((c) => ({ id: `ui.code.${c.clientKey}`, action: "code.clients", group: "Code", label: `Code: ${c.name}`, aka: ["code", "repo", "repos", "git"], run: () => env.showCode!(c.clientKey) })) : []),
     { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];

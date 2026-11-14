@@ -176,3 +176,15 @@
 .panel-shell.code-panel.kinds:not(.phone) { grid-template-columns: clamp(320px, 30vw, 480px) minmax(0, 1fr); }
 .panel-shell.phone.code-panel .cv-hit-where { white-space: normal; overflow-wrap: anywhere; }
 .panel-shell.phone.code-panel .cv-lives > span { display: none; }
+
+/* RB-4: Search inside files. A result is a file: its name, what it is, how many matches, its path. */
+.cv-hit-count { flex: none; color: var(--text-muted); font-size: var(--fs-1); white-space: nowrap; }
+.cv-inside-hit .cv-thing-detail { flex: 0 1 auto; }
+.cv-inside-scope { margin-top: 4px; color: var(--text-faint); font-size: var(--fs-1); }
+/* A file opened from those results: every match marked, the one the stepper is on stronger. */
+.cv-mark { background: var(--wash-accent); color: inherit; border-radius: 3px; box-shadow: 0 0 0 1px var(--border-strong); }
+.cv-mark.on { background: var(--action); color: #fff; box-shadow: 0 0 0 1px var(--action); }
+.cv-mark.on span { color: inherit; }
+.cv-stepper { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-2); }
+.cv-stepper > span { min-width: 5ch; font-variant-numeric: tabular-nums; }
+.panel-shell.phone.code-panel .cv-hit-count { flex-basis: auto; }
