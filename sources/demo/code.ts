@@ -435,11 +435,56 @@ const HTML = `<!doctype html>
 
 /** The demo's repos: per client, per repo, each file by path. */
 type DemoRepo = { id: string; name: string; files: Record<string, Content> };
+const STORE_TMDL = `table Store
+	lineageTag: 4a5b6c7d-8e9f-4012-a345-b6c7d8e9f012
+
+	column StoreId
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: StoreId
+
+	column Region
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Region
+`;
+
+const STORES_PQ = `section Section1;
+
+shared Stores = let
+    Source = Sql.Database("demo-sql.example", "Warehouse"),
+    Stores = Source{[Schema = "dbo", Item = "Stores"]}[Data]
+in
+    Stores;
+`;
+
+const IPYNB = `{
+  "cells": [{ "cell_type": "code", "source": ["returns = spark.read.table(\"bronze.returns\")\n", "returns.groupBy(\"reason\").count().show()"], "metadata": {}, "outputs": [], "execution_count": null }],
+  "metadata": { "language_info": { "name": "python" } },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
+`;
+
+const portal = (): Record<string, Content> => ({
+  "/README.md": "# Store portal\n\nThe store managers' report and the views behind it (demo).\n",
+  "/report/Store visits.Report/definition.pbir": `{\n  "version": "4.0",\n  "datasetReference": { "byPath": { "path": "../Store visits.SemanticModel" } }\n}\n`,
+  "/report/Store visits.Report/report.json": REPORT_JSON,
+  "/report/Store visits.Report/.platform": PLATFORM("Report", "Store visits"),
+  "/report/Store visits.SemanticModel/definition/model.tmdl": MODEL_TMDL,
+  "/report/Store visits.SemanticModel/definition/tables/Date.tmdl": DATE_TMDL,
+  "/report/Store visits.SemanticModel/definition/tables/Store.tmdl": STORE_TMDL,
+  "/report/Store visits.SemanticModel/.platform": PLATFORM("SemanticModel", "Store visits"),
+  "/sql/portal/Views/vStoreVisits.sql": "CREATE VIEW [portal].[vStoreVisits]\nAS\nSELECT s.[StoreId], s.[Region], COUNT(*) AS [Visits]\nFROM [portal].[Visits] AS v\nJOIN [dbo].[Stores] AS s ON s.[StoreId] = v.[StoreId]\nGROUP BY s.[StoreId], s.[Region];\n",
+});
+
 const sales = (): Record<string, Content> => ({
   "/README.md": README("Sales analytics"),
   "/model/Sales.SemanticModel/definition/model.tmdl": MODEL_TMDL,
   "/model/Sales.SemanticModel/definition/tables/Sales.tmdl": SALES_TMDL,
   "/model/Sales.SemanticModel/definition/tables/Date.tmdl": DATE_TMDL,
+  "/model/Sales.SemanticModel/definition/tables/Store.tmdl": STORE_TMDL,
+  "/model/Sales.SemanticModel/definition.pbism": `{\n  "version": "4.0",\n  "settings": {}\n}\n`,
   "/model/Sales.SemanticModel/definition/relationships.tmdl": RELATIONSHIPS_TMDL,
   "/model/Sales.SemanticModel/definition/roles/Store managers.tmdl": ROLES_TMDL,
   "/model/Sales.SemanticModel/.platform": PLATFORM("SemanticModel", "Sales"),
@@ -451,6 +496,14 @@ const sales = (): Record<string, Content> => ({
   "/pipelines/Load sales.DataPipeline/.platform": PLATFORM("DataPipeline", "Load sales"),
   "/pipelines/Clean orders.Notebook/notebook-content.py": NOTEBOOK,
   "/pipelines/Clean orders.Notebook/.platform": PLATFORM("Notebook", "Clean orders"),
+  // RB-2: enough for every group in By kind: a dataflow, a lakehouse, a warehouse and one more Fabric item.
+  "/pipelines/Store list.Dataflow/mashup.pq": STORES_PQ,
+  "/pipelines/Store list.Dataflow/.platform": PLATFORM("Dataflow", "Store list"),
+  "/lake/Bronze.Lakehouse/shortcuts.metadata.json": "[]\n",
+  "/lake/Bronze.Lakehouse/.platform": PLATFORM("Lakehouse", "Bronze"),
+  "/lake/Gold.Warehouse/.platform": PLATFORM("Warehouse", "Gold"),
+  "/pipelines/Low stock.Reflex/.platform": PLATFORM("Reflex", "Low stock"),
+  "/notebooks/explore-returns.ipynb": IPYNB,
   "/sql/Warehouse.sqlproj": SQLPROJ,
   "/sql/dbo/Tables/Orders.sql": ORDERS_SQL,
   "/sql/dbo/Views/vSales.sql": VSALES_SQL,
@@ -466,6 +519,10 @@ const sales = (): Record<string, Content> => ({
 const ingest = (): Record<string, Content> => ({
   "/README.md": README("Freight ingest").replace(/## What's here[\s\S]*?## Deploy/, "## What's here\n\n- `adf/`: the Data Factory pipelines, datasets and linked services\n- `sql/`: watermark scripts\n\n## Deploy"),
   "/adf/pipeline/pl_copy_shipments.json": ADF_PIPELINE,
+  "/adf/pipeline/pl_load_orders.json": ADF_PIPELINE.replace(/shipments/g, "orders").replace(/Shipments/g, "Orders"),
+  "/adf/dataflow/df_clean_freight.json": `{\n  "name": "df_clean_freight",\n  "properties": { "type": "MappingDataFlow", "typeProperties": { "sources": [], "sinks": [], "transformations": [] } }\n}\n`,
+  "/adf/trigger/tr_daily.json": `{\n  "name": "tr_daily",\n  "properties": { "type": "ScheduleTrigger", "typeProperties": { "recurrence": { "frequency": "Day", "interval": 1 } } }\n}\n`,
+  "/adf/publish_config.json": `{ "publishBranch": "adf_publish" }\n`,
   "/adf/linkedService/ls_adls.json": LINKED_SERVICE,
   "/adf/dataset/ds_adls_shipments.json": DATASET,
   "/sql/etl/Tables/Watermarks.sql": "CREATE TABLE [etl].[Watermarks]\n(\n    [TableName] SYSNAME      NOT NULL PRIMARY KEY,\n    [LoadedAt]  DATETIME2(3) NULL\n);\n",
@@ -481,7 +538,7 @@ const internal = (): Record<string, Content> => ({
 const REPOS: Record<string, DemoRepo[] | "needs_code_read"> = {
   Northwind: [
     { id: "a1b2c3d4-0001-4000-8000-00000000a001", name: "sales-analytics", files: sales() },
-    { id: "a1b2c3d4-0002-4000-8000-00000000a002", name: "store-portal", files: { "/README.md": "# Store portal\n\nNot moved to this repo yet (demo).\n" } },
+    { id: "a1b2c3d4-0002-4000-8000-00000000a002", name: "store-portal", files: portal() },
     { id: "a1b2c3d4-0006-4000-8000-00000000a006", name: "archive", files: {} },
   ],
   Atlas: [{ id: "a1b2c3d4-0003-4000-8000-00000000a003", name: "freight-ingest", files: ingest() }],
