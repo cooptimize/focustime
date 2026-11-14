@@ -2,7 +2,7 @@
 // the redaction boundary). What is sent:
 // - requests: "<METHOD> <route>" (a fixed route name), "POST /api/action <action>" for a registered action, status,
 //   duration, and the client's ref when the action names one;
-// - jobs (the DevOps check, the Teams poll, conversations upkeep, people refresh): one request item each run, marked
+// - jobs (the DevOps check, the Teams poll, people refresh): one request item each run, marked
 //   kind=job, with its outcome, counts (measurements) and short flags;
 // - the logger's closed fields: a call to a source with a status is a dependency, the rest a trace;
 // - exceptions: a 500 or an error a job throws: type, a redacted message (log/redact.ts) and frames in FocusTime's

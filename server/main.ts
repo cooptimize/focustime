@@ -84,8 +84,8 @@ import { userZone } from "../week/zone.ts";
 import { localToday } from "../week/dates.ts";
 import { recordUse } from "../actions/vm-autostart.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
-import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
-import { requestContext, aiFor, escalationHours, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
+import { pollCycle, requestsNextDue, type PollDeps } from "../actions/request-poll.ts";
+import { requestContext, aiFor, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
 import { createTeamsRhythmStore } from "../store/teams-rhythm-store.ts";
@@ -105,9 +105,7 @@ import { inviteDomains } from "../config/schema.ts";
 import type { MeetingUser } from "../actions/meeting-actions.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
 import { heldRecheckOnce, recheckHeld } from "../actions/held-recheck.ts";
-import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
 import { backfillRequests } from "../actions/conversation-backfill.ts";
-import { weekConfig } from "../config/defaults.ts";
 import type { RequestsPort } from "../actions/request-actions.ts";
 import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
@@ -472,40 +470,10 @@ await atStart("startup_upkeep", () =>
     () => log({ source: "plan", op: "requests_moved", kind: "failed" }),
   ),
 );
-pollDeps.upkeep = (now) => jobs("conversations_upkeep", {}, () => upkeep(now));
-async function upkeep(now: string): Promise<void> {
-  // The person whose sign-in reads for a client (its first chat's registrant): DevOps reads and AI, once per run.
-  const memo = new Map<string, Promise<PollPerson | null>>();
-  const readerFor = (clientKey: string) =>
-    memo.get(clientKey) ??
-    memo.set(clientKey, (async () => {
-      const chat = (await teams.chats()).find((c) => c.clientKey === clientKey);
-      const p = chat ? await pollDeps.person(chat.registeredBy).catch(() => null) : null;
-      return p?.config ? p : null;
-    })()).get(clientKey)!;
-  await upkeepConversations({
-    teams,
-    convs: conversations,
-    now,
-    hoursOf: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? escalationHours(await runtimeFor(uid)) : null),
-    defaultHours: weekConfig.hours,
-    items: async (clientKey) => {
-      const p = await readerFor(clientKey);
-      return p?.config ? p.openItems(p.config, clientKey) : null;
-    },
-    userByEmail: async (email) => (await accounts.users.all()).find((u) => !u.deletedAt && (u.email ?? "").toLowerCase() === email.toLowerCase())?.id ?? null,
-    ai: async (clientKey) => {
-      const p = await readerFor(clientKey);
-      return p?.pipelineAi ? p.pipelineAi() : null;
-    },
-    clientName: async (k) => (await readerFor(k))?.config?.clientSettings[k]?.name ?? k,
-    log,
-  });
-}
-// ENV-1: outside production, Refresh reads only with the sign-in of the person who pressed it and runs no upkeep.
+// ENV-1: outside production, Refresh reads only with the sign-in of the person who pressed it.
 const requestsPort: RequestsPort = {
   teams,
-  refresh: (chatIds, by) => jobs("requests_refresh", {}, async (job) => cycleCounts(job, await pollCycle(pollDeps, { force: true, chatIds, ...(background.production ? {} : { onlyAs: by ?? "", upkeep: false }) }))),
+  refresh: (chatIds, by) => jobs("requests_refresh", {}, async (job) => cycleCounts(job, await pollCycle(pollDeps, { force: true, chatIds, ...(background.production ? {} : { onlyAs: by ?? "" }) }))),
   conversations,
   users: pollDeps.users,
 };

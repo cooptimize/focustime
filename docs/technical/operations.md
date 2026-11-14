@@ -51,7 +51,6 @@ One pure module decides it: `config/background-policy.ts`. `server/main.ts` comp
 | Work (policy name) | Started from | Outside system | What it does | Prod | Test site (dev, local) |
 |---|---|---|---|---|---|
 | Chat poll (`requests_poll`) | App job, every 5 min in followers' working hours | Teams (followers' delegated Chat.Read), AI | Reads registered chats, sorts them with AI | Runs | Off. Refresh in the Inbox reads your own chats once with your sign-in. `FOCUSTIME_REQUESTS_POLL=on` declares a watch period |
-| Conversation upkeep (`conversations_upkeep`) | After each chat poll | None | Nothing: `actions/conversation-upkeep.ts` returns at once | Runs, does nothing | Off |
 | Meeting capture (`meeting_capture`) | App job: lay out registered calls, look for transcripts, the AI pass | Graph (reviewers' calendars and transcripts), AI | Reads transcripts, spends AI | Runs | Off. Check now on a registered call looks once with your sign-in |
 | Held messages re-sorted (`held_recheck`) | Once per build at start, and when an admin edits a client's names | AI | Spends AI | Runs | Off: held messages stay held |
 | Reminders and notices (`notices`) | Each person's ticks | None (the in-app list) | Messages a person (see [Reminders](#reminders)) | Runs | Only for someone who switched on "Send me reminders and Teams messages from this test site" |
