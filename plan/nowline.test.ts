@@ -70,15 +70,14 @@ describe("now line (UI-B, NL-1: only on a block under way)", () => {
     expect(ownsNow(d.am, at("2026-11-03T10:03"))).toBe(false);
   });
 
-  it("a whole-day cell (PTO, catch-up) gets a line only inside the day's hours", () => {
-    expect(nowSpot(thu, at("2026-11-05T13:00"), NY, true)).toMatchObject({ kind: "whole" });
-    expect(nowSpot(thu, thu.am.start, NY, true)).toEqual({ kind: "whole", at: 0 });
-    expect(nowSpot(thu, at("2026-11-05T06:30"), NY, true)).toEqual({ kind: "none" });
-    expect(nowSpot(thu, at("2026-11-05T22:03"), NY, true)).toEqual({ kind: "none" });
-    expect(nowSpot(thu, thu.pm.end, NY, true)).toEqual({ kind: "none" });
+  // NM-1: a day drawn as one cell has no block, so nothing is under way on it: no line at any time of day.
+  it("a whole-day cell (PTO, a catch-up day with no working hours) never gets a line", () => {
+    for (const t of ["06:30", "09:00", "13:00", "22:03"]) expect(nowSpot(thu, at(`2026-11-05T${t}`), NY, true), t).toEqual({ kind: "none" });
+    expect(nowSpot(thu, thu.am.start, NY, true)).toEqual({ kind: "none" });
     const fri = week.days.find((d) => d.date === "2026-11-06")!;
-    expect(nowSpot(fri, at("2026-11-06T10:03"), NY, true)).toMatchObject({ kind: "whole" });
-    expect(nowSpot(fri, at("2026-11-06T22:03"), NY, true)).toEqual({ kind: "none" });
+    for (const t of ["10:03", "22:03"]) expect(nowSpot(fri, at(`2026-11-06T${t}`), NY, true), t).toEqual({ kind: "none" });
+    // The same day drawn as blocks (a catch-up day with working hours) follows the block rule.
+    expect(nowSpot(thu, at("2026-11-05T10:03"), NY, false)).toMatchObject({ kind: "rail", half: "AM" });
   });
 
   it("is null on another day and in another week", () => {
