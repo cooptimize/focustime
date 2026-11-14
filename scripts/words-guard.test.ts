@@ -1,7 +1,7 @@
 // TD-1: the words guard finds "pick" in the to-do sense in text people read, and leaves code names and "pick" as
 // choose alone.
 import { describe, expect, it } from "vitest";
-import { saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
+import { NAMES_ALLOWED, namesHits, namesIn, saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
 
 describe("saysPick", () => {
   it("the to-do sense", () => {
@@ -34,5 +34,43 @@ describe("wordsHits", () => {
   it("scans the app's text, not tests, fakes, migrations or SQL files", () => {
     for (const f of ["ui/Day.tsx", "server/teams/cards.ts", "store/plan-store.ts", "docs/demo/script.md", "public/manifest.webmanifest", "scripts/teams-package.ts"]) expect(wordsScanned(f), f).toBe(true);
     for (const f of ["ui/Today.test.tsx", "host/fakes.ts", "store/sql/baseline.ts", "store/migrations/20261106T0900_week_carry.ts", "docs/decisions.md", "e2e/today.test.ts"]) expect(wordsScanned(f), f).toBe(false);
+  });
+});
+
+// NM-1: the app's own words use today's names, and a control is named, never drawn as a character.
+describe("namesIn", () => {
+  it("a retired name in text people read", () => {
+    for (const t of ["Back to Today", "Grid, Gantt, Gaps and Backlog need room", "Readiness nudges", "Fix next looks at the top N of each backlog", "Today and Week", "Click to open Plan ahead.", "views (Needs you, Promises, Waiting on, Captures and drafts and more)", "Undo is in Settings › Data.", "Logged in Settings > Data, with Undo.", "Shown next to Cooptimizers in Who and Roadmap", "Follow-ups due", "Inbox › Requests"]) expect(namesIn(t), t).not.toEqual([]);
+  });
+  it("a control written as a character", () => {
+    for (const t of ["Actions (⋯) for what has focus", "also in Week's ⋯", "‹", "Close ×", "✕", "+ Add on a block", "Open ›"]) expect(namesIn(t), t).toEqual(["a control as a character"]);
+  });
+  it("today's names, paths, keys, sums and code are fine", () => {
+    for (const t of ["Back to Day", "Day and Week", "Needs attention nudges", "Settings › Activity", "More › Keyboard shortcuts", "Ctrl +", "9:00 to 12:00 + 1:00 to 5:00", "look 8 to 12 weeks ahead", "what needs you", "UPDATE x SET version = version + 1 WHERE id = ?", "./ahead/Ahead.tsx", "calc(6px + 2px)", "A follow-up question", "Close the loop"]) expect(namesIn(t), t).toEqual([]);
+  });
+  it("the allow list: ordinary words that are also old names, each with a reason", () => {
+    for (const t of ["Today", "Today's blocks and to-dos", "Today is Sat, Nov 7 · showing next week", "Today (Fri) is hidden", "Loop closed"]) expect(namesIn(t), t).toEqual([]);
+    expect(namesIn("Needs you", "ui/Day.tsx")).toEqual([]);
+    expect(namesIn("Needs you", "ui/App.tsx")).toEqual(["Needs you (the Inbox's view)"]);
+    expect(namesIn("on Week and Today's timeline")).toEqual([]); // "Today's" reads as the day
+    expect(namesIn("on Week and Today")).toEqual(["Today (the tab)"]);
+    for (const a of NAMES_ALLOWED) expect(a.why.length, String(a.re)).toBeGreaterThan(15);
+    expect(NAMES_ALLOWED.length).toBeLessThanOrEqual(16);
+  });
+});
+
+describe("namesHits", () => {
+  it("finds strings and JSX text, and leaves comments alone", () => {
+    expect(namesHits("ui/x.tsx", '// Today, the tab\nconst a = "Back to Today";\n<p>Open Ahead</p>\n<span title="in Week\'s ⋯">x</span>\n').map((h) => h.line)).toEqual([2, 3, 4]);
+  });
+  it("old names stay where people search for them: old, aka and keywords", () => {
+    const src = '{ id: "planning", label: "Day and Week", old: ["Today and Week", "Planning"] },\n{ id: "v", label: "Day", aka: ["Today"] },\n{ id: "r", label: "Needs attention nudges", keywords: ["Readiness nudges"] },\n{ id: "bad", label: "Today and Week" },\n';
+    expect(namesHits("ui/settings/registry.ts", src).map((h) => h.line)).toEqual([4]);
+  });
+  it("the Guide has its own check, and the Renamed list holds the old names", () => {
+    expect(namesHits("ui/guide/retired.ts", 'const r = { was: "Roadmap", now: "Backlog" };\n')).toEqual([]);
+  });
+  it("public pages line by line", () => {
+    expect(namesHits("public/legal.html", "<p>Settings › Data › Export my data</p>\n<p>Settings › Your data</p>\n").map((h) => h.line)).toEqual([1]);
   });
 });

@@ -10,12 +10,15 @@
 // - process names (WT-1): no hard-coded work item type, state or category name acting as code in ui/, actions/ or
 //   plan/ outside plan/process.ts. Case-sensitive (it matches code, not prose).
 // - words (TD-1): no "pick" in the to-do sense in text people read (scripts/words-guard.ts); "pick" is only the code name.
+// - old names (NM-1): no name on the Guide's Renamed list (ui/guide/retired.ts) and no control written as a character
+//   (⋯ ‹ › × or a lone +) in text people read; the same scan as words. Old names stay only in the Renamed list, a
+//   setting's `old` names, a command's `aka` and search `keywords`.
 //
 // Usage: node scripts/guards.ts [--root <dir>]; exits 1 and lists file:line for each hit.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { wordsHits, wordsScanned } from "./words-guard.ts";
+import { namesHits, wordsHits, wordsScanned } from "./words-guard.ts";
 
 const word = (b64: string) => Buffer.from(b64, "base64").toString("utf8");
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -68,7 +71,7 @@ export function guardFiles(root: string): string[] {
   return [...new Set(out.split("\0"))].filter((f) => f && TEXT.test(f) && f !== "package-lock.json" && !f.startsWith("node_modules/")).sort();
 }
 
-export type Hit = { guard: "names" | "desktop" | "process" | "words"; at: string };
+export type Hit = { guard: "names" | "desktop" | "process" | "words" | "old names"; at: string };
 
 export function runGuards(root: string): { files: number; hits: Hit[] } {
   const files = guardFiles(root);
@@ -85,6 +88,7 @@ export function runGuards(root: string): { files: number; hits: Hit[] } {
     const proc = processScanned(f);
     const lines = text.split("\n");
     if (wordsScanned(f)) for (const n of wordsHits(f, text)) hits.push({ guard: "words", at: `${f}:${n}: ${lines[n - 1]!.trim().slice(0, 120)}` });
+    if (wordsScanned(f)) for (const h of namesHits(f, text)) hits.push({ guard: "old names", at: `${f}:${h.line}: ${h.says.join(", ")}: ${lines[h.line - 1]!.trim().slice(0, 120)}` });
     lines.forEach((line, i) => {
       const at = `${f}:${i + 1}`;
       if (!history && realRe.test(line)) hits.push({ guard: "names", at });
@@ -100,6 +104,7 @@ const WHY: Record<Hit["guard"], string> = {
   desktop: "a desktop or workstation name (only the history and system/README.md may name it)",
   process: "a work item type, state or category name used as code (decide through plan/process.ts)",
   words: 'text people read says "pick" for a planned piece of work: say "to-do" (TD-1; code names keep pick)',
+  "old names": "text people read uses a name FocusTime no longer has, or writes a control as a character: use the screen's name today and the control's name (NM-1; ui/guide/retired.ts says where each old name lives now)",
 };
 
 if (import.meta.main) {
@@ -109,7 +114,7 @@ if (import.meta.main) {
   if (!hits.length) {
     console.log(`guards: ${files} files, no hits`);
   } else {
-    for (const g of ["names", "desktop", "process", "words"] as const) {
+    for (const g of ["names", "desktop", "process", "words", "old names"] as const) {
       const mine = hits.filter((h) => h.guard === g);
       if (!mine.length) continue;
       console.error(`guards: ${mine.length} ${g} hit(s): ${WHY[g]}`);
