@@ -18,6 +18,7 @@ function fakeGit() {
     folder: async (k, _r, p) => (reads.push(`folder ${k} ${p}`), { commit: "c", entries: [{ name: "a.sql", path: "/a.sql", folder: false }], cut: false }),
     files: async (k) => (reads.push(`files ${k}`), { commit: "c", paths: ["/a.sql"], cut: false }),
     file: async (k, _r, p) => (reads.push(`file ${k} ${p}`), { path: p, commit: "c", size: 9, kind: "text", text: "SELECT 1;" }),
+    search: async (k) => (reads.push(`search ${k}`), { count: 0, hits: [], info: 0 }),
   };
   return { git, reads };
 }

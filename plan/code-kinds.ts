@@ -392,6 +392,56 @@ export function groupThings<T extends { kind: Kind }>(things: readonly T[]): { k
   return KINDS.filter((k) => by.has(k)).map((k) => ({ kind: k, label: KIND_GROUPS[k], things: by.get(k)! }));
 }
 
+/**
+ * RB-4: a kind DevOps's code search can narrow by itself, by file type (its documented "ext:" filter). Only where the
+ * type says the kind well enough; the other kinds are narrowed in FocusTime after the answer. One row per kind.
+ */
+export const KIND_EXT: Readonly<Partial<Record<Kind, string>>> = { sql: "sql" };
+
+/**
+ * RB-4: the plain words of a search inside files, to mark in a file once it is opened: phrases in quotes and words
+ * (a * at the end of a word matches the start of a word), without the operators (AND, OR, NOT, NEAR, BEFORE, AFTER),
+ * the term a NOT rules out, and filters like ext:sql. Lower case, at most 12.
+ */
+export function insideTerms(q: string): { text: string; prefix: boolean }[] {
+  const out: { text: string; prefix: boolean }[] = [];
+  let not = false;
+  for (const m of q.matchAll(/"((?:[^"\\]|\\.)*)"|[^\s()]+/g)) {
+    const phrase = m[1];
+    const raw = m[0];
+    const skip = not;
+    not = false;
+    if (phrase === undefined) {
+      if (raw === "NOT") { not = true; continue; }
+      if (["AND", "OR", "NEAR", "BEFORE", "AFTER"].includes(raw)) continue;
+      // A filter (ext:sql, path:"a b", file:x*) narrows where to look; it isn't a word in the file.
+      if (/^[A-Za-z]+:/.test(raw)) continue;
+    }
+    if (skip) continue;
+    const prefix = phrase === undefined && raw.endsWith("*");
+    const text = (phrase !== undefined ? phrase.replace(/\\(.)/g, "$1") : raw.replace(/[*?]+$/, "")).toLowerCase();
+    if (text && !/[*?]/.test(phrase === undefined ? text : "") && !out.some((t) => t.text === text)) out.push({ text, prefix });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+/** RB-4: where the terms are in one line of an opened file, ignoring case: [start, end) pairs, merged, in order. */
+export function termRanges(line: string, terms: readonly { text: string }[]): [number, number][] {
+  const lower = line.toLowerCase();
+  if (lower.length !== line.length) return [];
+  const found: [number, number][] = [];
+  for (const t of terms) for (let i = lower.indexOf(t.text); i >= 0; i = lower.indexOf(t.text, i + t.text.length)) found.push([i, i + t.text.length]);
+  found.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const out: [number, number][] = [];
+  for (const r of found) {
+    const last = out[out.length - 1];
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else out.push([r[0], r[1]]);
+  }
+  return out;
+}
+
 // ---------- searching names ----------
 
 /** The words of a search: lower case, split on spaces, at most 8. */

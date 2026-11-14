@@ -602,6 +602,9 @@ export function demoCodeGit(): CodeGit {
       const r = find(clientKey, repo);
       return { commit: COMMIT, paths: Object.keys(r.files).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })), cut: false };
     },
+    async search() {
+      throw new CodeFailure("no_code_search");
+    },
     async file(clientKey, repo, path): Promise<CodeFile> {
       const c = find(clientKey, repo).files[path];
       if (c === undefined) throw new CodeFailure("not_found");

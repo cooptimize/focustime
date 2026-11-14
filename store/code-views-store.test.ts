@@ -30,6 +30,14 @@ await forEachDriver("code views", ({ open }) => {
     await store.add({ actorId: "a", actorName: "Ana", clientKey: "Fabrikam", repoId: "", repoName: "", path: "", event: "names_searched" });
     expect((await store.list()).map((v) => [v.clientKey, v.event, v.repoId, v.repoName, v.path])).toEqual([["Fabrikam", "names_searched", "", "", ""], ["Contoso", "kinds_listed", "", "", ""]]);
   });
+  it("RB-4: Searched inside files is a row with a client and no repo or path; the table has no column for words", async () => {
+    const db = (await open()).conn;
+    const store = codeViewsStoreOn(db, () => NOW);
+    await store.add({ actorId: "a", actorName: "Ana", clientKey: "Contoso", repoId: "", repoName: "", path: "", event: "inside_searched" });
+    const rows = await store.list();
+    expect(rows.map((v) => [v.clientKey, v.event, v.repoId, v.repoName, v.path])).toEqual([["Contoso", "inside_searched", "", "", ""]]);
+    expect(Object.keys(rows[0]!).sort()).toEqual(["actorId", "actorName", "at", "clientKey", "event", "id", "path", "repoId", "repoName"]);
+  });
   it("the purge removes rows past 12 months and keeps the rest", async () => {
     const db = (await open()).conn;
     let t = NOW.subtract({ hours: 24 * 366 });

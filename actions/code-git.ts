@@ -7,8 +7,9 @@
 // minutes), keyed by client, repo, commit and path, never on disk, in the store or in a log. Only the actions reach
 // this, and only after their access check on every request (actions/code-actions.ts), so the memory is never looked at
 // for someone who may not read the client.
+// RB-4: a search inside files asks DevOps's own code search and is never held here: not the words, not the answer.
 import type { TargetsResult } from "../sources/devops/types.ts";
-import { GitFailure, type GitFailureReason, type GitFileList, type GitFolder, type GitReader, type GitRepo, type GitTarget } from "../sources/devops/git.ts";
+import { GitFailure, type GitFailureReason, type GitFileList, type GitFolder, type GitReader, type GitRepo, type GitSearchAnswer, type GitTarget } from "../sources/devops/git.ts";
 import { CODE_MEMORY_MS, decodeText, fileKind, nameOf, type FileKind } from "../plan/code.ts";
 
 export type CodeFailureReason = GitFailureReason | "no_devops" | "no_token";
@@ -29,6 +30,11 @@ export type CodeGit = {
   folder(clientKey: string, repo: GitRepo, path: string): Promise<GitFolder>;
   files(clientKey: string, repo: GitRepo): Promise<GitFileList>;
   file(clientKey: string, repo: GitRepo, path: string): Promise<CodeFile>;
+  /**
+   * RB-4: asks DevOps's own code search which files of the client's project hold the words (at most `top` files). No
+   * file is read here and nothing of the answer or the words is kept, not even in the 5-minute memory.
+   */
+  search(clientKey: string, text: string, top: number): Promise<GitSearchAnswer>;
 };
 
 /** At most this many entries, and about this many characters, sit in memory at once (oldest out first). */
@@ -137,6 +143,7 @@ export function createCodeGit(d: CodeGitDeps): CodeGit {
         if (f.commit) memory.set(key("files", clientKey, repo.id, f.commit), f, f.paths.reduce((n, p) => n + p.length, 0));
         return f;
       }),
+    search: (clientKey, text, top) => read(async () => d.reader.search(await target(clientKey), text, top)),
     file: (clientKey, repo, path) =>
       read(async () => {
         const h = head(clientKey, repo);
