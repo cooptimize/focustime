@@ -1000,3 +1000,16 @@ From the IT review (TD-1):
   - Drawing: on Day with a block's panel open, the source status row opened from the dot at the bottom left is covered at its right end by the panel ("DevOps 4 of 4" cut off). On Day's Timeline the "1h 45m free" pill sits on the 10 AM hour line.
   - Settings' search shows the old name after "was" on each result found by one, as it did before.
 
+
+## BL-2
+
+- Needs attention keeps BL-1's shape (client › epic › feature, a gap's parents shown for context). Should it follow the rank rule too, listing the level's items with gaps in rank order with their parent as a label? Left as it was: the spec named only the levels.
+- STEP 0.5: Last change reads FocusTime's own change log in the plan store (one indexed query per client, 30 days), not DevOps, so it now loads on every Backlog load. If the log grows large for a client with a busy project, should the window shrink, or the column load on demand again?
+- Children opened under a row have no rank number (the number is the rank at the level listed). Should an opened story show its own rank among stories, perhaps muted?
+- What BL-1's tree did in one step that now takes more: seeing every story of an epic at once (now Epics, then Expand all); seeing which features sit under an epic at a glance (now the parent label, or the Epic filter). A person who used the tree daily may want a remembered "open everything" per level.
+- Closed items keep their place dimmed with no rank, as BL-1 showed them. Should Backlog hide closed items at a level by default?
+- Items below the level with no item at the level above (a story straight under an epic, an orphan feature) are listed after the ranked rows with no rank. Is "after" right, or should they be in their own folded group ("Not under a feature")?
+- A link from before BL-2 with no `l=` used to open the tree with stories (BL-1's default); it now opens at Features, or the person's saved level.
+- When a row's parent is not an epic (a story's feature), its label puts the Epic filter on that feature, and the chip says "Feature: <title>". The filter field is still called epic in the code and the address (`e=`). Should it be renamed to parent?
+- The Backlog view's presence note (`aheadPresence`) does not include the level, since the level is kept in the browser and not on the server.
+- Found while testing, not changed: in the demo, the review panel's Saved list (writes since the panel opened) stays empty, because the demo's server clock is Nov 2 and the browser's is today, and the list compares the two. Writes land and show in Settings › Activity. Real use has one clock. Should the list compare against the server's own time?
