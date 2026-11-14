@@ -186,7 +186,7 @@ The words below are no longer shown: the New form, the draft editor and the card
 - The tab is **Backlog** (never Ahead in what a person reads; Ahead is the code name). Its views are **Grid** and **Gantt**.
 - The toolbar, left to right: the client chips, **People** (Mine, Contributing, Everyone), **Needs attention** with its count, **Search**, **Filter** with a count ("Filter · 2"), then **⋯** ("More: rows and view"). Never "Readiness", "Not ready only" or "Mixed".
 - People across clients that differ names who gets what: **"Everyone for Northwind Foods, Mine for the rest"**.
-- The line under the toolbar only off the defaults: **"Showing 33 of 583"**, then one chip per filter ("Needs attention", "Needs stories", "Stale", "Next 4 weeks"), each with ×, and **Clear filters**.
+- The line under the toolbar only off the defaults: **"Showing 33 of 583"**, then one chip per filter ("Needs attention", "Needs stories", "Stale", "Stories only, in rank order", "Next 4 weeks"), each with ×, and **Clear filters**.
 - Status: one chip per row in the words of `plan/backlog-status.ts` (Blocked, At risk, Not scoped, Stalled, Watch, Needs a date, On track, Needs stories, No target date, Unassigned, Unsized, Stale), the rest as **"+2"**. An empty cell is **"+ date"**, **"+ owner"**, **"+ size"** on hover or focus, never a dash.
 - The fix beside a reason: **Break down**, **Set dates**, **Assign**, **Size**, and **Skip** (Unskip in the Skipped list).
 - The header: **"Backlog · 42 items"**, or with Needs attention on **"12 need attention"**; the change set **"3 changes to save"** with **Review**.
@@ -232,6 +232,15 @@ The app's own words use the names the screens use. A string a person reads never
 - Client calls: the heading **Promises**; a commitment from the client's side reads **"noted with this call"** (was "in your Waiting on").
 - The command menu: the group **From chats** (was Requests), "Backlog › Gantt: the next 12 weeks" (was Plan ahead), "Timeline on Day", "Add a promise to Day", "Inbox items for Day and Week".
 
+## RB-2 words (Nov 14)
+
+- The switch inside a client: **Files** and **By kind**. By kind's groups, in this order: **Reports**, **Semantic models**, **Pipelines**, **Notebooks**, **Dataflows**, **Lakehouses and warehouses**, **SQL**, **Other Fabric items**, **Other**. A row is the name, then what it is ("Report", "Semantic model · 3 tables", "Data factory pipeline", "Table in dbo", "YAML"), then the repo when the client has more than one. A model's caret is named **"Tables of <model>"**.
+- By kind: **Filter by name**, **"Show all 120"**, **"Reading the file names…"**, **"Choose something in the list to open its file."**, **"Sorted by file and folder names only. No file is opened to sort them."**, **"<repo>: only the first 20,000 file names were read."**, and a repo that can't be read as **"<repo>: <the reason Code already gives>"**. With a file open: **"In <repo>, <folder>"** and **Show in files**.
+- The search: **Search names** (the box and the command "Code: search names"), **Search**, **This client** and **All clients**, **All kinds**, **"Type a name, then press Enter or Search. Folder names count too."**, **Back to results** on a file opened from them (the phone's Back says **Results**), and under the box **"Searches names only. Measures, columns and report pages live inside files and aren't searched."**
+- Results: **"Read 3 of 5 clients…"**, **"12 results"**, **"No name matches."**, **"Showing the first 200. Narrow your search."**, **"Left out: <client>. Only its team can read its code."**, a table as **"Table in <model>"**.
+- The log line is now **"Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words."** Admin › Audit › Code views: **Listed by kind**, **Searched names**, with **All its repos** in the Repo column.
+- Say **names**, never "index" or "catalog": nothing is kept between visits.
+
 ## BL-2 words (Nov 14)
 
 Backlog lists the level chosen in Filter › Levels, in that level's own rank order.
@@ -243,4 +252,3 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - The command menu: **"Backlog: every client's DevOps in rank order, Grid"**, **"Backlog: stories in rank order"**.
 - After a create at a level that isn't listed: **"Created #5101. Not shown here: Levels lists features"**.
 - Retired: "One level as a list", "Stories only, in rank order" (the chip), "Show down to features" (the old Levels tooltip).
-

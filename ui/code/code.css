@@ -123,3 +123,56 @@
 /* No wrap | Wrap: the switch's two sides; the ring shows on the track when the keyboard is on it. */
 .cv-wrap-switch { margin-left: 4px; cursor: pointer; }
 .cv-wrap-switch:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* RB-2: Files | By kind, By kind's groups and rows, and Search names. One-line rows, the app's washes. */
+.cv-views { align-self: flex-start; }
+.cv-kinds { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cv-kind-group { min-width: 0; }
+.cv-kind-head { width: 100%; display: flex; align-items: center; gap: 6px; min-height: var(--h-small); padding: 0 6px 0 2px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 600; text-align: left; cursor: pointer; }
+.cv-kind-head:hover { background: var(--wash-1); color: var(--text); }
+.cv-kind-head:focus-visible, .cv-thing-btn:focus-visible, .cv-thing-caret:focus-visible, .cv-hit:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-kind-label { flex: 1; min-width: 0; }
+.cv-kind-count { color: var(--text-faint); font-size: var(--fs-1); font-weight: 500; font-variant-numeric: tabular-nums; }
+.cv-things, .cv-tables { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.cv-tables { padding-left: 28px; }
+.cv-thing-row { display: flex; align-items: center; min-width: 0; border-radius: var(--radius-input); }
+.cv-thing-row:hover, .cv-table-btn:hover, .cv-hit:hover { background: var(--wash-1); }
+.cv-thing-row.selected, .cv-table-btn.selected { background: var(--wash-accent); }
+.cv-thing-caret { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: var(--h-small); border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; }
+.cv-thing-caret-space { flex: none; width: 28px; }
+.cv-thing-btn, .cv-hit { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: var(--h-small); padding: 0 6px 0 0; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
+.cv-table-btn { width: 100%; padding-left: 6px; }
+.cv-thing-name { flex: 0 1 auto; min-width: min(60%, max-content); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-thing-detail { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--fs-2); }
+.cv-show-all { margin: 4px 0 4px 28px; }
+.cv-kinds-note { font-size: var(--fs-1); }
+.cv-lives { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--text-muted); font-size: var(--fs-2); overflow-wrap: anywhere; }
+
+.cv-search { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cv-search-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.cv-search-input { flex: 1 1 140px; width: auto; min-width: 0; }
+.cv-search-go { flex: none; margin-left: 0; }
+.cv-search-kind { flex: 0 1 auto; min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); }
+.cv-search-note { margin: 0; color: var(--text-muted); font-size: var(--fs-1); }
+.cv-search-page, .cv-start { display: flex; flex-direction: column; gap: 12px; max-width: 920px; }
+.cv-search-page > .cv-search, .cv-start > .cv-search { max-width: 560px; }
+.cv-results { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cv-results-status { margin: 0; }
+.cv-result-client { min-width: 0; }
+.cv-result-head { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: var(--fs-3); font-weight: 600; }
+.cv-result-kind .cv-group-head { padding-left: 0; }
+.cv-hit { width: 100%; padding-left: 4px; }
+.cv-hit .cv-thing-detail { flex: 0 1 auto; }
+.cv-hit-where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--fs-1); }
+.cv-hit-where mark { background: var(--wash-accent); color: var(--text); border-radius: 3px; padding: 0 1px; }
+.panel-shell.phone.code-panel .cv-thing-btn, .panel-shell.phone.code-panel .cv-hit, .panel-shell.phone.code-panel .cv-kind-head { min-height: 44px; font-size: var(--fs-4); }
+.panel-shell.phone.code-panel .cv-thing-caret { width: 44px; height: 44px; }
+.panel-shell.phone.code-panel .cv-thing-caret-space { width: 8px; }
+.panel-shell.phone.code-panel .cv-hit { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
+.panel-shell.phone.code-panel .cv-hit-where { flex-basis: 100%; text-align: left; }
+.panel-shell.phone.code-panel .cv-search-page, .panel-shell.phone.code-panel .cv-start { padding-top: 12px; }
+/* Review 1: By kind's rows carry a name, what it is and the repo, so its side is wider than the tree's; on the phone a
+   result's path wraps so the file's name shows, and the file's folder isn't said twice. */
+.panel-shell.code-panel.kinds:not(.phone) { grid-template-columns: clamp(320px, 30vw, 480px) minmax(0, 1fr); }
+.panel-shell.phone.code-panel .cv-hit-where { white-space: normal; overflow-wrap: anywhere; }
+.panel-shell.phone.code-panel .cv-lives > span { display: none; }

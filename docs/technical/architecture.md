@@ -81,7 +81,7 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Inbox | `ui/inbox/` | `conversations.suggestions`, `inbox.list`, `capture.load` | `plan/slim-inbox.ts`, `plan/inbox-items.ts` |
 | Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
 | New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx` | `new.*`, `devops.preview` | `actions/new-item-actions.ts` |
-| Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file` | `plan/code.ts` |
+| Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file`, `code.kinds`, `code.search` | `plan/code.ts`, `plan/code-kinds.ts` |
 | Client calls | `ui/meetings/` | `meeting.mine`, `meeting.review` | `plan/meetings.ts`, `plan/meeting-views.ts` |
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
 | Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |

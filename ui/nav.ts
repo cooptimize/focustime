@@ -88,7 +88,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null; /** RB-2: By kind, or Search names (no client: every client). Absent: Files. */ view?: "kinds" | "search" } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -260,32 +260,44 @@ export const arriveAt = (hash: string) => {
 /** The query part of an address ("" when there is none). */
 export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
 
-/** RB-1: Code's address. The repo is its id (never its name); the path is one encoded part. */
-export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null }): string {
+/**
+ * RB-1: Code's address. The repo is its id (never its name); the path is one encoded part. RB-2: a client's By kind is
+ * #/code/<client>/kinds (with a file open, #/code/<client>/kinds/<repo id>/<path>); Search names is
+ * #/code/<client>/search inside a client and #/code/~search across clients. The words searched are never in it.
+ */
+export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" }): string {
+  if (o.view === "search") return o.clientKey ? `#/code/${encodeURIComponent(o.clientKey)}/search` : "#/code/~search";
   if (!o.clientKey) return "#/code";
-  const c = `#/code/${encodeURIComponent(o.clientKey)}`;
+  const c = `#/code/${encodeURIComponent(o.clientKey)}${o.view === "kinds" ? "/kinds" : ""}`;
   if (!o.repoId) return c;
   return o.path && o.path !== "/" ? `${c}/${o.repoId}/${encodeURIComponent(o.path)}` : `${c}/${o.repoId}`;
 }
 const REPO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>, over Today. */
+/** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>, over Today; RB-2's views. */
 function parseCode(hash: string): Loc | null {
   if (hash.length > 1400) return null;
-  const parts = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
-  if (parts.length > 3) return null;
-  const at = (clientKey: string | null, repoId: string | null, path: string | null): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path } });
-  if (!parts.length) return at(null, null, null);
+  const all = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
+  if (all.length > 4) return null;
+  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: "kinds" | "search"): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path, ...(view ? { view } : {}) } });
+  if (!all.length) return at(null, null, null);
+  // "~search" is never a client's key (CLIENT_KEY has no "~"): the search across clients.
+  if (all[0] === "~search") return all.length === 1 ? at(null, null, null, "search") : null;
   try {
-    const clientKey = decodeURIComponent(parts[0]!);
+    const clientKey = decodeURIComponent(all[0]!);
     if (!CLIENT_KEY.test(clientKey)) return null;
-    if (parts.length === 1) return at(clientKey, null, null);
+    if (all[1] === "search") return all.length === 2 ? at(clientKey, null, null, "search") : null;
+    // A repo's id is never "kinds": the client's things by kind, with or without a file open.
+    const view = all[1] === "kinds" ? ("kinds" as const) : undefined;
+    const parts = view ? [all[0]!, ...all.slice(2)] : all;
+    if (parts.length > 3) return null;
+    if (parts.length === 1) return at(clientKey, null, null, view);
     if (!REPO_ID.test(parts[1]!)) return null;
     const repoId = parts[1]!.toLowerCase();
-    if (parts.length === 2) return at(clientKey, repoId, null);
+    if (parts.length === 2) return at(clientKey, repoId, null, view);
     const path = decodeURIComponent(parts[2]!);
     // eslint-disable-next-line no-control-regex
     if (!path.startsWith("/") || path.length > 1024 || /[\u0000-\u001f\\]/.test(path) || path.split("/").some((s, i) => i > 0 && (s === "" || s === "." || s === ".."))) return null;
-    return at(clientKey, repoId, path);
+    return at(clientKey, repoId, path, view);
   } catch {
     return null;
   }

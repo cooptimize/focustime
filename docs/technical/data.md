@@ -95,7 +95,7 @@ A hidden working page for the people an admin turned it on for ([Integrations](i
 | `org_settings`, `admin_audit`, `admin_seen` | App | Team settings (Rules and Defaults, including each client's data platform and deployment items) and every admin change |
 | `people_directory`, `directory_accounts`, `people_clients`, `client_leads`, `people_overrides`, `client_logins`, `people_invites` | App | People, their levels and clients, client leads, client DevOps logins an admin confirmed, invites |
 | `sends`, `week_commitments`, `client_priorities`, `look_asks` | App | Send to…, each person's week features for the team view and the status report (feature, type, title, link; no hours, to-dos or notes), client priorities, Ask to look |
-| `code_views` | App | Who opened which client's repo or file in Code, or used Find, and when (actor id and name, client, repo id and name, path, event); never content. Read only by admins |
+| `code_views` | App | Who opened which client's repo or file in Code, or used Find, and when (actor id and name, client, repo id and name, path, event); never content. Listed by kind and Searched names are one row per client, with the repo and path empty and never the words typed. Read only by admins |
 | `work_templates`, `work_template_uses` | App | The team's work templates (one document, its version, who saved it last) and one row per item created with a request type (its tag, when, whether complete): counts only. No screen reads or writes them |
 | `scheduler_state`, `job_claims`, `schema_migrations`, `schema_version`, `schema_migration_names` | App | The scheduler's next due time, job claims, migrations |
 
@@ -157,7 +157,7 @@ Settings › Your data › Export my data gives a person every user table's rows
 - **Status report text.** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
 - **Calendar link details with Busy only.** Only start, end and busy, free or tentative; Show titles keeps titles only. A calendar link's own address is never shown again, logged or exported; only its host is shown.
 - **DevOps item text on the patterns page.** Descriptions and acceptance criteria are read to measure them and, for a classification, to send; the text is dropped once the request is done.
-- **Client code.** Repo lists, folder lists and file text are read from DevOps on each click and held in server memory at most 5 minutes; never written to the database, disk, logs, Export or the browser's storage. Only the view log's row is kept.
+- **Client code.** Repo lists, folder lists, file names and file text are read from DevOps on each click and held in server memory at most 5 minutes; never written to the database, disk, logs, Export or the browser's storage. Only the view log's row is kept.
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
 ## Who sees what

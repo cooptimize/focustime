@@ -23,6 +23,13 @@ await forEachDriver("code views", ({ open }) => {
     expect(await store.counts(NOW.subtract({ hours: 24 * 30 }).toString())).toEqual([{ clientKey: "Contoso", views: 1 }, { clientKey: "Fabrikam", views: 1 }]);
     await expect(store.add({ actorId: "x", actorName: "x", clientKey: "x", repoId: REPO, repoName: "x", path: "/", event: "deleted" as never })).rejects.toThrow();
   });
+  it("RB-2: Listed by kind and Searched names are rows with a client and no repo or path", async () => {
+    const db = (await open()).conn;
+    const store = codeViewsStoreOn(db, () => NOW);
+    await store.add({ actorId: "a", actorName: "Ana", clientKey: "Contoso", repoId: "", repoName: "", path: "", event: "kinds_listed" });
+    await store.add({ actorId: "a", actorName: "Ana", clientKey: "Fabrikam", repoId: "", repoName: "", path: "", event: "names_searched" });
+    expect((await store.list()).map((v) => [v.clientKey, v.event, v.repoId, v.repoName, v.path])).toEqual([["Fabrikam", "names_searched", "", "", ""], ["Contoso", "kinds_listed", "", "", ""]]);
+  });
   it("the purge removes rows past 12 months and keeps the rest", async () => {
     const db = (await open()).conn;
     let t = NOW.subtract({ hours: 24 * 366 });
