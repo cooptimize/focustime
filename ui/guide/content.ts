@@ -373,7 +373,9 @@ const Q_CALLS: QA[] = [
 
 const Q_CODE: QA[] = [
   { q: "Can I read another client's code?", a: "Yes, read only. {icon:more} More › Code (or Code in {key:Ctrl K}): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file. The client's name is at the top the whole time. Copy takes the whole file; Copy link opens the same file for a teammate. FocusTime never changes a repo, keeps none of the code and sends none of it to AI. A FocusTime admin can keep one client's code to its team; that client shows greyed for everyone else." },
-  { q: "Who sees that I opened a file?", a: "FocusTime admins, in Admin › Audit › Code views: who opened which client's repo or file, or used Find, and when. Never the code. Rows are kept 12 months." },
+  { q: "Who sees that I opened a file?", a: "FocusTime admins, in Admin › Audit › Code views: who opened which client's repo or file, or used Find, and when. Listing a client by kind or searching its names is logged by client, never the words you typed. Never the code. Rows are kept 12 months." },
+  { q: "How do I find a report or a pipeline when I don't know where it is?", a: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks, SQL and the rest across all its repos; a model opens to its tables. To look across clients, type part of a name in Search names and press Search: results come by client. Both go by file and folder names only." },
+  { q: "Why didn't Search names find a measure or a column?", a: "It searches names only: the names of things, files and folders. Measures, columns and report pages live inside files and aren't searched. Open the model's table from By kind to read them." },
   { q: "It says FocusTime can't read a client's code yet.", a: "The company DevOps token for that client doesn't have Code (read) yet. It's added by hand in DevOps; ask your FocusTime admin. Until then that client's work items still show as before." },
 ];
 
@@ -564,11 +566,13 @@ export const AREAS: Record<"day" | "week" | "backlog" | "status" | "inbox" | "wr
     faqs: qs(Q_CALLS),
   },
   code: {
-    lead: "Read any client's code, read only, to borrow what already works. One client at a time.",
+    lead: "Read any client's code, read only, to borrow what already works. One client at a time, apart from the names a search finds.",
     does: [
       { title: "Find a file", text: "{icon:more} More › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file.", go: { href: "#/code", label: "Open Code" } },
+      { title: "See what a client has", text: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks and SQL across all its repos. Choose one to open its file." },
+      { title: "Search names", text: "Type part of a name in Search names, choose This client or All clients, then Search. It looks at names only, never inside files." },
       { title: "Copy what you need", text: "Copy takes the whole file, Copy path its path, Copy DevOps link its page in DevOps. Select part of it to copy just that." },
-      { title: "It's logged", text: "Opening a file is logged for FocusTime admins: who, which file and when. Nothing of the code is kept." },
+      { title: "It's logged", text: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged by client. Nothing of the code is kept." },
     ],
     faqs: qs(Q_CODE),
   },

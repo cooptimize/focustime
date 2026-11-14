@@ -8,6 +8,11 @@
 //      only, which is the client report's check (actions/team-actions.ts reportTeam: an Account Worker or a lead).
 //   4. a repo id is one of that client's own repos (its list, read with the client's token); a path is one cleanPath()
 //      allows. The organization and project come only from Dataverse.
+// RB-2 adds two reads that only sort and search names: code.kinds (By kind) and code.search (Search names) read each
+// of one client's repos' file names (the same read Find uses, nothing else) and return its things by kind
+// (plan/code-kinds.ts). No file is opened for either. Each request names one client, and the browser matches the words
+// itself, so the words typed never reach the server. One row per client ("Listed by kind", "Searched names") is
+// written before any name is returned; no row, no names.
 // Repo opened (its top folder), File opened and Find used are written to the view log (code_views) with who, when, the
 // client, the repo and the path, never content; a file's row is written before its text is returned, and if it can't
 // be written the text isn't returned. This is the one deliberate exception to "one client's data never shows outside
@@ -18,14 +23,18 @@ import type { ActionResponse } from "./types.ts";
 import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts";
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
-import { cleanPath, FIND_MAX, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { cleanPath, FIND_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { thingsOf, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
-export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file"] as const;
+export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search"] as const;
 export type CodeAction = (typeof CODE_ACTIONS)[number];
 
 /** Why someone isn't let in at all (step 1). */
 export type CodeRefusal = "guest" | "domain" | "automation" | "signed_out" | "unknown";
+
+/** RB-2: one repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
+export type CodeRepoThings = RepoThings;
 
 export type CodeClientRef = { clientKey: string; name: string; color: string | null };
 
@@ -61,8 +70,9 @@ export const CODE_TEXT = {
   badPath: "That isn't a path in the repo.",
   error: (name: string) => `${name}'s code couldn't be read. Try again in a moment.`,
   notLogged: "The file wasn't opened because FocusTime couldn't record that you opened it. Try again in a moment.",
+  namesNotLogged: "The names weren't read because FocusTime couldn't record that you read them. Try again in a moment.",
   notHere: "Code isn't available here.",
-  logLine: "Opening a file is logged for FocusTime admins: who, which file and when.",
+  logLine: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words.",
 } as const;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -103,7 +113,7 @@ export function devopsLink(repo: GitRepo, path: string): string | null {
 export async function codeAction(ctx: CodeContext, action: CodeAction, input: unknown): Promise<ActionResponse> {
   const i = obj(input ?? {});
   if (!i) return bad("input must be an object");
-  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"] };
+  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey"], "code.search": ["clientKey"] };
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
 
@@ -153,6 +163,44 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
   }
   if (action === "code.repos") return { ok: true, data: { client, repos: repos.map(repoView) } };
+
+  // RB-2: By kind and Search names. Each repo's file names (the read Find uses), a few repos at a time, sorted into
+  // things by name alone. A repo that can't be read says so in its own line and the rest still list.
+  if (action === "code.kinds" || action === "code.search") {
+    const git = ctx.git;
+    const out: CodeRepoThings[] = new Array(repos.length);
+    let read = false;
+    let next = 0;
+    const worker = async () => {
+      for (let n = next++; n < repos.length; n = next++) {
+        const r = repos[n]!;
+        const v = repoView(r);
+        if (v.state !== "ok") {
+          out[n] = { repo: v, things: [], cut: false, problem: null };
+          continue;
+        }
+        try {
+          const f = await git.files(client.clientKey, r);
+          read = true;
+          out[n] = { repo: v, things: thingsOf(f.paths), cut: f.cut, problem: null };
+        } catch (e) {
+          const f = failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+          out[n] = { repo: v, things: [], cut: false, problem: f.ok ? null : f.error };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(NAMES_REPOS_AT_ONCE, repos.length) }, worker));
+    // The row first: one per client whose names were read, with no repo, no path and none of the words typed.
+    if (read) {
+      try {
+        if (!ctx.views) throw new Error("no view log");
+        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: action === "code.kinds" ? "kinds_listed" : "names_searched" });
+      } catch {
+        return bad(CODE_TEXT.namesNotLogged, 503, "not_logged");
+      }
+    }
+    return { ok: true, data: { client, repos: out, max: FIND_MAX } };
+  }
 
   if (typeof i.repoId !== "string" || !REPO_ID.test(i.repoId)) return bad(CODE_TEXT.noRepo, 404, "no_repo");
   const repo = repos.find((r) => r.id === (i.repoId as string).toLowerCase());

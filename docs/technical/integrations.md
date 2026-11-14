@@ -113,9 +113,11 @@ Work items are never deleted; undoing a create sets the item to its type's remov
 
 - `repositories`: the project's repos (id, name, default branch, disabled or not, web link).
 - `repositories/{id}/items?scopePath=<folder>&recursionLevel=OneLevel&versionDescriptor…`: one folder level on the default branch.
-- `repositories/{id}/items?scopePath=/&recursionLevel=Full&versionDescriptor…`: every file name, for Find (up to 20,000).
+- `repositories/{id}/items?scopePath=/&recursionLevel=Full&versionDescriptor…`: every file name, for Find, By kind and Search names (up to 20,000).
 - `repositories/{id}/items?path=<file>&includeContentMetadata=true&versionDescriptor…`: a file's commit and whether DevOps marks it binary or an image.
 - `repositories/{id}/items?path=<file>&versionDescriptor.version=<commit>&versionDescriptor.versionType=commit` with `Accept: application/octet-stream`: the file's bytes, at most 1 MB (a larger `Content-Length` isn't read at all). Git LFS pointers show as they are.
+
+By kind and Search names make no other request: for one client they read the repo list and each repo's file names, four repos at a time, and sort the names into kinds in `plan/code-kinds.ts` without opening a file. A search across clients asks for three clients at a time, each its own request; the shared limiter adds no wait of its own (it only holds a client DevOps told to wait), so 5 clients with 4 repos each are 25 requests in two rounds.
 
 The organization and project come from the client's Dataverse account, never from the browser; a repo id must be in that client's own list; a path travels only as a query value and can't leave the repo (`cleanPath`). A token without Code (read) shows "FocusTime can't read <client>'s code yet. The company DevOps token for <client> needs Code (read)."; 429 says DevOps is busy; 404 says not found. The log lines carry the read's name, its status and how long it took, never a path, a repo name or a client.
 

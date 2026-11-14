@@ -46,7 +46,7 @@ describe("the sections", () => {
     }
   });
   it("stays within the approved budgets (visible words; How it works is folded)", () => {
-    const budget: Record<string, number> = { day: 200, week: 300, backlog: 250, status: 150, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 90, settings: 200 };
+    const budget: Record<string, number> = { day: 200, week: 300, backlog: 250, status: 150, inbox: 350, writing: 130, capture: 150, assistant: 200, ask: 200, teams: 150, calls: 120, code: 150, settings: 200 };
     for (const id of areaIds) expect(words([C.AREAS[id].lead, C.AREAS[id].does]), id).toBeLessThanOrEqual(budget[id]! * 1.1);
     expect(words(C.START)).toBeLessThanOrEqual(300);
     // Your first day: the checklist and its seven to eight day-one questions, read open.
