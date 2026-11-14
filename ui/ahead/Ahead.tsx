@@ -108,7 +108,8 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const [callouts, setCallouts] = usePref("view.callouts", isBool, true);
   useEffect(() => {
     const q = linked.current;
-    if (q?.level) setFold(atLevel(q.level));
+    // A link's level opens closed; the same level as mine (a reload of my own address) keeps the rows I opened.
+    if (q?.level) setFold((old) => (old.level === q.level ? old : atLevel(q.level!)));
     if (q?.callouts !== undefined) setCallouts(q.callouts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

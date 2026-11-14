@@ -341,7 +341,7 @@ function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPr
   );
 }
 const confirmLabel = (p: DevOpsPreview) =>
-  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
+  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" || p.op === "fields" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
 
 /** The small form before a preview: a state and comment, or a date. */
 function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void; onPreview: (c: DevOpsChange[]) => void }) {

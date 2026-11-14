@@ -248,6 +248,15 @@ let aheadQuery = "";
 /** The Backlog tab's addresses (#/backlog…, and #/ahead… before BL-1): the only ones that carry a query. */
 export const AHEAD_ADDRESS = /^#\/?(ahead|backlog)(\/|$)/;
 export const setAheadQuery = (q: string) => void (aheadQuery = q);
+/**
+ * BL-2: an address arriving from outside (opening FocusTime on a link, Back or Forward) keeps its Backlog query until
+ * Backlog opens and reads it. App writes the address back before Backlog has mounted, and without this a link's
+ * filters and level (and an older link's fl=) were dropped on the way.
+ */
+export const arriveAt = (hash: string) => {
+  const qi = hash.indexOf("?");
+  if (AHEAD_ADDRESS.test(qi < 0 ? hash : hash.slice(0, qi))) aheadQuery = queryOf(hash);
+};
 /** The query part of an address ("" when there is none). */
 export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
 

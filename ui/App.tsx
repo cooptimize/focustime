@@ -53,7 +53,7 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, arriveAt, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -247,7 +247,7 @@ export function App() {
    */
   // A5: #/capture (the hosted app's Super+Alt+N) opens Quick capture over the last place, then leaves the address.
   const captureAsked = useRef(location.hash === CAPTURE_HASH);
-  const [loc, setLocState] = useState<Loc>(() => parseHash(location.hash) ?? (location.hash && !captureAsked.current && askTurnOf(location.hash) === null ? HOME : storedLoc()) ?? HOME);
+  const [loc, setLocState] = useState<Loc>(() => (arriveAt(location.hash), parseHash(location.hash)) ?? (location.hash && !captureAsked.current && askTurnOf(location.hash) === null ? HOME : storedLoc()) ?? HOME);
   const locRef = useRef(loc);
   locRef.current = loc;
   const go = useCallback((next: Loc | ((l: Loc) => Loc)) => setLocState((l) => {
@@ -281,6 +281,7 @@ export function App() {
         setAssistantAt({ text: "", turn });
         return;
       }
+      arriveAt(location.hash);
       const next = parseHash(location.hash) ?? HOME;
       // ST-1: a Settings address carries no tab: a link into Settings (Status, Feedback, the Guide's Do it now) opens it
       // over the tab I'm on, so closing returns there.
