@@ -994,6 +994,15 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Demo.** `sources/demo/code.ts` (`demoCodeGit`), wired in `server/demo.ts`; Fabrikam in `sources/demo/directory.ts`.
 - **Tests.** `sources/devops/git.test.ts`, `plan/code.test.ts`, `actions/code-git.test.ts`, `actions/code-actions.test.ts`, `store/code-views-store.test.ts`, the RB-1 block in `actions/admin-actions.test.ts`, `ui/code/viewer.test.ts`, e2e `e2e/rb1-code.test.ts` (screenshots in `docs/ux/rb1/` with `FOCUSTIME_SHOTS`).
 
+## RB-2: Code by kind, and search names across clients (Nov 14)
+
+- **Pure.** `plan/code-kinds.ts`: the rules as tables (`FABRIC_TYPES`, `ITEM_MARKERS`, `FACTORY_FOLDERS`, `SQL_OBJECT_FOLDERS`, `NOTEBOOK_EXT`), `thingsOf` (a repo's file paths to its things: kind, name, detail, folder, the file to open, a model's tables), `groupThings` and `KIND_GROUPS` (the nine groups in order), `searchThings`, `searchWords` and `markMatches` (the search over names). `plan/code-languages.ts` is the language table, moved from `ui/code/languages.ts` (which re-exports it) so the rules can name a file's language. `plan/code.ts`: the two new events and the limits (4 repos, 3 clients, 200 results).
+- **Actions.** `actions/code-actions.ts`: `code.kinds` and `code.search` (a client key and nothing else; the same checks as every Code read; each repo's file names through `CodeGit.files`, four repos at a time; one `code_views` row per client before any name is returned). No new read in `sources/devops/git.ts`.
+- **UI.** `ui/code/Names.tsx` (`ByKind`, `SearchBox`, `SearchResults`), wired in `ui/code/Code.tsx` (Files | By kind, the search and its run, three clients at a time). Addresses in `ui/nav.ts` (`#/code/<client>/kinds`, `#/code/<client>/kinds/<repo>/<path>`, `#/code/<client>/search`, `#/code/~search`). "Code: search names" in `ui/menu.ts`. Nine icons for kinds in `ui/icons.tsx`.
+- **Admin.** Code views shows "Listed by kind" and "Searched names" with "All its repos" (`ui/settings/Admin.tsx`).
+- **Demo.** `sources/demo/code.ts`: a second repo for Northwind (a report, a model and a view), a dataflow, a lakehouse, a warehouse, an Activator, a Jupyter notebook, a third table, and a data flow, a trigger, a second pipeline and `publish_config.json` in the data factory repo.
+- **Tests.** `plan/code-kinds.test.ts`, `actions/code-names.test.ts` (names only, access, the log, nothing kept, one failing, the cost of a search), `ui/code/address.test.ts`, the RB-2 test in `store/code-views-store.test.ts`, e2e `e2e/rb2-code.test.ts` (screenshots in `docs/ux/rb2/` with `FOCUSTIME_SHOTS`).
+
 ## ED-1: edit an item on its story card (Nov 12)
 
 - **Light formatting.** `plan/light-format.ts` (pure): HTML or Markdown to the light marks and back (`editingOf`, `lightToHtml`, `storedValue`, `lookHtml`, `sameContent`, `canonOf`, `applyMark`), with why a field can't be edited (`NOT_EDITABLE_TEXT`) and the lossy line (`LOSSY_TEXT`). `plan/sanitize.ts` allows h1 to h3.
