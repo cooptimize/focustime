@@ -104,12 +104,16 @@ describe("sqlTree (RB-5 A2)", () => {
     }
   });
   it("two objects with one name in different schemas sit in their own schemas, and side by side under their type", () => {
-    const seams = (g: SqlGrouping) => sqlTree(quarry, g).folders.flatMap((f) => f.folders.flatMap((l) => l.objects.filter((o) => o.name === "Seam").map((o) => `${f.label} › ${l.label}`)));
+    const seams = (g: SqlGrouping) => sqlTree(quarry, g).folders.flatMap((f) => f.folders.flatMap((l) => l.objects.filter((o) => o.name === "Seam").map(() => `${f.label} › ${l.label}`)));
     expect(seams("schema")).toEqual(["haul › Tables", "ore › Tables"]);
     expect(seams("type")).toEqual(["Tables › haul", "Tables › ore"]);
   });
   it("a schema spelled with other capitals is one folder", () => {
     expect(sqlTree(quarry, "schema").folders.filter((f) => f.label.toLowerCase() === "assay").map((f) => [f.label, f.count])).toEqual([["Assay", 2]]);
+  });
+  it("review 2: a schema's folder is spelled as a folder spells it, not as its definition file is named", () => {
+    const things = sql(["/w/Pit.Warehouse/.platform", "/w/Pit.Warehouse/Shaft/Tables/A.sql", "/w/Pit.Warehouse/shaft/Views/B.sql", "/w/Pit.Warehouse/Security/SHAFT.sql"]);
+    expect(sqlTree(things, "schema").folders.map((f) => [f.label, f.count])).toEqual([["Shaft", 3]]);
   });
   it("a SQL thing with no type is a script; nothing in gives nothing out", () => {
     expect(shape([{ kind: "sql", name: "q", detail: "Synapse SQL script", folder: "/s/sqlscript", file: "/s/sqlscript/q.json" }], "schema")).toEqual([`${NO_SCHEMA} 1: Scripts 1 [q]`]);

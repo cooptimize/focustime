@@ -503,9 +503,15 @@ export function sqlTree<T extends SqlObject>(objects: readonly T[], grouping: Sq
   const cmp = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : a > b ? 1 : 0);
   const schemaKey = (o: T) => (o.schema ? `s:${o.schema.toLowerCase()}` : "s:");
   const typeKey = (o: T) => `t:${o.sqlType ?? "script"}`;
-  // A schema spelled two ways ("Dim", "dim") is one folder, under the spelling that sorts first.
+  // A schema spelled two ways ("Dim", "dim") is one folder, under the spelling that sorts first: a folder's
+  // spelling before the name of a schema's own definition file.
   const spelled = new Map<string, string>();
-  for (const o of objects) if (o.schema && (!spelled.has(schemaKey(o)) || cmp(o.schema, spelled.get(schemaKey(o))!) < 0)) spelled.set(schemaKey(o), o.schema);
+  for (const own of [false, true])
+    for (const o of objects) {
+      if (!o.schema || (o.sqlType === "schema") !== own) continue;
+      const k = schemaKey(o);
+      if (own ? !spelled.has(k) : !spelled.has(k) || cmp(o.schema, spelled.get(k)!) < 0) spelled.set(k, o.schema);
+    }
   const label = (key: string) => (key === "s:" ? NO_SCHEMA : key.startsWith("s:") ? spelled.get(key)! : sqlTypeLabel(key.slice(2) as SqlType));
   const order = (keys: string[]) =>
     keys.sort((a, b) => (a.startsWith("t:") ? SQL_TYPES.indexOf(a.slice(2) as SqlType) - SQL_TYPES.indexOf(b.slice(2) as SqlType) : a === "s:" ? 1 : b === "s:" ? -1 : cmp(label(a), label(b))));

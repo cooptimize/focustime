@@ -2,7 +2,7 @@
 // Group by switch. The folders come from plan/code-kinds.ts (sqlTree), which reads names and folders only: no file is
 // opened to group anything and switching the grouping asks the server for nothing but to remember the choice. A tree
 // for the keyboard and a screen reader: Up and Down move, Right opens, Left closes, Enter opens the file.
-import { useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon } from "../icons.tsx";
 import { sqlTree, type SqlDatabase, type SqlGrouping, type SqlObject } from "../../plan/code-kinds.ts";
 
@@ -39,6 +39,36 @@ function nodesOf<T extends SqlRow>(prefix: string, objects: readonly T[], groupi
   }));
 }
 
+const rootsOf = <T extends SqlRow>(id: string, objects: readonly T[], databases: readonly SqlDatabase<T>[] | null | undefined, grouping: SqlGrouping): Node<T>[] => {
+  const base = `${id}|${grouping}`;
+  return databases ? databases.map((d) => ({ key: `${base}|${d.key}`, label: d.label, count: d.objects.length, objects: [], kids: nodesOf(`${base}|${d.key}`, d.objects, grouping) })) : nodesOf(base, objects, grouping);
+};
+
+/**
+ * The folders that lead to one file in a tree, outermost first (none when the tree doesn't hold it): what a change
+ * of grouping opens, so the file on the right is still in view. The list calls it for every tree, shown or not.
+ */
+export function sqlPathTo<T extends SqlRow>(id: string, objects: readonly T[], databases: readonly SqlDatabase<T>[] | null | undefined, grouping: SqlGrouping, selected: { repoId: string | null; path: string | null }): string[] {
+  if (!selected.path) return [];
+  const find = (nodes: Node<T>[], trail: string[]): string[] | null => {
+    for (const n of nodes) {
+      const here = [...trail, n.key];
+      if (n.objects.some((o) => o.repoId === selected.repoId && o.file === selected.path)) return here;
+      const below = find(n.kids, here);
+      if (below) return below;
+    }
+    return null;
+  };
+  return find(rootsOf(id, objects, databases, grouping), []) ?? [];
+}
+/** A memo with those folders open, and the last one showing all it holds. */
+export function sqlOpened(m: SqlTreeMemo, path: readonly string[]): SqlTreeMemo {
+  if (!path.length) return m;
+  const open = new Map(m.open);
+  for (const k of path) open.set(k, true);
+  return { open, whole: new Set([...m.whole, path[path.length - 1]!]) };
+}
+
 /** The Group by switch and the tree under it. `databases` puts each database first; without it the grouping starts at the top. */
 export function SqlTree<T extends SqlRow>({ id, label, objects, databases, grouping, onGrouping, filtering, selected, onOpen, memo, onMemo, attr }: {
   /** This list's own name for its keys (a client's SQL group, or one item). */
@@ -58,11 +88,8 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
   /** The attribute an object's row carries, as By kind's rows do. */
   attr: "data-code-thing" | "data-code-table";
 }) {
-  const base = `${id}|${grouping}`;
-  const roots = useMemo(
-    (): Node<T>[] => (databases ? databases.map((d) => ({ key: `${base}|${d.key}`, label: d.label, count: d.objects.length, objects: [], kids: nodesOf(`${base}|${d.key}`, d.objects, grouping) })) : nodesOf(base, objects, grouping)),
-    [base, databases, objects, grouping],
-  );
+  const byId = useId();
+  const roots = useMemo(() => rootsOf(id, objects, databases, grouping), [id, databases, objects, grouping]);
   // A folder starts closed, except where it is the only one at its level. While filtering every folder is open.
   const isOpen = (n: Node<T>, alone: boolean) => filtering || (memo.open.get(n.key) ?? alone);
   const lines = useMemo(() => {
@@ -96,47 +123,36 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
     });
   };
 
-  // Changing the grouping keeps the file on the right and opens the new tree to it.
-  const was = useRef(grouping);
-  useEffect(() => {
-    if (was.current === grouping) return;
-    was.current = grouping;
-    const path: string[] = [];
-    const find = (nodes: Node<T>[], trail: string[]): boolean =>
-      nodes.some((n) => {
-        const here = [...trail, n.key];
-        if (n.objects.some((o) => o.repoId === selected.repoId && o.file === selected.path) || find(n.kids, here)) {
-          if (!path.length) path.push(...here);
-          return true;
-        }
-        return false;
-      });
-    if (selected.path && find(roots, []))
-      onMemo((m) => {
-        const next = new Map(m.open);
-        for (const k of path) next.set(k, true);
-        // The folder may hold more than it shows: show all of it, so the open object is on screen.
-        return { open: next, whole: new Set([...m.whole, path[path.length - 1]!]) };
-      });
-  }, [grouping]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // One row takes the Tab key; the arrows move from there.
+  // One row takes the Tab key; the arrows move from there. The row is kept in state, so the tab stop is always React's.
   const ul = useRef<HTMLUListElement>(null);
-  const at = useRef<string | null>(null);
-  const focusKey = lines.some((l) => l.key === at.current) ? at.current : (lines.find((l) => l.kind === "object" && l.object.repoId === selected.repoId && l.object.file === selected.path)?.key ?? lines[0]?.key ?? null);
+  const [at, setAt] = useState<string | null>(null);
+  const focusKey = at !== null && lines.some((l) => l.key === at) ? at : (lines.find((l) => l.kind === "object" && l.object.repoId === selected.repoId && l.object.file === selected.path)?.key ?? lines[0]?.key ?? null);
+  /** A row to put the keyboard on once it is drawn (the first object Show all brought in). */
+  const pending = useRef<string | null>(null);
   const focusLine = (key: string) => {
-    at.current = key;
-    const el = [...(ul.current?.querySelectorAll<HTMLElement>("[data-sql-key]") ?? [])].find((e) => e.dataset.sqlKey === key);
-    if (!el) return;
-    for (const other of ul.current!.querySelectorAll<HTMLElement>('[tabindex="0"]')) other.tabIndex = -1;
-    el.tabIndex = 0;
-    el.focus();
+    setAt(key);
+    [...(ul.current?.querySelectorAll<HTMLElement>("[data-sql-key]") ?? [])].find((e) => e.dataset.sqlKey === key)?.focus();
   };
-  const act = (l: Line<T>) => {
-    at.current = l.key;
-    if (l.kind === "folder") setOpen([l.key], !l.open);
-    else if (l.kind === "object") onOpen(l.object.repoId, l.object.file);
-    else onMemo((m) => ({ ...m, whole: new Set([...m.whole, l.folder]) }));
+  useEffect(() => {
+    const key = pending.current;
+    if (!key || !lines.some((l) => l.key === key)) return;
+    pending.current = null;
+    focusLine(key);
+  }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = (l: Line<T>, keyboard = false) => {
+    setAt(l.key);
+    if (l.kind === "folder") {
+      // While the filter has words every folder with a match is open; nothing is stored, so clearing it puts the tree back.
+      if (!filtering) setOpen([l.key], !l.open);
+    } else if (l.kind === "object") onOpen(l.object.repoId, l.object.file);
+    else {
+      // Show all: the row goes away, and the keyboard lands on the first object it brought in.
+      const node = l.folder;
+      const find = (nodes: Node<T>[]): Node<T> | null => nodes.reduce<Node<T> | null>((hit, n) => hit ?? (n.key === node ? n : find(n.kids)), null);
+      const next = find(roots)?.objects[SQL_FOLDER_SHOWN];
+      if (keyboard && next) pending.current = `${node}|${next.repoId}|${next.file}`;
+      onMemo((m) => ({ ...m, whole: new Set([...m.whole, l.folder]) }));
+    }
   };
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
     const i = lines.findIndex((l) => l.key === (e.target as HTMLElement).dataset?.sqlKey);
@@ -152,12 +168,12 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
     else if (e.key === "End") to(lines.length - 1);
     else if (e.key === "ArrowRight") {
       if (l.kind !== "folder") return;
-      if (!l.open) act(l);
+      if (!l.open) act(l, true);
       else to(i + 1);
     } else if (e.key === "ArrowLeft") {
-      if (l.kind === "folder" && l.open && !filtering) act(l);
+      if (l.kind === "folder" && l.open && !filtering) act(l, true);
       else parent();
-    } else if (e.key === "Enter" || e.key === " ") act(l);
+    } else if (e.key === "Enter" || e.key === " ") act(l, true);
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -166,8 +182,8 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
   return (
     <div className="cv-sql" data-sql-list={id}>
       <div className="cv-sql-bar">
-        <span className="cv-sql-by" id={`${id}-by`}>{SQL_TEXT.groupBy}</span>
-        <span className="day-switch cv-sql-switch" role="group" aria-labelledby={`${id}-by`} data-sql-group={grouping}>
+        <span className="cv-sql-by" id={byId}>{SQL_TEXT.groupBy}</span>
+        <span className="day-switch cv-sql-switch" role="group" aria-labelledby={byId} data-sql-group={grouping}>
           <button type="button" aria-pressed={grouping === "schema"} data-sql-group-btn="schema" title="Schemas, then the types in each" onClick={() => grouping !== "schema" && onGrouping("schema")}>
             {SQL_TEXT.schema}
           </button>
@@ -186,7 +202,7 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
       </div>
       <ul className="cv-sql-tree" role="tree" aria-label={label} ref={ul} onKeyDown={onKey}>
         {lines.map((l) => {
-          const common = { key: l.key, role: "treeitem" as const, "aria-level": l.level, "data-sql-key": l.key, tabIndex: l.key === focusKey ? 0 : -1, style: { "--lvl": l.level } as React.CSSProperties, onClick: () => act(l), onFocus: () => (at.current = l.key) };
+          const common = { key: l.key, role: "treeitem" as const, "aria-level": l.level, "data-sql-key": l.key, tabIndex: l.key === focusKey ? 0 : -1, style: { "--lvl": l.level } as React.CSSProperties, onClick: () => act(l), onFocus: () => setAt(l.key) };
           if (l.kind === "folder")
             return (
               <li {...common} className="cv-sql-row folder" aria-expanded={l.open} aria-label={SQL_TEXT.folder(l.node.label, l.node.count)} data-sql-folder={l.node.label} data-sql-level={l.level}>

@@ -7,11 +7,11 @@
 // RB-4: the search box has a switch, Names · Inside files. Inside files asks each client's DevOps code search which
 // files hold the words (code.inside): for that search, and only that one, the words go through FocusTime's server to
 // DevOps. Its results are files, never lines: no text of a file shows until a person opens it.
-import { useMemo, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
 import { groupThings, KIND_GROUPS, KINDS, markMatches, NOT_IN_DATABASE, searchThings, searchWords, shareCap, sqlDatabases, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
 import { INSIDE_MAX, INSIDE_WORDS_MAX, SEARCH_MAX } from "../../plan/code.ts";
-import { SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { sqlOpened, sqlPathTo, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
 export type NamesClient = { clientKey: string; name: string; color: string | null; locked: boolean };
@@ -99,9 +99,11 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
   const many = repos.length > 1;
   const rows = useMemo(() => repos.flatMap((r) => r.things.map((t): Row => ({ ...t, repoId: r.repo.id, repoName: r.repo.name }))), [repos]);
   const words = searchWords(filter);
-  const tableHit = (name: string) => words.length > 0 && words.every((w) => name.toLowerCase().includes(w));
+  // RB-5 (review 1): a SQL object is found by its schema too, the way a warehouse person types it ("dim", "stg.Store").
+  const named = (t: { name: string; schema?: string }) => (t.schema ? `${t.name} ${t.schema}.${t.name}` : t.name).toLowerCase();
+  const tableHit = (tb: { name: string; schema?: string }) => words.length > 0 && words.every((w) => named(tb).includes(w));
   const shown = useMemo(
-    () => (words.length ? rows.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)) || kidsOf(t).some((tb) => tableHit(tb.name))) : rows),
+    () => (words.length ? rows.filter((t) => words.every((w) => named(t).includes(w)) || kidsOf(t).some((tb) => tableHit(tb))) : rows),
     [rows, filter], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const groups = groupThings(shown);
@@ -109,6 +111,24 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
   // database comes first; with one or none the grouping starts at the top. Decided from every row, not the filter's.
   const sqlRow = (t: Row): SqlRow & Row => ({ ...t, ...(t.db ? {} : { note: `${NAMES_TEXT.inFolder(t.folder)}${many ? ` · ${t.repoName}` : ""}` }) });
   const manyDatabases = useMemo(() => sqlDatabases(rows.filter((t) => t.kind === "sql"), many).databases.length > 1, [rows, many]);
+  const sqlGroupOf = (things: readonly Row[]) => {
+    const objects = things.map(sqlRow);
+    const by = manyDatabases ? sqlDatabases(objects, many) : null;
+    return { objects, databases: by ? [...by.databases, ...(by.loose.length ? [{ key: "loose", label: NOT_IN_DATABASE, objects: by.loose }] : [])] : null };
+  };
+  const itemTreeId = (t: Row) => `${id}-${t.repoId}-${t.folder}`;
+  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.kind === "sql" && tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
+  // Changing the switch keeps the file on the right and opens the new trees to it: the SQL group's and its item's,
+  // whether or not they are on screen now.
+  const wasGroup = useRef(sqlGroup);
+  useEffect(() => {
+    if (wasGroup.current === sqlGroup) return;
+    wasGroup.current = sqlGroup;
+    if (!selected.path) return;
+    const g = sqlGroupOf(rows.filter((t) => t.kind === "sql"));
+    const paths = [sqlPathTo(`${id}-sql`, g.objects, g.databases, sqlGroup, selected), ...rows.filter((t) => t.inside?.some((x) => x.file === selected.path) && t.repoId === selected.repoId).map((t) => sqlPathTo(itemTreeId(t), sqlKidsOf(t, t.inside!), null, sqlGroup, selected))];
+    onMemo((m) => ({ ...m, sql: paths.reduce(sqlOpened, m.sql) }));
+  }, [sqlGroup]); // eslint-disable-line react-hooks/exhaustive-deps
   const flip = <T,>(s: ReadonlySet<T>, v: T) => {
     const n = new Set(s);
     if (!n.delete(v)) n.add(v);
@@ -136,9 +156,8 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
               <span className="cv-kind-count">{g.things.length.toLocaleString()}</span>
             </button>
             {open && g.kind === "sql" && (() => {
-              const objects = g.things.map(sqlRow);
-              const by = manyDatabases ? sqlDatabases(objects, many) : null;
-              return <SqlTree {...tree} id={`${id}-sql`} label={NAMES_TEXT.sqlGroup} attr="data-code-thing" filtering={words.length > 0} objects={objects} databases={by ? [...by.databases, ...(by.loose.length ? [{ key: "loose", label: NOT_IN_DATABASE, objects: by.loose }] : [])] : null} />;
+              const { objects, databases } = sqlGroupOf(g.things);
+              return <SqlTree {...tree} id={`${id}-sql`} label={NAMES_TEXT.sqlGroup} attr="data-code-thing" filtering={words.length > 0} objects={objects} databases={databases} />;
             })()}
             {open && g.kind !== "sql" && (
               <ul className="cv-things">
@@ -146,12 +165,12 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                   const key = `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
                   // While filtering, an item shows the tables or things inside that match (all of them when opened by hand).
                   const kids = kidsOf(t);
-                  const hits = kids.filter((tb) => tableHit(tb.name));
+                  const hits = kids.filter((tb) => tableHit(tb));
                   // RB-5: a database's tree is always narrowed by the filter, so its folders show what matches.
                   const isDb = kids.some((tb) => tb.kind === "sql" && tb.sqlType);
                   const tables = hits.length && (isDb || !openModels.has(key)) ? hits : kids;
                   // RB-5: the SQL objects inside (a warehouse's, a SQL database's) are a tree; anything else inside stays a row.
-                  const sqlKids = tables.filter((tb) => tb.kind === "sql" && tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
+                  const sqlKids = sqlKidsOf(t, tables);
                   const otherKids = tables.filter((tb) => !(tb.kind === "sql" && tb.sqlType));
                   const kidsLabel = NAMES_TEXT.insideOf(t.name, !!t.tables);
                   const tablesOpen = openModels.has(key) || hits.length > 0;
@@ -177,7 +196,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                       </div>
                       {tablesOpen && sqlKids.length > 0 && (
                         <div className="cv-sql-in-item">
-                          <SqlTree {...tree} id={`${id}-${t.repoId}-${t.folder}`} label={NAMES_TEXT.sqlOf(t.name)} attr="data-code-table" filtering={tables !== kids} objects={sqlKids} />
+                          <SqlTree {...tree} id={itemTreeId(t)} label={NAMES_TEXT.sqlOf(t.name)} attr="data-code-table" filtering={tables !== kids} objects={sqlKids} />
                         </div>
                       )}
                       {tablesOpen && otherKids.length > 0 && (

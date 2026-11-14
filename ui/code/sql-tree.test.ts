@@ -4,7 +4,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SqlTree, SQL_FOLDER_SHOWN, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { sqlOpened, sqlPathTo, SqlTree, SQL_FOLDER_SHOWN, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 const row = (schema: string | null, sqlType: SqlRow["sqlType"], name: string): SqlRow => ({ name, file: `/${schema ?? "x"}/${sqlType}/${name}.sql`, repoId: "r1", sqlType, ...(schema ? { schema } : {}) });
 const memo = (open: Record<string, boolean> = {}, whole: string[] = []): SqlTreeMemo => ({ open: new Map(Object.entries(open)), whole: new Set(whole) });
@@ -36,6 +36,25 @@ describe("SqlTree (RB-5 B)", () => {
   it("with databases the database is the first level, and each says its count", () => {
     const html = render([], memo(), { databases: [{ key: "a", label: "Kiln warehouse", objects: many }, { key: "b", label: "Yard SQL project", objects: [row("yard", "table", "Stack")] }] });
     expect(lines(html)).toEqual(["1 Kiln warehouse 152", "1 Yard SQL project 1"]);
+  });
+  it("review 2: the folders that lead to a file, in either grouping and under a database, whether or not the tree is shown", () => {
+    const stack = { repoId: "r1", path: "/yard/table/Stack.sql" };
+    expect(sqlPathTo("t", many, null, "schema", stack)).toEqual(["t|schema|s:yard", "t|schema|s:yard/t:table"]);
+    expect(sqlPathTo("t", many, null, "type", stack)).toEqual(["t|type|t:table", "t|type|t:table/s:yard"]);
+    expect(sqlPathTo("t", [], [{ key: "a", label: "Kiln warehouse", objects: many }], "type", stack)).toEqual(["t|type|a", "t|type|a|t:table", "t|type|a|t:table/s:yard"]);
+    expect(sqlPathTo("t", many, null, "type", { repoId: "r2", path: stack.path })).toEqual([]);
+    expect(sqlPathTo("t", many, null, "type", { repoId: null, path: null })).toEqual([]);
+    // Opening them shows the object, even past the first 100 of its folder.
+    const last = { repoId: "r1", path: "/kiln/table/T149.sql" };
+    const opened = sqlOpened(memo({ "t|schema|s:kiln": false }), sqlPathTo("t", many, null, "schema", last));
+    expect(lines(render(many, opened, { selected: last }))).toContain("3 T149");
+    expect(sqlOpened(memo(), [])).toEqual(memo());
+  });
+  it("review 2: the Group by label works whatever the list's own name holds", () => {
+    const html = render(many, memo(), { id: "Some client-r1-/lake/Gold Layer.Warehouse" });
+    const id = /<span class="cv-sql-by" id="([^"]+)"/.exec(html)![1]!;
+    expect(id).not.toMatch(/\s/);
+    expect(html).toContain(`aria-labelledby="${id}"`);
   });
   it("a folder says its name and count to a screen reader, and one row takes Tab", () => {
     const html = render(many);

@@ -150,6 +150,14 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     await panel(page).getByLabel("Filter by name").fill("store");
     expect(await rows(tree)).toEqual(["1 dim 2", "2 Tables 1", "3 Store", "2 Views 1", "3 vStoreRegion", "1 rpt 2", "2 Views 2", "3 vStoreSales", "3 vTopStores", "1 stg 2", "2 Tables 1", "3 Store", "2 Stored procedures 1", "3 usp_StageStore"]);
     await shots(page, "04-filter");
+    // Review 1: a schema's name, and schema.name, find its objects.
+    await panel(page).getByLabel("Filter by name").fill("stg.store");
+    expect(await rows(tree)).toEqual(["1 stg 1", "2 Tables 1", "3 Store"]);
+    await panel(page).getByLabel("Filter by name").fill("dim");
+    expect((await rows(tree)).filter((r) => r.startsWith("1 "))).toEqual(["1 dim 5"]);
+    await panel(page).getByLabel("Filter by name").fill("store");
+    // Review 2: a click on a folder while filtering changes nothing that outlasts the filter.
+    await folder(tree, "dim").click();
     await panel(page).getByLabel("Filter by name").fill("");
     expect(await rows(tree)).toEqual(was);
     // Expand all and Collapse all.
@@ -205,6 +213,14 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     expect(await focused()).toBe("No schema");
     await page.keyboard.press("Home");
     expect(await focused()).toBe("dim");
+    // Review 2: the tree keeps exactly one Tab stop when the row the arrows were on goes away.
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowDown");
+    expect(await focused()).toBe("Views");
+    await lake.locator("[data-sql-collapse]").click();
+    expect(await tree.locator('[tabindex="0"]').count()).toBe(1);
+    await folder(tree, "fact").click();
+    expect(await tree.locator('[tabindex="0"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toEqual(["fact"]);
     expect(errors).toEqual([]);
   });
 
