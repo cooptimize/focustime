@@ -83,7 +83,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await select.selectOption({ label: "sales-analytics" });
     await row(page, "/sql").waitFor();
     expect(await tree(page).locator("[role=treeitem][aria-level='1'] .cv-folder").first().textContent()).toBe("data");
-    expect(await panel(page).locator(".cv-log-line").textContent()).toBe("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words.");
+    expect(await panel(page).locator(".cv-log-line").textContent()).toBe("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.");
     expect(await panel(page).locator(".cv-title").textContent()).toContain("Northwind");
     expect(await panel(page).locator(".cv-title").textContent()).toContain("Read only");
 

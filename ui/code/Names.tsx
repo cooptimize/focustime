@@ -389,7 +389,7 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
       <p className="cv-note cv-results-status" role="status" data-code-progress="">
         {/* "No file holds those words" is said only when at least one client answered; a client that couldn't says so below. */}
         {!run.targets.length ? NAMES_TEXT.noneToRead : asking ? `${NAMES_TEXT.insideAsking(done, run.targets.length)}…` : answered ? (total === 0 && kind ? NAMES_TEXT.insideNoneOfKind : NAMES_TEXT.insideResults(total)) : ""}
-        {!asking && answered > 0 && answered < run.targets.length ? ` ${answered} of ${run.targets.length} clients could be searched.` : ""}
+        {!asking && answered > 0 && answered < run.targets.length ? `${total === 0 ? "" : "."} ${answered} of ${run.targets.length} clients could be searched.` : ""}
       </p>
       {run.leftOut.length > 0 && (
         <p className="cv-note" data-code-left-out="">

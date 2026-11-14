@@ -4,8 +4,12 @@
 // the size limit and a Git LFS pointer. Harbor shows "can't read yet" (its token lacks Code (read)) and Fabrikam is set
 // to its team only (server/demo.ts). Everything here is invented: no real client, person, repo or code. Only
 // server/demo.ts imports this (host/no-demo-leak.test.ts), so a real session never reaches it.
+//
+// RB-4: a warehouse item and a SQL database item with tables, views and procedures inside (so a table inside an item
+// is found by name), and a fake of DevOps's code search that answers from these invented files, so Search inside files
+// can be seen and tested without DevOps. Cooptimize's demo organization has no code search turned on.
 import { CodeFailure, type CodeFile, type CodeGit } from "../../actions/code-git.ts";
-import type { GitRepo } from "../devops/git.ts";
+import type { GitRepo, GitSearchAnswer, GitSearchHit } from "../devops/git.ts";
 import { decodeText, fileKind, nameOf, sortEntries, TEXT_MAX_BYTES, type CodeEntry } from "../../plan/code.ts";
 
 const COMMIT = "0d3e5f7a9b1c2d4e6f8091a2b3c4d5e6f7a8b9c0";
@@ -466,6 +470,85 @@ const IPYNB = `{
 }
 `;
 
+// RB-4: what sits inside the Gold warehouse and the Returns SQL database (invented).
+const DIM_STORE_SQL = `CREATE TABLE [dim].[Store]
+(
+    [StoreKey]  INT           NOT NULL,
+    [StoreName] NVARCHAR(100) NOT NULL,
+    [Region]    NVARCHAR(50)  NOT NULL,
+    [OpenedOn]  DATE          NULL
+);
+`;
+const FACT_SALES_SQL = `CREATE TABLE [fact].[SalesLine]
+(
+    [OrderId]   INT            NOT NULL,
+    [LineNo]    SMALLINT       NOT NULL,
+    [StoreKey]  INT            NOT NULL,
+    [OrderDate] DATE           NOT NULL,
+    [Amount]    DECIMAL(18, 2) NOT NULL
+);
+`;
+const VSTORE_REGION_SQL = `-- Stores by region, for the store managers' report.
+CREATE VIEW [dim].[vStoreRegion]
+AS
+SELECT s.[Region], COUNT(*) AS [Stores]
+FROM [dim].[Store] AS s
+GROUP BY s.[Region];
+`;
+const LOAD_SALESLINE_SQL = `CREATE PROCEDURE [fact].[usp_LoadSalesLine]
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO [fact].[SalesLine] ([OrderId], [LineNo], [StoreKey], [OrderDate], [Amount])
+    SELECT o.[OrderId], o.[LineNo], s.[StoreKey], o.[OrderDate], o.[Amount]
+    FROM [dbo].[Orders] AS o
+    JOIN [dim].[Store] AS s
+        ON s.[StoreKey] = o.[StoreKey]
+    WHERE NOT EXISTS (SELECT 1 FROM [fact].[SalesLine] AS f WHERE f.[OrderId] = o.[OrderId] AND f.[LineNo] = o.[LineNo]);
+
+    UPDATE [etl].[Watermarks] SET [LoadedAt] = SYSUTCDATETIME() WHERE [TableName] = N'SalesLine';
+END;
+`;
+const RETURN_REQUEST_SQL = `CREATE TABLE [ops].[ReturnRequest]
+(
+    [ReturnId]  INT          NOT NULL PRIMARY KEY,
+    [OrderId]   INT          NOT NULL,
+    [StoreKey]  INT          NOT NULL,
+    [OpenedAt]  DATETIME2(3) NOT NULL,
+    [ClosedAt]  DATETIME2(3) NULL
+);
+`;
+const VOPEN_RETURNS_SQL = `CREATE VIEW [ops].[vOpenReturns]
+AS
+SELECT r.[ReturnId], r.[OrderId], r.[StoreKey], r.[OpenedAt]
+FROM [ops].[ReturnRequest] AS r
+WHERE r.[ClosedAt] IS NULL;
+`;
+const CLOSE_RETURN_SQL = `CREATE PROCEDURE [ops].[usp_CloseReturn]
+    @ReturnId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE [ops].[ReturnRequest] SET [ClosedAt] = SYSUTCDATETIME() WHERE [ReturnId] = @ReturnId AND [ClosedAt] IS NULL;
+END;
+`;
+const SET_WATERMARK_SQL = `CREATE PROCEDURE [etl].[usp_SetWatermark]
+    @TableName SYSNAME
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    MERGE [etl].[Watermarks] AS t
+    USING (SELECT @TableName AS [TableName]) AS s
+        ON t.[TableName] = s.[TableName]
+    WHEN MATCHED THEN
+        UPDATE SET t.[LoadedAt] = SYSUTCDATETIME()
+    WHEN NOT MATCHED THEN
+        INSERT ([TableName], [LoadedAt]) VALUES (s.[TableName], SYSUTCDATETIME());
+END;
+`;
+
 const portal = (): Record<string, Content> => ({
   "/README.md": "# Store portal\n\nThe store managers' report and the views behind it (demo).\n",
   "/report/Store visits.Report/definition.pbir": `{\n  "version": "4.0",\n  "datasetReference": { "byPath": { "path": "../Store visits.SemanticModel" } }\n}\n`,
@@ -502,6 +585,15 @@ const sales = (): Record<string, Content> => ({
   "/lake/Bronze.Lakehouse/shortcuts.metadata.json": "[]\n",
   "/lake/Bronze.Lakehouse/.platform": PLATFORM("Lakehouse", "Bronze"),
   "/lake/Gold.Warehouse/.platform": PLATFORM("Warehouse", "Gold"),
+  // RB-4: a warehouse and a SQL database keep their tables, views and procedures inside the item's folder.
+  "/lake/Gold.Warehouse/dim/Tables/Store.sql": DIM_STORE_SQL,
+  "/lake/Gold.Warehouse/dim/Views/vStoreRegion.sql": VSTORE_REGION_SQL,
+  "/lake/Gold.Warehouse/fact/Tables/SalesLine.sql": FACT_SALES_SQL,
+  "/lake/Gold.Warehouse/fact/StoredProcedures/usp_LoadSalesLine.sql": LOAD_SALESLINE_SQL,
+  "/lake/Returns.SQLDatabase/.platform": PLATFORM("SQLDatabase", "Returns"),
+  "/lake/Returns.SQLDatabase/ops/Tables/ReturnRequest.sql": RETURN_REQUEST_SQL,
+  "/lake/Returns.SQLDatabase/ops/Views/vOpenReturns.sql": VOPEN_RETURNS_SQL,
+  "/lake/Returns.SQLDatabase/ops/StoredProcedures/usp_CloseReturn.sql": CLOSE_RETURN_SQL,
   "/pipelines/Low stock.Reflex/.platform": PLATFORM("Reflex", "Low stock"),
   "/notebooks/explore-returns.ipynb": IPYNB,
   "/sql/Warehouse.sqlproj": SQLPROJ,
@@ -525,6 +617,7 @@ const ingest = (): Record<string, Content> => ({
   "/adf/publish_config.json": `{ "publishBranch": "adf_publish" }\n`,
   "/adf/linkedService/ls_adls.json": LINKED_SERVICE,
   "/adf/dataset/ds_adls_shipments.json": DATASET,
+  "/sql/etl/StoredProcedures/usp_SetWatermark.sql": SET_WATERMARK_SQL,
   "/sql/etl/Tables/Watermarks.sql": "CREATE TABLE [etl].[Watermarks]\n(\n    [TableName] SYSNAME      NOT NULL PRIMARY KEY,\n    [LoadedAt]  DATETIME2(3) NULL\n);\n",
   "/azure-pipelines.yml": PIPELINE_YML.replace("sql/*", "adf/*"),
 });
@@ -558,6 +651,72 @@ const ORGS: Record<string, { org: string; project: string }> = {
   Fabrikam: { org: "fabrikam-demo", project: "Fiber" },
   Tailspin: { org: "tailspin-demo", project: "Flights" },
 };
+
+/** RB-4: the demo organizations that don't have Microsoft's Code Search extension. */
+const NO_CODE_SEARCH = new Set(["Cooptimize"]);
+
+/**
+ * RB-4: a small stand-in for DevOps's code search, for the demo and the tests: plain words (all of them), a phrase in
+ * quotes, a * at the end of a word, AND, OR, NOT, brackets left out, and ext:, file: and path: filters. A * at the
+ * start of a word answers with DevOps's code for it (4). Only text files are looked at; the count is of files.
+ */
+export function demoSearch(repos: readonly DemoRepo[], text: string, top: number): GitSearchAnswer {
+  type Term = { not: boolean; /** A filter narrows where to look; it isn't a match in the file. */ filter: boolean; test: (path: string, body: string, tokens: readonly string[]) => number };
+  const groups: Term[][] = [[]];
+  let not = false;
+  for (const m of text.matchAll(/([A-Za-z]+):("[^"]*"|\S+)|"([^"]*)"|[^\s()]+/g)) {
+    const raw = m[0];
+    if (m[1] === undefined && m[3] === undefined) {
+      if (raw === "OR") { groups.push([]); continue; }
+      if (raw === "AND") continue;
+      if (raw === "NOT") { not = true; continue; }
+      if (raw.startsWith("*") || raw.startsWith("?")) return { count: 0, hits: [], info: 4 };
+    }
+    let test: Term["test"];
+    if (m[1] !== undefined) {
+      const v = m[2]!.replace(/^"|"$/g, "").toLowerCase();
+      const fn = m[1].toLowerCase();
+      const glob = (s: string) => (v.endsWith("*") ? s.startsWith(v.slice(0, -1)) : s === v);
+      test = fn === "ext" ? (p) => (p.toLowerCase().endsWith(`.${v}`) ? 1 : 0) : fn === "file" ? (p) => (glob(nameOf(p).toLowerCase()) || nameOf(p).toLowerCase().includes(v.replace(/\*$/, "")) ? 1 : 0) : fn === "path" ? (p) => (p.toLowerCase().includes(v.replace(/\*/g, "")) ? 1 : 0) : () => 0;
+    } else if (m[3] !== undefined) {
+      const phrase = m[3].toLowerCase();
+      test = (_p, body) => (phrase ? body.split(phrase).length - 1 : 0);
+    } else {
+      const word = raw.toLowerCase();
+      const start = word.endsWith("*") ? word.slice(0, -1) : null;
+      const parts = word.split(/[^a-z0-9_]+/).filter(Boolean);
+      // A word with a dot or a bracket in it ("dim.Store") is looked for as it is written; a plain word as a whole word.
+      test = start !== null ? (_p, _b, tokens) => tokens.filter((t) => t.startsWith(start)).length : parts.length > 1 ? (_p, body) => body.split(word).length - 1 : (_p, _b, tokens) => tokens.filter((t) => t === word).length;
+    }
+    groups[groups.length - 1]!.push({ not, filter: m[1] !== undefined, test });
+    not = false;
+  }
+  const hits: GitSearchHit[] = [];
+  let count = 0;
+  for (const r of repos) {
+    for (const [path, c] of Object.entries(r.files)) {
+      if (typeof c !== "string") continue;
+      const body = c.toLowerCase();
+      const tokens = body.split(/[^a-z0-9_]+/).filter(Boolean);
+      let best = -1;
+      for (const g of groups) {
+        if (!g.length) continue;
+        let n = 0;
+        let ok = true;
+        for (const t of g) {
+          const found = t.test(path, body, tokens);
+          if (t.not ? found > 0 : found === 0) { ok = false; break; }
+          if (!t.not && !t.filter) n += found;
+        }
+        if (ok) best = Math.max(best, n);
+      }
+      if (best < 0) continue;
+      count++;
+      if (hits.length < top) hits.push({ repoId: r.id, path, branches: ["main"], matches: best });
+    }
+  }
+  return { count, hits, info: 0 };
+}
 
 const enc = new TextEncoder();
 const bytesOf = (c: Content): Uint8Array | null => (typeof c === "string" ? enc.encode(c) : c instanceof Uint8Array ? c : null);
@@ -602,8 +761,10 @@ export function demoCodeGit(): CodeGit {
       const r = find(clientKey, repo);
       return { commit: COMMIT, paths: Object.keys(r.files).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })), cut: false };
     },
-    async search() {
-      throw new CodeFailure("no_code_search");
+    /** RB-4: the fake of DevOps's code search, over the invented files above. Nothing leaves this process. */
+    async search(clientKey, text, top) {
+      if (NO_CODE_SEARCH.has(clientKey)) throw new CodeFailure("no_code_search");
+      return demoSearch(reposOf(clientKey), text, top);
     },
     async file(clientKey, repo, path): Promise<CodeFile> {
       const c = find(clientKey, repo).files[path];

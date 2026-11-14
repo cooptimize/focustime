@@ -182,7 +182,7 @@
 .cv-inside-hit .cv-thing-detail { flex: 0 1 auto; }
 .cv-inside-scope { margin-top: 4px; color: var(--text-faint); font-size: var(--fs-1); }
 /* A file opened from those results: every match marked, the one the stepper is on stronger. */
-.cv-mark { background: var(--wash-accent); color: inherit; border-radius: 3px; box-shadow: 0 0 0 1px var(--border-strong); }
+.cv-mark { background: color-mix(in oklab, var(--accent) 28%, transparent); color: inherit; border-radius: 3px; box-shadow: 0 0 0 1px var(--border-strong); }
 .cv-mark.on { background: var(--action); color: #fff; box-shadow: 0 0 0 1px var(--action); }
 .cv-mark.on span { color: inherit; }
 .cv-stepper { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-2); }
