@@ -49,7 +49,7 @@ const BY_WORDS: readonly (readonly [RegExp, IconName])[] = [
 
 /** By the item's group (the command menu's headings): what the item belongs to, when neither its action nor its words say more. */
 const BY_GROUP: Readonly<Record<string, IconName>> = {
-  Conversations: "chats", Requests: "chats", Settings: "settings", DevOps: "backlog", "Work items": "backlog", Week: "week", "To-dos": "done", Promises: "promise",
+  Conversations: "chats", "From chats": "chats", Settings: "settings", DevOps: "backlog", "Work items": "backlog", Week: "week", "To-dos": "done", Promises: "promise",
   Admin: "admin", Views: "preview", Display: "theme", Team: "people", Focus: "focus", Meetings: "meeting", Inbox: "inbox", Help: "help", Sources: "connect",
   "My VM": "vm", "Close out": "day", Assistant: "ask", Day: "day", Capture: "capture", Timebox: "time", Time: "time", Code: "code", Keyboard: "keys", Calendar: "calendar",
 };

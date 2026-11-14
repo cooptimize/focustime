@@ -266,14 +266,14 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       access.delete("write");
       if (e instanceof AuthFailure && e.kind === "not_connected") return { status: "not_connected", message: e.message };
       if (e instanceof AuthFailure && (e.kind === "network" || e.kind === "keyring")) return { status: "unavailable", message: e.message };
-      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings › Accounts and calendars and allow calendar changes` };
     }
     // Granted scopes come back as full URIs or bare names; compare the bare names.
     const bare = (x: string) => x.split("/").pop()!.toLowerCase();
     const granted = new Set((access.get("write")?.scope ?? "").split(" ").map(bare));
     if (!p.writeScope.split(" ").filter((x) => x !== "offline_access").every((w) => granted.has(bare(w)))) {
       access.delete("write");
-      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings › Accounts and calendars and allow calendar changes` };
     }
     return { status: "write" };
   }

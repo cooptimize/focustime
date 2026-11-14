@@ -58,7 +58,7 @@ export function saysPick(text: string): boolean {
   return false;
 }
 
-type Piece = { line: number; text: string; bare: boolean };
+type Piece = { line: number; text: string; bare: boolean; /** Where a quoted string starts in the file (NM-1: to tell a string inside `old: [...]` from its neighbor). */ pos?: number };
 
 /**
  * The text pieces of a code file: each string literal (or template literal part) with the line it starts on, and in
@@ -72,9 +72,10 @@ export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text th
   const tpl: number[] = []; // brace depth at each open `${`
   let depth = 0;
   let prev = ""; // last significant code char, to tell a regex from a division
-  const push = (text: string, at: number, bare: boolean) => out.push({ line: at, text, bare });
+  const push = (text: string, at: number, bare: boolean, pos?: number) => out.push({ line: at, text, bare, ...(pos === undefined ? {} : { pos }) });
   const readString = (q: string) => {
     const at = line;
+    const pos = i;
     let s = "";
     i++;
     while (i < src.length && src[i] !== q && src[i] !== "\n") {
@@ -82,7 +83,7 @@ export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text th
       s += src[i++];
     }
     if (src[i] === q) i++; // an unclosed quote (an apostrophe in JSX text) ends at the line's end
-    push(s, at, true);
+    push(s, at, true, pos);
     cur += q + " ".repeat(s.length) + q;
   };
   const readTemplate = () => {
@@ -145,7 +146,8 @@ export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text th
       // text between a {expression} and the next tag or expression: {n} picks</span>, {n} pick{n === 1 ? ...
       for (const m of l.matchAll(/\}([^<>{}=;()|&:]*)(?=[<{])/g)) if (/[A-Za-z]/.test(m[1]!)) push(m[1]!, k + 1, false);
       // NM-1: text between two tags or expressions whatever it holds, and text that runs to the end of its line.
-      if (loose) for (const m of l.matchAll(/[\w"'}\/]>([^<>{}]*)(?=[<{]|$)/g)) if (/[A-Za-z]{2}/.test(m[1]!) && m[1]!.trim().split(/\s+/).length >= 2 && !/[=;]|=>|\b(const|return|typeof)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
+      // An entity is read as its character ("Settings &gt; Data"), written wide so it is never taken for a tag.
+      if (loose) for (const m of l.replace(/&gt;/g, "＞").replace(/&lt;/g, "＜").replace(/&amp;/g, "＆").replace(/&[a-z]+;|&#\d+;/g, " ").matchAll(/[\w"'}\/]>([^<>{}]*)(?=[<{]|$)/g)) if (/[A-Za-z]{2}/.test(m[1]!) && m[1]!.trim().split(/\s+/).length >= 2 && !/[=;]|=>|\b(const|return|typeof)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
       // NM-1: a line of JSX text with brackets or a colon in it: "On iPhone, add FocusTime to your home screen first (More".
       if (loose && /^\s*[A-Z][^<>{}=;]*$/.test(l) && l.trim().split(/\s+/).length >= 4 && !/=>|^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);
       // NM-1: text after an {expression} to the end of the line: {name}'s DevOps. Undo is in Settings
@@ -202,11 +204,11 @@ export type Allowed = { re: RegExp; file?: RegExp; why: string };
  * Keep it short: a new entry needs a reason a reader of the screen would accept.
  */
 export const NAMES_ALLOWED: readonly Allowed[] = [
-  { re: /^Today ?$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM): the day that is today" },
+  { re: /^Today ?$/, file: /^ui\/(Day|WeekGrid|PhoneDay|StyleGuide|dateinput|stamp|inbox\/Detail)\.tsx?$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM): the day that is today" },
   { re: /\bToday(?='s\b| is\b| isn't\b| \(| \d)/g, why: "today the day, starting a sentence: Today's blocks, Today is Sat, Today isn't planned yet, Today (Fri) is hidden" },
   { re: /\bToday(?= onboarding| it's)/g, file: /^sources\/demo\//, why: "the demo's example text: today as in these days" },
   { re: /\bLoop (closed|updates sent)\b/g, why: "Close the loop is the action's name today; these are its results" },
-  { re: /\bWaiting on $/g, why: "waiting on a person, by name: a sentence, not the Inbox's old view" },
+  { re: /\bWaiting on $/g, file: /^plan\/conversations\.ts$/, why: "waiting on a person, by name: a sentence, not the Inbox's old view" },
   { re: /\bNeeds you\b/g, file: /^ui\/Day\.tsx$/, why: "the phone's heading over Day's urgent lines: plain words, not the Inbox's old view" },
   { re: /\bRequests (go to|and DevOps items)\b/g, file: /^(public\/legal\.html|ui\/settings\/DeliveryChats\.tsx)$/, why: "requests the plural noun, starting a sentence" },
   { re: /\b[Rr]equest types?\b|\bReadiness (as written|by request type)\b|^Readiness$/g, file: /^(ui|plan|actions)\/patterns[./]|^actions\/registry\.ts$/, why: "DevOps patterns' own words (WP-1): its list of request types and how ready an item reads as written" },
@@ -216,21 +218,20 @@ export const NAMES_ALLOWED: readonly Allowed[] = [
   { re: /^×$/u, file: /^ui\/Feedback\.tsx$/, why: "a screen size, 1920×1080" },
 ];
 
-/** Strings on a line that sit in a field for old names: `old: [...]`, `aka: [...]`, `keywords: [...]`. */
-function oldNamesOn(line: string): Set<string> {
-  const out = new Set<string>();
-  for (const m of line.matchAll(/\b(?:old|aka|keywords)\??:\s*\[([^\]]*)\]/g)) for (const s of m[1]!.matchAll(/"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'/g)) out.add(s[1] ?? s[2]!);
-  return out;
+/** Where the fields for old names are in a file: each `old: [...]`, `aka: [...]` and `keywords: [...]`, start to end. */
+function oldNameRanges(text: string): [number, number][] {
+  return [...text.matchAll(/\b(?:old|aka|keywords)\??:\s*\[[^\]]*\]/g)].map((m) => [m.index, m.index + m[0].length]);
 }
 
-/** Code, not words: SQL, a path, a pattern, CSS, a list of class names. */
-const CODE_TEXT = (t: string) => SQL.test(t) || /^\.{0,2}\/|\.(tsx?|css|md)$/.test(t.trim()) || /\\[sdwb]|\(\?[:=!<]|calc\(|\dpx\b/.test(t);
+/** Code, not words: SQL, a path, a pattern. */
+const CODE_TEXT = (t: string) =>
+  (SQL.test(t) && /\b(FROM|SET|INTO|TABLE|WHERE|VALUES|ON|KEY)\b/.test(t)) || /^\.{0,2}\/|\.(tsx?|css|md)$/.test(t.trim()) || /\\[sdwb]|\(\?[:=!<]/.test(t);
 
 /** What a piece of text says that it shouldn't: retired names by their `was`, and "a control as a character". */
 export function namesIn(text: string, f = ""): string[] {
   if (CODE_TEXT(text)) return [];
   // "Settings > Data" is the same path as "Settings › Data".
-  let t = text.replace(/\b(Settings|Admin|Week|Inbox|Today|Ahead|Backlog|Day) (?:>|&gt;) (?=[A-Z])/g, "$1 › ");
+  let t = text.replace(/\b(Settings|Admin|Week|Inbox|Today|Ahead|Backlog|Day) (?:>|&gt;|＞) (?=[A-Z])/g, "$1 › ");
   for (const a of NAMES_ALLOWED) if (!a.file || a.file.test(f)) t = t.replace(a.re, " ");
   const out = NAMES.filter((r) => r.match!.test(t)).map((r) => r.was);
   if (CONTROL.some((re) => re.test(t))) out.push("a control as a character");
@@ -238,14 +239,18 @@ export function namesIn(text: string, f = ""): string[] {
 }
 
 /** The lines of a file that use a retired name or write a control as a character, with what each says. */
+/** What the names check reads: everything the words guard reads, and the sources' own messages ("Set it up in Settings › …"). */
+export const namesScanned = (f: string) => !NAMES_SKIPPED(f) && (wordsScanned(f) || (/^sources\//.test(f) && /\.ts$/.test(f) && !/\.test\.ts$/.test(f) && !/fakes\.ts$/.test(f)));
+
 export function namesHits(f: string, text: string): { line: number; says: string[] }[] {
   if (NAMES_SKIPPED(f)) return [];
   const by = new Map<number, Set<string>>();
   const add = (line: number, says: string[]) => { if (says.length) by.set(line, new Set([...(by.get(line) ?? []), ...says])); };
   const lines = text.split("\n");
   if (/\.(ts|tsx|mjs)$/.test(f)) {
+    const old = oldNameRanges(text);
     for (const p of codePieces(text, f.endsWith(".tsx"), true)) {
-      if (p.bare && oldNamesOn(lines[p.line - 1] ?? "").has(p.text)) continue;
+      if (p.pos !== undefined && old.some(([a, b]) => p.pos! > a && p.pos! < b)) continue;
       add(p.line, namesIn(p.text, f));
     }
   } else {

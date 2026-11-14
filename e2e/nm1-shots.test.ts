@@ -38,7 +38,7 @@ const tabTitles = (page: Page) =>
     const box = document.createElement("div");
     box.id = "nm1-caption";
     box.style.cssText = "position:fixed;left:16px;right:16px;top:64px;z-index:99999;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface, var(--bg));color:var(--text);font:var(--fs-3)/1.6 var(--font, sans-serif)";
-    box.innerHTML = `<div style="font-weight:600">Each tab's tooltip (the button's title), as the browser shows it on hover</div>` + tabs.map((b) => `<div>${(b.textContent ?? "").trim() || b.getAttribute("aria-label")}: ${b.title.replace(/</g, "&lt;")}</div>`).join("");
+    box.innerHTML = `<div style="font-weight:600">Each tab's tooltip (the button's title), as the browser shows it on hover</div>` + tabs.map((b) => `<div>"${b.title.replace(/</g, "&lt;")}"</div>`).join("");
     document.body.append(box);
     return tabs.length;
   });

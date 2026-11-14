@@ -537,7 +537,7 @@ async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, inp
         what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
       });
       await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id }, decidedBy: me, decidedAt: at });
-      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Waiting on ${b.who}` });
+      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Noted with this call: ${b.who}` });
     } else if (b.kind === "gap" && b.parentId === null && p.result?.draftId) {
       await store.updateProposal(p.id, { state: "confirmed", decidedBy: me, decidedAt: at });
       results.push({ proposalId: p.id, ok: true, message: "Saved as your draft" });

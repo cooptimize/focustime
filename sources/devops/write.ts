@@ -42,7 +42,7 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
     }
     d.log({ source: "devops", op: `write_${op}`, status: res.status, durationMs: performance.now() - started });
     if (res.status === 401 || res.status === 203 || (res.status >= 300 && res.status < 400) || res.type === "opaqueredirect")
-      throw new WriteFailure("auth", "The DevOps write PAT is expired or invalid. Enter a new one in Settings > Clients", res.status);
+      throw new WriteFailure("auth", "The DevOps write PAT is expired or invalid. Enter a new one in Settings › DevOps", res.status);
     if (res.status === 403) throw new WriteFailure("forbidden", "DevOps refused: the write PAT needs Work Items (Read & write), or you lack permission on this item", 403);
     if (res.status === 404) throw new WriteFailure("not_found", "Not found in DevOps (deleted, moved, or no access)", 404);
     if (res.status === 409 || res.status === 412) throw new WriteFailure("changed", "Changed in DevOps since you loaded it", res.status);
@@ -51,7 +51,7 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
       throw new WriteFailure(res.status === 400 ? "rejected" : "error", msg ? `DevOps refused the change: ${msg}` : `DevOps error (HTTP ${res.status})`, res.status);
     }
     const type = res.headers.get("content-type") ?? "";
-    if (!type.includes("application/json")) throw new WriteFailure("auth", "The DevOps write PAT is expired or invalid. Enter a new one in Settings > Clients", res.status);
+    if (!type.includes("application/json")) throw new WriteFailure("auth", "The DevOps write PAT is expired or invalid. Enter a new one in Settings › DevOps", res.status);
     return (await res.json()) as T;
   }
   const p = (project: string) => encodeURIComponent(project);

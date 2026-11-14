@@ -126,8 +126,9 @@ describe("IB-4: no chasing, no follow-through", () => {
     const p = await people(w, { leads: [SAM.userId!] });
     await p.as(EVAN).run("conversations.link", { id: c.id, itemId: 4101 });
     await w.convs.updateConversation(c.id, { itemChange: { kind: "root_cause", note: "Cause found", at: "2026-11-04T19:55:00Z", scope: true } });
-    // Days later, after more reads of the chat: nothing escalated, nothing suggested (NM-1: no job runs after a read).
+    // Days later, after another pass over the chat: nothing escalated, nothing suggested (NM-1: no job runs after a read).
     w.setNow("2026-11-09T20:00:00Z");
+    await w.run(CHAT, []);
     expect(await w.convs.suggestionsIn([c.id])).toEqual([]);
     for (const k of await w.convs.commitmentsIn([c.id])) expect(k.escalatedAt).toBeNull();
   });

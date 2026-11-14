@@ -1190,7 +1190,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
    */
   async function aheadItems(clients: ClientRef[], o: { refresh?: boolean; /** AH-2: "Show the whole project": items outside the scope too (marked). */ whole?: boolean; /** SR-2: closed items the store has that changed at or after this instant, too (a feature closed with a comment this week). */ closedSince?: string } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
     const fail = (ref: ClientRef, status: ClientWorkStatus, message: string): import("../../actions/types.ts").AheadClient => ({ clientKey: ref.clientKey, clientName: ref.clientName, status, message, fetchedAt: null, project: null, me: null, startFields: {}, targetFields: {}, sizeFields: {}, fieldNames: {}, types: [], items: [] });
-    if (!d.central) return clients.map((c) => fail(c, "error", "Ahead reads the shared DevOps store, which isn't running here"));
+    if (!d.central) return clients.map((c) => fail(c, "error", "Backlog reads the shared DevOps store, which isn't running here"));
     const targets = await viewerTargets(clients.map((c) => c.clientKey), !!o.refresh);
     return Promise.all(
       clients.map(async (ref) => {

@@ -18,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { namesHits, wordsHits, wordsScanned } from "./words-guard.ts";
+import { namesHits, namesScanned, wordsHits, wordsScanned } from "./words-guard.ts";
 
 const word = (b64: string) => Buffer.from(b64, "base64").toString("utf8");
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -88,7 +88,7 @@ export function runGuards(root: string): { files: number; hits: Hit[] } {
     const proc = processScanned(f);
     const lines = text.split("\n");
     if (wordsScanned(f)) for (const n of wordsHits(f, text)) hits.push({ guard: "words", at: `${f}:${n}: ${lines[n - 1]!.trim().slice(0, 120)}` });
-    if (wordsScanned(f)) for (const h of namesHits(f, text)) hits.push({ guard: "old names", at: `${f}:${h.line}: ${h.says.join(", ")}: ${lines[h.line - 1]!.trim().slice(0, 120)}` });
+    if (namesScanned(f)) for (const h of namesHits(f, text)) hits.push({ guard: "old names", at: `${f}:${h.line}: ${h.says.join(", ")}: ${lines[h.line - 1]!.trim().slice(0, 120)}` });
     lines.forEach((line, i) => {
       const at = `${f}:${i + 1}`;
       if (!history && realRe.test(line)) hits.push({ guard: "names", at });

@@ -263,7 +263,7 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   if (!target || target.problem || !validOrg(target.org) || !target.project) throw new Refused(`DevOps isn't set up for ${clientName(clientKey)}`, 409);
   // The PAT was checked on one org; a client whose org changed since must be checked again.
   if (target.org.toLowerCase() !== me.org.toLowerCase()) throw new Refused(`${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings › DevOps`, 409, "no_write_pat");
-  if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings > Clients`, 409, "no_write_pat");
+  if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings › DevOps`, 409, "no_write_pat");
   let pat: Pat;
   try {
     pat = await ctx.pats.get(clientKey);

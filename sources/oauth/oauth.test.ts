@@ -174,7 +174,7 @@ describe("write access (step 12, optional)", () => {
     expect(await client.accessToken()).toBe(FAKE_ACCESS);
     const w = await client.writeAccess();
     expect(w.status).toBe("read_only");
-    expect(w.status !== "write" && w.message).toMatch(/Reconnect Outlook in Settings > Connections/);
+    expect(w.status !== "write" && w.message).toMatch(/Reconnect Outlook in Settings › Accounts and calendars/);
     expect(w.status !== "write" && w.message).not.toContain(FAKE_REFRESH);
     // Reads still come from memory, and the stored refresh token is unchanged.
     expect(await client.accessToken()).toBe(FAKE_ACCESS);

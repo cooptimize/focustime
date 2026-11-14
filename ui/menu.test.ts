@@ -145,7 +145,10 @@ describe("command menu (built from the action registry)", () => {
     // And the labels themselves say today's names.
     const label = (action: string) => list.find((c) => c.id === action)!.label;
     expect([label("roadmap.ahead"), label("ui.set_today_timeline"), label("my_promises.today"), label("requests.list"), label("inbox.today")]).toEqual(["Backlog › Gantt: the next 12 weeks", "Timeline on Day", "Add a promise to Day", "From chats", "Inbox items for Day and Week"]);
-    expect(list.filter((c) => c.group === "Requests")).toEqual([]);
+    // The group's heading is the list's name today, with the chats icon as before.
+    expect(new Set(list.filter((c) => c.id.startsWith("requests.")).map((c) => c.group))).toEqual(new Set(["From chats", "Settings"]));
+    expect(new Set(list.filter((c) => c.id.startsWith("promises.")).map((c) => c.group))).toEqual(new Set(["Promises"]));
+    expect(list.map((c) => String(c.group))).not.toContain("Requests");
   });
 
   it("searches by words in any order", () => {

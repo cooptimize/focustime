@@ -1,7 +1,7 @@
 // TD-1: the words guard finds "pick" in the to-do sense in text people read, and leaves code names and "pick" as
 // choose alone.
 import { describe, expect, it } from "vitest";
-import { NAMES_ALLOWED, namesHits, namesIn, saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
+import { NAMES_ALLOWED, namesHits, namesIn, namesScanned, saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
 
 describe("saysPick", () => {
   it("the to-do sense", () => {
@@ -49,7 +49,15 @@ describe("namesIn", () => {
     for (const t of ["Back to Day", "Day and Week", "Needs attention nudges", "Settings › Activity", "More › Keyboard shortcuts", "Ctrl +", "9:00 to 12:00 + 1:00 to 5:00", "look 8 to 12 weeks ahead", "what needs you", "UPDATE x SET version = version + 1 WHERE id = ?", "./ahead/Ahead.tsx", "calc(6px + 2px)", "A follow-up question", "Close the loop"]) expect(namesIn(t), t).toEqual([]);
   });
   it("the allow list: ordinary words that are also old names, each with a reason", () => {
-    for (const t of ["Today", "Today's blocks and to-dos", "Today is Sat, Nov 7 · showing next week", "Today (Fri) is hidden", "Loop closed"]) expect(namesIn(t), t).toEqual([]);
+    for (const t of ["Today's blocks and to-dos", "Today is Sat, Nov 7 · showing next week", "Today (Fri) is hidden", "Loop closed"]) expect(namesIn(t), t).toEqual([]);
+    // The Today pill and button, only in the files that draw them: a tab named "Today" anywhere else fails.
+    expect(namesIn("Today", "ui/WeekGrid.tsx")).toEqual([]);
+    expect(namesIn("Today", "ui/nav.ts")).toEqual(["Today (the tab)"]);
+    expect(namesIn("Waiting on ", "plan/conversations.ts")).toEqual([]);
+    expect(namesIn("In your Waiting on ", "ui/meetings/Meetings.tsx")).toEqual(["Waiting on"]);
+    // A size or a keyword in a sentence doesn't make it code.
+    expect(namesIn("Width is 440px; see Settings › Data")).not.toEqual([]);
+    expect(namesIn("Set the value in Settings › Planning")).not.toEqual([]);
     expect(namesIn("Needs you", "ui/Day.tsx")).toEqual([]);
     expect(namesIn("Needs you", "ui/App.tsx")).toEqual(["Needs you (the Inbox's view)"]);
     expect(namesIn("on Week and Today's timeline")).toEqual([]); // "Today's" reads as the day
@@ -70,6 +78,18 @@ describe("namesHits", () => {
   it("old names stay where people search for them: old, aka and keywords", () => {
     const src = '{ id: "planning", label: "Day and Week", old: ["Today and Week", "Planning"] },\n{ id: "v", label: "Day", aka: ["Today"] },\n{ id: "r", label: "Needs attention nudges", keywords: ["Readiness nudges"] },\n{ id: "bad", label: "Today and Week" },\n';
     expect(namesHits("ui/settings/registry.ts", src).map((h) => h.line)).toEqual([4]);
+  });
+  it("only the strings inside old, aka and keywords are let through, not a label beside them", () => {
+    expect(namesHits("actions/registry.ts", '{ name: "roadmap.ahead", aka: ["Plan ahead"], title: "Plan ahead" },\n{ name: "x", aka: ["Plan ahead"], title: "Backlog › Gantt" },\n').map((h) => h.line)).toEqual([1]);
+    // An array over several lines.
+    expect(namesHits("ui/menu.ts", '{ label: "Day",\n  aka: [\n    "Today",\n    "Board",\n  ] },\n')).toEqual([]);
+  });
+  it("reads an entity as its character", () => {
+    expect(namesHits("ui/x.tsx", '<span className="muted">Logged in Settings &gt; Data, with Undo.</span>\n<p>Undo &amp; Retry are in Settings › Data.</p>\n<p>Undo &amp; Retry are in Settings › Activity.</p>\n').map((h) => h.line)).toEqual([1, 2]);
+  });
+  it("reads the sources' own messages too, but not the demo docs or the Guide", () => {
+    for (const f of ["sources/not-set-up.ts", "sources/oauth/oauth.ts", "ui/keys.ts", "ui/menu.ts", "ui/settings/registry.ts", "config/org.ts", "plan/notify.ts", "server/teams/cards.ts", "public/legal.html"]) expect(namesScanned(f), f).toBe(true);
+    for (const f of ["sources/devops/write.test.ts", "ui/guide/content.ts", "docs/demo/script.md", "scripts/demo-walkthrough.mjs", "ui/Roadmap.tsx", "docs/decisions.md"]) expect(namesScanned(f), f).toBe(false);
   });
   it("the Guide has its own check, and the Renamed list holds the old names", () => {
     expect(namesHits("ui/guide/retired.ts", 'const r = { was: "Roadmap", now: "Backlog" };\n')).toEqual([]);
