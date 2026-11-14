@@ -218,6 +218,12 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await panel(page).getByRole("button", { name: "Search", exact: true }).click();
     await results.locator('[data-code-result-client="Tailspin"]').waitFor();
     expect(await hash(page)).toBe("#/code/~search");
+    // Review 2: Back to the client's own search never shows the wider search's names under that client's name.
+    await page.goBack();
+    expect(await hash(page)).toBe("#/code/Atlas/search");
+    await panel(page).locator(".cv-search-page").waitFor();
+    expect(await panel(page).locator("[data-code-result-client]").count()).toBe(0);
+    expect(await panel(page).locator(".cv-search-page .cv-note").last().textContent()).toBe("Type a name, then press Enter or Search.");
     expect(errors).toEqual([]);
   });
 

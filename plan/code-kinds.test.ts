@@ -1,6 +1,6 @@
 // RB-2: a repo's things by kind, from invented file paths only. Each layout in the documentation, and the odd cases.
 import { describe, expect, it } from "vitest";
-import { groupThings, KIND_GROUPS, markMatches, searchThings, thingsOf, type Thing } from "./code-kinds.ts";
+import { groupThings, KIND_GROUPS, markMatches, searchThings, shareCap, thingsOf, type Thing } from "./code-kinds.ts";
 
 const pick = (t: Thing[], name: string) => t.find((x) => x.name === name);
 
@@ -67,6 +67,12 @@ describe("Fabric items", () => {
     const t = thingsOf(["/Renamed model/.platform", "/Renamed model/definition.pbism", "/Renamed model/definition/tables/A.tmdl", "/Mystery/.platform", "/Mystery/thing.json"]);
     expect(pick(t, "Renamed model")).toMatchObject({ kind: "model", detail: "Semantic model · 1 table" });
     expect(pick(t, "Mystery")).toMatchObject({ kind: "fabric", detail: "Fabric item", file: "/Mystery/.platform" });
+  });
+  it("a folder with a dot of its own and no known type after it is typed by a file inside, and keeps its whole name (review 2)", () => {
+    const t = thingsOf(["/Sales v1.5/.platform", "/Sales v1.5/definition.pbir", "/Sales v1.5/report.json", "/Plan v2.1/.platform"]);
+    expect(pick(t, "Sales v1.5")).toMatchObject({ kind: "report", detail: "Report" });
+    // Nothing inside says what it is: the part after the dot shows as it is written.
+    expect(pick(t, "Plan v2")).toMatchObject({ kind: "fabric", detail: "1" });
   });
   it("shows a character Fabric wrote as its HTML number", () => {
     expect(thingsOf(["/Cost&#58; plan.Report/.platform"])[0]).toMatchObject({ name: "Cost: plan", folder: "/Cost&#58; plan.Report" });
@@ -159,6 +165,10 @@ describe("searching names", () => {
   });
   it("a kind narrows it", () => {
     expect(searchThings(things, "orders", "pipeline").map((h) => h.name)).toEqual(["pl_load_orders"]);
+  });
+  it("over the limit, clients take what is left in order, and each still knows its own count (review 2)", () => {
+    expect(shareCap([150, 80, 30], 200)).toEqual([150, 50, 0]);
+    expect(shareCap([3, 4], 200)).toEqual([3, 4]);
   });
   it("marks the matched parts of a path", () => {
     expect(markMatches("/adf/pipeline/pl_load_orders.json", "Orders pl_")).toEqual([

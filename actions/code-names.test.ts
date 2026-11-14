@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { codeAction, CODE_TEXT, type CodeAction, type CodeContext, type CodeRepoThings } from "./code-actions.ts";
 import { CodeFailure, createCodeGit, type CodeGit } from "./code-git.ts";
 import { createLimiter } from "./devops-poll.ts";
-import { createGitReader, type GitRepo } from "../sources/devops/git.ts";
+import { createGitReader } from "../sources/devops/git.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { TargetsResult } from "../sources/devops/types.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";

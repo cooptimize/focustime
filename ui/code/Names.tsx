@@ -5,7 +5,7 @@
 // kept in the browser's storage; the lists live in the panel's memory while it is open.
 import { useMemo, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, type Kind, type NameHit, type RepoThings, type Thing } from "../../plan/code-kinds.ts";
+import { groupThings, KIND_GROUPS, KINDS, markMatches, searchThings, searchWords, shareCap, type Kind, type NameHit, type RepoThings, type Thing } from "../../plan/code-kinds.ts";
 import { SEARCH_MAX } from "../../plan/code.ts";
 
 export type NamesFailure = { message: string; code: string | null };
@@ -210,6 +210,8 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
 
 export type SearchRun = {
   q: string;
+  /** Where it looked: one client's key, or null for every client. Shown only at that place. */
+  scope: string | null;
   /** The clients asked, in the order they show. */
   targets: NamesClient[];
   /** Clients not read because only their team may read their code. */
@@ -223,19 +225,19 @@ type Hit = NameHit & { repoId: string; repoName: string };
 export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kind | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
   const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
   const byClient = useMemo(() => {
-    let left = SEARCH_MAX;
-    let total = 0;
-    const out = run.targets.map((c) => {
+    const found = run.targets.map((c) => {
       const r = run.results.get(c.clientKey);
-      if (!Array.isArray(r)) return { client: c, state: r ?? "waiting", hits: [] as Hit[], many: false };
-      const all = r.flatMap((repo) => searchThings(repo.things, run.q, kind).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name })));
-      total += all.length;
-      const hits = all.slice(0, left);
-      left -= hits.length;
-      const problems = r.flatMap((repo) => (repo.problem ? [`${repo.repo.name}: ${repo.problem}`] : []));
-      return { client: c, state: "ok" as const, hits, many: r.length > 1, problems };
+      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
     });
-    return { out, total };
+    // Over the limit, clients take what is left in order; each still says how many it has.
+    const shown = shareCap(found.map((f) => f.length), SEARCH_MAX);
+    const out = run.targets.map((c, i) => {
+      const r = run.results.get(c.clientKey);
+      if (!Array.isArray(r)) return { client: c, state: r ?? "waiting", hits: [] as Hit[], count: 0, many: false };
+      const problems = r.flatMap((repo) => (repo.problem ? [`${repo.repo.name}: ${repo.problem}`] : []));
+      return { client: c, state: "ok" as const, hits: found[i]!.slice(0, shown[i]), count: found[i]!.length, many: r.length > 1, problems };
+    });
+    return { out, total: found.reduce((n, f) => n + f.length, 0) };
   }, [run, kind]);
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -259,13 +261,13 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
       {byClient.out.map((g) => {
         if (g.state === "waiting") return null;
         const failed = g.state !== "ok" ? g.state : null;
-        if (!failed && !g.hits.length && !g.problems?.length) return null;
+        if (!failed && !g.count && !g.problems?.length) return null;
         return (
           <section key={g.client.clientKey} className="cv-result-client" data-code-result-client={g.client.clientKey} aria-label={g.client.name}>
             <h3 className="cv-result-head">
               <span className="cv-swatch" style={{ background: colorVar(g.client.color) }} aria-hidden="true" />
               {g.client.name}
-              {!failed && <span className="cv-kind-count">{g.hits.length}</span>}
+              {!failed && <span className="cv-kind-count">{g.hits.length < g.count ? `${g.hits.length} of ${g.count} shown` : g.count}</span>}
             </h3>
             {failed && <p className="cv-note problem" data-code-result-failed="">{failed.message}</p>}
             {g.problems?.map((p) => (

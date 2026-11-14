@@ -537,7 +537,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     const inScope = list.filter((c) => all || c.clientKey === at.clientKey);
     const targets = inScope.filter((c) => !c.locked);
     const id = ++runId.current;
-    setRun({ q, targets, leftOut: inScope.filter((c) => c.locked), results: new Map(targets.map((c) => [c.clientKey, "waiting" as const])) });
+    setRun({ q, scope: all ? null : at.clientKey, targets, leftOut: inScope.filter((c) => c.locked), results: new Map(targets.map((c) => [c.clientKey, "waiting" as const])) });
     const put = (k: string, v: RepoThings[] | Failure) => runId.current === id && setRun((r) => (r ? { ...r, results: new Map(r.results).set(k, v) } : r));
     let next = 0;
     const worker = async () => {
@@ -678,7 +678,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
     body = (
       <div className="cv-search-page">
         {searchBox}
-        {run ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => onGo({ clientKey, repoId, path: file })} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
+        {/* A search shows only where it was made: one client's results never sit under another client's name. */}
+        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => onGo({ clientKey, repoId, path: file })} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
       </div>
     );
   else if (!at.clientKey) body = (

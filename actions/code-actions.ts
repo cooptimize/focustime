@@ -10,7 +10,7 @@
 //      allows. The organization and project come only from Dataverse.
 // RB-2 adds two reads that only sort and search names: code.kinds (By kind) and code.search (Search names) read each
 // of one client's repos' file names (the same read Find uses, nothing else) and return its things by kind
-// (plan/code-kinds.ts). No file is opened for either. The browser asks one client at a time and matches the words
+// (plan/code-kinds.ts). No file is opened for either. Each request names one client, and the browser matches the words
 // itself, so the words typed never reach the server. One row per client ("Listed by kind", "Searched names") is
 // written before any name is returned; no row, no names.
 // Repo opened (its top folder), File opened and Find used are written to the view log (code_views) with who, when, the

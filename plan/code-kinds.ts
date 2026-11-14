@@ -260,9 +260,10 @@ export function thingsOf(paths: readonly string[]): Thing[] {
     const dot = folder.lastIndexOf(".");
     let name = dot > 0 ? folder.slice(0, dot) : folder;
     let type = dot > 0 ? folder.slice(dot + 1) : "";
-    if (!type) {
-      // A folder renamed without its type: a file inside may still say what it is. The name shown is the folder's.
-      for (const [re, t] of TYPE_BY_FILE) if (inside.some((f) => re.test(f.toLowerCase()))) { type = t; break; }
+    if (!FABRIC_BY_TYPE.has(type.toLowerCase())) {
+      // A folder renamed without its type, or with a dot of its own ("Sales v1.5"): a file inside may still say what
+      // it is, and then the whole folder name is the name. Otherwise the part after the dot shows as it is written.
+      for (const [re, t] of TYPE_BY_FILE) if (inside.some((f) => re.test(f.toLowerCase()))) { type = t; name = folder; break; }
     }
     name = unescapeName(name);
     const row = FABRIC_BY_TYPE.get(type.toLowerCase());
@@ -330,6 +331,19 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
     for (const tb of t.tables ?? []) if (has(`${tb.name} ${tb.file}`)) out.push({ thing: t, table: tb, name: tb.name, detail: `Table in ${t.name}`, file: tb.file });
   }
   return out;
+}
+
+/**
+ * How many results each client shows when all of them together are over the limit: in order, each as many as are
+ * left. A client with matches and none shown still says how many it has.
+ */
+export function shareCap(counts: readonly number[], max: number): number[] {
+  let left = max;
+  return counts.map((n) => {
+    const take = Math.min(n, left);
+    left -= take;
+    return take;
+  });
 }
 
 /** A path cut into pieces, the parts a word matched marked. */
