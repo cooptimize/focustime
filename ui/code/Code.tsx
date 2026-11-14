@@ -423,7 +423,7 @@ function FileView({ file, repo, onFolder, clientName, phone }: { file: CodeFileV
 export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; onClose: () => void }) {
   const phone = useNarrow();
   const [clients, setClients] = useState<Client[] | Failure | null>(null);
-  const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when.");
+  const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words.");
   const [repos, setRepos] = useState<Map<string, CodeRepoView[] | Failure | "loading">>(new Map());
   const [folders, setFolders] = useState<Map<string, Folder>>(new Map());
   const [open, setOpen] = useState<Map<string, Set<string>>>(new Map());

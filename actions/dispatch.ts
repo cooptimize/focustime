@@ -2028,6 +2028,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "code.folder":
     case "code.find":
     case "code.file":
+    case "code.kinds":
+    case "code.search":
       return codeAction(codeCtx(ctx), action as CodeAction, req.input);
     case "docs.access":
       // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).

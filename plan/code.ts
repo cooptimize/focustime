@@ -13,10 +13,19 @@ export const CODE_MEMORY_MS = 5 * 60_000;
 /** A path longer than this is refused (DevOps allows longer, but nothing a person clicks is). */
 export const PATH_MAX = 1_024;
 
-/** What happened, for the view log (C1). Opening and closing folders isn't logged. */
-export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used"] as const;
+/**
+ * What happened, for the view log (C1). Opening and closing folders isn't logged. RB-2: "Listed by kind" and
+ * "Searched names" are one row per client whose file names were read, with no repo and no path.
+ */
+export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used", "kinds_listed", "names_searched"] as const;
 export type CodeEvent = (typeof CODE_EVENTS)[number];
-export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used" };
+export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used", kinds_listed: "Listed by kind", names_searched: "Searched names" };
+/** RB-2: By kind and Search names read a client's repos this many at a time. */
+export const NAMES_REPOS_AT_ONCE = 4;
+/** RB-2: a search across clients asks for this many clients at a time. */
+export const SEARCH_CLIENTS_AT_ONCE = 3;
+/** RB-2: a search shows at most this many results. */
+export const SEARCH_MAX = 200;
 
 /** B2: the per-client Rule "Who can read this client's code". */
 export const CODE_ACCESS = ["company", "team"] as const;

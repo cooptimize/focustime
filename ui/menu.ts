@@ -1251,6 +1251,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "code.folder":
     case "code.find":
     case "code.file":
+    case "code.kinds":
+    case "code.search":
       return { disabled: "Open Code to read a client's code" };
     case "patterns.status": return env.showPatterns ? { run: () => env.showPatterns!() } : { disabled: "Not available" };
     case "patterns.access":
