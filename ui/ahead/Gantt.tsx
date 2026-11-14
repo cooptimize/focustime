@@ -62,6 +62,8 @@ function estimateOf(r: Row, rm: RoadmapRow | null, kids: Bar[], ahead: AheadStat
 
 /** What the Gantt shares with its rows. */
 type Env = {
+  /** BL-2: rows in list order (see Gantt's `ordered`). */
+  ordered: boolean;
   ahead: AheadState;
   scale: Scale;
   cols: AheadColumn[];
@@ -82,7 +84,7 @@ type Env = {
   end: () => void;
 };
 
-export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadData; groups: Group[]; onChanged: () => void }) {
+export function Gantt({ data, groups: incoming, onChanged, ordered = true }: { data: WeekLoadData; groups: Group[]; onChanged: () => void; /** BL-2: the rows come in list order (the level listed, in rank order); false (Needs attention): siblings by start date. */ ordered?: boolean }) {
   const a = useAhead();
   const [ahead, setAhead] = useState<AheadState | null>(null);
   // AH-6: the level, carets and Show callouts are Ahead's one view, set in its toolbar.
@@ -173,7 +175,7 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
     if (first?.dataset.key) setCursor(first.dataset.key);
   });
 
-  const env: Env | null = ahead && scale ? { ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, unsizedMinutes: data.planning.sizes.unsized, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
+  const env: Env | null = ahead && scale ? { ordered, ahead, scale, cols, fold, setFold, names, callouts, nudges: data.guidance?.readinessNudges !== false, unsizedMinutes: data.planning.sizes.unsized, setHours, onChanged, cursor, setCursor, frozen, begin, end } : null;
   return (
     <div className="ah-gantt-wrap">
       <div className="pa-box ah-gantt" ref={box} style={maxH ? { maxHeight: maxH } : undefined}>
@@ -395,12 +397,13 @@ function ClientGroup({ g, env }: { g: Group; env: Env }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g.rows, a.roadmap, a.readOnly, bars, ahead, crowded, cols, env.nudges, c.clientKey, c.me, c.hints, cap]);
 
-  // Rows: the tree, siblings by start date (no dates last), folded to the level and carets. The order freezes while a
-  // drag runs (D655).
+  // Rows: BL-2: the level listed in its rank order, each row opening to what's under it, as the Grid lists them (the
+  // rows come in that order). Needs attention's rows keep their siblings by start date (no dates last). Folded by the
+  // carets; the order freezes while a drag runs (D655).
   const startOf = (r: Row) => bars.get(r.item.id)?.start.date ?? "9999";
-  const roots = useMemo(() => tree(g.rows, (x, y) => startOf(x).localeCompare(startOf(y)) || x.item.title.localeCompare(y.item.title)),
+  const roots = useMemo(() => (env.ordered ? tree(g.rows) : tree(g.rows, (x, y) => startOf(x).localeCompare(startOf(y)) || x.item.title.localeCompare(y.item.title))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [g.rows, bars]);
+    [g.rows, bars, env.ordered]);
   const natural = visible(roots, env.fold);
   const order = shownOrder(env.frozen?.get(c.clientKey) ?? null, natural.map((l) => l.node.row.key));
   const byKey = new Map(natural.map((l) => [l.node.row.key, l]));
@@ -466,6 +469,9 @@ function ClientGroup({ g, env }: { g: Group; env: Env }) {
     </section>
   );
 }
+
+/** BL-2: a list row's rank number (rows from Needs attention have none). */
+const rankOf = (r: Row): number | null => ("rank" in r && typeof (r as { rank?: unknown }).rank === "number" ? (r as { rank: number }).rank : null);
 
 function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix }: {
   node: TreeNode<Row>;
@@ -594,9 +600,11 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
     e.stopPropagation();
   };
   const tab = env.cursor === r.key ? 0 : -1;
+  // Indented by level only (AH-6), from the level listed (BL-2), so every icon at a level shares one left edge.
+  const indent = Math.max(0, levelRank(r.tier) - (env.ordered ? levelRank(env.fold.level) : 0));
 
   return (
-    <div className={`pa-row pa-item tier-${r.tier}${r.context ? " context" : ""}${isOpen(r.item) ? "" : " closed"}`} role="row" aria-level={levelRank(r.tier) + 1} aria-expanded={kids > 0 ? open : undefined}>
+    <div className={`pa-row pa-item tier-${r.tier}${r.context ? " context" : ""}${isOpen(r.item) ? "" : " closed"}`} role="row" aria-level={indent + 1} aria-expanded={kids > 0 ? open : undefined}>
       <div
         ref={label}
         className="pa-label"
@@ -605,10 +613,10 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
         data-key={r.key}
         data-id={r.item.id}
         data-client={r.clientKey}
-        aria-label={`${r.item.type} #${r.item.id} ${r.item.title}${kids > 0 ? `, ${open ? "expanded" : "collapsed"}` : ""}`}
+        aria-label={`${rankOf(r) ? `Rank ${rankOf(r)}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${kids > 0 ? `, ${open ? "expanded" : "collapsed"}` : ""}`}
         onFocus={() => env.setCursor(r.key)}
         onKeyDown={keys}
-        style={{ paddingLeft: `calc(6px + ${levelRank(r.tier)} * var(--gantt-step))` }}
+        style={{ paddingLeft: `calc(6px + ${indent} * var(--gantt-step))` }}
       >
         {kids > 0 ? <Chevron open={open} title={r.item.title} onToggle={() => env.setFold((f) => setRow(f, r, !open))} /> : <ChevronSpace />}
         <TypeIcon clientKey={r.clientKey} type={r.item.type} className="pa-type" />

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { call } from "./mb1-helpers.ts";
-import { calloutsOn, levelPressed, moreItem, openFilter, pickLevel } from "./backlog-helpers.ts";
+import { calloutsOn, levelPressed, moreItem, openFilter, pickLevel, oldTree } from "./backlog-helpers.ts";
 import { SHOTS } from "./shots.ts";
 
 let h: Harness;
@@ -21,6 +21,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
 
   const open = async (viewport = { width: 1440, height: 900 }, before?: (page: Page) => Promise<void>) => {
     const { page, errors } = await freshPage(h, viewport);
+    await oldTree(page);
     await before?.(page);
     await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
@@ -77,7 +78,7 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
   it("type icons at every level, indentation by level only, nothing but the hierarchy in the label column", async () => {
     const { page, errors } = await open();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-1440.png` });
-    await pickLevel(page, "Stories");
+    // BL-2: Epics with everything opened (open() starts there) is the whole tree, every level on screen.
     await page.waitForTimeout(200);
     const rows = await page.locator(".pa-item").evaluateAll((els) =>
       els.map((r) => ({
@@ -96,7 +97,8 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
     for (const r of rows) {
       // The icon is the type from the process model (the label names the same type), drawn, with its name.
       expect(r.type, r.title).toBeTruthy();
-      expect(r.aria.startsWith(`${r.type} #`), r.title).toBe(true);
+      // BL-2: a row at the level listed starts with its rank ("Rank 2. Epic #…").
+      expect(r.aria.replace(/^Rank \d+\. /, "").startsWith(`${r.type} #`), r.title).toBe(true);
       expect(r.svgName, r.title).toBe(r.type);
       expect(r.fallback, `${r.title}: a known DevOps icon`).toBe(false);
       // Only the title: no pills, flags, counts or estimates.
@@ -209,23 +211,25 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
     await page.close();
   }, T);
 
-  it("levels: Epics, Features and Stories fold the tree; a roll-up spans its children with their count; carets work after a level; the choice is remembered", async () => {
+  it("levels: Epics, Features and Stories list that level; a roll-up spans its children with their count; carets work after a level; the choice is remembered", async () => {
     const { page, errors } = await open();
     const states = () => page.locator(".pa-item").evaluateAll((els) => els.map((e) => ({ level: Number(e.getAttribute("aria-level")), expanded: e.getAttribute("aria-expanded"), title: e.querySelector(".pa-title")!.textContent })));
-    // Stories is the default (AH-6 toolbar: one level for every mode, nothing folded); Features: epics open, features closed.
-    await expect(levelPressed(page, "Stories")).resolves.toBe("true");
+    // BL-2: these tests start from the old tree (Epics, everything open); Features lists features, each closed.
+    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
     await pickLevel(page, "Features");
     await expect(levelPressed(page, "Features")).resolves.toBe("true");
     let s = await states();
-    for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe(r.level === 1 ? "true" : "false");
-    // Stories with no feature on screen are top rows at every level.
-    const loose = s.filter((r) => r.level === 3).length;
+    for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe("false");
+    expect(s.some((r) => r.title === "Customer portal redesign")).toBe(false);
+    // Stories with no feature over them follow the features, at every level.
+    const loose = s.filter((r) => r.level === 2).length;
     const epic = "Customer portal redesign";
     await shot(page, "level-features");
+    expect(loose).toBeGreaterThan(0);
     await pickLevel(page, "Epics");
     s = await states();
     expect(s.every((r) => r.expanded !== "true")).toBe(true);
-    expect(s.filter((r) => r.level === 3).length).toBe(loose);
+    expect(s.filter((r) => r.level === 1).map((r) => r.title)).toContain(epic);
     // The roll-up: its bar spans its children's bars, with their count.
     const roll = row(page, epic).locator(".pa-bar.rollup");
     const count = await roll.getAttribute("data-count");
@@ -252,8 +256,8 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
     await expect(row(page, epic).getAttribute("aria-expanded")).resolves.toBe("true");
     await pickLevel(page, "Stories");
     s = await states();
-    for (const r of s) if (r.expanded !== null) expect(r.expanded, `${r.title}`).toBe("true");
-    expect(s.some((r) => r.level === 3)).toBe(true);
+    // BL-2: Stories lists stories only, nothing under them.
+    expect(s.every((r) => r.level === 1 && r.expanded === null)).toBe(true);
     await shot(page, "level-stories");
     // A collapsed feature with its own dates keeps its bar; its stories' span is the bracket under it.
     await pickLevel(page, "Features");
@@ -264,15 +268,15 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
     // Expand all and Collapse all in ⋯.
     await moreItem(page, "Collapse all");
     await expect.poll(async () => (await states()).every((r) => r.expanded !== "true")).toBe(true);
-    // Remembered after a reload.
+    // Remembered after a reload (BL-2: Collapse all keeps the level listed).
     await page.reload();
     await page.evaluate(() => (location.hash = "#/backlog/gantt"));
     await page.locator(".pa-item").first().waitFor({ timeout: 60_000 });
-    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
+    await expect(levelPressed(page, "Features")).resolves.toBe("true");
     // AH-6 toolbar: the Grid has the same control and the same level (one view for both).
     await page.evaluate(() => (location.hash = "#/backlog"));
     await page.locator(".ah-row").first().waitFor({ timeout: 30_000 });
-    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
+    await expect(levelPressed(page, "Features")).resolves.toBe("true");
     await pickLevel(page, "Stories");
     const all = await page.locator(".ah-row").count();
     await pickLevel(page, "Epics");
@@ -337,22 +341,26 @@ describe.skipIf(!CHROMIUM)("AH-6: Backlog › Gantt layout (browser, demo mode)"
     const first = page.locator(".pa-item > .pa-label").first();
     await expect(first.getAttribute("tabindex")).resolves.toBe("0");
     await expect(page.locator('.pa-item > .pa-label[tabindex="0"]').count()).resolves.toBe(1);
-    const epicRow = row(page, "Customer portal redesign");
-    await epicRow.locator(".pa-label").focus();
-    await page.keyboard.press("ArrowLeft");
-    await expect(epicRow.getAttribute("aria-expanded")).resolves.toBe("false");
+    // BL-2: Features lists features, each closed until opened.
+    const top = "Order history export";
+    const featureRow = row(page, top);
+    await featureRow.locator(".pa-label").focus();
+    await expect(featureRow.getAttribute("aria-expanded")).resolves.toBe("false");
     await page.keyboard.press("ArrowRight");
-    await expect(epicRow.getAttribute("aria-expanded")).resolves.toBe("true");
+    await expect(featureRow.getAttribute("aria-expanded")).resolves.toBe("true");
+    await page.keyboard.press("ArrowLeft");
+    await expect(featureRow.getAttribute("aria-expanded")).resolves.toBe("false");
+    await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowDown");
     const focused = () => page.evaluate(() => document.activeElement?.closest(".pa-item")?.querySelector(".pa-title")?.textContent ?? null);
     const second = await focused();
-    expect(second).not.toBe("Customer portal redesign");
+    expect(second).not.toBe(top);
     await page.keyboard.press("ArrowUp");
-    await expect.poll(focused).toBe("Customer portal redesign");
+    await expect.poll(focused).toBe(top);
     // Left on a child goes to its parent.
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowLeft");
-    await expect.poll(focused).toBe("Customer portal redesign");
+    await expect.poll(focused).toBe(top);
     await page.close();
   }, T);
 
