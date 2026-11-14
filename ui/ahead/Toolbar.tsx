@@ -68,8 +68,8 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
     const scopeCounts = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("; ");
     const scopeWords = `${f.whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for ${names}`;
     const items: MenuItem[] = [
-      { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll()) },
-      { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll()) },
+      { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll(view.fold.level)) },
+      { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll(view.fold.level)) },
       // Callouts are the Gantt's; in the Grid the item stays, saying why (it's found where it was looked for).
       { id: "callouts", group: "View", label: "Callouts at the end of bars", toggle: true, checked: view.callouts, ...(callOff ? { disabled: callOff, expected: true } : { run: () => view.setCallouts(!view.callouts) }) },
       // The counts per client ("Northwind Foods: 14 of 19 open items are Cooptimize's work") as its hint.

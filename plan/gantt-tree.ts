@@ -1,5 +1,5 @@
 // AH-6: Ahead's tree for the Gantt and the Grid, pure. The rows of one client as a tree (parent › children, siblings in
-// a given order), which rows are open (a level for the whole tree, "Show: Epics · Features · Stories", with per-row
+// a given order, else as given), which rows are open (BL-2: the level listed, Expand all or Collapse all, with per-row
 // carets on top of it), the rows on screen, a collapsed row's roll-up (the span of what's under it) and the level
 // names from the process model (the types at each level, never hard-coded words).
 import type { Tier } from "./ahead-model.ts";
@@ -8,26 +8,33 @@ export const LEVELS: readonly Tier[] = ["epic", "feature", "story"];
 const RANK: Record<Tier, number> = { epic: 0, feature: 1, story: 2 };
 export const levelRank = (t: Tier): number => RANK[t];
 
-/** The level the tree shows down to, and the rows opened or closed by hand on top of it. */
-export type Fold = { level: Tier; rows: Record<string, boolean> };
+/**
+ * BL-2: the level listed (Filter › Levels), and which rows are open. `all` is Expand all (true) or Collapse all (false);
+ * without it, a row is open only when its level is above the one listed (Needs attention's rows under their parents),
+ * so the list's rows start closed. A caret opened or closed by hand wins over both.
+ */
+export type Fold = { level: Tier; rows: Record<string, boolean>; all?: boolean };
 export const isFold = (v: unknown): v is Fold => {
   if (!v || typeof v !== "object") return false;
   const f = v as Partial<Fold>;
-  return typeof f.level === "string" && (LEVELS as readonly string[]).includes(f.level) && !!f.rows && typeof f.rows === "object";
+  return typeof f.level === "string" && (LEVELS as readonly string[]).includes(f.level) && !!f.rows && typeof f.rows === "object" && (f.all === undefined || typeof f.all === "boolean");
 };
 
-/** A row is open when its level is above the chosen one, unless its caret said otherwise. */
-export const isOpenRow = (fold: Fold, r: { key: string; tier: Tier }): boolean => fold.rows[r.key] ?? RANK[r.tier] < RANK[fold.level];
-/** A level for the whole tree: the carets start over. */
+const byDefault = (fold: Fold, r: { tier: Tier }) => fold.all ?? RANK[r.tier] < RANK[fold.level];
+/** A row is open when its caret said so, else by Expand all or Collapse all, else when its level is above the one listed. */
+export const isOpenRow = (fold: Fold, r: { key: string; tier: Tier }): boolean => fold.rows[r.key] ?? byDefault(fold, r);
+/** A level to list: the carets start over. */
 export const atLevel = (level: Tier): Fold => ({ level, rows: {} });
-export const expandAll = (): Fold => atLevel("story");
-export const collapseAll = (): Fold => atLevel("epic");
+/** Every row open, at the level listed. */
+export const expandAll = (level: Tier): Fold => ({ level, rows: {}, all: true });
+/** Every row closed, at the level listed. */
+export const collapseAll = (level: Tier): Fold => ({ level, rows: {}, all: false });
 /** One caret on top of the level. */
 export function setRow(fold: Fold, r: { key: string; tier: Tier }, open: boolean): Fold {
   const rows = { ...fold.rows };
-  if (open === RANK[r.tier] < RANK[fold.level]) delete rows[r.key];
+  if (open === byDefault(fold, r)) delete rows[r.key];
   else rows[r.key] = open;
-  return { level: fold.level, rows };
+  return { ...fold, rows };
 }
 
 export type TreeRow = { key: string; tier: Tier; item: { id: number; parentId: number | null } };
