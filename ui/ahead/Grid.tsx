@@ -1,6 +1,8 @@
 // AH-1, BL-1: Backlog › Grid. Every client's DevOps on one screen: each client a section that folds (remembered on this
 // device) with a header line (name, project, "33 items · 5 need attention", "you're a lead here"), its items as a tree
-// in the client's backlog order (by target date where the project has none, said once in the header). Columns: Item,
+// BL-2: the level picked in Filter › Levels as a list in its own backlog order, each row with its rank number and its
+// parent as a quiet label (press it to show only what's under that parent), opening to what is one level under it in
+// that level's order (by target date where the project has none, said once in the header). Columns: Item,
 // State, Dates ("Aug 10 → Nov 6"), Assigned to, Size, Status.
 //
 // No dashes: an empty cell is empty; where I may fill it, "+ date", "+ owner" or "+ size" shows on hover and on focus; a
@@ -13,9 +15,9 @@
 // selects a row (Shift+Space or Shift+click a range); with rows selected the bulk bar offers what the Backlog mode did.
 // Esc clears the selection.
 //
-// Two other shapes of the same table: one level as a flat list in each client's rank order with its rank number (the
-// Backlog mode before BL-1), and Needs attention (Readiness before BL-1): only the items with something to fix, under
-// their parents for context, each with its fix (Break down, Set dates, Assign, Size) and Skip in its Status cell.
+// The table's other shape is Needs attention (Readiness before BL-1), in its own order: only the items with something to
+// fix, under their parents for context, each with its fix (Break down, Set dates, Assign, Size) and Skip in its Status
+// cell.
 import type React from "react";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ChangeField } from "../../plan/ahead-edit.ts";
@@ -33,7 +35,8 @@ import { BulkBar } from "./Bulk.tsx";
 import { Chevron, ChevronSpace } from "./Chevron.tsx";
 import { CellEditor } from "./Editors.tsx";
 import type { GridLayout } from "./layout.ts";
-import { isOpen, type LoadClient, type Row } from "./model.ts";
+import { isOpen, type LoadClient, type Row, type Tier } from "./model.ts";
+import type { ParentLabel } from "../../plan/backlog-list.ts";
 import { NewUnder } from "./NewUnder.tsx";
 import { usePref } from "./prefs.ts";
 import { Icon } from "../icons.tsx";
@@ -54,8 +57,8 @@ const longDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US"
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const isKeys = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
-/** A row as the Grid shows it: its rank in a flat list, and in Needs attention its entry (null: shown for context). */
-export type GridRow = Row & { rank?: number; entry?: FixEntry | null; /** The ranked list: the last change in DevOps ("5 days ago · state"). */ lastWords?: string };
+/** A row as the Grid shows it: in the list its rank and parent, and in Needs attention its entry (null: shown for context). */
+export type GridRow = Row & { rank?: number | null; parent?: ParentLabel | null; entry?: FixEntry | null; /** The list: the last change in DevOps ("5 days ago · state"). */ lastWords?: string };
 export type GridGroup = {
   client: LoadClient;
   rows: GridRow[];
@@ -68,10 +71,12 @@ export type GridGroup = {
   more?: { hidden: number; all: boolean; toggle: () => void };
   /** Needs attention: the entries I skipped (2 weeks each), with Unskip. */
   skipped?: { e: FixEntry; r: Row }[];
+  /** BL-2: the level listed. */
+  level?: Tier;
 };
-export type GridShape = "tree" | "flat" | "attention";
+export type GridShape = "list" | "attention";
 
-export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, skips, onChanged }: { groups: GridGroup[]; layout?: GridLayout; shape?: GridShape; skip?: (k: string) => void; unskip?: (k: string) => void; skips?: Skips; onChanged?: () => void }) {
+export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, skips, onChanged }: { groups: GridGroup[]; layout?: GridLayout; shape?: GridShape; skip?: (k: string) => void; unskip?: (k: string) => void; skips?: Skips; onChanged?: () => void }) {
   const COLS = COLUMNS[layout];
   const a = useAhead();
   const { fold, setFold } = a.view;
@@ -92,7 +97,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
         g.rows.forEach((r, i) => {
           if (closedAt !== null && r.depth > closedAt) return;
           closedAt = null;
-          const kids = shape !== "flat" && (g.rows[i + 1]?.depth ?? -1) > r.depth;
+          const kids = (g.rows[i + 1]?.depth ?? -1) > r.depth;
           rows.push({ r, kids });
           if (kids && !isOpenRow(fold, r)) closedAt = r.depth;
         });
@@ -210,7 +215,12 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
                 );
               })()}
               {c.lead && <span className="muted">· you're a lead here</span>}
-              {c.status === "ok" && g.rankedBy === "target" && (
+              {c.status === "ok" && shape === "list" && g.level && (
+                <span className="muted ah-client-order" title={g.rankedBy === "target" ? `${c.project ?? c.clientName} has no backlog order field in DevOps` : `${a.view.names[g.level]} in ${c.project ?? c.clientName}'s own backlog order, as DevOps ranks them`}>
+                  · {g.rankedBy === "target" ? `${a.view.names[g.level]} by target date (no backlog order)` : `${a.view.names[g.level]}, in backlog order`}
+                </span>
+              )}
+              {c.status === "ok" && shape !== "list" && g.rankedBy === "target" && (
                 <span className="muted ah-client-order" title={`${c.project ?? c.clientName} has no backlog order field in DevOps`}>
                   · by target date (no backlog order)
                 </span>
@@ -221,7 +231,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
               <p className="muted ah-client-empty">{shape === "attention" ? "Nothing to fix near the top of this backlog or in the next 4 weeks." : "Nothing here with these filters."}</p>
             )}
             {open && rows.length > 0 && (
-              <table className="ah-grid" role={shape === "flat" ? "grid" : "treegrid"} aria-label={`${c.clientName} items`} aria-multiselectable={ticks || undefined}>
+              <table className="ah-grid" role="treegrid" aria-label={`${c.clientName} items`} aria-multiselectable={ticks || undefined}>
                 <colgroup>
                   {COLS.map((col) => <col key={col} className={WIDTH[col]} />)}
                 </colgroup>
@@ -229,7 +239,7 @@ export function Grid({ groups, layout = "wide", shape = "tree", skip, unskip, sk
                   <tr>
                     {COLS.map((col) => (
                       <th key={col} scope="col">
-                        {col === "item" && shape === "flat" ? "Rank · Item" : HEAD[col]}
+                        {col === "item" && shape === "list" ? "Rank · Item" : HEAD[col]}
                       </th>
                     ))}
                   </tr>
@@ -415,16 +425,17 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
       {entry?.leaving && <span className="ah-fx-ready">Ready</span>}
     </span>
   );
-  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.lastWords ? `Last change ${r.lastWords}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
+  const parent = shape === "list" && r.depth === 0 ? (r.parent ?? null) : null;
+  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.lastWords ? `Last change ${r.lastWords}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${parent ? `, in ${parent.type} ${parent.title}` : ""}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
   return (
     <tr
       role="row"
-      aria-level={shape === "flat" ? undefined : r.depth + 1}
+      aria-level={r.depth + 1}
       aria-expanded={kids ? open : undefined}
       aria-selected={pick ? selected : undefined}
       data-key={r.key}
       className={`ah-row tier-${r.tier} depth-${r.depth}${r.context ? " context" : ""}${closedItem ? " closed" : ""}${r.item.inScope === false ? " out-scope" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}${selected ? " sel" : ""}${entry?.leaving ? " leaving" : ""}`}
-      style={{ "--ah-depth": shape === "flat" ? 0 : r.depth } as CSSProperties}
+      style={{ "--ah-depth": r.depth } as CSSProperties}
       title={r.editable ? undefined : c.note}
     >
       {cols.map((col) => {
@@ -433,7 +444,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
             <Fragment key={col}>
               {cell(
                 "item",
-                <span className="ah-item" style={{ paddingInlineStart: shape === "flat" ? 0 : `calc(${r.depth} * var(--ah-indent, 18px))` }}>
+                <span className="ah-item" style={{ paddingInlineStart: `calc(${r.depth} * var(--ah-indent, 18px))` }}>
                   {pick ? (
                     <span className="ah-tick">
                       <input type="checkbox" tabIndex={-1} checked={selected} onChange={() => null} onClick={(e) => (e.stopPropagation(), pick(e.shiftKey))} aria-label={`Select #${r.item.id} ${r.item.title}`} />
@@ -441,11 +452,12 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                   ) : (
                     <span className="ah-tick" aria-hidden="true" />
                   )}
-                  {shape === "flat" ? (
-                    <span className="bl-rank" title={`Rank ${r.rank} in this backlog${r.lastWords ? `. Last change in DevOps: ${r.lastWords}` : ""}`}>
-                      {r.rank}
+                  {shape === "list" && (
+                    <span className={`bl-rank${r.rank ? "" : " none"}`} title={r.rank ? `Rank ${r.rank} in this backlog${r.lastWords ? `. Last change in DevOps: ${r.lastWords}` : ""}` : r.lastWords ? `Last change in DevOps: ${r.lastWords}` : undefined} aria-hidden={r.rank ? undefined : true}>
+                      {r.rank ?? ""}
                     </span>
-                  ) : kids ? (
+                  )}
+                  {kids ? (
                     <Chevron open={open} title={r.item.title} onToggle={() => toggle()} />
                   ) : (
                     <ChevronSpace />
@@ -457,6 +469,12 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                     </WorkLink>{" "}
                     <span className="muted ah-id">#{r.item.id}</span>
                   </span>
+                  {parent && (
+                    <button type="button" className="ah-parent" tabIndex={-1} onClick={(e) => (e.stopPropagation(), a.filterUnder(parent.key))} title={`In ${parent.type} #${parent.id}. Show only what's under it`} aria-label={`Show only what's under ${parent.type} ${parent.title}`}>
+                      <TypeIcon clientKey={c.clientKey} type={parent.type} className="ah-type-icon" />
+                      <span className="ah-parent-text">{parent.title}</span>
+                    </button>
+                  )}
                   {!r.editable && !r.context && (
                     <span className="ah-ro" title={c.note}>
                       Read only

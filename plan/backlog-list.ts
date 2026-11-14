@@ -102,4 +102,4 @@ export function listGroups(load: AheadLoad, f: AheadFilters, o: Omit<ListOptions
 }
 
 /** The rows a list counts: the chosen level's rows (and the loose ones after them) that a filter picked, not context. */
-export const listCount = (g: Pick<ListGroup, "rows">): number => g.rows.filter((r) => r.depth === 0 && !r.context).length;
+export const listCount = (g: { rows: readonly { depth: number; context: boolean }[] }): number => g.rows.filter((r) => r.depth === 0 && !r.context).length;

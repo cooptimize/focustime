@@ -227,6 +227,8 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     await page.locator(".ah-client").first().waitFor({ timeout: 30_000 });
     await page.locator(".ah-tb-people").getByRole("button", { name: "Everyone" }).click();
     const nw = page.locator(".ah-client", { has: page.getByRole("heading", { name: /^Northwind/ }) });
+    // BL-2: Backlog lists Features; the story shows when its new feature is opened.
+    await nw.locator('.ah-row[data-key="Northwind:1120"] .ah-chev').click();
     const order = async () => {
       const keys = await nw.locator(".ah-row").evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.key ?? ""));
       return { feature: keys.findIndex((k) => k.endsWith(":1120") || k.endsWith("1120")), story: keys.findIndex((k) => k.endsWith(":1113") || k.endsWith("1113")), old: keys.findIndex((k) => k.endsWith(":1110") || k.endsWith("1110")) };

@@ -43,3 +43,12 @@ export async function calloutsOn(page: Page) {
   await page.keyboard.press("Escape");
   return v;
 }
+
+/**
+ * BL-2: Backlog lists one level (Features by default), each row opening to what's under it. Tests written for the
+ * tree BL-1 showed by default (every level, every row open) start from Epics with everything opened, which is that
+ * same tree: call before Backlog opens (it reads the level once, as it mounts).
+ */
+export async function oldTree(page: Page) {
+  await page.evaluate(() => localStorage.setItem("focustime.ahead.view.fold", JSON.stringify({ level: "epic", rows: {}, all: true })));
+}

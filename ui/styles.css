@@ -6978,7 +6978,15 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .ah-tick input { margin: 0; opacity: 0; cursor: pointer; }
 .ah-row:hover .ah-tick input, .ah-row:focus-within .ah-tick input, .has-sel .ah-tick input, .ah-tick input:focus-visible { opacity: 1; }
 .ah-row.sel > .ah-cell { background: color-mix(in oklab, var(--selected) 10%, transparent); }
-.shape-flat .bl-rank { flex: none; min-width: calc(28px * var(--text-scale)); text-align: right; padding-right: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* BL-2: the list's rank number before each row at the level listed (rows under it keep the space, so titles line up). */
+.shape-list .bl-rank { flex: none; min-width: calc(28px * var(--text-scale)); text-align: right; padding-right: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.shape-list .ah-row:not(.depth-0) .bl-rank { visibility: hidden; }
+/* BL-2: the row's parent, a quiet label at the end of the title; pressing it shows only what's under that parent. Its
+   28 px target is drawn by a transparent border, so the row doesn't grow (section 10, PS-2). */
+.ah-parent { flex: 0 1 auto; min-width: 0; max-width: 40%; display: inline-flex; align-items: center; gap: 4px; margin-block: calc(-5px * var(--text-scale)); border: calc(5px * var(--text-scale)) solid transparent; border-radius: 999px; padding: 0 4px; background: none; background-clip: padding-box; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 400; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ah-parent:hover { background-color: var(--wash-1); color: var(--text); }
+.ah-parent:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ah-parent-text { overflow: hidden; text-overflow: ellipsis; }
 /* Titles in the app's quiet link style. */
 .ahead .ah-title a, .ahead .pa-title a { color: var(--text); text-decoration: none; }
 .ahead .ah-title a:hover, .ahead .ah-title a:focus-visible, .ahead .pa-title a:hover, .ahead .pa-title a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }

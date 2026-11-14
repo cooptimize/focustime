@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
-import { pickLevel } from "./backlog-helpers.ts";
+import { pickLevel, oldTree } from "./backlog-helpers.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 
 let h: Harness;
@@ -19,6 +19,7 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
 
   const open = async (hash: string, viewport?: { width: number; height: number }) => {
     const { page, errors } = await freshPage(h, viewport);
+    await oldTree(page);
     await page.evaluate((x) => (location.hash = x), hash);
     // MB-1: on the phone Ahead opens with its notice first; Open anyway shows it.
     if (viewport && viewport.width < 600) await page.getByRole("button", { name: "Open anyway" }).click({ timeout: 30_000 });
@@ -575,7 +576,7 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
           expect(m.item, `${w}: the Item column`).toBeGreaterThanOrEqual(lay === "cards" ? 300 : 320);
         } else expect(m.item, `${w} larger: the Item column`).toBeGreaterThanOrEqual(lay === "cards" || m.lay.includes("cards") ? 300 : 320);
         // BL-1: one Dates column and one Status column at every size.
-        if (size === "default" && (lay === "wide" || lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Item", "State", "Dates", "Assigned to", "Size", "Status"]);
+        if (size === "default" && (lay === "wide" || lay === "dates" || lay === "dots")) expect(m.heads).toEqual(["Rank · Item", "State", "Dates", "Assigned to", "Size", "Status"]);
         if (size === "default" && lay === "cards") expect(m.heads).toEqual([]);
       }
       // The merged Dates column reads "Oct 19 → Nov 13"; dots carry their words for screen readers.
