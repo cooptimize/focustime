@@ -989,4 +989,14 @@ From the IT review (TD-1):
   - The action registry's summaries are shown nowhere (the command menu shows titles); they were brought up to date with the titles anyway.
 - The config file's comments written beside a setting (`"Display (U5.1): show personal events on Week and Day."`) now use today's names; an existing file keeps the comment it has.
 - `docs/architecture.md` still describes the upkeep job and the removed kinds in its history of CV-1 and IB-1; TD-1 left that file alone and so does this step.
+- From review 1 (someone who knows only today's names, with only the demo), seen and left:
+  - "Team" as a place: a tooltip on Ask a lead to look ("Sends a link to your planned Harbor features in Team"), Admin › People ("leads, Team and notes"), and a command menu group "Team". Team is hidden for now (WD-1). Should these words go while it is?
+  - "request" as a thing: Settings › Client chats ("My request phrases", "Client chats read for requests", "becomes a request when"), Admin › Conversations ("Request phrases", "Keep messages that aren't requests"), Admin › AI ("Sorting requests"), Admin › Status. The Inbox shows no requests; the phrases still drive what is picked out as urgent. What should they be called?
+  - The command menu's "loop update" commands (Draft a loop update, Send the loop update shown, Loop updates sent) beside "Close the loop".
+  - Admin › Conversations: "Closed conversations stay shown (days)" with the hint "In Inbox › Conversations › Closed, then they're no longer listed." The Inbox has no Closed list. Does the rule still do anything a person sees?
+  - The command menu: "Backlog › stories in each client's rank order" (a filter, written as a view) and "Settings · Coming soon" although Settings exists.
+  - The phone's Week accessible name starts "Day view" (it shows one day at a time). The phone's day bar draws ← and → as the buttons' text (their names are Previous day and Next day). A hint says "The ⚑ flags in Backlog's Gantt". Backlog's status column shows "+1" for a second reason, and the Focus screen's button is "+15": counts and an amount, left alone.
+  - Pointers it could not place: Chat.Read's "Settings > Clients: Add a chat to allow it" (above); the Guide's Day section says the focus screen has "Done, +15 and Stop" where a plain timer shows Finish, +15 and Stop (a timer on a to-do was not checked).
+  - Drawing: on Day with a block's panel open, the source status row opened from the dot at the bottom left is covered at its right end by the panel ("DevOps 4 of 4" cut off). On Day's Timeline the "1h 45m free" pill sits on the 10 AM hour line.
+  - Settings' search shows the old name after "was" on each result found by one, as it did before.
 

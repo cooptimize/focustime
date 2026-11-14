@@ -2,9 +2,9 @@
 
 STEP 0.3's list: every string a person can read that used a name on the retired list (`ui/guide/retired.ts`) or wrote a control as a character, with what it became. Comments in code are not on it.
 
-How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was written first and run on `main`: it reads every string, template part and run of JSX text in the app's code (`ui/`, `server/`, `assistant/`, `actions/`, `plan/`, `config/`, `week/`, `ai/`, `host/`, `store/`, the Teams scripts) and the public pages, and reported 121 lines. A second pass by hand added what a pattern can't see: old names in lower case ("captures and drafts", "the whole roadmap", "urgent asks"), paths written with ">" ("Settings > Data"), and pointers to a Settings section that has since moved (a write PAT is entered in Settings › DevOps, not Settings › Clients). Widening the scan to JSX text with brackets found two more lines later (the key list's footer and the iPhone note in Settings).
+How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was written first and run on `main`: it reads every string, template part and run of JSX text in the app's code (`ui/`, `server/`, `assistant/`, `actions/`, `plan/`, `config/`, `week/`, `ai/`, `host/`, `store/`, the Teams scripts) and the public pages, and reported 121 lines. A second pass by hand added what a pattern can't see: old names in lower case ("captures and drafts", "the whole roadmap", "urgent asks"), paths written with ">" ("Settings > Data"), and pointers to a Settings section that has since moved (a write PAT is entered in Settings › DevOps, not Settings › Clients). Widening the scan found more later: JSX text with brackets (the key list's footer, the iPhone note in Settings), and after the two reviews the sources' own messages, text written with an entity ("Settings &gt; Data") and text after a tag that closes itself ("Show personal events on Week and Today"). The reviews also found lines no pattern would: "offered after you confirm next week", "Logged in Data › Teams status log", "Enter opens details".
 
-148 rows. "Words now" is `main` before this step; "Words proposed" is what the branch says. A row from `actions/registry.ts` shows the command's title or group (what the command menu shows) and its summary (not shown, kept in step).
+164 rows. "Words now" is `main` before this step; "Words proposed" is what the branch says. A row from `actions/registry.ts` shows the command's title or group (what the command menu shows) and its summary (not shown, kept in step).
 
 | File and line (on main) | Words now | Words proposed |
 |---|---|---|
@@ -17,6 +17,7 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `actions/devops-write-actions.ts:157` | may already be in DevOps. Retry it in Settings > Data > Audit log: it checks first and won't make a second one | may already be in DevOps. Retry it in Settings › Activity: it checks first and won't make a second one |
 | `actions/devops-write-actions.ts:216` | DevOps writes aren't enabled for ${client}. Enter your own DevOps PAT in Settings > Clients > DevOps write access | DevOps writes aren't enabled for ${client}. Enter your own DevOps PAT in Settings › DevOps › Write access |
 | `actions/devops-write-actions.ts:265` | ${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings > Clients | ${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings › DevOps |
+| `actions/devops-write-actions.ts:266` | Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings > Clients | Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings › DevOps |
 | `actions/devops-write-actions.ts:625` | Feedback isn't sent again from here. Send it again from ⋯ › Send feedback | Feedback isn't sent again from here. Send it again from More › Send feedback |
 | `actions/devops-write-actions.ts:654` | The request opens again in Inbox › Requests, for everyone on the chat. | The request opens again in Inbox › From chats, for everyone on the chat. |
 | `actions/devops-write-actions.ts:1121` | may already be in DevOps. Retry it in Settings > Data > Audit log | may already be in DevOps. Retry it in Settings › Activity |
@@ -30,6 +31,7 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `actions/meeting-actions.ts:453` | Enable DevOps writes for this client in Settings › Clients first | Enable DevOps writes for this client in Settings › DevOps first |
 | `actions/meeting-actions.ts:472` | Saved as your draft: put it under a feature or epic in Inbox › Captures and drafts, then create it | Saved as your draft: put it under a feature or epic in Inbox › Captures, then create it |
 | `actions/meeting-actions.ts:487` | In your Waiting on | Noted with this call |
+| `actions/meeting-actions.ts:540` | Waiting on ${b.who} | Noted with this call: ${b.who} |
 | `actions/registry.ts:40` | Requests | From chats |
 | `actions/registry.ts:87` | , title: "Plan ahead | , aka: ["Plan ahead"], title: "Backlog › Gantt: the next 12 weeks |
 | `actions/registry.ts:194` | Whether a person's first Today offers the 2-minute tour; { done: true } once they open it or say Not now; kept per person in the plan store | Whether a person's first Day offers the 2-minute tour; { done: true } once they open it or say Not now; kept per person in the plan store |
@@ -82,6 +84,12 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `public/legal.html:34` | Settings › Data › Export my data gives you everything kept for you as a file. Delete my data signs you out and removes it: the Teams bot's records at once, everything else 30 days later. Settings › Data › Assistant history › Clear… | Settings › Your data › Export my data gives you everything kept for you as a file. Delete my data signs you out and removes it: the Teams bot's records at once, everything else 30 days later. Settings › AI and assistant › Assistan… |
 | `scripts/teams-card-previews.ts:83` | Open in Ahead | Open in Backlog |
 | `server/teams/rhythm-cards.ts:123` | } in Today | } on Day |
+| `sources/devops/source.ts:1193` | Ahead reads the shared DevOps store, which isn't running here | Backlog reads the shared DevOps store, which isn't running here |
+| `sources/devops/write.ts:45` | The DevOps write PAT is expired or invalid. Enter a new one in Settings > Clients | The DevOps write PAT is expired or invalid. Enter a new one in Settings › DevOps |
+| `sources/devops/write.ts:54` | The DevOps write PAT is expired or invalid. Enter a new one in Settings > Clients | The DevOps write PAT is expired or invalid. Enter a new one in Settings › DevOps |
+| `sources/not-set-up.ts:8` | ${NAMES[source]} isn't set up yet. Set it up in Settings > Connections | ${NAMES[source]} isn't set up yet. Set it up in Settings › Accounts and calendars |
+| `sources/oauth/oauth.ts:269` | FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes | FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings › Accounts and calendars and allow calendar changes |
+| `sources/oauth/oauth.ts:276` | FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes | FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings › Accounts and calendars and allow calendar changes |
 | `ui/App.tsx:153` | The week's blocks, with Add work beside them | Week: the week's blocks, with a block's panel beside them |
 | `ui/App.tsx:154` | Features, epics and stories ahead: Grid, Gantt, Readiness and Backlog | Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention |
 | `ui/App.tsx:155` | What needs you: promises, conversations, sends, captures and drafts | Inbox: From chats, Promises and Captures |
@@ -90,6 +98,7 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `ui/App.tsx:2316` | Shows them until you leave Week; the setting is in Week's ⋯ | Shows them until you leave Week; the setting is under Week's View options |
 | `ui/BlockPanel.tsx:261` | Timeboxing is off in Settings › Planning | Timeboxing is off in Settings › Day and Week |
 | `ui/Checkin.tsx:114` | Requests still open after their urgency (now: 2 hours; this week: Friday) | Urgent requests still open after their urgency (now: 2 hours; this week: Friday) |
+| `ui/CloseOut.tsx:193` | + Another client | Add another client |
 | `ui/CloseOut.tsx:259` | Back to Today (Esc)" : "Close out this day, then back to Today | Back to Day (Esc)" : "Close out this day, then back to Day |
 | `ui/DevOpsWrite.tsx:432` | DevOps is read-only for this client until you add your own write PAT in Settings > Clients | DevOps is read-only for this client until you add your own write PAT in Settings › DevOps |
 | `ui/DoneOffer.tsx:336` | }Undo is in Settings › Data. | }Undo is in Settings › Activity. |
@@ -100,6 +109,7 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `ui/NewItem.tsx:194` | Kept on the block as a draft. Create it in DevOps from its ⋯, or drop it | Kept on the block as a draft. Create it in DevOps from its More menu, or drop it |
 | `ui/PhoneShell.tsx:181` | Grid, Gantt, Gaps and Backlog need room for the whole roadmap. Open FocusTime on a computer to plan ahead. | Grid, Gantt and Needs attention need room for the whole backlog. Open FocusTime on a computer to plan ahead. |
 | `ui/PhoneShell.tsx:187` | Back to Today | Back to Day |
+| `ui/Settings.tsx:482` | Show personal events on Week and Today | Show personal events on Week and Day |
 | `ui/Settings.tsx:494` | With Show weekend on, weekend days show when something is on them (or always, with Every weekend day in Week's ⋯). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every da… | With Show weekend on, weekend days show when something is on them (or always, with Every weekend day under Week's View options). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps th… |
 | `ui/Settings.tsx:600` | None. Set a day's own hours from its ⋯ menu in the week. | None. Set a day's own hours from its Actions menu on Week. |
 | `ui/Settings.tsx:729` | Today's and your next working day's empty blocks offer to-dos: unfinished ones first, then your backlog. Nothing is planned until you keep it. Also in Week's and Day's ⋯ as Suggestions. | Today's and your next working day's empty blocks offer to-dos: unfinished ones first, then your backlog. Nothing is planned until you keep it. Also under Week's and Day's View options as Suggestions. |
@@ -107,13 +117,17 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `ui/Settings.tsx:813` | Readiness nudges | Needs attention nudges |
 | `ui/Settings.tsx:835` | Readiness nudges" hint={<>The ⚑ flags in Plan ahead. Team default: {onOff(team.readinessNudges)}. {reset( | Needs attention nudges" hint={<>The ⚑ flags in Backlog's Gantt. Team default: {onOff(team.readinessNudges)}. {reset( |
 | `ui/Settings.tsx:837` | Show readiness nudges | Show Needs attention nudges |
+| `ui/Settings.tsx:853` | every other Thursday, offered after you confirm next week. Next: {day(n.lookAhead)}. | every other Thursday, once next week has work on it. Next: {day(n.lookAhead)}. |
 | `ui/Settings.tsx:858` | Both open Plan ahead; switch them in Notifications. | Both open Backlog › Gantt; switch them in Notifications. |
+| `ui/Settings.tsx:997` | Logged in Data › Teams status log. | Logged in Settings › Activity › Teams status log. |
 | `ui/Settings.tsx:1213` | Let urgent asks through | Let urgent requests through |
 | `ui/Settings.tsx:1379` | On iPhone, add FocusTime to your home screen first (⋯ › Install app), then open it from there to turn this on. | On iPhone, add FocusTime to your home screen first (More › Install app), then open it from there to turn this on. |
 | `ui/Status.tsx:1092` | Each line is its own write, logged in Settings &gt; Data with Undo. | Each line is its own write, logged in Settings › Activity with Undo. |
 | `ui/StyleGuide.tsx:274` | Today and Week: four sizes and three weights. Uppercase only for section labels. | Day and Week: four sizes and three weights. Uppercase only for section labels. |
 | `ui/TimeboxCheckin.tsx:287` | Undo is also in Settings › Data. | Undo is also in Settings › Activity. |
 | `ui/Timeboxes.tsx:289` | Logged in Settings > Data. No undo: a first response can't be taken back." : "Logged in Settings > Data, with Undo. | Logged in Settings › Activity. No undo: a first response can't be taken back." : "Logged in Settings › Activity, with Undo. |
+| `ui/Timeboxes.tsx:375` | } The others are done. Try again, or use Retry in Settings &gt; Data. | } The others are done. Try again, or use Retry in Settings › Activity. |
+| `ui/Timeboxes.tsx:383` | Each one is logged in Settings &gt; Data, with its own Undo. | Each one is logged in Settings › Activity, with its own Undo. |
 | `ui/WrapUp.tsx:439` | )}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Data. | )}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Activity. |
 | `ui/keys.ts:103` | Move between blocks on Week and on Day (↓ from the afternoon reaches the evening); with the block panel open it follows | Move between blocks on Week and on Day (↓ from the afternoon reaches the evening); with the block's panel open it follows |
 | `ui/keys.ts:105` | Close the block panel and go back to its block | Close the block's panel and go back to its block |
@@ -137,12 +151,14 @@ How it was built. The new guard (`scripts/words-guard.ts`, `namesHits`) was writ
 | `ui/meetings/Meetings.tsx:224` | in your Waiting on | noted with this call |
 | `ui/meetings/Meetings.tsx:226` | Added to your Waiting on | Noted with this call |
 | `ui/meetings/Meetings.tsx:294` | Promises and Waiting on | Promises |
+| `ui/menu-icons.ts:52` | , Requests: | , "From chats": |
 | `ui/menu.ts:774` | Cancel it from Settings > Data (Undo) | Cancel it from Settings › Activity (Undo) |
 | `ui/menu.ts:1165` | Breaks are set to 0 minutes in Settings > Planning | Breaks are set to 0 minutes in Settings › Focus |
 | `ui/menu.ts:1422` | Shown next to Cooptimizers in Ask to collaborate, Who and Roadmap | Shown next to Cooptimizers in Ask to collaborate, Who and Backlog |
 | `ui/settings/Admin.tsx:447` | ${c.key}: what Gaps counts | ${c.key}: what Needs attention counts |
 | `ui/settings/Admin.tsx:450` | What Gaps counts | What Needs attention counts |
 | `ui/settings/Admin.tsx:451` | ${c.key}: what Gaps counts | ${c.key}: what Needs attention counts |
+| `ui/settings/Admin.tsx:732` | The team's phrase lists. Each person may add their own phrases on top in Settings › Clients, but never removes the team's. | The team's phrase lists. Each person may add their own phrases on top in Settings › Client chats, but never removes the team's. |
 | `ui/settings/Admin.tsx:1264` | Readiness top N | Needs attention top N |
 | `ui/settings/Admin.tsx:1265` | Readiness top N | Needs attention top N |
 | `ui/settings/Admin.tsx:1305` | Each level's defaults; a person may change any of these for themselves (Settings › Planning, Reset to team default). They never block anything. | Each level's defaults; a person may change any of these for themselves (Settings › Day and Week, Reset to team default). They never block anything. |
@@ -170,7 +186,7 @@ Also changed with these: the Guide's sentences that quoted "Settings › Today a
 | Where | Words | Why |
 |---|---|---|
 | `ui/Day.tsx` | "Needs you", the phone's heading over Day's urgent lines | Plain words for what the lines are, not the Inbox's old view. On the allow list with that reason. |
-| `plan/conversations.ts`, `actions/meeting-actions.ts` | "Waiting on <Name> · 1 day", "Waiting on <Name>" | A sentence about a person, not the old view. |
+| `plan/conversations.ts` | "Waiting on <Name> · 1 day" | A sentence about a person, not the old view. |
 | "Loop closed", "Loop updates sent" | Results of Close the loop | Close the loop is the action's name today. |
 | "Today" alone, "Today's …", "Today is …", "Today 4:07 PM" | The pill, the button, the quick date, stamps | The day that is today. |
 | `ui/patterns/`, `plan/patterns/`, `actions/patterns.ts` | "Request types", "Readiness as written" | DevOps patterns' own words (a page only some people have). Not the retired work-template field or the old Backlog view. |

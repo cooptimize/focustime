@@ -84,6 +84,10 @@ describe("namesHits", () => {
     // An array over several lines.
     expect(namesHits("ui/menu.ts", '{ label: "Day",\n  aka: [\n    "Today",\n    "Board",\n  ] },\n')).toEqual([]);
   });
+  it("reads the text after a tag that closes itself, and a line that starts with a plus", () => {
+    const src = '<label>\n  <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} /> Show personal events on Week and Today\n</label>\n<button type="button" onClick={add}>\n  + Another client\n</button>\n';
+    expect(namesHits("ui/x.tsx", src)).toEqual([{ line: 2, says: ["Today (the tab)"] }, { line: 5, says: ["a control as a character"] }]);
+  });
   it("reads an entity as its character", () => {
     expect(namesHits("ui/x.tsx", '<span className="muted">Logged in Settings &gt; Data, with Undo.</span>\n<p>Undo &amp; Retry are in Settings › Data.</p>\n<p>Undo &amp; Retry are in Settings › Activity.</p>\n').map((h) => h.line)).toEqual([1, 2]);
   });

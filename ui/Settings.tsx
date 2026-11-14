@@ -479,7 +479,7 @@ function SectionBody(p: BodyProps) {
           <fieldset className="set-choice" data-setting="personal-events">
             <legend>Personal events</legend>
             <label>
-              <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Today
+              <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Day
             </label>
             <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
           </fieldset>
@@ -850,7 +850,7 @@ function AheadRituals() {
   return (
     <ul className="set-rituals">
       <li>
-        <strong>Look ahead 4 weeks</strong> every other Thursday, offered after you confirm next week. Next: {day(n.lookAhead)}.
+        <strong>Look ahead 4 weeks</strong> every other Thursday, once next week has work on it. Next: {day(n.lookAhead)}.
       </li>
       <li>
         <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.
@@ -994,7 +994,7 @@ function FocusForm(p: FormProps) {
     <>
     <Group title="Teams status" intro="Set while focus runs, back to automatic after. A change you make in Teams wins.">
       <div className="set-grid">
-        <AutoField a={a} k="teamsStatus" label="Set Teams status during focus" hint="Logged in Data › Teams status log.">
+        <AutoField a={a} k="teamsStatus" label="Set Teams status during focus" hint="Logged in Settings › Activity › Teams status log.">
           <label className="set-check">
             <input type="checkbox" checked={v.teamsStatus} onChange={(e) => a.change("teamsStatus", e.target.checked)} /> Set my status while I focus
           </label>

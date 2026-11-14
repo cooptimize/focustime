@@ -216,7 +216,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       <main
         className={`grid narrow${timeline ? "" : " no-timeline"}`}
         role="group"
-        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details."
+        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens the block's panel."
         // P1: on a touch screen a sideways swipe changes the day.
         onTouchStart={(e) => (swipe.x = e.touches[0]!.clientX, swipe.y = e.touches[0]!.clientY)}
         onTouchEnd={(e) => {
@@ -272,7 +272,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
         className={`grid ${layout} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}${timeline ? "" : " no-timeline"}`}
         style={{ gridTemplateColumns: tracks, ...(fit ? { "--rail-w": `${fit.railPx}px` } : {}) } as CSSProperties}
         role="group"
-        aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
+        aria-label="Week grid. Arrow keys move between half-days, Enter opens the block's panel."
         data-focus-day={focusAll >= 0 ? week.days[focusAll]!.date : undefined}
       >
         {idx.map((i, k) =>

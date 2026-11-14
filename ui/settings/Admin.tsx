@@ -729,7 +729,7 @@ function AdminConversations() {
   );
   return (
     <div className="set-form">
-      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Clients, but never removes the team's.</p>
+      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Client chats, but never removes the team's.</p>
       <div className="set-grid">
         {list("conv.request_phrases", "Request phrases", data.requestPhrases, "A client's message with one of these becomes a request. Commas between them.")}
         {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never a request.")}

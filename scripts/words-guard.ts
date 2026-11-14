@@ -111,7 +111,8 @@ export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text th
       i += 2;
       continue;
     }
-    if (c === "/" && (prev === "" || /[(,=:[!&|?{};]/.test(prev) || /\b(return|typeof|case)\s*$/.test(cur))) {
+    // NM-1: "/>" closes a tag, it never opens a pattern (the text after `} />` was being skipped to the line's end).
+    if (c === "/" && src[i + 1] !== ">" && (prev === "" || /[(,=:[!&|?{};]/.test(prev) || /\b(return|typeof|case)\s*$/.test(cur))) {
       // a regex literal: skip to its closing slash on this line
       let inClass = false;
       i++;
@@ -149,7 +150,7 @@ export function codePieces(src: string, tsx: boolean, /** NM-1: also JSX text th
       // An entity is read as its character ("Settings &gt; Data"), written wide so it is never taken for a tag.
       if (loose) for (const m of l.replace(/&gt;/g, "＞").replace(/&lt;/g, "＜").replace(/&amp;/g, "＆").replace(/&[a-z]+;|&#\d+;/g, " ").matchAll(/[\w"'}\/]>([^<>{}]*)(?=[<{]|$)/g)) if (/[A-Za-z]{2}/.test(m[1]!) && m[1]!.trim().split(/\s+/).length >= 2 && !/[=;]|=>|\b(const|return|typeof)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
       // NM-1: a line of JSX text with brackets or a colon in it: "On iPhone, add FocusTime to your home screen first (More".
-      if (loose && /^\s*[A-Z][^<>{}=;]*$/.test(l) && l.trim().split(/\s+/).length >= 4 && !/=>|^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);
+      if (loose && /^\s*(?:[A-Z]|\+ [A-Z])[^<>{}=;]*$/.test(l) && l.trim().split(/\s+/).length >= 3 && !/=>|^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);
       // NM-1: text after an {expression} to the end of the line: {name}'s DevOps. Undo is in Settings
       for (const m of l.matchAll(/\}([^<>{}=;()|&:]*)$/g)) if (m[1]!.trim().split(/\s+/).length >= 3 && !/^\s*(as|from|else|satisfies|catch|finally|while)\b/.test(m[1]!)) push(m[1]!, k + 1, false);
       if (/^\s*[A-Za-z][^<>{}=;()|&:]*$/.test(l) && l.trim().split(/\s+/).length >= 3 && !/^\s*(return|const|let|if|else|await|export|import|type|case|throw|new|typeof)\b/.test(l)) push(l, k + 1, false);

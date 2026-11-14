@@ -190,7 +190,7 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
                   openMenu({ x: r.left, y: r.bottom + 4 }, { title: "Another client", items: others.map((c) => ({ id: c.clientKey, label: nameOf(c.clientKey), run: () => setExtra((x) => [...x, c.clientKey]) })) });
                 }}
               >
-                + Another client
+                Add another client
               </button>
             )}
         </section>
