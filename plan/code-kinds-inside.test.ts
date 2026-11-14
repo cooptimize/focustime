@@ -111,7 +111,7 @@ describe("RB-4: things inside an item", () => {
     expect(at("/ws/Depot.Warehouse/dim/Tables/Pallet.sql")).toMatchObject({ kind: "sql", name: "Pallet", detail: "Table in dim · Depot warehouse", item: "Depot warehouse" });
     expect(at("/ws/Depot.Warehouse/dim/Views/vPallet.sql")).toMatchObject({ kind: "sql", detail: "View in dim · Depot warehouse" });
     expect(at("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toMatchObject({ kind: "sql", detail: "Stored procedure in dim · Depot warehouse" });
-    expect(at("/ws/Depot.Warehouse/Security/loader.sql")).toMatchObject({ kind: "sql", detail: "SQL script · Depot warehouse" });
+    expect(at("/ws/Depot.Warehouse/Security/loader.sql")).toMatchObject({ kind: "sql", detail: "Security object · Depot warehouse" });
     expect(at("/ws/Ledger.SQLDatabase/fin/Functions/fnNet.sql")).toMatchObject({ kind: "sql", detail: "Function in fin · Ledger SQL database" });
     expect(at("/ws/Scratch.Lakehouse/notes/probe.ipynb")).toMatchObject({ kind: "notebook", name: "probe", detail: "Jupyter notebook · Scratch lakehouse" });
   });
@@ -120,7 +120,7 @@ describe("RB-4: things inside an item", () => {
     expect(depot.detail).toBe("Warehouse · 5 inside");
     expect(depot.inside!.map((x) => [x.name, x.detail, x.kind])).toEqual([
       ["Depot", "SQL project", "sql"],
-      ["loader", "SQL script", "sql"],
+      ["loader", "Security object", "sql"],
       ["Pallet", "Table in dim", "sql"],
       ["usp_FillPallet", "Stored procedure in dim", "sql"],
       ["vPallet", "View in dim", "sql"],
