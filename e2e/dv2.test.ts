@@ -6,6 +6,7 @@
 // With FOCUSTIME_SHOTS the screenshots go there.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
+import { oldTree } from "./backlog-helpers.ts";
 import { CHROMIUM, freshPage, NOW, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 
@@ -45,6 +46,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
   beforeAll(async () => {
     h = await startDemo("chromium", {}, NOW);
     ({ page, errors } = await freshPage(h, { width: 1440, height: 900 }));
+    await oldTree(page);
     await page.clock.install({ time: Temporal.Instant.from(NOW).epochMilliseconds });
     await page.reload();
   }, T);

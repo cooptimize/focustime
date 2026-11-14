@@ -12,8 +12,10 @@ describe("AH-6: levels", () => {
     expect(keys(atLevel("epic"))).toEqual([1, 6, 7]);
     expect(keys(atLevel("feature"))).toEqual([1, 2, 3, 6, 7]);
     expect(keys(atLevel("story"))).toEqual([1, 2, 4, 5, 3, 6, 7]);
-    expect(keys(expandAll())).toEqual(keys(atLevel("story")));
-    expect(keys(collapseAll())).toEqual(keys(atLevel("epic")));
+    // BL-2: Expand all and Collapse all keep the level listed.
+    expect(keys(expandAll("epic"))).toEqual(keys(atLevel("story")));
+    expect(keys(collapseAll("story"))).toEqual(keys(atLevel("epic")));
+    expect(expandAll("feature").level).toBe("feature");
   });
 
   it("carets work on top of a level, and a new level starts them over", () => {

@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { calloutsOn, levelPressed, moreItem, openFilter, pickLevel } from "./backlog-helpers.ts";
+import { calloutsOn, levelPressed, moreItem, openFilter, pickLevel, oldTree } from "./backlog-helpers.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 
 let h: Harness;
@@ -24,6 +24,7 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
 
   const open = async (hash: string, viewport = { width: 1440, height: 900 }) => {
     const { page, errors } = await freshPage(h, viewport);
+    await oldTree(page);
     await page.evaluate((x) => (location.hash = x), hash);
     await page.locator(".ah-toolbar").waitFor({ timeout: 60_000 });
     await page.waitForTimeout(300);
@@ -86,8 +87,8 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
     await expect(summary(page)).resolves.toMatch(/^Showing \d+ of \d+$/);
     // Northwind is a client I lead, so Everyone is its default: no People chip.
     await expect(chips(page)).resolves.toEqual([expect.stringContaining("Northwind Foods"), expect.stringContaining("Next 4 weeks")]);
-    // Filter counts what's off its default inside it: Dates and the level.
-    await expect(page.locator(".ah-toolbar .ah-filter-n").textContent()).resolves.toBe("2");
+    // Filter counts what's off its default inside it: Dates (BL-2: Features is the default level).
+    await expect(page.locator(".ah-toolbar .ah-filter-n").textContent()).resolves.toBe("1");
     await expect(page.locator(".pa-marker").count()).resolves.toBe(0);
     await shotBoth(page, "toolbar-gantt");
     await view(page, "Grid");
@@ -115,12 +116,12 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
     await page.getByRole("button", { name: /^Needs attention/ }).click();
     await page.getByRole("group", { name: "Needs attention, by kind" }).getByRole("button", { name: /^Needs stories/ }).click();
     await page.getByRole("textbox", { name: "Search titles or #id" }).fill("supplier");
-    const pop = await openFilter(page);
-    await pop.getByRole("group", { name: "Levels" }).getByRole("button", { name: "Features", exact: true }).click();
-    await page.keyboard.press("Escape");
+    // BL-2: #/backlog/stories lists Stories; the link names the level (l=), never the old one-level list (fl=).
+    await expect(levelPressed(page, "Stories")).resolves.toBe("true");
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/backlog\?/);
     const link = await page.evaluate(() => location.hash);
-    for (const part of ["nr=1", "k=needs_stories", "q=supplier", "fl=feature"]) expect(link).toContain(part);
+    for (const part of ["nr=1", "k=needs_stories", "q=supplier", "l=story"]) expect(link).toContain(part);
+    expect(link).not.toContain("fl=");
     const want = await chips(page);
     await page.close();
     // Someone else's browser: no stored filters, the link alone.
@@ -148,10 +149,10 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
     const labels = await entries.locator(".ah-col-status").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
     expect(labels.length).toBeGreaterThan(0);
     for (const l of labels) expect(l).toContain("Unsized");
-    // The one-level list: the same search narrows it.
+    // BL-2: the list at Stories (the old one-level address): the same search narrows it.
     await page.getByRole("button", { name: "Clear filters" }).click();
     await page.evaluate(() => (location.hash = "#/backlog/stories"));
-    await page.locator(".shape-flat").waitFor({ timeout: 30_000 });
+    await page.locator(".shape-list").waitFor({ timeout: 30_000 });
     const all = await page.locator(".ah-row").count();
     await page.getByRole("textbox", { name: "Search titles or #id" }).fill("#1120");
     await expect.poll(() => page.locator(".ah-row").count()).toBeLessThan(all);
@@ -159,7 +160,7 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
     await page.close();
   }, T);
 
-  it("the level folds both views; Needs attention's rows fold under their parents with the chevron and Left, Right, Up and Down", async () => {
+  it("the level lists in both views; Needs attention's rows fold under their parents with the chevron and Left, Right, Up and Down", async () => {
     const { page, errors } = await open("#/backlog");
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();
     const counts: Record<string, number[]> = {};
@@ -179,15 +180,19 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
       expect(f!, v).toBeGreaterThanOrEqual(e!);
       expect(s!, v).toBeGreaterThan(e!);
     }
-    // Needs attention at Epics: a closed row; its chevron and the keys open and close it.
+    // Needs attention at Epics: its rows start open whatever the level (BL-2 review 2: a gap is never hidden under a
+    // closed row); its chevron and the keys close and open them.
     await view(page, "Grid");
     await page.getByRole("button", { name: /^Needs attention/ }).click();
-    const closed = page.locator(".ah-client .ah-row", { has: page.locator(".ah-chev[aria-expanded=false]") }).first();
-    await closed.waitFor({ timeout: 30_000 });
-    const key = await closed.getAttribute("data-key");
+    const opened = page.locator(".ah-client .ah-row", { has: page.locator(".ah-chev[aria-expanded=true]") }).first();
+    await opened.waitFor({ timeout: 30_000 });
+    await expect(page.locator(".ah-client .ah-chev[aria-expanded=false]").count()).resolves.toBe(0);
+    const key = await opened.getAttribute("data-key");
     const row = page.locator(`.ah-row[data-key="${key}"]`);
     const item = row.locator(".ah-col-item");
     await item.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("false");
     await page.keyboard.press("ArrowRight");
     await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("true");
     await page.keyboard.press("ArrowDown");
@@ -198,9 +203,10 @@ describe.skipIf(!CHROMIUM)("AH-6, BL-1: Backlog's one row of filters (browser, d
     await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("false");
     await row.locator(".ah-chev").click();
     await expect(row.locator(".ah-chev").getAttribute("aria-expanded")).resolves.toBe("true");
-    // Expand all in ⋯.
+    // Expand all in ⋯: BL-2: every row opens and the level listed stays.
     await moreItem(page, "Expand all");
-    await expect(levelPressed(page, "Stories")).resolves.toBe("true");
+    await expect.poll(() => page.locator(".ah-chev[aria-expanded=false]").count()).toBe(0);
+    await expect(levelPressed(page, "Epics")).resolves.toBe("true");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

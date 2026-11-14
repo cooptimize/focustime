@@ -21,7 +21,7 @@ export type FoundItem = {
 /** Ahead's answer: shown, hidden by one of my filters (which), or not in Ahead at all. */
 export type AheadPresence =
   | { kind: "shown" }
-  | { kind: "filtered"; filter: "clients" | "owner" | "epic" | "ready" | "flat" | "dates" | "stale" | "text" | "several"; owner?: "mine" | "contributing" }
+  | { kind: "filtered"; filter: "clients" | "owner" | "epic" | "ready" | "dates" | "stale" | "text" | "several"; owner?: "mine" | "contributing" }
   | { kind: "absent" }
   | { kind: "unavailable" };
 
@@ -61,7 +61,6 @@ const FILTER_WORDS: Record<Exclude<Extract<AheadPresence, { kind: "filtered" }>[
   clients: "the client filter",
   epic: "the epic filter",
   ready: "Needs attention",
-  flat: "One level as a list",
   dates: "the Dates filter",
   stale: "the Stale filter",
   text: "the search text",

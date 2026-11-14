@@ -25,7 +25,7 @@ export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in
 export type WeekMode = "board" | "team";
 /**
  * AH-1 (D653): Ahead is one model in views. BL-1: two, Grid and Gantt; Readiness is the Grid's Needs attention filter
- * and the old Backlog mode is the Grid showing one level as a list.
+ * and the old Backlog mode is the Grid listing Stories (BL-2: every level is a list in its own rank order).
  */
 export type AheadMode = "grid" | "gantt";
 /** BL-1: what an old address (#/ahead/fix, #/ahead/backlog) turns on in the Grid when it lands. */
@@ -248,6 +248,15 @@ let aheadQuery = "";
 /** The Backlog tab's addresses (#/backlog…, and #/ahead… before BL-1): the only ones that carry a query. */
 export const AHEAD_ADDRESS = /^#\/?(ahead|backlog)(\/|$)/;
 export const setAheadQuery = (q: string) => void (aheadQuery = q);
+/**
+ * BL-2: an address arriving from outside (opening FocusTime on a link, Back or Forward) keeps its Backlog query until
+ * Backlog opens and reads it. App writes the address back before Backlog has mounted, and without this a link's
+ * filters and level (and an older link's fl=) were dropped on the way.
+ */
+export const arriveAt = (hash: string) => {
+  const qi = hash.indexOf("?");
+  if (AHEAD_ADDRESS.test(qi < 0 ? hash : hash.slice(0, qi))) aheadQuery = queryOf(hash);
+};
 /** The query part of an address ("" when there is none). */
 export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
 
@@ -507,7 +516,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.ahead(), overlay: null };
     case "ahead": return { nav: navOf.ahead("gantt"), overlay: null };
-    // BL-1: Readiness (Fix next, Gaps) is the Grid's Needs attention; the Backlog mode is the Grid's stories in rank order.
+    // BL-1: Readiness (Fix next, Gaps) is the Grid's Needs attention; the Backlog mode is the Grid listing Stories in rank order.
     case "gaps": return { nav: navOf.ahead("grid", "attention"), overlay: null };
     case "backlog": return { nav: navOf.ahead("grid", "stories"), overlay: null };
     // WD-1: the old planning places are Week with the block panel.

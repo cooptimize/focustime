@@ -3,8 +3,9 @@
 // (clients, people, Needs attention, search, and Filter's epic, dates and levels; remembered per person, D654), my change
 // set ("N changes to save · Review", in both views, surviving a reload, D657), and the review that commits through the
 // write framework (preview, confirm, read back, audit log, undo), one patch per item, in batches of 10. Nothing is
-// written to DevOps until Save. Needs attention (Readiness before BL-1) and one level as a ranked list (the Backlog mode
-// before BL-1) are the Grid's own shapes.
+// written to DevOps until Save. BL-2: the level picked in Filter › Levels is the list, in that level's own backlog
+// order (plan/backlog-list.ts), in the Grid and the Gantt alike; Needs attention (Readiness before BL-1) is the Grid's
+// other shape and keeps its own order.
 import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -22,16 +23,17 @@ import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
 import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
-import { buildRows, DEFAULT_FILTERS, fixGroups, groups, hiddenBy, type Group, type Row } from "./model.ts";
+import { buildRows, DEFAULT_FILTERS, fixGroups, hiddenBy, type Group, type Row } from "./model.ts";
 import { Grid } from "./Grid.tsx";
 import { Gantt, LegendButton } from "./Gantt.tsx";
 import type { GridGroup, GridRow, GridShape } from "./Grid.tsx";
-import { backlogGroups, DEFAULT_AHEAD, lastText } from "../../plan/backlog.ts";
+import { DEFAULT_AHEAD, lastText } from "../../plan/backlog.ts";
+import { listCount, listGroups } from "../../plan/backlog-list.ts";
 import { fixRows, PER_CLIENT } from "../../plan/fixnext.ts";
 import { gridLayout, useWindowScale } from "./layout.ts";
 import { AHEAD_ADDRESS, queryOf, setAheadQuery, type AheadPreset } from "../nav.ts";
 import { DEFAULT_LEVEL, fromQuery, toQuery, withQuery } from "../../plan/ahead-view.ts";
-import { atLevel, isFold, levelNames, type Fold } from "../../plan/gantt-tree.ts";
+import { atLevel, expandAll, isFold, levelNames, levelRank, type Fold } from "../../plan/gantt-tree.ts";
 import { isBool, usePref } from "./prefs.ts";
 import { AttentionLine, Toolbar, type AheadViewState } from "./Toolbar.tsx";
 import { kindCounts, progressText, startHere, type Skips } from "../../plan/readiness.ts";
@@ -65,6 +67,8 @@ export type AheadEnv = {
    * staged field beside mine (null: it didn't). Nothing is overwritten on either side.
    */
   changedUnder: (clientKey: string, itemId: number) => { field: string; devops: string; mine: string }[] | null;
+  /** BL-2: a row's parent label pressed: show only what's under that item (the Epic filter). */
+  filterUnder: (key: string) => void;
   /** QC-1: the New form with this item as the parent (the next level down chosen). Absent: no New here. */
   newUnder?: (parent: { clientKey: string; id: number; type: string; title: string }) => void;
 };
@@ -104,13 +108,12 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const [callouts, setCallouts] = usePref("view.callouts", isBool, true);
   useEffect(() => {
     const q = linked.current;
-    if (q?.level) setFold(atLevel(q.level));
+    // A link's level opens closed; the same level as mine (a reload of my own address) keeps the rows I opened.
+    if (q?.level) setFold((old) => (old.level === q.level ? old : atLevel(q.level!)));
     if (q?.callouts !== undefined) setCallouts(q.callouts);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // BH-1: only the ranked list (one level as a list) asks for the change log's last change per item.
-  const wantLast = useRef(false);
   // DV-2: the revision of each item as last read, to see an item I have staged changes on change in DevOps underneath.
   const revs = useRef<Map<string, number>>(new Map());
   const [changedNow, setChangedNow] = useState<Set<string>>(new Set());
@@ -122,7 +125,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     if (!quiet) setBusy(true);
     const startedAt = local.current;
     try {
-      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), ...(wantLast.current ? { lastChanges: true } : {}), ...(made.current.length ? { keep: made.current } : {}) }, quiet ? { background: true } : {});
+      const l = await call<AheadLoad>("ahead.load", { ...(refresh ? { refresh: true } : {}), lastChanges: true, ...(made.current.length ? { keep: made.current } : {}) }, quiet ? { background: true } : {});
       const staged = new Set(l.changes.map((c) => `${c.clientKey}:${c.itemId}`));
       const moved: string[] = [];
       for (const c of l.clients)
@@ -168,23 +171,26 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   // AH-7: a fresh read brings my skips (and this week's fixes) from the server again.
   useEffect(() => setSkipOverride(null), [load?.skips]);
   useEffect(() => {
-    const fromLink = (mine: AheadFilters) => {
+    // A link's filters, then BL-2: "One level as a list" is gone, so a saved one (or a link's) becomes the level listed,
+    // once. Saved in one call when either changed anything, so the two can't land out of order.
+    const arrive = (mine: AheadFilters) => {
       const f = withQuery(mine, DEFAULT_FILTERS, linked.current);
-      if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
-      return f;
+      if (!f.flat) {
+        if (f !== mine) void call("ahead.set_filters", { filters: f }).catch(() => null);
+        return f;
+      }
+      // A link's own level (l=) wins over an old saved one.
+      if (!linked.current?.level) setFold(atLevel(f.flat));
+      const { flat: _f, ...rest } = f;
+      void call("ahead.set_filters", { filters: rest }).catch(() => null);
+      return rest;
     };
-    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(fromLink(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(fromLink(pageFilters ?? DEFAULT_FILTERS)));
+    call<{ filters: AheadFilters | null }>("ahead.filters", {}).then((r) => setFiltersRaw(arrive(pageFilters ?? { ...DEFAULT_FILTERS, ...(r.filters ?? {}) })), () => setFiltersRaw(arrive(pageFilters ?? DEFAULT_FILTERS)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => head.current?.focus(), [mode]);
-  const flatOn = !!filters?.flat;
-  useEffect(() => {
-    if (flatOn && !wantLast.current) {
-      wantLast.current = true;
-      void reload(false, true);
-    }
-  }, [flatOn, reload]);
-  // BL-1: an old address lands with its filter on: #/ahead/fix with Needs attention, #/ahead/backlog with stories only,
-  // each as its old mode was (the other off). The address is rewritten to #/backlog right away, often before my saved
+  // BL-1: an old address lands with its filter on: #/ahead/fix with Needs attention, #/ahead/backlog (and BL-2's
+  // #/backlog/stories) with Stories listed, each as its old mode was (the other off). The address is rewritten to #/backlog right away, often before my saved
   // filters arrive, so the preset waits in a ref until they do.
   // Once per arrival: the address keeps the preset while it stays, so it is taken only when it changes. It waits
   // outside the component: on arrival Backlog can mount twice before the filters come, the second time without it.
@@ -199,7 +205,10 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     pendingPreset = null;
     const { flat: _f, ...rest } = filters;
     if (p === "attention" && (!filters.gaps || filters.flat)) setFilters({ ...rest, gaps: true });
-    if (p === "stories" && (filters.flat !== "story" || filters.gaps)) setFilters({ ...filters, flat: "story", gaps: false, kinds: [] });
+    if (p === "stories") {
+      setFold(atLevel("story"));
+      if (filters.gaps || filters.flat) setFilters({ ...rest, gaps: false, kinds: [] });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset, filters]);
 
@@ -268,13 +277,49 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     if (AHEAD_ADDRESS.test(base) && location.hash !== base + (q ? `?${q}` : "")) history.replaceState(history.state, "", base + (q ? `?${q}` : ""));
   }, [filters, fold.level, callouts, mode]);
   const staleWeeks = load?.staleWeeks ?? DEFAULT_AHEAD.staleWeeks;
-  const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: true, keep: madeKeys }) : []), [load, f, mode, madeKeys]);
+  // BL-2: the level listed, in its rank order, each row opening to what's under it (the Grid and the Gantt alike).
+  const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
+  const listed = useMemo(() => (load ? listGroups(load, f, { level: fold.level, keep: madeKeys, staleWeeks, last }) : []), [load, f, fold.level, madeKeys, staleWeeks, last]);
+  const shown: Group[] = listed;
+  // BL-2: an item a notice or Find opened (#/backlog/item/<id>) is shown: one above the level listed lists its level; one
+  // under a row opens the rows above it. Once per item.
+  const revealed = useRef<number | null>(null);
+  useEffect(() => {
+    const id = madeFocus ?? item;
+    if (id === null || !load || revealed.current === id) return;
+    for (const c of load.clients) {
+      const all = buildRows(load, c);
+      const r = all.find((x) => x.item.id === id);
+      if (!r) continue;
+      revealed.current = id;
+      // Needs attention shows an item under its parents whatever the level: nothing to change there.
+      if (filters?.gaps) return;
+      if (levelRank(r.tier) < levelRank(fold.level)) return void setFold(atLevel(r.tier));
+      const open: Record<string, boolean> = {};
+      for (let p = all.find((x) => x.item.id === r.item.parentId); p && levelRank(p.tier) >= levelRank(fold.level); p = all.find((x) => x.item.id === p!.item.parentId)) open[p.key] = true;
+      if (Object.keys(open).length) setFold((x) => ({ ...x, rows: { ...x.rows, ...open } }));
+      return;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, madeFocus, load]);
   // QC-1: once the new item is read, say it was created and which filters would hide it after I leave.
   useEffect(() => {
     if (!justMade || !load || !filters) return;
-    // Needs attention and one level as a list don't keep a new item in view: the words say so.
-    const why = [...hiddenBy(load, filters, `${justMade.clientKey}:${justMade.id}`, new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)))), ...(filters.flat ? ["One level as a list"] : [])];
-    const kept = !filters.gaps && !filters.flat;
+    // Needs attention doesn't keep a new item in view, nor a level that doesn't list it: the words say so. BL-2: one
+    // under the level opens the rows above it, so it shows in its place.
+    const key = `${justMade.clientKey}:${justMade.id}`;
+    const row = listed.find((g) => g.client.clientKey === justMade.clientKey)?.rows.find((r) => r.key === key);
+    const made = load.clients.find((c) => c.clientKey === justMade.clientKey)?.items.find((i) => i.id === justMade.id);
+    const madeTier = made ? buildRows(load, load.clients.find((c) => c.clientKey === justMade.clientKey)!).find((r) => r.item.id === justMade.id)?.tier : undefined;
+    const above = !!madeTier && levelRank(madeTier) < levelRank(fold.level);
+    const why = [...hiddenBy(load, filters, key, new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)))), ...(above ? [`Levels lists ${names[fold.level].toLowerCase()}`] : [])];
+    const kept = !filters.gaps && !above;
+    if (row && row.depth > 0) {
+      const rows = listed.find((g) => g.client.clientKey === justMade.clientKey)!.rows;
+      const open: Record<string, boolean> = {};
+      for (let p = rows.find((r) => r.item.id === row.item.parentId); p; p = rows.find((r) => r.item.id === p!.item.parentId)) open[p.key] = true;
+      setFold((x) => ({ ...x, rows: { ...x.rows, ...open } }));
+    }
     const there = load.clients.some((c) => c.clientKey === justMade.clientKey && c.items.some((i) => i.id === justMade.id));
     setSaid({ id: justMade.n, text: !there ? `Created #${justMade.id}. FocusTime hasn't read it from DevOps yet; Refresh shows it` : why.length ? (kept ? `Created #${justMade.id}. Shown until you leave Backlog. Hidden by: ${why.join(", ")}` : `Created #${justMade.id}. Not shown here: ${why.join(", ")}`) : `Created #${justMade.id}` });
     setJustMade(null);
@@ -357,25 +402,26 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const starts = useMemo(() => new Set(startHere(fix.flatMap((x) => x.group.entries.filter((e) => !e.leaving).map((entry, rank) => ({ entry, rank, date: entry.due ?? null, mine: entry.mine === true })))).map((e) => e.key)), [fix]);
   // Start here narrows the Grid's list; the Gantt has no list to narrow, so it isn't offered there.
   const startNow = startOn && attention && mode === "grid" && starts.size > 0;
-  const last = useMemo(() => Object.fromEntries((load?.clients ?? []).flatMap((c) => (c.last ? [[c.clientKey, c.last] as const] : []))), [load]);
-  // With Needs attention on, Stale is one of its reasons (an either-or with the kinds), so the list doesn't narrow by it too.
-  const flat = useMemo(() => (load && f.flat ? backlogGroups(load, { ...f, tier: f.flat, ...(f.gaps ? { stale: false } : {}) }, { staleWeeks, last }) : []), [load, f, staleWeeks, last]);
-  const names = useMemo(() => levelNames(shown), [shown]);
-  const view: AheadViewState = { fold, setFold, names, callouts, setCallouts };
-  const shape: GridShape = f.flat ? "flat" : attention ? "attention" : "tree";
+  // The level names from every row of the clients shown (the levels above the list too).
+  const names = useMemo(() => levelNames(load ? load.clients.filter((c) => c.status === "ok" && (!f.clients.length || f.clients.includes(c.clientKey))).map((c) => ({ rows: buildRows(load, c) })) : []), [load, f.clients]);
+  // BL-2 review 2: Needs attention lists each gap under its parents, so its rows keep their own carets, all open until
+  // closed: a gap is never hidden under a row closed at the level listed. The level stays the one picked.
+  const [attFold, setAttFold] = usePref<Fold>("view.attention.fold", isFold, expandAll(DEFAULT_LEVEL));
+  const shownFold: Fold = attention ? { ...attFold, level: fold.level } : fold;
+  const setShownFold = (v: Fold | ((old: Fold) => Fold)) => {
+    if (!attention) return setFold(v);
+    const n = typeof v === "function" ? v(shownFold) : v;
+    if (n.level !== fold.level) setFold(atLevel(n.level));
+    setAttFold(n.level !== fold.level ? expandAll(n.level) : n);
+  };
+  const view: AheadViewState = { fold: shownFold, setFold: setShownFold, names, callouts, setCallouts };
+  const shape: GridShape = attention ? "attention" : "list";
   const rankedBy = (c: { orderField?: string | null }) => (c.orderField ? ("backlog" as const) : ("target" as const));
-  /** BL-1: the Grid's groups for its shape (the tree, one level as a ranked list, or Needs attention). */
+  /** BL-1, BL-2: the Grid's groups for its shape (the level as a ranked list, or Needs attention). */
   const gridGroups: GridGroup[] = useMemo(() => {
     if (!load) return [];
     const need = (k: string) => needOf.get(k) ?? 0;
     // The kinds and Stale narrow which rows Needs attention keeps (the chip's count stays every reason).
-    const attentionKeys = new Set(fix.flatMap((x) => x.group.entries.map((e) => e.key)));
-    if (shape === "flat") {
-      return flat.map((g) => {
-        const rows: GridRow[] = g.rows.filter((r) => !attention || attentionKeys.has(r.key)).map((r) => ({ ...r, depth: 0, context: false, entry: null, lastWords: lastText(r.age, r.last) }));
-        return { client: g.client, rows, rankedBy: g.rankedBy, count: rows.length, need: need(g.client.clientKey) };
-      });
-    }
     if (shape === "attention") {
       const byClient = new Map(fix.map((x) => [x.client.clientKey, x] as const));
       return load.clients
@@ -403,9 +449,9 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
           };
         });
     }
-    return shown.map((g) => ({ client: g.client, rows: g.rows, rankedBy: rankedBy(g.client), count: g.rows.filter((r) => !r.context).length, need: need(g.client.clientKey) }));
+    return listed.map((g) => ({ client: g.client, rows: g.rows.map((r) => ({ ...r, lastWords: lastText(r.age, r.last) })), rankedBy: g.rankedBy, count: listCount(g), need: need(g.client.clientKey), level: g.level }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, shape, flat, fix, shown, moreOf, needOf, attention, f.clients, startNow, starts]);
+  }, [load, shape, listed, fix, moreOf, needOf, attention, f.clients, startNow, starts]);
   /** BL-1: Needs attention on the Gantt: the same items, under their parents for context. */
   const ganttGroups: Group[] = useMemo(() => {
     if (!load || !attention) return shown;
@@ -423,10 +469,10 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
   const counts = useMemo(() => {
     if (!load) return { shown: 0, total: 0 };
     if (shape === "attention") return { shown: fixN, total: fix.reduce((n, x) => n + x.total, 0) };
-    if (shape === "flat") return { shown: gridGroups.reduce((k, g) => k + g.rows.length, 0), total: backlogGroups(load, { ...everything, tier: f.flat! }, { staleWeeks }).reduce((k, g) => k + g.rows.length, 0) };
-    const n = (gs: Group[]) => gs.reduce((k, g) => k + g.rows.filter((r) => !r.context).length, 0);
-    return { shown: n(shown), total: n(groups(load, everything, { stories: true })) };
-  }, [load, shape, fix, fixN, gridGroups, shown, everything, staleWeeks, f.flat]);
+    // BL-2: the level's rows a filter picked, of the level's rows with no filters.
+    const n = (gs: { rows: { depth: number; context: boolean }[] }[]) => gs.reduce((k, g) => k + listCount(g), 0);
+    return { shown: n(listed), total: n(listGroups(load, everything, { level: fold.level, staleWeeks })) };
+  }, [load, shape, fix, fixN, listed, everything, staleWeeks, fold.level]);
 
   const n = load?.changes.length ?? 0;
   const color = (k: string) => clientColor(k, data.clients);
@@ -441,7 +487,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
     return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, ...(newUnder ? { newUnder } : {}) } : null;
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
   const title = mode === "gantt" ? "Gantt" : "Grid";
@@ -497,7 +543,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
               {load && !load.clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
               {load && load.clients.length > 0 && visible === 0 && <p className="muted">{attention ? (anyFilter ? "Nothing that needs attention matches these filters." : "Nothing needs attention on items you can change. The top of each backlog has its stories, dates, owners and sizes.") : anyFilter ? "Nothing matches these filters." : "Nothing here for you yet. Try People: Everyone."}</p>}
               {mode === "grid" && <Grid groups={gridGroups} layout={layout} shape={shape} skip={(k) => skipOne(k, true)} unskip={(k) => skipOne(k, false)} skips={skips} onChanged={onChanged} />}
-              {mode === "gantt" && <Gantt data={data} groups={ganttGroups} onChanged={onChanged} />}
+              {mode === "gantt" && <Gantt data={data} groups={ganttGroups} onChanged={onChanged} ordered={!attention} />}
             </div>
           </div>
           {toast && attention && (

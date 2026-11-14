@@ -54,8 +54,10 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
   const people = peopleWord(f, shownClients);
   const setOwner = (o: AheadOwner) => set({ ...f, owner: { ...f.owner, ...Object.fromEntries(shownClients.map((c) => [c.clientKey, o])) } });
   const epics = epicsOf(load, f);
-  const epicLabel = f.epic ? (epics.find((e) => e.key === f.epic)?.label ?? null) : null;
-  const sum = summary(load.clients, f, { today: load.today, shown: counts.shown, total: counts.total, epicLabel });
+  // BL-2: a parent label pressed may choose a feature (or any parent), not only an epic.
+  const under = f.epic && !epics.some((e) => e.key === f.epic) ? load.clients.flatMap((c) => c.items.filter((i) => `${c.clientKey}:${i.id}` === f.epic)).at(0) ?? null : null;
+  const epicLabel = f.epic ? (epics.find((e) => e.key === f.epic)?.label ?? under?.title ?? null) : null;
+  const sum = summary(load.clients, f, { today: load.today, shown: counts.shown, total: counts.total, epicLabel, epicType: under?.type ?? null });
   const nFilter = filterCount(f, view.fold.level);
 
   const openMore = () => {
@@ -68,8 +70,8 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
     const scopeCounts = scoped.map((c) => `${c.clientName}: ${c.scope!.inScope} of ${c.scope!.total} open items are Cooptimize's work`).join("; ");
     const scopeWords = `${f.whole ? "Showing the whole project" : "Showing Cooptimize's work (automatic)"} for ${names}`;
     const items: MenuItem[] = [
-      { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll()) },
-      { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll()) },
+      { id: "expand-all", group: "Rows", label: "Expand all", run: () => view.setFold(expandAll(view.fold.level)) },
+      { id: "collapse-all", group: "Rows", label: "Collapse all", run: () => view.setFold(collapseAll(view.fold.level)) },
       // Callouts are the Gantt's; in the Grid the item stays, saying why (it's found where it was looked for).
       { id: "callouts", group: "View", label: "Callouts at the end of bars", toggle: true, checked: view.callouts, ...(callOff ? { disabled: callOff, expected: true } : { run: () => view.setCallouts(!view.callouts) }) },
       // The counts per client ("Northwind Foods: 14 of 19 open items are Cooptimize's work") as its hint.
@@ -165,8 +167,6 @@ function FilterButton({ f, set, load, view, count, epics }: { f: AheadFilters; s
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const close = () => (setOpen(false), requestAnimationFrame(() => btn.current?.focus()));
-  const touched = Object.keys(view.fold.rows).length > 0;
-  const unflat = (({ flat: _f, ...x }: AheadFilters) => x)(f);
   return (
     <>
       <button ref={btn} type="button" className="top-btn ah-filter" data-tour="ah-filter" aria-haspopup="dialog" aria-expanded={open} aria-label={count ? `Filter: ${plural(count, "choice", "choices")} set` : "Filter: epic, dates, levels"} onClick={() => setOpen(!open)}>
@@ -190,25 +190,14 @@ function FilterButton({ f, set, load, view, count, epics }: { f: AheadFilters; s
             <span className="ah-fp-label" id="ah-fp-levels">
               Levels
             </span>
-            <span className="rm-seg" role="group" aria-labelledby="ah-fp-levels" title={touched && !f.flat ? "Some rows are opened or closed by hand; a level starts them over" : undefined}>
+            {/* BL-2: the level picked is the list, in its own rank order; a row opens to what's under it. */}
+            <span className="rm-seg" role="group" aria-labelledby="ah-fp-levels">
               {LEVELS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  data-level={t}
-                  aria-pressed={f.flat ? f.flat === t : view.fold.level === t && !touched}
-                  className={!f.flat && view.fold.level === t && touched ? "partly" : undefined}
-                  onClick={() => (f.flat ? set({ ...f, flat: t }) : view.setFold(atLevel(t)))}
-                  title={f.flat ? `Only ${view.names[t].toLowerCase()}, in rank order` : `Show down to ${view.names[t].toLowerCase()}`}
-                >
+                <button key={t} type="button" data-level={t} aria-pressed={view.fold.level === t} onClick={() => view.fold.level !== t && view.setFold(atLevel(t))} title={`${view.names[t]}, in rank order`}>
                   {view.names[t]}
                 </button>
               ))}
             </span>
-            <label className="ah-fp-flat">
-              <input type="checkbox" checked={!!f.flat} onChange={(e) => set(e.target.checked ? { ...f, flat: view.fold.level } : unflat)} />
-              One level as a list, in each backlog's rank order
-            </label>
             {!f.gaps && (
               <label className="ah-fp-flat">
                 <input type="checkbox" checked={!!f.stale} onChange={(e) => set(e.target.checked ? { ...f, stale: true } : (({ stale: _s, ...x }) => x)(f))} />

@@ -240,3 +240,15 @@ The app's own words use the names the screens use. A string a person reads never
 - Results: **"Read 3 of 5 clients…"**, **"12 results"**, **"No name matches."**, **"Showing the first 200. Narrow your search."**, **"Left out: <client>. Only its team can read its code."**, a table as **"Table in <model>"**.
 - The log line is now **"Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching names are logged too: who, which client and when, never the words."** Admin › Audit › Code views: **Listed by kind**, **Searched names**, with **All its repos** in the Repo column.
 - Say **names**, never "index" or "catalog": nothing is kept between visits.
+
+## BL-2 words (Nov 14)
+
+Backlog lists the level chosen in Filter › Levels, in that level's own rank order.
+
+- Filter › **Levels**: **Epics**, **Features**, **Stories** (each in the client's process's own words); each button's tooltip **"Features, in rank order"**. No checkbox under it.
+- A client's header says what is listed and how: **"Features, in backlog order"**, or for a project with no order field **"Features by target date (no backlog order)"**.
+- The Item column's heading **"Rank · Item"**; the rank number before each row at the level (its tooltip **"Rank 3 in this backlog"** and the last change in DevOps); rows under it have none.
+- A row's parent is a quiet label at the end of its title (its type's icon and title); its tooltip **"In Epic #3305. Show only what's under it"**. Pressing it sets the Epic filter, whose chip names the parent's type when it isn't an epic (**"Feature: Shipment tracking dashboard"**).
+- The command menu: **"Backlog: every client's DevOps in rank order, Grid"**, **"Backlog: stories in rank order"**.
+- After a create at a level that isn't listed: **"Created #5101. Not shown here: Levels lists features"**.
+- Retired: "One level as a list", "Stories only, in rank order" (the chip), "Show down to features" (the old Levels tooltip).

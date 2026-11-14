@@ -147,7 +147,7 @@ const AHEAD: Tour = {
     { target: "modes-ahead", title: "Grid and Gantt", text: "Grid is a table you edit in place, client by client in each backlog's order. Gantt is the same items on a timeline: drag a bar to move its dates. P switches." },
     { target: "ah-owner", title: "Mine, Contributing, Everyone", text: "Choose whose items show. FocusTime remembers your choice for each client.", phone: "skip" },
     { target: "ah-attention", title: "Needs attention", text: "Only the items with something to fix: missing stories, a target date, an owner or a size, or stale. Each has its fix beside it, and Skip. Work from the top.", example: "attention-row", phone: "skip" },
-    { target: "ah-filter", title: "Filter", text: "Epic, dates and the levels shown. One level as a list shows each client's backlog in its own rank order, with the rank number.", phone: "skip" },
+    { target: "ah-filter", title: "Filter", text: "Epic, dates and Levels. The level you choose is listed in each client's own rank order, with the rank number; a row opens to what's under it.", phone: "skip" },
     { target: "ah-pending", title: "Changes wait until you save", text: "Every edit collects here. Review shows before and after; Save writes them to DevOps, with Undo. Someone else's change since shows both.", example: "pending" },
   ],
   end: { line: "That's Backlog. A look once a week keeps every client's DevOps clean.", tryIt: "Try it yourself: turn on Needs attention and fix the top row." },

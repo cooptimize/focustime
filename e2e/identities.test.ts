@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { oldTree } from "./backlog-helpers.ts";
 
 let h: Harness;
 const T = 120_000;
@@ -22,6 +23,8 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
   afterAll(async () => h?.stop());
 
   const ahead = async (page: Page) => {
+    // BL-2: Backlog lists features by default; this reads a feature and a story, so it starts from every row opened.
+    await oldTree(page);
     await page.evaluate(() => (location.hash = "#/ahead"));
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
     await page.getByRole("group", { name: "People" }).getByRole("button", { name: "Everyone" }).click();

@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { openFilter } from "./backlog-helpers.ts";
+import { openFilter, oldTree } from "./backlog-helpers.ts";
 
 let h: Harness;
 const T = 120_000;
@@ -23,6 +23,7 @@ describe.skipIf(!CHROMIUM)("BL-1: Backlog, measured (browser, demo mode)", () =>
 
   const open = async (hash: string, viewport: { width: number; height: number } = VIEWPORTS[0]) => {
     const { page, errors } = await freshPage(h, viewport);
+    await oldTree(page);
     await page.evaluate((x) => (location.hash = x), hash);
     await page.locator(".ah-toolbar").waitFor({ timeout: 60_000 });
     await page.locator(".ah-grid tbody .ah-row, .pa-item").first().waitFor({ timeout: 60_000 });

@@ -209,19 +209,24 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
   ],
   Atlas: [
     // Step 17: two Atlas features due in December, a month with few Atlas blocks (a crowded month in Plan ahead).
-    [3310, "Feature", "Active", null, "Shipment tracking dashboard", ME, "2026-12-10"],
+    // BL-2: two epics ranked one way and their features another, so Backlog's rank order shows. The first-ranked epic
+    // (Carrier relations) holds the feature ranked third and a resolved one; the second (Shipment visibility) holds the
+    // features ranked first and second. Both are dated and mine, so Needs attention has nothing new to say about them.
+    [3300, "Epic", "Active", null, "Carrier relations", ME, "2027-02-26"],
+    [3305, "Epic", "Active", null, "Shipment visibility", ME, "2027-01-29"],
+    [3310, "Feature", "Active", 3305, "Shipment tracking dashboard", ME, "2026-12-10"],
     [3311, "User Story", "Active", 3310, "Map of active shipments", ME],
     [3312, "User Story", "New", 3310, "Delay alerts", ME],
     [3320, "Epic", "New", null, "Carrier integrations", ME],
     [3330, "User Story", "New", null, "Rate table import", ME],
-    [3340, "Feature", "New", null, "Delivery time estimates", ME, "2026-12-17"],
+    [3340, "Feature", "New", 3305, "Delivery time estimates", ME, "2026-12-17"],
     [3341, "User Story", "New", 3340, "Estimate from carrier history", ME],
     // PL-1: one I own with only teammates' stories (Watching), and one resolved last week (Finished last week).
-    [3350, "Feature", "Active", null, "Carrier rate alerts", ME],
+    [3350, "Feature", "Active", 3300, "Carrier rate alerts", ME],
     [3351, "User Story", "Active", 3350, "Rate change feed", "Sam Ortiz"],
     [3352, "User Story", "New", 3350, "Alert settings page", "Sam Ortiz"],
     [3353, "User Story", "New", 3350, "Weekly rate digest", "Priya Shah"],
-    [3360, "Feature", "Resolved", null, "Carrier contact list", ME],
+    [3360, "Feature", "Resolved", 3300, "Carrier contact list", ME],
     [3361, "User Story", "Closed", 3360, "Import carrier contacts", ME],
   ],
 };

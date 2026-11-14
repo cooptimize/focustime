@@ -1,11 +1,11 @@
 // AH-6, BL-1: Backlog's one toolbar, pure: quick date ranges, the address round trip, where a control doesn't apply and
 // why, the Showing line and its chips (only off the defaults), the Filter button's count, and every filter narrowing the
-// Grid's rows, Needs attention's entries and the one-level list.
+// Grid's rows, Needs attention's entries and (BL-2) the level listed.
 import { describe, expect, it } from "vitest";
 import { anAheadClient, anAheadItem, anAheadLoad, anAssignee } from "../test/builders/index.ts";
 import { buildRows, DEFAULT_FILTERS, filterRows, fixGroups } from "./ahead-model.ts";
 import { cleared, dateWords, filterCount, fromQuery, notHere, peopleWord, rangeDates, summary, toQuery, withQuery, type AheadModeKey, type Control } from "./ahead-view.ts";
-import { backlogGroups } from "./backlog.ts";
+import { listGroups } from "./backlog-list.ts";
 import type { AheadFilters } from "./ahead-edit.ts";
 
 const TODAY = "2026-11-02";
@@ -83,26 +83,31 @@ describe("BL-1: Needs attention, the kinds and Stale", () => {
   });
 });
 
-describe("BL-1: one level as a list (was Ahead's Backlog mode)", () => {
-  const rows = (f: AheadFilters) => backlogGroups(load, { ...f, tier: f.flat ?? "feature" }, { staleWeeks: 6 })[0]!.rows;
-  it("one level only, flat, each row with its rank in the client's own backlog", () => {
-    const r = rows(all({ flat: "feature" }));
+describe("BL-2: the level listed (BL-1's one level as a list became the only list)", () => {
+  const top = (f: AheadFilters, level: "epic" | "feature" | "story" = "feature") => listGroups(load, f, { level, staleWeeks: 6 })[0]!.rows.filter((r) => r.depth === 0);
+  it("one level, each row with its rank in the client's own backlog, in rank order", () => {
+    const r = top(all());
     expect(r.every((x) => x.tier === "feature")).toBe(true);
     expect(r.map((x) => x.item.id)).toEqual(expect.arrayContaining([110, 120, 200]));
-    expect(r.map((x) => x.rank)).toEqual([...r.map((x) => x.rank)].sort((a, b) => a - b));
-    expect(rows(all({ flat: "story" })).map((x) => x.item.id).sort()).toEqual([111, 121]);
+    expect(r.map((x) => x.rank)).toEqual([...r.map((x) => x.rank)].sort((a, b) => (a ?? 0) - (b ?? 0)));
+    expect(top(all(), "story").map((x) => x.item.id).sort()).toEqual([111, 121]);
   });
   it("every other filter narrows it: search, dates, epic", () => {
-    const ids = (f: AheadFilters) => rows(f).map((x) => x.item.id);
-    expect(ids(all({ flat: "feature", q: "#200" }))).toEqual([200]);
-    expect(ids(all({ flat: "feature", range: "next2" }))).toEqual([120]);
-    expect(ids(all({ flat: "feature", epic: "Northwind:100" }))).toEqual(expect.arrayContaining([110, 120]));
-    expect(ids(all({ flat: "feature", epic: "Northwind:100" }))).not.toContain(200);
+    const ids = (f: AheadFilters) => top(f).filter((x) => !x.context).map((x) => x.item.id);
+    expect(ids(all({ q: "#200" }))).toEqual([200]);
+    expect(ids(all({ range: "next2" }))).toEqual([120]);
+    expect(ids(all({ epic: "Northwind:100" }))).toEqual(expect.arrayContaining([110, 120]));
+    expect(ids(all({ epic: "Northwind:100" }))).not.toContain(200);
   });
-  it("the address carries it as fl and leaves out a level it doesn't know", () => {
-    expect(toQuery({ f: all({ flat: "story" }), level: "story", callouts: true })).toContain("fl=story");
-    expect(fromQuery("fl=story")!.f.flat).toBe("story");
-    expect(fromQuery("fl=task")!.f.flat).toBeUndefined();
+  it("an old link's fl= opens that level; l= wins; a level it doesn't know is left out", () => {
+    expect(fromQuery("fl=story")!.level).toBe("story");
+    expect(fromQuery("fl=story")!.f.flat).toBeUndefined();
+    expect(fromQuery("fl=story&l=epic")!.level).toBe("epic");
+    expect(fromQuery("fl=task")!.level).toBeUndefined();
+    // Copy link writes l= only, and nothing for Features (the default).
+    expect(toQuery({ f: all({ flat: "story" }), level: "story", callouts: true })).not.toContain("fl=");
+    expect(toQuery({ f: DEFAULT_FILTERS, level: "feature", callouts: true })).toBe("");
+    expect(toQuery({ f: DEFAULT_FILTERS, level: "story", callouts: true })).toBe("l=story");
   });
 });
 
@@ -113,7 +118,7 @@ describe("AH-6: the address", () => {
     const back = fromQuery(q)!;
     expect(withQuery(DEFAULT_FILTERS, DEFAULT_FILTERS, back)).toEqual({ ...DEFAULT_FILTERS, ...f });
     expect([back.level, back.callouts]).toEqual(["epic", false]);
-    expect(toQuery({ f: DEFAULT_FILTERS, level: "story", callouts: true })).toBe("");
+    expect(toQuery({ f: DEFAULT_FILTERS, level: "feature", callouts: true })).toBe("");
     expect(fromQuery("")).toBeNull();
     // Custom dates instead of a quick pick.
     expect(fromQuery(toQuery({ f: all({ from: "2026-11-09", to: "2026-12-04" }), level: "story", callouts: true }))!.f).toMatchObject({ from: "2026-11-09", to: "2026-12-04" });
@@ -154,18 +159,18 @@ describe("BL-1: the Showing line and the Filter button", () => {
     const noAttention = s.chips.find((c) => c.id === "attention")!.clear(f);
     expect([noAttention.gaps, noAttention.kinds]).toEqual([false, undefined]);
   });
-  it("one chip per meaning: Stale and the one-level list read once, and the line says all when nothing is hidden", () => {
+  it("one chip per meaning: Stale reads once (BL-2: the old one-level list has no chip), and the line says all when nothing is hidden", () => {
     const s = summary(clients, all({ stale: true, flat: "story", q: "pay" }), { today: TODAY, shown: 7, total: 7 })!;
     expect(s.text).toBe("Showing all 7");
     const labels = s.chips.map((c) => c.label);
-    expect(labels).toEqual(["People: Everyone", "Stale", "Stories only, in rank order", "“pay”"]);
+    expect(labels).toEqual(["People: Everyone", "Stale", "“pay”"]);
     expect(new Set(labels).size).toBe(labels.length);
   });
-  it("the Filter button counts what's off its default inside it: Epic, Dates, the level, one level as a list", () => {
-    expect(filterCount(DEFAULT_FILTERS, "story")).toBe(0);
-    expect(filterCount({ ...DEFAULT_FILTERS, epic: "Northwind:100" }, "story")).toBe(1);
-    expect(filterCount({ ...DEFAULT_FILTERS, range: "next2" }, "feature")).toBe(2);
-    expect(filterCount({ ...DEFAULT_FILTERS, from: "2026-11-09", flat: "story" }, "epic")).toBe(3);
+  it("the Filter button counts what's off its default inside it: Epic, Dates, the level (Features by default)", () => {
+    expect(filterCount(DEFAULT_FILTERS, "feature")).toBe(0);
+    expect(filterCount({ ...DEFAULT_FILTERS, epic: "Northwind:100" }, "feature")).toBe(1);
+    expect(filterCount({ ...DEFAULT_FILTERS, range: "next2" }, "story")).toBe(2);
+    expect(filterCount({ ...DEFAULT_FILTERS, from: "2026-11-09", stale: true }, "epic")).toBe(3);
   });
   it("People never reads Mixed: it names who gets what", () => {
     const f = all({ owner: { Northwind: "all", Harbor: "mine" } });

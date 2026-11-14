@@ -34,7 +34,9 @@ export const RETIRED: readonly Retired[] = [
   { was: "Fix next", now: "Backlog › Needs attention", match: /\bFix next\b/ },
   { was: "Gaps", now: "Backlog › Needs attention", match: /\bGaps\b/ },
   { was: "Readiness", now: "Backlog › Needs attention", match: /\bReadiness\b/ },
-  { was: "Ahead › Backlog (the mode)", now: "Backlog › Filter › Levels › One level as a list" },
+  { was: "Ahead › Backlog (the mode)", now: "Backlog › Filter › Levels › Stories" },
+  // BL-2: every level is a list in its own rank order now, so the choice went.
+  { was: "One level as a list", now: "Backlog › Filter › Levels", match: /\bOne level as a list\b/i },
   { was: "Sort later", now: "Decide later", match: /\bSort later\b/ },
   { was: "Pick (a planned piece of work)", now: "To-do", match: /\b(?:a|the|your|my|each|every|planned) picks?\b|\bpicks\b(?! (?:it|up|out|them|the)\b)/i },
   { was: "Draft stories", now: "Break down", match: /\bDraft stories\b/ },

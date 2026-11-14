@@ -53,7 +53,8 @@ export function notHere(mode: AheadModeKey, c: Control, o: { scoped: boolean; wh
 // ---- The address ----
 
 export type AheadView = { f: AheadFilters; level: Tier; callouts: boolean };
-export const DEFAULT_LEVEL: Tier = "story";
+/** BL-2: someone with no saved level starts on Features. */
+export const DEFAULT_LEVEL: Tier = "feature";
 const KEY = /^[\w.:@-]{1,100}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const validDate = (s: string) => {
@@ -84,7 +85,6 @@ export function toQuery(v: AheadView): string {
   if (f.stale) p.set("st", "1");
   if (f.q.trim()) p.set("q", f.q.trim());
   if (f.whole) p.set("w", "1");
-  if (f.flat) p.set("fl", f.flat);
   if (v.level !== DEFAULT_LEVEL) p.set("l", v.level);
   if (!v.callouts) p.set("co", "0");
   return p.toString();
@@ -121,9 +121,9 @@ export function fromQuery(q: string): { f: Partial<AheadFilters>; level?: Tier; 
   const text = p.get("q");
   if (text) f.q = text.slice(0, 200);
   if (p.get("w") === "1") f.whole = true;
+  // BL-2: "One level as a list" (fl=) is gone; an old link's fl= is the level it lists (l= wins when both are there).
   const fl = p.get("fl");
-  if (fl && (TIERS as readonly string[]).includes(fl)) f.flat = fl as Tier;
-  const l = p.get("l");
+  const l = p.get("l") ?? (fl && (TIERS as readonly string[]).includes(fl) ? fl : null);
   const co = p.get("co");
   return { f, ...(l && (TIERS as readonly string[]).includes(l) ? { level: l as Tier } : {}), ...(co === "0" ? { callouts: false } : co === "1" ? { callouts: true } : {}) };
 }
@@ -142,7 +142,6 @@ export function withQuery(mine: AheadFilters, defaults: AheadFilters, q: ReturnT
 export type SummaryClient = { clientKey: string; clientName: string; lead: boolean };
 export type Chip = { id: string; label: string; clear: (f: AheadFilters) => AheadFilters };
 const ownerDefault = (c: SummaryClient): AheadOwner => (c.lead ? "all" : "mine");
-const TIER_WORDS: Record<Tier, string> = { epic: "Epics", feature: "Features", story: "Stories" };
 
 /**
  * The People choice for the clients shown: one owner when they agree; when they differ (each client remembers its
@@ -162,18 +161,18 @@ export function peopleWord(f: AheadFilters, shown: readonly SummaryClient[]): { 
   return { word: `${named.join("; ")}, ${PEOPLE_WORDS[rest.o]} for the rest`, owner: null };
 }
 
-/** How many of the Filter popover's choices are off their defaults: Epic, Dates, the level shown, one level as a list. */
-export function filterCount(f: Pick<AheadFilters, "epic" | "range" | "from" | "to" | "flat"> & Partial<Pick<AheadFilters, "stale" | "gaps">>, level: Tier): number {
+/** How many of the Filter popover's choices are off their defaults: Epic, Dates, the level listed, Stale. */
+export function filterCount(f: Pick<AheadFilters, "epic" | "range" | "from" | "to"> & Partial<Pick<AheadFilters, "stale" | "gaps">>, level: Tier): number {
   // Stale only counts here outside Needs attention (inside it, Stale is one of its kinds).
-  return (f.epic ? 1 : 0) + (f.range || f.from || f.to ? 1 : 0) + (level !== DEFAULT_LEVEL ? 1 : 0) + (f.flat ? 1 : 0) + (f.stale && !f.gaps ? 1 : 0);
+  return (f.epic ? 1 : 0) + (f.range || f.from || f.to ? 1 : 0) + (level !== DEFAULT_LEVEL ? 1 : 0) + (f.stale && !f.gaps ? 1 : 0);
 }
 
 /**
  * BL-1: the line under the toolbar. Null with every filter at its default (it isn't shown); otherwise "Showing 33 of
  * 583" and a chip for each filter that isn't its default (a client chosen, People not my default for a client shown,
- * Needs attention, a kind or Stale, an epic, dates, one level as a list, a search).
+ * Needs attention, a kind or Stale, an epic, dates, a search).
  */
-export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: { today: string; shown: number; total: number; epicLabel?: string | null }): { text: string; chips: Chip[] } | null {
+export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: { today: string; shown: number; total: number; epicLabel?: string | null; /** BL-2: the chosen item's type when it isn't an epic (a parent label pressed). */ epicType?: string | null }): { text: string; chips: Chip[] } | null {
   const shownClients = clients.filter((c) => !f.clients.length || f.clients.includes(c.clientKey));
   const people = peopleWord(f, shownClients);
   const chips: Chip[] = [];
@@ -193,9 +192,8 @@ export function summary(clients: readonly SummaryClient[], f: AheadFilters, o: {
   if (f.gaps) chips.push({ id: "attention", label: "Needs attention", clear: ({ kinds: _k, stale: _s, ...x }) => ({ ...x, gaps: false }) });
   if (f.kinds?.length) chips.push({ id: "kinds", label: KINDS.filter((k) => f.kinds!.includes(k)).map((k) => KIND_WORDS[k]).join(", "), clear: ({ kinds: _k, ...x }) => x });
   if (f.stale) chips.push({ id: "stale", label: "Stale", clear: ({ stale: _s, ...x }) => x });
-  if (f.epic) chips.push({ id: "epic", label: `Epic: ${o.epicLabel ?? "chosen"}`, clear: (x) => ({ ...x, epic: null }) });
+  if (f.epic) chips.push({ id: "epic", label: o.epicType ? `${o.epicType}: ${o.epicLabel ?? "chosen"}` : `Epic: ${o.epicLabel ?? "chosen"}`, clear: (x) => ({ ...x, epic: null }) });
   if (rangeDates(f, o.today)) chips.push({ id: "dates", label: dateWords(f, o.today), clear: ({ range: _r, ...x }) => ({ ...x, from: null, to: null }) });
-  if (f.flat) chips.push({ id: "flat", label: `${TIER_WORDS[f.flat]} only, in rank order`, clear: ({ flat: _f, ...x }) => x });
   if (f.q.trim()) chips.push({ id: "search", label: `“${f.q.trim()}”`, clear: (x) => ({ ...x, q: "" }) });
   if (!chips.length) return null;
   return { text: o.shown === o.total ? `Showing all ${o.total}` : `Showing ${o.shown} of ${o.total}`, chips };

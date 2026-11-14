@@ -7,6 +7,7 @@
 // FOCUSTIME_SHOTS: screenshots at 1440 × 900, light and dark (docs/ux/qc1/ for the PR).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
+import { oldTree } from "./backlog-helpers.ts";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 import { appReady, liveBrowser, liveContext, liveTeam, type LiveBrowser } from "./live.ts";
@@ -66,6 +67,8 @@ describe.skipIf(!CHROMIUM)("QC-1: one New form, straight to DevOps (browser, dem
   it("Backlog: + New, Enter, the preview, Create; selected in Grid even when a filter would hide it; New under; a level above epic", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     await failShot(page, "t0", async () => {
+      // BL-2: from the old tree (Epics, everything open), for New under an epic's row.
+      await oldTree(page);
       await page.evaluate(() => (location.hash = "#/ahead"));
       const newBtn = page.locator(".ah-new");
       await newBtn.waitFor({ timeout: 30_000 });

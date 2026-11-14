@@ -28,8 +28,8 @@ describe("BL-1: Find item's Backlog line", () => {
     expect(aheadPresence(load, f({ gaps: true }), "Northwind", 110)).toEqual({ kind: "shown" });
     expect(aheadPresence(load, f({ gaps: true }), "Northwind", 120)).toEqual({ kind: "filtered", filter: "ready" });
   });
-  it("one level as a list hides the other levels and says so", () => {
+  it("BL-2: a saved old one-level filter hides nothing (every level is on the list; Backlog opens the way to it)", () => {
     expect(aheadPresence(load, f({ flat: "story" }), "Northwind", 111)).toEqual({ kind: "shown" });
-    expect(aheadPresence(load, f({ flat: "story" }), "Northwind", 110)).toEqual({ kind: "filtered", filter: "flat" });
+    expect(aheadPresence(load, f({ flat: "story" }), "Northwind", 110)).toEqual({ kind: "shown" });
   });
 });

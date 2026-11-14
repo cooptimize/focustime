@@ -1737,7 +1737,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
   return [
     { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
-    { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps, Grid", hint: "3", run: () => env.setView("roadmap") },
+    { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps in rank order, Grid", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "4", run: () => env.setView("status") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: from chats, promises, captures", hint: "5", run: () => env.setView("inbox") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › From chats: conversations that need a DevOps item", run: () => env.setView("requests") },
@@ -1747,7 +1747,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.planday_date", action: "view.planday_date", aka: ["Plan a day"], group: "Views", label: "Add work to a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit", "Plan the week", "Week › Plan"], group: "Views", label: "Add work to the week", hint: "W", run: () => env.openPlanWeek() },
     { id: "view.ahead", action: "view.ahead", aka: ["ahead", "plan ahead", "timeline", "gantt"], group: "Views", label: "Backlog › Gantt: the timeline", run: () => env.setView("ahead") },
-    { id: "view.backlog", action: "view.backlog", aka: ["ahead", "stale", "stack rank", "rank order", "stories only"], group: "Views", label: "Backlog › stories in each client's rank order", run: () => env.setView("backlog") },
+    { id: "view.backlog", action: "view.backlog", aka: ["ahead", "stale", "stack rank", "rank order", "stories only", "one level as a list"], group: "Views", label: "Backlog: stories in rank order", run: () => env.setView("backlog") },
     { id: "view.gaps", action: "view.gaps", aka: ["ahead", "fix next", "gaps", "get ready", "readiness", "not ready"], group: "Views", label: "Backlog › Needs attention: missing stories, a target date, an owner or a size, or stale", run: () => env.setView("gaps") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Day › Midday check-in", hint: "M", run: env.openCheckIn },

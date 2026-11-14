@@ -3,7 +3,7 @@
 // its date, block, week or id, P, keys 1–5, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
-import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav, navOf, parseHash, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, weekOfAdd, type Loc, type Nav, type ViewName, queryOf, setAheadQuery } from "./nav.ts";
+import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav, navOf, parseHash, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, weekOfAdd, type Loc, type Nav, type ViewName, queryOf, setAheadQuery, arriveAt } from "./nav.ts";
 
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
@@ -338,6 +338,19 @@ describe("AH-6: Backlog's address carries its view", () => {
     try {
       expect(hashOf({ nav: navOf.ahead("gantt"), overlay: null })).toBe("#/backlog/gantt?c=northwind");
       expect(hashOf({ nav: navOf.week(), overlay: null })).toBe("#/week");
+    } finally {
+      setAheadQuery("");
+    }
+  });
+  it("BL-2: a Backlog link opened from outside keeps its query when App writes the address back, before Backlog reads it", () => {
+    try {
+      arriveAt("#/backlog?fl=story&c=northwind");
+      expect(hashOf(parseHash("#/backlog?fl=story&c=northwind")!)).toBe("#/backlog?fl=story&c=northwind");
+      // Another tab's address leaves it alone; a Backlog address without one clears it.
+      arriveAt("#/today");
+      expect(hashOf({ nav: navOf.ahead(), overlay: null })).toBe("#/backlog?fl=story&c=northwind");
+      arriveAt("#/backlog/gantt");
+      expect(hashOf({ nav: navOf.ahead("gantt"), overlay: null })).toBe("#/backlog/gantt");
     } finally {
       setAheadQuery("");
     }

@@ -5,6 +5,7 @@
 // Skipped, kept on the server so a cleared browser still has it, Unskip). Screenshots go to FOCUSTIME_SHOTS.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
+import { oldTree } from "./backlog-helpers.ts";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 import { SHOTS } from "./shots.ts";
 
@@ -19,6 +20,7 @@ describe.skipIf(!CHROMIUM)("AH-7, BL-1: Needs attention you can finish (browser,
 
   const open = async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    await oldTree(page);
     // Nothing goes to DevOps from Needs attention: no preview or confirm until "Save N items to DevOps".
     const writes: string[] = [];
     page.on("request", (r) => {
