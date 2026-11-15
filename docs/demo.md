@@ -1,3 +1,5 @@
+> History: a walkthrough of the app as it stood on Nov 2, 2026 (tabs Today, Week, Roadmap, Inbox), with its screenshots in `docs/demo/`; it describes an older app. The screens' current names are in `docs/technical/README.md`, and the in-app Guide is current.
+
 # FocusTime demo (about 5 minutes)
 
 A scripted walkthrough in demo mode, in the step 16.2 navigation: four tabs (Today · Week · Roadmap · Inbox, keys 1–4), one mode switch at the right of each page header, and planning as a mode with a green Done. Verified end to end at 1920x1080 on Nov 2, 2026 with `scripts/demo-walkthrough.mjs` (demo clock Monday Nov 2, 9:30 AM). Screenshots are in `docs/demo/`.

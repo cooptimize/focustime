@@ -1,3 +1,5 @@
+> History: FocusTime on a phone as it stood on Nov 7, 2026; it describes an older app. What the phone shows now is in `docs/technical/README.md` (The screens) and in the in-app Guide.
+
 # FocusTime on a phone
 
 Under 600 px wide FocusTime is for checking and doing; planning a week and Ahead are made for a bigger screen (MB-1).
