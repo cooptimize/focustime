@@ -293,6 +293,13 @@ export function App() {
   const nav = loc.nav;
   // ST-1: the section in the address ("" is the rail) and a setting in it; Settings maps old ids and unknown ones.
   const settingsAt: string | null = loc.overlay?.kind === "settings" ? loc.overlay.section : null;
+  const overlayBefore = useRef<Loc["overlay"]>(loc.overlay);
+  useEffect(() => {
+    const was = overlayBefore.current;
+    if (loc.overlay?.kind === "settings" && was?.kind !== "settings") settingsFrom.current = was;
+    else if (loc.overlay?.kind !== "settings") settingsFrom.current = null;
+    overlayBefore.current = loc.overlay;
+  }, [loc.overlay]);
   const settingAt: string | null = loc.overlay?.kind === "settings" ? (loc.overlay.setting ?? null) : null;
   const focusOpen = loc.overlay?.kind === "focus";
   /** G1: the Guide (#/guide), over the current place like Settings. */
@@ -337,7 +344,10 @@ export function App() {
   /** WD-1: the block panel's asked-for block (null: closed). */
   const addAt = addOf(nav);
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
-  const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : null })), [go]);
+  // NM-2 (C2): Close or Esc on Settings goes back to what it was opened over (a Guide section, a story card, Code, the
+  // focus screen) or to the tab under it. Opened by its own address with nothing behind it, the tab is Day.
+  const settingsFrom = useRef<Loc["overlay"]>(null);
+  const setSettingsAt = useCallback((section: string | null, setting: string | null = null) => go((l) => ({ nav: l.nav, overlay: section !== null ? { kind: "settings", section, setting } : l.overlay?.kind === "settings" ? settingsFrom.current : l.overlay })), [go]);
   // CV-3: the account menu, for the phone's ⋯ first row (the person chip on wider screens).
   const account = useAccountMenu(() => setSettingsAt("you"));
   // G1: the tour link shows on the first Today (Now) a person sees, once: it is recorded as shown when it first
@@ -1423,7 +1433,7 @@ export function App() {
         // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running). Settings' own
         // shell takes Esc first (ST-1), so its unsaved fields are saved on the way out.
         e.preventDefault();
-        go((l) => ({ nav: l.nav, overlay: null }));
+        go((l) => ({ nav: l.nav, overlay: l.overlay?.kind === "settings" ? settingsFrom.current : null }));
       } else if (k === "Escape" && !captureOpen && isPlanning(nav)) {
         // A planning mode: Esc goes back to the tab's view mode without saving (Plan the day handles its own Esc).
         e.preventDefault();
