@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
 import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
-import { INSIDE_MAX, INSIDE_WORDS_MAX, SEARCH_MAX } from "../../plan/code.ts";
+import { INSIDE_MAX, SEARCH_MAX } from "../../plan/code.ts";
 import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
@@ -18,7 +18,7 @@ export type NamesClient = { clientKey: string; name: string; color: string | nul
 
 export const NAMES_TEXT = {
   search: "Search names",
-  searchNote: "Searching names. To find where a table or column is used, switch to Inside files.",
+  searchNote: "Searches names only. Measures, columns and report pages live inside files: switch to Inside files for those.",
   names: "Names",
   inside: "Inside files",
   searchInside: "Search inside files",
@@ -189,7 +189,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                         ) : (
                           <span className="cv-thing-caret-space" aria-hidden="true" />
                         )}
-                        <button type="button" className="cv-thing-btn" aria-current={on ? "true" : undefined} data-code-thing={t.name} title={`${t.name}: ${t.detail}${many ? `, in ${t.repoName}` : ""}`} onClick={() => onOpen(t.repoId, t.file)}>
+                        <button type="button" className="cv-thing-btn" aria-current={on ? "true" : undefined} data-code-thing={t.name} data-code-listed={`${t.repoId}:${t.file}`} title={`${t.name}: ${t.detail}${many ? `, in ${t.repoName}` : ""}`} onClick={() => onOpen(t.repoId, t.file)}>
                           <Icon name={KIND_ICON[t.kind]} className="cv-kind" />
                           <span className="cv-thing-name">{t.name}</span>
                           <span className="cv-thing-detail">
@@ -209,7 +209,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                             const tbOn = selected.repoId === t.repoId && selected.path === tb.file;
                             return (
                               <li key={tb.file}>
-                                <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} onClick={() => onOpen(t.repoId, tb.file)}>
+                                <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} data-code-listed={`${t.repoId}:${tb.file}`} onClick={() => onOpen(t.repoId, tb.file)}>
                                   <Icon name={tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
                                   <span className="cv-thing-name">{tb.name}</span>
                                   <span className="cv-thing-detail">{tb.detail}</span>
@@ -241,16 +241,21 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
 
 // ---------- Search names ----------
 
-/** The box: the words, what to search (names or inside files), where to look, a kind, and Search. Nothing is read until Enter or Search. */
-export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, onDown, inside, onInside }: { q: string; onQ: (v: string) => void; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; onDown: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
+/**
+ * RB-6: the search box's choices, under the one "Search code" box at the top of every Code screen: Names or Inside files,
+ * This client or All clients (only inside a client), the kind, Search, and one line saying what the search does. The
+ * box itself sits in the row above and belongs to this form, so Enter runs it. Nothing is read until Enter or Search.
+ */
+export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
   const ready = inside ? q.trim().length > 0 : searchWords(q).length > 0;
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!disabled && ready) onSearch();
   };
-  const label = inside ? NAMES_TEXT.searchInside : NAMES_TEXT.search;
+  // A click on a choice keeps the caret in the box, so the choices stay open and typing goes on.
+  const keep = (e: { target: EventTarget; preventDefault: () => void }) => (e.target as HTMLElement).closest("button") && e.preventDefault();
   return (
-    <form className="cv-search" role="search" aria-label={label} onSubmit={submit}>
+    <form id="cv-search-form" className={`cv-search${floating ? " floating" : ""}`} aria-label="Search choices" data-code-searcharea="" data-code-choices="" hidden={!open} onSubmit={submit} onMouseDown={keep}>
       <div className="cv-search-row">
         <div className="seg" role="group" aria-label="What to search">
           <button type="button" className={`seg-btn${inside ? "" : " on"}`} aria-pressed={!inside} data-code-mode="names" onClick={() => onInside(false)}>
@@ -260,35 +265,12 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
             {NAMES_TEXT.inside}
           </button>
         </div>
-      </div>
-      <div className="cv-search-row">
-        <input
-          type="search"
-          className="cv-find-input cv-search-input"
-          data-code-search=""
-          placeholder={label}
-          aria-label={label}
-          aria-describedby="cv-search-note"
-          value={q}
-          maxLength={INSIDE_WORDS_MAX}
-          autoComplete="off"
-          onChange={(e) => onQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") (e.preventDefault(), onDown());
-            else if (e.key === "Escape" && q) (e.preventDefault(), e.stopPropagation(), onQ(""));
-          }}
-        />
-        <button type="submit" className="mini cv-search-go" disabled={disabled || !ready}>
-          Search
-        </button>
-      </div>
-      <div className="cv-search-row">
         {canScope && (
           <div className="seg" role="group" aria-label="Where to search">
-            <button type="button" className={`seg-btn${scopeAll ? "" : " on"}`} aria-pressed={!scopeAll} onClick={() => onScope(false)}>
+            <button type="button" className={`seg-btn${scopeAll ? "" : " on"}`} aria-pressed={!scopeAll} data-code-scope="client" onClick={() => onScope(false)}>
               {NAMES_TEXT.thisClient}
             </button>
-            <button type="button" className={`seg-btn${scopeAll ? " on" : ""}`} aria-pressed={scopeAll} onClick={() => onScope(true)}>
+            <button type="button" className={`seg-btn${scopeAll ? " on" : ""}`} aria-pressed={scopeAll} data-code-scope="all" onClick={() => onScope(true)}>
               {NAMES_TEXT.allClients}
             </button>
           </div>
@@ -301,9 +283,12 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
             </option>
           ))}
         </select>
+        <button type="submit" className="mini primary cv-search-go" disabled={disabled || !ready}>
+          Search
+        </button>
       </div>
       <p id="cv-search-note" className="cv-search-note" data-code-search-note="">
-        {inside ? `${NAMES_TEXT.insideNote} ${NAMES_TEXT.insideHelp}` : NAMES_TEXT.searchNote}
+        {inside ? NAMES_TEXT.insideNote : NAMES_TEXT.searchNote}
       </p>
     </form>
   );

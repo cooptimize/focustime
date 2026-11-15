@@ -680,8 +680,8 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
   // the folders inside its item, never by the item's own folder (which would make everything in it a match).
   const slashy = words.some((w) => w.includes("/"));
   for (const t of things) {
-    // A thing inside an item passes its own kind's filter and its item's (a warehouse's table under SQL and under
-    // Lakehouses and warehouses).
+    // A thing inside an item passes its own kind's filter and its item's (RB-6: a warehouse's table is found under
+    // Databases, its item's group and its own).
     if (kind && t.kind !== kind && t.itemKind !== kind) continue;
     // A SQL object is found as schema.name too ("dim.Store", "[dim].[Store]").
     const alias = t.schema ? ` ${t.schema}.${t.name} [${t.schema}].[${t.name}]` : "";

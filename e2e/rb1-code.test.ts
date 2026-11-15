@@ -1,7 +1,7 @@
-// RB-1: Code in a browser, on the demo's invented repos. Opens from ⋯ and the command menu; pick a client and a repo,
-// open folders, read SQL, TMDL and JSON colored with line numbers, Format a squashed report, the Copy buttons, Find a
-// file by keyboard, reopen the address; a client set to its team only is greyed with no repos; a client whose token
-// can't read code yet says so; binary and oversize files show no text; Esc and Back; the phone; an admin flips the Rule
+// RB-1: Code in a browser, on the demo's invented repos. Opens from its tab (RB-6; ⋯ before) and the command menu; pick a client and a repo,
+// open folders, read SQL, TMDL and JSON colored with line numbers, Format a squashed report, the Copy buttons, a file
+// found by name with Search code by keyboard (RB-6; Find a file before), reopen the address; a client set to its team only is greyed with no repos; a client whose token
+// can't read code yet says so; binary and oversize files show no text; Esc stays (RB-6) and Back; the phone; an admin flips the Rule
 // and sees Code views. With FOCUSTIME_SHOTS set, screenshots for docs/ux/rb1 (dark and light, 1440×900 and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -10,7 +10,7 @@ import { SHOTS, shotBoth } from "./shots.ts";
 
 let h: Harness;
 const T = 180_000;
-const panel = (page: Page) => page.locator("main.code-panel");
+const panel = (page: Page) => page.locator("[data-code-page]");
 const tree = (page: Page) => panel(page).locator(".cv-tree");
 const row = (page: Page, path: string) => tree(page).locator(`[data-path="${path}"]`);
 const file = (page: Page) => panel(page).locator(".cv-file-view");
@@ -57,11 +57,10 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
   }, T);
   afterAll(async () => h?.stop());
 
-  it("opens from ⋯, reads a client's folders and files colored with line numbers, and Esc closes", { timeout: T }, async () => {
+  it("opens from its tab, reads a client's folders and files colored with line numbers, and Esc stays (RB-6)", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await theme(page, "dark");
-    await page.locator(".top-more").click();
-    await page.getByRole("menuitem", { name: /^Code$/ }).click();
+    await page.locator(".topbar .view-tab", { hasText: "Code" }).click();
     await panel(page).waitFor();
     expect(await page.evaluate(() => location.hash)).toBe("#/code");
     // Mine first, then the rest; Fabrikam is its team's only, greyed with the reason.
@@ -83,9 +82,9 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await select.selectOption({ label: "sales-analytics" });
     await row(page, "/sql").waitFor();
     expect(await tree(page).locator("[role=treeitem][aria-level='1'] .cv-folder").first().textContent()).toBe("data");
-    expect(await panel(page).locator(".cv-log-line").textContent()).toBe("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.");
-    expect(await panel(page).locator(".cv-title").textContent()).toContain("Northwind");
-    expect(await panel(page).locator(".cv-title").textContent()).toContain("Read only");
+    expect(await panel(page).locator(".cv-log-line").textContent()).toBe("FocusTime admins can see who opened which file, or searched which client, and when. Never the words.");
+    expect(await panel(page).locator(".cv-picker-btn").textContent()).toContain("Northwind");
+    expect(await panel(page).locator(".cv-ro").textContent()).toContain("Read only");
 
     // Folders open in place; a SQL file shows colored with line numbers.
     await row(page, "/sql").click();
@@ -127,18 +126,19 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     expect(await file(page).locator("[data-code-copy=file]").textContent()).toBe("Copy formatted");
     await shotThemes(page, "07-json-formatted");
 
-    // Esc closes and goes back to where it opened from.
+    // RB-6: Code is a tab: Esc leaves it where it is.
     await page.keyboard.press("Escape");
-    await panel(page).waitFor({ state: "detached" });
-    expect(await page.evaluate(() => location.hash)).not.toMatch(/^#\/code/);
-    // Nothing of the code in the browser's storage.
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => location.hash)).toMatch(/^#\/code\/Northwind\//);
+    // Nothing of the code in the browser's storage: only that Code was the tab.
     const stored = await page.evaluate(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }));
-    for (const s of ["sales-analytics", "vSales", "report.json", "/code"]) expect(stored).not.toContain(s);
+    for (const s of ["sales-analytics", "vSales", "report.json", "Northwind", "a1b2c3d4"]) expect(stored).not.toContain(s);
+    expect(await page.evaluate(() => localStorage.getItem("focustime.loc"))).toBe("#/code");
     expect(errors).toEqual([]);
     await page.close();
   });
 
-  it("the command menu opens a client; Find opens a file by keyboard; the address reopens it; the Copy buttons", { timeout: T }, async () => {
+  it("the command menu opens a client; Search code opens a file by keyboard; the address reopens it; the Copy buttons", { timeout: T }, async () => {
     const fresh = await freshPage(h, { width: 1440, height: 900 });
     let page = fresh.page;
     const errors = fresh.errors;
@@ -157,12 +157,13 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await panel(page).waitFor();
     // One repo opens on its own.
     await row(page, "/adf").waitFor();
-    const find = panel(page).getByLabel("Find a file");
+    // RB-6: Find a file is gone; Search code finds a file by its own name, and the keyboard opens it.
+    const find = panel(page).locator("[data-code-search]");
     await find.click();
-    await find.fill("shipments json");
-    await panel(page).locator(".cv-find-list li").first().waitFor();
-    expect(await panel(page).locator(".cv-find-list li").count()).toBe(2);
-    await page.keyboard.press("ArrowDown");
+    await find.fill("pl_copy_shipments");
+    await find.press("Enter");
+    await panel(page).locator("[data-code-hit]").first().waitFor();
+    await find.press("ArrowDown");
     await shotThemes(page, "08-find");
     await page.keyboard.press("Enter");
     await file(page).waitFor();
@@ -268,7 +269,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     expect(await file(page).getAttribute("data-lang")).toBe("powershell");
     expect(await noSidewaysScroll(page)).toBe(true);
     await shotBoth(page, "22-phone-file-dark");
-    await panel(page).locator(".ps-back").click();
+    await panel(page).locator("[data-code-back]").click();
     await row(page, "/scripts/New-Workspace.ps1").waitFor();
     expect(await file(page).count()).toBe(0);
     expect(await noSidewaysScroll(page)).toBe(true);
@@ -286,8 +287,6 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     // Open a file so there is a view.
     await page.evaluate(() => (location.hash = `#/code/Northwind/a1b2c3d4-0001-4000-8000-00000000a001/${encodeURIComponent("/README.md")}`));
     await file(page).waitFor();
-    await page.keyboard.press("Escape");
-    await panel(page).waitFor({ state: "detached" });
 
     await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
     const field = page.getByLabel("Northwind: who can read its code");

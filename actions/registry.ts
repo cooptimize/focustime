@@ -195,7 +195,7 @@ export const ACTIONS = [
   { name: "guide.checklist", title: "Your first day", group: "Help", target: "none", summary: "The Guide's first-day checklist: for each of seven checks whether it's done, to do or skipped (read only; never a PAT or token)", aka: ["checklist", "getting started"] },
   // RB-1: Code, every client's repos, read only. code.clients opens the panel; the other reads are the panel's own (never
   // in the command menu's results, never in assistant/allowlist.ts). Each checks who may read the client on the server.
-  { name: "code.clients", title: "Code", group: "Code", target: "none", summary: "Read any client's repos, read only: walk the tree and read a file down to the code. Opening a file is logged for FocusTime admins; nothing of the code is kept", aka: ["code", "repo", "repos", "git", "source", "browse code", "pipeline", "sql", "tmdl"] },
+  { name: "code.clients", title: "Code", group: "Code", target: "none", shortcut: "6", summary: "Read any client's repos, read only: walk the tree and read a file down to the code. Opening a file is logged for FocusTime admins; nothing of the code is kept", aka: ["code", "repo", "repos", "git", "source", "browse code", "pipeline", "sql", "tmdl"] },
   { name: "code.repos", title: "Code: a client's repos", group: "Code", target: "none", summary: "The repos in one client's registered DevOps project (read only)" },
   { name: "code.folder", title: "Code: a folder", group: "Code", target: "none", summary: "One folder of a client's repo on its default branch (read only)" },
   { name: "code.find", title: "Code: find a file", group: "Code", target: "none", summary: "Every file name in one client's repo, to find a file (read only; logged as Find used)" },

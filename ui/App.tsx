@@ -53,7 +53,7 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, arriveAt, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -147,13 +147,14 @@ function storedLoc(): Loc | null {
 }
 
 /** RS-1: each tab's icon says what it is for: one day, the week in columns, the backlog's indented list, bars, a tray. */
-const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox" };
+const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", code: "code" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
   week: "Week: the week's blocks, with a block's panel beside them",
   ahead: "Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention",
   inbox: "Inbox: From chats, Promises and Captures",
   status: "Status: this week's feature updates for Monday's status report",
+  code: "Code: every client's repos, read only: search for something, or look around a client's repos",
 };
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -262,8 +263,7 @@ export function App() {
     if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
     else if (location.hash !== h) history.pushState(null, "", h);
     try {
-      // RB-1: nothing of the code is kept in the browser's storage, not even a file's path: reopening lands on the place under it.
-      localStorage.setItem(LOC_KEY, loc.overlay?.kind === "code" ? hashOf({ nav: loc.nav, overlay: null }) : h);
+      localStorage.setItem(LOC_KEY, placeToKeep(loc));
     } catch {
       /* per-window convenience only */
     }
@@ -306,8 +306,8 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   /** DOC-1: the Technical docs (#/docs/<page>/<heading>), over the current place like the Guide. */
   const docsAt = loc.overlay?.kind === "docs" ? loc.overlay : null;
-  /** RB-1: Code (#/code/<client>/<repo>/<path>), every client's repos, read only. */
-  const codeAt = loc.overlay?.kind === "code" ? loc.overlay : null;
+  /** RB-1: Code (#/code/<client>/<repo>/<path>), every client's repos, read only. RB-6: a tab. */
+  const codeAt = nav.tab === "code" ? nav : null;
   /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
@@ -364,9 +364,9 @@ export function App() {
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
   const openDocs = useCallback((page: string | null = null, heading: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "docs", page, heading } })), [go]);
   const docsAccess = useCallback(() => call<DocsAccess>("docs.access", {}), []);
-  const openCode = useCallback((clientKey: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey, repoId: null, path: null } })), [go]);
+  const openCode = useCallback((clientKey: string | null = null) => goNav(navOf.code(clientKey)), [goNav]);
   // RB-2: Code on Search names across clients (the command menu's "Code: search names").
-  const openCodeSearch = useCallback((inside = false) => go((l) => ({ nav: l.nav, overlay: { kind: "code", clientKey: null, repoId: null, path: null, view: inside ? "inside" : "search" } })), [go]);
+  const openCodeSearch = useCallback((inside = false) => goNav(navOf.code(null, null, null, inside ? "inside" : "search")), [goNav]);
   // RB-1: the clients Code can open, for the command menu's "Code: <client>", read a few seconds after start or when the
   // command menu first opens (names only, never DevOps). Empty for anyone Code isn't for (an automation account): then no Code
   // entry anywhere. Until it's read, ⋯ › Code shows, and the panel says why when it can't open.
@@ -380,7 +380,11 @@ export function App() {
       () => setCodeList([]),
     );
   }, []);
-  const codeItem = codeList && !codeList.length ? [] : [{ id: "code", label: "Code", run: () => openCode() }];
+  // RB-6: Code is a tab on a computer, shown by the same test More used: until the list is read it shows, and the page
+  // says why when it can't open; an empty list (an automation account) means no Code anywhere. The phone keeps it in More.
+  const codeShown = !(codeList && !codeList.length);
+  const codeItem = codeShown ? [{ id: "code", label: "Code", run: () => openCode() }] : [];
+  const tabShown = useCallback((t: Tab) => t !== "code" || codeShown, [codeShown]);
   useEffect(() => void (cmdOpen && askCode()), [cmdOpen, askCode]);
   // P1: opening the list marks every notice read (the dot goes).
   const readAllNotices = notices.readAll;
@@ -1441,8 +1445,8 @@ export function App() {
       } else if (settingsAt === null && k === "," && free) {
         e.preventDefault();
         setSettingsAt("");
-      } else if (tabForKey(k) && free) {
-        // Step 16.2: 1–4 are the tabs in order (T stays Today).
+      } else if (tabForKey(k) && free && tabShown(tabForKey(k)!)) {
+        // Step 16.2: 1–6 are the tabs in order (T stays Today; RB-6: 6 is Code, where it shows).
         e.preventDefault();
         openTab(tabForKey(k)!);
       } else if ((k === "p" || k === "P" || k === "i" || k === "I") && free && settingsAt === null) {
@@ -1491,7 +1495,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt]);
+  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt, tabShown]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1874,6 +1878,7 @@ export function App() {
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
     inbox: null,
     status: null,
+    code: null,
   };
   const leavePlanning = () => goNav(afterDone(nav));
   const tbEnv: TimeboxEnv = {
@@ -1956,7 +1961,7 @@ export function App() {
     >
     <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
-      <header className="topbar">
+      <header className={`topbar${codeShown && !phone ? " six-tabs" : ""}`}>
         <div className="brand">
           <button type="button" className="brand-home" onClick={() => setView("today")} title="Day">
             <WeekMark height={18} />
@@ -1969,7 +1974,7 @@ export function App() {
           )}
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
-          {TABS.map((t, n) => (
+          {TABS.filter(tabShown).map((t, n) => (
             <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
@@ -2020,16 +2025,16 @@ export function App() {
               aria-haspopup="menu"
             >
               <Icon name="focus" />
-              Focus <kbd>F</kbd>
+              <span className="top-word">Focus</span> <kbd>F</kbd>
             </button>
           )}
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
             <Icon name="capture" />
-            Capture <kbd>N</kbd>
+            <span className="top-word">Capture</span> <kbd>N</kbd>
           </button>
           <button type="button" className="top-btn assistant-btn" data-tour="ask" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
             <Icon name="ask" />
-            Ask <kbd>Ctrl J</kbd>
+            <span className="top-word">Ask</span> <kbd>Ctrl J</kbd>
           </button>
           <button
             type="button"
@@ -2140,20 +2145,6 @@ export function App() {
             checklist={guideChecklist}
           />
         </Suspense>
-      ) : codeAt ? (
-        <Suspense fallback={null}>
-          <CodePanel
-            at={codeAt}
-            sqlGroup={codeSqlGroup}
-            onSqlGroup={(g) => void saveCodeSqlGroup(g)}
-            onGo={(next, opts) => {
-              const to = { nav: loc.nav, overlay: { kind: "code" as const, ...next } };
-              if (opts?.replace) history.replaceState(null, "", hashOf(to));
-              go(to);
-            }}
-            onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
-          />
-        </Suspense>
       ) : docsAt ? (
         <Suspense fallback={null}>
           <TechDocs
@@ -2203,6 +2194,20 @@ export function App() {
       ) : nav.tab === "status" ? (
         // SR-1, WD-1: Status is its own tab (was Week › Status). SR-3: the phone can write too.
         <StatusView tz={userZone(data)} colors={data.clients} readOnly={false} phone={phone} group={nav.group} version={planWeekVersion} onChanged={() => (reloadQuiet(), setStatusVersion((n) => n + 1))} />
+      ) : codeAt ? (
+        // RB-6: Code is a tab: a page with no Close; Esc stays in it and the other tabs' keys work from it.
+        <Suspense fallback={null}>
+          <CodePanel
+            at={codeAt}
+            sqlGroup={codeSqlGroup}
+            onSqlGroup={(g) => void saveCodeSqlGroup(g)}
+            onGo={(next, opts) => {
+              const to = { nav: navOf.code(next.clientKey, next.repoId, next.path, next.view), overlay: null };
+              if (opts?.replace) history.replaceState(null, "", hashOf(to));
+              go(to);
+            }}
+          />
+        </Suspense>
       ) : nav.tab === "week" && nav.mode === "team" ? (
         // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
         <TeamView weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
@@ -2454,7 +2459,7 @@ export function App() {
 
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || docsAt || codeAt || meetingAt || patternsAt || focusOpen || nav.tab === "status" ? null : nav.tab}
+          current={settingsAt !== null || guideAt || docsAt || meetingAt || patternsAt || focusOpen || nav.tab === "status" || nav.tab === "code" ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
@@ -2534,7 +2539,6 @@ export function App() {
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },
-              ...codeItem,
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
               // ADM-1: only for FocusTime admins (the server checks every admin action again).

@@ -217,7 +217,7 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, grouping, filter
           const o = l.object;
           const on = selected.repoId === o.repoId && selected.path === o.file;
           return (
-            <li {...common} className={`cv-sql-row object${on ? " selected" : ""}`} aria-current={on ? "true" : undefined} aria-selected={on} title={o.file} data-sql-file={o.file} {...{ [attr]: o.name }}>
+            <li {...common} className={`cv-sql-row object${on ? " selected" : ""}`} aria-current={on ? "true" : undefined} aria-selected={on} title={o.file} data-sql-file={o.file} data-code-listed={`${o.repoId}:${o.file}`} {...{ [attr]: o.name }}>
               <Icon name={o.sqlType === "table" ? "table" : "sql"} className="cv-kind" />
               <span className="cv-thing-name">{o.name}</span>
               {o.note && <span className="cv-thing-detail">{o.note}</span>}

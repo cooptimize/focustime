@@ -84,7 +84,8 @@ export const CODE_TEXT = {
   notLogged: "The file wasn't opened because FocusTime couldn't record that you opened it. Try again in a moment.",
   namesNotLogged: "The names weren't read because FocusTime couldn't record that you read them. Try again in a moment.",
   notHere: "Code isn't available here.",
-  logLine: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.",
+  // RB-6: one line, at the foot of every Code screen where a file can be opened or a search run.
+  logLine: "FocusTime admins can see who opened which file, or searched which client, and when. Never the words.",
   noCodeSearch: (name: string) => `${name}'s DevOps doesn't have code search turned on, so FocusTime can't search inside its files. An administrator of that DevOps organization can add Microsoft's Code Search extension to it.`,
   indexing: (name: string) => `DevOps is still indexing ${name}'s code, so there is nothing to search yet. Try again later.`,
   badQuery: "DevOps couldn't run that search as written. Check the quotes and brackets, and put a * only at the end of a word.",

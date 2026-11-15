@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1: where the window is. Five tabs (Day · Week · Backlog · Status · Inbox), a view switch
+// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1, RB-6: where the window is. Six tabs (Day · Week · Backlog · Status · Inbox · Code), a view switch
 // on Backlog (Grid · Gantt; the code name stays "ahead"), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
@@ -8,11 +8,12 @@ import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
-export const TABS = ["today", "week", "ahead", "status", "inbox"] as const;
+export const TABS = ["today", "week", "ahead", "status", "inbox", "code"] as const;
 export type Tab = (typeof TABS)[number];
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
 /** BL-1: the Ahead tab is called Backlog (its code name stays "ahead"). */
-export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status" };
+/** RB-6: Code is a tab of its own (was a panel from More), shown only to a person who may read code. */
+export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status", code: "Code" };
 
 /** NV-1: Today has no modes. Its Midday check-in and Close out are flows its cards open over the same page. */
 export const TODAY_FLOWS = ["checkin", "closeout"] as const;
@@ -34,7 +35,7 @@ export type AheadPreset = "attention" | "stories";
 export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [], code: [] };
 
 /** IB-4: the Inbox's three lists, in its address (#/inbox/chats, #/inbox/promises, #/inbox/captures). */
 export const INBOX_LISTS = ["chats", "promises", "captures"] as const;
@@ -80,7 +81,15 @@ export type Nav =
    * IB-4: three lists. `view` null is the bare #/inbox (the list I used last); `item` is the row open in place
    * (#/inbox/item/<key>), in the list its key belongs to.
    */
-  | { tab: "inbox"; view: InboxList | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true };
+  | { tab: "inbox"; view: InboxList | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true }
+  /**
+   * RB-1, RB-6: Code at a client, a repo and a file (#/code/<client>/<repo id>/<path>). RB-2: By kind, or a search
+   * (no client: every client); RB-4: "inside" is the search set to Inside files. Absent: Files. A tab since RB-6.
+   */
+  | ({ tab: "code" } & CodeAt);
+
+/** RB-6: where Code is: a client, a repo, a path, and the view (Files when absent). */
+export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" };
 
 /** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
 export type LateFilter = { client: string | null };
@@ -88,7 +97,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | { kind: "code"; clientKey: string | null; repoId: string | null; path: string | null; /** RB-2: By kind, or Search names (no client: every client). RB-4: "inside" is the search set to Inside files. Absent: Files. */ view?: "kinds" | "search" | "inside" } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -127,11 +136,13 @@ export const navOf = {
   conversation: (id: number): Nav => ({ tab: "inbox", view: "chats", item: `v${id}` }),
   /** One promise found in a chat, open in Promises (the old #/inbox/promise/<id> lands here). */
   promise: (id: number): Nav => ({ tab: "inbox", view: "promises", item: `c${id}` }),
+  /** RB-6: the Code tab, on a client (null: its front page), a repo and a file, in a view. */
+  code: (clientKey: string | null = null, repoId: string | null = null, path: string | null = null, view?: CodeAt["view"]): Nav => ({ tab: "code", clientKey, repoId, path, ...(view ? { view } : {}) }),
 };
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
 /** The mode a tab opens in. */
-export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : navOf.inbox());
+export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : tab === "code" ? navOf.code() : navOf.inbox());
 /** WD-1: the block panel's block on Week (null: closed). */
 export const addOf = (n: Nav): AddAt | null => (n.tab === "week" && n.mode === "board" ? n.add : null);
 
@@ -165,9 +176,9 @@ const mondayOf = (d: IsoDate): IsoDate => {
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
 
-/** 1–5 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; T stays Day, L the Inbox). */
+/** 1–6 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; RB-6: 6 is Code; T stays Day, L the Inbox). */
 export function tabForKey(key: string): Tab | null {
-  const i = ["1", "2", "3", "4", "5"].indexOf(key);
+  const i = ["1", "2", "3", "4", "5", "6"].indexOf(key);
   return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;
 }
 
@@ -211,8 +222,6 @@ export function hashOf(l: Loc): string {
   // DOC-1: the Technical docs, at a page and a heading.
   if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
   if (l.overlay?.kind === "patterns") return "#/patterns";
-  // RB-1: Code at a client, a repo and a file: #/code/<client>/<repo id>/<path, one encoded part>.
-  if (l.overlay?.kind === "code") return codeHash(l.overlay);
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
@@ -229,6 +238,8 @@ export function hashOf(l: Loc): string {
   }
   // BL-1: the Backlog tab's addresses are #/backlog and #/backlog/gantt (#/ahead… still lands).
   if (n.tab === "ahead") return (n.mode === "gantt" ? "#/backlog/gantt" : n.item ? `#/backlog/item/${n.item}` : "#/backlog") + (aheadQuery ? `?${aheadQuery}` : "");
+  // RB-1: Code at a client, a repo and a file: #/code/<client>/<repo id>/<path, one encoded part>.
+  if (n.tab === "code") return codeHash(n);
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${n.view}` : "#/inbox";
@@ -266,7 +277,16 @@ export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.i
  * #/code/<client>/search inside a client and #/code/~search across clients; RB-4: the same with "inside" for the
  * search set to Inside files. The words searched are never in it.
  */
-export function codeHash(o: { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" }): string {
+/**
+ * Step 16.2: the address kept as the last place. RB-1, RB-6: nothing of the code is kept in the browser's storage, not
+ * even a client, a repo, a path or a search: on Code only that Code was the tab is kept (#/code), and reopening lands
+ * on Code's front page.
+ */
+export function placeToKeep(l: Loc): string {
+  return l.nav.tab === "code" ? hashOf({ nav: navOf.code(), overlay: null }) : hashOf(l);
+}
+
+export function codeHash(o: CodeAt): string {
   if (o.view === "search" || o.view === "inside") return o.clientKey ? `#/code/${encodeURIComponent(o.clientKey)}/${o.view}` : `#/code/~${o.view}`;
   if (!o.clientKey) return "#/code";
   const c = `#/code/${encodeURIComponent(o.clientKey)}${o.view === "kinds" ? "/kinds" : ""}`;
@@ -274,12 +294,12 @@ export function codeHash(o: { clientKey: string | null; repoId: string | null; p
   return o.path && o.path !== "/" ? `${c}/${o.repoId}/${encodeURIComponent(o.path)}` : `${c}/${o.repoId}`;
 }
 const REPO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>, over Today; RB-2's views. */
+/** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>; RB-2's views. RB-6: the Code tab. */
 function parseCode(hash: string): Loc | null {
   if (hash.length > 1400) return null;
   const all = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
   if (all.length > 4) return null;
-  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: "kinds" | "search" | "inside"): Loc => ({ nav: navOf.today(), overlay: { kind: "code", clientKey, repoId, path, ...(view ? { view } : {}) } });
+  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: CodeAt["view"]): Loc => ({ nav: navOf.code(clientKey, repoId, path, view), overlay: null });
   if (!all.length) return at(null, null, null);
   // "~search" and "~inside" are never a client's key (CLIENT_KEY has no "~"): the search across clients.
   if (all[0] === "~search" || all[0] === "~inside") return all.length === 1 ? at(null, null, null, all[0] === "~search" ? "search" : "inside") : null;
@@ -561,7 +581,8 @@ export function viewName(loc: Loc): string {
     : n.tab === "status" ? TAB_NAMES.status
     : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
+    : n.tab === "code" ? TAB_NAMES.code
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "code" ? "Code" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

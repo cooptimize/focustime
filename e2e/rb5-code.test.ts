@@ -1,7 +1,7 @@
 // RB-5: Code's By kind lists a database's SQL objects in folders, in a browser, on the demo's invented repos. A
 // warehouse opens to its schemas, then the types in each; the Group by switch turns that into types, then schemas,
-// with the open table still open and the tree opened to it; the switch is the same inside the warehouse and in the
-// SQL group, and the choice is remembered in the demo session only; switching asks the server for nothing but to
+// with the open table still open and the tree opened to it; the switch is one, at the top of Databases (RB-6), and
+// turns every database round, and the choice is remembered in the demo session only; switching asks the server for nothing but to
 // remember it; the filter narrows the tree and clearing it puts it back; a client with more than one database gets
 // the database first; the keyboard walks the tree; the phone shows the same. With FOCUSTIME_SHOTS set, screenshots
 // for docs/ux/rb5/after (dark and light at 1440×900, and the phone).
@@ -12,7 +12,7 @@ import { SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 180_000;
-const panel = (page: Page) => page.locator("main.code-panel");
+const panel = (page: Page) => page.locator("[data-code-page]");
 const theme = async (page: Page, t: "dark" | "light") => {
   await page.emulateMedia({ colorScheme: t });
   await page.evaluate((v) => {
@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     const sent = watchActions(page);
     await go(page, "#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
-    const lake = panel(page).locator('[data-code-kind="lake"]');
+    const lake = panel(page).locator('[data-code-kind="database"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
     const tree = lake.getByRole("tree", { name: "SQL objects of Gold" });
     // Schemas by name, No schema last, each with its count; folders start closed.
@@ -107,30 +107,23 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     await expect.poll(() => sent.slice(before)).toEqual(["ui.set_code_sql_group"]);
     expect([...new Set(sent.filter((a) => a.startsWith("code.")))].sort()).toEqual(["code.clients", "code.file", "code.kinds", "code.repos"]);
 
-    // The same switch in the SQL group: it is already on Type there, and a client with three databases gets the
-    // database first.
-    const sql = panel(page).locator('[data-code-kind="sql"]');
-    const sqlTree = sql.getByRole("tree", { name: "SQL objects" });
-    expect(await sql.locator("[data-sql-group]").getAttribute("data-sql-group")).toBe("type");
-    expect((await rows(sqlTree)).filter((r) => r.startsWith("1 "))).toEqual(["1 Gold warehouse · sales-analytics 22", "1 Returns SQL database · sales-analytics 9", "1 Warehouse SQL project · sales-analytics 4", "1 Not in a database 1"]);
-    await sql.locator('[data-sql-group-btn="schema"]').click();
+    // RB-6: the switch shows once, at the top of Databases, and turns every database round: the SQL database too.
+    expect(await panel(page).locator("[data-code-kinds] [data-sql-group]").count()).toBe(1);
+    await lake.getByRole("button", { name: "Inside Returns" }).click();
+    const returns = lake.getByRole("tree", { name: "SQL objects of Returns" });
+    expect((await rows(returns)).filter((r) => r.startsWith("1 "))[0]).toMatch(/^1 Tables \d+$/);
+    await lake.locator('[data-sql-group-btn="schema"]').click();
     await expect.poll(() => lake.locator("[data-sql-group]").getAttribute("data-sql-group")).toBe("schema");
-    await folder(sqlTree, "Returns SQL database · sales-analytics").click();
-    // (The Gold warehouse above it is open to the table on the right.)
-    const all = await rows(sqlTree);
-    const from = all.indexOf("1 Returns SQL database · sales-analytics 9");
-    expect(all.slice(from + 1, from + 6)).toEqual(["2 audit 2", "2 ops 4", "2 ref 1", "2 stg 1", "2 No schema 1"]);
-    expect(all.slice(0, from).filter((r) => r.startsWith("3 "))).toEqual(["3 Tables 3", "3 Views 1", "3 Functions 1"]);
-    await sql.scrollIntoViewIfNeeded();
-    await sqlTree.locator('[data-sql-folder="ops"]').click();
+    expect((await rows(returns)).filter((r) => r.startsWith("1 "))).toEqual(["1 audit 2", "1 ops 4", "1 ref 1", "1 stg 1", "1 No schema 1"]);
+    await returns.locator('[data-sql-folder="ops"]').click();
     await shots(page, "05-sql-group");
 
     // Remembered: the demo session's own settings hold it, and a reload opens on it.
-    await sql.locator('[data-sql-group-btn="type"]').click();
+    await lake.locator('[data-sql-group-btn="type"]').click();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.codeSqlGroup).toBe("type");
     await page.reload();
     await go(page, "#/code/Northwind/kinds");
-    await panel(page).locator('[data-code-kind="sql"] [data-sql-group="type"]').waitFor();
+    await panel(page).locator('[data-code-kind="database"] [data-sql-group="type"]').waitFor();
     // A demo session's choice is nobody's: another demo session starts on Schema.
     const other = await freshPage(h, { width: 1440, height: 900 });
     expect((await call(other.page, "week.load", {})).data.ui.codeSqlGroup).toBe("schema");
@@ -142,7 +135,7 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     await theme(page, "dark");
     await go(page, "#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
-    const lake = panel(page).locator('[data-code-kind="lake"]');
+    const lake = panel(page).locator('[data-code-kind="database"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
     const tree = lake.getByRole("tree", { name: "SQL objects of Gold" });
     await folder(tree, "fact").click();
@@ -163,13 +156,16 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     // Expand all and Collapse all.
     await lake.locator("[data-sql-expand]").click();
     expect((await rows(tree)).length).toBe(5 + 17 + 22);
+    // RB-6: Collapse all closes every database too; opened again, its folders start closed.
     await lake.locator("[data-sql-collapse]").click();
+    expect(await tree.count()).toBe(0);
+    await lake.getByRole("button", { name: "Inside Gold" }).click();
     expect(await rows(tree)).toEqual(["1 dim 5", "1 fact 4", "1 rpt 5", "1 stg 4", "1 No schema 4"]);
-    // One database or none: the grouping starts at the top (Atlas has loose SQL files only).
+    // RB-6: loose SQL files (Atlas has only those) are SQL scripts, one row each, and there is no Databases group.
     await go(page, "#/code/Atlas/kinds");
-    const sqlTree = panel(page).locator('[data-code-kind="sql"]').getByRole("tree", { name: "SQL objects" });
-    await sqlTree.waitFor();
-    expect(await rows(sqlTree)).toEqual(["1 No schema 2", "2 Tables 1", "2 Stored procedures 1"]);
+    await panel(page).locator("[data-code-kinds]").waitFor();
+    expect(await panel(page).locator('[data-code-kind="script"] [data-code-thing]').count()).toBe(2);
+    expect(await panel(page).locator('[data-code-kind="database"]').count()).toBe(0);
     expect(errors).toEqual([]);
   });
 
@@ -177,7 +173,7 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
-    const lake = panel(page).locator('[data-code-kind="lake"]');
+    const lake = panel(page).locator('[data-code-kind="database"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
     const tree = lake.getByRole("tree", { name: "SQL objects of Gold" });
     const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.querySelector(".cv-thing-name")?.textContent ?? null);
@@ -218,6 +214,7 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     await page.keyboard.press("ArrowDown");
     expect(await focused()).toBe("Views");
     await lake.locator("[data-sql-collapse]").click();
+    await lake.getByRole("button", { name: "Inside Gold" }).click();
     expect(await tree.locator('[tabindex="0"]').count()).toBe(1);
     await folder(tree, "fact").click();
     expect(await tree.locator('[tabindex="0"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toEqual(["fact"]);
@@ -229,7 +226,7 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     await theme(page, "dark");
     await go(page, "#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
-    const lake = panel(page).locator('[data-code-kind="lake"]');
+    const lake = panel(page).locator('[data-code-kind="database"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
     const tree = lake.getByRole("tree", { name: "SQL objects of Gold" });
     await folder(tree, "dim").click();

@@ -1,6 +1,6 @@
 // Step 16.2, NV-1, WD-1, RF-1, BL-1: tabs (Day · Week · Backlog · Status · Inbox), Week with no modes and its Add work panel,
 // Backlog's Grid and Gantt (BL-1: Ahead's Gaps and Backlog modes land on the Grid with a filter), Day's flows, addresses (back and reopen), every older address landing with
-// its date, block, week or id, P, keys 1–5, entry points, and notification and command routes.
+// its date, block, week or id, P, keys 1–6, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
 import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav, navOf, parseHash, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, weekOfAdd, type Loc, type Nav, type ViewName, queryOf, setAheadQuery, arriveAt } from "./nav.ts";
@@ -8,9 +8,10 @@ import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav,
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
-  it("WD-1: five tabs in order, Today named Day and Status its own tab; Week, Day, Inbox and Status have no modes", () => {
-    expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox"]);
-    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
+  it("WD-1, RB-6: six tabs in order, Today named Day, Status and Code tabs of their own; Week, Day, Inbox, Status and Code have no modes", () => {
+    expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox", "code"]);
+    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Code"]);
+    expect(MODES.code).toEqual([]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual([]);
     expect(MODES.ahead).toEqual(["grid", "gantt"]);
@@ -26,9 +27,9 @@ describe("tabs and modes", () => {
     expect(routeLoc({ view: "team" }).loc.nav).toEqual(navOf.week());
   });
 
-  it("keys 1–5 pick the tabs in order (T is Day, L the Inbox); other keys none", () => {
-    expect(["1", "2", "3", "4", "5", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "status", "inbox", "today", "today", "inbox", "inbox"]);
-    expect(tabForKey("6")).toBeNull();
+  it("keys 1–6 pick the tabs in order (T is Day, L the Inbox, 6 Code); other keys none", () => {
+    expect(["1", "2", "3", "4", "5", "6", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "status", "inbox", "code", "today", "today", "inbox", "inbox"]);
+    expect(tabForKey("7")).toBeNull();
     expect(tabForKey("p")).toBeNull();
   });
 
