@@ -30,7 +30,9 @@ import { placePopover } from "../popover-place.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { Chevron, ChevronSpace } from "./Chevron.tsx";
 import { NewUnder } from "./NewUnder.tsx";
-import { WorkLink } from "../WorkLink.tsx";
+import { openItemCardToEdit, WorkLink } from "../WorkLink.tsx";
+import { MovePicker, RenameBox, unsavedWords } from "./GridEdits.tsx";
+import type { MenuItem } from "../menu.ts";
 import { ganttLabelW, useWindowScale } from "./layout.ts";
 import { useAhead } from "./Ahead.tsx";
 import { CellEditor, type EditKind } from "./Editors.tsx";
@@ -493,6 +495,25 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
   const [editing, setEditing] = useState<{ kind: EditKind; r: Row; anchor: HTMLElement | null } | null>(null);
   const marker = useRef<HTMLButtonElement>(null);
   const label = useRef<HTMLDivElement>(null);
+  // ED-2: Rename and Move… from the row's menu (F2, M, Shift+F10), staged into the same change set as the Grid's.
+  // No drag to a parent here: a drag on the Gantt moves dates.
+  const menus = useContext(MenuCtx);
+  const [op, setOp] = useState<"rename" | "move" | null>(null);
+  const [told, setTold] = useState("");
+  const canChange = r.editable && !a.readOnly;
+  const moveNo = r.has.parent ? null : `${r.item.type} has no level above it in ${c?.project ?? c?.clientName ?? "this project"}'s process, so it has no parent to change`;
+  const backToLabel = () => (setOp(null), requestAnimationFrame(() => label.current?.focus()));
+  const startMove = () => (moveNo ? (setTold(moveNo), a.error(moveNo)) : setOp("move"));
+  const rowMenu = (at: { x: number; y: number }) => {
+    const items: MenuItem[] = [
+      { id: "rename", label: "Rename", hint: "F2", icon: "edit", run: () => setOp("rename") },
+      { id: "move", label: "Move…", hint: "M", icon: "move", ...(moveNo ? { disabled: moveNo, expected: true } : {}), run: () => startMove() },
+      { id: "edit", label: "Edit description…", hint: "E", run: () => openItemCardToEdit(r.clientKey, r.item.id) },
+    ];
+    if (r.pending.title) items.push({ id: "undo-rename", label: "Undo rename", run: () => a.unstage(r, "title") });
+    if (r.pending.parent) items.push({ id: "undo-move", label: "Undo move", run: () => a.unstage(r, "parent") });
+    menus.open(at, { title: `#${r.item.id} ${r.item.title}`, items });
+  };
   // A collapsed row's roll-up: the bar itself when the row has no dates of its own in DevOps, else a thin bracket
   // under its own bar (which stays draggable).
   const ownDated = !!b && !(b.dashedStart && b.dashedEnd);
@@ -595,7 +616,14 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
       if (kids > 0 && !open) env.setFold((f) => setRow(f, r, true));
       else if (kids > 0) go(rows[i + 1]);
     } else if (e.key === "Enter" && r.tier !== "story") a.breakDown(r);
-    else return;
+    // ED-2: the same keys as the Grid's Item cell.
+    else if (e.key === "F2" && canChange) setOp("rename");
+    else if ((e.key === "m" || e.key === "M") && !e.ctrlKey && !e.metaKey && !e.altKey && canChange) startMove();
+    else if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && r.item.id > 0) openItemCardToEdit(r.clientKey, r.item.id);
+    else if (((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") && canChange) {
+      const b = e.currentTarget.getBoundingClientRect();
+      rowMenu({ x: b.left + 60, y: b.bottom });
+    } else return;
     e.preventDefault();
     e.stopPropagation();
   };
@@ -613,19 +641,37 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
         data-key={r.key}
         data-id={r.item.id}
         data-client={r.clientKey}
-        aria-label={`${rankOf(r) ? `Rank ${rankOf(r)}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${kids > 0 ? `, ${open ? "expanded" : "collapsed"}` : ""}`}
+        aria-label={`${rankOf(r) ? `Rank ${rankOf(r)}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${unsavedWords(r)}${kids > 0 ? `, ${open ? "expanded" : "collapsed"}` : ""}${canChange ? `. F2 renames${r.has.parent ? ", M moves" : ""}, E opens it to edit` : ""}`}
         onFocus={() => env.setCursor(r.key)}
         onKeyDown={keys}
         style={{ paddingLeft: `calc(6px + ${indent} * var(--gantt-step))` }}
       >
         {kids > 0 ? <Chevron open={open} title={r.item.title} onToggle={() => env.setFold((f) => setRow(f, r, !open))} /> : <ChevronSpace />}
         <TypeIcon clientKey={r.clientKey} type={r.item.type} className="pa-type" />
-        <span className="pa-title" title={`${r.item.title} (#${r.item.id})`}>
-          <WorkLink clientKey={r.clientKey} url={r.item.url} title={`${r.item.title} (#${r.item.id})`}>
-            {r.item.title}
-          </WorkLink>
-        </span>
+        {op === "rename" ? (
+          <RenameBox r={r} done={backToLabel} say={setTold} />
+        ) : (
+          <span className="pa-title" title={`${r.item.title} (#${r.item.id})`}>
+            <WorkLink clientKey={r.clientKey} url={r.item.url} title={`${r.item.title} (#${r.item.id})`}>
+              {r.item.title}
+            </WorkLink>
+          </span>
+        )}
+        {(r.pending.title || r.pending.parent) && op !== "rename" && (
+          <span className="ah-unsaved pa-unsaved" title="Not in DevOps until you save">
+            {r.pending.title && r.pending.parent ? "Renamed, moved" : r.pending.title ? "Renamed" : "Moved"}, not saved
+          </span>
+        )}
         <NewUnder clientKey={r.clientKey} item={r.item} />
+        {canChange && op !== "rename" && (
+          <button type="button" className="more-btn ah-row-more" tabIndex={-1} aria-label={`More for ${r.item.title}: rename, move, edit`} aria-haspopup="menu" title="Rename, move, edit (Shift F10)" onClick={(e) => { e.stopPropagation(); const b = e.currentTarget.getBoundingClientRect(); rowMenu({ x: b.right, y: b.bottom + 4 }); }}>
+            <Icon name="more" />
+          </button>
+        )}
+        {op === "move" && <MovePicker rows={[r]} anchor={label.current} onPick={(p) => a.tryStage(r, "parent", p).then((why) => (why ? why : (setTold(p ? `#${r.item.id} moves under ${p.title}. Not saved until you save.` : `#${r.item.id} will have no parent. Not saved until you save.`), null)))} done={backToLabel} />}
+        <span className="sr-only" role="status" aria-live="polite">
+          {told}
+        </span>
       </div>
       <div className="pa-track" role="gridcell" aria-label={barLabel || `${r.item.title}: no dates`}>
         {capL && <span className={`pa-capmark before${early ? " early" : ""}`} title={capL} aria-label={capL} role="img" />}
