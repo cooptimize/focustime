@@ -76,6 +76,12 @@ span.brand-svg > svg { display: block; width: 100%; height: auto; }
 .brand-empty { display: flex; align-items: center; gap: 14px; padding: 14px 0; color: var(--text-muted); }
 .brand-empty p { margin: 0; }
 
+/* The lockup (BR-1): the week mark, then the wordmark over "by Cooptimize". About in Settings. */
+.lockup { display: inline-flex; align-items: center; gap: 14px; color: var(--text); }
+.lockup-words { display: flex; flex-direction: column; gap: 2px; }
+.lockup .wordmark { width: 170px; }
+.lockup-by { font-size: var(--fs-2); color: var(--text-muted); padding-left: 2px; }
+
 /* About in Settings. */
 .brand-about { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .brand-about p { margin: 0; }

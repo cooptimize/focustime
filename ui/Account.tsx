@@ -14,7 +14,7 @@ import { ActionRefusal, call, endSession, SessionError, setSignInShowing, signIn
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { BentMark } from "./brand/Brand.tsx";
+import { WeekMark } from "./brand/Brand.tsx";
 import { bootReady } from "./brand/boot.ts";
 import { TourLink } from "./guide/TourLink.tsx";
 /** UI-5: the Guide loads only when opened. */
@@ -126,7 +126,7 @@ export function SignInScreen({ message: first }: { message: string | null }) {
   return (
     <main className="signin-page">
       <div className="signin-card">
-        <BentMark width={120} />
+        <WeekMark height={43.2} />
         <h1>FocusTime</h1>
         <p>Sign in with your Cooptimize Microsoft account. FocusTime uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
         <button

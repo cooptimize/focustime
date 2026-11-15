@@ -215,7 +215,7 @@ export function StyleGuide() {
         <div className="sg-brand">
           <figure><WeekMark height={36} /><figcaption>WeekMark: top bar, icon</figcaption></figure>
           <figure><BentMark width={120} /><figcaption>BentMark: sign-in</figcaption></figure>
-          <figure><Lockup width={280} /><figcaption>Lockup: About</figcaption></figure>
+          <figure><Lockup /><figcaption>Lockup: About</figcaption></figure>
           <figure><Lumen pose="still" size={40} /><figcaption>Lumen still</figcaption></figure>
           <figure><Lumen pose="idle" size={40} /><figcaption>Lumen idle</figcaption></figure>
           <figure><Lumen pose="bob" size={40} /><figcaption>Lumen bob</figcaption></figure>

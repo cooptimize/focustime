@@ -3,7 +3,7 @@
 // requestAnimationFrame for the unroll. Every mark is decorative (aria-hidden); words around it carry the meaning.
 import { Fragment, useEffect, useId, useRef, type CSSProperties } from "react";
 import bentRaw from "../../assets/brand/mark-bent.svg?raw";
-import lockupRaw from "../../assets/brand/lockup-horizontal.svg?raw";
+import wordRaw from "../../assets/brand/wordmark.svg?raw";
 import { bandPath, finalFade, lumenAt, RING, SEGMENTS, segmentAt, span, STAGE, UNROLL, UNROLL_TOTAL, WEEK, LUMEN } from "./geometry.ts";
 import { useReducedMotion } from "./motion.ts";
 import "./brand.css";
@@ -71,10 +71,18 @@ export function BentMark({ width = 120 }: { width?: number }) {
   return <span className="brand-svg bent-mark" style={{ width }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: inline(bentRaw, uid) }} />;
 }
 
-/** The lockup: bent mark, wordmark and "by Cooptimize" (outlined). About in Settings. */
-export function Lockup({ width = 260 }: { width?: number }) {
+/** The lockup (BR-1): the week mark, the outlined wordmark and "by Cooptimize". About in Settings. */
+export function Lockup({ height = 40 }: { height?: number }) {
   const uid = useId().replace(/:/g, "");
-  return <span className="brand-svg lockup" style={{ width }} role="img" aria-label="FocusTime by Cooptimize" dangerouslySetInnerHTML={{ __html: inline(lockupRaw, uid) }} />;
+  return (
+    <span className="lockup" role="img" aria-label="FocusTime by Cooptimize">
+      <WeekMark height={height} />
+      <span className="lockup-words" aria-hidden="true">
+        <span className="brand-svg wordmark" dangerouslySetInnerHTML={{ __html: inline(wordRaw, uid) }} />
+        <span className="lockup-by">by Cooptimize</span>
+      </span>
+    </span>
+  );
 }
 
 /** Lumen's parts, drawn at the origin (30 x 30): beam to the left of the light bar, body, bar. */

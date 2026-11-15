@@ -507,10 +507,10 @@ function SectionBody(p: BodyProps) {
     case "data":
       return <DataSection {...p} />;
     case "about":
-      // Step 17.5: the lockup, the version and the credit line.
+      // Step 17.5: the lockup, the version and the credit line (BR-1: the lockup is the week mark's).
       return (
         <div className="brand-about">
-          <Lockup width={320} />
+          <Lockup />
           <p data-setting="version">Version {APP_VERSION}</p>
           <p className="set-hint">FocusTime is made by Cooptimize, for planning a week of client work.</p>
           <div className="set-grid">
