@@ -1,7 +1,7 @@
 // Step 17.5: the brand marks and Lumen as components (docs/design/brand.md). Colors come from the brand tokens;
 // mascot-highlight (Lumen's light) is used only here. No animation library: CSS for poses and the sweep,
 // requestAnimationFrame for the unroll. Every mark is decorative (aria-hidden); words around it carry the meaning.
-import { useEffect, useId, useRef, type CSSProperties } from "react";
+import { Fragment, useEffect, useId, useRef, type CSSProperties } from "react";
 import bentRaw from "../../assets/brand/mark-bent.svg?raw";
 import lockupRaw from "../../assets/brand/lockup-horizontal.svg?raw";
 import { bandPath, finalFade, lumenAt, RING, SEGMENTS, segmentAt, span, STAGE, UNROLL, UNROLL_TOTAL, WEEK, LUMEN } from "./geometry.ts";
@@ -37,6 +37,29 @@ export function WeekMark({ height = 18, className = "" }: { height?: number; cla
           )}
           <rect x={x} y={pm.y} width={bw} height={pm.h} rx={rx} fill="var(--brand-pm)" />
         </g>
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * BR-1: the loader's mark: the week mark's own drawing (WEEK, the same rects as WeekMark), each block with its place in
+ * reading order by day, morning then afternoon (wl-0 Mon AM to wl-7 Thu PM), its colors and its pass in
+ * ui/brand/boot.css. index.html carries this same markup so it shows from the first paint (ui/brand/boot.test.ts).
+ */
+export function WeekLoader() {
+  const { cols, bw, am, pm, rx } = WEEK;
+  return (
+    <svg className="week-loader" viewBox={`0 0 ${WEEK.w} ${WEEK.h}`} aria-hidden="true" focusable="false">
+      {cols.map((x, i) => (
+        <Fragment key={x}>
+          {i === 0 ? (
+            <rect className="wl wl-0 wl-hollow" x={x + 1.5} y={am.y + 1.5} width={bw - 3} height={am.h - 3} rx={rx - 1} fill="none" strokeWidth={3} />
+          ) : (
+            <rect className={`wl wl-${i * 2} wl-am`} x={x} y={am.y} width={bw} height={am.h} rx={rx} />
+          )}
+          <rect className={`wl wl-${i * 2 + 1} wl-pm`} x={x} y={pm.y} width={bw} height={pm.h} rx={rx} />
+        </Fragment>
       ))}
     </svg>
   );

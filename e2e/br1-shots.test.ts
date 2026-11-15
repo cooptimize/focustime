@@ -98,6 +98,7 @@ async function openingFrames(h: Harness, from: Page, theme: (typeof THEMES)[numb
   const p3 = await c3.newPage();
   const t3 = Date.now();
   await p3.goto(h.url, { waitUntil: "commit" });
+  if (full) await at(p3, `opening-3a-loader-${tag}`, 800, t3);
   await at(p3, `opening-3-loader-${tag}`, 1200, t3);
   if (full) {
     await at(p3, `opening-3b-loader-${tag}`, 1600, t3);
@@ -124,7 +125,7 @@ async function timeOpening(h: Harness, from: Page, ms: number): Promise<number> 
     const w = window as unknown as { __usable?: number };
     new MutationObserver(() => {
       if (w.__usable === undefined && document.querySelector(".topbar") && !document.querySelector(".brand-stage")) w.__usable = performance.now();
-      else if (document.querySelector(".brand-stage")) w.__usable = undefined;
+      else if (document.querySelector(".brand-stage")) delete w.__usable;
     }).observe(document, { subtree: true, childList: true, attributes: true });
   });
   const page = await ctx.newPage();

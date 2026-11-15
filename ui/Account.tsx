@@ -15,6 +15,7 @@ import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { BentMark } from "./brand/Brand.tsx";
+import { bootReady } from "./brand/boot.ts";
 import { TourLink } from "./guide/TourLink.tsx";
 /** UI-5: the Guide loads only when opened. */
 const Guide = lazy(() => import("./guide/Guide.tsx"));
@@ -81,7 +82,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   const api = useMemo(() => ({ status, refresh, signIn, signOut }), [status, refresh, signIn, signOut]);
   if (noSession) return <SignInScreen message={reason} />;
-  if (!status && !failed) return <div className="center-note"><p>Loading…</p></div>;
+  // BR-1: while the sign-in is checked, the loader (index.html's week mark) is what shows.
+  if (!status && !failed) return null;
   return <AuthCtx.Provider value={api}>{children}</AuthCtx.Provider>;
 }
 
@@ -113,6 +115,8 @@ export function SignInScreen({ message: first }: { message: string | null }) {
     setSignInShowing(true);
     return () => setSignInShowing(false);
   }, []);
+  // BR-1: the sign-in screen is the first screen: the loader finishes (ui/brand/boot.ts).
+  useEffect(() => bootReady(), []);
   if (guide !== undefined)
     return (
       <Suspense fallback={<div className="center-note"><p>Loading…</p></div>}>

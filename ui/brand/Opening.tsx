@@ -2,16 +2,17 @@
 // fun moments. Lumen appears only here, on sign-in and connect screens, in About, in the Guide's footer and in three empty states;
 // never in Week, Plan the week, Today, Plan the day, Check-in, Roadmap or on a card. Lumen never carries information.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Lumen, LumenLoading, Unroll } from "./Brand.tsx";
+import { Lumen, Unroll } from "./Brand.tsx";
+import { bootReady, bootWaiting } from "./boot.ts";
 import { WEEK_BOX, STAGE } from "./geometry.ts";
 import { useReducedMotion } from "./motion.ts";
-import { openingAt, sourceWord, type SourceLine } from "./opening.ts";
+import { waitingLine, type SourceLine } from "./opening.ts";
 
 const STAGE_H = 220;
 const FLY_MS = 450;
 const [VB_X, VB_Y, VB_W] = STAGE.viewBox.split(" ").map(Number) as [number, number, number];
 
-/** The top bar's mark, the end of the opening's flight and the start of Close out's. */
+/** The top bar's mark, the start of Close out's flight. */
 const topMark = () => document.querySelector<SVGSVGElement>(".brand-home .week-mark");
 
 /** The transform that puts the stage's week exactly over the top bar's mark (FLIP: first, last, invert, play). */
@@ -27,89 +28,20 @@ function flipToMark(svg: SVGSVGElement): string | null {
   return `translate(${target.x - box.left - (week.x - box.left) * k}px, ${target.y - box.top - (week.y - box.top) * k}px) scale(${k})`;
 }
 
-type Phase = "wait" | "loader" | "unroll" | "fly" | "done";
-
 /**
- * The app open. `ready` is true once the first load finished (or failed: a failed source never blocks the reveal).
- * Within 400 ms: nothing, the app shows directly. Otherwise the loader (Lumen with its light sweeping, "Loading your
- * week", each source done, waiting or failed), kept at least 600 ms; then the unroll, the hop into Mon AM, and the
- * week shrinking into the top bar's mark while the app fades in. Reduced motion: the loader holds still and the app
- * appears with no unroll.
+ * BR-1: the app open. The loader is index.html's own week mark (ui/brand/boot.ts); this only tells it what the
+ * opening is still waiting on (its line after 8 seconds) and when the first load is done (or failed: a failed source
+ * never holds it back). `onFinished` runs once the app shows.
  */
 export function Opening({ ready, lines, onFinished }: { ready: boolean; lines: SourceLine[]; onFinished?: () => void }) {
-  const reduced = useReducedMotion();
-  const t0 = useRef(performance.now());
-  const loadedAt = useRef<number | null>(null);
-  const [phase, setPhase] = useState<Phase>("wait");
-  const svg = useRef<SVGSVGElement>(null);
-  const bg = useRef<HTMLDivElement>(null);
   const finished = useRef(onFinished);
   finished.current = onFinished;
-
-  // The loader's timing: checked every 50 ms until the reveal.
+  const line = ready ? null : waitingLine(lines);
+  useEffect(() => bootWaiting(line), [line]);
   useEffect(() => {
-    if (phase !== "wait" && phase !== "loader") return;
-    const tick = () => {
-      const now = performance.now() - t0.current;
-      if (ready && loadedAt.current === null) loadedAt.current = now;
-      const o = openingAt(now, loadedAt.current);
-      if (o.revealAt !== null && now >= o.revealAt) {
-        // Never shown (a fast load), or reduced motion: the app shows directly. Otherwise the unroll.
-        setPhase(phase === "wait" || reduced ? "done" : "unroll");
-        return true;
-      }
-      if (o.loader && phase === "wait") setPhase("loader");
-      return false;
-    };
-    if (tick()) return;
-    const id = setInterval(() => void (tick() && clearInterval(id)), 50);
-    return () => clearInterval(id);
-  }, [ready, phase, reduced]);
-  useEffect(() => {
-    if (phase === "done") finished.current?.();
-  }, [phase]);
-
-  const unrolled = useCallback(() => {
-    // Lumen is home in Mon AM: it fades, then the week flies into the top bar while the app fades in.
-    svg.current?.querySelector(".unroll-lumen")?.classList.add("gone");
-    setTimeout(() => {
-      // The flight and the app's fade-in start in the same frame.
-      const el = svg.current;
-      const to = el ? flipToMark(el) : null;
-      el?.classList.add("flying");
-      requestAnimationFrame(() => {
-        if (el && to) el.style.transform = to;
-        bg.current?.classList.add("gone");
-      });
-      setPhase("fly");
-      setTimeout(() => setPhase("done"), FLY_MS + 40);
-    }, 200);
-  }, []);
-
-  if (phase === "done") return null;
-  if (phase === "wait") return <div className="brand-stage blocking" aria-hidden="true"><div className="brand-stage-bg" /></div>;
-  return (
-    <div className="brand-stage blocking" role="status" aria-live="polite" data-opening={phase}>
-      <div className="brand-stage-bg" ref={bg} />
-      <div className="brand-stage-body">
-        {phase === "loader" ? (
-          <LumenLoading height={STAGE_H} />
-        ) : (
-          <Unroll direction="open" height={STAGE_H} onDone={unrolled} svgRef={(el) => void (svg.current = el)} />
-        )}
-        <div className={`brand-loading-text${phase !== "loader" ? " gone" : ""}`}>
-          <h1>Loading your week</h1>
-          <ul>
-            {lines.map((l) => (
-              <li key={l.name} data-state={l.state}>
-                {l.name} {sourceWord(l.state)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
+    if (ready) bootReady(() => finished.current?.());
+  }, [ready]);
+  return null;
 }
 
 /** Click or any key skips an overlay; the key goes no further (no shortcut runs underneath). */

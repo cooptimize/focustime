@@ -1,5 +1,6 @@
 // Step 17.5: when the loader shows, when the app is revealed, what each source says while loading, and whether
-// today's work is all done (for the Close out moment). Pure.
+// today's work is all done (for the Close out moment). BR-1: the mark's pass, and the one line the loader may show
+// after 8 seconds. Pure; every time is in ms since the loader's mark started (its CSS, ui/brand/boot.css).
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
 
@@ -17,6 +18,33 @@ export function openingAt(now: number, loadedAt: number | null): { loader: boole
   if (loadedAt !== null && loadedAt <= LOADER_DELAY_MS) return { loader: false, revealAt: loadedAt };
   const revealAt = loadedAt === null ? null : Math.max(loadedAt, LOADER_DELAY_MS + LOADER_MIN_MS);
   return { loader: now >= LOADER_DELAY_MS && (revealAt === null || now < revealAt), revealAt };
+}
+
+/** BR-1: the mark's pass (ui/brand/boot.css): a block lights every STEP_MS in reading order, every block is lit from
+ *  ALL_LIT_MS into the pass, and a pass is PASS_MS long, the first starting as the mark appears (LOADER_DELAY_MS). */
+export const STEP_MS = 120;
+export const ALL_LIT_MS = 960;
+export const PASS_MS = 1600;
+/** The move into the top bar's mark while the app fades in. */
+export const FLY_MS = 400;
+/** The loader's one line shows only after this long (CSS, ui/brand/boot.css). */
+export const WAIT_LINE_MS = 8000;
+
+/** How long until the current pass has every block lit, at `t`: nothing to wait for when they already are (or are
+ *  dimming, which the move lights again), and before the mark shows. */
+export function passWait(t: number): number {
+  if (t < LOADER_DELAY_MS) return 0;
+  const p = (t - LOADER_DELAY_MS) % PASS_MS;
+  return p < ALL_LIT_MS ? ALL_LIT_MS - p : 0;
+}
+
+/** The loader's only words, after 8 seconds: what it is still waiting on, two names at most, then "and N more". */
+export function waitingLine(lines: readonly SourceLine[]): string | null {
+  const n = lines.filter((l) => l.state === "waiting").map((l) => l.name);
+  if (!n.length) return null;
+  if (n.length === 1) return `Still waiting on ${n[0]}`;
+  if (n.length === 2) return `Still waiting on ${n[0]} and ${n[1]}`;
+  return `Still waiting on ${n[0]}, ${n[1]} and ${n.length - 2} more`;
 }
 
 export type SourceState = "waiting" | "done" | "failed";
@@ -40,9 +68,6 @@ export function sourceLines(sources: readonly SourceSummary[] | null, devops: re
   lines.push({ name: "DevOps", state: devopsFailed ? "failed" : "done" });
   return lines;
 }
-
-/** The words for a source line. */
-export const sourceWord = (s: SourceState) => (s === "done" ? "done" : s === "failed" ? "didn't load" : "waiting");
 
 type DayPick = { status: string };
 

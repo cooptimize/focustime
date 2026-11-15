@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
-import { allDone, openingAt, sourceLines } from "./opening.ts";
+import { allDone, openingAt, passWait, sourceLines, waitingLine } from "./opening.ts";
 
 const src = (source: SourceSummary["source"], status: SourceSummary["status"]) => ({ source, status, fetchedAt: null, fromCache: false, itemCount: 0 }) as SourceSummary;
 const client = (status: ClientWork["status"]) => ({ status }) as ClientWork;
@@ -23,6 +23,24 @@ describe("the loader", () => {
     expect(openingAt(1000, 410).loader).toBe(false);
     // A slow load reveals as soon as it's done.
     expect(openingAt(3000, 3000)).toEqual({ loader: false, revealAt: 3000 });
+  });
+});
+
+describe("the mark's pass and the 8 second line (BR-1)", () => {
+  it("waits for every block to be lit, never more than one pass's lighting", () => {
+    expect(passWait(0)).toBe(0); // not shown yet
+    expect(passWait(400)).toBe(960); // the pass just started
+    expect(passWait(400 + 500)).toBe(460);
+    expect(passWait(400 + 960)).toBe(0); // all lit
+    expect(passWait(400 + 1400)).toBe(0); // dimming: the move lights them again
+    expect(passWait(400 + 1600 + 100)).toBe(860); // the next pass
+  });
+  it("names at most two things still waited on, then how many more", () => {
+    const w = (...names: string[]) => names.map((name) => ({ name, state: "waiting" as const }));
+    expect(waitingLine(w("Outlook"))).toBe("Still waiting on Outlook");
+    expect(waitingLine(w("Outlook", "Google"))).toBe("Still waiting on Outlook and Google");
+    expect(waitingLine(sourceLines(null, null))).toBe("Still waiting on Dataverse, Outlook and 2 more");
+    expect(waitingLine([{ name: "Outlook", state: "done" }, { name: "Google", state: "failed" }])).toBeNull();
   });
 });
 

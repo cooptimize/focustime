@@ -19,6 +19,7 @@ import { isTheme } from "./theme.ts";
 import { useLayout } from "./viewport.ts";
 import { WeekGrid } from "./WeekGrid.tsx";
 import { BentMark, Lockup, Lumen, LumenLoading, WeekMark } from "./brand/Brand.tsx";
+import { bootReady } from "./brand/boot.ts";
 
 const NY = "America/New_York";
 const NOW = "2026-11-02T10:10:00-05:00";
@@ -172,6 +173,8 @@ const SG_MENU: { label: string; cls?: string; key?: string; why?: string; next?:
 ];
 
 export function StyleGuide() {
+  // BR-1: the style guide is a first screen too: the loader finishes.
+  useEffect(() => bootReady(), []);
   const [theme, setTheme] = useState<Theme>(() => {
     const q = new URLSearchParams(location.search).get("theme");
     const now = document.documentElement.dataset.theme;
