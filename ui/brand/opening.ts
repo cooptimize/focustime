@@ -29,13 +29,6 @@ export const FLY_MS = 400;
 /** The loader's one line shows only after this long (CSS, ui/brand/boot.css). */
 export const WAIT_LINE_MS = 8000;
 
-/** How long until the current pass has every block lit, at `t`: nothing to wait for when they already are (or are
- *  dimming, which the move lights again), and before the mark shows. */
-export function passWait(t: number): number {
-  if (t < LOADER_DELAY_MS) return 0;
-  const p = (t - LOADER_DELAY_MS) % PASS_MS;
-  return p < ALL_LIT_MS ? ALL_LIT_MS - p : 0;
-}
 
 /** The loader's only words, after 8 seconds: what it is still waiting on, two names at most, then "and N more". */
 export function waitingLine(lines: readonly SourceLine[]): string | null {

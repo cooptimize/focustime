@@ -77,7 +77,7 @@ describe("the loader's mark (BR-1)", () => {
     expect(boot).toMatch(/width: calc\(96px \* var\(--boot-scale\)\); height: calc\(43\.2px \* var\(--boot-scale\)\)/);
   });
 
-  it("its pass keeps the timing boot.ts counts on: appears at 400 ms, a block every 120 ms, all lit at 960 ms, 1.6 s a pass", () => {
+  it("its pass keeps the timing ui/brand/opening.ts names: appears at 400 ms, a block every 120 ms, all lit at 960 ms, 1.6 s a pass", () => {
     expect(boot).toMatch(/animation: boot-show 0s 400ms both/);
     expect(boot).toMatch(/\.week-loader \.wl \{ animation-duration: 1\.6s; animation-timing-function: ease-in-out; animation-delay: 400ms; animation-iteration-count: infinite; animation-fill-mode: both; \}/);
     expect([LOADER_DELAY_MS, STEP_MS, ALL_LIT_MS, PASS_MS]).toEqual([400, 120, 960, 1600]);

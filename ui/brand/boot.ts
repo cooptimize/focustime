@@ -2,12 +2,12 @@
 // then the mark with its blocks lighting in turn, and after 8 seconds one line saying what is still waited on. This
 // module takes it from there, once, for whichever screen comes first (the app, the sign-in screen, a signed-out or
 // failed screen, /styleguide): a load under 400 ms removes it before it shows; otherwise it stays at least 600 ms,
-// the mark finishes its pass (every block lit), then moves and shrinks into the top bar's mark while the app fades in
+// then the mark lights every block and moves and shrinks into the top bar's mark while the app fades in
 // (with no top bar mark it fades where it is). Reduced motion: the mark is still and the app appears with no movement.
 // A click or a key while it finishes goes straight to the app (the key does nothing else). Screen readers hear
 // "Loading FocusTime", then "FocusTime is ready". Moves are Web Animations and class changes: no inline style (CSP).
 import { reducedMotion } from "./motion.ts";
-import { FLY_MS, LOADER_DELAY_MS, openingAt, passWait } from "./opening.ts";
+import { FLY_MS, LOADER_DELAY_MS, openingAt } from "./opening.ts";
 
 type State = "loading" | "finishing" | "done";
 let state: State = "loading";
@@ -46,11 +46,8 @@ export function bootReady(done?: () => void): void {
   if (!o.loader && t <= LOADER_DELAY_MS) return finish();
   window.addEventListener("keydown", skipKey, true);
   stage()?.addEventListener("pointerdown", finish);
-  // At least 600 ms on screen, then (with motion) the end of the pass, then the move.
-  timer = window.setTimeout(() => {
-    if (reducedMotion()) return finish();
-    timer = window.setTimeout(move, passWait(markClock()));
-  }, Math.max(0, (o.revealAt ?? t) - t));
+  // At least 600 ms on screen, then the move (it lights every block as it goes), or with reduced motion the app.
+  timer = window.setTimeout(() => (reducedMotion() ? finish() : move()), Math.max(0, (o.revealAt ?? t) - t));
 }
 
 function skipKey(e: KeyboardEvent): void {

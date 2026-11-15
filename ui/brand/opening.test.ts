@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
-import { openingAt, passWait, sourceLines, waitingLine } from "./opening.ts";
+import { openingAt, sourceLines, waitingLine } from "./opening.ts";
 
 const src = (source: SourceSummary["source"], status: SourceSummary["status"]) => ({ source, status, fetchedAt: null, fromCache: false, itemCount: 0 }) as SourceSummary;
 const client = (status: ClientWork["status"]) => ({ status }) as ClientWork;
@@ -26,15 +26,7 @@ describe("the loader", () => {
   });
 });
 
-describe("the mark's pass and the 8 second line (BR-1)", () => {
-  it("waits for every block to be lit, never more than one pass's lighting", () => {
-    expect(passWait(0)).toBe(0); // not shown yet
-    expect(passWait(400)).toBe(960); // the pass just started
-    expect(passWait(400 + 500)).toBe(460);
-    expect(passWait(400 + 960)).toBe(0); // all lit
-    expect(passWait(400 + 1400)).toBe(0); // dimming: the move lights them again
-    expect(passWait(400 + 1600 + 100)).toBe(860); // the next pass
-  });
+describe("the 8 second line (BR-1)", () => {
   it("names at most two things still waited on, then how many more", () => {
     const w = (...names: string[]) => names.map((name) => ({ name, state: "waiting" as const }));
     expect(waitingLine(w("Outlook"))).toBe("Still waiting on Outlook");

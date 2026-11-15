@@ -27,7 +27,7 @@ The SVGs name their colors `--brand-am`, `--brand-pm` and `--accent`. In the app
 | Launcher, notifications, window icon | `focustime` hicolor PNGs (mark-week); symbolic: `focustime-symbolic` |
 | Browser tab | `favicon.svg`, with the 32 px PNG as fallback |
 | Loader | The week mark alone, centered, its blocks lighting in turn; no words (BR-1) |
-| Sign-in screen | WeekMark, the loader's size and place, above the sign-in words |
+| Sign-in screen | WeekMark at the loader's size, at the top of the sign-in card |
 | Settings > About | Lockup: WeekMark, the wordmark and "by Cooptimize" |
 | The Guide's Start here | WeekMark (68 px tall) |
 | /styleguide | WeekMark, the Lockup and the loader, live in each theme |

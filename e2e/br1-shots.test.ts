@@ -122,8 +122,9 @@ async function timeOpening(h: Harness, from: Page, ms: number): Promise<number> 
   const ctx = await themed(h, from, THEMES[0]);
   if (ms) await hold(ctx, "**/api/action", isAction("week.load"), ms);
   await ctx.addInitScript(() => {
-    const w = window as unknown as { __usable?: number };
+    const w = window as unknown as { __usable?: number; __top?: number };
     new MutationObserver(() => {
+      if (w.__top === undefined && document.querySelector(".topbar")) w.__top = performance.now();
       if (w.__usable === undefined && document.querySelector(".topbar") && !document.querySelector(".brand-stage")) w.__usable = performance.now();
       else if (document.querySelector(".brand-stage")) delete w.__usable;
     }).observe(document, { subtree: true, childList: true, attributes: true });
@@ -132,8 +133,12 @@ async function timeOpening(h: Harness, from: Page, ms: number): Promise<number> 
   await page.goto(h.url);
   await opened(page);
   await page.waitForTimeout(300);
-  const t = await page.evaluate(() => (window as unknown as { __usable?: number }).__usable ?? -1);
+  const [t, top] = await page.evaluate(() => {
+    const w = window as unknown as { __usable?: number; __top?: number };
+    return [w.__usable ?? -1, w.__top ?? -1];
+  });
   await ctx.close();
+  if (process.env.BR1_TOP) console.log(`opening: top bar at ${Math.round(top)} ms, usable at ${Math.round(t)} ms`);
   return Math.round(t);
 }
 

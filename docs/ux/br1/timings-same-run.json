@@ -1,0 +1,5 @@
+{
+  "note": "Navigation to usable (the loader gone, the top bar up), ms, three runs each, taken back to back on one machine on Nov 15: origin/main 7fd1c59d from an exported copy, then this branch. The week held 0, 1.5 s or 3 s.",
+  "before": { "fast": [549, 442, 553], "slow1500": [4265, 4213, 4205], "slow3000": [5795, 5681, 5756] },
+  "after": { "fast": [466, 311, 461], "slow1500": [2260, 2265, 2270], "slow3000": [3780, 3856, 3755] }
+}
