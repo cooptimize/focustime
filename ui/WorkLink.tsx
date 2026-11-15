@@ -22,6 +22,20 @@ export function openItemCard(clientKey: string, itemId: number): void {
   window.dispatchEvent(new CustomEvent<ItemCardTarget>(ITEM_CARD_EVENT, { detail: { clientKey, itemId } }));
 }
 
+/** ED-2: the card to open ready to edit (E on a Backlog row): taken once by the card when its Edit can start. */
+let editNext: ItemCardTarget | null = null;
+export function openItemCardToEdit(clientKey: string, itemId: number): void {
+  editNext = { clientKey, itemId };
+  openItemCard(clientKey, itemId);
+}
+export function takeEditNext(clientKey: string, itemId: number): boolean {
+  if (!editNext) return false;
+  const mine = editNext.clientKey === clientKey && editNext.itemId === itemId;
+  // Asked for another card: it no longer applies.
+  editNext = null;
+  return mine;
+}
+
 /** What link.open and outlook.open answer: the host opened the link, or the page opens it (the hosted app). */
 export type Opened = { opened: "browser" } | { opened: "page"; url: string };
 /** Opens a link the server checked and handed back, in a new tab of the person's browser. */

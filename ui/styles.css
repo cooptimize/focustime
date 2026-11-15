@@ -7487,3 +7487,44 @@ button:disabled { cursor: default; }
 .st-feature h4 .st-title::after { content: ""; position: absolute; top: -6px; bottom: -6px; left: 0; right: 0; }
 /* RS-2 D3: the Gantt's free-time row holds three lines, so a cell with an over part or Crowded month shows whole. */
 .ah-gantt .pa-cap { min-height: calc(var(--fs-2) * 1.25 * 3 + 10px); }
+
+/* ---- ED-2: rename, move and bulk edit in Backlog's Grid ---- */
+/* A staged rename or move says so on its row, in words (one line, like Read only). */
+.ah-unsaved { flex: none; font-size: var(--fs-1); color: var(--text); border: 1px solid var(--selected); border-radius: 999px; padding: 0 6px; background: color-mix(in oklab, var(--selected) 14%, transparent); white-space: nowrap; }
+.ah-parent.pend { color: var(--text); box-shadow: inset 0 -1px 0 var(--selected); }
+/* The title edited in place: the box takes the title's room, one line. */
+.ah-rename { flex: 1 1 auto; min-width: 0; position: relative; display: flex; }
+.ah-rename-box { flex: 1 1 auto; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--focus); border-radius: 6px; padding: 0 6px; margin-block: calc(-2px * var(--text-scale)); height: calc(24px * var(--text-scale)); }
+.ah-rename-box[aria-invalid="true"] { border-color: var(--risk); }
+.ah-rename-why { position: absolute; left: 0; top: calc(100% + 4px); z-index: 5; max-width: 420px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--raised); color: var(--text); font-size: var(--fs-2); box-shadow: var(--shadow-pop); }
+/* Rename and the row's ⋯ show on hover and on focus, like New under. */
+.ah-rename-btn, .ah-row-more { flex: none; visibility: hidden; }
+.ah-row-more { width: calc(22px * var(--text-scale)); height: calc(22px * var(--text-scale)); margin-block: calc(-2px * var(--text-scale)); }
+.ah-row:is(:hover, :focus-within) :is(.ah-rename-btn, .ah-row-more), .pa-row:is(:hover, :focus-within) .ah-row-more, :is(.ah-rename-btn, .ah-row-more):focus-visible { visibility: visible; }
+@media (hover: none) { .ah-rename-btn, .ah-row-more { visibility: visible; } }
+.pa-label .ah-row-more { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; background: var(--surface); box-shadow: 0 0 0 4px var(--surface); }
+.pa-label:has(.ah-new-under) .ah-row-more { right: calc(96px * var(--text-scale)); }
+/* A drag onto a new parent: only the rows that can take it light up; the row under the pointer says where it goes. */
+body.ah-dragging { user-select: none; cursor: grabbing; }
+body.ah-dragging * { cursor: grabbing !important; }
+.ah-row { transition: background-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease; }
+.ah-row.ah-drop-from { opacity: 0.55; }
+.ah-row.ah-drop-ok > td { background: color-mix(in oklab, var(--selected) 10%, transparent); box-shadow: inset 0 1px 0 var(--selected), inset 0 -1px 0 var(--selected); }
+.ah-row.ah-drop-on > td { background: color-mix(in oklab, var(--selected) 26%, transparent); box-shadow: inset 0 2px 0 var(--selected), inset 0 -2px 0 var(--selected); }
+.ah-item { position: relative; }
+.ah-grid-box.dragging .ah-row :is(.ah-rename-btn, .ah-row-more, .ah-new-under) { visibility: hidden; }
+.pa-unsaved { margin-left: 6px; }
+.pa-label .ah-rename { margin-right: 6px; }
+.ah-drop-say { position: absolute; right: 6px; top: 0; font-size: var(--fs-1); font-weight: 600; white-space: nowrap; max-width: 46%; overflow: hidden; text-overflow: ellipsis; border-radius: 999px; padding: 0 8px; background: var(--action); color: var(--on-action); }
+.ah-drag-say { position: fixed; z-index: 2000; pointer-events: none; max-width: 420px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); font-size: var(--fs-2); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--shadow-pop); }
+:root[data-reduce-motion] .ah-row { transition: none; }
+@media (prefers-reduced-motion: reduce) { .ah-row { transition: none; } }
+/* Move…'s list is a little wider than a state list: titles are long. */
+.ah-pop-move { width: min(440px, 92vw); }
+/* The bulk bar's four pickers: a button that can't open for these rows stays reachable and says why. */
+.bl-bulk .mini.bl-off { color: var(--text-faint); }
+.bl-result.bl-why { color: var(--text); }
+.bl-state-partial { display: flex; flex-direction: column; gap: 4px; }
+.bl-state-partial [role="list"] { display: flex; flex-direction: column; gap: 2px; }
+.bl-state-fit { display: flex; align-items: center; gap: 6px; color: var(--text); }
+.ah-pop-bulk-state { width: min(380px, 92vw); }

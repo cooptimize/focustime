@@ -6,7 +6,7 @@
 import type { AppConfig } from "../config/schema.ts";
 import { KINDS, RANGES } from "../plan/ahead-view.ts";
 import type { AheadGapKind, AheadRange } from "../plan/ahead-edit.ts";
-import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, moveProblem, parentIdIn, sameValue, type MoveItem, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
+import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, moveItemFrom, moveProblem, parentIdIn, sameValue, type MoveItem, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
 import { aboutText, hoursText, storyMinutes, unsizedText, type SizeScale } from "../plan/estimate.ts";
 import { aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -18,7 +18,6 @@ import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.
 import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
 import { bulkDecide, DEFAULT_AHEAD, type BulkOp } from "../plan/backlog.ts";
 import { assignPeople, type AssignPerson } from "../plan/ahead-people.ts";
-import { isOpen as isOpenCategory } from "../plan/process.ts";
 import { FIXED_KEY, fixedSince, liveSkips, readFixed, SKIPS_KEY } from "../plan/readiness.ts";
 
 export const AHEAD_ACTIONS = ["ahead.load", "ahead.people", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters", "ahead.skip", "ahead.unskip"] as const;
@@ -81,7 +80,7 @@ const isId = (v: unknown): v is number => typeof v === "number" && Number.isSafe
 const isField = (v: unknown): v is ChangeField => typeof v === "string" && (CHANGE_FIELDS as readonly string[]).includes(v);
 
 /** ED-2: an item as the move rule reads it. */
-export const moveItemOf = (i: AheadItem): MoveItem => ({ id: i.id, type: i.type, title: i.title, state: i.state, rung: i.rung, open: isOpenCategory(i.stateCategory) });
+export const moveItemOf = (i: AheadItem): MoveItem => moveItemFrom(i);
 
 /** What DevOps has now for a field of an item (`items`: its client's, for a parent's title). */
 export function currentValue(i: AheadItem, field: ChangeField, items: readonly AheadItem[] = []): ChangeValue {

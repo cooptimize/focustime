@@ -51,6 +51,8 @@ export type AheadEnv = {
   roadmap: Map<string, RoadmapRow>;
   readOnly: boolean;
   stage: (r: Row, field: ChangeField, value: ChangeValue, half?: DayHalf | null) => Promise<boolean>;
+  /** ED-2: the same, answering why it couldn't be kept (null: staged) so the place that asked can say it. */
+  tryStage: (r: Row, field: ChangeField, value: ChangeValue) => Promise<string | null>;
   unstage: (r: Row, field?: ChangeField) => Promise<void>;
   /** BH-1: my change set after a bulk action staged it on the server. */
   setChanges: (changes: StagedChange[]) => void;
@@ -226,17 +228,21 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     await reload();
   };
 
-  const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+  const tryStage = async (r: Row, field: ChangeField, value: ChangeValue, half: DayHalf | null = null): Promise<string | null> => {
     local.current++;
     try {
       const res = await call<{ changes: StagedChange[] }>("ahead.stage", { clientKey: r.clientKey, itemId: r.item.id, field, value, ...(half ? { half } : {}) });
       local.current++;
       setLoad((l) => (l ? { ...l, changes: res.changes } : l));
-      return true;
+      return null;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That change couldn't be kept");
-      return false;
+      return e instanceof Error ? e.message : "That change couldn't be kept";
     }
+  };
+  const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+    const why = await tryStage(r, field, value, half);
+    if (why) setError(why);
+    return !why;
   };
   const unstage: AheadEnv["unstage"] = async (r, field) => {
     local.current++;
@@ -488,7 +494,7 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : f === "parent" ? "no parent" : "no value") : valueText(f, v, half));
     return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, tryStage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
   const title = mode === "gantt" ? "Gantt" : "Grid";
@@ -600,7 +606,9 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [landed, setLanded] = useState<DevOpsLogView["entries"]>([]);
-  const [since] = useState(() => new Date().toISOString());
+  // What this review saved: the write log's entries newer than the newest one when it opened (by id, so it doesn't
+  // depend on the browser's clock agreeing with the server's).
+  const since = useRef<number | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   useReturnFocus();
   useEffect(() => panel.current?.focus(), []);

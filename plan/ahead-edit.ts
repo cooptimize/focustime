@@ -7,6 +7,7 @@
 // ladder, never from type names.
 
 import { aOr, cleanTitle, TITLE_MAX } from "./quick-create.ts";
+import { isOpen as isOpenCategory } from "./process.ts";
 
 export type EditWhy = "lead" | "owner" | "parent_owner";
 export type EditRight = { ok: true; why: EditWhy } | { ok: false; note: string };
@@ -208,6 +209,8 @@ export function moveProblem(item: MoveItem, to: MoveItem | null, project: string
   if (!to.open) return `#${to.id} is ${to.state}; FocusTime moves items only under open parents`;
   return null;
 }
+/** An item as the move rule reads it (open by the one rule: Proposed or In Progress). */
+export const moveItemFrom = (i: { id: number; type: string; title: string; state: string; rung: number | null; stateCategory: string }): MoveItem => ({ id: i.id, type: i.type, title: i.title, state: i.state, rung: i.rung, open: isOpenCategory(i.stateCategory) });
 /** The items this one may move under: its client's open items exactly one level up (ED-1's picker). */
 export const moveTargets = <T extends MoveItem>(items: readonly T[], item: MoveItem, project: string): T[] => items.filter((x) => moveProblem(item, x, project) === null);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
