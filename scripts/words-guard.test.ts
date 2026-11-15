@@ -111,8 +111,17 @@ describe("pointers (NM-2)", () => {
     expect(badPointers("It opens again in Inbox › Conversations.")).toEqual(["Inbox › Conversations"]);
     expect(badPointers("Choose your VM first (Settings > You)")).toEqual(["Settings › You"]);
     expect(badPointers("Ask in Admin › Clients › <client> › Meetings")).toEqual([]);
-    expect(badPointers("Open it from More › Install app, or More › Downloads.")).toEqual(["More › Downloads"]);
+    expect(badPointers("Open it from More › Install app. Or More › Downloads.")).toEqual(["More › Downloads"]);
     expect(badPointers("Backlog › Gantt and Backlog › Roadmap")).toEqual(["Backlog › Roadmap"]);
+  });
+  it("needs the whole name, checks lowercase, and reads a nested segment as part of its path (review)", () => {
+    expect(badPointers("Settings › Backlog › Stale after")).toEqual([]);
+    expect(badPointers("More › Settings › Display")).toEqual([]);
+    expect(badPointers("Inbox › From your team")).toEqual(["Inbox › From your team"]);
+    expect(badPointers("Settings › Your clients")).toEqual(["Settings › Your clients"]);
+    expect(badPointers("Settings > data")).toEqual(["Settings › data"]);
+    expect(badPointers("Settings › Activity's rows and Admin › Clients' scope")).toEqual([]);
+    expect(badPointers("Settings › AI, then Settings › Accounts.")).toEqual([]);
   });
   it("leaves pointers built from code alone", () => {
     expect(badPointers("Settings › ${label}")).toEqual([]);

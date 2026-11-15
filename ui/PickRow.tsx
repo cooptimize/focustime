@@ -20,6 +20,7 @@ import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { PlanCtx, useFocused } from "./planview.ts";
 import { ItemTitleLink, WorkLink } from "./WorkLink.tsx";
+import { isDevOpsUrl } from "./work.ts";
 import { PlanRow } from "./plan/PlanRow.tsx";
 import { useTodoSheet } from "./TodoSheet.tsx";
 import { DevOpsWork } from "./work.ts";
@@ -68,7 +69,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   // and any whose URL wasn't a DevOps address) opens it too, by id; it was plain text before.
   const linked = (children: ReactNode, className?: string, title?: string): ReactNode =>
     !link ? children
-    : pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} {...(className ? { className } : {})} {...(title ? { title } : {})}>{children}</WorkLink>
+    : pick.itemUrl && isDevOpsUrl(pick.itemUrl) ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} {...(className ? { className } : {})} {...(title ? { title } : {})}>{children}</WorkLink>
     : pick.itemId !== null && pick.clientKey ? <ItemTitleLink clientKey={pick.clientKey} id={pick.itemId} {...(className ? { className } : {})} {...(title ? { title } : {})}>{children}</ItemTitleLink>
     : children;
   const today = density === "today";

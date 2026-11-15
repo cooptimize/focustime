@@ -84,7 +84,7 @@ export function ItemTitleLink({ clientKey, id, url, className, title, children }
     openItemCard(clientKey, id);
   };
   return (
-    <a href={url && isDevOpsUrl(url) ? url : `#/item/${encodeURIComponent(clientKey)}/${id}`} className={className} title={title} tabIndex={tabIndex} data-card={`${clientKey}:${id}`} aria-haspopup="dialog" onClick={open} onAuxClick={(e) => e.button === 1 && open(e)}>
+    <a href={url && isDevOpsUrl(url) ? url : `#/item/${encodeURIComponent(clientKey)}/${id}`} className={className} title={title} tabIndex={tabIndex} data-card={`${clientKey}:${id}`} aria-haspopup="dialog" onClick={open} onAuxClick={(e) => e.button === 1 && open(e)} onDoubleClick={(e) => e.stopPropagation()}>
       {children}
     </a>
   );

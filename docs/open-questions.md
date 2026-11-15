@@ -977,12 +977,12 @@ From the IT review (TD-1):
 - Anything in C found still in use: none. Each proof is in `docs/ux/nm1/dead-parts.md`.
 - The now mark on a PTO day or a holiday went with the catch-up day's: all three are one cell, not a block, and the rule given was "a cell that isn't a block gets no now mark". Before, a PTO day's hatched cell had the thin line inside working hours. Is that wanted for PTO too?
 - Not in this step, as seen in the demo (nothing changed):
-  - A to-do's title on a block's card: on Week, clicking the title of "Export orders to CSV" on its card opened nothing; no story card, and the address stayed `#/week`. The same title in the block's panel opens its story card.
-  - Close from Settings opened out of the Guide: from `#/guide/settings`, opening `#/settings/display` and closing Settings (Esc or Close) lands on Day (`#/day`), not back in the Guide.
+  - (Built in NM-2.) A to-do's title on a block's card: on Week, clicking the title of "Export orders to CSV" on its card opened nothing; no story card, and the address stayed `#/week`. The same title in the block's panel opens its story card.
+  - (Built in NM-2.) Close from Settings opened out of the Guide: from `#/guide/settings`, opening `#/settings/display` and closing Settings (Esc or Close) lands on Day (`#/day`), not back in the Guide.
 - Unused, noticed along the way (nothing removed):
-  - `ui/Roadmap.tsx`: nothing imports it. It still says "Roadmap".
+  - `ui/Roadmap.tsx`: nothing imports it. It still says "Roadmap". (Removed in NM-2.)
   - `plan/work-templates.ts` and `store/work-templates-store.ts`: no screen or action imports them since TP-1b; the store and its table remain.
-  - `conversationsTick` in `server/ticks.ts` is an empty function still registered as the tick part `conversation_notices` (it sent the four kinds removed here).
+  - `conversationsTick` in `server/ticks.ts` is an empty function still registered as the tick part `conversation_notices` (it sent the four kinds removed here). (Removed in NM-2.)
   - `escalationHours` in `actions/dispatch.ts` has one caller left (Snooze in the Inbox); `PollPerson.openItems` and `pipelineAi` lost a caller with the job and are still used by the pipeline.
   - Tables TD-1 already listed as kept but unread (`chat_messages`, `asks`, `delivery_chats`, `dedupe_log`); the columns the upkeep job once wrote (`escalated_at` on commitments, the follow-through suggestions) have been written by nothing since IB-4.
   - Stored settings unread: a person's `[notify]` switches for the four removed kinds.
@@ -1118,3 +1118,9 @@ From the IT review (TD-1):
   - The command "Settings" moves from the group Week to the group Settings.
   - The Renamed list's word budget went from 260 to 270 rather than dropping an older row.
   - The Technical docs' "Checked against" lines are left as they were: only the lines this step changed were checked again.
+- From the review:
+  - The assistant's `unlink` tool still names a conversation as well as a promise. A linked conversation leaves From chats, so the inbox read the tool depends on never lists one, and in practice only promises are unlinked. Left as it is; drop the conversation case from the tool when its actions are next looked at.
+  - Replies to Ask a lead to look made before NM-2 show only in Team (hidden); the `look_reply` notice opens Week, where the reply isn't shown. Show the reply in the block panel's You sent again, or show Team?
+  - To place's group still has the heading "From your team" (its own section heading, not a pointer). Rename it with the next pass on the block panel's words?
+  - The pointer check reads only the first segment of a path ("Settings › Profile › Run setup again" checks Profile).
+  - The command menu shows the From chats group heading twice: the registry's commands keep their order (RS-2 D7), and the Inbox's keys sit between two runs of From chats commands.

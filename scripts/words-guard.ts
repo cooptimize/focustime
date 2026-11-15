@@ -263,8 +263,9 @@ export function namesHits(f: string, text: string): { line: number; says: string
 
 // ---------- NM-2: pointers lead somewhere ----------
 // "Settings › Display", "Admin › Clients", "More › Install app", "Inbox › Promises", "Backlog › Gantt": every pointer in
-// the words a person reads names a place the screens draw today (ui/places.ts reads their lists). The place's name is
-// matched by its first word, since a sentence goes on after it ("Settings › Accounts" is Accounts and calendars). A
+// the words a person reads names a place the screens draw today (ui/places.ts reads their lists). The place's whole
+// name must follow (a sentence may go on after it), or one of SHORT's shortenings ("Settings › Accounts"). Only the
+// first segment is checked: "Settings › Profile › Run setup again" checks Profile. A
 // pointer built from code ("Settings › ${label}") isn't checked here; the screen that builds it draws the name.
 
 /** What the pointer check reads: what the names check reads, the Guide (not its Renamed list) and the Technical docs. */
@@ -272,22 +273,28 @@ export const pointersScanned = (f: string) => namesScanned(f) || (/^ui\/guide\/[
 
 /** Pointers that name another app's places, each with its reason. Keep it short. */
 export const POINTERS_ALLOWED: readonly Allowed[] = [
-  { re: /^Calendar › Shared calendars\b/, file: /^(ui\/settings\/CalendarLinks\.tsx|docs\/technical\/integrations\.md)$/, why: "Outlook's own Settings, where a person publishes a calendar: not FocusTime's" },
+  { re: /^(Calendar › Shared calendars|the calendar › Integrate calendar)\b/, file: /^(ui\/settings\/CalendarLinks\.tsx|docs\/technical\/integrations\.md)$/, why: "Outlook's and Google's own Settings, where a person publishes a calendar: not FocusTime's" },
 ];
 
 const POINTER = /\b(Settings|Admin|More|Inbox|Backlog) (?:›|>|&gt;) (?=([^›>]*))/g;
-const firstWord = (s: string) => s.trim().split(/[\s,.;:()"'`]+/)[0] ?? "";
+/** A place's name in a sentence may be shortened to these, each standing for one place. */
+const SHORT: Readonly<Record<string, string>> = { Accounts: "Accounts and calendars", AI: "AI and assistant" };
+/** The name, then anything but more of a word: "Activity's rows" and "Clients' scope" are the place's. */
+const startsWithName = (rest: string, name: string) => rest.startsWith(name) && !/^[A-Za-z0-9]|^['’](?!s\b|\s|$)/.test(rest.slice(name.length));
 
 /** The pointers in a piece of text that name no place there is. */
 export function badPointers(text: string, f = "", places: Readonly<Record<string, readonly string[]>> = PLACES): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(POINTER)) {
     const where = m[1]!, rest = m[2]!.trimStart();
+    const before = text.slice(0, m.index);
+    // A segment inside a longer path ("Settings › Backlog › Stale after") is a root only after More ("More › Settings").
+    if (/(?:›|>|&gt;) ?$/.test(before) && !/\bMore (?:›|>|&gt;) ?$/.test(before)) continue;
     // Built from code, or a placeholder: "Settings › ${x}", "Admin › Clients › <client>", "Settings ›" at the end.
     if (!rest || /^[$<{\[*`]/.test(rest)) continue;
-    const word = firstWord(rest);
-    if (!word || !/^[A-Z]/.test(word)) continue;
-    if (places[where]!.some((p) => firstWord(p) === word)) continue;
+    if (!/^[A-Za-z]/.test(rest)) continue;
+    const list = places[where]!;
+    if (list.some((p) => startsWithName(rest, p)) || Object.entries(SHORT).some(([s, p]) => list.includes(p) && startsWithName(rest, s))) continue;
     const tail = text.slice(m.index).replace(/^\S+ (?:›|>|&gt;) /, "");
     if (POINTERS_ALLOWED.some((a) => (!a.file || a.file.test(f)) && a.re.test(tail))) continue;
     out.push(`${where} › ${rest.split(/[.,;:()"]/)[0]!.trim()}`);
