@@ -16,3 +16,20 @@ export function dueWords(due: string, today: string): string {
   if (due > today && due <= t.add({ days: 6 }).toString()) return `Due ${SHORT_DAY(due)}`;
   return `Due ${Temporal.PlainDate.from(due).toLocaleString("en-US", { month: "short", day: "numeric" })}`;
 }
+
+/**
+ * UC-1: how many things need me per client, for the chips: the rows the tab's number counts (the "needs_you" view:
+ * suggestions from chats, and my promises late or due today), by their client. A client with none isn't in the map.
+ */
+export function needCounts(items: readonly { clientKey: string | null; views: readonly string[] }[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of items) if (r.clientKey && r.views.includes("needs_you")) out.set(r.clientKey, (out.get(r.clientKey) ?? 0) + 1);
+  return out;
+}
+
+/** A chip's name for a screen reader: the client, then its number when it has one ("Harbor, 2 need you"). */
+export const chipName = (name: string, n: number) => (n > 0 ? `${name}, ${n} ${n === 1 ? "needs" : "need"} you` : name);
+
+/** A chip's hover line, saying what its number counts (review 1: the number alone didn't say). Null with no number. */
+export const chipHint = (name: string | null, n: number) =>
+  n > 0 ? `${n} ${n === 1 ? "needs" : "need"} you${name ? ` in ${name}` : ""}: suggestions from chats, and promises late or due today. The same count as the Inbox tab's` : null;

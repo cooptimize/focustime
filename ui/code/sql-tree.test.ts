@@ -4,12 +4,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { sqlOpened, sqlPathTo, SqlTree, SQL_FOLDER_SHOWN, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, SqlTree, SQL_FOLDER_SHOWN, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 const row = (schema: string | null, sqlType: SqlRow["sqlType"], name: string): SqlRow => ({ name, file: `/${schema ?? "x"}/${sqlType}/${name}.sql`, repoId: "r1", sqlType, ...(schema ? { schema } : {}) });
 const memo = (open: Record<string, boolean> = {}, whole: string[] = []): SqlTreeMemo => ({ open: new Map(Object.entries(open)), whole: new Set(whole) });
 const render = (objects: SqlRow[], m: SqlTreeMemo = memo(), extra: Partial<Parameters<typeof SqlTree>[0]> = {}) =>
-  renderToStaticMarkup(createElement(SqlTree, { id: "t", label: "SQL objects", objects, grouping: "schema", onGrouping: () => {}, filtering: false, selected: { repoId: null, path: null }, onOpen: () => {}, memo: m, onMemo: () => {}, attr: "data-code-thing", ...extra }));
+  renderToStaticMarkup(createElement(SqlTree, { id: "t", label: "SQL objects", objects, grouping: "schema", filtering: false, selected: { repoId: null, path: null }, onOpen: () => {}, memo: m, onMemo: () => {}, attr: "data-code-thing", ...extra }));
 const lines = (html: string) => [...html.matchAll(/<li[^>]*aria-level="(\d)"[^>]*>.*?<\/li>/g)].map((m) => `${m[1]} ${m[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}`);
 
 describe("SqlTree (RB-5 B)", () => {
@@ -33,25 +33,25 @@ describe("SqlTree (RB-5 B)", () => {
     const hits = [row("kiln", "view", "vAll"), row("yard", "table", "Stack")];
     expect(lines(render(hits, memo({ "t|schema|s:kiln": false }), { filtering: true }))).toEqual(["1 kiln 1", "2 Views 1", "3 vAll", "1 yard 1", "2 Tables 1", "3 Stack"]);
   });
-  it("with databases the database is the first level, and each says its count", () => {
-    const html = render([], memo(), { databases: [{ key: "a", label: "Kiln warehouse", objects: many }, { key: "b", label: "Yard SQL project", objects: [row("yard", "table", "Stack")] }] });
-    expect(lines(html)).toEqual(["1 Kiln warehouse 152", "1 Yard SQL project 1"]);
+  it("RB-6: every folder's key, for Expand all and Collapse all, in either grouping", () => {
+    expect(sqlFolderKeys("t", [row("yard", "table", "Stack"), row("kiln", "view", "vAll")], "schema")).toEqual(["t|schema|s:kiln", "t|schema|s:kiln/t:view", "t|schema|s:yard", "t|schema|s:yard/t:table"]);
+    const open = Object.fromEntries(sqlFolderKeys("t", many, "schema").map((k) => [k, true]));
+    expect(lines(render(many, memo(open))).filter((l) => l.startsWith("2 "))).toEqual(["2 Tables 150", "2 Views 1", "2 Tables 1"]);
   });
-  it("review 2: the folders that lead to a file, in either grouping and under a database, whether or not the tree is shown", () => {
+  it("review 2: the folders that lead to a file, in either grouping, whether or not the tree is shown", () => {
     const stack = { repoId: "r1", path: "/yard/table/Stack.sql" };
-    expect(sqlPathTo("t", many, null, "schema", stack)).toEqual(["t|schema|s:yard", "t|schema|s:yard/t:table"]);
-    expect(sqlPathTo("t", many, null, "type", stack)).toEqual(["t|type|t:table", "t|type|t:table/s:yard"]);
-    expect(sqlPathTo("t", [], [{ key: "a", label: "Kiln warehouse", objects: many }], "type", stack)).toEqual(["t|type|a", "t|type|a|t:table", "t|type|a|t:table/s:yard"]);
-    expect(sqlPathTo("t", many, null, "type", { repoId: "r2", path: stack.path })).toEqual([]);
-    expect(sqlPathTo("t", many, null, "type", { repoId: null, path: null })).toEqual([]);
+    expect(sqlPathTo("t", many, "schema", stack)).toEqual(["t|schema|s:yard", "t|schema|s:yard/t:table"]);
+    expect(sqlPathTo("t", many, "type", stack)).toEqual(["t|type|t:table", "t|type|t:table/s:yard"]);
+    expect(sqlPathTo("t", many, "type", { repoId: "r2", path: stack.path })).toEqual([]);
+    expect(sqlPathTo("t", many, "type", { repoId: null, path: null })).toEqual([]);
     // Opening them shows the object, even past the first 100 of its folder.
     const last = { repoId: "r1", path: "/kiln/table/T149.sql" };
-    const opened = sqlOpened(memo({ "t|schema|s:kiln": false }), sqlPathTo("t", many, null, "schema", last));
+    const opened = sqlOpened(memo({ "t|schema|s:kiln": false }), sqlPathTo("t", many, "schema", last));
     expect(lines(render(many, opened, { selected: last }))).toContain("3 T149");
     expect(sqlOpened(memo(), [])).toEqual(memo());
   });
-  it("review 2: the Group by label works whatever the list's own name holds", () => {
-    const html = render(many, memo(), { id: "Some client-r1-/lake/Gold Layer.Warehouse" });
+  it("review 2: the Group by label is tied to its switch (RB-6: one bar for every database)", () => {
+    const html = renderToStaticMarkup(createElement(SqlBar, { grouping: "schema", onGrouping: () => {}, onAll: () => {}, disabled: false }));
     const id = /<span class="cv-sql-by" id="([^"]+)"/.exec(html)![1]!;
     expect(id).not.toMatch(/\s/);
     expect(html).toContain(`aria-labelledby="${id}"`);
@@ -61,6 +61,7 @@ describe("SqlTree (RB-5 B)", () => {
     expect(html).toContain('aria-label="kiln, 151"');
     expect(html).toContain('role="tree"');
     expect([...html.matchAll(/tabindex="0"/g)].length).toBe(1);
-    expect(html).toContain('aria-pressed="true" data-sql-group-btn="schema"');
+    expect(html).not.toContain("data-sql-group-btn");
+    expect(renderToStaticMarkup(createElement(SqlBar, { grouping: "schema", onGrouping: () => {}, onAll: () => {}, disabled: false }))).toContain('aria-pressed="true" data-sql-group-btn="schema"');
   });
 });

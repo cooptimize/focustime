@@ -24,7 +24,7 @@ import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
 import { Detail } from "./Detail.tsx";
 import { actsFor, ITEM_KEYS, type FormId } from "./ItemActions.tsx";
-import { dueWords, lateText } from "./model.ts";
+import { chipHint, chipName, dueWords, lateText, needCounts } from "./model.ts";
 import { SuggestionOpen, type SuggestionForm } from "./Suggestion.tsx";
 import "./inbox.css";
 import { Icon } from "../icons.tsx";
@@ -119,6 +119,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   );
   const captureRows = useMemo(() => items.filter((r) => (r.kind === "capture" || r.kind === "draft") && r.views.length > 0 && inClients(r.clientKey)), [items, inClients]);
   const counts: Record<InboxList, number> = { chats: suggestions.length, promises: promiseRows.length, captures: captureRows.length };
+  // UC-1: each chip's number is what needs me in that client, counted as the tab counts; All clients shows the tab's.
+  // The phone's Inbox is unchanged: no numbers on its chips.
+  const need = useMemo(() => (phone ? new Map<string, number>() : needCounts(items)), [items, phone]);
+  const allNeed = phone ? 0 : (src.list?.needsYou ?? 0);
   // Every client with something in any list, for the chips.
   const chipClients = useMemo(() => {
     const ks = new Set<string>();
@@ -500,13 +504,15 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       </header>
       {chipClients.length > 1 && (
         <div className="ib4-chips" role="group" aria-label="Clients">
-          <button type="button" className={`ib4-chip${clients.length ? "" : " on"}`} aria-pressed={!clients.length} onClick={() => toggleClient(null)}>
+          <button type="button" className={`ib4-chip${clients.length ? "" : " on"}`} aria-pressed={!clients.length} aria-label={chipName("All clients", allNeed)} title={chipHint(null, allNeed) ?? undefined} onClick={() => toggleClient(null)}>
             All clients
+            {allNeed > 0 && <span className="ib4-count">{allNeed}</span>}
           </button>
           {chipClients.map((k) => (
-            <button key={k} type="button" className={`ib4-chip${clients.includes(k) ? " on" : ""}`} aria-pressed={clients.includes(k)} onClick={() => toggleClient(k)} style={{ "--c": color(k) } as CSSProperties}>
+            <button key={k} type="button" className={`ib4-chip${clients.includes(k) ? " on" : ""}`} aria-pressed={clients.includes(k)} aria-label={chipName(clientName(k), need.get(k) ?? 0)} title={chipHint(clientName(k), need.get(k) ?? 0) ?? undefined} onClick={() => toggleClient(k)} style={{ "--c": color(k) } as CSSProperties}>
               <span className="dot" aria-hidden="true" />
               {clientName(k)}
+              {(need.get(k) ?? 0) > 0 && <span className="ib4-count">{need.get(k)}</span>}
             </button>
           ))}
         </div>

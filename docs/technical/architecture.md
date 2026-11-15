@@ -8,7 +8,7 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 
 | Part | What it is | Where |
 |---|---|---|
-| Web app | React 19, built by Vite into static files: five tabs (Day, Week, Backlog, Status, Inbox), the block panel, the story card over any screen, and full-window panels (Settings, Admin, Code, Client calls, the Guide, these docs). Heavy panels load only when opened | `ui/`, `vite.config.ts` |
+| Web app | React 19, built by Vite into static files: six tabs (Day, Week, Backlog, Status, Inbox, and Code for those who may read code), the block panel, the story card over any screen, and full-window panels (Settings, Admin, Client calls, the Guide, these docs). Heavy panels and Code load only when opened | `ui/`, `vite.config.ts` |
 | Server | Node.js `http` server: sign-in, sessions, the action API, a few upload and media routes, the Teams bot endpoint, the built UI | `server/app.ts`, `server/main.ts` |
 | Actions | Every operation the UI, the command menu, the assistant and the bot can run (396 of them): named in one registry, validated, dispatched | `actions/registry.ts`, `actions/dispatch.ts` |
 | Pure rules | The week from patterns and events, risks, free time, planning, the Inbox's rules, notifications; no I/O | `week/`, `plan/` |
@@ -182,7 +182,7 @@ sequenceDiagram
 
 ## Code
 
-A read-only view of any client's repos for every Cooptimizer (`ui/code/`, `actions/code-actions.ts`, `actions/code-git.ts`, `sources/devops/git.ts`). Each read checks who is asking and the client's Rule, writes the view log row for a file before returning its text, and keeps folder lists and file text in server memory at most 5 minutes. Files are colored by Prism in its manual mode, each piece drawn as text, so nothing in a file runs. No AI, no background work. The rules are on [Security](security.md#client-code).
+A read-only tab, Code, showing any client's repos to every Cooptimizer (`ui/code/`, `actions/code-actions.ts`, `actions/code-git.ts`, `sources/devops/git.ts`). Each read checks who is asking and the client's Rule, writes the view log row for a file before returning its text, and keeps folder lists and file text in server memory at most 5 minutes. Files are colored by Prism in its manual mode, each piece drawn as text, so nothing in a file runs. No AI, no background work. The rules are on [Security](security.md#client-code).
 
 ## Check-ins about timeboxes
 

@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1, RF-1: five tabs (1–5: Day · Week · Backlog · Status · Inbox), Week with no switch and the Add work panel,
+// Step 16.2, NV-1, WD-1, RF-1, RB-6: six tabs (1–6: Day · Week · Backlog · Status · Inbox · Code), Week with no switch and the Add work panel,
 // Backlog's Grid · Gantt (BL-1; Ahead's Readiness and Backlog modes folded into the Grid), addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -16,11 +16,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("five tabs in order (Day · Week · Backlog · Status · Inbox), no Plan or Team tab, no ritual chips, no context line; 1–5 switch them", async () => {
+  it("six tabs in order (Day · Week · Backlog · Status · Inbox · Code), no Plan or Team tab, no ritual chips, no context line; 1–6 switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/)]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/), "Code"]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["6", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);
@@ -121,7 +121,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/backlog");
     await page.locator(".top-more").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", "Code", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
     await page.keyboard.press("Escape");
     await page.locator(".person-chip").click();
     await page.getByRole("menuitem", { name: /^Settings/ }).click();

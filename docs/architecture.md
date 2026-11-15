@@ -1064,3 +1064,10 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Settings' close.** `settingsFrom` in `ui/App.tsx`: the overlay Settings was opened over, restored by Close and Esc.
 - **A to-do's title.** `PickRow`'s `linked` (`ui/PickRow.tsx`): `WorkLink` with a stored URL, else `ItemTitleLink` by id.
 - e2e: `e2e/nm2-card-title.test.ts`, `e2e/nm2-settings-close.test.ts`, `e2e/nm2-phone-daybar.test.ts`; screenshots `e2e/nm2-shots.test.ts` (only with `NM2_SHOTS`).
+
+## UC-1: Inbox on the left, a deployment titles itself (Nov 15)
+
+- **The Inbox's edge.** `ui/inbox/inbox.css`: `main.ib4` is one column of at most 920 px times `--text-scale`, padded 24 px like Day; the capture section's inset is removed above 640 px.
+- **The chips' numbers.** `ui/inbox/model.ts` (`needCounts`, `chipName`), used by `ui/inbox/InboxPage.tsx`.
+- **The made title.** `plan/deploy.ts` (`madeTitle`, `movedTitle`); `ui/Capture.tsx` shows it as the hint and sends it when the box is empty; `store/plan-store.ts` `copyOf` carries it to a new day.
+- **Tests.** `e2e/uc1.test.ts`, `plan/deploy.test.ts`, `actions/deploy-actions.test.ts`, `ui/inbox/model.test.ts`; screenshots `e2e/uc1-shots.test.ts` (only with `UC1_SHOTS`).

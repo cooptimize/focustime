@@ -11,7 +11,7 @@ import { SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 180_000;
-const panel = (page: Page) => page.locator("main.code-panel");
+const panel = (page: Page) => page.locator("[data-code-page]");
 const hash = (page: Page) => page.evaluate(() => location.hash);
 const theme = async (page: Page, t: "dark" | "light") => {
   await page.emulateMedia({ colorScheme: t });
@@ -69,12 +69,13 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await hash(page)).toBe("#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
     // Every group, in order, with its count; an empty group wouldn't show.
-    expect(await panel(page).locator(".cv-kind-head .cv-kind-label").allTextContents()).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses and warehouses", "SQL", "Other Fabric items", "Other"]);
+    // RB-6: Lakehouses, Databases and SQL scripts in place of Lakehouses and warehouses and SQL; each thing once.
+    expect(await panel(page).locator(".cv-kind-head .cv-kind-label").allTextContents()).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses", "Databases", "SQL scripts", "Other Fabric items", "Other"]);
     expect(await group(page, "report").locator("[data-code-thing]").allTextContents()).toEqual(["SalesReport · sales-analytics", "Store visitsReport · store-portal"]);
-    expect(await group(page, "lake").locator(".cv-thing-name").allTextContents()).toEqual(["Bronze", "Gold"]);
-    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics", "SQL database · 9 inside · sales-analytics"]);
-    // RB-5: the SQL group is a tree, the client's databases first.
-    expect(await group(page, "sql").locator("[data-sql-folder]").evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toContain("Warehouse SQL project · sales-analytics");
+    expect(await group(page, "lake").locator(".cv-thing-name").allTextContents()).toEqual(["Bronze"]);
+    expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics"]);
+    // RB-6: the warehouse, the SQL database and the SQL project are databases, each with how many objects it holds.
+    expect(await group(page, "database").locator(".cv-thing-detail").allTextContents()).toEqual(["Warehouse · 22 objects · sales-analytics", "SQL database · 9 objects · sales-analytics", "SQL project · 3 objects · sales-analytics"]);
     // Names only: the repos and By kind's one read, never a folder or a file.
     expect([...new Set(sent.map((s) => s.action).filter((a) => a.startsWith("code.")))]).toEqual(["code.clients", "code.repos", "code.kinds"]);
     await shots(page, "01-by-kind");
@@ -102,7 +103,8 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     // The filter narrows by name as you type.
     const filter = panel(page).getByLabel("Filter by name");
     await filter.fill("orders");
-    expect(await panel(page).locator("[data-code-thing]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-thing")))).toEqual(["Clean orders", "Orders", "usp_LoadOrders", "sample-orders.csv"]);
+    // RB-6: the table and the procedure are inside the SQL project, which the filter keeps.
+    expect(await panel(page).locator("[data-code-thing]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-thing")))).toEqual(["Clean orders", "Warehouse", "sample-orders.csv"]);
     await shots(page, "04-filter");
     await filter.fill("");
 
@@ -132,10 +134,10 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await page.keyboard.press("Enter");
     await panel(page).waitFor();
     expect(await hash(page)).toBe("#/code/~search");
-    const box = panel(page).getByRole("searchbox", { name: "Search names" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.waitFor();
     await page.waitForFunction(() => document.activeElement?.hasAttribute("data-code-search"));
-    expect(await panel(page).locator(".cv-search-note").textContent()).toBe("Searching names. To find where a table or column is used, switch to Inside files.");
+    expect(await panel(page).locator(".cv-search-note").textContent()).toBe("Searches names only. Measures, columns and report pages live inside files: switch to Inside files for those.");
     // Nothing is read while typing.
     await page.keyboard.type("orders");
     await page.waitForTimeout(300);
@@ -163,7 +165,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await results.locator("[data-code-left-out]").textContent()).toBe("Left out: Fabrikam. Only its team can read its code.");
     expect(await results.locator('[data-code-result-client="Harbor"] [data-code-result-failed]').textContent()).toBe("FocusTime can't read Harbor's code yet. The company DevOps token for Harbor needs Code (read).");
     const north = results.locator('[data-code-result-client="Northwind"]');
-    expect(await north.locator(".cv-group-head").allTextContents()).toEqual(["Notebooks", "SQL", "Other"]);
+    expect(await north.locator(".cv-group-head").allTextContents()).toEqual(["Notebooks", "Databases", "Other"]);
     expect(await north.locator("[data-code-hit]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-hit")))).toEqual(["Clean orders", "Orders", "usp_LoadOrders", "sample-orders.csv"]);
     expect(await results.locator('[data-code-result-client="Atlas"] .cv-hit-where mark').allTextContents()).toEqual(["orders"]);
     await shots(page, "05-search-results");
@@ -203,7 +205,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     // The only requests that name anything are the opened file's own reads (its path, as RB-1 sends it).
     expect(sent.filter((s) => /orders/i.test(s.body)).map((s) => s.action).filter((a) => a !== "code.file" && a !== "code.folder")).toEqual([]);
     const stored = await page.evaluate(() => JSON.stringify([{ ...localStorage }, { ...sessionStorage }]));
-    expect(stored).not.toMatch(/orders|pl_load|\.tmdl|notebook-content|~search/i);
+    expect(stored).not.toMatch(/orders|pl_load|\.tmdl|notebook-content|~search|Northwind/i);
     expect(errors).toEqual([]);
   });
 
@@ -211,7 +213,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     const sent = watchActions(page);
     await go(page, "#/code/Atlas");
-    const box = panel(page).getByRole("searchbox", { name: "Search names" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.fill("shipments pl");
     const where = panel(page).getByRole("group", { name: "Where to search" });
     expect(await where.locator("[aria-pressed=true]").textContent()).toBe("This client");
@@ -230,9 +232,9 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     // Review 2: Back to the client's own search never shows the wider search's names under that client's name.
     await page.goBack();
     expect(await hash(page)).toBe("#/code/Atlas/search");
-    await panel(page).locator(".cv-search-page").waitFor();
+    await panel(page).locator("[data-code-results-page]").waitFor();
     expect(await panel(page).locator("[data-code-result-client]").count()).toBe(0);
-    expect(await panel(page).locator(".cv-search-page .cv-note").last().textContent()).toBe("Type a name, then press Enter or Search. Folder names count too.");
+    expect(await panel(page).locator("[data-code-results-page] .cv-empty").last().textContent()).toBe("Type a name, then press Enter or Search. Folder names count too.");
     expect(errors).toEqual([]);
   });
 
@@ -249,18 +251,18 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await panel(page).getByRole("button", { name: /By kind/ }).first().click();
     await panel(page).locator("[data-code-kinds]").waitFor();
     await go(page, "#/code/~search");
-    const box = panel(page).getByRole("searchbox", { name: "Search names" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.fill("sales");
     await box.press("Enter");
     await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
     expect(await noSidewaysScroll(page)).toBe(true);
     // Review 1: the phone's search page says what is logged too.
-    expect(await panel(page).locator(".cv-search-page [data-code-log-line]").textContent()).toContain("searching are logged too");
+    expect(await panel(page).locator("[data-code-results-page] [data-code-log-line]").textContent()).toContain("Never the words");
     await shots(page, "11-phone-search");
     // A result's file goes Back to the results, not to the repo's tree.
     await panel(page).locator('[data-code-hit="Sales"]').first().click();
     await panel(page).locator(".cv-file-view").waitFor();
-    await panel(page).getByRole("button", { name: /Results/ }).first().click();
+    await panel(page).getByRole("button", { name: /Back to results/ }).first().click();
     await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
     expect(await hash(page)).toBe("#/code/~search");
     expect(errors).toEqual([]);
@@ -271,7 +273,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await go(page, "#/code/Atlas/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
     await go(page, "#/code/~search");
-    const box = panel(page).getByRole("searchbox", { name: "Search names" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.fill("zzzz-nothing");
     await box.press("Enter");
     await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "No name matches.");

@@ -23,7 +23,7 @@ It runs in Azure (Container Apps, Azure SQL, Key Vault) in two environments, dev
 | Inbox | The fifth tab (5 or L), `#/inbox` | Three lists: From chats, Promises, Captures |
 | Block panel | Beside Week and Day | One block: what's on it, its meetings, and one Add box |
 | Story card | Over any screen, `#/item/<client>/<id>` | A DevOps item as FocusTime shows it, with Edit and Wrap it up |
-| Code | More › Code, `#/code` | Any client's repos, read only |
+| Code | The Code tab (6; on a phone More › Code), `#/code` | Any client's repos, read only |
 | Settings and Admin | More › Settings, More › Admin | A person's preferences; the team's values (admins only) |
 | The Guide and these docs | More › Guide, More › Technical docs | How to use FocusTime; how it works |
 

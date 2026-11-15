@@ -9,16 +9,16 @@
 // DevOps. Its results are files, never lines: no text of a file shows until a person opens it.
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, markMatches, NOT_IN_DATABASE, searchThings, searchWords, shareCap, sqlDatabases, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
-import { INSIDE_MAX, INSIDE_WORDS_MAX, SEARCH_MAX } from "../../plan/code.ts";
-import { sqlOpened, sqlPathTo, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
+import { INSIDE_MAX, SEARCH_MAX } from "../../plan/code.ts";
+import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
 export type NamesClient = { clientKey: string; name: string; color: string | null; locked: boolean };
 
 export const NAMES_TEXT = {
   search: "Search names",
-  searchNote: "Searching names. To find where a table or column is used, switch to Inside files.",
+  searchNote: "Searches names only. Measures, columns and report pages live inside files: switch to Inside files for those.",
   names: "Names",
   inside: "Inside files",
   searchInside: "Search inside files",
@@ -62,42 +62,45 @@ export const NAMES_TEXT = {
   files: "Files",
   insideOf: (name: string, tables: boolean) => (tables ? `Tables of ${name}` : `Inside ${name}`),
   sqlOf: (name: string) => `SQL objects of ${name}`,
-  sqlGroup: "SQL objects",
-  inFolder: (folder: string) => `In ${folder}`,
 } as const;
 
 function list(names: string[]): string {
   return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-export const KIND_ICON: Readonly<Record<Kind, IconName>> = { report: "report", model: "model", pipeline: "pipeline", notebook: "notebook", dataflow: "dataflow", lake: "lake", sql: "sql", fabric: "fabric-item", other: "file" };
+export const KIND_ICON: Readonly<Record<Kind, IconName>> = { report: "report", model: "model", pipeline: "pipeline", notebook: "notebook", dataflow: "dataflow", lake: "lake", database: "sql", script: "sql-script", fabric: "fabric-item", other: "file" };
 const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--client-${c})`) : "var(--client-none)");
 
 // ---------- By kind ----------
 
 type Row = Thing & { repoId: string; repoName: string };
-/** What an item opens to: a model's tables, or (RB-4) the things inside it (a warehouse's tables, views and procedures). */
+/** What an item opens to: a model's tables, or (RB-4) the things inside it (a database's tables, views and procedures). */
 const kidsOf = (t: Thing): ThingInside[] => [...(t.tables ?? []).map((tb) => ({ name: tb.name, file: tb.file, kind: t.kind, detail: "Table" })), ...(t.inside ?? [])];
 /** A group shows this many rows until Show all. */
 const GROUP_SHOWN = 50;
 
 /**
- * RB-5: what By kind remembers while the panel is open (the panel keeps it, so it outlasts this list when a file
- * opens on the phone or the view changes): the groups folded, the items opened, and each SQL tree's folders.
+ * RB-5: what By kind remembers while Code is open (Code keeps it, so it outlasts this list when a file opens on the
+ * phone or the view changes): the groups folded, the items opened, and each SQL tree's folders.
  */
 export type KindsMemo = { folded: ReadonlySet<Kind>; whole: ReadonlySet<Kind>; openModels: ReadonlySet<string>; sql: SqlTreeMemo };
 export const newKindsMemo = (): KindsMemo => ({ folded: new Set(), whole: new Set(), openModels: new Set(), sql: { open: new Map(), whole: new Set() } });
 
-/** One client's things across its repos, in groups that fold, with a filter by name. */
+/**
+ * One client's things across its repos, in groups that fold, with a filter by name. RB-6: each thing is listed once:
+ * what sits inside another (a database's objects, a model's tables) shows only when that one is opened, and the
+ * Databases group has the one Group by switch for every database in it.
+ */
 export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup, memo, onMemo }: { /** The client's key: this list's own name for what it remembers. */ id: string; repos: RepoThings[]; max: number; selected: { repoId: string | null; path: string | null }; onOpen: (repoId: string, file: string) => void; /** RB-5: SQL objects by schema then type, or by type then schema (the person's own choice). */ sqlGroup: SqlGrouping; onSqlGroup: (g: SqlGrouping) => void; memo: KindsMemo; onMemo: (change: (m: KindsMemo) => KindsMemo) => void }) {
   const [filter, setFilter] = useState("");
   const { folded, whole, openModels } = memo;
   const setFolded = (f: (s: ReadonlySet<Kind>) => ReadonlySet<Kind>) => onMemo((m) => ({ ...m, folded: f(m.folded) }));
   const setWhole = (f: (s: ReadonlySet<Kind>) => ReadonlySet<Kind>) => onMemo((m) => ({ ...m, whole: f(m.whole) }));
   const setOpenModels = (f: (s: ReadonlySet<string>) => ReadonlySet<string>) => onMemo((m) => ({ ...m, openModels: f(m.openModels) }));
-  const tree = { grouping: sqlGroup, onGrouping: onSqlGroup, selected, onOpen, memo: memo.sql, onMemo: (change: (s: SqlTreeMemo) => SqlTreeMemo) => onMemo((m) => ({ ...m, sql: change(m.sql) })) };
+  const onSqlMemo = (change: (s: SqlTreeMemo) => SqlTreeMemo) => onMemo((m) => ({ ...m, sql: change(m.sql) }));
   const many = repos.length > 1;
-  const rows = useMemo(() => repos.flatMap((r) => r.things.map((t): Row => ({ ...t, repoId: r.repo.id, repoName: r.repo.name }))), [repos]);
+  // RB-6: only what isn't inside another thing is a row of a group.
+  const rows = useMemo(() => repos.flatMap((r) => listedThings(r.things).map((t): Row => ({ ...t, repoId: r.repo.id, repoName: r.repo.name }))), [repos]);
   const words = searchWords(filter);
   // RB-5 (review 1): a SQL object is found by its schema too, the way a warehouse person types it ("dim", "stg.Store").
   const named = (t: { name: string; schema?: string }) => (t.schema ? `${t.name} ${t.schema}.${t.name}` : t.name).toLowerCase();
@@ -107,28 +110,32 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
     [rows, filter], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const groups = groupThings(shown);
-  // RB-5: the SQL group is a tree. With more than one database (a warehouse, a SQL database, a SQL project) the
-  // database comes first; with one or none the grouping starts at the top. Decided from every row, not the filter's.
-  const sqlRow = (t: Row): SqlRow & Row => ({ ...t, ...(t.db ? {} : { note: `${NAMES_TEXT.inFolder(t.folder)}${many ? ` · ${t.repoName}` : ""}` }) });
-  const manyDatabases = useMemo(() => sqlDatabases(rows.filter((t) => t.kind === "sql"), many).databases.length > 1, [rows, many]);
-  const sqlGroupOf = (things: readonly Row[]) => {
-    const objects = things.map(sqlRow);
-    const by = manyDatabases ? sqlDatabases(objects, many) : null;
-    return { objects, databases: by ? [...by.databases, ...(by.loose.length ? [{ key: "loose", label: NOT_IN_DATABASE, objects: by.loose }] : [])] : null };
-  };
-  const itemTreeId = (t: Row) => `${id}-${t.repoId}-${t.folder}`;
-  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.kind === "sql" && tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
-  // Changing the switch keeps the file on the right and opens the new trees to it: the SQL group's and its item's,
-  // whether or not they are on screen now.
+  const keyOf = (t: Row) => `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
+  const treeId = (t: Row) => `${id}-${t.repoId}-${t.folder}`;
+  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
+  // Changing the switch keeps the file on the right and opens the new tree to it.
   const wasGroup = useRef(sqlGroup);
   useEffect(() => {
     if (wasGroup.current === sqlGroup) return;
     wasGroup.current = sqlGroup;
     if (!selected.path) return;
-    const g = sqlGroupOf(rows.filter((t) => t.kind === "sql"));
-    const paths = [sqlPathTo(`${id}-sql`, g.objects, g.databases, sqlGroup, selected), ...rows.filter((t) => t.inside?.some((x) => x.file === selected.path) && t.repoId === selected.repoId).map((t) => sqlPathTo(itemTreeId(t), sqlKidsOf(t, t.inside!), null, sqlGroup, selected))];
+    const paths = rows.filter((t) => t.repoId === selected.repoId && t.inside?.some((x) => x.file === selected.path)).map((t) => sqlPathTo(treeId(t), sqlKidsOf(t, t.inside!), sqlGroup, selected));
     onMemo((m) => ({ ...m, sql: paths.reduce(sqlOpened, m.sql) }));
   }, [sqlGroup]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** RB-6: Expand all and Collapse all, for every database: the rows open (or close) and every folder in their trees. */
+  const allDatabases = (open: boolean) => {
+    const dbs = rows.filter((t) => t.kind === "database" && sqlKidsOf(t, kidsOf(t)).length);
+    onMemo((m) => {
+      const models = new Set(m.openModels);
+      const folders = new Map(m.sql.open);
+      for (const t of dbs) {
+        if (open) models.add(keyOf(t));
+        else models.delete(keyOf(t));
+        for (const k of sqlFolderKeys(treeId(t), sqlKidsOf(t, kidsOf(t)), sqlGroup)) folders.set(k, open);
+      }
+      return { ...m, openModels: models, sql: { ...m.sql, open: folders } };
+    });
+  };
   const flip = <T,>(s: ReadonlySet<T>, v: T) => {
     const n = new Set(s);
     if (!n.delete(v)) n.add(v);
@@ -155,23 +162,20 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
               <span className="cv-kind-label">{g.label}</span>
               <span className="cv-kind-count">{g.things.length.toLocaleString()}</span>
             </button>
-            {open && g.kind === "sql" && (() => {
-              const { objects, databases } = sqlGroupOf(g.things);
-              return <SqlTree {...tree} id={`${id}-sql`} label={NAMES_TEXT.sqlGroup} attr="data-code-thing" filtering={words.length > 0} objects={objects} databases={databases} />;
-            })()}
-            {open && g.kind !== "sql" && (
+            {open && g.kind === "database" && <SqlBar grouping={sqlGroup} onGrouping={onSqlGroup} onAll={allDatabases} disabled={words.length > 0} />}
+            {open && (
               <ul className="cv-things">
                 {things.map((t) => {
-                  const key = `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
+                  const key = keyOf(t);
                   // While filtering, an item shows the tables or things inside that match (all of them when opened by hand).
                   const kids = kidsOf(t);
                   const hits = kids.filter((tb) => tableHit(tb));
                   // RB-5: a database's tree is always narrowed by the filter, so its folders show what matches.
-                  const isDb = kids.some((tb) => tb.kind === "sql" && tb.sqlType);
+                  const isDb = kids.some((tb) => tb.sqlType);
                   const tables = hits.length && (isDb || !openModels.has(key)) ? hits : kids;
-                  // RB-5: the SQL objects inside (a warehouse's, a SQL database's) are a tree; anything else inside stays a row.
+                  // RB-5: the SQL objects inside (a warehouse's, a SQL database's, a SQL project's) are a tree; anything else inside stays a row.
                   const sqlKids = sqlKidsOf(t, tables);
-                  const otherKids = tables.filter((tb) => !(tb.kind === "sql" && tb.sqlType));
+                  const otherKids = tables.filter((tb) => !tb.sqlType);
                   const kidsLabel = NAMES_TEXT.insideOf(t.name, !!t.tables);
                   const tablesOpen = openModels.has(key) || hits.length > 0;
                   const on = selected.repoId === t.repoId && selected.path === t.file;
@@ -185,7 +189,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                         ) : (
                           <span className="cv-thing-caret-space" aria-hidden="true" />
                         )}
-                        <button type="button" className="cv-thing-btn" aria-current={on ? "true" : undefined} data-code-thing={t.name} title={`${t.name}: ${t.detail}${many ? `, in ${t.repoName}` : ""}`} onClick={() => onOpen(t.repoId, t.file)}>
+                        <button type="button" className="cv-thing-btn" aria-current={on ? "true" : undefined} data-code-thing={t.name} data-code-listed={`${t.repoId}:${t.file}`} title={`${t.name}: ${t.detail}${many ? `, in ${t.repoName}` : ""}`} onClick={() => onOpen(t.repoId, t.file)}>
                           <Icon name={KIND_ICON[t.kind]} className="cv-kind" />
                           <span className="cv-thing-name">{t.name}</span>
                           <span className="cv-thing-detail">
@@ -196,7 +200,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                       </div>
                       {tablesOpen && sqlKids.length > 0 && (
                         <div className="cv-sql-in-item">
-                          <SqlTree {...tree} id={itemTreeId(t)} label={NAMES_TEXT.sqlOf(t.name)} attr="data-code-table" filtering={tables !== kids} objects={sqlKids} />
+                          <SqlTree id={treeId(t)} label={NAMES_TEXT.sqlOf(t.name)} attr="data-code-table" grouping={sqlGroup} selected={selected} onOpen={onOpen} memo={memo.sql} onMemo={onSqlMemo} filtering={tables !== kids} objects={sqlKids} />
                         </div>
                       )}
                       {tablesOpen && otherKids.length > 0 && (
@@ -205,7 +209,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                             const tbOn = selected.repoId === t.repoId && selected.path === tb.file;
                             return (
                               <li key={tb.file}>
-                                <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} onClick={() => onOpen(t.repoId, tb.file)}>
+                                <button type="button" className={`cv-thing-btn cv-table-btn${tbOn ? " selected" : ""}`} aria-current={tbOn ? "true" : undefined} data-code-table={tb.name} data-code-listed={`${t.repoId}:${tb.file}`} onClick={() => onOpen(t.repoId, tb.file)}>
                                   <Icon name={tb.detail.startsWith("Table") ? "table" : KIND_ICON[tb.kind]} className="cv-kind" />
                                   <span className="cv-thing-name">{tb.name}</span>
                                   <span className="cv-thing-detail">{tb.detail}</span>
@@ -237,16 +241,21 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
 
 // ---------- Search names ----------
 
-/** The box: the words, what to search (names or inside files), where to look, a kind, and Search. Nothing is read until Enter or Search. */
-export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, onDown, inside, onInside }: { q: string; onQ: (v: string) => void; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; onDown: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
+/**
+ * RB-6: the search box's choices, under the one "Search code" box at the top of every Code screen: Names or Inside files,
+ * This client or All clients (only inside a client), the kind, Search, and one line saying what the search does. The
+ * box itself sits in the row above and belongs to this form, so Enter runs it. Nothing is read until Enter or Search.
+ */
+export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
   const ready = inside ? q.trim().length > 0 : searchWords(q).length > 0;
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!disabled && ready) onSearch();
   };
-  const label = inside ? NAMES_TEXT.searchInside : NAMES_TEXT.search;
+  // A click on a choice keeps the caret in the box, so the choices stay open and typing goes on.
+  const keep = (e: { target: EventTarget; preventDefault: () => void }) => (e.target as HTMLElement).closest("button") && e.preventDefault();
   return (
-    <form className="cv-search" role="search" aria-label={label} onSubmit={submit}>
+    <form id="cv-search-form" className={`cv-search${floating ? " floating" : ""}`} aria-label="Search choices" data-code-searcharea="" data-code-choices="" hidden={!open} onSubmit={submit} onMouseDown={keep}>
       <div className="cv-search-row">
         <div className="seg" role="group" aria-label="What to search">
           <button type="button" className={`seg-btn${inside ? "" : " on"}`} aria-pressed={!inside} data-code-mode="names" onClick={() => onInside(false)}>
@@ -256,35 +265,18 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
             {NAMES_TEXT.inside}
           </button>
         </div>
-      </div>
-      <div className="cv-search-row">
-        <input
-          type="search"
-          className="cv-find-input cv-search-input"
-          data-code-search=""
-          placeholder={label}
-          aria-label={label}
-          aria-describedby="cv-search-note"
-          value={q}
-          maxLength={INSIDE_WORDS_MAX}
-          autoComplete="off"
-          onChange={(e) => onQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") (e.preventDefault(), onDown());
-            else if (e.key === "Escape" && q) (e.preventDefault(), e.stopPropagation(), onQ(""));
-          }}
-        />
-        <button type="submit" className="mini cv-search-go" disabled={disabled || !ready}>
-          Search
-        </button>
-      </div>
-      <div className="cv-search-row">
+        {!canScope && (
+          // Review 1: on the front page the search reaches every client; say so before the results do.
+          <span className="cv-search-scope" data-code-scope-fixed="">
+            {NAMES_TEXT.allClients}
+          </span>
+        )}
         {canScope && (
           <div className="seg" role="group" aria-label="Where to search">
-            <button type="button" className={`seg-btn${scopeAll ? "" : " on"}`} aria-pressed={!scopeAll} onClick={() => onScope(false)}>
+            <button type="button" className={`seg-btn${scopeAll ? "" : " on"}`} aria-pressed={!scopeAll} data-code-scope="client" onClick={() => onScope(false)}>
               {NAMES_TEXT.thisClient}
             </button>
-            <button type="button" className={`seg-btn${scopeAll ? " on" : ""}`} aria-pressed={scopeAll} onClick={() => onScope(true)}>
+            <button type="button" className={`seg-btn${scopeAll ? " on" : ""}`} aria-pressed={scopeAll} data-code-scope="all" onClick={() => onScope(true)}>
               {NAMES_TEXT.allClients}
             </button>
           </div>
@@ -297,9 +289,12 @@ export function SearchBox({ q, onQ, kind, onKind, scopeAll, onScope, canScope, d
             </option>
           ))}
         </select>
+        <button type="submit" className="mini primary cv-search-go" disabled={disabled || !ready}>
+          Search
+        </button>
       </div>
       <p id="cv-search-note" className="cv-search-note" data-code-search-note="">
-        {inside ? `${NAMES_TEXT.insideNote} ${NAMES_TEXT.insideHelp}` : NAMES_TEXT.searchNote}
+        {inside ? NAMES_TEXT.insideNote : NAMES_TEXT.searchNote}
       </p>
     </form>
   );

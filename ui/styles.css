@@ -7523,3 +7523,22 @@ body.ah-dragging * { cursor: grabbing !important; }
 .bl-state-partial [role="list"] { display: flex; flex-direction: column; gap: 2px; }
 .bl-state-fit { display: flex; align-items: center; gap: 6px; color: var(--text); }
 .ah-pop-bulk-state { width: min(380px, 92vw); }
+
+/* ---- RB-6: six tabs (Code for the people who may read code) ------------------------------------------------------ */
+/* The top bar never wraps (docs/design/style-guide.md, The top bar). When the sixth tab needs the room, what gives way
+   is, in order: the words on Focus, Capture and Ask (their icons stay; the word stays for screen readers and in the
+   title), then the VM chip's state in one word (its full words are in its title and menu). Tabs keep icon and word. */
+.app.medium > .topbar.six-tabs { flex-wrap: nowrap; }
+.topbar.six-tabs .views { flex: none; }
+@media (max-width: 1320px) {
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+@media (max-width: 1500px) {
+  :root[data-text-size="large"] .topbar.six-tabs .top-btn .top-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :root[data-text-size="large"] .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  :root[data-text-size="large"] .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+@media (max-width: 1800px) {
+  :root[data-text-size="larger"] .topbar.six-tabs .top-btn .top-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

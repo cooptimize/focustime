@@ -1154,6 +1154,46 @@ From the IT review (TD-1):
   - On the phone's Week, the week's Previous and Next sit just above the day's and look the same (each is named).
   - "1 late" chips and the Demo tag are about 22 px tall on the phone.
 
+## RB-6
+
+- **What gave way in the top bar, and does it read well?** With the Code tab, at Large text up to 1500 px and at Larger up to 1800 px, Focus, Capture and Ask show their icons only (the words are in each title and read by screen readers), and the VM chip says its state in one word up to 1320 px at Default and 1500 px at Large. Three icon-only buttons in a row may be less clear than words for someone new; the alternative was to fold Capture and Ask into More, which takes a step.
+- **Should Code be on the phone's bottom bar?** Not in this step: it stays in More. The bar holds five things now; Code would take one of their places.
+- **Should the kind filter offer object types of its own** (tables, views, stored procedures) rather than Databases as a whole? Databases finds databases and every object inside them; a result says "Table in dim · …", so a person can read the type, but can't narrow to it.
+- **What now takes more steps than before:**
+  - Find a file (type part of a file's name in the left side) is gone. The same is done by Search code, which lists files by their own names, but it searches the client's whole set of repos, not just the open repo, and the results replace the tree until the box is cleared.
+  - Switching between This client and All clients, or between Names and Inside files, needs the box focused first (one click) because the choices are hidden until then.
+  - Group by Schema · Type is at the top of the Databases group only; with a long list above it, it is a scroll away from a database opened lower down.
+- **The SQL project as a database row.** A SQL project outside any item is listed under Databases by its project name, and its file opens the `.sqlproj`. A project inside a warehouse or SQL database item stays part of that item. Should a project with no objects (only the file) still be listed as a database?
+- **Esc on Code.** Esc in the search box leaves the search; elsewhere on Code it does nothing, as on the other tabs (the old panel closed). Someone used to Esc closing Code may expect it.
+- **The choices stay open while the search's words are in the box** on a results page, so the kind and scope can be changed and run again. Once a result is opened the choices close until the box is focused again.
+- **Review 1 (someone new, on the demo), left as they are, each from an earlier step or a choice this step didn't reopen:**
+  - A names search for "Store" lists every stored procedure, because their folder is StoredProcedures and folder names count (RB-2). Should a folder match count only for whole words, or come after the name matches under its own heading?
+  - A database's name opens its own file (`.platform` or the project file); only its caret opens what is inside (RB-4's rule for items). People expected the name to open it.
+  - Group by Schema (the start, RB-5) shows no object types until a schema is opened; "where are the stored procedures" took switching to Type or the filter. Should Type be the start?
+  - Inside a client, Files with "Choose a repo" and an empty right side is the first screen when the client has more than one repo. Should By kind be the start, or the first repo open?
+  - The search keeps Names or Inside files from the last search. Someone may run the wrong one; the choice shows each time the box is used.
+  - Inside files results: the long lines for clients that couldn't be searched (no code search, a token without Code (read)) take more room than the results. One short line with the reasons folded away?
+  - A demo SQL project is named "Warehouse", which reads like a type beside "Gold · Warehouse". Demo data only.
+  - On the phone the search row and its choices take about a third of the screen above the results.
+
+## UC-1
+
+- Are other full-page screens centered, and should they move left too? Status already starts at 24 px like Day and Backlog. Settings, Admin, the Guide and the Technical docs are panels with their own nav and a reading column, not tabs, and were left alone. Week starts at 16 px (its grid's gutter), 8 px left of the others; UC-1 lined the Inbox up with Day, Backlog and Status at 24.
+- Should the tab's number include captures to sort? It counts suggestions from chats and my promises late or due today (IB-4), and the chips now show the same count per client, so a client with only captures or drafts shows no number while its Captures list has rows.
+- A counted row with no client (a promise I added with no client) is in the tab's and All clients' number and in no chip, so the chips can add up to less than the tab. Should there be a "No client" chip?
+- The chips' numbers don't follow the list I'm on: on Captures a chip still says how many chats and promises need me there. That is "counted the way the tab counts", as decided; a per-list number would be a different count.
+- STEP 0.5, a title shown differently: none. But two places read worse with the made title than with typed words. The draft to the client when no items are ticked says "Deployment - Northwind - Sat, Nov 7 is deployed." (it said "Deployment is deployed." for an untitled one before), and the promise says "Tell Northwind it's deployed: Deployment - Northwind - Sat, Nov 7". The draft is editable and goes only from its preview. Should the draft say "The deployment is done" for a made title?
+- Week's weekend column is narrow (WK-3): a made title there breaks mid-word and is cut after two lines ("Deployme nt -…"), as "Deployment" alone already broke. The whole title is on Day and in the block panel. Should the weekend column show a deployment's client and window instead of its title?
+- Plan a deployment… (the day menu and the command menu) and the assistant still make an untitled deployment as "Deployment". Should they make the same "Deployment - <client> - <date>"? UC-1 named only the capture box, so `deploy.add` was left alone.
+- A made title is recognized by its form, not by a stored mark. If I type exactly "Deployment - <anything> - <the day's date>" myself, it follows a move like a made one. A stored mark would need a column; not worth it unless titles become editable.
+- A made title keeps the client's name as it was when saved; renaming the client later doesn't change it.
+- The deployment's date, start and end stay as I last set them after a save (they did before), so a second deployment in a row gets the same day in its title.
+- A made title goes stale one way: the deployment is made a plain to-do, moved to another day, and made a Deployment again. Its title still names the old day and no longer follows. Rare; a stored mark would fix this too.
+- The hint is the box's placeholder, and the box is one line until text is typed: a client name of about 30 characters in a narrow box (the phone's Quick capture) wraps the hint and hides its date. The line under the kinds still says the whole title.
+- At 1920 the Inbox's column ends at 944 px and the rest of the window is empty. Day's top lines do the same, but its cards fill the width. Should an open row use the space beside the list?
+- The kinds under the capture box are now a Tab stop for every kind (the keyboard way to an empty Deployment). Should Tab in an empty box cycle the kinds instead, as it does with text?
+- On an empty Deployment with no client, Enter now says "A deployment needs a client" where an empty box did nothing before.
+
 ## BR-1
 
 - Should the 8 s line ("Still waiting on Outlook") stay? It is the loader's only words. Until the week arrives every source is still loading, so it names all four ("Dataverse, Outlook and 2 more"); naming the slow one needs the sources to report one by one.
@@ -1179,4 +1219,3 @@ From the IT review (TD-1):
   - `public/prefs.js` is served `no-cache`, so a load with a cold service worker revalidates it before the first paint (one small request).
   - Sign-in, About and the Guide's Start here show the week mark where the bent mark or the unroll was; the prompt made the week mark the only mark, so they carry it.
   - While the loader finishes, a key skips it and does nothing else, and a click skips it, as Close out's reverse did before. Keys before the app is ready reach nothing, as before.
-

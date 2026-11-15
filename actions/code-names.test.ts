@@ -85,7 +85,7 @@ describe("names only", () => {
     expect([...d.ops].sort()).toEqual(["files Contoso", "files Contoso", "files Contoso", "files Contoso", "repos Contoso"]);
     expect(r.data.max).toBe(FIND_MAX);
     expect(r.data.repos.map((x) => x.repo.name)).toEqual(["repo-11", "repo-12", "repo-13", "repo-14"]);
-    expect(r.data.repos[0]!.things.map((t) => [t.kind, t.name])).toEqual([["report", "Orders 11"], ["model", "Orders 11"], ["pipeline", "pl_load_11"], ["sql", "Stock11"], ["other", "ds_11"]]);
+    expect(r.data.repos[0]!.things.map((t) => [t.kind, t.name])).toEqual([["report", "Orders 11"], ["model", "Orders 11"], ["pipeline", "pl_load_11"], ["script", "Stock11"], ["other", "ds_11"]]);
     expect(r.data.repos[0]!.things[1]!.tables).toEqual([{ name: "Calendar", file: "/ws/Orders 11.SemanticModel/definition/tables/Calendar.tmdl" }]);
   });
   it("a read of a folder's level or a file's bytes during either would fail: the fake DevOps throws on them", async () => {
