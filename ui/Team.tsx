@@ -94,7 +94,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
     setBusy(true);
     try {
       await call("priority.flag", { clientKey: target.clientKey, itemId: target.itemId, title: target.title, itemType: target.itemType, url: target.url, ...(priority?.note.trim() ? { note: priority.note.trim() } : {}) });
-      setDone(`${target.title} is a ${client} priority. Everyone on ${client} sees it at the top of Plan.`);
+      setDone(`${target.title} is a ${client} priority. Everyone on ${client} sees it in To place, in a block's panel on Week.`);
       onSent();
     } catch (e) {
       setError(errText(e));
@@ -171,7 +171,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
             {error && <p className="error-line" role="alert">{error}</p>}
             <div className="wd-actions send-acts">
               {people.canMust && !priority && (
-                <button type="button" className="link-btn send-priority" onClick={() => setPriority({ note: "" })} title="No person named; everyone on the client sees it at the top of Plan">
+                <button type="button" className="link-btn send-priority" onClick={() => setPriority({ note: "" })} title="No person named; everyone on the client sees it in To place, in a block's panel on Week">
                   Make it a {client} priority instead
                 </button>
               )}
@@ -400,7 +400,7 @@ function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: I
  * Commit's "From your team": per client, sent to me (top), client priorities, what I sent, and Ask <lead> to look.
  * Hidden for a client with nothing in it but a lead to ask, so Commit stays calm; nothing counts until accepted.
  */
-export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule, part = "all" }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void; /** WD-1: "answer" (sent to me and priorities: Add work's To place), "mine" (what I sent and Ask a lead: its group at the bottom). */ part?: "all" | "answer" | "mine" }) {
+export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule, part = "all" }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void; /** WD-1: "answer" (sent to me and priorities: Add work's To place), "mine" (what I sent: its group at the bottom; NM-2: Ask a lead to look only in "all", Team's). */ part?: "all" | "answer" | "mine" }) {
   const t = useTeamCommit(weekStart, version);
   const past = weekStart < thisWeek;
   const answerPart = part !== "mine";
@@ -421,9 +421,9 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
     },
     [t, onChanged],
   );
-  const clients = (t.data?.clients ?? []).filter((c) => (answerPart && (c.incoming.length || c.priorities.length)) || (minePart && (c.sent.length || c.looks.length)));
+  const clients = (t.data?.clients ?? []).filter((c) => (answerPart && (c.incoming.length || c.priorities.length)) || (minePart && (c.sent.length || (part === "all" && c.looks.length))));
   // Clients with nothing here but a lead to ask: one quiet line at the foot, not a section each.
-  const askOnly = past || !minePart ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
+  const askOnly = past || part !== "all" ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
   const waiting = clients.reduce((n, c) => n + c.incoming.filter((s) => !s.conflict).length, 0);
   const answer = clients.reduce((n, c) => n + c.incoming.length, 0);
   // Open by itself only while something waits on me (or a Must I couldn't take); otherwise one line, like From last week.
@@ -435,7 +435,7 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
   const sum = (f: (c: CommitClient) => number) => clients.reduce((n, c) => n + f(c), 0);
   const folded = [...count(sum((c) => c.priorities.length), "priority", "priorities"), ...count(sum((c) => c.sent.length), "sent", "sent"), ...count(sum((c) => c.looks.filter((l) => l.reply).length), "reply", "replies")].join(" · ") || "Ask a lead to look";
   return (
-    <section className="carry team-group" aria-label={part === "mine" ? "You sent and Ask a lead" : "From your team"}>
+    <section className="carry team-group" aria-label={part === "mine" ? "You sent" : "From your team"}>
       {part !== "mine" && <header className="carry-head">
         <h2 className="section-label">From your team</h2>
         {answer === 0 && part === "all" && (
@@ -476,10 +476,11 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
               </ul>
             </>
           )}
-          {!past && minePart && <AskToLook c={c} weekStart={weekStart} act={act} />}
+          {/* NM-2: Ask a lead to look only in Team: a lead replies there, and Team is hidden for now. */}
+          {!past && part === "all" && <AskToLook c={c} weekStart={weekStart} act={act} />}
         </div>
       ))}
-      {shown && askOnly.length > 0 && (
+      {shown && part === "all" && askOnly.length > 0 && (
         <div className="look-others">
           <span className="muted">Ask a lead to look at your week:</span>
           {askOnly.map((c) => (

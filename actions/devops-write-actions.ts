@@ -653,7 +653,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   if (h.followUpId) notes.push("Closes the follow-up once DevOps shows the change.");
   if (h.ask) notes.push(h.op === "undo_create" ? "The request opens again in Inbox › From chats, for everyone on the chat." : "Resolves the request for everyone on the chat once DevOps shows the new item. Nothing is posted in Teams.");
   if (h.conv && h.op === "create") notes.push("Tracks the conversation as the new item for everyone on the chat once DevOps shows it. Nothing is posted in Teams.");
-  if (h.op === "undo_create" && h.conv) notes.push("The conversation opens again in Inbox › Conversations.");
+  if (h.op === "undo_create" && h.conv) notes.push("It can show in Inbox › From chats again.");
   if (h.op === "assign" && assigneeEmail(h.before["Assigned to"])) notes.push(`${(h.before["Assigned to"] ?? "").replace(/\s*<[^>]*>$/, "")} gets a quiet note in FocusTime, if they use it. Undo gives it back.`);
   if (h.op === "description" && !h.appendOnly) notes.push("Replaces the whole description with the text above. The old text is kept in the audit log, and Undo puts it back.");
   notes.push(...(h.notes ?? []));

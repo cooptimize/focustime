@@ -59,7 +59,6 @@ export const SLOW_PARTS = [
   ["vm_notice", "notices"],
   ["urgent_asks", "notices"],
   ["chat_text_cleanup", "chat_text_cleanup"],
-  ["conversation_notices", "notices"],
   ["takes", "notices"],
   ["notes", "notices"],
   ["team", "notices"],
@@ -433,10 +432,6 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       log({ source: "plan", op: "asks_cleanup", count: n });
     }
   };
-  // CV-1 sent my own notices from Conversations here (a promise waiting for its item, taken over, handed to me, new
-  // messages on one I have). IB-4 removed them: the Inbox no longer chases, and From chats is its count. The tick stays
-  // registered and does nothing.
-  const conversationsTick = async () => {};
   // PV-1: a quiet note, once each, when a teammate took one of my stories with Take one (the last 3 days only).
   const takesTick = async () => {
     const takes = liveCtx.takes;
@@ -533,7 +528,6 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       vm_notice: () => vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" })),
       urgent_asks: () => asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
       chat_text_cleanup: () => chatTextCleanup().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
-      conversation_notices: () => conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" })),
       takes: () => takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" })),
       notes: () => notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" })),
       team: () => teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" })),

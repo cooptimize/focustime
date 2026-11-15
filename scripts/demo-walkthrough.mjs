@@ -1,3 +1,4 @@
+// Written for the app on Nov 6, 2026 (noted Nov 14, 2026, NM-2): the screens and names it walks through have changed since, so it may not run as written.
 // The scripted demo (docs/demo.md), end to end in demo mode at 1920x1080, in the step 16.2 navigation: Today › Now →
 // Week → Week › Plan the week → a day's Plan chip → Today › Plan (select a block, add from the week's priorities, Done,
 // Timebox my day, Done) → Today › Now → Start focus → Today › Close out (close the loop on a follow-up) → Roadmap. It

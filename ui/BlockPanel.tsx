@@ -778,19 +778,17 @@ function ToPlace({ data, at, ctx, loose, nameOf, onChanged, onSelect, startOpen 
   );
 }
 
-/** What I sent and Ask a lead to look at my week, one collapsed group at the bottom of the panel. */
+/** What I sent, one collapsed group at the bottom of the panel (NM-2: Ask a lead to look stays in Team, hidden for now). */
 function YourSends({ weekStart, thisWeek, version, colors, onChanged }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void }) {
   const team = useTeamCommit(weekStart, version);
   const [open, setOpen] = useState(false);
   const clients = team.data?.clients ?? [];
   const sent = clients.reduce((n, c) => n + c.sent.length, 0);
-  const replies = clients.reduce((n, c) => n + c.looks.filter((l) => l.reply).length, 0);
-  const canAsk = weekStart >= thisWeek && clients.some((c) => c.leads.length);
-  if (!sent && !replies && !canAsk) return null;
-  const count = [sent ? `${sent} sent` : "", replies ? `${replies} ${replies === 1 ? "reply" : "replies"}` : ""].filter(Boolean).join(", ");
+  if (!sent) return null;
+  const count = `${sent} sent`;
   return (
     <div className="aw-sec aw-sends">
-      <FoldLine open={open} onToggle={() => setOpen((o) => !o)} label="You sent" count={count || undefined} title="What you sent teammates, and Ask a lead to look at your week" />
+      <FoldLine open={open} onToggle={() => setOpen((o) => !o)} label="You sent" count={count || undefined} title="What you sent teammates" />
       {open && <FromYourTeam weekStart={weekStart} thisWeek={thisWeek} version={version} colors={colors} onChanged={onChanged} part="mine" />}
     </div>
   );

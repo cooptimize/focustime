@@ -43,7 +43,7 @@ export const TEAMS_KIND_HINT: Record<TeamsKind, string> = {
   checkin: "This morning's to-dos with Done and Not yet, and Move the rest.",
   closeout: "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
   nudges: "A promise due tonight that's still open, work sent to you waiting over half a day, and someone taking over an item assigned to you. At most one message an hour.",
-  status: "Friday afternoon, when some of your features have no update yet for Monday's report, with the list and Open Status. Sunday evening too when you turn it on under Monday's status report.",
+  status: "Friday afternoon, when some of your features have no update yet for Monday's report, with the list and Open Status. Sunday evening too when you turn it on in Status report times.",
   meetings: "After a client call you review, once: Update the plan when its proposals are ready, or Upload its transcript when none came through. Inside your working hours.",
 };
 

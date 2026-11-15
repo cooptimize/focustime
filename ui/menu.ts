@@ -1228,8 +1228,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
+    // NM-2: Code's Group by switch is in Code.
+    case "ui.set_code_sql_group": return env.showCode ? { run: () => env.showCode!(null) } : { disabled: "Sign in to read clients' code" };
     case "ui.set_inbox":
-    case "ui.set_code_sql_group":
     case "inbox.hide":
     case "inbox.snooze":
     case "inbox.looked":
@@ -1303,17 +1304,18 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.calls": {
       const chats = env.cowork?.chats ?? [];
       if (!env.openChat || !env.cowork) return { disabled: "Client chats aren't available here" };
-      if (!chats.length) return { disabled: "None of your clients has a delivery chat you're in" };
+      if (!chats.length) return { disabled: "None of your clients has a client chat you're in" };
       return { next: () => ({ title: "Start a call", items: chats.map((c) => ({ ...callItem(env, c), hint: c.live ? `live now · ${clientNameOf(env, c.clientKey)}` : clientNameOf(env, c.clientKey) })) }) };
     }
-    case "chats.registered":
-    case "chats.list":
+    // NM-2: a client's chats are added, labelled, read and removed in Admin › Clients; others see them in Settings › Client chats.
     case "chats.add":
     case "chats.remove":
     case "chats.kind":
     case "chats.reading":
+    case "chats.refresh":
+    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin-clients") : env.openSettings("chats", "chats-read")) };
     case "chats.social":
-    case "chats.refresh": return { run: () => env.openSettings("chats", "chats-read") };
+    case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":
     case "requests.context":
@@ -1404,8 +1406,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.invite_preview":
     case "admin.invite_send":
     case "admin.invite_retry":
-    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
+    // NM-2: the invite commands fell through to Standards; they open Who's set up as IN-2 says.
+    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     // RB-1: Code views sit in Admin › Audit; a client's code status in Admin › Clients.
     case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin-audit", "code-views") } : { disabled: "Only for FocusTime admins" };
@@ -1486,7 +1489,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "loop.undo_kept":
       return { run: () => void (window.location.hash = "#/inbox/promises") };
     case "loop.sends":
-      return { run: () => env.openSettings("data") };
+      return { run: () => env.openSettings("activity", "loop-log") };
     case "followups.list": return { run: env.openFollowUps };
     // Closing, not needed, snooze, edit, delete, who suggestions and the heads-up review are on each row in the Inbox.
     case "followup.close":
@@ -1594,9 +1597,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "feature.brief":
     case "feature.mark_breakdown":
     case "followup.ask_priorities":
-    case "draft.add_feature":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "auth.connect_outlook_write": return { run: env.connectWrite };
+    // NM-2: a draft feature is added on Backlog's Gantt.
+    case "draft.add_feature": return { run: () => env.setView("ahead") };
     case "timebox.resolve": return { run: () => env.openPlanDay() };
     case "outlook.open": return { run: () => env.openOutlook(outlookDay(env.selection.date)) };
     case "collab.candidates":
@@ -1636,12 +1640,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.retry":
     case "devops.log":
       return { run: () => env.openSettings("activity", "devops-log") };
-    // PK-1: offered after a tick, never run from the menu.
+    // NM-2: the Midday check-in's and Close out's own buttons.
     case "checkin.sessions":
     case "checkin.answer":
     case "checkin.all_to_plan":
     case "checkin.undo":
+      return { disabled: "At the top of the Midday check-in and Close out" };
     case "checkin.offer_close":
+      return { disabled: "At the end of Close out" };
+    // PK-1: offered after a tick, never run from the menu.
     case "devops.progress_offer":
     case "devops.done_offer":
     case "devops.undo_offer":
@@ -1662,9 +1669,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "auth.status":
     case "auth.sign_in":
     case "auth.sign_out":
+      return { run: () => env.openSettings("you") };
+    // NM-2: My VM is in Settings › Accounts and calendars.
     case "vm.find":
     case "vm.choose":
-      return { run: () => env.openSettings("you") };
+      return { run: () => env.openSettings("connections", "vm") };
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
@@ -1737,7 +1746,6 @@ const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent
 
 /** Window commands that aren't server actions: views, week navigation, details. */
 function uiCommands(env: MenuEnv): MenuItem[] {
-  const soon = "Coming soon";
   return [
     { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
@@ -1761,7 +1769,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
     // WD-2: one entry opens the selected block's panel; it still answers to Details and Add work.
     { id: "ui.block", action: "ui.block", group: "Week", label: "Open the selected block", aka: ["Details", "Details of the selected half-day", "Add work", "Add work to the selected block", "Add a to-do", "block panel"], hint: "A", run: () => env.openBlock(env.selection.date, env.selection.half, !addWorkRefusal(env, env.selection.date, env.selection.half)) },
-    { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
+    { id: "ui.settings", action: "ui.settings", group: "Settings", label: "Settings", run: () => env.openSettings() },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
     { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },
     {
@@ -1796,11 +1804,66 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 // CF-1: confirming and tiers are retired; their old actions stay (they answer plainly) but leave the command menu.
 export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply", "weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
 
+/**
+ * NM-2: commands that name a place or a button the app no longer has, or that can't finish, each with the reason.
+ * They leave the command menu, the assistant and the Teams bot; their actions, data and tests stay
+ * (docs/open-questions.md, NM-2, says what would bring each back).
+ */
+export const HOLLOW: Readonly<Record<string, string>> = {
+  "conversations.list": "Names a Conversations list; the Inbox has none since IB-4 (From chats lists suggestions)",
+  "conversations.count": "A count of conversations that need you; that view went with IB-4",
+  "conversations.seen": "Marks a conversation seen; a suggestion has no New mark",
+  "conversations.resolve": "Resolve went with IB-4",
+  "conversations.reopen": "Reopen went with IB-4",
+  "conversations.not_request": "Not a request went with IB-4 (This isn't work replaces it)",
+  "conversations.hide": "Hide for me went with IB-4 (Dismiss replaces it)",
+  "conversations.move": "No list of a conversation's messages to move or split them in",
+  "conversations.this_is_work": "The Chatter list it answered went with IB-4",
+  "conversations.claim": "Ownership went with IB-4",
+  "conversations.give": "Ownership went with IB-4",
+  "conversations.add_helper": "Ownership went with IB-4",
+  "conversations.release": "Ownership went with IB-4",
+  "conversations.close_out": "Closing out a conversation went with IB-4",
+  "conversations.undo_ownership": "Ownership went with IB-4",
+  "conversations.take_over": "Take it over went with IB-4",
+  "conversations.held": "The held-back list is out of view since IB-4",
+  "conversations.held_bulk": "The held-back list is out of view since IB-4",
+  "conversations.held_not_work": "The held-back list is out of view since IB-4",
+  "conversations.merge": "Merge went with IB-4",
+  "conversations.merge_preview": "Merge went with IB-4",
+  "conversations.unmerge": "Merge went with IB-4",
+  "conversations.unlink": "A linked conversation leaves From chats, so nothing lists one to unlink",
+  "suggestions.skip": "Follow-through suggestions are no longer made (IB-4)",
+  "requests.context": "The list of chat requests went with IB-1 and IB-4",
+  "requests.resolve": "The list of chat requests went with IB-4",
+  "requests.reopen": "The list of chat requests went with IB-4",
+  "requests.search": "The list of chat requests went with IB-4",
+  "requests.sort_again": "The list of chat requests went with IB-4",
+  "requests.show": "Hidden requests aren't listed anywhere",
+  "requests.refresh": "Refreshes a list of chat requests that is gone; Refresh From chats does the same read",
+  "inbox.today": "A read for Day's lines, not a place",
+  "inbox.count": "The tab's number, not a place",
+  "inbox.hide": "Hide for me went with IB-4",
+  "inbox.snooze": "Snooze went with IB-4",
+  "inbox.looked": "The Inbox timeline went",
+  "inbox.seen": "New marks went with IB-4",
+  "followup.snooze": "Promises has no Snooze",
+  "followups.review": "Nothing reviews heads-ups any more",
+  "weekplan.add_draft": "The type box for a draft feature went with WD-2",
+  "weekplan.draft_tier": "Draft features on the week's list went with WD-2",
+  "weekplan.nothing": "No screen offers Nothing this week since WD-1",
+  "feature.mark_breakdown": "No screen offers Mark as being broken down since WD-1",
+  "followup.ask_priorities": "No screen offers it since WD-1",
+  "planday.carry_hint": "The suggested to-dos hint is gone",
+  "chats.social": "No screen marks a client chat as a Social chat",
+  "look.ask": "Can't finish while Team is hidden: the lead's notice opens Week, and a lead replies only in Team",
+};
+
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
   // WP-1: the DevOps patterns page is hidden: one entry, only for people it is on for; its own actions never show.
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
-  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
+  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || n in HOLLOW || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   // RS-2 D7: only the window commands are grouped; the registry's keep their place after them, so a search's first
   // result (what Enter runs) is what it was.

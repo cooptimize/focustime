@@ -112,7 +112,7 @@ const nowMs = (ctx: VmContext) => Temporal.Instant.from(ctx.now()).epochMillisec
 
 /** Refuses a VM ID that isn't the confirmed one (a stale window, or anything else). */
 function guard(vm: ChosenVm | null, asked: unknown): ActionResponse | null {
-  if (!vm) return refuse("Choose your VM first (Settings > You)");
+  if (!vm) return refuse("Choose your VM first (Settings › Accounts and calendars)");
   if (asked !== undefined && (typeof asked !== "string" || !sameVm(asked, vm.id))) return refuse("FocusTime only acts on the VM you confirmed as yours", 403);
   return null;
 }

@@ -92,8 +92,8 @@ export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   return [
     { name: "Read client chats", every: `Every ${plural(c.pollMinutes, "minute")} in followers' working hours`, lastRun: st.lastPoll, note: null },
-    { name: "Delete messages that aren't requests", every: `After each poll, those older than ${plural(c.retentionDays, "day")}`, lastRun: st.lastPoll, note: null },
-    { name: "Closed conversations", every: `Shown for ${plural(c.closedShownDays, "day")} after closing`, lastRun: null, note: "Read when Inbox opens; no job" },
+    { name: "Delete chat messages nothing was found in", every: `After each poll, those older than ${plural(c.retentionDays, "day")}`, lastRun: st.lastPoll, note: null },
+    // NM-2: the Closed conversations row went with its setting (no list shows closed ones since IB-4).
     { name: "People, levels and leads from Dataverse", every: "Once a day", lastRun: st.dataverse.refreshedAt, note: null },
     { name: "Sign-in sweep and removals", every: "Every hour", lastRun: runs.maintenance ?? null, note: null },
     { name: "Delete people's data", every: `After ${plural(rules.organization.retentionYears, "year")}`, lastRun: null, note: "Not enforced yet" },
@@ -427,7 +427,7 @@ async function setupSection(ops: AdminOps, me: { id: string; name: string }, zon
 const TASK_LABELS: Record<string, string> = {
   "conversations.update": "Sorting client chats into conversations (with image descriptions)",
   "promises.extract": "Reading promises from chat messages",
-  "asks.classify": "Sorting requests",
+  "asks.classify": "Checking client messages",
   "meeting.capture": "Proposals from client call transcripts",
   "assistant.intent": "Assistant: understanding the request",
   "assistant.answer": "Assistant: the answer",

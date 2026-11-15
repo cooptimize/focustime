@@ -143,7 +143,8 @@ describe("the scheduler's jobs", () => {
 
 // Each person's tick parts, in order, before ENV-1 (server/ticks.ts's slow and fast passes).
 // VM-2 merged during this step: its auto-start ran between the workday notices and the VM notice, and still does.
-const PRE_ENV1_SLOW = ["teams_rhythm", "day_reminders", "workday_notices", "vm_autostart", "vm_notice", "urgent_asks", "chat_text_cleanup", "conversation_notices", "takes", "notes", "team", "meetings"];
+// NM-2: conversation_notices (empty since IB-4) is gone; the policy name it ran under (notices) stays for the others.
+const PRE_ENV1_SLOW = ["teams_rhythm", "day_reminders", "workday_notices", "vm_autostart", "vm_notice", "urgent_asks", "chat_text_cleanup", "takes", "notes", "team", "meetings"];
 const PRE_ENV1_FAST = ["timer", "warnings", "held", "sweep", "teams_status"];
 
 describe("each person's tick parts", () => {

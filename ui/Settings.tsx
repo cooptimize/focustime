@@ -741,7 +741,7 @@ function PlanningForm(p: FormProps) {
             </label>
           </div>
         </AutoField>
-        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After the end of day check-in: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
+        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After Close out: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
           <label className="set-check">
             <input type="checkbox" checked={a.v.progressOffer} onChange={(e) => a.change("progressOffer", e.target.checked)} /> Offer
           </label>
@@ -832,7 +832,7 @@ function GuidanceForm(p: FormProps) {
             <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Break down on features that need stories
           </label>
         </AutoField>
-        <AutoField a={a} k="readinessNudges" label="Needs attention nudges" hint={<>The ⚑ flags in Backlog's Gantt. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
+        <AutoField a={a} k="readinessNudges" label="Needs attention nudges" hint={<>The readiness flags on Backlog's Gantt rows. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
           <label className="set-check">
             <input type="checkbox" checked={a.v.readinessNudges ?? team.readinessNudges} onChange={(e) => a.change("readinessNudges", e.target.checked)} /> Show Needs attention nudges
           </label>
@@ -1120,25 +1120,25 @@ function AsksForm(p: FormProps) {
     initial: { requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
     payload: (v) => ({ requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
     onSaved: p.onSavedData,
-    label: (k) => (k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
+    label: (k) => (k === "requestPhrases" ? "Asking phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
   });
   return (
     <Group title="Phrases">
       <p className="muted set-intro">
-        Each client chat registered below is read every {p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize becomes a request when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. The request phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide.
+        Each client chat registered below is read every {p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize is checked for what it asks when it mentions a Cooptimizer, has a question mark, uses an asking phrase, or has an attachment; one that is only an acknowledgement is never checked. An urgent one can bring an Urgent request notice. The asking phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide.
       </p>
       {team && (
         <div className="set-grid" data-setting="team-phrases">
-          <ReadOnly label="Team request phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
+          <ReadOnly label="Team asking phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
           <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={ADMIN} />
           <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={ADMIN} />
         </div>
       )}
       <div className="set-grid">
-        <AutoField a={a} k="requestPhrases" label={team ? "My request phrases" : "Request phrases"} hint={team ? "Added on top of the team's. Commas between them." : "Commas between them. Whole words, any case."}>
+        <AutoField a={a} k="requestPhrases" label={team ? "My asking phrases" : "Asking phrases"} hint={team ? "Added on top of the team's. Commas between them." : "Commas between them. Whole words, any case."}>
           <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
         </AutoField>
-        <AutoField a={a} k="ackPhrases" label={team ? "My acknowledgements" : "Acknowledgements"} hint="A message that is only these (and emoji) is not a request.">
+        <AutoField a={a} k="ackPhrases" label={team ? "My acknowledgements" : "Acknowledgements"} hint="A message that is only these (and emoji) is never checked.">
           <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
         </AutoField>
         <AutoField a={a} k="promisePhrases" label={team ? "My promise phrases" : "Promise phrases"} hint="In your own messages: commas between them. Inbox › Promises.">

@@ -9,6 +9,7 @@
 // NM-1: the same scan also finds the names FocusTime no longer uses (the Guide's Renamed list, ui/guide/retired.ts) and
 // controls written as characters, in every string a person reads. See `namesHits` at the foot of this file.
 import { RETIRED } from "../ui/guide/retired.ts";
+import { PLACES } from "../ui/places.ts";
 
 /** Where people read text: the app's code (not tests or fakes), the demo docs and the public pages. */
 export const wordsScanned = (f: string) =>
@@ -188,10 +189,10 @@ export function wordsHits(f: string, text: string): number[] {
 /**
  * Not scanned for names, each with its reason:
  * - ui/guide/: the Guide is held to the same list by ui/guide/app-names.test.ts, which knows its markup, and holds the Renamed list itself.
- * - ui/Roadmap.tsx and plan/work-templates.ts: nothing draws them any more (docs/open-questions.md, NM-1).
+ * - plan/work-templates.ts: nothing draws it any more (docs/open-questions.md, NM-1). (ui/Roadmap.tsx was removed in NM-2.)
  * - scripts/demo-walkthrough.mjs and docs/demo/: a walkthrough and a script written for the app on a past date.
  */
-const NAMES_SKIPPED = (f: string) => f.startsWith("ui/guide/") || f === "ui/Roadmap.tsx" || f === "plan/work-templates.ts" || f === "scripts/demo-walkthrough.mjs" || f.startsWith("docs/demo/");
+const NAMES_SKIPPED = (f: string) => f.startsWith("ui/guide/") || f === "plan/work-templates.ts" || f === "scripts/demo-walkthrough.mjs" || f.startsWith("docs/demo/");
 
 /** "Pick" is left to `saysPick` above, which knows pick the code name from pick as choose. */
 const NAMES = RETIRED.filter((r) => r.match && !r.was.startsWith("Pick"));
@@ -256,6 +257,62 @@ export function namesHits(f: string, text: string): { line: number; says: string
     }
   } else {
     lines.forEach((l, k) => add(k + 1, namesIn(l, f)));
+  }
+  return [...by].sort((a, b) => a[0] - b[0]).map(([line, says]) => ({ line, says: [...says] }));
+}
+
+// ---------- NM-2: pointers lead somewhere ----------
+// "Settings › Display", "Admin › Clients", "More › Install app", "Inbox › Promises", "Backlog › Gantt": every pointer in
+// the words a person reads names a place the screens draw today (ui/places.ts reads their lists). The place's whole
+// name must follow (a sentence may go on after it), or one of SHORT's shortenings ("Settings › Accounts"). Only the
+// first segment is checked: "Settings › Profile › Run setup again" checks Profile. A
+// pointer built from code ("Settings › ${label}") isn't checked here; the screen that builds it draws the name.
+
+/** What the pointer check reads: what the names check reads, the Guide (not its Renamed list) and the Technical docs. */
+export const pointersScanned = (f: string) => namesScanned(f) || (/^ui\/guide\/[^/]+\.ts$/.test(f) && !/\.test\.ts$/.test(f) && f !== "ui/guide/retired.ts") || /^docs\/technical\/[^/]+\.md$/.test(f);
+
+/** Pointers that name another app's places, each with its reason. Keep it short. */
+export const POINTERS_ALLOWED: readonly Allowed[] = [
+  { re: /^(Calendar › Shared calendars|the calendar › Integrate calendar)\b/, file: /^(ui\/settings\/CalendarLinks\.tsx|docs\/technical\/integrations\.md)$/, why: "Outlook's and Google's own Settings, where a person publishes a calendar: not FocusTime's" },
+];
+
+const POINTER = /\b(Settings|Admin|More|Inbox|Backlog) (?:›|>|&gt;) (?=([^›>]*))/g;
+/** A place's name in a sentence may be shortened to these, each standing for one place. */
+const SHORT: Readonly<Record<string, string>> = { Accounts: "Accounts and calendars", AI: "AI and assistant" };
+/** The name, then anything but more of a word: "Activity's rows" and "Clients' scope" are the place's. */
+const startsWithName = (rest: string, name: string) => rest.startsWith(name) && !/^[A-Za-z0-9]|^['’](?!s\b|\s|$)/.test(rest.slice(name.length));
+
+/** The pointers in a piece of text that name no place there is. */
+export function badPointers(text: string, f = "", places: Readonly<Record<string, readonly string[]>> = PLACES): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(POINTER)) {
+    const where = m[1]!, rest = m[2]!.trimStart();
+    const before = text.slice(0, m.index);
+    // A segment inside a longer path ("Settings › Backlog › Stale after") is a root only after More ("More › Settings").
+    if (/(?:›|>|&gt;) ?$/.test(before) && !/\bMore (?:›|>|&gt;) ?$/.test(before)) continue;
+    // Built from code, or a placeholder: "Settings › ${x}", "Admin › Clients › <client>", "Settings ›" at the end.
+    if (!rest || /^[$<{\[*`]/.test(rest)) continue;
+    if (!/^[A-Za-z]/.test(rest)) continue;
+    const list = places[where]!;
+    if (list.some((p) => startsWithName(rest, p)) || Object.entries(SHORT).some(([s, p]) => list.includes(p) && startsWithName(rest, s))) continue;
+    const tail = text.slice(m.index).replace(/^\S+ (?:›|>|&gt;) /, "");
+    if (POINTERS_ALLOWED.some((a) => (!a.file || a.file.test(f)) && a.re.test(tail))) continue;
+    out.push(`${where} › ${rest.split(/[.,;:()"]/)[0]!.trim()}`);
+  }
+  return out;
+}
+
+export function pointerHits(f: string, text: string): { line: number; says: string[] }[] {
+  const by = new Map<number, Set<string>>();
+  const add = (line: number, says: string[]) => { if (says.length) by.set(line, new Set([...(by.get(line) ?? []), ...says])); };
+  if (/\.(ts|tsx|mjs)$/.test(f)) {
+    const old = oldNameRanges(text);
+    for (const p of codePieces(text, f.endsWith(".tsx"), true)) {
+      if (p.pos !== undefined && old.some(([a, b]) => p.pos! > a && p.pos! < b)) continue;
+      add(p.line, badPointers(p.text, f));
+    }
+  } else {
+    text.split("\n").forEach((l, k) => add(k + 1, badPointers(l, f)));
   }
   return [...by].sort((a, b) => a[0] - b[0]).map(([line, says]) => ({ line, says: [...says] }));
 }

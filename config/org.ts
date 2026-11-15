@@ -252,12 +252,12 @@ export const ORG_SPECS = {
   "ai.person_cap_usd": { kind: "rule", area: "ai", label: "Monthly cap per person (US dollars)", builtin: 10, parse: usd },
   "ai.app_cap_usd": { kind: "rule", area: "ai", label: "Monthly cap for everyone (US dollars)", builtin: 100, parse: usd },
   "ai.standard_tasks": { kind: "rule", area: "ai", label: "Background tasks on standard", builtin: [] as string[], parse: standardTasks },
-  "conv.request_phrases": { kind: "default", area: "conversations", label: "Request phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
+  "conv.request_phrases": { kind: "default", area: "conversations", label: "Asking phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
   "conv.ack_phrases": { kind: "default", area: "conversations", label: "Thanks and short replies", builtin: [...DEFAULT_ACK_PHRASES], parse: list(50, 60, true) },
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
   // ADM-2 (D604): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
   "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 30, "minutes") },
-  "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep messages that aren't requests (days)", builtin: 14, parse: intIn(1, 90, "days") },
+  "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep chat messages nothing was found in (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.closed_shown_days": { kind: "rule", area: "conversations", label: "Closed conversations stay shown (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
   // ADM-2 (D600): also who is a Cooptimizer (sign-in and People); help invites go only to these too.

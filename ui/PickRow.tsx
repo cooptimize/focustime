@@ -19,7 +19,8 @@ import { DeployItemsChip } from "./DeployItems.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { PlanCtx, useFocused } from "./planview.ts";
-import { WorkLink } from "./WorkLink.tsx";
+import { ItemTitleLink, WorkLink } from "./WorkLink.tsx";
+import { isDevOpsUrl } from "./work.ts";
 import { PlanRow } from "./plan/PlanRow.tsx";
 import { useTodoSheet } from "./TodoSheet.tsx";
 import { DevOpsWork } from "./work.ts";
@@ -64,6 +65,13 @@ type Props = {
 };
 
 export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions, typeIcon = false, dragProps, checklist = false }: Props) {
+  // FN-1, WD-2: the title opens the story card. NM-2 (C1): a to-do stored with its item's id and no URL (the demo's,
+  // and any whose URL wasn't a DevOps address) opens it too, by id; it was plain text before.
+  const linked = (children: ReactNode, className?: string, title?: string): ReactNode =>
+    !link ? children
+    : pick.itemUrl && isDevOpsUrl(pick.itemUrl) ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} {...(className ? { className } : {})} {...(title ? { title } : {})}>{children}</WorkLink>
+    : pick.itemId !== null && pick.clientKey ? <ItemTitleLink clientKey={pick.clientKey} id={pick.itemId} {...(className ? { className } : {})} {...(title ? { title } : {})}>{children}</ItemTitleLink>
+    : children;
   const today = density === "today";
   const week = density === "week";
   const planD = density === "plan";
@@ -105,7 +113,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   // MB-1: on the phone (the sheet is there only on the phone) every to-do row puts its title on its own line (two at
   // most) and its chips (time, size, + time, ⋯) on a smaller second line, so a chip never squeezes the title.
   if (sheet) {
-    const titleNode = link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title;
+    const titleNode = linked(pick.title);
     const line2 = (
       <span className="pr-line2">
         {extra}
@@ -157,7 +165,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
         <span className="pr-main">
           <span className="pr-title" title={pick.title}>
-            {link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
+            {linked(pick.title)}
           </span>
           {meta && <span className="pr-meta">{meta}</span>}
           {(extra || badge) && <span className="pr-extra">{extra}{badge}</span>}
@@ -176,7 +184,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} {...(dragProps ?? { draggable, onDragStart: draggable ? onDrag : undefined })} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
         handle={<Icon name={pick.status === "done" ? "done" : "grip"} />} titleText={pick.title}
         icon={dep ? <DeployIcon /> : pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
-        title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
+        title={linked(pick.title)}
         badges={<>{resolved && <ResolvedMark state={resolved.state} />}{extra}{badge}</>}
         right={<>{timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
         hover={<>{!timed && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{more}</>} />
@@ -186,13 +194,13 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       <label className="tick" onClick={stop} onDoubleClick={stop}><input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} /></label>
       {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
       <span className="pr-title" title={pick.title}>
-        {link && pick.itemUrl ? (
-          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""}'s card` : undefined}>
+        {linked(
+          <>
             {today ? <span className="pr-text">{pick.title}</span> : pick.title}
             {today && pick.itemId !== null && <span className="pr-id">#{pick.itemId}</span>}
-          </WorkLink>
-        ) : (
-          pick.title
+          </>,
+          today ? "pr-link pr-cue" : undefined,
+          today ? `${pick.title}\nOpen #${pick.itemId ?? ""}'s card` : undefined,
         )}
       </span>
       {extra}

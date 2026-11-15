@@ -144,7 +144,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-clients-list", page.locator(".ps-head").getByRole("heading", { name: "Admin › Clients" }));
 
       // Register the chat.
-      const group = adatum.getByRole("group", { name: /^Delivery chats for Adatum/ });
+      const group = adatum.getByRole("group", { name: /^Client chats for Adatum/ });
       await group.getByRole("button", { name: "Add a chat" }).click();
       await group.getByRole("listbox", { name: "Your Teams group chats" }).getByRole("option").first().waitFor();
       await page.keyboard.type("adatum");
@@ -183,7 +183,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await shotBoth(page, "admin-ai", body);
       // AI-F1: background tasks on Flex; an admin puts one back on standard. Interactive tasks have no switch.
       const tiers = body.locator(".adm-ai-tiers");
-      await tiers.getByRole("switch", { name: "Use Flex for Sorting requests" }).uncheck();
+      await tiers.getByRole("switch", { name: "Use Flex for Checking client messages" }).uncheck();
       await expect.poll(async () => (await team.org.rules()).ai.standardTasks).toEqual(["asks.classify"]);
       await tiers.getByRole("row", { name: /Break down/ }).getByText("Standard", { exact: true }).waitFor();
       expect(await tiers.getByRole("switch").count()).toBe(4);
@@ -197,7 +197,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
 
       // Admin › Conversations.
       await page.locator('.ps-rail [data-settings-section="admin-conversations"]').click();
-      await body.getByLabel("Request phrases").waitFor();
+      await body.getByLabel("Asking phrases").waitFor();
       await shotBoth(page, "admin-conversations", body);
 
       // Admin › People: Kim becomes a lead of Adatum (an override, marked).
@@ -252,7 +252,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       const card = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await card.waitFor();
       // Read-only: the chat (no Add or Remove), AI allowed, the open states, all "Set by your FocusTime admin".
-      const group = card.getByRole("group", { name: /^Delivery chats for Adatum/ });
+      const group = card.getByRole("group", { name: /^Client chats for Adatum/ });
       await group.getByRole("region", { name: "Adatum Delivery Team" }).waitFor();
       expect(await group.getByRole("button", { name: "Add a chat" }).count()).toBe(0);
       await card.getByText("Allowed for Adatum").waitFor();
