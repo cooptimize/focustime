@@ -15,9 +15,10 @@ span.brand-svg > svg { display: block; width: 100%; height: auto; }
 .brand-home:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* The lockup (BR-1): the week mark, then the wordmark over "by Cooptimize". About in Settings. */
-.lockup { display: inline-flex; align-items: center; gap: 14px; color: var(--text); }
+/* About's lockup takes the box the old one did (320 x 85 px), so the page under it doesn't move. */
+.lockup { display: inline-flex; align-items: center; gap: 14px; width: 320px; height: 85px; color: var(--text); }
 .lockup-words { display: flex; flex-direction: column; gap: 2px; }
-.lockup .wordmark { width: 170px; }
+.lockup .wordmark { width: 164px; }
 .lockup-by { font-size: var(--fs-2); color: var(--text-muted); padding-left: 2px; }
 
 /* About in Settings. */

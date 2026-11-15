@@ -17,15 +17,25 @@ type Seen = { shownAt: number | null; goneAt: number | null; lit: boolean; overl
 const WATCH = () => {
   const seen: Seen = { shownAt: null, goneAt: null, lit: false, overlays: [] };
   (window as unknown as { __seen: Seen }).__seen = seen;
+  let there = false; // the stage was in the page at least once (a frame can run before the markup is parsed)
   const tick = () => {
     const st = document.querySelector<HTMLElement>("#boot .brand-stage");
+    if (st) there = true;
+    // Each change of the stage, with its time, for the failure message.
+    const w = window as unknown as { __log?: string[]; __last?: string };
+    const now = `${st ? "stage" : "none"} opacity ${st ? getComputedStyle(st).opacity : "-"} ${document.readyState}`;
+    if (now !== w.__last) (w.__log ??= []).push(`${Math.round(performance.now())} ${now}`), (w.__last = now);
     if (st && seen.shownAt === null && Number(getComputedStyle(st).opacity) > 0) seen.shownAt = performance.now();
-    if (!st && seen.goneAt === null && document.readyState !== "loading") seen.goneAt = performance.now();
+    if (!st && there && seen.goneAt === null) seen.goneAt = performance.now();
     if (document.querySelector("#boot .week-loader.lit")) seen.lit = true;
     for (const sel of ["[data-close]", "[data-moment]", "[data-lumen]"]) if (document.querySelector(sel) && !seen.overlays.includes(sel)) seen.overlays.push(sel);
     if (performance.now() < 30_000) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+  // The appear step's own event too, so a starved frame loop can't miss a loader that showed.
+  addEventListener("animationend", (e) => {
+    if ((e as AnimationEvent).animationName === "boot-show" && seen.shownAt === null) seen.shownAt = performance.now();
+  }, true);
 };
 const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: Seen }).__seen);
 
@@ -131,9 +141,10 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await p2.goto(h.url);
     await appUp(p2);
     const s2 = await seen(p2);
+    const log = await p2.evaluate(() => (window as unknown as { __log?: string[] }).__log ?? []);
     expect(s2.shownAt).not.toBeNull();
     expect(s2.shownAt!).toBeGreaterThanOrEqual(380);
-    expect(s2.goneAt! - s2.shownAt!).toBeGreaterThanOrEqual(600);
+    expect(s2.goneAt! - s2.shownAt!, log.join(" | ")).toBeGreaterThanOrEqual(600);
     expect(s2.lit).toBe(true); // it finished a pass and moved
     expect(s2.overlays).toEqual([]);
     await slow.close();
@@ -144,21 +155,35 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await hold(ctx, "**/api/action", isAction("week.load"), 1500);
     const page = await ctx.newPage();
     await page.goto(h.url);
-    // Measured in the page, 380 ms after the mark lights up to move (the move is 400 ms).
-    const [moved, mark] = await page.evaluate(
+    // Read in the same task the move starts (a class change wakes the observer before any timer can run, so a busy
+    // machine can't let the move finish first): where the move's last frame puts the mark, the top bar's mark, and
+    // whether that one is hidden. The loader's mark scales from its top left corner (boot.css).
+    type Box = { x: number; y: number; width: number };
+    const [end, mark, hidden] = await page.evaluate(
       () =>
-        new Promise<({ x: number; y: number; width: number } | undefined)[]>((done) => {
-          const look = () => {
-            if (!document.querySelector("#boot .week-loader.lit")) return void requestAnimationFrame(look);
-            setTimeout(() => done([document.querySelector("#boot .week-loader"), document.querySelector(".brand-home .week-mark")].map((e) => e?.getBoundingClientRect().toJSON())), 380);
-          };
-          look();
+        new Promise<[Box | null, Box | undefined, string]>((done) => {
+          const svg = document.querySelector("#boot .week-loader")!;
+          new MutationObserver((_, obs) => {
+            if (!svg.classList.contains("lit")) return;
+            obs.disconnect();
+            const box = svg.getBoundingClientRect();
+            const top = document.querySelector(".brand-home .week-mark");
+            const frames = svg.getAnimations().flatMap((a) => (a.effect as KeyframeEffect).getKeyframes());
+            const last = frames.map((f) => String(f.transform ?? "")).filter((t) => t.startsWith("translate")).pop() ?? "";
+            const n = [...last.matchAll(/-?[\d.]+(?:e-?\d+)?/g)].map((m) => Number(m[0]));
+            const at = n.length === 3 ? { x: box.x + n[0]!, y: box.y + n[1]!, width: box.width * n[2]! } : null;
+            done([at, top?.getBoundingClientRect().toJSON(), top ? getComputedStyle(top).visibility : ""]);
+          }).observe(svg, { attributes: true, attributeFilter: ["class"] });
         }),
     );
-    expect(moved && mark).toBeTruthy();
-    expect(Math.abs(moved!.x - mark!.x)).toBeLessThan(4);
-    expect(Math.abs(moved!.y - mark!.y)).toBeLessThan(4);
-    expect(Math.abs(moved!.width - mark!.width)).toBeLessThan(4);
+    // Only one mark shows while it moves; the top bar's shows again once the loader's is gone.
+    expect(hidden).toBe("hidden");
+    await expect.poll(() => page.locator("#boot .brand-stage").count(), { timeout: 3000 }).toBe(0);
+    expect(await page.locator(".brand-home .week-mark").evaluate((e) => getComputedStyle(e).visibility)).toBe("visible");
+    expect(end && mark).toBeTruthy();
+    expect(Math.abs(end!.x - mark!.x)).toBeLessThan(2);
+    expect(Math.abs(end!.y - mark!.y)).toBeLessThan(2);
+    expect(Math.abs(end!.width - mark!.width)).toBeLessThan(2);
     await ctx.close();
   }, T);
 
@@ -177,7 +202,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
       expect(await page.evaluate(() => document.getAnimations().filter((a) => /^wl-\d$/.test((a as CSSAnimation).animationName) && a.playState === "running").length)).toBe(8);
       const o = () => page.evaluate(() => [...document.querySelectorAll("#boot .wl")].map((e) => Number(getComputedStyle(e).opacity)));
       const seenOpacities = new Set<number>();
-      for (let i = 0; i < 6; i++) (await o()).forEach((v) => seenOpacities.add(Math.round(v * 10))), await page.waitForTimeout(110);
+      // Sampled across a whole pass (1.6 s), so a slow sampler can't land only in the all-lit hold.
+      for (let i = 0; i < 16; i++) (await o()).forEach((v) => seenOpacities.add(Math.round(v * 10))), await page.waitForTimeout(110);
       expect(seenOpacities.size).toBeGreaterThan(2);
       if (long) {
         await page.waitForTimeout(t0 + 7400 - Date.now());

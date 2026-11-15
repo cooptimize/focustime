@@ -67,6 +67,8 @@ function move(): void {
   for (const [el, from] of blocks) el.animate?.([{ opacity: from }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
   const box = svg.getBoundingClientRect();
   const mark = document.querySelector(".brand-home .week-mark")?.getBoundingClientRect();
+  // The top bar's own mark waits hidden until the moving one lands on it, so the two never show at once.
+  if (mark) document.documentElement.classList.add("boot-flying");
   const fly = { duration: FLY_MS, easing: "cubic-bezier(0.5, 0, 0.2, 1)", fill: "forwards" } as const;
   if (mark && mark.width > 0 && box.width > 0)
     svg.animate?.([{ transform: "none" }, { transform: `translate(${mark.left - box.left}px, ${mark.top - box.top}px) scale(${mark.width / box.width})` }], fly);
@@ -81,6 +83,7 @@ function finish(): void {
   window.clearTimeout(timer);
   window.removeEventListener("keydown", skipKey, true);
   stage()?.remove();
+  document.documentElement.classList.remove("boot-flying");
   const say = boot()?.querySelector(".boot-say");
   if (say) say.textContent = "FocusTime is ready";
   // The live line stays a moment so it is heard, then the last of the loader goes.

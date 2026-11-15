@@ -14,8 +14,12 @@ export function Opening({ ready, lines, onFinished }: { ready: boolean; lines: S
   finished.current = onFinished;
   const line = ready ? null : waitingLine(lines);
   useEffect(() => bootWaiting(line), [line]);
+  // Once per opening: StrictMode runs an effect twice in development, and onFinished must not.
+  const told = useRef(false);
   useEffect(() => {
-    if (ready) bootReady(() => finished.current?.());
+    if (!ready || told.current) return;
+    told.current = true;
+    bootReady(() => finished.current?.());
   }, [ready]);
   return null;
 }

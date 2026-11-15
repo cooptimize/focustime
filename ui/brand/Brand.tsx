@@ -63,7 +63,7 @@ export function WeekLoader() {
 }
 
 /** The lockup (BR-1): the week mark, the outlined wordmark and "by Cooptimize". About in Settings. */
-export function Lockup({ height = 40 }: { height?: number }) {
+export function Lockup({ height = 64 }: { height?: number }) {
   const uid = useId().replace(/:/g, "");
   return (
     <span className="lockup" role="img" aria-label="FocusTime by Cooptimize">

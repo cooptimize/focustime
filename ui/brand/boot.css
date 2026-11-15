@@ -46,6 +46,8 @@ html { background: var(--boot-bg); }
 
 /* The mark (the week mark's own drawing, ui/brand/Brand.tsx's WeekLoader) and its pass. */
 .week-loader { display: block; overflow: visible; transform-origin: 0 0; }
+/* While the loader's mark moves onto the top bar's, that one waits hidden (ui/brand/boot.ts), so only one shows. */
+:root.boot-flying .brand-home .week-mark { visibility: hidden; }
 .week-loader .wl-am { fill: var(--boot-am); }
 .week-loader .wl-pm { fill: var(--boot-pm); }
 .week-loader .wl-hollow { stroke: var(--boot-accent); }

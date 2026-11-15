@@ -340,7 +340,7 @@ Hover is a faint wash, pressed a slightly stronger one, both instant. Disabled a
 
 **The top bar.** The VM chip is a quiet pill with its dot; Focus, Capture and Ask are outlined with an icon and their word; More is a round icon button; the photo is as it was.
 
-**Icons.** One family for FocusTime's own things (`ui/icons.tsx`, by name; drawn by Lucide, ISC, only the icons named there in the bundle): 16 px at the Default text size and scaled with it, a 1.5 px stroke at every size, rounded ends, the color of the text beside it, never colored on its own except by a state it sits in. An icon beside a word is hidden from screen readers; an icon alone has a name. No text character acts as a control or a mark (no ‹ › ⋯ + × ▸ ▾ ✓): each is its icon, with the name it had. Arrows inside sentences ("→ Thu") stay text. Not part of the family, on purpose: the DevOps type icons (their shapes and colors are the project's), the brand marks and Lumen, a person's photo.
+**Icons.** One family for FocusTime's own things (`ui/icons.tsx`, by name; drawn by Lucide, ISC, only the icons named there in the bundle): 16 px at the Default text size and scaled with it, a 1.5 px stroke at every size, rounded ends, the color of the text beside it, never colored on its own except by a state it sits in. An icon beside a word is hidden from screen readers; an icon alone has a name. No text character acts as a control or a mark (no ‹ › ⋯ + × ▸ ▾ ✓): each is its icon, with the name it had. Arrows inside sentences ("→ Thu") stay text. Not part of the family, on purpose: the DevOps type icons (their shapes and colors are the project's), the brand mark, a person's photo.
 
 | Group | Names |
 |---|---|
