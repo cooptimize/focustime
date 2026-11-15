@@ -1094,3 +1094,27 @@ From the IT review (TD-1):
 - **Where no database is found** (loose SQL files) the tree is still two levels: "No schema", then the types. A flat list would be shorter there.
 - **Deep link.** Opening a link to a file in By kind doesn't open the tree to it; only changing the switch does.
 
+
+## NM-2
+
+- The hidden commands (`HOLLOW` in `ui/menu.ts`) and what would bring each back. Their actions, data and tests are kept.
+  - Conversation ownership (I'll take it, Give to…, Add helper, Release, Take it over, its Undo), Merge (and its preview and Unmerge), Resolve, Reopen, Not a request, Hide for me, Close out a conversation, Move or split messages, Mark seen, the count of conversations that need you: a conversation screen with these buttons again (From chats lists suggestions only since IB-4). Or remove the actions in a later step, with their tests.
+  - The held-back list (Show, Sort in bulk, Not work): a held-back view in the Inbox again (GD-2's list is out of view since IB-4).
+  - This is work: a Chatter list to answer from.
+  - Unlink a conversation's item: a place that lists linked conversations (a linked one leaves From chats). The assistant's `unlink` tool still does it for a promise.
+  - Skip a follow-through suggestion: follow-through suggestions made again.
+  - The `requests.*` commands (context, resolve, reopen, search, sort again, show hidden, refresh) and the `inbox.*` ones (today, count, hide, snooze, looked, seen): a Requests list or an Inbox with those buttons again. Refresh From chats does the same read as requests.refresh.
+  - Snooze a promise and Review heads-ups: Snooze on Promises, or a heads-up review screen.
+  - Add a draft feature to the week, its tier, Nothing this week, Mark as being broken down, Ask for priorities, the carry hint: a week list with these again (WD-1 and WD-2 took it apart).
+  - Ask a lead to look: Team shown again, or a way for a lead to reply outside Team. The lead's notice and the replies are kept; replies to asks made before NM-2 now show only in Team.
+- STEP 0.6: C1 (a to-do's title on a block card) was lost by accident: WD-2 added it, and `PickRow` linked only a stored DevOps URL. Built in this step.
+- Unreachable now, left in place (nothing removed beyond E):
+  - `roadmapRowMenu` in `ui/menu.ts` and its test `ui/roadmapmenu.test.ts`: only `ui/Roadmap.tsx` called it.
+  - The CSS for the day bar's `kbd` and for `ui/Roadmap.tsx`'s classes.
+  - `conv.closed_shown_days` is hidden but still read by the Inbox's read and the assistant's commitments read; whether those reads still need it is a question for a later step.
+- Taken as the reading that changes less:
+  - Settings' and Admin's lists are named Asking phrases (a client's message with one is checked for what it asks); "Urgent request" stays the notice's name, since it is a notice kind people switch.
+  - The send-can't-take-a-Must notice to the other leads said Open Team and opened Week; it now says Open Week, like Ask to look's.
+  - The command "Settings" moves from the group Week to the group Settings.
+  - The Renamed list's word budget went from 260 to 270 rather than dropping an older row.
+  - The Technical docs' "Checked against" lines are left as they were: only the lines this step changed were checked again.
