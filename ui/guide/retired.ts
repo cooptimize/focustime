@@ -47,6 +47,10 @@ export const RETIRED: readonly Retired[] = [
   { was: "Asks", now: "Inbox › From chats", match: /\bAsks\b(?! for\b)/ },
   { was: "Conversations (the Inbox's cards and statuses)", now: "Inbox › From chats: only the ones that need a DevOps item" },
   { was: "Needs you (the Inbox's view)", now: "Inbox › From chats", match: /\bNeeds you\b/ },
+  // NM-2: a client's chats are Client chats everywhere a person reads it; the kinds Delivery team and Customer collaboration keep their names.
+  { was: "Delivery chats", now: "Client chats", match: /\bDelivery chats\b/i },
+  { was: "Admin › Conversations", now: "Admin › Client chats" },
+  { was: "Request phrases", now: "Asking phrases", match: /\b[Rr]equest phrases\b/ },
   { was: "Waiting on", now: "Gone: a teammate's promise is in their own Inbox", match: /\bWaiting on\b/ },
   { was: "In progress (the Inbox)", now: "Inbox › Promises" },
   { was: "Captures and drafts", now: "Inbox › Captures", match: /\bCaptures and drafts\b/ },

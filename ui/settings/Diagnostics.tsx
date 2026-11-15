@@ -145,7 +145,7 @@ export function DiagnosticsPanel() {
                     <th className="num" title="GIFs, stickers, emoji, empty and short acks">Chatter: rule</th>
                     <th className="num">Chatter: AI</th>
                     <th className="num">Chatter: Social chat</th>
-                    <th className="num">Not work-related</th>
+                    <th className="num">This isn't work</th>
                     <th>Unsorted</th>
                     <th className="num">Not placed</th>
                     <th>My marks</th>
@@ -170,7 +170,7 @@ export function DiagnosticsPanel() {
                         <td>{unsorted.length ? unsorted.map(([k, n]) => unsortedCount(n, k, c.clientName)).join(", ") : "0"}</td>
                         <td className="num">{o.notPlaced}</td>
                         <td>
-                          This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · Not work-related {c.marks.notWorkConversations}
+                          This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · This isn't work {c.marks.notWorkConversations}
                         </td>
                       </tr>
                     );
@@ -188,9 +188,9 @@ export function DiagnosticsPanel() {
                   <li key={i}>
                     <p><span className="dx-client">{c.clientName}</span> {c.chatName}<span className="muted"> · {kindName(c.kind)}{c.social ? " · Social chat" : ""}</span></p>
                     <p>{c.total} messages · to a conversation: AI {o.sorted.ai}, rules {o.sorted.rules}, person {o.sorted.person}{o.workNoConversation ? `, loose ${o.workNoConversation}` : ""}</p>
-                    <p>Chatter: rule {o.chatter.rule} · AI {o.chatter.ai} · Social chat {o.chatter.social} · Not work-related {o.chatter.notWork}</p>
+                    <p>Chatter: rule {o.chatter.rule} · AI {o.chatter.ai} · Social chat {o.chatter.social} · This isn't work {o.chatter.notWork}</p>
                     <p>Unsorted: {unsorted.length ? unsorted.map(([k, n]) => unsortedCount(n, k, c.clientName)).join(", ") : "0"} · not placed {o.notPlaced}</p>
-                    <p className="muted">My marks: This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · Not work-related {c.marks.notWorkConversations}</p>
+                    <p className="muted">My marks: This is work {c.marks.thisIsWork} · moved {c.marks.movedByMe} · This isn't work {c.marks.notWorkConversations}</p>
                   </li>
                 );
               })}

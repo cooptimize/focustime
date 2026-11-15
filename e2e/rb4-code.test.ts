@@ -241,8 +241,12 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
 
     // The keyboard: Down from the box into the results, then Enter on one.
     await box.focus();
-    await page.keyboard.press("ArrowDown");
-    for (let n = 0; n < 3; n++) await page.keyboard.press("ArrowDown");
+    // NM-2: one key at a time, waiting for the focus to land; four quick presses lost one on CI's runners.
+    const order = await hits(page);
+    for (let n = 0; n < 4; n++) {
+      await page.keyboard.press("ArrowDown");
+      await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-code-hit"))).toBe(order[n]);
+    }
     expect(await page.evaluate(() => document.activeElement?.getAttribute("data-code-hit"))).toBe("usp_LoadOrders.sql");
     await page.keyboard.press("Enter");
     const file = panel(page).locator(".cv-file-view");

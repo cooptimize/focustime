@@ -1,3 +1,5 @@
+> Written for the app on Nov 8, 2026 (noted Nov 14, 2026, NM-2): some screens and names have changed since; the Guide (`?`) is current.
+
 # How the demo works
 
 **Try the demo** on the sign-in page starts a demo session: a fictional person (Alex Rivera, you@example.com), four

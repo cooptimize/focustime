@@ -30,7 +30,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await openSettings(page);
     // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
     await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
-    const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
+    const northwind = page.getByRole("group", { name: /^Client chats for Northwind/ });
     await northwind.waitFor();
 
     // Add the internal team chat: search, Enter.
@@ -77,7 +77,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await custCard.getByText("2 people from outside Cooptimize are in this internal chat").waitFor({ state: "detached" });
 
     // Harbor's picker doesn't offer Northwind's chats; Esc closes it.
-    const harbor = page.getByRole("group", { name: /^Delivery chats for Harbor/ });
+    const harbor = page.getByRole("group", { name: /^Client chats for Harbor/ });
     await harbor.getByRole("button", { name: "Add a chat" }).click();
     await picks(harbor).getByRole("option").first().waitFor();
     expect((await picks(harbor).getByRole("option").allTextContents()).some((t) => t.includes("Northwind"))).toBe(false);
@@ -102,7 +102,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     });
     await openSettings(page);
     await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
-    const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
+    const northwind = page.getByRole("group", { name: /^Client chats for Northwind/ });
     await northwind.getByRole("button", { name: "Add a chat" }).click({ timeout: 5_000 });
     await picks(northwind).getByRole("option").first().waitFor();
     release();

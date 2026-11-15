@@ -20,7 +20,7 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 | `npm run build` | The typecheck, then the UI build into `dist/` |
 | `npm start`, `npm run serve` | The UI build (no typecheck) and serve; serve only |
 | `npm run typecheck` | Both TypeScript projects (the UI, and the server with scripts and tests) |
-| `npm run guards` | The repo guards (`scripts/guards.ts`): real names, desktop words, type and state names as code, "pick" in text people read |
+| `npm run guards` | The repo guards (`scripts/guards.ts`): real names, desktop words, type and state names as code, "pick" in text people read, names FocusTime no longer uses (NM-1), and pointers ("Settings ›", "Admin ›", "More ›", "Inbox ›", "Backlog ›") that name a place the screens draw (NM-2, `ui/places.ts`) |
 | `npm run check` | The typecheck and the guards |
 | `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests. Run `npm run db:up` first, or the SQL Server tests are skipped (`FOCUSTIME_TEST_SQL=required` makes them fail instead, `off` skips them) |
 | `npm run test:zones` | The suite under four US time zones, one after another |

@@ -81,7 +81,6 @@ const CASES: Case[] = [
   { covers: "item_update", name: "a compound update", text: "Mark #8101 as complete and add a comment that the flags are live", script: (s) => s.action(["item_update"], {}, call(["item_update", { itemId: 8101, done: true, comment: "The flags are live.", target: null }]), say("Here it is.")) },
   { covers: "unlink", name: "unlink", text: "Take the link off my Tailspin promise to Dana", script: inboxThen((s) => s.action(["inbox", "unlink"], {}, call(["inbox", { view: "promises" }]), call(["unlink", { conversationId: null, promiseId: 42 }]), say("Here it is."))) },
   { covers: "link_comment", name: "a linked comment", text: "Comment on #8101 from my Tailspin promise with the chat link", script: inboxThen((s) => s.action(["inbox", "link_comment"], {}, call(["inbox", { view: "promises" }]), call(["link_comment", { conversationId: null, promiseId: 42, itemId: 8101, text: null }]), say("Here it is."))) },
-  { covers: "inbox_seen", name: "mark seen", text: "I've seen my promises", script: inboxThen((s) => s.action(["inbox", "inbox_seen"], {}, call(["inbox", { view: "promises" }]), call(["inbox_seen", { keys: ["chatPromise:41"] }]), say("Here it is."))) },
   { covers: "plan_deployment", name: "a deployment", text: "Plan a Tailspin deployment Saturday nine to eleven", script: (s) => s.action(["plan_deployment"], {}, call(["plan_deployment", { date: "2026-11-14", start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here it is.")) },
   // A multi-action request.
   { covers: "comment", name: "two changes in one request", text: "Comment on #8101 that it's ready and move #8102's target", script: (s) => s.action(["comment", "ahead_change"], {}, call(["comment", { itemId: 8101, text: "Ready." }], ["ahead_change", { itemId: 8102, field: "target", value: "2026-12-01" }]), say("Here they are.")) },
@@ -107,7 +106,8 @@ const CASES: Case[] = [
   { covers: "item_undo", name: "a to-do's done state undone", text: "", script: () => {}, propose: (t) => ({ tool: "item_undo", args: { pickId: t.tomorrow.id } }) },
 ];
 /** Covered by the Undo test below: it needs a write made first. */
-const COVERED_BELOW: readonly ToolName[] = ["write_undo"];
+// NM-2: inbox_seen is never offered to the model (NOT_OFFERED), so no words reach it; its own test is in service.test.ts (NM-2).
+const COVERED_BELOW: readonly ToolName[] = ["write_undo", "inbox_seen"];
 
 const READS = new Set(["week.load", "ahead.load", "status.load", "inbox.list", "conversations.suggestions", "meeting.mine", "conversations.list", "team.commit", "send.today", "send.people", "devops.preview", "deploy.items", "conversations.search_items", "loop.find", "devops.done_offer", "devops.undo_offer", "wrapup.offer", "wrapup.preview"]);
 const writesOf = (s: World) => s.ran.filter((r) => !READS.has(r.action)).map((r) => JSON.parse(JSON.stringify(r).replace(/"previewId":"pv\d+"/g, '"previewId":"pv"')) as unknown);

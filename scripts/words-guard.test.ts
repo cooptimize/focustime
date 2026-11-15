@@ -1,7 +1,7 @@
 // TD-1: the words guard finds "pick" in the to-do sense in text people read, and leaves code names and "pick" as
 // choose alone.
 import { describe, expect, it } from "vitest";
-import { NAMES_ALLOWED, namesHits, namesIn, namesScanned, saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
+import { badPointers, NAMES_ALLOWED, namesHits, namesIn, namesScanned, pointerHits, POINTERS_ALLOWED, pointersScanned, saysPick, wordsHits, wordsScanned } from "./words-guard.ts";
 
 describe("saysPick", () => {
   it("the to-do sense", () => {
@@ -93,12 +93,51 @@ describe("namesHits", () => {
   });
   it("reads the sources' own messages too, but not the demo docs or the Guide", () => {
     for (const f of ["sources/not-set-up.ts", "sources/oauth/oauth.ts", "ui/keys.ts", "ui/menu.ts", "ui/settings/registry.ts", "config/org.ts", "plan/notify.ts", "server/teams/cards.ts", "public/legal.html"]) expect(namesScanned(f), f).toBe(true);
-    for (const f of ["sources/devops/write.test.ts", "ui/guide/content.ts", "docs/demo/script.md", "scripts/demo-walkthrough.mjs", "ui/Roadmap.tsx", "docs/decisions.md"]) expect(namesScanned(f), f).toBe(false);
+    for (const f of ["sources/devops/write.test.ts", "ui/guide/content.ts", "docs/demo/script.md", "scripts/demo-walkthrough.mjs", "plan/work-templates.ts", "docs/decisions.md"]) expect(namesScanned(f), f).toBe(false);
   });
   it("the Guide has its own check, and the Renamed list holds the old names", () => {
     expect(namesHits("ui/guide/retired.ts", 'const r = { was: "Roadmap", now: "Backlog" };\n')).toEqual([]);
   });
   it("public pages line by line", () => {
     expect(namesHits("public/legal.html", "<p>Settings › Data › Export my data</p>\n<p>Settings › Your data</p>\n").map((h) => h.line)).toEqual([1]);
+  });
+});
+
+describe("pointers (NM-2)", () => {
+  it("a pointer names a place the screens draw, by its first word", () => {
+    expect(badPointers("Set it in Settings › Display.")).toEqual([]);
+    expect(badPointers("Connect in Settings › Accounts, then try again.")).toEqual([]); // Accounts and calendars
+    expect(badPointers("Logged in Settings &gt; Activity")).toEqual([]);
+    expect(badPointers("It opens again in Inbox › Conversations.")).toEqual(["Inbox › Conversations"]);
+    expect(badPointers("Choose your VM first (Settings > You)")).toEqual(["Settings › You"]);
+    expect(badPointers("Ask in Admin › Clients › <client> › Meetings")).toEqual([]);
+    expect(badPointers("Open it from More › Install app. Or More › Downloads.")).toEqual(["More › Downloads"]);
+    expect(badPointers("Backlog › Gantt and Backlog › Roadmap")).toEqual(["Backlog › Roadmap"]);
+  });
+  it("needs the whole name, checks lowercase, and reads a nested segment as part of its path (review)", () => {
+    expect(badPointers("Settings › Backlog › Stale after")).toEqual([]);
+    expect(badPointers("More › Settings › Display")).toEqual([]);
+    expect(badPointers("Inbox › From your team")).toEqual(["Inbox › From your team"]);
+    expect(badPointers("Settings › Your clients")).toEqual(["Settings › Your clients"]);
+    expect(badPointers("Settings > data")).toEqual(["Settings › data"]);
+    expect(badPointers("Settings › Activity's rows and Admin › Clients' scope")).toEqual([]);
+    expect(badPointers("Settings › AI, then Settings › Accounts.")).toEqual([]);
+  });
+  it("leaves pointers built from code alone", () => {
+    expect(badPointers("Settings › ${label}")).toEqual([]);
+    expect(badPointers("Settings ›")).toEqual([]);
+  });
+  it("Outlook's own Settings only where FocusTime tells a person how to publish a calendar", () => {
+    const outlook = "Settings › Calendar › Shared calendars › Publish a calendar";
+    expect(badPointers(outlook, "ui/settings/CalendarLinks.tsx")).toEqual([]);
+    expect(badPointers(outlook, "ui/Day.tsx")).toEqual(["Settings › Calendar"]);
+    for (const a of POINTERS_ALLOWED) expect(a.why.length).toBeGreaterThan(15);
+  });
+  it("reads the Guide and the Technical docs, not the Renamed list or the demo's past script", () => {
+    for (const f of ["ui/guide/content.ts", "docs/technical/security.md", "ui/menu.ts", "sources/not-set-up.ts"]) expect(pointersScanned(f), f).toBe(true);
+    for (const f of ["ui/guide/retired.ts", "docs/demo/script.md", "ui/guide/content.test.ts"]) expect(pointersScanned(f), f).toBe(false);
+  });
+  it("finds the line in code", () => {
+    expect(pointerHits("actions/x.ts", 'const a = 1;\nnotes.push("The conversation opens again in Inbox › Conversations.");\n')).toEqual([{ line: 2, says: ["Inbox › Conversations"] }]);
   });
 });

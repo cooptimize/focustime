@@ -783,7 +783,7 @@ export function TeamsAccessLine() {
   const words: Record<string, string> = {
     ok: "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
     consent: "FocusTime needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
-    signed_out: "Sign in with Microsoft (Settings > You) to use Teams status.",
+    signed_out: "Sign in with Microsoft (Settings › Profile) to use Teams status.",
     unavailable: "Teams can't be reached right now.",
     off: "",
   };

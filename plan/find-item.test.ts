@@ -81,7 +81,7 @@ describe("Find an item", () => {
   it("a new unassigned feature with no parent", () => {
     const lines = text(facts({ todayTodo: false, weekPlanned: false, status: { kind: "absent", featureId: 42 } }, { tier: "feature", type: "Feature", assignee: "nobody", parentId: null, state: "New" }));
     expect(lines).toContain("day:no: Day doesn't show it: Day shows to-dos, and a Feature shows there only as This week's chip once it's on the week's plan.");
-    expect(lines).toContain("week:no: Week's cards don't show it: it isn't on this week's plan. Add it in Week › Plan.");
+    expect(lines).toContain("week:no: Week's cards don't show it: it isn't on this week's plan. Add it to a block on Week.");
     expect(lines).toContain("status:no: Status doesn't show it unless you commented on it this week: Status lists features on this week's plan, open ones assigned to you, and ones you worked on this week.");
   });
 });

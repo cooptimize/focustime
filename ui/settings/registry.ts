@@ -40,7 +40,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "ahead", label: "Backlog", group: "planning", description: "When Backlog calls an item stale, and when a feature reads Stalled or Watch.", old: ["Roadmap", "Ahead"] },
   { id: "clients", label: "Clients", group: "clients", description: "The clients FocusTime follows for you, and how each one shows." },
   { id: "client", label: "Client", group: "clients", description: "How this client shows for you, and what comes from Dataverse and your admin.", parent: "clients" },
-  { id: "chats", label: "Client chats", group: "clients", description: "Your phrases for requests and promises, and how each client chat is read.", old: ["Requests", "Asks"] },
+  { id: "chats", label: "Client chats", group: "clients", description: "Your phrases for what clients ask and what you promise, and how each client chat is read.", old: ["Requests", "Asks"] },
   { id: "connections", label: "Accounts and calendars", group: "connections", description: "Your sources, Microsoft permissions, your VM, Teams and Send feedback.", old: ["Connections", "My VM"] },
   { id: "devops", label: "DevOps", group: "connections", description: "Each client's DevOps read status and your write access.", old: ["DevOps write access", "Enable DevOps writes"], phoneReadOnly: true },
   { id: "ai", label: "AI and assistant", group: "connections", description: "AI for FocusTime, your spend, Break down, and the assistant's history.", old: ["AI"] },
@@ -137,11 +137,11 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "follow-grace", section: "clients", label: "Keep following after focus time ends", old: ["Keep following", "Clients followed"], keywords: ["grace days"] },
   { id: "client-list", section: "clients", label: "Your clients", keywords: ["color", "shown as", "name", "keep following", "house style", "delivery chats"] },
   // Client chats
-  { id: "request-phrases", section: "chats", label: "My request phrases", old: ["Request phrases", "Requests"] },
+  { id: "request-phrases", section: "chats", label: "My asking phrases", old: ["My request phrases", "Request phrases", "Requests"] },
   { id: "ack-phrases", section: "chats", label: "My acknowledgements", old: ["Acknowledgements"] },
   { id: "promise-phrases", section: "chats", label: "My promise phrases", old: ["Promise phrases"] },
   { id: "team-phrases", section: "chats", label: "Team phrases" },
-  { id: "chats-read", section: "chats", label: "Client chats read for requests", keywords: ["polling", "reconnect", "delivery chats"] },
+  { id: "chats-read", section: "chats", label: "Client chats FocusTime reads", old: ["Client chats read for requests", "Delivery chats"], keywords: ["polling", "reconnect", "delivery chats"] },
   // Accounts and calendars
   { id: "sources", section: "connections", label: "Sources", keywords: ["dataverse", "outlook", "google", "calendar", "connect", "reconnect", "disconnect", "retry"] },
   { id: "calendar-links", section: "connections", label: "Calendars added by link", old: ["Add a calendar by link"], keywords: ["ics", "ical", "webcal", "subscribe", "icloud", "apple", "school", "busy only", "replace link"] },

@@ -36,7 +36,7 @@ import { NO_CLIENT, type AiErrorKind, type JsonSchema } from "../ai/types.ts";
 import type { AssistantProposalRow, PlanStore } from "../store/plan-store.ts";
 import type { Pick } from "../plan/types.ts";
 import type { PickerPersonView } from "../plan/team-types.ts";
-import { BUTTON_ONLY, ITEM_TOOLS, MOVE_TOOLS, PICKS_TOOLS, PICK_TOOLS, PROPOSE_TOOLS, SUGGEST_TOOLS, TOOLS, TOOL_NAMES, isTool, type ToolName } from "./allowlist.ts";
+import { ITEM_TOOLS, offered, MOVE_TOOLS, PICKS_TOOLS, PICK_TOOLS, PROPOSE_TOOLS, SUGGEST_TOOLS, TOOLS, TOOL_NAMES, isTool, type ToolName } from "./allowlist.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { nextBlockFor, type BlockAt } from "../plan/suggest.ts";
 import { closeLoopRead, commitmentsRead, dayRead, findItem, gapsRead, inboxRead, itemCard, itemRead, linkSearchRead, sendsRead, statusRead, todayRead, type FoundItem, type ReadDeps, type ReadResult } from "./reads.ts";
@@ -76,13 +76,13 @@ export function asksToConfirm(text: string): "day" | "week" | null {
 /** AS-2: FocusTime's own words, in both rounds' fixed instructions. */
 export const GLOSSARY = `FocusTime's words: the tabs are Day, Week, Backlog (called Ahead before), Status and Inbox. Week is the week grid of blocks. Day is one day's blocks, any date. A block's panel opens beside either one from "+ Add" or a click on the block: what's on the block, its meetings, and one box to add work ("Add work", "Details", "Plan the week", "Plan today" and "the Board" are old names for it). Taking a to-do off the plan puts it back to not placed; dropping it marks it dropped. Status is Monday's status report; "write my status updates" opens it. A block is a half-day of focus time for one client: AM is the morning, PM the afternoon. A to-do (code name pick; people say either, and both mean the same) is a planned piece of work on a block. Friday is the catch-up day. PTO is a day off. Every feature on the week counts the same. A send puts a feature or story on a teammate's week. A promise is something I owe someone (Inbox › Promises); In progress is a conversation or promise linked to an item. Nothing is confirmed: a day's or a week's plan is simply what's on it, and it changes freely. Backlog has two views, Grid and Gantt, and filters: Needs attention (items missing stories, a target date, an owner or a size, or stale; called Readiness, Gaps and Fix next before) and one level as a list (each client's backlog order; called the Backlog mode before). Stale is an open item unchanged for weeks. "Complete", "done", "close" and "finish" an item all mean its process's done state.`;
 
-const examples = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
+const examples = TOOL_NAMES.filter(offered).map((t) => `${t}: ${TOOLS[t].examples.map((e) => `"${e}"`).join(" | ")}`).join("\n");
 
 export const INTENT_INSTRUCTIONS = `You route requests in FocusTime, a planning app for consultants. Read the person's request and the screen they are on, and name the tools the request needs, in order, at most 4. Only name a tool the person's own words ask for: a move, drop, keep, add, change, send, comment, description, update, unlink, capture or plan_deployment only when they ask for that. If they ask to close a loop or a follow-up, name close_loop. If the request isn't something these tools do, name none.
 Words: a to-do is a planned piece of work on a half-day block (code name pick). People may say pick or to-do; both mean the same, and the *_pick and *_picks tools act on to-dos.
 For a move of to-dos by day or block ("move those to Friday", "everything from Wednesday PM to Friday AM", "push today to tomorrow"), name move_plan, even when the to-dos are with different clients. For two or three changes to one item in one request (done and a comment, a date), name item_update.
 ${GLOSSARY}
-Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (one list of my Inbox: chats, the conversations that need a DevOps item; promises; captures), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), add_to_week, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, inbox_seen, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
+Tools: today (what's next, due today, due tonight), day (what I did or planned on a day), item (a work item's state, owner, dates, children), gaps (features with readiness gaps), commitments (what someone committed to in a conversation), sends (my sends and their states), status (Monday's status report: writing my status updates, or finding the feature an update goes on; with comment when they give the update's words), inbox (one list of my Inbox: chats, the conversations that need a DevOps item; promises; captures), link_search (items to link a conversation or promise to), move_pick, drop_pick, keep_pick, move_picks (several to-dos at once, by id), move_plan (to-dos by day or block), close_day (close out a day: to-dos done, the rest moved on, the day closed out), add_to_week, ahead_change (start, target, size or owner of an item), send (send work to a teammate's week), comment (a comment on a DevOps item), description (a new description for a DevOps item), item_update (done, a comment and a target date on one item), unlink, link_comment, capture, close_loop, plan_deployment (plan a deployment, release or go-live with a time window).
 Questions (AS-3): when the request asks something rather than asking for a change, set ask and name no tools: topic is plan_check (what to look out for, planning a period, risks, "anything I should know"), capabilities (what you can help with, what you can do here), agenda (what's on a day or period, my plate, my schedule), promises (promises late or due; lateOnly true when it asks only about late ones), waiting (what I'm waiting on), readiness (what's not ready, gaps, missing stories, dates or owners for a period or a client's work), deployments (deployments, releases, go-lives, after-hours or weekend work), status_updates (features that still need an update for Monday's status report), done (what I got done or finished), calls (client calls or meeting proposals to review), standards (what Cooptimize's development standards say: naming, formatting or design rules for SQL, DAX, semantic models or reports, such as "what's our standard for fact table naming?" or "how should DAX measures be formatted?"), items (about named features, stories or items: what's under a feature, their state), general (any other question about my plan or FocusTime). period is today, tomorrow, this_week, next_week, weekend, last_week, or day with date (YYYY-MM-DD; null otherwise); this_week when it doesn't say. A question about one item by #id may name item instead; who committed to something, commitments; my sends, sends. A request for a change sets ask to null.
 followUp is true when the request continues or corrects the earlier request shown ("those", "they", "it", "that feature", "I meant", "no,", "can't you", or a missing detail); then route it as the two together would be. Otherwise false.
 How people ask:
@@ -111,7 +111,7 @@ export const ASK_SCHEMA: JsonSchema = {
     { type: "object", properties: { topic: { type: "string", enum: [...TOPICS] }, period: { type: "string", enum: [...PERIODS] }, date: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Only for period day" }, lateOnly: { type: "boolean" } }, required: ["topic", "period", "date", "lateOnly"], additionalProperties: false },
   ],
 };
-export const INTENT_SCHEMA: JsonSchema = { type: "object", properties: { tools: { type: "array", maxItems: 4, items: { type: "string", enum: [...TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)), "none"] } }, ask: ASK_SCHEMA, followUp: { type: "boolean" } }, required: ["tools", "ask", "followUp"], additionalProperties: false };
+export const INTENT_SCHEMA: JsonSchema = { type: "object", properties: { tools: { type: "array", maxItems: 4, items: { type: "string", enum: [...TOOL_NAMES.filter(offered), "none"] } }, ask: ASK_SCHEMA, followUp: { type: "boolean" } }, required: ["tools", "ask", "followUp"], additionalProperties: false };
 export type Intent = { tools: string[]; ask: { topic: Topic; period: PeriodKind; date: string | null; lateOnly: boolean } | null; followUp: boolean };
 
 /** AS-3: a general question about one client, answered from that client's context only (quoted data). */
@@ -497,14 +497,14 @@ export function createAssistant(env: AssistantEnv) {
     const said = followUp && prior ? `Earlier I asked:\n${prior.request}\nNow I say:\n${text}` : text;
 
     // Reads are always allowed; a proposal only when the intent round named it from my words.
-    const allowed = TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t) && (TOOLS[t].kind === "read" || asked.includes(t)));
+    const allowed = TOOL_NAMES.filter((t) => offered(t) && (TOOLS[t].kind === "read" || asked.includes(t)));
     const known: Known = { items: new Set<number>([...idsIn(text), ...(context.itemId ? [context.itemId] : []), ...matchedItems.map((i) => i.id), ...matched.map((m) => m.pick.itemId).filter((x): x is number => x !== null), ...(o.itemIds ?? [])]), picks: new Set<number>(matched.map((m) => m.pick.id)), keys: new Set(), conversations: new Set(), promises: new Set() };
     const cards: Card[] = [];
     const proposals: Proposal[] = [];
     const x: Exec = { turnId, text: request, client, cards, proposals, known, context, matched, question: null };
     const exec = executor(x);
     const answer = await env.ai.runTools<{ reply: string }>({ name: "assistant.answer", client: aiClient, instructions: ANSWER_INSTRUCTIONS }, `${screen}\n${found}The person's request:\n${said}`, ANSWER_SCHEMA, {
-      tools: TOOL_NAMES.filter((t) => !BUTTON_ONLY.includes(t)).map((t) => TOOLS[t].spec),
+      tools: TOOL_NAMES.filter(offered).map((t) => TOOLS[t].spec),
       allowed,
       execute: exec,
       maxRounds: 4,
@@ -856,7 +856,7 @@ export function createAssistant(env: AssistantEnv) {
         const f = await item(Number(args.itemId), client);
         const weekStart = mondayOf(typeof args.weekStart === "string" ? args.weekStart : today());
         const preview = plain("Add to the week", `#${f.item.id} ${f.item.title}`, [{ label: `Week of ${dayWords(weekStart)}`, before: "Not on it", after: "On it" }]);
-        return { view: base("weekplan.add", f.clientKey, `Add #${f.item.id} to the week`, preview, "Your teammates on this client, in Team"), held: { tool, args, run: { action: "weekplan.add", input: { weekStart, clientKey: f.clientKey, itemId: f.item.id } } }, snapshot: null };
+        return { view: base("weekplan.add", f.clientKey, `Add #${f.item.id} to the week`, preview, "Only you"), held: { tool, args, run: { action: "weekplan.add", input: { weekStart, clientKey: f.clientKey, itemId: f.item.id } } }, snapshot: null };
       }
       case "ahead_change": {
         const f = await item(Number(args.itemId), client);
@@ -892,7 +892,7 @@ export function createAssistant(env: AssistantEnv) {
         const note = typeof args.note === "string" && args.note.trim() ? args.note.trim().slice(0, 500) : null;
         const preview = plain("Send to someone's week", `#${f.item.id} ${f.item.title}`, [{ label: "To", before: null, after: `${who.name}, ${kind === "must" ? "Must" : "Suggested"}, week of ${dayWords(weekStart)}` }, ...(note ? [{ label: "Note", before: null, after: note }] : [])]);
         const input = { clientKey: f.clientKey, itemId: f.item.id, level, title: f.item.title, itemType: f.item.type, url: f.item.url, parentId: f.item.parentId, weekStart, kind, toId: who.id, ...(note ? { note } : {}) };
-        return { view: base("send.create", f.clientKey, `Send #${f.item.id} to ${who.name}`, preview, `${who.name} sees it in From your team; the client's leads see it in Team`), held: { tool, args, run: { action: "send.create", input } }, snapshot: { toId: who.id } };
+        return { view: base("send.create", f.clientKey, `Send #${f.item.id} to ${who.name}`, preview, `${who.name} sees it in To place, in a block's panel on Week`), held: { tool, args, run: { action: "send.create", input } }, snapshot: { toId: who.id } };
       }
       case "comment":
       case "description": {

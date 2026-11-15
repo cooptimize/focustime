@@ -79,6 +79,13 @@ export const ITEM_TOOLS: readonly ToolName[] = ["add_to_week", "ahead_change", "
 export const PICK_TOOLS: readonly ToolName[] = ["move_pick", "drop_pick", "keep_pick", "item_done", "item_undo", "wrap_up"];
 /** PK-1: tools only a button proposes (propose()), never given to the model. */
 export const BUTTON_ONLY: readonly ToolName[] = ["item_done", "item_undo", "write_undo", "wrap_up"];
+/**
+ * NM-2: tools whose button the app no longer has (inbox_seen: the Inbox's New marks went with IB-4). Never offered to
+ * the model, like BUTTON_ONLY; the tool and its action stay (ui/menu.ts HOLLOW hides the command too).
+ */
+export const NOT_OFFERED: readonly ToolName[] = ["inbox_seen"];
+/** Neither offered to the model nor named in its examples. */
+export const offered = (t: ToolName) => !BUTTON_ONLY.includes(t) && !NOT_OFFERED.includes(t);
 /** TB-2: tools whose arguments carry several pick ids (each must come from a read, like PICK_TOOLS' one). */
 export const PICKS_TOOLS: readonly ToolName[] = ["move_picks", "close_day"];
 /**

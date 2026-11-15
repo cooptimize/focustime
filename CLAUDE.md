@@ -266,6 +266,8 @@ Older names still found in decisions, specs and the command menu, with what they
 | Pick | To-do |
 | Request, Ask | Urgent request |
 | Delivery chats, Delivery team chat, Customer collaboration chat | Client chats, shown Internal or With the client |
+| Admin › Conversations | Admin › Client chats |
+| Request phrases | Asking phrases |
 | Needs help from | Ask to collaborate |
 | Sort later | Decide later |
 | Draft stories | Break down |

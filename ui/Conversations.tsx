@@ -224,7 +224,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
               Turn on DevOps writes for {c.clientName} to create it. Nothing is sent until you do.{" "}
               {writes && (
                 <button type="button" className="linkish" onClick={() => writes.enable(c.clientKey)}>
-                  Settings › Clients
+                  Settings › DevOps
                 </button>
               )}
             </p>
