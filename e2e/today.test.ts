@@ -1,7 +1,7 @@
 // U2, WD-2: Day in three states (browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM). Behavior only: one Start
 // focus (on the next to-do's row, on Week's block card), the chips line only when needed, risk with its reason,
 // Check-in's counts and one move per to-do, fit never in the risk color, Close out's panel (no to-do twice, dropped as
-// a count), Lumen absent, and the word count guard. The 3840 day timeline went in WD-2 (docs/ux/wd2/inventory.md).
+// a count) and the word count guard. The 3840 day timeline went in WD-2 (docs/ux/wd2/inventory.md).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -164,7 +164,7 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     await page.close();
   }, T);
 
-  it("Close out: a panel over Today; no pick twice, a to-do taken off today is gone (CF-1); no Lumen; Done closes the day", async () => {
+  it("Close out: a panel over Today; no pick twice, a to-do taken off today is gone (CF-1); Done closes the day", async () => {
     const { page, errors } = await freshPage(h);
     const ids = await seed(page);
     await call(page, "pick.remove", { id: ids[ids.length - 1] });
@@ -178,7 +178,6 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     const titles = await page.locator("main .pick-row .pr-title").allTextContents();
     expect(new Set(titles).size).toBe(titles.length);
     expect(titles).not.toContain("Review the export spec with Dana");
-    await expect(page.locator("main .lumen, main [data-lumen]").count()).resolves.toBe(0);
     await expect(panel.locator(".cap-box").count()).resolves.toBe(0);
     await panel.locator(".done-btn").click();
     await expect.poll(async () => (await call(page, "closeout.load", { date: D })).data.closedOutAt, { timeout: 10_000 }).not.toBeNull();

@@ -140,7 +140,8 @@
   --p-client-7: #8a6fb0;
   --p-client-8: #c06a3a;
 
-  /* Brand (step 17.5, docs/design/brand.md): the mark's AM and PM bars, the beam, the ghost lines and Lumen's highlight. */
+  /* Brand (step 17.5, docs/design/brand.md): the week mark's AM and PM bars, its hollow Mon AM (the accent) and the ghost
+     line (BR-1: the week mark is the only mark; ui/brand/boot.css repeats these colors for the loader). */
   --p-brand-am-d: #1e3a55;
   --p-brand-am-l: #7fa6c9;
   --p-brand-pm-d: #4fa3dd;
@@ -230,8 +231,6 @@
   --brand-pm: var(--p-brand-pm-d);
   --brand-accent: var(--p-brand-accent-d);
   --brand-ghost: var(--p-brand-ghost-d);
-  --mascot-highlight: var(--p-lime-400);
-  --brand-beam-blend: screen;
   color-scheme: dark;
 }
 
@@ -309,8 +308,6 @@
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
   --brand-ghost: var(--p-brand-ghost-l);
-  --mascot-highlight: var(--p-lime-400);
-  --brand-beam-blend: multiply;
   color-scheme: light;
 }
 
@@ -384,8 +381,6 @@
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
   --brand-ghost: var(--p-brand-ghost-l);
-  --mascot-highlight: var(--p-lime-400);
-  --brand-beam-blend: multiply;
   color-scheme: light;
 }
 
@@ -437,8 +432,6 @@
     --brand-pm: var(--p-brand-pm-d);
     --brand-accent: var(--p-brand-accent-d);
     --brand-ghost: var(--p-brand-ghost-d);
-    --mascot-highlight: var(--p-lime-400);
-    --brand-beam-blend: screen;
     color-scheme: dark;
   }
 }

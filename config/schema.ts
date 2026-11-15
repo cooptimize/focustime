@@ -100,7 +100,7 @@ export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimi
 /** Text size (U5, D401): three presets off one base, not a slider. Default is 11/12/13/15 px, Large 13/14/15/17, Larger 15/16/17/19. */
 export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
-/** reduceMotion (step 17.5): no sweep, unroll, hop or bob; the still pose shows and open and close cut straight to the result. */
+/** reduceMotion (step 17.5, BR-1): the loader's mark holds still and the app appears with no movement. */
 /** showPersonal (U5.1, D408): personal (Google) events shown on Week and Today; hidden ones still count in risk and free time. */
 /** showCatchUpDay, showWeekendDays (WK-5): whether Week shows the catch-up day and weekend days, by the day's kind; the person's own, both on by default. */
 /** IB-1: the Inbox's remembered view, clients (none: all) and grouping. */

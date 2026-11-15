@@ -1,5 +1,7 @@
 // BR-1: the opening (the loader is the week mark alone, from the first paint) and the brand's places (browser, demo
 // mode, clock pinned to Mon Nov 2, 9:30 AM). Timing, words, place, motion and what a key does; no colors or curves.
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BrowserContext, Page, Route } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -345,4 +347,14 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await expect.poll(async () => (await call(page, "ui.first_launch", {})).data?.first).toBe(false);
     await ctx.close();
   }, T);
+
+  it("the built app has nothing of Lumen: no element, asset, style, token or word for it", () => {
+    const dist = process.env.FOCUSTIME_E2E_DIST;
+    if (!dist || dist === "dev") return; // a Vite run has no build to search
+    const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
+    const text = walk(dist).filter((f) => /\.(js|css|html|svg|json|webmanifest)$/.test(f));
+    expect(text.length).toBeGreaterThan(5);
+    const hits = text.filter((f) => /lumen|mascot|\bbeam|--lime\b|headlight|bent-mark|mark-bent|lockup-horizontal|data-lumen|lumen-loading|unroll/i.test(readFileSync(f, "utf8")));
+    expect(hits).toEqual([]);
+  });
 });

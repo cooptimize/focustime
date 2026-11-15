@@ -2094,7 +2094,7 @@ export function App() {
           loading={loading}
           onRefresh={() => void refreshAllRef.current()}
           onConnect={(src) => {
-            // Step 17.5: a calendar that was down and reconnects here says so in one line (BR-1: plain, no Lumen).
+            // Step 17.5: a calendar that was down and reconnects here says so in one line (BR-1: a plain line).
             const wasDown = data.sources.some((s) => s.source === src && s.status !== "ok");
             void connect(src).then((ok) => {
               if (!ok || !wasDown) return;

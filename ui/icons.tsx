@@ -2,7 +2,7 @@
 // from one source (Lucide, ISC; lucide-react, only the icons named below end up in the bundle). 16 px at the Default
 // text size and scaled with it (--icon), a 1.5 px stroke at every size, rounded ends, the color of the text beside it.
 // Not here on purpose: the DevOps type icons (ui/TypeIcon.tsx, the project's own shapes and colors), the brand marks
-// and Lumen (ui/brand/), and a person's photo.
+// (ui/brand/), and a person's photo.
 import {
   Activity, Archive, Box, Calendar, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Bell, Bold, BookOpen, CalendarClock, CalendarDays, CalendarOff, CalendarPlus,
   ChartColumn, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleHelp, Clock, Code, Columns4, Command, Copy, CornerDownLeft, Database, Download,

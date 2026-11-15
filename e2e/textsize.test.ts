@@ -33,7 +33,7 @@ const offScale = (page: Page) =>
     for (const e of document.querySelectorAll("body *")) {
       const r = e.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0) || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
-      if (e.closest(".brand-stage, svg, kbd, .focus-count, .avatar-initials, [class^='brand-'], [class*=' brand-'], .lumen")) continue;
+      if (e.closest(".brand-stage, svg, kbd, .focus-count, .avatar-initials, [class^='brand-'], [class*=' brand-']")) continue;
       if (![...e.childNodes].some((x) => x.nodeType === 3 && (x.textContent ?? "").trim())) continue;
       const cs = getComputedStyle(e);
       const what = `${cs.fontSize}/${cs.fontWeight} ${e.tagName.toLowerCase()}.${e.className} "${(e.textContent ?? "").trim().slice(0, 24)}"`;

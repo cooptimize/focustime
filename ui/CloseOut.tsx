@@ -73,8 +73,8 @@ export function CloseOutBlock({ slot, data, picks, tickable, ended, carryTo, nam
 
 /**
  * Close out as a side panel (U2): the numbers, where you left off, DevOps updates owed and follow-ups due, then Done.
- * Done closes the day exactly as before (closeout.commit) and ends on Day with its done line (BR-1: no reverse unroll
- * or all-done moment after it). Dropped picks are a count only.
+ * Done closes the day exactly as before (closeout.commit) and ends on Day with its done line (BR-1: nothing plays
+ * after it). Dropped picks are a count only.
  */
 export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onDate, onLeave, onInbox, onCaptures, act, onShown }: {
   date: IsoDate;

@@ -26,7 +26,7 @@ const styles = (page: Page) =>
       const r = e.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0) || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
       if (r.bottom < 0 || r.top > innerHeight) continue;
-      if (e.closest(".brand-stage, svg, kbd, .focus-count, .avatar-initials, [class^='brand-'], [class*=' brand-'], .lumen")) continue;
+      if (e.closest(".brand-stage, svg, kbd, .focus-count, .avatar-initials, [class^='brand-'], [class*=' brand-']")) continue;
       if (![...e.childNodes].some((x) => x.nodeType === 3 && (x.textContent ?? "").trim())) continue;
       const cs = getComputedStyle(e);
       seen.add(`${cs.fontSize}/${cs.fontWeight}${cs.textTransform === "uppercase" ? "/caps" : ""}`);
