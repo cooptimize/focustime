@@ -1251,7 +1251,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
-    // RB-1: Code opens the panel; its reads are the panel's own and never listed (commandList hides them).
+    // RB-1, RB-6: Code opens the Code tab (6, its shortcut in the registry); its reads are the page's own and never listed (commandList hides them).
     case "code.clients": return env.showCode ? { run: () => env.showCode!(null) } : { disabled: "Sign in to read clients' code" };
     case "code.repos":
     case "code.folder":

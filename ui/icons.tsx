@@ -6,7 +6,7 @@
 import {
   Activity, Archive, Box, Calendar, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Bell, Bold, BookOpen, CalendarClock, CalendarDays, CalendarOff, CalendarPlus,
   ChartColumn, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleHelp, Clock, Code, Columns4, Command, Copy, CornerDownLeft, Database, Download,
-  Ellipsis, ExternalLink, Eye, EyeOff, File, FileText, Flag, Folder, FolderGit2, GanttChart, GripVertical, Handshake, History, Image, Inbox, Info, Italic,
+  Ellipsis, ExternalLink, Eye, EyeOff, File, FileCode, FileText, Flag, Folder, FolderGit2, GanttChart, GripVertical, Handshake, History, Image, Inbox, Info, Italic,
   Keyboard, Layers, LayoutGrid, Link, List, ListFilter, ListOrdered, ListTree, LogOut, MessageCircle, MessageSquareText, MessagesSquare, Mic, Minus, Monitor, Move, NotebookText,
   Palette, Paperclip, Pause, Pencil, Phone, Pin, Play, Plug, Plus, RefreshCw, Repeat, Ruler, Search, Send, Shield, SlidersHorizontal, Smartphone, Sparkles, Split,
   Square, SquarePlus, Star, StickyNote, Sun, Table2, Target, Timer, Trash2, TreePalm, TriangleAlert, Type, Undo2, Upload, User, UserPlus, Users, Video, Volume2, Waves, Workflow, WrapText, X,
@@ -32,7 +32,7 @@ const ICONS = {
   holiday: CalendarOff, catchup: History, standing: Repeat, risk: TriangleAlert, folder: Folder, file: File, repo: FolderGit2, people: Users,
   flag: Flag, priority: Star, timer: Timer, size: Ruler, schedule: CalendarClock, "add-date": CalendarPlus, grid: LayoutGrid, gantt: GanttChart, archive: Archive, calendar: Calendar, deploy: Upload,
   // RB-2: what a thing in a client's code is (Code's By kind and Search names)
-  report: ChartColumn, model: Layers, table: Table2, pipeline: Workflow, notebook: NotebookText, dataflow: Split, lake: Waves, sql: Database, "fabric-item": Box,
+  report: ChartColumn, model: Layers, table: Table2, pipeline: Workflow, notebook: NotebookText, dataflow: Split, lake: Waves, sql: Database, "sql-script": FileCode, "fabric-item": Box,
   // Places in menus
   guide: BookOpen, docs: FileText, keys: Keyboard, commands: Command, feedback: MessageSquareText, about: Info, help: CircleHelp, notices: Bell,
   "sign-out": LogOut, theme: Palette, "text-size": Type, sound: Volume2, data: Database, activity: Activity, connect: Plug, admin: Shield, phone: Smartphone,

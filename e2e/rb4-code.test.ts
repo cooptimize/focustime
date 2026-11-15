@@ -12,7 +12,7 @@ import { SHOTS } from "./shots.ts";
 
 let h: Harness;
 const T = 180_000;
-const panel = (page: Page) => page.locator("main.code-panel");
+const panel = (page: Page) => page.locator("[data-code-page]");
 const hash = (page: Page) => page.evaluate(() => location.hash);
 const theme = async (page: Page, t: "dark" | "light") => {
   await page.emulateMedia({ colorScheme: t });
@@ -63,8 +63,10 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await theme(page, "dark");
     const sent = watchActions(page);
     await go(page, "#/code/Northwind");
-    const box = panel(page).getByRole("searchbox", { name: "Search names" });
-    expect(await panel(page).locator("[data-code-search-note]").textContent()).toBe("Searching names. To find where a table or column is used, switch to Inside files.");
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
+    // RB-6: the choices open once the box has focus.
+    await box.click();
+    expect(await panel(page).locator("[data-code-search-note]").textContent()).toBe("Searches names only. Measures, columns and report pages live inside files: switch to Inside files for those.");
     expect(await panel(page).getByRole("group", { name: "What to search" }).locator("[aria-pressed=true]").textContent()).toBe("Names");
     await box.fill("SalesLine");
     await box.press("Enter");
@@ -73,12 +75,12 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(await hits(page)).toEqual(["SalesLine", "usp_LoadSalesLine"]);
     expect(await results.locator('[data-code-hit="SalesLine"] .cv-thing-detail').textContent()).toBe("Table in fact · Gold warehouse · sales-analytics");
     await shots(page, "01-table-in-warehouse-by-name");
-    // The SQL kind keeps it.
-    await panel(page).getByLabel("Kind").selectOption("sql");
+    // RB-6: Databases keeps it (the warehouse's group, and its objects'); SQL scripts, for loose SQL only, doesn't.
+    await panel(page).getByLabel("Kind").selectOption("database");
     expect(await hits(page)).toEqual(["SalesLine", "usp_LoadSalesLine"]);
-    // Review 1: so does the warehouse's own kind, and a kind it isn't says so with a way out.
-    await panel(page).getByLabel("Kind").selectOption("lake");
-    expect(await hits(page)).toEqual(["SalesLine", "usp_LoadSalesLine"]);
+    // Review 1: a kind it isn't says so with a way out.
+    await panel(page).getByLabel("Kind").selectOption("script");
+    expect(await results.locator("[data-code-progress]").textContent()).toBe("No name of that kind matches. Try All kinds.");
     await panel(page).getByLabel("Kind").selectOption("report");
     expect(await results.locator("[data-code-progress]").textContent()).toBe("No name of that kind matches. Try All kinds.");
     await panel(page).getByLabel("Kind").selectOption("");
@@ -101,18 +103,18 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(sent.filter((s) => /salesline|pbism|roles/i.test(s.body))).toEqual([]);
     expect(sent.filter((s) => s.action === "code.search").map((s) => s.body)).toEqual(Array.from({ length: 4 }, () => JSON.stringify({ action: "code.search", input: { clientKey: "Northwind" } })));
 
-    // By kind: the warehouse opens to its tables, views and procedures, and they also count under SQL.
+    // By kind: the warehouse, under Databases (RB-6), opens to its tables, views and procedures, listed nowhere else.
     await go(page, "#/code/Northwind/kinds");
     await panel(page).locator("[data-code-kinds]").waitFor();
-    const lake = panel(page).locator('[data-code-kind="lake"]');
+    const lake = panel(page).locator('[data-code-kind="database"]');
     await lake.getByRole("button", { name: "Inside Gold" }).click();
     // RB-5: what is inside is a tree, by schema then type; the table's row sits under fact › Tables.
-    expect(await lake.locator("[data-sql-folder]").evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toEqual(["dim", "fact", "rpt", "stg", "No schema"]);
+    await expect.poll(() => lake.locator("[data-sql-folder]").evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-folder")))).toEqual(["dim", "fact", "rpt", "stg", "No schema"]);
     await lake.locator('[data-sql-folder="fact"]').click();
     await lake.locator('[data-sql-folder="Tables"]').click();
     expect(await lake.locator("[data-code-table]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-table")))).toEqual(["Returns", "SalesLine"]);
-    const sql = panel(page).locator('[data-code-kind="sql"]');
-    expect(await sql.locator('[data-sql-folder="Gold warehouse · sales-analytics"] .cv-kind-count').textContent()).toBe("22");
+    expect(await lake.locator('[data-code-thing="Gold"] .cv-thing-detail').textContent()).toBe("Warehouse · 22 objects · sales-analytics");
+    expect(await panel(page).locator('[data-code-kinds] [data-code-table="SalesLine"]').count()).toBe(1);
     // A model still opens to its tables.
     await panel(page).locator('[data-code-kind="model"]').getByRole("button", { name: "Tables of Sales" }).click();
     expect(await panel(page).locator('[data-code-kind="model"] [data-code-table]').evaluateAll((els) => els.map((e) => e.getAttribute("data-code-table")))).toEqual(["Date", "Sales", "Store"]);
@@ -133,11 +135,11 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await page.keyboard.press("Enter");
     await panel(page).waitFor();
     expect(await hash(page)).toBe("#/code/~inside");
-    const box = panel(page).getByRole("searchbox", { name: "Search inside files" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.waitFor();
     await page.waitForFunction(() => document.activeElement?.hasAttribute("data-code-search"));
     expect(await panel(page).getByRole("group", { name: "What to search" }).locator("[aria-pressed=true]").textContent()).toBe("Inside files");
-    expect(await panel(page).locator("[data-code-search-note]").textContent()).toContain('as whole words. "A phrase in quotes", a * at the end of a word, and AND, OR and NOT in capitals work too.');
+    expect(await panel(page).locator("[data-code-search-note]").textContent()).toBe("Each client's DevOps is asked which files hold the words. FocusTime reads no file to search it.");
     // Nothing is asked while typing.
     await page.keyboard.type("Watermarks");
     await page.waitForTimeout(300);
@@ -188,9 +190,9 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(await panel(page).locator("[data-code-match-at]").textContent()).toBe("1 of 1");
     await panel(page).locator("[data-code-back-to-results]").click();
     await results.waitFor();
-    // A warehouse's files pass the SQL kind and the warehouse's.
-    await panel(page).getByLabel("Kind").selectOption("lake");
-    expect(await hits(page)).toEqual(["usp_LoadSalesLine.sql"]);
+    // A warehouse's files pass the Databases kind (RB-6), and so do the SQL project's.
+    await panel(page).getByLabel("Kind").selectOption("database");
+    expect(await hits(page)).toEqual(["usp_LoadSalesLine.sql", "Orders.sql", "vSales.sql", "usp_LoadOrders.sql"]);
     await panel(page).getByLabel("Kind").selectOption("");
     // A quote left open is refused in plain words, never "no file".
     await box.fill('"Orders');
@@ -225,15 +227,16 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     const sent = watchActions(page);
     await go(page, "#/code/Northwind");
     // Inside a client the search starts on This client; the switch moves it to Inside files.
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
+    await box.click();
     await panel(page).getByRole("group", { name: "What to search" }).getByRole("button", { name: "Inside files" }).click();
-    const box = panel(page).getByRole("searchbox", { name: "Search inside files" });
     await box.fill("Orders");
-    await panel(page).getByLabel("Kind").selectOption("sql");
+    await panel(page).getByLabel("Kind").selectOption("database");
     await box.press("Enter");
     const results = panel(page).locator("[data-code-inside-results]");
     await results.locator("[data-code-hit]").first().waitFor();
     expect(await hash(page)).toBe("#/code/Northwind/inside");
-    expect(sent.filter((s) => s.action === "code.inside").map((s) => s.body)).toEqual([JSON.stringify({ action: "code.inside", input: { clientKey: "Northwind", words: "Orders", kind: "sql" } })]);
+    expect(sent.filter((s) => s.action === "code.inside").map((s) => s.body)).toEqual([JSON.stringify({ action: "code.inside", input: { clientKey: "Northwind", words: "Orders", kind: "database" } })]);
     expect(await results.locator("[data-code-progress]").textContent()).toBe("4 files");
     expect(await hits(page)).toEqual(["usp_LoadSalesLine.sql", "Orders.sql", "vSales.sql", "usp_LoadOrders.sql"]);
     // Nothing of a file has been asked for yet.
@@ -291,7 +294,7 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
   it("an admin sees Searched inside files and the opened file in Code views, with a client and never the words", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/code/Atlas/inside");
-    const box = panel(page).getByRole("searchbox", { name: "Search inside files" });
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.fill("zzqxnothing OR Watermarks");
     await box.press("Enter");
     await panel(page).locator('[data-code-hit="usp_SetWatermark.sql"]').click();
@@ -310,21 +313,22 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await theme(page, "dark");
     await go(page, "#/code/~search");
+    const box = panel(page).getByRole("searchbox", { name: "Search code" });
+    await box.click();
     await panel(page).getByRole("group", { name: "What to search" }).getByRole("button", { name: "Inside files" }).click();
     expect(await hash(page)).toBe("#/code/~inside");
-    const box = panel(page).getByRole("searchbox", { name: "Search inside files" });
     await box.fill("Watermarks");
     await box.press("Enter");
     await panel(page).locator('[data-code-result-client="Tailspin"]').waitFor();
     await page.waitForFunction(() => !document.querySelector("[data-code-progress]")?.textContent?.startsWith("Asked"));
     expect(await noSidewaysScroll(page)).toBe(true);
-    expect(await panel(page).locator(".cv-search-page [data-code-log-line]").textContent()).toContain("searching are logged too");
+    expect(await panel(page).locator("[data-code-results-page] [data-code-log-line]").textContent()).toContain("Never the words");
     await shots(page, "06-phone-inside-files");
     await panel(page).locator('[data-code-result-client="Northwind"] [data-code-hit="usp_LoadOrders.sql"]').click();
     await panel(page).locator(".cv-file-view").waitFor();
     expect(await panel(page).locator("[data-code-match-at]").textContent()).toBe("1 of 1");
     expect(await noSidewaysScroll(page)).toBe(true);
-    await panel(page).getByRole("button", { name: /Results/ }).first().click();
+    await panel(page).getByRole("button", { name: /Back to results/ }).first().click();
     await panel(page).locator('[data-code-result-client="Northwind"]').waitFor();
     expect(await hash(page)).toBe("#/code/~inside");
     expect(errors).toEqual([]);

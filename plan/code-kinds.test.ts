@@ -1,6 +1,6 @@
 // RB-2: a repo's things by kind, from invented file paths only. Each layout in the documentation, and the odd cases.
 import { describe, expect, it } from "vitest";
-import { groupThings, KIND_GROUPS, markMatches, searchThings, shareCap, thingsOf, type Thing } from "./code-kinds.ts";
+import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, shareCap, sortRepo, thingsOf, type Thing } from "./code-kinds.ts";
 
 const pick = (t: Thing[], name: string) => t.find((x) => x.name === name);
 
@@ -32,7 +32,8 @@ describe("Fabric items", () => {
     expect(pick(things, "Tidy up")).toMatchObject({ kind: "notebook", detail: "Notebook", file: "/ws/Tidy up.Notebook/notebook-content.py" });
     expect(pick(things, "Nightly load")).toMatchObject({ kind: "pipeline", detail: "Pipeline", file: "/ws/Nightly load.DataPipeline/pipeline-content.json" });
     expect(pick(things, "Bronze")).toMatchObject({ kind: "lake", detail: "Lakehouse" });
-    expect(pick(things, "Gold")).toMatchObject({ kind: "lake", detail: "Warehouse" });
+    // RB-6: a warehouse is a database.
+    expect(pick(things, "Gold")).toMatchObject({ kind: "database", detail: "Warehouse" });
     expect(pick(things, "Stores")).toMatchObject({ kind: "dataflow", detail: "Dataflow" });
     expect(pick(things, "Alerts")).toMatchObject({ kind: "fabric", detail: "Activator" });
   });
@@ -78,7 +79,7 @@ describe("Fabric items", () => {
     expect(thingsOf(["/Cost&#58; plan.Report/.platform"])[0]).toMatchObject({ name: "Cost: plan", folder: "/Cost&#58; plan.Report" });
   });
   it("a marker at the repo's top doesn't make the whole repo one item", () => {
-    expect(thingsOf(["/.platform", "/a.sql"]).map((t) => t.kind).sort()).toEqual(["other", "sql"]);
+    expect(thingsOf(["/.platform", "/a.sql"]).map((t) => t.kind).sort()).toEqual(["other", "script"]);
   });
 });
 
@@ -95,7 +96,7 @@ describe("a data factory or a Synapse workspace", () => {
   it("a Synapse workspace's notebooks and SQL scripts, at the repo's top", () => {
     const t = thingsOf(["/template-parameters-definition.json", "/notebook/nb_explore.json", "/sqlscript/top_rows.json", "/pipeline/pl_a.json"]);
     expect(pick(t, "nb_explore")).toMatchObject({ kind: "notebook", detail: "Synapse notebook" });
-    expect(pick(t, "top_rows")).toMatchObject({ kind: "sql", detail: "Synapse SQL script" });
+    expect(pick(t, "top_rows")).toMatchObject({ kind: "script", detail: "Synapse SQL script" });
     expect(pick(t, "pl_a")).toMatchObject({ kind: "pipeline", detail: "Synapse pipeline" });
   });
   it("one folder named pipeline alone isn't a factory, unless a root file says so", () => {
@@ -115,13 +116,17 @@ describe("a data factory or a Synapse workspace", () => {
 describe("SQL, notebooks and the rest", () => {
   it("a .sql file is a thing named by its file; schema and object folders are said where the path shows them", () => {
     const t = thingsOf(["/db/Shop.sqlproj", "/db/sales/Tables/Orders.sql", "/db/sales/Views/vOrders.sql", "/db/etl/Stored Procedures/usp_Load.sql", "/db/sales/Functions/fn_Tax.sql", "/scripts/fix.sql", "/Tables/Loose.sql"]);
-    expect(pick(t, "Orders")).toMatchObject({ kind: "sql", detail: "Table in sales", file: "/db/sales/Tables/Orders.sql" });
-    expect(pick(t, "vOrders")!.detail).toBe("View in sales");
-    expect(pick(t, "usp_Load")!.detail).toBe("Stored procedure in etl");
-    expect(pick(t, "fn_Tax")!.detail).toBe("Function in sales");
-    expect(pick(t, "fix")!.detail).toBe("SQL script");
-    expect(pick(t, "Loose")!.detail).toBe("Table");
-    expect(pick(t, "Shop")).toMatchObject({ kind: "sql", detail: "SQL project" });
+    // RB-6: a SQL project is a database holding its objects; they are listed only inside it.
+    expect(pick(t, "Orders")).toMatchObject({ kind: "database", detail: "Table in sales · Shop SQL project", item: "Shop SQL project", file: "/db/sales/Tables/Orders.sql" });
+    expect(pick(t, "vOrders")!.detail).toBe("View in sales · Shop SQL project");
+    expect(pick(t, "usp_Load")!.detail).toBe("Stored procedure in etl · Shop SQL project");
+    expect(pick(t, "fn_Tax")!.detail).toBe("Function in sales · Shop SQL project");
+    expect(pick(t, "fix")).toMatchObject({ kind: "script", detail: "SQL script" });
+    expect(pick(t, "Loose")).toMatchObject({ kind: "script", detail: "Table" });
+    const shop = pick(t, "Shop")!;
+    expect(shop).toMatchObject({ kind: "database", detail: "SQL project · 4 objects", file: "/db/Shop.sqlproj" });
+    expect(shop.inside!.map((x) => [x.name, x.detail])).toEqual([["fn_Tax", "Function in sales"], ["Orders", "Table in sales"], ["usp_Load", "Stored procedure in etl"], ["vOrders", "View in sales"]]);
+    expect(listedThings(t).map((x) => x.name).sort()).toEqual(["Loose", "Shop", "fix"]);
   });
   it("a notebook by its file type, and everything else as Other with its language", () => {
     const t = thingsOf(["/nb/explore.ipynb", "/deploy.ps1", "/azure-pipelines.yml", "/LICENSE"]);
@@ -135,7 +140,7 @@ describe("SQL, notebooks and the rest", () => {
   });
   it("groups come in their order and an empty group doesn't show", () => {
     const t = thingsOf(["/z.sql", "/A.Report/.platform", "/n.ipynb"]);
-    expect(groupThings(t).map((g) => g.label)).toEqual([KIND_GROUPS.report, KIND_GROUPS.notebook, KIND_GROUPS.sql]);
+    expect(groupThings(t).map((g) => g.label)).toEqual([KIND_GROUPS.report, KIND_GROUPS.notebook, KIND_GROUPS.script]);
     expect(groupThings([])).toEqual([]);
   });
   it("every file is one thing or inside an item, and 20,000 names sort in well under a second", () => {
@@ -151,7 +156,7 @@ describe("SQL, notebooks and the rest", () => {
     expect(performance.now() - started).toBeLessThan(1000);
     expect(t.filter((x) => x.kind === "report")).toHaveLength(400);
     expect(t.filter((x) => x.kind === "model").every((m) => m.tables?.length === 10)).toBe(true);
-    expect(t.filter((x) => x.kind === "sql")).toHaveLength(20_000 - 400 * 13);
+    expect(t.filter((x) => x.kind === "script")).toHaveLength(20_000 - 400 * 13);
   });
 });
 
@@ -185,5 +190,93 @@ describe("searching names", () => {
       { text: "orders", hit: true },
       { text: ".json", hit: false },
     ]);
+  });
+});
+
+describe("one home per thing (RB-6)", () => {
+  it("review: a project file named only .sqlproj is no project, and nothing is lost or thrown", () => {
+    const t = thingsOf(["/db/.sqlproj", "/db/dbo/Tables/Orders.sql", "/db/dbo/Views/vOrders.sql"]);
+    expect(t.map((x) => x.file).sort()).toEqual(["/db/.sqlproj", "/db/dbo/Tables/Orders.sql", "/db/dbo/Views/vOrders.sql"]);
+    expect(t.some((x) => x.kind === "database" && !x.item)).toBe(false);
+  });
+  /** A repo with every kind of home: a warehouse, a SQL database, a SQL project, a model, items with things inside, loose SQL. */
+  const REPO = [
+    "/ws/Kiln.Warehouse/.platform",
+    "/ws/Kiln.Warehouse/kiln.sqlproj",
+    "/ws/Kiln.Warehouse/fire/Tables/Batch.sql",
+    "/ws/Kiln.Warehouse/fire/Views/vBatch.sql",
+    "/ws/Kiln.Warehouse/Security/fire.sql",
+    "/ws/Ledger.SQLDatabase/.platform",
+    "/ws/Ledger.SQLDatabase/acct/Tables/Entry.sql",
+    "/ws/Ledger.SQLDatabase/acct/StoredProcedures/usp_Post.sql",
+    "/ws/Yard.SemanticModel/.platform",
+    "/ws/Yard.SemanticModel/definition/model.tmdl",
+    "/ws/Yard.SemanticModel/definition/tables/Stack.tmdl",
+    "/ws/Bronze.Lakehouse/.platform",
+    "/ws/Bronze.Lakehouse/explore.ipynb",
+    "/ws/Tidy.Notebook/.platform",
+    "/ws/Tidy.Notebook/notebook-content.sql",
+    "/db/Quarry.sqlproj",
+    "/db/ore/Tables/Seam.sql",
+    "/db/Security/ore.sql",
+    "/db/README.md",
+    "/scripts/one-off.sql",
+    "/scripts/Tables/Loose.sql",
+    "/adf/pipeline/pl_a.json",
+    "/adf/sqlscript/q.json",
+    "/adf/publish_config.json",
+  ];
+  const sorted = sortRepo(REPO);
+  /** Every file By kind lists, with the group it shows under: a row of a group, or inside one row (its tables or objects). */
+  const homes = () => {
+    const out = new Map<string, string[]>();
+    const add = (file: string, where: string) => out.set(file, [...(out.get(file) ?? []), where]);
+    for (const g of groupThings(listedThings(sorted.things)))
+      for (const t of g.things) {
+        add(t.file, g.label);
+        for (const tb of t.tables ?? []) add(tb.file, `${g.label} › ${t.name}`);
+        for (const x of t.inside ?? []) add(x.file, `${g.label} › ${t.name}`);
+      }
+    return out;
+  };
+  it("the groups, in their order: Reports to Other, with Lakehouses, Databases and SQL scripts", () => {
+    expect(KINDS.map((k) => KIND_GROUPS[k])).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses", "Databases", "SQL scripts", "Other Fabric items", "Other"]);
+    expect(groupThings(listedThings(sorted.things)).map((g) => [g.label, g.things.map((t) => t.name)])).toEqual([
+      ["Semantic models", ["Yard"]],
+      ["Pipelines", ["pl_a"]],
+      ["Notebooks", ["Tidy"]],
+      ["Lakehouses", ["Bronze"]],
+      ["Databases", ["Kiln", "Ledger", "Quarry"]],
+      ["SQL scripts", ["Loose", "one-off", "q"]],
+      ["Other", ["publish_config.json", "README.md"]],
+    ]);
+  });
+  it("no file is listed twice, and every file is listed or found by its own name", () => {
+    const h = homes();
+    for (const [file, where] of h) expect(where, file).toHaveLength(1);
+    const byName = new Set(sorted.files.map((f) => f.file));
+    for (const p of REPO) expect(h.has(p) || byName.has(p), p).toBe(true);
+  });
+  it("a database's objects are inside it and nowhere else, of its kind, saying what and where", () => {
+    const h = homes();
+    expect(h.get("/ws/Kiln.Warehouse/fire/Tables/Batch.sql")).toEqual(["Databases › Kiln"]);
+    expect(h.get("/ws/Ledger.SQLDatabase/acct/StoredProcedures/usp_Post.sql")).toEqual(["Databases › Ledger"]);
+    expect(h.get("/db/ore/Tables/Seam.sql")).toEqual(["Databases › Quarry"]);
+    expect(sorted.things.find((t) => t.name === "Batch")).toMatchObject({ kind: "database", itemKind: "database", detail: "Table in fire · Kiln warehouse" });
+    expect(sorted.things.find((t) => t.name === "Seam")).toMatchObject({ kind: "database", detail: "Table in ore · Quarry SQL project" });
+    // Each database says how many objects it holds; a group's count is its rows.
+    const dbs = groupThings(listedThings(sorted.things)).find((g) => g.kind === "database")!;
+    expect(dbs.things.map((t) => t.detail)).toEqual(["Warehouse · 4 objects", "SQL database · 2 objects", "SQL project · 2 objects"]);
+  });
+  it("a model's tables and an item's own things stay inside it", () => {
+    const h = homes();
+    expect(h.get("/ws/Yard.SemanticModel/definition/tables/Stack.tmdl")).toEqual(["Semantic models › Yard"]);
+    expect(h.get("/ws/Bronze.Lakehouse/explore.ipynb")).toEqual(["Lakehouses › Bronze"]);
+  });
+  it("the kind filter of a search: Databases finds databases and the objects inside them; SQL scripts only loose SQL", () => {
+    expect(searchThings(sorted.things, "seam", "database").map((x) => [x.name, x.detail])).toEqual([["Seam", "Table in ore · Quarry SQL project"]]);
+    expect(searchThings(sorted.things, "kiln", "database").map((x) => x.name)).toContain("Kiln");
+    expect(searchThings(sorted.things, "seam", "script")).toEqual([]);
+    expect(searchThings(sorted.things, "loose", "script").map((x) => x.name)).toEqual(["Loose"]);
   });
 });

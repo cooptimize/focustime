@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
         const views = (await linesOf(page, "nav.views"))[0]!;
         expect(hasLine(views.top) || !clearBg(views.bg), `${where}: the tabs' group has a box`).toBe(false);
         const tabs = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".view-tab")].map((t) => ({ icon: !!t.querySelector("svg.ft-icon"), current: t.getAttribute("aria-current") === "page", bg: getComputedStyle(t).backgroundColor, h: t.getBoundingClientRect().height, radius: parseFloat(getComputedStyle(t).borderTopLeftRadius) })));
-        expect(tabs.length, where).toBe(5);
+        expect(tabs.length, where).toBe(6); // RB-6: Code is the sixth tab.
         for (const t of tabs) {
           expect(t.icon, `${where}: a tab without an icon`).toBe(true);
           expect(Math.abs(t.h - 32 * scale), `${where}: a tab ${t.h} high`).toBeLessThan(1.2);

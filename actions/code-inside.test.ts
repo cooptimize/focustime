@@ -81,7 +81,7 @@ describe("what it asks and what comes back", () => {
     expect([...d.ops].sort()).toEqual(["files Contoso", "repos Contoso", "search Contoso"]);
     expect(JSON.parse(d.bodies[0]!)).toEqual({ searchText: WORDS, $skip: 0, $top: INSIDE_MAX, includeFacets: false, includeSnippet: false });
     expect(r.data.files).toEqual([
-      { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[2], kind: "sql", detail: "Stored procedure in dim · Depot warehouse", matches: 3, itemKind: "lake" },
+      { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[2], kind: "database", detail: "Stored procedure in dim · Depot warehouse", matches: 3, itemKind: "database" },
       { repoId: repoId(1, 1), repoName: "repo-11", path: PATHS[4], kind: "pipeline", detail: "Data factory pipeline", matches: 1 },
     ]);
     expect(r.data).toMatchObject({ total: 2, more: false, indexing: false, narrowed: false });
@@ -108,7 +108,7 @@ describe("what it asks and what comes back", () => {
   it("review 2: when the narrowing request fails or isn't taken, the first answer stands", async () => {
     for (const second of [{ status: 429 }, { status: 400 }, { body: { count: 0, infoCode: 3, results: [] } }] as Search[]) {
       const d = devops((_c, b) => (b.searchText.endsWith(" ext:sql") ? second : { body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[4]!, 1)] } }));
-      const r = (await inside(ctx(d.git).c, "Contoso", { kind: "sql" })) as Ok;
+      const r = (await inside(ctx(d.git).c, "Contoso", { kind: "script" })) as Ok;
       expect(r.ok).toBe(true);
       expect(r.data).toMatchObject({ narrowed: false, more: true, files: [{ path: PATHS[4] }] });
     }
@@ -119,28 +119,28 @@ describe("what it asks and what comes back", () => {
     const trimmed = devops(() => ({ body: { count: 1, infoCode: 8, results: [hit(1, 1, PATHS[2]!, 1)] } }));
     expect(((await inside(ctx(trimmed.git).c, "Contoso")) as Ok).data.more).toBe(true);
   });
-  it("with the SQL kind and more files than fit, asks DevOps to narrow by file type, in its documented form", async () => {
+  it("with the SQL scripts kind (RB-6) and more files than fit, asks DevOps to narrow by file type, in its documented form", async () => {
     const d = devops((_c, b) => (b.searchText.endsWith(" ext:sql") ? { body: { count: 1, infoCode: 0, results: [hit(1, 1, PATHS[1]!, 2)] } } : { body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[4]!, 1)] } }));
-    const r = (await inside(ctx(d.git).c, "Contoso", { kind: "sql" })) as Ok;
+    const r = (await inside(ctx(d.git).c, "Contoso", { kind: "script" })) as Ok;
     expect(d.bodies.map((b) => (JSON.parse(b) as { searchText: string }).searchText)).toEqual([WORDS, `(${WORDS}) ext:sql`]);
     expect(r.data).toMatchObject({ narrowed: true, more: false });
     expect(r.data.files.map((f) => f.path)).toEqual([PATHS[1]]);
     // Not when everything fit, not for a kind a file type can't say, and not when the words can't sit in brackets.
     const fits = devops();
-    await inside(ctx(fits.git).c, "Contoso", { kind: "sql" });
+    await inside(ctx(fits.git).c, "Contoso", { kind: "script" });
     expect(fits.bodies).toHaveLength(1);
     const other = devops(() => ({ body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[4]!, 1)] } }));
     await inside(ctx(other.git).c, "Contoso", { kind: "report" });
     expect(other.bodies).toHaveLength(1);
     const open = devops(() => ({ body: { count: 340, infoCode: 0, results: [hit(1, 1, PATHS[4]!, 1)] } }));
-    await codeAction(ctx(open.git).c, "code.inside", { clientKey: "Contoso", words: 'a ("b', kind: "sql" });
+    await codeAction(ctx(open.git).c, "code.inside", { clientKey: "Contoso", words: 'a ("b', kind: "script" });
     expect(open.bodies).toHaveLength(1);
   });
   it("a repo whose file names can't be read still lists its files, sorted by their own paths", async () => {
     const d = devops();
     const git: CodeGit = { ...d.git, files: async () => Promise.reject(new Error("no names")) };
     const r = (await inside(ctx(git).c, "Contoso")) as Ok;
-    expect(r.data.files.map((f) => [f.kind, f.detail])).toEqual([["sql", "Stored procedure"], ["other", "JSON"]]);
+    expect(r.data.files.map((f) => [f.kind, f.detail])).toEqual([["script", "Stored procedure"], ["other", "JSON"]]);
   });
 });
 

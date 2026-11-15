@@ -1,38 +1,38 @@
-// RB-1: Code (#/code/<client>/<repo>/<path>), every client's repos, read only. On ST-1's panel shell like the Technical
-// docs: the client's name and color at the top the whole time, the left side a client picker (mine first, then the
-// rest A to Z; a client set to its team only is greyed for everyone else, with no repo names), a repo select when the
-// client has more than one, Find a file and the tree; the right side the file with its path as breadcrumbs, its size,
-// line numbers, a fixed-width font, sideways scroll or Wrap, Copy, Copy path, Copy DevOps link and Copy link. On a phone
-// the client and repo, then the tree as a list, then the file. Loaded only when Code opens (ui/App.tsx), with the
-// coloring library.
+// RB-1: Code (#/code/<client>/<repo>/<path>), every client's repos, read only: a client's tree and a file colored by
+// its language, with its path as breadcrumbs, its size, line numbers, a fixed-width font, sideways scroll or Wrap, Copy,
+// Copy path, Copy DevOps link and Copy link. Loaded only when Code opens (ui/App.tsx), with the coloring library.
 //
-// RB-2: two more ways in, from file and folder names only (ui/code/Names.tsx). Inside a client the left side switches
-// Files | By kind: By kind lists the client's things across its repos in groups, and a row opens its file on the right
-// with Show in files. Search names (on the front page and inside a client) looks across the clients a person may read,
-// three at a time, and lists what it finds by client. The words typed never leave the browser and are never in the
-// address.
+// RB-2: two more ways in, from file and folder names only (ui/code/Names.tsx): By kind (a client's things across its
+// repos in groups) and Search names (across the clients a person may read, three at a time). The words typed never
+// leave the browser and are never in the address. RB-4: the search can look Inside files instead: each client's DevOps
+// code search says which files hold the words (the one search whose words go through FocusTime's server); its results
+// are files, never lines, and a file opened from them has every match marked, found in the opened text itself.
 //
-// RB-4: the search box switches Names · Inside files. Inside files asks each client's DevOps code search which files
-// hold the words (the one search whose words go through FocusTime's server); its results are files, never lines. A
-// file opened from them has every match of the words marked, found in the opened text itself, with a "1 of 4"
-// stepper. The words live in this panel's memory only, never in the address or the browser's storage.
+// RB-6: Code is a tab, a page of its own (no Close; Esc stays here). Across its top one row: the client picker (inside
+// a client), one search box, "Search code", and Read only. Its choices (where to look, how far, the kind, Search) open
+// under it only once the box has focus or words; nothing is read until Enter or Search. Results take the whole area
+// under the row; clearing the box, or Esc in it, goes back to exactly where browsing was (same client, tree and file:
+// they stay in this page's memory). Browsing is a client and a tree: on the left only Files · By kind, the repo picker
+// (Files, more than one repo), By kind's filter and the tree, with the line about the log at their foot; the file on
+// the right. On a narrow window the list and the file are pages of their own, with Back.
 //
 // A file is always drawn as text: each colored piece is a text node in a span (ui/code/highlight.ts), never markup,
 // so an .html or .svg file shows its source and nothing in it runs. Nothing of the code is kept in the browser's
-// storage: folder lists, names and file text live only in this panel's memory while it is open.
+// storage: folder lists, names, file text and the words typed live only in this page's memory while Code is open.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { call, ActionRefusal } from "../api.ts";
-import { PanelShell, useNarrow } from "../PanelShell.tsx";
+import { useNarrow } from "../PanelShell.tsx";
 import { LANG_NAMES, languageOf, tooLargeToColor } from "./languages.ts";
 import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
-import { SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
+import { INSIDE_WORDS_MAX, SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
 import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings, type SqlGrouping } from "../../plan/code-kinds.ts";
-import { ByKind, InsideResults, NAMES_TEXT, newKindsMemo, SearchBox, SearchResults, type InsideRun, type KindsMemo, type SearchRun } from "./Names.tsx";
+import { ByKind, InsideResults, NAMES_TEXT, newKindsMemo, SearchChoices, SearchResults, type InsideRun, type KindsMemo, type SearchRun } from "./Names.tsx";
+import type { CodeAt } from "../nav.ts";
 import "./code.css";
 import { Icon } from "../icons.tsx";
 
-export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" };
+export type { CodeAt };
 type KindsState = "loading" | { repos: RepoThings[]; max: number } | Failure;
 type Client = { clientKey: string; name: string; color: string | null; mine: boolean; locked: boolean };
 type Failure = { message: string; code: string | null };
@@ -42,20 +42,15 @@ type FileState = { state: "loading" } | { state: "ok"; file: CodeFileView } | { 
 const TEXT = {
   name: "Code",
   readOnly: "Read only",
-  pickClient: "Choose a client to read its code.",
+  pickClient: "Choose a client to look around its code, or search above.",
   yours: "Your clients",
   others: "Other clients",
-  pickRepo: "Choose a repo.",
-  pickFile: "Choose a file in the tree, or find one by name.",
+  pickRepo: "Choose a repo on the left.",
+  pickFile: "Choose a file in the tree, or search for one above.",
   noRepos: (c: string) => `${c}'s DevOps project has no repos.`,
   empty: "This repo is empty: nothing has been pushed to it yet.",
   disabled: "This repo is disabled in DevOps, so it can't be read.",
-  cut: "This folder has more entries than FocusTime shows. Find a file by name to reach the rest.",
-  find: "Find a file",
-  findLoading: "Loading the file names…",
-  findCut: (n: number) => `Only the first ${n.toLocaleString()} file names are searched.`,
-  findNone: "No file name matches.",
-  findCount: (n: number) => `${n} match${n === 1 ? "" : "es"}`,
+  cut: "This folder has more entries than FocusTime shows. Search code to reach the rest.",
   binary: (s: string) => `This is a binary file (${s}), so it isn't shown here.`,
   image: (s: string) => `This is an image (${s}). Images aren't shown here.`,
   tooLarge: (s: string) => `This file is ${s}. Files over 1 MB aren't shown here.`,
@@ -67,6 +62,7 @@ const TEXT = {
   noMarks: "DevOps found the words in this file, but none is marked here: it may match them in another way.",
   prevMatch: "Previous match",
   nextMatch: "Next match",
+  back: "Back",
   error: "Something went wrong. Try again in a moment.",
 } as const;
 
@@ -269,63 +265,6 @@ function Tree({ root, folders, open, selected, onToggle, onFile }: { root: Folde
   );
 }
 
-/** Find a file: filters the repo's file names (loaded on first use); Up, Down and Enter. */
-function Find({ load, names, cut, max, onOpen }: { load: () => void; names: string[] | "loading" | Failure | null; cut: boolean; max: number; onOpen: (path: string) => void }) {
-  const [q, setQ] = useState("");
-  const [sel, setSel] = useState(0);
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const hits = useMemo(() => (Array.isArray(names) && words.length ? names.filter((n) => words.every((w) => n.toLowerCase().includes(w))).slice(0, 50) : []), [names, q]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => setSel(0), [q]);
-  const go = (p: string | undefined) => {
-    if (!p) return;
-    setQ("");
-    onOpen(p);
-  };
-  return (
-    <div className="cv-find">
-      <input
-        type="search"
-        className="cv-find-input"
-        placeholder={TEXT.find}
-        aria-label={TEXT.find}
-        aria-controls="cv-find-list"
-        aria-activedescendant={hits[sel] ? `cv-hit-${sel}` : undefined}
-        value={q}
-        onFocus={load}
-        onChange={(e) => (load(), setQ(e.target.value))}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") (e.preventDefault(), setSel((s) => Math.min(s + 1, hits.length - 1)));
-          else if (e.key === "ArrowUp") (e.preventDefault(), setSel((s) => Math.max(s - 1, 0)));
-          else if (e.key === "Enter") (e.preventDefault(), go(hits[sel]));
-          else if (e.key === "Escape" && q) (e.preventDefault(), setQ(""));
-        }}
-      />
-      {words.length > 0 && (
-        <div className="cv-find-results">
-          {names === "loading" || names === null ? (
-            <p className="cv-note" role="status">{TEXT.findLoading}</p>
-          ) : !Array.isArray(names) ? (
-            <p className="cv-note problem" role="status">{names.message}</p>
-          ) : (
-            <>
-              <p className="cv-note" role="status">{hits.length ? TEXT.findCount(hits.length) : TEXT.findNone}</p>
-              <ul id="cv-find-list" role="listbox" aria-label="Matching files" className="cv-find-list">
-                {hits.map((h, i) => (
-                  <li key={h} id={`cv-hit-${i}`} role="option" aria-selected={i === sel} className={i === sel ? "on" : undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => go(h)}>
-                    <span className="cv-hit-name">{baseName(h)}</span>
-                    <span className="cv-hit-path">{h}</span>
-                  </li>
-                ))}
-              </ul>
-              {cut && <p className="cv-note">{TEXT.findCut(max)}</p>}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** RB-4: the matches of a search's words in a file's lines: per line, where they are and the first one's number. */
 type Marks = { byLine: Map<number, { ranges: [number, number][]; first: number }>; count: number };
 function marksOf(lines: Line[], terms: readonly { text: string; prefix?: boolean }[]): Marks {
@@ -507,38 +446,65 @@ function FileView({ file, repo, onFolder, clientName, phone, words }: { file: Co
   );
 }
 
-export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGroup }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; onClose: () => void; /** RB-5: how By kind groups SQL objects (the person's saved choice) and how to change it. */ sqlGroup?: SqlGrouping; onSqlGroup?: (g: SqlGrouping) => void }) {
-  const phone = useNarrow();
+/** The view a place shows: Files when the address names none. */
+const viewOf = (at: CodeAt) => at.view ?? "files";
+const isSearch = (at: CodeAt) => at.view === "search" || at.view === "inside";
+
+export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; /** RB-5: how By kind groups SQL objects (the person's saved choice) and how to change it. */ sqlGroup?: SqlGrouping; onSqlGroup?: (g: SqlGrouping) => void }) {
+  const narrow = useNarrow();
   const [clients, setClients] = useState<Client[] | Failure | null>(null);
-  const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.");
+  const [logLine, setLogLine] = useState<string>("FocusTime admins can see who opened, listed or searched which client's code, and when. Never the words.");
   const [repos, setRepos] = useState<Map<string, CodeRepoView[] | Failure | "loading">>(new Map());
   const [folders, setFolders] = useState<Map<string, Folder>>(new Map());
   const [open, setOpen] = useState<Map<string, Set<string>>>(new Map());
   const [files, setFiles] = useState<Map<string, FileState>>(new Map());
-  const [names, setNames] = useState<Map<string, { list: string[] | "loading" | Failure; cut: boolean; max: number }>>(new Map());
   const asked = useRef(new Set<string>());
-  // RB-2: a client's things by kind (once per client while the panel is open), and the search: its words, where it
-  // looks, the kind, and the run under way. All of it lives here only; none of it is stored or put in the address.
+  // RB-2: a client's things by kind (once per client while Code is open), and the search: its words, where it looks,
+  // the kind, and the run under way. All of it lives here only; none of it is stored or put in the address.
   const [kinds, setKinds] = useState<Map<string, KindsState>>(new Map());
-  // RB-5: what By kind has open, per client, kept here so it outlasts the list while the panel is open.
+  // RB-5: what By kind has open, per client, kept here so it outlasts the list while Code is open.
   const [kindsMemo, setKindsMemo] = useState<Map<string, KindsMemo>>(new Map());
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<Kind | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
   const [run, setRun] = useState<SearchRun | null>(null);
   const runId = useRef(0);
-  /** The file on screen was opened from a search's results: Back to results shows, and the phone's Back goes there. */
+  /** The file on screen was opened from a search's results: Back to results shows, and the narrow window's Back goes there. */
   const [fromRun, setFromRun] = useState<false | "search" | "inside">(false);
-  const view = at.view ?? "files";
-  // RB-4: the search inside files under way, and whether the box is set to it (the address says so on a search page).
+  const fromRunRef = useRef<false | "search" | "inside">(false);
+  fromRunRef.current = fromRun;
+  const view = viewOf(at);
+  const searching = isSearch(at);
+  // RB-4: the search inside files under way, and whether the search is set to it (the address says so on a results page).
   const [inRun, setInRun] = useState<InsideRun | null>(null);
   const [insideMode, setInsideMode] = useState(view === "inside");
   useEffect(() => {
-    if (view === "search" || view === "inside") setInsideMode(view === "inside");
-  }, [view]);
-  const searching = view === "search" || view === "inside";
+    if (searching) setInsideMode(view === "inside");
+  }, [view, searching]);
   /** The words to mark in the file on screen: those of the search inside files it was opened from. */
   const [markAt, setMarkAt] = useState<{ key: string; words: string } | null>(null);
+  // RB-6: the search box's choices show while it (or a choice) has focus, or it has words; Esc hides them.
+  const [focused, setFocused] = useState(false);
+  const [hushed, setHushed] = useState(false);
+  const choicesOpen = (focused && !hushed) || (q !== "" && searching);
+  // Leaving the results (a result opened, Back, an address) closes the choices until the box is used again.
+  useEffect(() => {
+    if (!searching) setHushed(true);
+  }, [searching]);
+  // RB-6: where browsing was before a search, to go back to when the box is cleared (same client, tree and file).
+  // A file opened from the results isn't browsing: Back to results returns to them, and leaving the search still goes
+  // back to where browsing was before it.
+  const browseAt = useRef<CodeAt | null>(searching ? null : at);
+  const openingResult = useRef(false);
+  useEffect(() => {
+    if (searching) return;
+    if (openingResult.current) openingResult.current = false;
+    else if (!fromRunRef.current) {
+      // Browsing somewhere else (not a result): the search's words go with the search.
+      browseAt.current = at;
+      setQ("");
+    }
+  }, [at, searching]);
 
   useEffect(() => {
     let live = true;
@@ -555,17 +521,17 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
   const repo = Array.isArray(repoList) && at.repoId ? (repoList.find((r) => r.id === at.repoId) ?? null) : null;
   const rk = (path: string) => `${at.clientKey}\u0000${at.repoId}\u0000${path}`;
 
-  // The client's repos (once per client while the panel is open); one repo opens on its own.
+  // The client's repos (once per client while Code is open); one repo opens on its own.
   useEffect(() => {
     const k = at.clientKey;
-    if (!k || !client || client.locked || asked.current.has(`repos\u0000${k}`)) return;
+    if (!k || !client || client.locked || searching || asked.current.has(`repos\u0000${k}`)) return;
     asked.current.add(`repos\u0000${k}`);
     setRepos((m) => new Map(m).set(k, "loading"));
     call<{ repos: CodeRepoView[] }>("code.repos", { clientKey: k }).then(
       (r) => setRepos((m) => new Map(m).set(k, r.repos)),
       (e) => setRepos((m) => new Map(m).set(k, failureOf(e))),
     );
-  }, [at.clientKey, client]);
+  }, [at.clientKey, client, searching]);
   useEffect(() => {
     if (view === "files" && at.clientKey && !at.repoId && Array.isArray(repoList) && repoList.length === 1) onGo({ clientKey: at.clientKey, repoId: repoList[0]!.id, path: null }, { replace: true });
   }, [view, at.clientKey, at.repoId, repoList, onGo]);
@@ -612,15 +578,17 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
     );
   }, [view, at.clientKey, client]);
 
-  // RB-2: inside another client the search starts on This client again; the search view puts the caret in its box.
+  // RB-2: inside another client the search starts on This client again. A results page (the command menu's "Code:
+  // search names" lands on one) puts the caret in the box once the clients are known.
   useEffect(() => setScopeAll(false), [at.clientKey]);
   const loaded = clients !== null;
   useEffect(() => {
     if (!searching || !loaded) return;
-    // After the shell has put focus on its title (and a menu that opened Code has given focus back).
-    const t = setTimeout(() => document.querySelector<HTMLElement>("[data-code-search]")?.focus(), 60);
+    // After a menu that opened Code has given focus back; never taken from something on Code (a result the arrows
+    // reached after a search run from the box).
+    const t = setTimeout(() => !document.activeElement?.closest("[data-code-page]") && document.querySelector<HTMLElement>("[data-code-search]")?.focus(), 60);
     return () => clearTimeout(t);
-  }, [view, at.clientKey, loaded]);
+  }, [view, at.clientKey, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** RB-2: Search. Reads the names of the clients I may read, a few at a time; each fills in as it arrives. */
   const search = () => {
@@ -628,6 +596,7 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
     const inScope = list.filter((c) => all || c.clientKey === at.clientKey);
     const targets = inScope.filter((c) => !c.locked);
     const id = ++runId.current;
+    setHushed(false);
     if (insideMode) {
       // RB-4: Inside files. Each client's DevOps is asked once, a few at a time; the words go only in these requests.
       const words = q.trim();
@@ -662,28 +631,25 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
     for (let i = 0; i < SEARCH_CLIENTS_AT_ONCE; i++) void worker();
     onGo({ clientKey: all ? null : at.clientKey, repoId: null, path: null, view: "search" });
   };
-  const searchBox = (
-    <SearchBox
-      q={q}
-      onQ={setQ}
-      kind={kind}
-      onKind={setKind}
-      scopeAll={!at.clientKey || scopeAll}
-      onScope={setScopeAll}
-      canScope={!!at.clientKey}
-      disabled={!Array.isArray(clients)}
-      onSearch={search}
-      onDown={() => document.querySelector<HTMLElement>("[data-code-hit]")?.focus()}
-      inside={insideMode}
-      onInside={(v) => (setInsideMode(v), searching && onGo({ clientKey: at.clientKey, repoId: null, path: null, view: v ? "inside" : "search" }, { replace: true }))}
-    />
-  );
+  /** RB-6: the box cleared, or Esc in it: the choices close and the page goes back to where browsing was. */
+  const leaveSearch = () => {
+    setQ("");
+    setHushed(true);
+    // A results page opened by its address has no browsing to go back to: it stays, so a key in the box reads nothing.
+    if (searching && browseAt.current) onGo(browseAt.current);
+  };
   const kindsState = at.clientKey ? kinds.get(at.clientKey) : undefined;
   // A file opened from the results keeps its way back until the person goes somewhere else in Code.
   useEffect(() => {
     if (view !== "files" || !at.path) setFromRun(false);
   }, [view, at.path, at.clientKey]);
   const backRun = fromRun === "inside" ? inRun : fromRun === "search" ? run : null;
+  // Back on a results page (Back to results, the browser's Back): the box shows that search's words again.
+  useEffect(() => {
+    if (!searching) return;
+    const shown = view === "inside" ? inRun : run;
+    if (shown && shown.scope === (at.clientKey ?? null)) setQ((cur) => cur || shown.q);
+  }, [searching, view, at.clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const toResults = () => backRun && fromRun && onGo({ clientKey: backRun.scope, repoId: null, path: null, view: fromRun });
 
   // The file in the address.
@@ -698,15 +664,17 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
       (e) => (asked.current.delete(`file\u0000${key}`), setFiles((m) => new Map(m).set(key, { state: "failed", failure: failureOf(e) }))),
     );
   }, [repo, at.path]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadNames = () => {
-    if (!at.clientKey || !at.repoId || names.has(repoKey)) return;
-    setNames((m) => new Map(m).set(repoKey, { list: "loading", cut: false, max: 0 }));
-    call<{ paths: string[]; cut: boolean; max: number }>("code.find", { clientKey: at.clientKey, repoId: at.repoId }).then(
-      (r) => setNames((m) => new Map(m).set(repoKey, { list: r.paths, cut: r.cut, max: r.max })),
-      (e) => setNames((m) => new Map(m).set(repoKey, { list: failureOf(e), cut: false, max: 0 })),
+  // A result from another client, or a file opened by its address, reads that client's repos first.
+  useEffect(() => {
+    const k = at.clientKey;
+    if (!k || !at.repoId || !client || client.locked || asked.current.has(`repos\u0000${k}`)) return;
+    asked.current.add(`repos\u0000${k}`);
+    setRepos((m) => new Map(m).set(k, "loading"));
+    call<{ repos: CodeRepoView[] }>("code.repos", { clientKey: k }).then(
+      (r) => setRepos((m) => new Map(m).set(k, r.repos)),
+      (e) => setRepos((m) => new Map(m).set(k, failureOf(e))),
     );
-  };
+  }, [at.clientKey, at.repoId, client]);
 
   const toggle = (path: string) => {
     const isOpen = openSet.has(path);
@@ -718,27 +686,77 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
     const ps = path === "/" ? [] : [...parentsOf(path), path];
     for (const p of ps) loadFolder(p);
     setOpenFor((s) => (ps.forEach((p) => s.add(p)), s));
-    if (phone) onGo({ clientKey: at.clientKey, repoId: at.repoId, path: null });
+    if (narrow) onGo({ clientKey: at.clientKey, repoId: at.repoId, path: null });
     requestAnimationFrame(() => document.querySelector<HTMLElement>(path === "/" ? ".cv-tree [role=treeitem]" : `.cv-tree [data-path="${CSS.escape(path)}"]`)?.focus());
   };
   const openFile = (path: string) => onGo({ clientKey: at.clientKey, repoId: at.repoId, path });
-
   const fileState = at.path ? files.get(rk(at.path)) : undefined;
-  const nameState = names.get(repoKey);
 
-  // ---- the left side ----
   const failedClients = clients && !Array.isArray(clients) ? clients : null;
-  const left = (
-    <div className="cv-side" data-code-side="">
-      {failedClients ? (
-        <p className="cv-note problem" role="alert">{failedClients.message}</p>
-      ) : clients === null ? (
-        <p className="cv-note" role="status">Loading…</p>
-      ) : (
-        <>
-          <ClientPicker clients={list} current={client} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
-          {!searching && client && !client.locked && searchBox}
-          {!searching && client && !client.locked && Array.isArray(repoList) && repoList.length > 0 && (
+  const logFoot = <p className="cv-log-line" data-code-log-line="">{logLine}</p>;
+
+  // ---- the search row: the client picker (inside a client), the box, Read only; its choices under it ----
+  const top = (
+    <div
+      className="cv-head"
+      onFocus={(e) => (e.target as HTMLElement).closest("[data-code-searcharea]") && (setFocused(true), setHushed(false))}
+      onBlur={(e) => !(e.relatedTarget as HTMLElement | null)?.closest?.("[data-code-searcharea]") && setFocused(false)}
+    >
+      <div className="cv-top">
+        {client && <ClientPicker clients={list} current={client} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />}
+        <div className="cv-search-box" role="search" aria-label="Search code" data-code-searcharea="">
+          <Icon name="search" className="cv-search-icon" />
+          <input
+            type="search"
+            className="cv-find-input cv-search-input"
+            data-code-search=""
+            form="cv-search-form"
+            placeholder="Search code"
+            aria-label="Search code"
+            aria-expanded={choicesOpen}
+            aria-controls="cv-search-form"
+            aria-describedby="cv-search-note"
+            value={q}
+            maxLength={INSIDE_WORDS_MAX}
+            autoComplete="off"
+            disabled={!Array.isArray(clients)}
+            onClick={() => setHushed(false)}
+            onChange={(e) => {
+              setHushed(false);
+              if (!e.target.value) leaveSearch();
+              else setQ(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" && searching) (e.preventDefault(), document.querySelector<HTMLElement>("[data-code-hit]")?.focus());
+              else if (e.key === "Escape" && (q || choicesOpen || searching)) (e.preventDefault(), e.stopPropagation(), leaveSearch());
+            }}
+          />
+        </div>
+        <span className="cv-ro">{TEXT.readOnly}</span>
+      </div>
+      <SearchChoices
+        floating={!searching}
+        open={choicesOpen}
+        q={q}
+        kind={kind}
+        onKind={setKind}
+        scopeAll={!at.clientKey || scopeAll}
+        onScope={setScopeAll}
+        canScope={!!at.clientKey}
+        disabled={!Array.isArray(clients)}
+        onSearch={search}
+        inside={insideMode}
+        onInside={(v) => (setInsideMode(v), searching && onGo({ clientKey: at.clientKey, repoId: null, path: null, view: v ? "inside" : "search" }, { replace: true }))}
+      />
+    </div>
+  );
+
+  // ---- the left side: Files · By kind, the repo, the filter or the tree, and the log line at the foot ----
+  const left =
+    client && !client.locked ? (
+      <div className="cv-side" data-code-side="">
+        <div className="cv-side-scroll">
+          {Array.isArray(repoList) && repoList.length > 0 && (
             <div className="seg cv-views" role="group" aria-label="View">
               <button type="button" className={`seg-btn${view === "files" ? " on" : ""}`} aria-pressed={view === "files"} data-code-view="files" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path })}>
                 Files
@@ -748,16 +766,15 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
               </button>
             </div>
           )}
-          {view === "kinds" && client && !client.locked && (
-            kindsState === undefined || kindsState === "loading" ? (
+          {view === "kinds" &&
+            (kindsState === undefined || kindsState === "loading" ? (
               <p className="cv-note" role="status">{NAMES_TEXT.kindsLoading}</p>
             ) : "message" in kindsState ? (
               <p className="cv-note problem" role="alert" data-code-state={kindsState.code ?? "error"}>{kindsState.message}</p>
             ) : (
               <ByKind id={at.clientKey!} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
-            )
-          )}
-          {view === "files" && client && !client.locked && Array.isArray(repoList) && repoList.length > 1 && (
+            ))}
+          {view === "files" && Array.isArray(repoList) && repoList.length > 1 && (
             <label className="cv-repo">
               <span className="sr-only">Repo</span>
               <select aria-label="Repo" value={at.repoId ?? ""} onChange={(e) => onGo({ clientKey: at.clientKey, repoId: e.target.value || null, path: null })}>
@@ -773,7 +790,6 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
           )}
           {view === "files" && repo && repo.state === "ok" && (
             <>
-              <Find load={loadNames} names={nameState?.list ?? null} cut={nameState?.cut ?? false} max={nameState?.max ?? 0} onOpen={openFile} />
               <Tree root={folders.get(rk("/"))} folders={new Map([...folders].filter(([k]) => k.startsWith(`${repoKey}\u0000`)).map(([k, v]) => [k.slice(repoKey.length + 1), v]))} open={openSet} selected={at.path} onToggle={toggle} onFile={openFile} />
               {folders.get(rk("/"))?.state === "loading" && <p className="cv-note" role="status">Loading…</p>}
               {(() => {
@@ -782,54 +798,15 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
               })()}
             </>
           )}
-          <p className="cv-log-line" data-code-log-line="">{logLine}</p>
-        </>
-      )}
-    </div>
-  );
+        </div>
+        {logFoot}
+      </div>
+    ) : null;
 
   // ---- the right side ----
   let body: ReactNode;
-  if (failedClients) body = null;
+  if (failedClients) body = <p className="cv-note problem" role="alert">{failedClients.message}</p>;
   else if (clients === null) body = <p className="cv-note" role="status">Loading…</p>;
-  else if (view === "inside")
-    body = (
-      <div className="cv-search-page">
-        {searchBox}
-        {inRun && inRun.scope === (at.clientKey ?? null) ? (
-          <InsideResults
-            run={inRun}
-            kind={kind}
-            onOpen={(clientKey, repoId, file) => {
-              // The file opens through code.file, logged as a file open before its text is returned, as any file is.
-              setMarkAt({ key: `${clientKey}\u0000${repoId}\u0000${file}`, words: inRun.q });
-              onGo({ clientKey, repoId, path: file });
-              setTimeout(() => setFromRun("inside"), 0);
-            }}
-          />
-        ) : (
-          <p className="cv-note">{NAMES_TEXT.insideStart}</p>
-        )}
-        {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
-      </div>
-    );
-  else if (view === "search")
-    body = (
-      <div className="cv-search-page">
-        {searchBox}
-        {/* A search shows only where it was made: one client's results never sit under another client's name. */}
-        {run && run.scope === (at.clientKey ?? null) ? <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => (onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} /> : <p className="cv-note">{NAMES_TEXT.searchStart}</p>}
-        {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
-      </div>
-    );
-  else if (!at.clientKey) body = (
-    <div className="cv-start">
-      {searchBox}
-      <p className="cv-lead">{TEXT.pickClient}</p>
-      <ClientList clients={list} current={null} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
-      {phone && <p className="cv-log-line" data-code-log-line="">{logLine}</p>}
-    </div>
-  );
   else if (!client) body = <p className="cv-state" data-code-state="no_client">That client isn't in FocusTime.</p>;
   else if (client.locked)
     body = (
@@ -838,7 +815,7 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
         <p className="cv-next">A FocusTime admin set it that way. If you need something from it, ask someone on {client.name}'s team.</p>
       </div>
     );
-  else if (view === "kinds" && !at.path) body = <p className="cv-note">{NAMES_TEXT.pickThing}</p>;
+  else if (view === "kinds" && !at.path) body = <p className="cv-empty">{NAMES_TEXT.pickThing}</p>;
   else if (repoList === undefined || repoList === "loading") body = <p className="cv-note" role="status">Loading…</p>;
   else if (!Array.isArray(repoList))
     body = (
@@ -848,17 +825,17 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
       </div>
     );
   else if (!repoList.length) body = <p className="cv-state">{TEXT.noRepos(client.name)}</p>;
-  else if (!at.repoId) body = <p className="cv-note">{TEXT.pickRepo}</p>;
+  else if (!at.repoId) body = <p className="cv-empty">{TEXT.pickRepo}</p>;
   else if (!repo) body = <p className="cv-state" data-code-state="no_repo">That repo isn't one of {client.name}'s.</p>;
   else if (repo.state === "empty") body = <p className="cv-state" data-code-state="empty">{TEXT.empty}</p>;
   else if (repo.state === "disabled") body = <p className="cv-state" data-code-state="disabled">{TEXT.disabled}</p>;
-  else if (!at.path) body = <p className="cv-note">{TEXT.pickFile}</p>;
+  else if (!at.path) body = <p className="cv-empty">{TEXT.pickFile}</p>;
   else if (!fileState || fileState.state === "loading") body = <p className="cv-note" role="status">Loading…</p>;
   else if (fileState.state === "failed") body = <p className="cv-state" data-code-state={fileState.failure.code ?? "error"}>{fileState.failure.message}</p>;
   else
     body = (
       <>
-        {fromRun && backRun && view === "files" && !phone && (
+        {fromRun && backRun && view === "files" && !narrow && (
           <p className="cv-lives">
             <button type="button" className="mini" data-code-back-to-results="" onClick={toResults}>
               {NAMES_TEXT.backToResults}
@@ -875,42 +852,96 @@ export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGrou
             </button>
           </p>
         )}
-        <FileView file={fileState.file} repo={repo} clientName={client.name} words={fromRun === "inside" && markAt?.key === rk(at.path!) ? markAt.words : null} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path }), openFolder(path)) : openFolder} phone={phone} />
+        <FileView file={fileState.file} repo={repo} clientName={client.name} words={fromRun === "inside" && markAt?.key === rk(at.path!) ? markAt.words : null} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path }), openFolder(path)) : openFolder} phone={narrow} />
       </>
     );
 
-  const title = (
-    <span className="cv-title" data-code-title={client?.clientKey ?? ""}>
-      {client ? (
-        <>
-          <Swatch color={client.color} />
-          <span className="cv-title-client">{client.name}</span>
-          {repo && <span className="cv-title-repo">· {repo.name}</span>}
-        </>
-      ) : (
-        <span>{TEXT.name}</span>
-      )}
-      <span className="cv-ro">{TEXT.readOnly}</span>
-    </span>
-  );
-  // A phone shows the client and the tree first (the shell's list page), then the file as its own page with Back.
-  const showBody = !phone || !!at.path || !at.clientKey || searching;
+  // ---- what shows under the search row ----
+  let main: ReactNode;
+  if (searching)
+    main = (
+      <div className="cv-results-page" data-code-results-page="">
+        <div className="cv-results-scroll">
+          {view === "inside" ? (
+            inRun && inRun.scope === (at.clientKey ?? null) ? (
+              <InsideResults
+                run={inRun}
+                kind={kind}
+                onOpen={(clientKey, repoId, file) => {
+                  // The file opens through code.file, logged as a file open before its text is returned, as any file is.
+                  setMarkAt({ key: `${clientKey}\u0000${repoId}\u0000${file}`, words: inRun.q });
+                  openingResult.current = true;
+                  onGo({ clientKey, repoId, path: file });
+                  setTimeout(() => setFromRun("inside"), 0);
+                }}
+              />
+            ) : (
+              <p className="cv-empty">{NAMES_TEXT.insideStart}</p>
+            )
+          ) : /* A search shows only where it was made: one client's results never sit under another client's name. */
+          run && run.scope === (at.clientKey ?? null) ? (
+            <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => ((openingResult.current = true), onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} />
+          ) : (
+            <p className="cv-empty">{NAMES_TEXT.searchStart}</p>
+          )}
+        </div>
+        {logFoot}
+      </div>
+    );
+  else if (failedClients || clients === null || !at.clientKey)
+    main = (
+      <div className="cv-start">
+        <div className="cv-start-scroll">
+          {failedClients ? (
+            <p className="cv-note problem" role="alert">{failedClients.message}</p>
+          ) : clients === null ? (
+            <p className="cv-note" role="status">Loading…</p>
+          ) : (
+            <>
+              <p className="cv-lead">{TEXT.pickClient}</p>
+              <ClientList clients={list} current={null} onPick={(k) => onGo({ clientKey: k, repoId: null, path: null })} />
+            </>
+          )}
+        </div>
+        {logFoot}
+      </div>
+    );
+  else if (narrow)
+    // A narrow window: the list (Files or By kind) is one page, the file another with Back.
+    main = at.path ? (
+      <div className="cv-file-page">
+        <button type="button" className="cv-back quiet" data-code-back="" onClick={fromRun && backRun && view === "files" ? toResults : () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) })}>
+          <Icon name="back" /> {fromRun && backRun && view === "files" ? NAMES_TEXT.backToResults : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.back)}
+        </button>
+        <div className="cv-body">{body}</div>
+        {logFoot}
+      </div>
+    ) : (
+      left ?? (
+        <div className="cv-file-page">
+          <div className="cv-body">{body}</div>
+          {logFoot}
+        </div>
+      )
+    );
+  else
+    main = (
+      <div className={`cv-browse${view === "kinds" ? " kinds" : ""}${left ? "" : " solo"}`}>
+        {left}
+        <section className="cv-body" aria-label={at.path ? baseName(at.path) : "File"}>
+          {body}
+        </section>
+        {!left && logFoot}
+      </div>
+    );
+
   return (
-    <PanelShell
-      name={TEXT.name}
-      className={`code-panel${view === "kinds" ? " kinds" : ""}`}
-      groups={[]}
-      current={showBody ? (at.path ?? "code") : null}
-      onPick={() => {}}
-      onClose={onClose}
-      onBack={phone && fromRun && backRun && view === "files" && at.path ? toResults : phone && searching ? () => onGo({ clientKey: at.clientKey, repoId: null, path: null }) : phone && at.path ? () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) }) : null}
-      backLabel={fromRun && backRun && view === "files" ? "Results" : searching ? (client?.name ?? TEXT.name) : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.name)}
-      title={title}
-      railOverride={phone && (!at.clientKey || searching) ? <></> : left}
-      phone={phone}
-      pageKey={`${view}/${at.clientKey ?? ""}/${at.repoId ?? ""}/${at.path ?? ""}`}
-    >
-      {phone && at.clientKey && !at.path && !searching ? left : body}
-    </PanelShell>
+    <main className={`code-page${narrow ? " narrow" : ""}`} aria-label={TEXT.name} data-code-page="">
+      <h1 className="sr-only" data-code-title={client?.clientKey ?? ""}>
+        {client ? `${TEXT.name}: ${client.name}` : TEXT.name}
+      </h1>
+      {top}
+      {main}
+    </main>
   );
 }
