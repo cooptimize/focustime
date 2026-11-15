@@ -244,3 +244,5 @@
 .code-page.narrow .cv-sql-all-btn { min-height: 44px; padding-inline: 10px; font-size: var(--fs-2); }
 .code-page.narrow .cv-sql-bar { padding-left: 8px; row-gap: 8px; }
 .code-page.narrow .cv-sql-in-item { padding-left: 8px; }
+
+.cv-search-scope { padding: 0 6px; color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; }

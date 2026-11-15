@@ -265,6 +265,12 @@ export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAl
             {NAMES_TEXT.inside}
           </button>
         </div>
+        {!canScope && (
+          // Review 1: on the front page the search reaches every client; say so before the results do.
+          <span className="cv-search-scope" data-code-scope-fixed="">
+            {NAMES_TEXT.allClients}
+          </span>
+        )}
         {canScope && (
           <div className="seg" role="group" aria-label="Where to search">
             <button type="button" className={`seg-btn${scopeAll ? "" : " on"}`} aria-pressed={!scopeAll} data-code-scope="client" onClick={() => onScope(false)}>
