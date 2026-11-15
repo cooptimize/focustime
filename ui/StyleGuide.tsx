@@ -18,7 +18,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { isTheme } from "./theme.ts";
 import { useLayout } from "./viewport.ts";
 import { WeekGrid } from "./WeekGrid.tsx";
-import { BentMark, Lockup, Lumen, LumenLoading, WeekMark } from "./brand/Brand.tsx";
+import { Lockup, WeekLoader, WeekMark } from "./brand/Brand.tsx";
 import { bootReady } from "./brand/boot.ts";
 
 const NY = "America/New_York";
@@ -211,15 +211,11 @@ export function StyleGuide() {
 
       <section className="sg-section">
         <h2>Brand</h2>
-        <p className="muted">Step 17.5 (docs/design/brand.md): the marks and Lumen. Lumen appears only in the opening, Close out's reverse, sign-in, About, three empty states and three fun moments.</p>
+        <p className="muted">BR-1 (docs/design/brand.md): the week mark is the only brand mark. The loader is the mark alone, its blocks lighting in turn.</p>
         <div className="sg-brand">
-          <figure><WeekMark height={36} /><figcaption>WeekMark: top bar, icon</figcaption></figure>
-          <figure><BentMark width={120} /><figcaption>BentMark: sign-in</figcaption></figure>
+          <figure><WeekMark height={36} /><figcaption>WeekMark: top bar, sign-in, Guide, icon</figcaption></figure>
           <figure><Lockup /><figcaption>Lockup: About</figcaption></figure>
-          <figure><Lumen pose="still" size={40} /><figcaption>Lumen still</figcaption></figure>
-          <figure><Lumen pose="idle" size={40} /><figcaption>Lumen idle</figcaption></figure>
-          <figure><Lumen pose="bob" size={40} /><figcaption>Lumen bob</figcaption></figure>
-          <figure><LumenLoading height={120} /><figcaption>LumenLoading</figcaption></figure>
+          <figure><WeekLoader /><figcaption>The loader (still with reduced motion)</figcaption></figure>
         </div>
       </section>
 
