@@ -1,3 +1,5 @@
+> History: the Settings proposal of Nov 6, 2026, before Settings was rebuilt; it describes an older app. How Settings is put together now is in `docs/settings.md`.
+
 # ST-1 checkpoint: Settings inventory and the new layout
 
 Status: proposal, waiting for review. Nothing here changes what a setting does; only where it shows.

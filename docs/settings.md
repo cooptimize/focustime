@@ -49,7 +49,7 @@ value read-only with "Set by your FocusTime admin".
 
 ## The panel shell for other panels (UI-5)
 
-The Guide can sit on the same shell once ST-1 is merged:
+The Guide sits on the same shell (`ui/guide/GuideFrame.tsx`), and so can any other panel:
 
 ```tsx
 <PanelShell

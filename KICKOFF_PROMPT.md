@@ -1,3 +1,5 @@
+> History: the prompt that started step 1 of the first slice on Oct 31, 2026; it describes that slice, not the app now. A session now reads CLAUDE.md first, then `docs/technical/` for how FocusTime works and `docs/architecture.md` for where things are. The spec it names is kept in `docs/history/spec.md`.
+
 Paste everything below the line into Claude Code, started in this folder.
 
 ---

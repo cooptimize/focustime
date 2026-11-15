@@ -11,7 +11,7 @@ UI-5, rebuilt by GU-1. The Guide is `#/guide`: one section at a time on ST-1's p
 - `ui/guide/retired.ts` is the one list of names FocusTime no longer uses: `was`, `now` (where it lives now, in the app's words, never another old name) and `match` (how the old name is recognised in text). Renamed is this list, one row per old name; the Guide's search finds every one; and a Guide sentence outside Renamed that uses one fails the test. When a step renames something: add its old name here, and fix every sentence the test then names.
 - A control written as a character (⋯ ‹ › × ✓ ✕, a lone +) fails the same test. Arrows inside a sentence ("→ Thu") and the › between path labels are text.
 - No answer is over 120 words (`MAX_ANSWER_WORDS`). Cut it, or split it into two questions. No "Where did X go?" questions: that is Renamed's job.
-- The five tab sections are in the app's tab order and carry the tabs' icons (`TAB_SECTIONS` in `sections.ts`; the test compares them with `TABS` in `ui/nav.ts` and the top bar's icons).
+- The six tab sections (Day, Week, Backlog, Status, Inbox, Code) are in the app's tab order and carry the tabs' icons (`TAB_SECTIONS` in `sections.ts`; the test compares them with `TABS` in `ui/nav.ts` and the top bar's icons).
 - `docs/ux/gu1/app.md` is the stock-take of the app the Guide was checked against (tabs, switches, More, menus, addresses, icon buttons' names, Settings and Admin sections, commands, keys). `docs/ux/gu1/ledger.md` has a row for every sentence the Guide had before GU-1 with where it is true, what became of each wrong or gone one, and which drawn pieces are the app's own and which are hand-drawn. `e2e/gu1-shots.test.ts` (with `GU1_SHOTS=<folder>`) takes every section, try-it and tour step.
 
 ## A section

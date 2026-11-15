@@ -3,7 +3,10 @@
 // every diagram is drawn and none is left over; nothing in the pages looks like a secret; and the rendering keeps
 // raw HTML, script URLs and event handlers inert. TD-1 adds: exactly one "Checked against" commit per page, no retired
 // screen name outside the names table and History lines, every repo path named exists, every table on data.md is one
-// the code has, and every package.json dependency is listed in development.md.
+// the code has, and every package.json dependency is listed in development.md. TD-2 adds the build guide
+// (docs/architecture.md): every path and link it names exists, every top-level folder and every Folder map line has its
+// section and no other folder does, it stays under its size, and its body holds no step code or history word.
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -224,5 +227,97 @@ describe("rendering a page", () => {
 
   it("fails on a diagram that isn't drawn", () => {
     expect(() => renderPage("# T\n\n```mermaid\nflowchart LR\n  a --> b\n```\n", ctx)).toThrow(/npm run docs:diagrams/);
+  });
+});
+
+/** The build guide's size limit, in bytes. */
+export const GUIDE_MAX_BYTES = 30 * 1024;
+/** Sections the guide has beyond CLAUDE.md's Folder map: the docs folder, which the map doesn't list. */
+const GUIDE_EXTRA = ["docs/"];
+/** History words and step codes: the guide's body says only what is true now. */
+const GUIDE_HISTORY: [string, RegExp][] = [
+  ["a history word", /\b(was|were|until|used to|removed in|no longer|formerly)\b/i],
+  ["a step code", /\b[A-Z]{1,4}[0-9]?-[0-9]+[a-z]?\b|\bD[0-9]{2,4}\b|\bA[0-6]\b|\bstep [0-9]/],
+];
+
+/** The folders and files CLAUDE.md's Folder map lists, as written ("ui/", "Dockerfile"). */
+export function folderMap(claude: string): string[] {
+  const block = /## Folder map[\s\S]*?```\n([\s\S]*?)```/.exec(claude)?.[1] ?? "";
+  return block.split("\n").map((l) => l.trim().split(/\s+/)[0]!).filter(Boolean);
+}
+
+/** What is wrong with the build guide: each problem as one line. Pure: the caller gives the files and the repo. */
+export function guideProblems(guide: string, claude: string, topFolders: readonly string[], exists: (path: string) => boolean, anchors: (file: string) => string[] | null): string[] {
+  const bad: string[] = [];
+  const bytes = Buffer.byteLength(guide, "utf8");
+  if (bytes > GUIDE_MAX_BYTES) bad.push(`size: ${bytes} bytes, over ${GUIDE_MAX_BYTES}`);
+  const lines = guide.split("\n");
+  const top = lines.findIndex((l, i) => i > 0 && l.trim() !== "");
+  if (top < 0 || !/\(decisions\.md\)|`docs\/decisions\.md`/.test(lines[top]!)) bad.push("top line: should point to docs/decisions.md");
+  const sections = [...guide.matchAll(/^#{2,3} `([^`]+)`\s*$/gm)].map((m) => m[1]!);
+  const map = folderMap(claude);
+  for (const f of map) if (!sections.includes(f)) bad.push(`section: CLAUDE.md's Folder map lists ${f}, the guide has no section for it`);
+  for (const f of sections) if (!map.includes(f) && !GUIDE_EXTRA.includes(f)) bad.push(`section: ${f} isn't in CLAUDE.md's Folder map`);
+  for (const f of topFolders) if (!sections.includes(`${f}/`)) bad.push(`section: the top-level folder ${f}/ has none`);
+  // Paths: as named, or inside the section's folder (its parent folders too), or under docs/.
+  let here: string[] = [];
+  const body = lines.slice(top + 1);
+  body.forEach((line, i) => {
+    const n = top + 2 + i;
+    const head = /^#{2,3} `([^`]+)`/.exec(line);
+    if (head) here = head[1]!.replace(/\/$/, "").split("/").map((_, k, a) => a.slice(0, a.length - k).join("/"));
+    else if (/^#{2,3} /.test(line)) here = [];
+    // A folder named earlier in the line ("`sql/` holds `migrate.ts`") is where its line's bare names are looked for too.
+    const near: string[] = [];
+    for (const m of line.matchAll(/`([^`\n]+)`/g)) {
+      const path = m[1]!.replace(/\/$/, "");
+      if (/[\s<>*{}$=|,#()]|^\.\.|^~|^https?:|^-|^\//.test(path)) continue;
+      const folder = m[1]!.endsWith("/");
+      if (!folder && !path.includes("/") && !PATH_EXT.test(path) && path !== "Dockerfile") continue;
+      if (/^[a-z]+:/.test(path)) continue;
+      const found = [...near, ...here, "", "docs"].map((d) => (d ? `${d}/${path}` : path)).find((p) => exists(p));
+      if (found === undefined) bad.push(`line ${n}: ${m[1]} doesn't exist`);
+      else if (folder) near.unshift(found);
+    }
+    for (const m of line.replace(/`[^`\n]*`/g, "").matchAll(/\]\(([^)\s]+)\)/g)) {
+      const [file, anchor] = m[1]!.split("#");
+      if (/^https?:/.test(m[1]!)) continue;
+      const target = file ? join("docs", file).replace(/\\/g, "/") : "docs/architecture.md";
+      if (!exists(target)) bad.push(`line ${n}: link ${m[1]} lands on nothing`);
+      else if (anchor && !(anchors(target) ?? []).includes(anchor)) bad.push(`line ${n}: link ${m[1]} has no such heading`);
+    }
+    const prose = line.replace(/`[^`\n]*`/g, "").replace(/\]\([^)]*\)/g, "]");
+    for (const [what, re] of GUIDE_HISTORY) if (re.test(prose)) bad.push(`line ${n}: ${what} (${re.exec(prose)![0]})`);
+  });
+  return bad;
+}
+
+const trackedTop = () => [...new Set(execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter((f) => f.includes("/")).map((f) => f.split("/")[0]!))].filter((f) => f !== ".github");
+
+describe("the build guide, docs/architecture.md (TD-2)", () => {
+  const problems = (guide: string) =>
+    guideProblems(guide, read("CLAUDE.md"), trackedTop(), (p) => existsSync(join(root, p)), (f) => (f.endsWith(".md") && existsSync(join(root, f)) ? anchorsIn(read(f)) : null));
+
+  it("names only what exists, has a section per folder, stays short and says only what is true now", () => {
+    expect(problems(read("docs/architecture.md"))).toEqual([]);
+  });
+
+  it("fails on each kind of problem", () => {
+    const good = read("docs/architecture.md");
+    const hit = (g: string, what: RegExp) => expect(problems(g).some((p) => what.test(p)), String(what)).toBe(true);
+    hit(good.replace("`registry.ts` is the one list", "`no-such-file.ts` is the one list"), /no-such-file\.ts doesn't exist/);
+    hit(good.replace(/^## `log\/`$/m, "## Logging"), /log\/ has none|Folder map lists log\//);
+    hit(good + "\n## `nowhere/`\n", /nowhere\/ isn't in CLAUDE\.md's Folder map/);
+    hit(good + "x".repeat(GUIDE_MAX_BYTES), /^size:/);
+    hit(good.replace("The React app:", "The React app, added in LP-1:"), /a step code/);
+    hit(good.replace("The React app:", "The React app, which was smaller:"), /a history word/);
+    hit(good.replace("[Data](technical/data.md)", "[Data](technical/nope.md)"), /lands on nothing/);
+  });
+
+  it("reads CLAUDE.md's Folder map", () => {
+    const map = folderMap(read("CLAUDE.md"));
+    expect(map).toContain("ui/");
+    expect(map).toContain("Dockerfile");
+    expect(map).toContain(".github/workflows/");
   });
 });

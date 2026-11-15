@@ -1,3 +1,5 @@
+> History: this records the direction as it was planned on Nov 1, 2026, and describes an older app. How FocusTime works now is in `docs/technical/`, what each step decided is in `docs/decisions.md`, and the spec it names as the living source is kept as history in `docs/history/spec.md`.
+
 # FocusTime | Roadmap and Vision
 
 November 1, 2026. Planning-chat record. The repo's docs/ folder is the living source for built behavior (spec.md, decisions.md, open-questions.md); this file holds direction and the staged path to it.
