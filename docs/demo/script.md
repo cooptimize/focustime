@@ -1,3 +1,5 @@
+> Written for the app on Nov 9, 2026 (noted Nov 14, 2026, NM-2): some screens and names have changed since; the Guide (`?`) is current.
+
 # FocusTime demo script (about 15 minutes)
 
 For Monday Nov 9, 2026, 11:00 ET, on dev or prod, signed out: **Try the demo**. Everything you see is fictional
