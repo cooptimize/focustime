@@ -43,7 +43,7 @@ export type DemoItem = {
 };
 /** DV-2: what a teammate can change in the demo's DevOps (see `teammate`). */
 export type TeammateChange =
-  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null; /** ED-1: a teammate rewrites the description. */ description?: string }
+  | { id: number; title?: string; state?: string; assignee?: string | null; target?: string | null; /** ED-1: a teammate rewrites the description. */ description?: string; /** ED-2: not a change: the next write to this item gets no answer. */ loseNextWrite?: boolean }
   | { create: { type: string; title: string; parent?: number | null; assignee?: string | null; target?: string | null; /** In the project, outside the scope (another team's area). */ outsideScope?: boolean } };
 /** DV-2: a teammate's change from a request's input, or null when it isn't one. */
 export function parseTeammate(v: unknown): TeammateChange | null {
@@ -57,8 +57,8 @@ export function parseTeammate(v: unknown): TeammateChange | null {
     if (!str(c.type) || !str(c.title) || !opt(c.parent, (x) => x === null || Number.isInteger(x)) || !opt(c.assignee, (x) => x === null || str(x)) || !opt(c.target, day) || !opt(c.outsideScope, (x) => typeof x === "boolean")) return null;
     return { create: { type: c.type as string, title: c.title as string, ...(c.parent !== undefined ? { parent: c.parent as number | null } : {}), ...(c.assignee !== undefined ? { assignee: c.assignee as string | null } : {}), ...(c.target !== undefined ? { target: c.target as string | null } : {}), ...(c.outsideScope ? { outsideScope: true } : {}) } };
   }
-  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day) || !opt(o.description, str)) return null;
-  return { id: o.id as number, ...(o.description !== undefined ? { description: o.description as string } : {}), ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
+  if (!Number.isInteger(o.id) || !opt(o.title, str) || !opt(o.state, str) || !opt(o.assignee, (x) => x === null || str(x)) || !opt(o.target, day) || !opt(o.description, str) || !opt(o.loseNextWrite, (x) => typeof x === "boolean")) return null;
+  return { id: o.id as number, ...(o.loseNextWrite === true ? { loseNextWrite: true } : {}), ...(o.description !== undefined ? { description: o.description as string } : {}), ...(o.title !== undefined ? { title: o.title as string } : {}), ...(o.state !== undefined ? { state: o.state as string } : {}), ...(o.assignee !== undefined ? { assignee: o.assignee as string | null } : {}), ...(o.target !== undefined ? { target: o.target as string | null } : {}) };
 }
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
@@ -117,6 +117,8 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
   let nextId = 5100;
   let nextComment = 7000;
   let nextAttachment = 1;
+  /** ED-2: items whose next write is lost on the way (a teammate change `{ id, loseNextWrite: true }`). */
+  const loseNext = new Set<number>();
   /** Every request this DevOps answered (method and path only), for the tests. */
   const seen: { method: string; path: string }[] = [];
   const orgOf = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!.org;
@@ -241,10 +243,13 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
       if (method === "GET") return json(view(it));
       if (method === "PATCH") {
         const ops = body as { op: string; path: string; value: unknown }[];
+        // ED-2: one write whose answer never arrives (a dropped connection), so Save's Retry can be seen in the demo.
+        if (loseNext.delete(it.id)) throw new TypeError("The demo's DevOps dropped this connection");
         if (ops.some((op) => op.op === "test" && op.path === "/rev" && op.value !== it.rev)) return json({ message: "TF26071: This work item has been changed by someone else since you opened it." }, 412);
         let commentId: number | null = null;
         // One patch is one revision: an op refused leaves the item (and a parent it linked) as it was.
-        const saved = structuredClone({ parent: it.parent, relations: it.relations, formats: it.formats });
+        // ED-2: a patch can now hold fields and a parent link together, so the whole item is put back.
+        const saved = structuredClone(it);
         const undoAll = (r: Response) => (Object.assign(it, saved), r);
         const oldParent = it.parent;
         for (const op of ops) {
@@ -343,6 +348,10 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     const it = items.get(c.id);
     if (!it || it.clientKey !== k) return { ok: false, error: `#${c.id} isn't one of ${k}'s items` };
     if (c.state !== undefined && !(STATES[it.type] ?? []).some((s) => s.name === c.state)) return { ok: false, error: `${it.type} has no state ${c.state}` };
+    if (c.loseNextWrite) {
+      loseNext.add(it.id);
+      return { ok: true, id: it.id };
+    }
     if (c.title !== undefined) setField(it, "System.Title", c.title);
     if (c.state !== undefined) setField(it, "System.State", c.state);
     if (c.assignee !== undefined) setField(it, "System.AssignedTo", c.assignee ?? "", c.assignee === null);

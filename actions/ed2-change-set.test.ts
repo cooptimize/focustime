@@ -23,7 +23,6 @@ const ME = "avery@cooptimize.example";
 const PROJECT = "Cooptimize Project";
 const cfgText = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', `my_email = "${ME}"`);
 const who = (email: string) => ({ uniqueName: email, displayName: email.split("@")[0] });
-const AC = "Microsoft.VSTS.Common.AcceptanceCriteria";
 
 function setup(o: { lead?: boolean; automation?: boolean; outside?: string[]; noPat?: boolean } = {}) {
   clearDevopsPreviews();
