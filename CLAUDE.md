@@ -2,13 +2,13 @@
 
 FocusTime is a hosted web app for Cooptimizers: a week grid of half-day focus blocks with meetings and personal events layered on, risk flags, planning rituals, a focus timer, follow-ups, and (later) a conversation panel that calls the same actions as the UI. It is moving to Azure (docs/azure/). Developers run it locally through the developer loop (`system/README.md`).
 
-Read before changing code: this file, `docs/technical/` (how FocusTime works: architecture, data, integrations, security, operations, development; also in the app at `#/docs`), `docs/spec.md` (the slices so far), `docs/decisions.md`, and for the Azure move `docs/azure/A0-plan.md`.
+Read before changing code: this file, `docs/technical/` (how FocusTime works: architecture, data, integrations, security, operations, development; also in the app at `#/docs`), `docs/decisions.md`, and for the Azure move `docs/azure/A0-plan.md`.
 
 ## Current milestone
 
 FocusTime is hosted on Azure: prod in the FocusTime resource group (deployed by hand by SHA through `deploy-prod.yml`, promoting dev's tested image) and dev deployed from main; the local app is retired and developers run the developer loop. The Azure move follows `docs/azure/A0-plan.md` (A0 to A5 done, reports in `docs/azure/`; A6 follows, authorized separately).
-Work goes one step per pull request: a step code (like LP-1, GD-2 or HK-7), its decisions under that code in `docs/decisions.md` (numbered at merge), its open questions in `docs/open-questions.md`, each step authorized separately. What each delivered is in `docs/spec.md` and `docs/decisions.md`; `docs/technical/` is the reference for how FocusTime works now.
-Only the work in `docs/spec.md`, `docs/azure/A0-plan.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Work goes one step per pull request: a step code (like LP-1, GD-2 or HK-7), its decisions under that code in `docs/decisions.md` (numbered at merge), its open questions in `docs/open-questions.md`, each step authorized separately. What each delivered is in `docs/history/spec.md` and `docs/decisions.md`; `docs/technical/` is the reference for how FocusTime works now.
+Only the work in `docs/history/spec.md`, `docs/azure/A0-plan.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Principles
 
@@ -53,7 +53,7 @@ Only the work in `docs/spec.md`, `docs/azure/A0-plan.md` and the authorized step
 
 ## Folder map
 
-One line per folder; the detail is in `docs/architecture.md`. Steps update `docs/architecture.md` when files change. CLAUDE.md changes only for rules, the glossary and the current milestone.
+One line per folder; `docs/architecture.md` is the short guide to what is where, updated only by a step that adds, moves or removes a folder or an entry point. CLAUDE.md changes only for rules, the glossary and the current milestone.
 
 ```
 ui/                React UI: screens, menus, Settings, styles and the type scale
