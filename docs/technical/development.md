@@ -46,7 +46,17 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 - **Stopping servers by hand:** stop your own server by its process id, never by a pattern such as `pkill -f server/main.ts`: on a shared machine it also stops other sessions' test servers and the local service. If a run fails with `ERR_CONNECTION_REFUSED` or "The demo server on port N stopped during the test", look for that first.
 - **Test data** comes from the builders in `test/builders`, never hand-written fixtures. A test that starts a server takes its port from `test/ports.ts`.
 - **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`: the typecheck, the guards, the unit and store tests with a SQL Server container, a UI build, the browser tests in six shards, the Bicep build and the image build with a demo start. There are no retries.
-- **A flaky test** is a cause to find, never a retry: rerun it once, and if it fails again, run that file several times at once on fewer cores to reproduce it ([docs/architecture.md, Testing](../architecture.md#testing-hk-5)).
+- **A flaky test** is a cause to find, never a retry: rerun it once, and if it fails again, run that file several times at once on fewer cores to reproduce it ([How tests stay apart](#how-tests-stay-apart)).
+
+### How tests stay apart
+
+Any order and any number at once gives the same result:
+
+- **Unit and store tests.** SQLite: a new in-memory database per test (`sqliteDb()` in `test/db.ts`). SQL Server: one database per test file (`focustime_test_<pid>_<n>_<time>`, migrated once, dropped at the end), with every table emptied and its identities reset at each test's `open()`. Every test file runs in its own process. A test that asserts on time passes its own clock (`now`) instead of reading the machine's.
+- **Browser tests.** Each file's demo server has its own temp folder for config, data, cache and the launch file, its own port, and the clock pinned with `--clock` (Monday Nov 2, 2026 9:30 AM unless a file pins another). Each `freshPage` is a new browser context and a new demo session with its own in-memory store, so tests in a file never see each other's changes. `e2e/live.ts` does the same for a real session on fake sources, and a fake a test builds beside it takes the harness's clock too.
+- **Waiting.** A test waits for the condition it means (a locator, `expect.poll` on what the screen shows), never a fixed sleep. A count or text read once is only for what is already settled, after a wait on that same thing. There are no retries in the config or on CI.
+- **Workers.** `test/workers.ts` (read by `vite.config.ts`, and said at the start of a run as "test workers: N") takes 60% of the CPUs that aren't already busy (by the 1-minute load average, so a second session's suite takes what is left; not on CI, where the runner is the job's alone), at most one per GB of free memory beyond 2 GB, between 1 and CPUs − 1. That is 12 on a 20-core laptop and 2 on CI's 4-core runners, which is why the browser tests run in six shards there. `FOCUSTIME_TEST_WORKERS=1` runs one file at a time, to bisect a failure.
+- **As CI runs it.** One browser shard: `npx vitest run e2e/ --shard=2/6` (the same six shards as `ci.yml`; the UI is built first, in about a second). The unit and store half: `npx vitest run --exclude 'e2e/**'`, with `npm run db:up` and `FOCUSTIME_TEST_SQL=required`. One test: `npx vitest run e2e/<file>.test.ts -t "<name>"`. To check a fix for a flake, run that file several times at once on fewer cores, for example eight copies under `taskset -c 0-3`.
 
 ## Dependencies
 
@@ -86,7 +96,7 @@ Every package in `package.json`, what FocusTime uses it for and its license. A n
 
 - Record a decision in [docs/decisions.md](../decisions.md) under the step's heading, unnumbered. Numbers are assigned when the step merges, in merge order, so two parallel pull requests never take the same number. Never renumber an existing decision.
 - Record what a person needs to decide in [docs/open-questions.md](../open-questions.md) under the step.
-- Update [docs/architecture.md](../architecture.md) when files change, and these pages when what they say changes.
+- Update [docs/architecture.md](../architecture.md) when a folder or an entry point is added, moved or removed, and these pages when what they say changes.
 
 ## Adding an external write safely
 
