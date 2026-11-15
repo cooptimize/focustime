@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { aDeployment, aPick, aWeekConfig, WEEK } from "../test/builders/index.ts";
 import { hoursOn } from "../week/hours.ts";
 import { weekDates7 } from "../week/dates.ts";
-import { afterHours, afterHoursText, deployedText, deployedWhen, windowHalf, windowProblem, windowText } from "./deploy.ts";
+import { afterHours, afterHoursText, deployedText, deployedWhen, madeTitle, movedTitle, windowHalf, windowProblem, windowText } from "./deploy.ts";
 import { pickNeed, SIZE_MINUTES } from "./types.ts";
 
 const model = aWeekConfig().hours;
@@ -107,5 +107,22 @@ describe("DP-2: Tell <client> it's deployed", () => {
     expect(deployedWhen(evening, "2026-11-07")).toBe("tonight");
     expect(deployedWhen(morning, "2026-11-07")).toBe("today");
     expect(deployedWhen(evening, "2026-11-08")).toBe("on Saturday");
+  });
+});
+
+describe("UC-1: a deployment's made title", () => {
+  it("is Deployment, the client's name and the date as the app writes dates", () => {
+    expect(madeTitle("Contoso", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
+    expect(madeTitle("  Fabrikam  ", "2026-12-01")).toBe("Deployment - Fabrikam - Tue, Dec 1");
+  });
+  it("follows the deployment to another day", () => {
+    expect(movedTitle(madeTitle("Contoso", "2026-11-21"), "2026-11-21", "2026-11-22")).toBe("Deployment - Contoso - Sun, Nov 22");
+    // A client's name with a dash in it is still the made form.
+    expect(movedTitle("Deployment - Contoso - East - Sat, Nov 21", "2026-11-21", "2026-11-28")).toBe("Deployment - Contoso - East - Sat, Nov 28");
+  });
+  it("leaves a person's own words alone", () => {
+    for (const mine of ["Release 4.2 to production", "Deployment", "Deployment - Contoso", "Deployment - Sat, Nov 21", "Contoso - Sat, Nov 21", "Deployment - Contoso - Sat, Nov 21 (phase 2)", "Deployment - Contoso - Fri, Nov 20"])
+      expect(movedTitle(mine, "2026-11-21", "2026-11-22"), mine).toBe(mine);
+    expect(movedTitle(madeTitle("Contoso", "2026-11-21"), "2026-11-21", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
   });
 });

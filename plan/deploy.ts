@@ -6,8 +6,26 @@ import type { Pick, TodoLink, TodoWindow } from "./types.ts";
 import type { DeployItem } from "./deploy-items.ts";
 import { hoursOn, nominalHours, toHm, toMin, type DayHours, type Span, type TimeModel } from "../week/hours.ts";
 import type { Half, IsoDate } from "../week/types.ts";
+import { dayLabel } from "./days.ts";
 
 export const DEPLOYMENT = "Deployment";
+
+/**
+ * UC-1: the title a Deployment gets when none is typed: "Deployment - <client's name> - <date>", the date as the app
+ * writes dates ("Sat, Nov 21"). Capture shows it as the box's hint and sends it as the title.
+ */
+export const madeTitle = (clientName: string, date: IsoDate): string => `${DEPLOYMENT} - ${clientName.trim().slice(0, 150)} - ${dayLabel(date)}`;
+
+/**
+ * UC-1: a title FocusTime made follows its deployment to another day. A title is a made one when it still reads
+ * "Deployment - <something> - <the day it was on>"; anything else is the person's own words and is kept as it is.
+ */
+export function movedTitle(title: string, from: IsoDate, to: IsoDate): string {
+  const head = `${DEPLOYMENT} - `;
+  const tail = ` - ${dayLabel(from)}`;
+  if (from === to || !title.startsWith(head) || !title.endsWith(tail) || title.length <= head.length + tail.length) return title;
+  return `${title.slice(0, -tail.length)} - ${dayLabel(to)}`;
+}
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$|^24:00$/;
 /** The longest window one deployment takes on a day (a whole night's cutover is still one day). */
 export const MAX_WINDOW_MINUTES = 16 * 60;

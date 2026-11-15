@@ -16,6 +16,7 @@ import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel } from "../plan/weeklist.ts";
 import { DEFAULT_SIZE_SCALE, MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type SizeScale, type StorySize } from "../plan/estimate.ts";
 import type { DeployItem } from "../plan/deploy-items.ts";
+import { movedTitle } from "../plan/deploy.ts";
 import type { InboxMark, InboxMarkPatch } from "../plan/inbox-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
@@ -1799,6 +1800,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     if (p.minutes != null) base.minutes = p.minutes;
     if (p.remainingMinutes != null) Object.assign(base, { remainingMinutes: p.remainingMinutes, spentMinutes: p.spentMinutes ?? 0 });
     if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, deployItems: p.deployItems ?? null, notes: p.notes });
+    // UC-1: a title FocusTime made for a deployment names its day, so it follows the move; a typed title is kept.
+    if (p.todoKind === "deployment") base.title = movedTitle(p.title, p.date, date);
     return base;
   }
 
