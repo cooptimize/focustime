@@ -1,9 +1,8 @@
 // UI-5: Start here. What FocusTime is for, the day in five steps, the week in three, and the two things that never
-// change. The WeekMark unrolls once as the section opens (the brand's own Unroll; reduced motion shows its end), and
-// a proposal card turns into "Done · Undo" once when it scrolls into view (CSS, under 600 ms; reduced motion: the
-// end state, still). Show me starts a tour on the person's own screens; signed out there are none, so it says so.
+// change. The picture is the still WeekMark (BR-1; it unrolled before), and a proposal card turns into "Done · Undo"
+// once when it scrolls into view (CSS, under 600 ms; reduced motion: the end state, still). Show me starts a tour on the person's own screens; signed out there are none, so it says so.
 import { useEffect, useRef, useState } from "react";
-import { Unroll } from "../brand/Brand.tsx";
+import { WeekMark } from "../brand/Brand.tsx";
 import { useReducedMotion } from "../brand/motion.ts";
 import { Icon } from "../icons.tsx";
 import { START } from "./content.ts";
@@ -61,7 +60,7 @@ export function StartHere({ onTour }: { /** Null signed out: no screens to show.
           </ul>
         </div>
         <div className="gs-mark" role="img" aria-label={START.markLabel}>
-          <Unroll direction="open" height={150} />
+          <WeekMark height={68} />
         </div>
       </div>
 

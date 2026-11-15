@@ -6,7 +6,6 @@
 // Loaded lazily (App.tsx), with its styles in ../guide.css.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CloseButton } from "../../CloseButton.tsx";
-import { Lumen } from "../../brand/Brand.tsx";
 import { useReducedMotion } from "../../brand/motion.ts";
 import { TOUR_UI } from "../content.ts";
 import { plainText, Rich } from "../Rich.tsx";
@@ -238,9 +237,6 @@ export default function Tour({ tour, phone, onEnd, onNav }: {
           </h2>
         ) : atEnd ? (
           <>
-            <div className="tour-end-mark">
-              <Lumen pose={reduced ? "still" : "idle"} size={26} />
-            </div>
             <h2 ref={head} id={titleId} tabIndex={-1} className="tour-title">
               {TOUR_UI.endTitle}
             </h2>

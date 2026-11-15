@@ -4,10 +4,8 @@
 // where one helps, and "How it works" folded. Every word is in ./content.ts; keys come from ui/keys.ts; controls are
 // named as the app names them, with the app's own icon (Rich's {icon:name}). Example data only, labeled as such.
 // The look is the app's (docs/design/style-guide.md section 11): rows, not boxes; pills; one filled button at most.
-// Lumen: Start here's unroll, a tour's end and this footer (docs/design/brand.md).
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Checklist } from "../../actions/guide-actions.ts";
-import { Lumen } from "../brand/Brand.tsx";
 import { KEYS } from "../keys.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { AREA_UI, AREAS, DEVOPS, FIRST_DAY, FOOTER, QUESTION_POOL, RENAMED, RENAMED_ROWS, SEARCH, SECTION_LINES, SHORTCUTS, START, TECH_DOCS_LINK, TRY, type AreaBody, type Do, type Extra } from "./content.ts";
@@ -375,7 +373,6 @@ export function Guide({
         <div className="guide-body" data-section={current}>
           <Section id={current} onTour={onTour} signedIn={signedIn} checklist={checklist} />
           <footer className="guide-footer">
-            <Lumen pose="still" size={22} />
             <span>
               <Rich text={FOOTER} />
               {signedIn && (
