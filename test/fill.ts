@@ -69,6 +69,8 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   await plan.stageAheadChange({ clientKey: "cooptimize", itemId: 7001, field: "target", value: "2026-11-27", half: "PM", baseRev: 3, baseValue: null });
   // AH-5: a pending state change (its own table).
   await plan.stageAheadChange({ clientKey: "cooptimize", itemId: 7001, field: "state", value: "Active", half: null, baseRev: 3, baseValue: "New" });
+  // ED-2: a pending rename (its own table).
+  await plan.stageAheadChange({ clientKey: "cooptimize", itemId: 7001, field: "title", value: "A clearer title", half: null, baseRev: 3, baseValue: "A title" });
   await plan.setAheadHalf("cooptimize", 7001, "start", "2026-11-02", "PM");
   // AS-1: a turn of the assistant's history and a proposal from it.
   const turn = await plan.addAssistantTurn({ channel: "panel", role: "me", text: `${tag} what's next?`, cards: [] });

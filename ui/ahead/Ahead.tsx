@@ -482,9 +482,10 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     const mine = load.changes.filter((c) => c.clientKey === clientKey && c.itemId === itemId);
     const it = load.clients.find((c) => c.clientKey === clientKey)?.items.find((i) => i.id === itemId);
     if (!mine.length || !it) return null;
-    const now = (f: ChangeField): ChangeValue => (f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
-    const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State" };
-    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
+    const items = load.clients.find((c) => c.clientKey === clientKey)?.items ?? [];
+    const now = (f: ChangeField): ChangeValue => (f === "title" ? it.title : f === "parent" ? (it.parentId === null ? null : { id: it.parentId, title: items.find((x) => x.id === it.parentId)?.title ?? "" }) : f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
+    const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State", title: "Title", parent: "Parent" };
+    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : f === "parent" ? "no parent" : "no value") : valueText(f, v, half));
     return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
   const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
@@ -586,7 +587,7 @@ export function changeText(c: Pick<StagedChange, "field" | "value" | "half">, si
   if (c.field === "size") return typeof c.value === "number" ? `${c.value}${sizeLabel ? ` ${sizeLabel}` : ""}` : "None";
   return valueText(c.field, c.value, c.half);
 }
-const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State" };
+const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State", title: "Title", parent: "Parent" };
 
 /**
  * The review (D657): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now

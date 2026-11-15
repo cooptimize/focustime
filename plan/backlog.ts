@@ -98,8 +98,20 @@ export function backlogGroups(load: AheadLoad, f: BacklogFilters, o: { staleWeek
 
 // ---- Bulk actions (through Ahead's change set) ----
 
-export type BulkOp = { kind: "push"; weeks: 2 | 4 } | { kind: "move"; date: string } | { kind: "set_missing"; date: string } | { kind: "assign_me" };
-export const BULK_WORDS: Record<BulkOp["kind"], string> = { push: "Push target date", move: "Target date", set_missing: "Set a target date", assign_me: "Assign to me" };
+/**
+ * BH-1's four (push, move, set_missing, assign_me) and ED-2's four: Assign to… (someone on the client's DevOps
+ * project), State… (a state of the item's own type), Size… (the process's size field) and Move to… (one new parent).
+ */
+export type BulkOp =
+  | { kind: "push"; weeks: 2 | 4 }
+  | { kind: "move"; date: string }
+  | { kind: "set_missing"; date: string }
+  | { kind: "assign_me" }
+  | { kind: "assign"; email: string | null; name: string }
+  | { kind: "state"; state: string }
+  | { kind: "size"; value: number | null }
+  | { kind: "parent"; parentId: number | null; title: string };
+export const BULK_WORDS: Record<BulkOp["kind"], string> = { push: "Push target date", move: "Target date", set_missing: "Set a target date", assign_me: "Assign to me", assign: "Assign to…", state: "State…", size: "Size…", parent: "Move to…" };
 
 /** What a bulk action needs to know of one item. */
 export type BulkItem = {
@@ -113,16 +125,55 @@ export type BulkItem = {
   target: string | null;
   /** Assigned to me now (DevOps or pending). */
   mine: boolean;
+  /** ED-2: who has it now (DevOps or pending), lowercased; null: nobody. */
+  assignee?: string | null;
+  /** ED-2: its state now, and the states its own type takes in the process. */
+  state?: string;
+  states?: readonly string[];
+  /** ED-2: its type has the process's size field; its size now. */
+  hasSize?: boolean;
+  size?: number | null;
+  /** ED-2: its parent now, and why it can't go under the parent asked for (the move rule's words; null: it can). */
+  parentId?: number | null;
+  moveProblem?: string | null;
 };
-export type BulkStep = { field: "target"; value: string } | { field: "assignee"; value: "me" };
+export type BulkStep =
+  | { field: "target"; value: string }
+  | { field: "assignee"; value: "me" }
+  | { field: "assignee"; value: { email: string; name: string } | null }
+  | { field: "state"; value: string }
+  | { field: "size"; value: number | null }
+  | { field: "parent"; value: number | null };
 export type BulkDecision = { ok: true; step: BulkStep } | { ok: false; reason: string };
 
 const longDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
+const lc = (x: string | null | undefined) => (x ?? "").trim().toLowerCase();
 
 /** One item: the change to stage, or why it's skipped (in words a person reads). */
 export function bulkDecide(i: BulkItem, op: BulkOp, project: string): BulkDecision {
   if (!i.editable) return { ok: false, reason: i.note };
   if (op.kind === "assign_me") return i.mine ? { ok: false, reason: "Already yours" } : { ok: true, step: { field: "assignee", value: "me" } };
+  if (op.kind === "assign") {
+    if (lc(i.assignee) === lc(op.email)) return { ok: false, reason: op.email ? `Already assigned to ${op.name}` : "Already unassigned" };
+    return { ok: true, step: { field: "assignee", value: op.email ? { email: op.email, name: op.name } : null } };
+  }
+  if (op.kind === "state") {
+    // The spelling the type's own process has; a state the type doesn't take is never written.
+    const st = (i.states ?? []).find((x) => lc(x) === lc(op.state));
+    if (!st) return { ok: false, reason: `${op.state} isn't a state of ${i.type} in ${project}'s process` };
+    if (lc(i.state) === lc(st)) return { ok: false, reason: `Already ${st}` };
+    return { ok: true, step: { field: "state", value: st } };
+  }
+  if (op.kind === "size") {
+    if (!i.hasSize) return { ok: false, reason: `${i.type} has no size in ${project}'s process` };
+    if ((i.size ?? null) === op.value) return { ok: false, reason: op.value === null ? "Already has no size" : "Already that size" };
+    return { ok: true, step: { field: "size", value: op.value } };
+  }
+  if (op.kind === "parent") {
+    if (i.moveProblem) return { ok: false, reason: i.moveProblem };
+    if ((i.parentId ?? null) === op.parentId) return { ok: false, reason: op.parentId === null ? "Already has no parent" : "Already under it" };
+    return { ok: true, step: { field: "parent", value: op.parentId } };
+  }
   if (!i.hasTarget) return { ok: false, reason: `${i.type} has no target date in ${project}'s process` };
   if (op.kind === "push") {
     if (!i.target) return { ok: false, reason: "No target date to push. Use Set a target date" };
@@ -133,14 +184,47 @@ export function bulkDecide(i: BulkItem, op: BulkOp, project: string): BulkDecisi
   return { ok: true, step: { field: "target", value: op.date } };
 }
 
-/** "Pushed 3 target dates by 2 weeks", "2 skipped" etc., for the line after a bulk action. */
+/** "Pushed 3 target dates by 2 weeks", "2 skipped" etc., for the line after a bulk action. ED-2's say "Staged N, skipped M". */
 export function bulkSummary(op: BulkOp, staged: number, skipped: number): string {
   const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  if (op.kind === "assign" || op.kind === "state" || op.kind === "size" || op.kind === "parent") {
+    const what =
+      op.kind === "assign" ? (op.email ? `Assign to ${op.name}` : "Unassign")
+      : op.kind === "state" ? `State ${op.state}`
+      : op.kind === "size" ? (op.value === null ? "No size" : `Size ${op.value}`)
+      : op.parentId === null ? "No parent" : `Move under ${op.title || `#${op.parentId}`}`;
+    return `${what}: staged ${staged}, skipped ${skipped}. Nothing is written until you save.`;
+  }
   const what =
     op.kind === "push" ? `${n(staged, "target date", "target dates")} pushed by ${op.weeks} weeks`
     : op.kind === "assign_me" ? `${n(staged, "item", "items")} assigned to you`
     : `${n(staged, "target date", "target dates")} set to ${longDay(op.date)}`;
   return `${what}, ready to save${skipped ? ` · ${skipped} skipped` : ""}`;
+}
+
+/**
+ * ED-2: State… over a mixed selection: the states every ticked row's type takes (these can be picked), and the rest
+ * with which types they fit, in the first type's own order then the others'. Names come from the process, never a list.
+ */
+export function commonStates(rows: readonly { type: string; states: readonly string[] }[]): { common: string[]; partial: { state: string; types: string[]; fits: number }[] } {
+  const order: string[] = [];
+  for (const r of rows) for (const s of r.states) if (!order.some((x) => lc(x) === lc(s))) order.push(s);
+  const takes = (r: { states: readonly string[] }, s: string) => r.states.some((x) => lc(x) === lc(s));
+  const common = order.filter((s) => rows.every((r) => takes(r, s)));
+  const partial = order.filter((s) => !common.includes(s)).map((s) => ({ state: s, types: [...new Set(rows.filter((r) => takes(r, s)).map((r) => r.type))], fits: rows.filter((r) => takes(r, s)).length }));
+  return { common, partial };
+}
+
+/**
+ * ED-2: Move to… needs the ticked rows at one level of one client (one picker of parents fits them all). Null: it
+ * does; otherwise the reason the bar shows.
+ */
+export function bulkMoveBlock(rows: readonly { clientKey: string; rung: number | null }[]): string | null {
+  if (!rows.length) return null;
+  if (new Set(rows.map((r) => r.clientKey)).size > 1) return "Move to… needs rows from one client. A move never crosses clients";
+  if (new Set(rows.map((r) => r.rung)).size > 1) return "Move to… needs rows at one level, so one parent fits them all";
+  if (rows[0]!.rung === null || rows[0]!.rung === 0) return "These rows have no level above them, so there is no parent to move them under";
+  return null;
 }
 
 /** Plan it: the Monday after this week's. */

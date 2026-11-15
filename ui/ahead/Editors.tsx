@@ -18,7 +18,7 @@ import type { Row } from "./model.ts";
 /** What a cell edits: one field, or the narrow layout's Dates column (start and target together). */
 export type EditKind = ChangeField | "dates";
 
-const NAME: Record<EditKind, string> = { start: "Start date", target: "Target date", dates: "Dates", state: "State", assignee: "Assigned to", size: "Size" };
+const NAME: Record<EditKind, string> = { start: "Start date", target: "Target date", dates: "Dates", state: "State", assignee: "Assigned to", size: "Size", title: "Title", parent: "Parent" };
 const itemSub = (r: Row) => `#${r.item.id} ${r.item.title}`;
 const before = (a: string, b: string) => Temporal.PlainDate.compare(Temporal.PlainDate.from(a), Temporal.PlainDate.from(b)) < 0;
 const HALVES = [{ value: "AM", label: "AM" }, { value: "PM", label: "PM" }] as const;

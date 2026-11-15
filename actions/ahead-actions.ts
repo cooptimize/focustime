@@ -6,7 +6,7 @@
 import type { AppConfig } from "../config/schema.ts";
 import { KINDS, RANGES } from "../plan/ahead-view.ts";
 import type { AheadGapKind, AheadRange } from "../plan/ahead-edit.ts";
-import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, sameValue, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
+import { byItem, canEdit, CHANGE_FIELDS, checkValue, conflictOf, moveProblem, parentIdIn, sameValue, type MoveItem, type ChangeField, type ChangeValue, type DayHalf, type EditRight, type StagedChange, type AheadFilters, type AheadOwner } from "../plan/ahead-edit.ts";
 import { aboutText, hoursText, storyMinutes, unsizedText, type SizeScale } from "../plan/estimate.ts";
 import { aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -18,6 +18,7 @@ import type { ActionResponse, AheadClient, AheadItem, AheadLoad } from "./types.
 import { GAP_KINDS, TOP_N, type GapKind } from "../plan/fixnext.ts";
 import { bulkDecide, DEFAULT_AHEAD, type BulkOp } from "../plan/backlog.ts";
 import { assignPeople, type AssignPerson } from "../plan/ahead-people.ts";
+import { isOpen as isOpenCategory } from "../plan/process.ts";
 import { FIXED_KEY, fixedSince, liveSkips, readFixed, SKIPS_KEY } from "../plan/readiness.ts";
 
 export const AHEAD_ACTIONS = ["ahead.load", "ahead.people", "ahead.stage", "ahead.stage_bulk", "ahead.unstage", "ahead.discard", "ahead.resolve", "ahead.filters", "ahead.set_filters", "ahead.skip", "ahead.unskip"] as const;
@@ -79,17 +80,22 @@ const isKey = (v: unknown): v is string => typeof v === "string" && !!v.trim() &
 const isId = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v > 0;
 const isField = (v: unknown): v is ChangeField => typeof v === "string" && (CHANGE_FIELDS as readonly string[]).includes(v);
 
-/** What DevOps has now for a field of an item. */
-export function currentValue(i: AheadItem, field: ChangeField): ChangeValue {
+/** ED-2: an item as the move rule reads it. */
+export const moveItemOf = (i: AheadItem): MoveItem => ({ id: i.id, type: i.type, title: i.title, state: i.state, rung: i.rung, open: isOpenCategory(i.stateCategory) });
+
+/** What DevOps has now for a field of an item (`items`: its client's, for a parent's title). */
+export function currentValue(i: AheadItem, field: ChangeField, items: readonly AheadItem[] = []): ChangeValue {
+  if (field === "title") return i.title;
+  if (field === "parent") return i.parentId === null ? null : { id: i.parentId, title: items.find((x) => x.id === i.parentId)?.title ?? "" };
   if (field === "start") return i.start;
   if (field === "target") return i.target;
   if (field === "size") return i.size;
   if (field === "state") return i.state;
   return i.assignee?.email ? { email: i.assignee.email.toLowerCase(), name: i.assignee.name } : null;
 }
-/** Whether the item's type has the field in its process (assignee always; a state where the model lists the type's states). */
+/** Whether the item's type has the field in its process (assignee and title always; a state where the model lists the type's states; a parent is decided per item by the move rule). */
 export const hasField = (c: Pick<AheadClient, "startFields" | "targetFields" | "sizeFields" | "states">, type: string, field: ChangeField): boolean =>
-  field === "assignee" ? true : field === "state" ? (c.states?.[type]?.length ?? 0) > 0 : !!(field === "start" ? c.startFields : field === "target" ? c.targetFields : c.sizeFields)[type];
+  field === "assignee" || field === "title" || field === "parent" ? true : field === "state" ? (c.states?.[type]?.length ?? 0) > 0 : !!(field === "start" ? c.startFields : field === "target" ? c.targetFields : c.sizeFields)[type];
 
 /** My rights on every item of a client. */
 export function rightsOf(c: AheadClient & { mine?: readonly string[] }, me: { lead: boolean; automation: boolean }): Map<number, EditRight> {
@@ -198,7 +204,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const coops = org?.cooptimizers ?? [];
     const assignees = [
       ...c.items.flatMap((i) => (i.assignee?.email ? [{ email: i.assignee.email, name: i.assignee.name }] : [])),
-      ...staged.filter((x) => x.clientKey === c.clientKey && x.field === "assignee").flatMap((x) => (x.value && typeof x.value === "object" ? [x.value] : [])),
+      ...staged.filter((x) => x.clientKey === c.clientKey && x.field === "assignee").flatMap((x) => (x.value && typeof x.value === "object" && "email" in x.value ? [x.value] : [])),
     ];
     const loginOf = (e: string): string | null => {
       const who = ix?.personOf(c.clientKey, e);
@@ -223,6 +229,16 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const right = rightsOf(c, { lead, automation }).get(item.id)!;
     if (!right.ok) return right.note;
     if (!hasField(c, item.type, field)) return `${field === "size" ? "A size" : field === "start" ? "A start date" : field === "state" ? "A state" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`;
+    // ED-2: a move by ED-1's rules: only this client's own items (c.items is one client's, so another client's item
+    // is never found), open, exactly one level up; or No parent. The title kept is the one read here.
+    if (field === "parent") {
+      const to = parentIdIn(value);
+      const parent = to === null ? null : c.items.find((x) => x.id === to);
+      if (to !== null && !parent) return `#${to} isn't in ${c.clientName}'s DevOps items here`;
+      const why = moveProblem(moveItemOf(item), parent ? moveItemOf(parent) : null, c.project ?? c.clientName);
+      if (why) return why;
+      value = parent ? { id: parent.id, title: parent.title } : null;
+    }
     // AH-5: one of the type's states in the process model, by its own spelling.
     if (field === "state") {
       const st = c.states?.[item.type]?.find((x) => typeof value === "string" && x.name.toLowerCase() === value.toLowerCase());
@@ -230,18 +246,18 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
       value = st.name;
     }
     // AH-5: anyone on this client's DevOps project (its teams), its Cooptimizers, or someone already assigned there.
-    if (field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) {
+    if (field === "assignee" && value && typeof value === "object" && "email" in value && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) {
       const email = value.email.toLowerCase();
       if (!(await peopleOf(c)).people.some((p) => p.email === email)) return `Only people on ${c.clientName}'s DevOps project can be assigned here`;
     }
     // AH-3: a person who signs in to this client's DevOps with a client login is assigned as that login.
-    if (field === "assignee" && value && typeof value === "object") {
+    if (field === "assignee" && value && typeof value === "object" && "email" in value) {
       const ix = await idx();
       if (ix) value = { email: ix.writeAs(c.clientKey, value.email).toLowerCase(), name: ix.personOf(c.clientKey, value.email)?.name ?? value.name };
     }
     const half: DayHalf | null = field === "start" || field === "target" ? (value === null ? null : (halfIn ?? (field === "start" ? "AM" : "PM"))) : null;
     const existing = (await plan.aheadChanges()).find((x) => x.clientKey === c.clientKey && x.itemId === item.id && x.field === field);
-    const baseValue = existing ? existing.baseValue : currentValue(item, field);
+    const baseValue = existing ? existing.baseValue : currentValue(item, field, c.items);
     const baseRev = existing ? existing.baseRev : item.rev;
     if (sameValue(field, value, baseValue) && existing?.theirs === undefined) {
       // Back to what DevOps has: no change. A different half on the same day is FocusTime's alone.
@@ -257,7 +273,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const op = o ? checkBulkOp(o.op) : null;
     const list = o && Array.isArray(o.items) && o.items.length > 0 && o.items.length <= 200 ? (o.items as unknown[]) : null;
     const keys = list?.every((x) => !!x && typeof x === "object" && !Array.isArray(x) && Object.keys(x).every((k) => k === "clientKey" || k === "itemId") && isKey((x as Obj).clientKey) && isId((x as Obj).itemId)) ? (list as { clientKey: string; itemId: number }[]) : null;
-    if (!op || !keys) return bad("ahead.stage_bulk takes { items: [{ clientKey, itemId }] (1 to 200), op: { kind: push, weeks: 2 | 4 } | { kind: move | set_missing, date } | { kind: assign_me } }");
+    if (!op || !keys) return bad("ahead.stage_bulk takes { items: [{ clientKey, itemId }] (1 to 200), op: { kind: push, weeks: 2 | 4 } | { kind: move | set_missing, date } | { kind: assign_me } | { kind: assign, email, name } | { kind: state, state } | { kind: size, value } | { kind: parent, parentId } }");
     const staged: { clientKey: string; itemId: number }[] = [];
     const skipped: { clientKey: string; itemId: number; reason: string }[] = [];
     for (const clientKey of [...new Set(keys.map((k) => k.clientKey))]) {
@@ -279,21 +295,31 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
           continue;
         }
         const p = (f: ChangeField) => pending.find((x) => x.itemId === itemId && x.field === f);
-        const pt = p("target"), pa = p("assignee");
+        const pt = p("target"), pa = p("assignee"), ps = p("state"), pz = p("size"), pp = p("parent");
         const target = pt ? (pt.value as string | null) : item.target;
         const assignee = pa ? (pa.value as { email: string } | null)?.email ?? null : item.assignee?.email ?? null;
         const right = rights.get(itemId)!;
-        const d = bulkDecide({ id: itemId, type: item.type, editable: right.ok, note: right.ok ? "" : right.note, hasTarget: hasField(c, item.type, "target"), target, mine: !!assignee && mine.has(assignee.toLowerCase()) }, op, c.project ?? c.clientName);
+        // ED-2: the new parent is looked up among this client's own items only; one from anywhere else isn't found.
+        const to = op.kind === "parent" && op.parentId !== null ? c.items.find((x) => x.id === op.parentId) : undefined;
+        const moveWhy = op.kind !== "parent" ? null : op.parentId !== null && !to ? `#${op.parentId} isn't in ${c.clientName}'s DevOps items here` : moveProblem(moveItemOf(item), to ? moveItemOf(to) : null, c.project ?? c.clientName);
+        const d = bulkDecide({
+          id: itemId, type: item.type, editable: right.ok, note: right.ok ? "" : right.note, hasTarget: hasField(c, item.type, "target"), target, mine: !!assignee && mine.has(assignee.toLowerCase()),
+          assignee, state: ps && typeof ps.value === "string" ? ps.value : item.state, states: (c.states?.[item.type] ?? []).map((x) => x.name),
+          hasSize: hasField(c, item.type, "size"), size: pz ? (pz.value as number | null) : item.size, parentId: pp ? parentIdIn(pp.value) : item.parentId, moveProblem: moveWhy,
+        }, op, c.project ?? c.clientName);
         if (!d.ok) {
           skipped.push({ clientKey, itemId, reason: d.reason });
           continue;
         }
-        if (d.step.field === "assignee" && !meEmail) {
+        if (d.step.field === "assignee" && d.step.value === "me" && !meEmail) {
           skipped.push({ clientKey, itemId, reason: `FocusTime doesn't know your DevOps identity on ${c.clientName}` });
           continue;
         }
         const ix = await idx();
-        const value: ChangeValue = d.step.field === "target" ? d.step.value : { email: meEmail!.toLowerCase(), name: ix?.personOf(clientKey, meEmail!)?.name ?? "Me" };
+        const value: ChangeValue =
+          d.step.field === "parent" ? (d.step.value === null ? null : { id: d.step.value, title: "" })
+          : d.step.field === "assignee" ? (d.step.value === "me" ? { email: meEmail!.toLowerCase(), name: ix?.personOf(clientKey, meEmail!)?.name ?? "Me" } : d.step.value)
+          : d.step.value;
         const half = d.step.field === "target" ? (pt?.half ?? null) : null;
         const why = await stageOne(c, item, d.step.field, value, half, lead);
         if (why) skipped.push({ clientKey, itemId, reason: why });
@@ -350,7 +376,7 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const c = await oneClient(o.clientKey);
     const item = c?.items.find((i) => i.id === o.itemId);
     if (!c || !item) return bad("That item can't be read just now; try again", 503);
-    for (const x of mine) await plan.rebaseAheadChange(x.clientKey, x.itemId, x.field, item.rev, currentValue(item, x.field));
+    for (const x of mine) await plan.rebaseAheadChange(x.clientKey, x.itemId, x.field, item.rev, currentValue(item, x.field, c.items));
   }
   return { ok: true, data: { changes: await plan.aheadChanges() } };
 }
@@ -362,10 +388,11 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
  */
 async function reconcile(plan: PlanStore, clients: readonly AheadClient[]): Promise<void> {
   const items = new Map(clients.flatMap((c) => c.items.map((i) => [`${c.clientKey}:${i.id}`, i] as const)));
+  const ofClient = new Map(clients.map((c) => [c.clientKey, c.items] as const));
   for (const ch of await plan.aheadChanges()) {
     const i = items.get(`${ch.clientKey}:${ch.itemId}`);
     if (!i) continue;
-    const now = currentValue(i, ch.field);
+    const now = currentValue(i, ch.field, ofClient.get(ch.clientKey) ?? []);
     if (sameValue(ch.field, ch.value, now)) {
       await plan.removeAheadChanges(ch.clientKey, ch.itemId, ch.field);
       if ((ch.field === "start" || ch.field === "target") && typeof ch.value === "string" && ch.half) await plan.setAheadHalf(ch.clientKey, ch.itemId, ch.field, ch.value, ch.half);
@@ -481,6 +508,23 @@ export function checkBulkOp(v: unknown): BulkOp | null {
     return d ? { kind: o.kind, date: d } : null;
   }
   if (o.kind === "assign_me" && Object.keys(o).length === 1) return { kind: "assign_me" };
+  // ED-2: each value goes through the same check a single edit's does.
+  const only = (...ks: string[]) => Object.keys(o).every((k) => k === "kind" || ks.includes(k));
+  try {
+    if (o.kind === "assign" && only("email", "name")) {
+      if (o.email === null) return { kind: "assign", email: null, name: "Nobody" };
+      const v = checkValue("assignee", { email: o.email, name: o.name }) as { email: string; name: string };
+      return { kind: "assign", email: v.email, name: v.name };
+    }
+    if (o.kind === "state" && only("state")) return { kind: "state", state: checkValue("state", o.state) as string };
+    if (o.kind === "size" && only("value")) return { kind: "size", value: checkValue("size", o.value) as number | null };
+    if (o.kind === "parent" && only("parentId", "title")) {
+      const v = checkValue("parent", o.parentId === null ? null : { id: o.parentId, title: o.title }) as { id: number; title: string } | null;
+      return { kind: "parent", parentId: v?.id ?? null, title: v?.title ?? "" };
+    }
+  } catch {
+    return null;
+  }
   return null;
 }
 
