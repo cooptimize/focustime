@@ -58,12 +58,13 @@ describe("the miss: a table inside a warehouse item", () => {
   it("finds the table by its name", () => {
     expect(find(INSIDE_REPO, "Pallet")).toContain("/ws/Depot.Warehouse/dim/Tables/Pallet.sql");
   });
-  it("finds it with the SQL kind too", () => {
-    expect(find(INSIDE_REPO, "Pallet", "sql")).toContain("/ws/Depot.Warehouse/dim/Tables/Pallet.sql");
+  // RB-6: a warehouse's objects are of its kind, Databases.
+  it("finds it with the Databases kind too", () => {
+    expect(find(INSIDE_REPO, "Pallet", "database")).toContain("/ws/Depot.Warehouse/dim/Tables/Pallet.sql");
   });
-  it("finds the stored procedure beside it, with and without the SQL kind", () => {
+  it("finds the stored procedure beside it, with and without the Databases kind", () => {
     expect(find(INSIDE_REPO, "usp_FillPallet")).toEqual(["/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql"]);
-    expect(find(INSIDE_REPO, "usp_FillPallet", "sql")).toEqual(["/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql"]);
+    expect(find(INSIDE_REPO, "usp_FillPallet", "database")).toEqual(["/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql"]);
   });
 });
 
@@ -108,22 +109,22 @@ describe("RB-4: things inside an item", () => {
   const { things, files } = sortRepo(INSIDE_REPO);
   const at = (file: string) => things.find((t) => t.file === file)!;
   it("a .sql file inside an item is a table, view, procedure, function or script by its folders, and says its schema and its item", () => {
-    expect(at("/ws/Depot.Warehouse/dim/Tables/Pallet.sql")).toMatchObject({ kind: "sql", name: "Pallet", detail: "Table in dim · Depot warehouse", item: "Depot warehouse" });
-    expect(at("/ws/Depot.Warehouse/dim/Views/vPallet.sql")).toMatchObject({ kind: "sql", detail: "View in dim · Depot warehouse" });
-    expect(at("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toMatchObject({ kind: "sql", detail: "Stored procedure in dim · Depot warehouse" });
-    expect(at("/ws/Depot.Warehouse/Security/loader.sql")).toMatchObject({ kind: "sql", detail: "Security object · Depot warehouse" });
-    expect(at("/ws/Ledger.SQLDatabase/fin/Functions/fnNet.sql")).toMatchObject({ kind: "sql", detail: "Function in fin · Ledger SQL database" });
+    expect(at("/ws/Depot.Warehouse/dim/Tables/Pallet.sql")).toMatchObject({ kind: "database", name: "Pallet", detail: "Table in dim · Depot warehouse", item: "Depot warehouse" });
+    expect(at("/ws/Depot.Warehouse/dim/Views/vPallet.sql")).toMatchObject({ kind: "database", detail: "View in dim · Depot warehouse" });
+    expect(at("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toMatchObject({ kind: "database", detail: "Stored procedure in dim · Depot warehouse" });
+    expect(at("/ws/Depot.Warehouse/Security/loader.sql")).toMatchObject({ kind: "database", detail: "Security object · Depot warehouse" });
+    expect(at("/ws/Ledger.SQLDatabase/fin/Functions/fnNet.sql")).toMatchObject({ kind: "database", detail: "Function in fin · Ledger SQL database" });
     expect(at("/ws/Scratch.Lakehouse/notes/probe.ipynb")).toMatchObject({ kind: "notebook", name: "probe", detail: "Jupyter notebook · Scratch lakehouse" });
   });
   it("the item is still a thing, and opens to what is inside it", () => {
-    const depot = things.find((t) => t.name === "Depot" && t.kind === "lake")!;
-    expect(depot.detail).toBe("Warehouse · 5 inside");
+    const depot = things.find((t) => t.name === "Depot" && t.kind === "database" && !t.item)!;
+    expect(depot.detail).toBe("Warehouse · 5 objects");
     expect(depot.inside!.map((x) => [x.name, x.detail, x.kind])).toEqual([
-      ["Depot", "SQL project", "sql"],
-      ["loader", "Security object", "sql"],
-      ["Pallet", "Table in dim", "sql"],
-      ["usp_FillPallet", "Stored procedure in dim", "sql"],
-      ["vPallet", "View in dim", "sql"],
+      ["Depot", "SQL project", "database"],
+      ["loader", "Security object", "database"],
+      ["Pallet", "Table in dim", "database"],
+      ["usp_FillPallet", "Stored procedure in dim", "database"],
+      ["vPallet", "View in dim", "database"],
     ]);
     // A model still opens to its tables.
     expect(things.find((t) => t.name === "Trips" && t.kind === "model")).toMatchObject({ detail: "Semantic model · 1 table", tables: [{ name: "Journey" }] });
@@ -134,8 +135,8 @@ describe("RB-4: things inside an item", () => {
     expect(t[0]).toMatchObject({ kind: "notebook", name: "Clean", detail: "Notebook" });
   });
   it("a folder above Tables is a schema only where the path shows one", () => {
-    expect(at("/sql/stock/Tables/Bin.sql").detail).toBe("Table in stock"); // under a SQL project
-    expect(at("/sql/Tables/Crate.sql").detail).toBe("Table"); // the project's own folder isn't a schema
+    expect(at("/sql/stock/Tables/Bin.sql").detail).toBe("Table in stock · Stock SQL project"); // under a SQL project
+    expect(at("/sql/Tables/Crate.sql").detail).toBe("Table · Stock SQL project"); // the project's own folder isn't a schema
     expect(at("/loose/Tables/Hook.sql").detail).toBe("Table"); // no project: "loose" is only a folder
     // Review 2: a dot in the file's name says nothing about a schema.
     for (const p of ["/db/Tables/ops.Shift.sql", "/db/Tables/Crate.v2.sql", "/db/Tables/v1.2_move.sql"]) expect(thingsOf([p])[0]!.detail, p).toBe("Table");
@@ -148,11 +149,11 @@ describe("RB-4: things inside an item", () => {
     expect(hits.findIndex((h) => h.asFile)).toBeGreaterThan(0);
     // The kind filter keeps a file with its item's kind.
     expect(searchThings(things, "page.json", "report", files).map((h) => h.file)).toEqual(["/ws/Trips.Report/definition/pages/overview/page.json"]);
-    expect(searchThings(things, "page.json", "sql", files)).toEqual([]);
+    expect(searchThings(things, "page.json", "database", files)).toEqual([]);
   });
-  it("review 1: a warehouse's table passes the SQL kind and its item's kind; schema.name finds it; a * at the end is ignored", () => {
+  it("review 1: a warehouse's table passes its database's kind; schema.name finds it; a * at the end is ignored", () => {
     const pallet = "/ws/Depot.Warehouse/dim/Tables/Pallet.sql";
-    for (const kind of [null, "sql", "lake"] as const) expect(searchThings(things, "Pallet", kind, files).map((h) => h.file), String(kind)).toContain(pallet);
+    for (const kind of [null, "database"] as const) expect(searchThings(things, "Pallet", kind, files).map((h) => h.file), String(kind)).toContain(pallet);
     expect(searchThings(things, "Pallet", "report", files)).toEqual([]);
     for (const q of ["dim.Pallet", "[dim].[Pallet]", "DIM.pallet", "Pall*"]) expect(searchThings(things, q, null, files).map((h) => h.file), q).toContain(pallet);
     expect(searchThings(things, "fin.Pallet", null, files)).toEqual([]);
@@ -178,7 +179,10 @@ describe("RB-4: things inside an item", () => {
   it("every file has a label for a list of files", () => {
     const labels = fileLabels(INSIDE_REPO);
     expect([...labels.keys()].sort()).toEqual([...INSIDE_REPO].sort());
-    expect(labels.get("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toEqual({ kind: "sql", detail: "Stored procedure in dim · Depot warehouse", itemKind: "lake" });
+    expect(labels.get("/ws/Depot.Warehouse/dim/StoredProcedures/usp_FillPallet.sql")).toEqual({ kind: "database", detail: "Stored procedure in dim · Depot warehouse", itemKind: "database" });
+    // RB-6: a SQL project's own file is the project.
+    expect(labels.get("/sql/Stock.sqlproj")).toEqual({ kind: "database", detail: "SQL project" });
+    expect(labels.get("/loose/Tables/Hook.sql")).toEqual({ kind: "script", detail: "Table" });
     expect(labels.get("/ws/Trips.Report/definition/report.json")).toEqual({ kind: "report", detail: "File in Trips report" });
     expect(labels.get("/ws/Trips.SemanticModel/definition/tables/Journey.tmdl")).toEqual({ kind: "model", detail: "Table in Trips" });
     expect(labels.get("/adf/pipeline/pl_move.json")).toEqual({ kind: "pipeline", detail: "Data factory pipeline" });

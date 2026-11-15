@@ -2,9 +2,12 @@
 // Group by switch. The folders come from plan/code-kinds.ts (sqlTree), which reads names and folders only: no file is
 // opened to group anything and switching the grouping asks the server for nothing but to remember the choice. A tree
 // for the keyboard and a screen reader: Up and Down move, Right opens, Left closes, Enter opens the file.
+//
+// RB-6: every database is one row of By kind's Databases group, opening to its own tree; the Group by switch (with
+// Expand all and Collapse all) is drawn once, at the top of the group (SqlBar), and applies to every tree under it.
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon } from "../icons.tsx";
-import { sqlTree, type SqlDatabase, type SqlGrouping, type SqlObject } from "../../plan/code-kinds.ts";
+import { sqlTree, type SqlGrouping, type SqlObject } from "../../plan/code-kinds.ts";
 
 export const SQL_TEXT = {
   groupBy: "Group by",
@@ -39,16 +42,20 @@ function nodesOf<T extends SqlRow>(prefix: string, objects: readonly T[], groupi
   }));
 }
 
-const rootsOf = <T extends SqlRow>(id: string, objects: readonly T[], databases: readonly SqlDatabase<T>[] | null | undefined, grouping: SqlGrouping): Node<T>[] => {
-  const base = `${id}|${grouping}`;
-  return databases ? databases.map((d) => ({ key: `${base}|${d.key}`, label: d.label, count: d.objects.length, objects: [], kids: nodesOf(`${base}|${d.key}`, d.objects, grouping) })) : nodesOf(base, objects, grouping);
-};
+const rootsOf = <T extends SqlRow>(id: string, objects: readonly T[], grouping: SqlGrouping): Node<T>[] => nodesOf(`${id}|${grouping}`, objects, grouping);
+/** RB-6: every folder key of a tree, in either grouping: what Expand all and Collapse all set. */
+export function sqlFolderKeys<T extends SqlRow>(id: string, objects: readonly T[], grouping: SqlGrouping): string[] {
+  const keys: string[] = [];
+  const walk = (nodes: Node<T>[]) => nodes.forEach((n) => (keys.push(n.key), walk(n.kids)));
+  walk(rootsOf(id, objects, grouping));
+  return keys;
+}
 
 /**
  * The folders that lead to one file in a tree, outermost first (none when the tree doesn't hold it): what a change
  * of grouping opens, so the file on the right is still in view. The list calls it for every tree, shown or not.
  */
-export function sqlPathTo<T extends SqlRow>(id: string, objects: readonly T[], databases: readonly SqlDatabase<T>[] | null | undefined, grouping: SqlGrouping, selected: { repoId: string | null; path: string | null }): string[] {
+export function sqlPathTo<T extends SqlRow>(id: string, objects: readonly T[], grouping: SqlGrouping, selected: { repoId: string | null; path: string | null }): string[] {
   if (!selected.path) return [];
   const find = (nodes: Node<T>[], trail: string[]): string[] | null => {
     for (const n of nodes) {
@@ -59,7 +66,7 @@ export function sqlPathTo<T extends SqlRow>(id: string, objects: readonly T[], d
     }
     return null;
   };
-  return find(rootsOf(id, objects, databases, grouping), []) ?? [];
+  return find(rootsOf(id, objects, grouping), []) ?? [];
 }
 /** A memo with those folders open, and the last one showing all it holds. */
 export function sqlOpened(m: SqlTreeMemo, path: readonly string[]): SqlTreeMemo {
@@ -69,15 +76,39 @@ export function sqlOpened(m: SqlTreeMemo, path: readonly string[]): SqlTreeMemo 
   return { open, whole: new Set([...m.whole, path[path.length - 1]!]) };
 }
 
-/** The Group by switch and the tree under it. `databases` puts each database first; without it the grouping starts at the top. */
-export function SqlTree<T extends SqlRow>({ id, label, objects, databases, grouping, onGrouping, filtering, selected, onOpen, memo, onMemo, attr }: {
-  /** This list's own name for its keys (a client's SQL group, or one item). */
+/** RB-6: the one Group by switch, with Expand all and Collapse all, at the top of By kind's Databases group. */
+export function SqlBar({ grouping, onGrouping, onAll, disabled }: { grouping: SqlGrouping; onGrouping: (g: SqlGrouping) => void; /** Expand all (true) or Collapse all (false), for every database. */ onAll: (open: boolean) => void; /** The filter has words: every folder with a match is open. */ disabled: boolean }) {
+  const byId = useId();
+  return (
+    <div className="cv-sql-bar" data-sql-bar="">
+      <span className="cv-sql-by" id={byId}>{SQL_TEXT.groupBy}</span>
+      <span className="day-switch cv-sql-switch" role="group" aria-labelledby={byId} data-sql-group={grouping}>
+        <button type="button" aria-pressed={grouping === "schema"} data-sql-group-btn="schema" title="Schemas, then the types in each" onClick={() => grouping !== "schema" && onGrouping("schema")}>
+          {SQL_TEXT.schema}
+        </button>
+        <button type="button" aria-pressed={grouping === "type"} data-sql-group-btn="type" title="Types, then the schemas in each" onClick={() => grouping !== "type" && onGrouping("type")}>
+          {SQL_TEXT.type}
+        </button>
+      </span>
+      <span className="cv-sql-all">
+        <button type="button" className="cv-sql-all-btn" data-sql-expand="" disabled={disabled} onClick={() => onAll(true)}>
+          {SQL_TEXT.expandAll}
+        </button>
+        <button type="button" className="cv-sql-all-btn" data-sql-collapse="" disabled={disabled} onClick={() => onAll(false)}>
+          {SQL_TEXT.collapseAll}
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** One database's objects as a tree, grouped as the one switch above says. */
+export function SqlTree<T extends SqlRow>({ id, label, objects, grouping, filtering, selected, onOpen, memo, onMemo, attr }: {
+  /** This list's own name for its keys (one database). */
   id: string;
   label: string;
   objects: readonly T[];
-  databases?: readonly SqlDatabase<T>[] | null;
   grouping: SqlGrouping;
-  onGrouping: (g: SqlGrouping) => void;
   /** The filter box has words: `objects` are the matches, and every folder with one is open. */
   filtering: boolean;
   selected: { repoId: string | null; path: string | null };
@@ -88,8 +119,7 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
   /** The attribute an object's row carries, as By kind's rows do. */
   attr: "data-code-thing" | "data-code-table";
 }) {
-  const byId = useId();
-  const roots = useMemo(() => rootsOf(id, objects, databases, grouping), [id, databases, objects, grouping]);
+  const roots = useMemo(() => rootsOf(id, objects, grouping), [id, objects, grouping]);
   // A folder starts closed, except where it is the only one at its level. While filtering every folder is open.
   const isOpen = (n: Node<T>, alone: boolean) => filtering || (memo.open.get(n.key) ?? alone);
   const lines = useMemo(() => {
@@ -108,20 +138,6 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
     walk(roots, 1);
     return out;
   }, [roots, memo, filtering]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const allFolders = useMemo(() => {
-    const keys: string[] = [];
-    const walk = (nodes: Node<T>[]) => nodes.forEach((n) => (keys.push(n.key), walk(n.kids)));
-    walk(roots);
-    return keys;
-  }, [roots]);
-  const setOpen = (keys: readonly string[], open: boolean) => {
-    onMemo((m) => {
-      const next = new Map(m.open);
-      for (const k of keys) next.set(k, open);
-      return { ...m, open: next };
-    });
-  };
 
   // One row takes the Tab key; the arrows move from there. The row is kept in state, so the tab stop is always React's.
   const ul = useRef<HTMLUListElement>(null);
@@ -143,7 +159,7 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
     setAt(l.key);
     if (l.kind === "folder") {
       // While the filter has words every folder with a match is open; nothing is stored, so clearing it puts the tree back.
-      if (!filtering) setOpen([l.key], !l.open);
+      if (!filtering) onMemo((m) => ({ ...m, open: new Map(m.open).set(l.key, !l.open) }));
     } else if (l.kind === "object") onOpen(l.object.repoId, l.object.file);
     else {
       // Show all: the row goes away, and the keyboard lands on the first object it brought in.
@@ -181,25 +197,6 @@ export function SqlTree<T extends SqlRow>({ id, label, objects, databases, group
 
   return (
     <div className="cv-sql" data-sql-list={id}>
-      <div className="cv-sql-bar">
-        <span className="cv-sql-by" id={byId}>{SQL_TEXT.groupBy}</span>
-        <span className="day-switch cv-sql-switch" role="group" aria-labelledby={byId} data-sql-group={grouping}>
-          <button type="button" aria-pressed={grouping === "schema"} data-sql-group-btn="schema" title="Schemas, then the types in each" onClick={() => grouping !== "schema" && onGrouping("schema")}>
-            {SQL_TEXT.schema}
-          </button>
-          <button type="button" aria-pressed={grouping === "type"} data-sql-group-btn="type" title="Types, then the schemas in each" onClick={() => grouping !== "type" && onGrouping("type")}>
-            {SQL_TEXT.type}
-          </button>
-        </span>
-        <span className="cv-sql-all">
-          <button type="button" className="cv-sql-all-btn" data-sql-expand="" disabled={filtering} onClick={() => setOpen(allFolders, true)}>
-            {SQL_TEXT.expandAll}
-          </button>
-          <button type="button" className="cv-sql-all-btn" data-sql-collapse="" disabled={filtering} onClick={() => setOpen(allFolders, false)}>
-            {SQL_TEXT.collapseAll}
-          </button>
-        </span>
-      </div>
       <ul className="cv-sql-tree" role="tree" aria-label={label} ref={ul} onKeyDown={onKey}>
         {lines.map((l) => {
           const common = { key: l.key, role: "treeitem" as const, "aria-level": l.level, "data-sql-key": l.key, tabIndex: l.key === focusKey ? 0 : -1, style: { "--lvl": l.level } as React.CSSProperties, onClick: () => act(l), onFocus: () => setAt(l.key) };
