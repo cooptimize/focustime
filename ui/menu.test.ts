@@ -7,7 +7,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
-import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HIDDEN_FOR_NOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HIDDEN_FOR_NOW, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -102,7 +102,7 @@ describe("command menu (built from the action registry)", () => {
   });
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !name.startsWith("patterns.") && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
+    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !(name in HOLLOW) && !name.startsWith("patterns.") && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
     // RB-1: Code is one entry ("Code") plus "Code: <client>" per client; its reads never show, and no repo or file does.
     expect(listed.filter((n) => n.startsWith("code."))).toEqual(["code.clients"]);
     const withCode = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
@@ -144,7 +144,7 @@ describe("command menu (built from the action registry)", () => {
     for (const [typed, action] of [["today", "view.today"], ["board", "view.week"], ["roadmap", "view.roadmap"], ["ahead", "view.roadmap"], ["plan ahead", "view.ahead"], ["plan ahead", "roadmap.ahead"], ["fix next", "view.gaps"], ["gaps", "view.gaps"], ["readiness", "view.gaps"], ["week › status", "view.status"], ["plan today", "view.planday"], ["plan the day", "planday.start"], ["plan the week", "view.planweek"], ["commit", "view.planweek"], ["timeline on today", "ui.set_today_timeline"], ["add a promise to today", "my_promises.today"], ["requests", "requests.list"], ["asks", "requests.list"], ["draft stories", "stories.prepare"], ["needs help from", "collab.candidates"]] as const) expect(found(typed), typed).toContain(action);
     // And the labels themselves say today's names.
     const label = (action: string) => list.find((c) => c.id === action)!.label;
-    expect([label("roadmap.ahead"), label("ui.set_today_timeline"), label("my_promises.today"), label("requests.list"), label("inbox.today")]).toEqual(["Backlog › Gantt: the next 12 weeks", "Timeline on Day", "Add a promise to Day", "From chats", "Inbox items for Day and Week"]);
+    expect([label("roadmap.ahead"), label("ui.set_today_timeline"), label("my_promises.today"), label("requests.list")]).toEqual(["Backlog › Gantt: the next 12 weeks", "Timeline on Day", "Add a promise to Day", "From chats"]);
     // The group's heading is the list's name today, with the chats icon as before.
     expect(new Set(list.filter((c) => c.id.startsWith("requests.")).map((c) => c.group))).toEqual(new Set(["From chats", "Settings"]));
     expect(new Set(list.filter((c) => c.id.startsWith("promises.")).map((c) => c.group))).toEqual(new Set(["Promises"]));
@@ -172,6 +172,30 @@ describe("command menu (built from the action registry)", () => {
     const done = commandList(t.e).find((c) => c.action === "pick.mark_done")!;
     await items(done.next!())[0]!.run!();
     expect(t.calls).toEqual([["pick.mark_done", { id: 7, done: true }]]);
+  });
+});
+
+describe("NM-2: the command menu offers only what still exists", () => {
+  it("hides the hollow commands, each with its reason, and keeps their actions", () => {
+    const listed = new Set(commandList(env().e).map((c) => c.action));
+    for (const [name, why] of Object.entries(HOLLOW)) {
+      expect(ACTION_NAMES as readonly string[], name).toContain(name);
+      expect(listed.has(name), name).toBe(false);
+      expect(why.length, name).toBeGreaterThan(15);
+    }
+  });
+  it("finds the renamed commands by their old titles", () => {
+    const list = commandList(env().e);
+    for (const [typed, action] of [["refresh conversations", "conversations.refresh"], ["loop updates sent", "loop.sends"], ["take off the week", "weekplan.remove"], ["from your team", "team.commit"]] as const) expect(filterCommands(list, typed).map((c) => c.action), typed).toContain(action);
+    expect(new Set(list.filter((c) => /^(send|priority)\./.test(c.id) || c.id === "team.commit").map((c) => c.group))).toEqual(new Set(["Send work"]));
+  });
+  it("runs to where the thing is", async () => {
+    const { e, calls } = env();
+    const list = commandList({ ...e, showCode: (k) => calls.push(["code", k]) });
+    for (const id of ["ui.set_code_sql_group", "draft.add_feature", "loop.sends", "ui.settings"]) await list.find((c) => c.id === id)!.run!();
+    expect(calls).toEqual([["code", null], ["view", "ahead"], ["settings", "activity"], ["settings", undefined]]);
+    expect(list.find((c) => c.id === "checkin.answer")!.disabled).toBe("At the top of the Midday check-in and Close out");
+    expect(list.find((c) => c.id === "checkin.offer_close")!.disabled).toBe("At the end of Close out");
   });
 });
 
@@ -553,7 +577,7 @@ describe("Start a call (CW-1)", () => {
     expect(cmd.label).toBe("Start a call");
     const step = cmd.next!();
     expect(items(step).map((i) => [i.label, i.hint])).toEqual([["Start a call in Fabrikam Delivery", "fabrikam"], ["Join the call in Fabrikam Collaboration", "live now · fabrikam"], ["Start a call in Internal Delivery", "Internal"]]);
-    expect(commandList(withCalls({ cowork: { available: true, chats: [] } }).e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/delivery chat/);
+    expect(commandList(withCalls({ cowork: { available: true, chats: [] } }).e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/client chat/);
     expect(commandList(env().e).find((c) => c.action === "chats.calls")!.disabled).toMatch(/aren't available/);
   });
 });

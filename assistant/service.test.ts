@@ -994,3 +994,16 @@ describe("WK-3", () => {
     expect((await s.plan.getPick(p.id))!.status).toBe("planned");
   });
 });
+
+describe("NM-2: tools whose button is gone", () => {
+  it("inbox_seen is never offered to the model, and the tool and its action stay", async () => {
+    const { INTENT_SCHEMA } = await import("./service.ts");
+    const { NOT_OFFERED, TOOLS } = await import("./allowlist.ts");
+    const items = (INTENT_SCHEMA as { properties: { tools: { items: { enum: string[] } } } }).properties.tools.items.enum;
+    for (const t of NOT_OFFERED) {
+      expect(items, t).not.toContain(t);
+      expect(TOOLS[t], t).toBeDefined();
+    }
+    expect(NOT_OFFERED).toEqual(["inbox_seen"]);
+  });
+});
