@@ -499,7 +499,11 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   useEffect(() => {
     if (searching) return;
     if (openingResult.current) openingResult.current = false;
-    else if (!fromRunRef.current) browseAt.current = at;
+    else if (!fromRunRef.current) {
+      // Browsing somewhere else (not a result): the search's words go with the search.
+      browseAt.current = at;
+      setQ("");
+    }
   }, [at, searching]);
 
   useEffect(() => {
@@ -639,6 +643,12 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     if (view !== "files" || !at.path) setFromRun(false);
   }, [view, at.path, at.clientKey]);
   const backRun = fromRun === "inside" ? inRun : fromRun === "search" ? run : null;
+  // Back on a results page (Back to results, the browser's Back): the box shows that search's words again.
+  useEffect(() => {
+    if (!searching) return;
+    const shown = view === "inside" ? inRun : run;
+    if (shown && shown.scope === (at.clientKey ?? null)) setQ((cur) => cur || shown.q);
+  }, [searching, view, at.clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const toResults = () => backRun && fromRun && onGo({ clientKey: backRun.scope, repoId: null, path: null, view: fromRun });
 
   // The file in the address.

@@ -25,7 +25,7 @@
 .cv-browse.solo { grid-template-columns: minmax(0, 1fr); }
 .cv-browse > .cv-side { min-height: 0; border-right: 1px solid var(--border); }
 .cv-side-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 12px 24px; }
-.cv-side > .cv-log-line, .cv-results-page > .cv-log-line, .cv-start > .cv-log-line, .cv-file-page > .cv-log-line { flex: none; padding: 8px 24px; border-top: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-side > .cv-log-line, .cv-results-page > .cv-log-line, .cv-start > .cv-log-line, .cv-file-page > .cv-log-line { flex: none; padding: 8px 24px; border-top: 1px solid var(--border); }
 .cv-browse > .cv-body { min-height: 0; min-width: 0; overflow: auto; padding: 12px 24px 24px; }
 .cv-results-page, .cv-start, .cv-file-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .cv-results-scroll, .cv-start-scroll { flex: 1; min-height: 0; overflow: auto; padding: 12px 24px 24px; }
