@@ -216,7 +216,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       <main
         className={`grid narrow${timeline ? "" : " no-timeline"}`}
         role="group"
-        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens the block's panel."
+        aria-label="Week. Left and right arrows change the day, up and down pick the half-day, Enter opens the block's panel."
         // P1: on a touch screen a sideways swipe changes the day.
         onTouchStart={(e) => (swipe.x = e.touches[0]!.clientX, swipe.y = e.touches[0]!.clientY)}
         onTouchEnd={(e) => {
@@ -226,8 +226,8 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
         }}
       >
         <nav className="daybar" aria-label="Day">
-          <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i <= first} aria-label="Previous day">
-            <kbd>←</kbd>
+          <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i <= first} aria-label="Previous day" title="Previous day">
+            <Icon name="back" />
           </button>
           <div className="day-tabs">
             {week.days.map((d, k) => !shown[k] ? null : (
@@ -243,8 +243,8 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
               </button>
             ))}
           </div>
-          <button type="button" className="day-step" onClick={() => go(i + 1)} disabled={i >= last} aria-label="Next day">
-            <kbd>→</kbd>
+          <button type="button" className="day-step" onClick={() => go(i + 1)} disabled={i >= last} aria-label="Next day" title="Next day">
+            <Icon name="next" />
           </button>
         </nav>
         {column(week.days[i]!, i)}
