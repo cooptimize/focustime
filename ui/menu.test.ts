@@ -195,6 +195,11 @@ describe("NM-2: the command menu offers only what still exists", () => {
     for (const id of ["ui.set_code_sql_group", "draft.add_feature", "loop.sends", "ui.settings"]) await list.find((c) => c.id === id)!.run!();
     expect(calls).toEqual([["code", null], ["view", "ahead"], ["settings", "activity"], ["settings", undefined]]);
     expect(list.find((c) => c.id === "checkin.answer")!.disabled).toBe("At the top of the Midday check-in and Close out");
+    // From the newcomer review: invites open Who's set up, the VM opens My VM, an admin's chat commands open Admin › Clients.
+    calls.length = 0;
+    const admin = commandList({ ...e, admin: true });
+    for (const id of ["admin.invite_send", "vm.choose", "chats.add"]) await admin.find((c) => c.id === id)!.run!();
+    expect(calls).toEqual([["settings", "admin-people"], ["settings", "connections"], ["settings", "admin-clients"]]);
     expect(list.find((c) => c.id === "checkin.offer_close")!.disabled).toBe("At the end of Close out");
   });
 });

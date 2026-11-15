@@ -1307,14 +1307,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!chats.length) return { disabled: "None of your clients has a client chat you're in" };
       return { next: () => ({ title: "Start a call", items: chats.map((c) => ({ ...callItem(env, c), hint: c.live ? `live now · ${clientNameOf(env, c.clientKey)}` : clientNameOf(env, c.clientKey) })) }) };
     }
-    case "chats.registered":
-    case "chats.list":
+    // NM-2: a client's chats are added, labelled, read and removed in Admin › Clients; others see them in Settings › Client chats.
     case "chats.add":
     case "chats.remove":
     case "chats.kind":
     case "chats.reading":
+    case "chats.refresh":
+    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin-clients") : env.openSettings("chats", "chats-read")) };
     case "chats.social":
-    case "chats.refresh": return { run: () => env.openSettings("chats", "chats-read") };
+    case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":
     case "requests.context":
@@ -1405,8 +1406,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.invite_preview":
     case "admin.invite_send":
     case "admin.invite_retry":
-    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
+    // NM-2: the invite commands fell through to Standards; they open Who's set up as IN-2 says.
+    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
     // RB-1: Code views sit in Admin › Audit; a client's code status in Admin › Clients.
     case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin-audit", "code-views") } : { disabled: "Only for FocusTime admins" };
@@ -1667,9 +1669,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "auth.status":
     case "auth.sign_in":
     case "auth.sign_out":
+      return { run: () => env.openSettings("you") };
+    // NM-2: My VM is in Settings › Accounts and calendars.
     case "vm.find":
     case "vm.choose":
-      return { run: () => env.openSettings("you") };
+      return { run: () => env.openSettings("connections", "vm") };
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
@@ -1851,6 +1855,7 @@ export const HOLLOW: Readonly<Record<string, string>> = {
   "feature.mark_breakdown": "No screen offers Mark as being broken down since WD-1",
   "followup.ask_priorities": "No screen offers it since WD-1",
   "planday.carry_hint": "The suggested to-dos hint is gone",
+  "chats.social": "No screen marks a client chat as a Social chat",
   "look.ask": "Can't finish while Team is hidden: the lead's notice opens Week, and a lead replies only in Team",
 };
 

@@ -741,7 +741,7 @@ function PlanningForm(p: FormProps) {
             </label>
           </div>
         </AutoField>
-        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After the end of day check-in: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
+        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After Close out: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
           <label className="set-check">
             <input type="checkbox" checked={a.v.progressOffer} onChange={(e) => a.change("progressOffer", e.target.checked)} /> Offer
           </label>

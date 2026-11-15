@@ -1124,3 +1124,12 @@ From the IT review (TD-1):
   - To place's group still has the heading "From your team" (its own section heading, not a pointer). Rename it with the next pass on the block panel's words?
   - The pointer check reads only the first segment of a path ("Settings › Profile › Run setup again" checks Profile).
   - The command menu shows the From chats group heading twice: the registry's commands keep their order (RS-2 D7), and the Inbox's keys sit between two runs of From chats commands.
+- From the newcomer review (the demo only), not changed here:
+  - On Week, a to-do's title on a card is a link with tabindex -1, like every control inside a card (the cards use roving focus: arrows and Enter open the block panel). A click opens the story card; the keyboard reaches the same card from the block panel. Should a card's title join the card's tab order?
+  - The demo's chats contradict each other: From chats has suggestions and "last checked", while Settings › Client chats and Admin › Clients say "Not read yet", Admin › Status "Last poll: never", and Chat.Read shows Missing. Demo data, not a screen; a demo pass should line them up.
+  - Near-duplicates in the command menu: Promises twice, "Link a promise to a DevOps item" twice, "From chats" twice, "Close the loop without sending" beside "Close the loop on a promise without sending", "Send a test notification" beside "Send a sample notification".
+  - Sign out and Sign in with Microsoft open Settings › Profile, where the buttons are, rather than doing it.
+  - Admin › Status and Admin › Audit carry Admin's "Changes save as you make them" subtitle though nothing there changes.
+  - The demo's Lunch reads "12:30-12:30"; Profile promises first-run setup, which the demo says isn't part of it.
+  - On the phone's Week, the week's Previous and Next sit just above the day's and look the same (each is named).
+  - "1 late" chips and the Demo tag are about 22 px tall on the phone.

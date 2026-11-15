@@ -478,3 +478,14 @@ The Teams bot's own words (`assistant/quick.ts`: next, today, help, open) name n
 ## Where an action's summary is read
 
 `ActionSpec.summary` in `actions/registry.ts` is read by nothing a person or the AI sees: the command menu shows titles, the assistant is given its tools' own descriptions, and the bot answers through the assistant. So summaries were left as they are, apart from one pointer in a summary (`conversations.list`: "Inbox › Conversations"), which the pointer check reads and which now says From chats.
+
+## Found after STEP 0, by the newcomer review
+
+STEP 0 called these true; the review used them and found otherwise. Fixed in the same pull request:
+
+| Command | Name | Was | Now |
+|---|---|---|---|
+| Send the invite shown, Preview an invite, Retry an invite, Can I send invites from FocusTime | `admin.invite_*` | opened Admin › Standards (a fall-through) | open Admin › People › Who's set up (IN-2) |
+| Find my VM, Choose my VM | `vm.find`, `vm.choose` | opened Settings › Profile | open Settings › Accounts and calendars › My VM |
+| Add, Label, Remove, Read or not, Refresh members, Pick a client chat | `chats.*` | opened Settings › Client chats (read only) | open Admin › Clients for an admin; the read-only list for others |
+| Mark a client chat as a Social chat | `chats.social` | opened Settings › Client chats | hollow: no screen marks a Social chat (47 hollow in all) |
