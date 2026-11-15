@@ -58,7 +58,7 @@ One line per folder; the detail is in `docs/architecture.md`. Steps update `docs
 ```
 ui/                React UI: screens, menus, Settings, styles and the type scale
 ui/ahead/          Backlog (code name ahead): the Grid, the Gantt, filters and the change set
-ui/brand/          marks, Lumen, the opening and empty states
+ui/brand/          the week mark, the lockup, the loader and the opening
 ui/code/           Code: the read-only repo browser and syntax colors
 ui/docs/           the Technical docs panel (#/docs), rendered from docs/technical/ at build time (scripts/tech-docs.ts)
 ui/guide/          the in-app Guide
@@ -124,7 +124,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Moment card | Day's one card for the moment of the day: Nothing on today yet (with + Add), Midday check-in or Close out; done is a small line with Reopen |
 | Next to-do | The first planned to-do, in time order, in the first block that hasn't ended (the timed to-do while focus runs): highlighted on its row, the only one with Start focus, or the countdown with Done and +15 |
 | Midday check-in | A flow over Day after the afternoon starts (M, `#/day/checkin`): the time and the afternoon's free time once ("2h 30m free this afternoon"), ended blocks dimmed, done to-dos as a count, every unfinished to-do with one move (Move to PM, Move to <day>, Tonight when its promise is due today) and More, then the timebox check-in; Done marks it done for the day |
-| Close out | A side panel over the dimmed Day (E, `#/day/closeout/<date>`), any day up to today: the day's numbers, where you left off, DevOps updates owed, promises due, the timebox check-in, then Done (the reverse unroll). Cards behind show not-done to-dos with "→ <day>" and done and dropped counts |
+| Close out | A side panel over the dimmed Day (E, `#/day/closeout/<date>`), any day up to today: the day's numbers, where you left off, DevOps updates owed, promises due, the timebox check-in, then Done (it closes onto Day, no overlay; BR-1). Cards behind show not-done to-dos with "→ <day>" and done and dropped counts |
 | Timebox check-in | At Midday check-in and Close out (and their Teams cards), each to-do whose timebox ended since the last one: Done, Partly (how much is left) or Didn't get to it, or All went to plan for the lot. Nothing qualifying, nothing shows |
 | Resume note | One line per client, "where I left off / next step"; the latest wins, shown on the client's next block |
 | Week | The second tab (2, `#/week`): the week's blocks, Monday to Thursday, Friday as the Catch-up day, Saturday or Sunday when they have work. The day in focus takes about twice a working day's width; days fold to strips when there isn't room (weekend, catch-up day, past days, then farthest from the focus); past days list their to-dos. "To place" sits above the grid |
@@ -229,9 +229,8 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Diagnostics | Settings › Your data › Diagnostics (and the command "Diagnostics"): counts only, for my own chats: why my promise-sounding messages have no promise, and where my chats' messages were sorted in the last 14 days. No message text; no admin view |
 | Type scale | Four sizes off one base (`--text-base` − 2, − 1, base, + 2; 11, 12, 13, 15 px at Default; `--fs-1` to `--fs-4`) and three weights (400, 500, 600); uppercase only for section labels; no literal font sizes (`docs/design/style-guide.md`) |
 | Text size | Settings › Display: Default (11/12/13/15), Large (13/14/15/17) or Larger (15/16/17/19), `[ui] text_size`; Ctrl+plus and Ctrl+minus step, Ctrl+0 resets, not while typing; spacing that pairs with text scales with it |
-| Lumen | FocusTime's mascot: an upright green block with a lime light bar; no face, it emits. Only in the opening, Close out's reverse, sign-in, About, the Guide and empty states; never on Week, Day, Backlog or cards. Never carries information |
-| WeekMark | The unrolled week mark (four columns, AM over PM, Mon AM hollow): the top bar's mark, the icon and the favicon |
-| Opening | The app open: nothing within 400 ms, else the loader (at least 600 ms), the unroll, Lumen back into Mon AM, the week into the top bar. Reduce motion (Settings › Display or the system) cuts to the result |
+| WeekMark | The unrolled week mark (four columns, AM over PM, Mon AM hollow): FocusTime's only brand mark: the top bar, the loader, sign-in, About's lockup, the Guide's Start here, the icon and the favicon (BR-1) |
+| Opening | The app open: nothing within 400 ms, else the loader (the week mark alone, its blocks lighting in turn, no words, at least 600 ms; after 8 s one line, "Still waiting on Outlook"), then the mark moves onto the top bar's while the app fades in. Reduce motion (Settings › Display or the system): the mark holds still and the app appears with no movement (BR-1) |
 | Technical docs | `docs/technical/` (Overview, Architecture, Data, Integrations, Security, Operations, Development), rendered and sanitized at build time and read in the app beside the Guide (More › Technical docs, `#/docs/<page>/<heading>`); signed-in Cooptimizers only, not automation accounts (`docs.access`). Bundled with the app, so never anything sensitive; each page says the one commit it was checked against |
 | Sign-in | One Microsoft sign-in: Entra OpenID Connect on the FocusTime web registration: the app's user, Outlook calendars, Teams and Azure, scopes added as needed (`docs/technical/integrations.md`). Sign out ends the session; the plan stays in the plan store. The old "Coopilot Desktop" registration is left alone |
 | User | A person who signed in with Microsoft: a `users` row keyed by their Entra object id, with their tenant, UPN, name, email, time zone and deleted_at. Every plan row has their `user_id` |

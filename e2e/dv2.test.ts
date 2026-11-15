@@ -49,6 +49,7 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     await oldTree(page);
     await page.clock.install({ time: Temporal.Instant.from(NOW).epochMilliseconds });
     await page.reload();
+    await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
   }, T);
   afterAll(async () => {
     await h?.stop();

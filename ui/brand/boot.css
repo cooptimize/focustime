@@ -1,0 +1,77 @@
+/* BR-1: the loader, the week mark alone (docs/design/brand.md). Linked from index.html, so it is drawn from the first
+   paint, before the app's script and styles arrive; public/prefs.js has already set the theme, text size and reduce
+   motion on <html>. Colors are the brand tokens' values per theme (ui/brand/boot.test.ts checks them against
+   ui/styles.css). Nothing shows for 400 ms; then the mark, its blocks lighting in reading order by day, morning then
+   afternoon, 120 ms apart, then dimming together, a pass every 1.6 s. The one line under it shows only after 8 s.
+   ui/brand/boot.ts takes it from there. No inline style or script anywhere (the CSP allows neither). */
+
+:root {
+  --boot-scale: 1;
+  --boot-fs: 13px;
+  --boot-bg: #0d1318;
+  --boot-am: #1e3a55;
+  --boot-pm: #4fa3dd;
+  --boot-accent: #9cc24f;
+  --boot-muted: #a9b4be;
+}
+:root[data-text-size="large"] { --boot-scale: 1.1538; --boot-fs: 15px; }
+:root[data-text-size="larger"] { --boot-scale: 1.3077; --boot-fs: 17px; }
+:root[data-theme="cooptimize-light"] { --boot-bg: #f4f5f7; --boot-am: #7fa6c9; --boot-pm: #00416b; --boot-accent: #42783c; --boot-muted: #4a5663; }
+:root[data-theme="neutral"] { --boot-bg: #f4f4f1; --boot-am: #7fa6c9; --boot-pm: #00416b; --boot-accent: #42783c; --boot-muted: #474c55; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="neutral"] { --boot-bg: #111317; --boot-am: #1e3a55; --boot-pm: #4fa3dd; --boot-accent: #9cc24f; --boot-muted: #b3b8c0; }
+}
+/* The page's own background from the first paint (the same color as the body's, --bg). */
+html { background: var(--boot-bg); }
+
+#boot { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+/* Read by screen readers only: "Loading FocusTime", then "FocusTime is ready". */
+#boot .boot-say { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#boot .brand-stage { position: absolute; inset: 0; pointer-events: auto; animation: boot-show 0s 400ms both; }
+#boot .boot-bg { position: absolute; inset: 0; background: var(--boot-bg); }
+/* About 96 px wide at the Default text size, centred; it moves by transform only (ui/brand/boot.ts). */
+#boot .week-loader {
+  position: absolute; left: 50%; top: 50%;
+  width: calc(96px * var(--boot-scale)); height: calc(43.2px * var(--boot-scale));
+  margin: calc(-21.6px * var(--boot-scale)) 0 0 calc(-48px * var(--boot-scale));
+}
+#boot .boot-wait {
+  position: absolute; left: 16px; right: 16px; top: calc(50% + 21.6px * var(--boot-scale) + 20px); margin: 0;
+  text-align: center; color: var(--boot-muted); font: var(--boot-fs)/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  visibility: hidden; animation: boot-line 0s 8000ms both;
+}
+#boot .boot-wait:empty { display: none; }
+@keyframes boot-show { from { opacity: 0; } to { opacity: 1; } }
+@keyframes boot-line { from { visibility: hidden; } to { visibility: visible; } }
+
+/* The mark (the week mark's own drawing, ui/brand/Brand.tsx's WeekLoader) and its pass. */
+.week-loader { display: block; overflow: visible; transform-origin: 0 0; }
+/* While the loader's mark moves onto the top bar's, that one waits hidden (ui/brand/boot.ts), so only one shows. */
+:root.boot-flying .brand-home .week-mark { visibility: hidden; }
+.week-loader .wl-am { fill: var(--boot-am); }
+.week-loader .wl-pm { fill: var(--boot-pm); }
+.week-loader .wl-hollow { stroke: var(--boot-accent); }
+/* Longhands, not the shorthand: a shorthand without a name is minified to "animation: none" in the build. */
+.week-loader .wl { animation-duration: 1.6s; animation-timing-function: ease-in-out; animation-delay: 400ms; animation-iteration-count: infinite; animation-fill-mode: both; }
+.week-loader .wl-0 { animation-name: wl-0; }
+.week-loader .wl-1 { animation-name: wl-1; }
+.week-loader .wl-2 { animation-name: wl-2; }
+.week-loader .wl-3 { animation-name: wl-3; }
+.week-loader .wl-4 { animation-name: wl-4; }
+.week-loader .wl-5 { animation-name: wl-5; }
+.week-loader .wl-6 { animation-name: wl-6; }
+.week-loader .wl-7 { animation-name: wl-7; }
+@keyframes wl-0 { 0% { opacity: 0.3; } 7.5%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-1 { 0%, 7.5% { opacity: 0.3; } 15%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-2 { 0%, 15% { opacity: 0.3; } 22.5%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-3 { 0%, 22.5% { opacity: 0.3; } 30%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-4 { 0%, 30% { opacity: 0.3; } 37.5%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-5 { 0%, 37.5% { opacity: 0.3; } 45%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-6 { 0%, 45% { opacity: 0.3; } 52.5%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+@keyframes wl-7 { 0%, 52.5% { opacity: 0.3; } 60%, 81.25% { opacity: 1; } 93.75%, 100% { opacity: 0.3; } }
+/* Every block lit and still: when the app is ready, and always with reduced motion (the system's or the setting). */
+.week-loader.lit .wl { animation: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .week-loader .wl { animation: none; }
+}
+:root[data-reduce-motion] .week-loader .wl { animation: none; }

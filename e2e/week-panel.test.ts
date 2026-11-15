@@ -106,7 +106,6 @@ describe.skipIf(!CHROMIUM)("Week block panel (PV-1)", () => {
       await page.goto(`${app.url}#/week`);
       await page.reload();
       await appReady(page);
-      await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
       const blocks = page.locator(".half.focus", { has: page.locator(".card-client", { hasText: "Adatum" }) });
       await blocks.first().waitFor();
       expect(await blocks.count()).toBeGreaterThan(1);

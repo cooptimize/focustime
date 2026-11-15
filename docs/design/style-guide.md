@@ -188,14 +188,12 @@ Tokens, in every theme (`ui/styles.css`, domain layer):
 |---|---|---|---|
 | `--brand-am` | #1E3A55 | #7FA6C9 | the marks' AM bars |
 | `--brand-pm` | #4FA3DD | #00416B | the marks' PM bars |
-| `--brand-accent` | #9CC24F | #42783C | Lumen's body, the hollow Mon AM |
-| `--brand-ghost` | #2B3A4D | #B9C6D3 | the dashed inner AM band |
-| `--mascot-highlight` | #B2D235 | #B2D235 | Lumen's light bar and beam; only inside `ui/brand/` (tested) |
-| `--brand-beam-blend` | screen | multiply | how the beam blends |
+| `--brand-accent` | #9CC24F | #42783C | the hollow Mon AM |
+| `--brand-ghost` | #2B3A4D | #B9C6D3 | not used since BR-1 (it drew the bent mark's dashed band; Q in open-questions) |
 
 Neutral uses the dark values in dark mode and the light values in light mode. The brief's full surface and text palette is not applied (Q93).
 
-Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px tall), `BentMark` (sign-in), `Lockup` (About), `Lumen` (`pose` still, idle or bob), `LumenLoading` (the loader), `Unroll` (`direction` open or close), and the overlays `Opening`, `CloseReverse`, `MomentOverlay`, plus `InlineMoment`. Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
+Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar about 18 px tall, sign-in, the Guide's Start here), `Lockup` (About) and `WeekLoader` (the loader, drawn by `index.html` from the first paint; `Opening` hands it to the top bar). Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
 
 ## 5. Core components
 
@@ -342,7 +340,7 @@ Hover is a faint wash, pressed a slightly stronger one, both instant. Disabled a
 
 **The top bar.** The VM chip is a quiet pill with its dot; Focus, Capture and Ask are outlined with an icon and their word; More is a round icon button; the photo is as it was. RB-6: the top bar never wraps. When the sixth tab (Code) needs the room, what gives way is, in order: the words on Focus, Capture and Ask (their icons stay, the word stays for screen readers and in the title), then the VM chip's state in one word. The tabs always keep their icon and word. Today that is Focus, Capture and Ask as icons at Large text up to 1500 px wide and at Larger up to 1800 px, and the VM chip in one word up to 1320 px at Default and 1500 px at Large (`.topbar.six-tabs`, measured by `e2e/rb6-code.test.ts`).
 
-**Icons.** One family for FocusTime's own things (`ui/icons.tsx`, by name; drawn by Lucide, ISC, only the icons named there in the bundle): 16 px at the Default text size and scaled with it, a 1.5 px stroke at every size, rounded ends, the color of the text beside it, never colored on its own except by a state it sits in. An icon beside a word is hidden from screen readers; an icon alone has a name. No text character acts as a control or a mark (no ‹ › ⋯ + × ▸ ▾ ✓): each is its icon, with the name it had. Arrows inside sentences ("→ Thu") stay text. Not part of the family, on purpose: the DevOps type icons (their shapes and colors are the project's), the brand marks and Lumen, a person's photo.
+**Icons.** One family for FocusTime's own things (`ui/icons.tsx`, by name; drawn by Lucide, ISC, only the icons named there in the bundle): 16 px at the Default text size and scaled with it, a 1.5 px stroke at every size, rounded ends, the color of the text beside it, never colored on its own except by a state it sits in. An icon beside a word is hidden from screen readers; an icon alone has a name. No text character acts as a control or a mark (no ‹ › ⋯ + × ▸ ▾ ✓): each is its icon, with the name it had. Arrows inside sentences ("→ Thu") stay text. Not part of the family, on purpose: the DevOps type icons (their shapes and colors are the project's), the brand mark, a person's photo.
 
 | Group | Names |
 |---|---|

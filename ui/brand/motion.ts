@@ -1,6 +1,7 @@
 // Step 17.5: reduced motion, from the system (prefers-reduced-motion) or Settings > Display "Reduce motion".
 // The config's [ui] reduce_motion is the truth; a copy in localStorage lets the opening know before the first load.
-// With either on: no sweep, unroll, hop or bob; the still pose shows; open and close cut straight to the result.
+// With either on (BR-1): the loader's mark holds still and the app appears with no movement. public/prefs.js reads the
+// local copy before the first paint.
 import { useEffect, useState } from "react";
 
 const KEY = "focustime.reduceMotion";

@@ -192,6 +192,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     page = await again.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(link);
+    await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 }); // keys during the loader's finish only skip it (BR-1)
     await file(page).waitFor({ timeout: 60_000 });
     expect(await file(page).getAttribute("data-code-file")).toBe("/adf/pipeline/pl_copy_shipments.json");
     // Its folders are open in the tree, with the file selected; arrows move, Left goes to the parent.

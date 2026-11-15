@@ -31,7 +31,6 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
 import { version as APP_VERSION } from "../package.json";
-import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
 import { usePhone } from "./viewport.ts";
 import { PhoneReadOnly } from "./Phone.tsx";
@@ -70,13 +69,13 @@ type Props = {
   onRefresh: () => void;
   onConnect: (c: Calendar) => void;
   onDisconnect: (c: Calendar) => void;
-  /** Step 17.5: a calendar that just reconnected here (the fun moment). */
+  /** Step 17.5: a calendar that just reconnected here (BR-1: one plain line). */
   reconnected?: Calendar | null;
   theme: Theme;
   setTheme: (t: Theme) => void;
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
-  /** Step 17.5: no opening and closing animation, no moving Lumen. */
+  /** Step 17.5: no opening animation (BR-1: the loader's mark holds still). */
   reduceMotion: boolean;
   setReduceMotion: (on: boolean) => void;
   /** U5 (D401): Default, Large or Larger. */
@@ -498,7 +497,7 @@ function SectionBody(p: BodyProps) {
             <label>
               <input type="checkbox" checked={p.reduceMotion} onChange={(e) => p.setReduceMotion(e.target.checked)} /> Reduce motion
             </label>
-            <span className="set-hint">No opening or Close out animation; Lumen stays still.</span>
+            <span className="set-hint">No opening animation; the loader's mark holds still.</span>
           </fieldset>
         </div>
       );
@@ -507,10 +506,10 @@ function SectionBody(p: BodyProps) {
     case "data":
       return <DataSection {...p} />;
     case "about":
-      // Step 17.5: the lockup, the version and the credit line.
+      // Step 17.5: the lockup, the version and the credit line (BR-1: the lockup is the week mark's).
       return (
         <div className="brand-about">
-          <Lockup width={320} />
+          <Lockup />
           <p data-setting="version">Version {APP_VERSION}</p>
           <p className="set-hint">FocusTime is made by Cooptimize, for planning a week of client work.</p>
           <div className="set-grid">
@@ -1828,7 +1827,11 @@ function Connections(p: BodyProps) {
           );
         })}
       </ul>
-      {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
+      {p.reconnected && (
+        <p className="reconnect-line" role="status">
+          {SOURCE_NAMES[p.reconnected]} is connected again.
+        </p>
+      )}
       </Group>
       <Group title="Calendars added by link" sid="calendar-links">
         <CalendarLinks timeZone={Temporal.Now.timeZoneId()} onChanged={p.onRefresh} />

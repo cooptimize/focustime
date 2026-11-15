@@ -13,8 +13,8 @@ import { rememberReduceMotion } from "./brand/motion.ts";
 import { applyTextSize, stepTextSize, storedTextSize, TEXT_SIZE_NAMES, textSizeKey } from "./textsize.ts";
 import type { TextSize } from "../config/schema.ts";
 import { WeekMark } from "./brand/Brand.tsx";
-import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
-import { allDone, sourceLines } from "./brand/opening.ts";
+import { Opening } from "./brand/Opening.tsx";
+import { sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
 import { copyWorkLink, ITEM_CARD_EVENT, NOTICE_EVENT, openChecked, openItemCard, openWorkItem, type ItemCardTarget, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
@@ -194,9 +194,6 @@ export function App() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
-  // Step 17.5: the welcome moment (the first launch ever, kept in the plan store) and the Close out reverse.
-  const [welcome, setWelcome] = useState(false);
-  const [closing, setClosing] = useState<{ allDone: boolean } | null>(null);
   const [reconnected, setReconnected] = useState<"outlook" | "google" | null>(null);
   // S1 (D451): first-run setup. It opens by itself for a new person (and resumes after a sign-out halfway); once
   // closed or skipped, Today keeps one quiet line to finish it. Never in demo mode (the server says so).
@@ -224,9 +221,9 @@ export function App() {
     [],
   );
   const afterOpening = useCallback(() => {
-    // When setup opens by itself it is the welcome: the first launch's moment (which takes the first key) waits.
-    const first = call<{ first: boolean }>("ui.first_launch", {});
-    void loadSetup(true).then((v) => first.then((r) => r.first && !v?.open && setWelcome(true), () => {}));
+    // BR-1: the first launch is still recorded in the plan store, with no welcome overlay: the app just opens.
+    call("ui.first_launch", {}).catch(() => {});
+    void loadSetup(true);
     // G1: a person's first Today offers the tour once (per person, in the plan store).
     call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});
   }, [loadSetup]);
@@ -1790,7 +1787,7 @@ export function App() {
   }, [loc, env, data?.planDay.date]);
   openSettingsRef.current = env?.openSettings ?? null;
 
-  // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
+  // BR-1: the opening (the loader, index.html's week mark, into the top bar's mark; ui/brand/boot.ts).
   const opening = <Opening key="opening" ready={state.kind !== "loading"} lines={sourceLines(data?.sources ?? null, data?.devops)} onFinished={afterOpening} />;
 
   if (state.kind === "session") {
@@ -1921,8 +1918,6 @@ export function App() {
   return (
     <>
     {opening}
-    {welcome && <MomentOverlay line="Welcome to FocusTime. Here's your week." onDone={() => setWelcome(false)} />}
-    {closing && <CloseReverse allDone={closing.allDone} onDone={() => setClosing(null)} />}
     <SampleSources.Provider value={samples}>
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
@@ -2104,7 +2099,7 @@ export function App() {
           loading={loading}
           onRefresh={() => void refreshAllRef.current()}
           onConnect={(src) => {
-            // Step 17.5: a calendar that was down and reconnects here gets the fun moment.
+            // Step 17.5: a calendar that was down and reconnects here says so in one line (BR-1: a plain line).
             const wasDown = data.sources.some((s) => s.source === src && s.status !== "ok");
             void connect(src).then((ok) => {
               if (!ok || !wasDown) return;
@@ -2266,7 +2261,6 @@ export function App() {
           onChanged={reloadQuiet}
           onLeave={(msg) => (msg && setNotice(msg), leavePlanning())}
           onCloseOutDate={(d) => goNav(navOf.today("closeout", d))}
-          onClosedOut={(st) => setClosing({ allDone: st.date === st.today && allDone(st.picks) })}
           setupLine={setupView?.line ?? null}
           onSetup={(step) => setSetupAt(step)}
           panelAt={dayOn ? shownPanel : null}

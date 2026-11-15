@@ -191,7 +191,6 @@
 .tour-nav button:disabled { opacity: 0.4; }
 .tour-nav .tour-skip { margin-left: -8px; }
 .tour-keys { margin: 8px 0 0; font-size: var(--fs-1); color: var(--text-faint); }
-.tour-end-mark { margin: 2px 0 6px; }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* The example drawings (ui/guide/tour/Illustrations.tsx): one of the app's three shapes each. */

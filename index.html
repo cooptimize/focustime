@@ -14,8 +14,20 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="FocusTime" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- BR-1: the loader from the first paint: the person's theme, text size and reduce motion, then the mark's styles. -->
+    <script src="/prefs.js"></script>
+    <link rel="stylesheet" href="/ui/brand/boot.css" />
   </head>
   <body>
+    <!-- BR-1: the loader, the week mark alone (ui/brand/boot.css draws it, ui/brand/boot.ts finishes it). -->
+    <div id="boot">
+      <p class="boot-say" role="status">Loading FocusTime</p>
+      <div class="brand-stage">
+        <div class="boot-bg"></div>
+        <svg class="week-loader" viewBox="0 0 200 90" aria-hidden="true" focusable="false"><rect class="wl wl-0 wl-hollow" x="9.5" y="9.5" width="37" height="23" rx="5" fill="none" stroke-width="3"></rect><rect class="wl wl-1 wl-pm" x="8" y="50" width="40" height="32" rx="6"></rect><rect class="wl wl-2 wl-am" x="56" y="8" width="40" height="26" rx="6"></rect><rect class="wl wl-3 wl-pm" x="56" y="50" width="40" height="32" rx="6"></rect><rect class="wl wl-4 wl-am" x="104" y="8" width="40" height="26" rx="6"></rect><rect class="wl wl-5 wl-pm" x="104" y="50" width="40" height="32" rx="6"></rect><rect class="wl wl-6 wl-am" x="152" y="8" width="40" height="26" rx="6"></rect><rect class="wl wl-7 wl-pm" x="152" y="50" width="40" height="32" rx="6"></rect></svg>
+        <p class="boot-wait">Still waiting on FocusTime</p>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/ui/boot.ts"></script>
   </body>

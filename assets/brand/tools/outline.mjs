@@ -1,4 +1,4 @@
-// Outlines the live <text> in the wordmark and lockup to paths, in IBM Plex Sans from @fontsource (step 17.5).
+// Outlines the live <text> in the wordmark to paths, in IBM Plex Sans from @fontsource (step 17.5).
 // Run after gen.py and before bake.py:  python3 tools/gen.py && node tools/outline.mjs && python3 tools/bake.py
 // opentype.js is a devDependency for this script only; it reads the .woff files (it can't read woff2).
 import opentype from "opentype.js";
@@ -36,7 +36,7 @@ function outline(tag, content) {
   return `<path aria-label="${content}" d="${parts.join(" ")}"${keep}/>`;
 }
 
-for (const name of ["wordmark.svg", "lockup-horizontal.svg"]) {
+for (const name of ["wordmark.svg"]) {
   const p = join(brand, name);
   const svg = readFileSync(p, "utf8");
   const out = svg.replace(/<text([^>]*)>([^<]*)<\/text>/g, (_, tag, content) => outline(tag, content));

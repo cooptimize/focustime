@@ -1,5 +1,7 @@
 # FocusTime | Brand Brief v0.2 (repo copy)
 
+> **Nov 15 2026 (BR-1):** Lumen and its beam are removed from FocusTime, and the bent mark with them; the week mark is the only brand mark and the loader is the week mark alone, with no words. This brief is kept as history; what is true now is in `brand.md`.
+
 November 2, 2026. Repo copy of the planning brief. The v0.1 sections that v0.2 refers back to (voice, palette, type, token mapping) are inlined so this file stands alone. The drawing step (old section 9) has already run; integration notes are at the end. Everything not marked **[confirmed]** is a proposal.
 
 **Palette source:** the Cooptimize Brand Guide PDF (eyedart creative studio, April 2022). **Logo source:** the Cooptimize logo PNG set (icon, horizontal and stacked).
