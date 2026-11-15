@@ -120,3 +120,7 @@ Each lists the files, actions, tables and tests one step added, in that step's w
 - Step sections: 23 cut as untrue in part (three or more paths gone, or three or more kinds of retired names), 49 cut as said elsewhere.
 - Rescued: one, Testing (HK-5), into `docs/technical/development.md` under How tests stay apart (the waiting rule and the commands for one shard were nowhere else). Its link from development.md now points there.
 - Checked and found elsewhere, not rescued: Send feedback (integrations.md, operations.md, the files' headers), Telemetry (the log/ headers, operations.md, `focustime client-ref` in scripts/focustime.ts), Environments (operations.md), the phone breakpoint (ui/viewport.ts).
+
+## Corrected by the review
+
+The second review found one fact the MC-1 and AS-1 sections held that was said nowhere else: the two raw-body routes beside `/api/action` (`POST /api/assistant/transcribe`, `POST /api/meetings/upload`). They are now in `docs/technical/architecture.md` (A normal request). Those two rows' "Cut as said elsewhere" stood before that fix.

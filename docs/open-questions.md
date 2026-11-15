@@ -1222,7 +1222,7 @@ From the IT review (TD-1):
 
 ## TD-2
 
-- Facts found nowhere else and where they went: only how tests stay apart (the old guide's Testing section), now in `docs/technical/development.md` (How tests stay apart). Everything else in the old guide is in its step's decisions, a file's header comment or a `docs/technical/` page (`docs/ux/td2/architecture.md` has the table).
+- Facts found nowhere else and where they went: how tests stay apart (the old guide's Testing section), now in `docs/technical/development.md` (How tests stay apart); and the two raw-body routes beside `/api/action` (from its AS-1 and MC-1 sections), now in `docs/technical/architecture.md` (A normal request). Everything else in the old guide is in its step's decisions, a file's header comment or a `docs/technical/` page (`docs/ux/td2/architecture.md` has the table).
 - Docs left as history that someone may want true again: `docs/demo.md` and `docs/demo/` (a walkthrough with screenshots of Nov 2), `docs/phone.md` (the phone on Nov 7), `docs/settings-inventory.md` (the Settings proposal of Nov 6), `docs/roadmap.md` (the direction on Nov 1) and `KICKOFF_PROMPT.md`. Rewrite any of them for the app now, or leave them as records?
 - `docs/technical/architecture.md` opens by saying the per-file detail is in `docs/architecture.md`. The per-file detail is now in each file's header; the guide says where folders and entry points are. Left, since `docs/technical/` changes only for a rescued fact here; reword it with the page's next re-check?
 - `docs/open-questions.md`'s first line says it mirrors spec section 16; the spec is in `docs/history/` now. Left (only this step's section is edited).

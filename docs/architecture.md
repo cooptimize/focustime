@@ -54,7 +54,7 @@ DevOps patterns (`#/patterns`), a working page an admin turns on per person: `Pa
 
 ### `ui/plan/`
 
-Four small planning components shared by Week, Day and the block panel: `AddPane.tsx` (the Add list), `Estimate.tsx` (the hours stepper), `FoldLine.tsx` (a folded group's line) and `PlanRow.tsx` (a row with its handle and size).
+Four small planning components shared by Week's and Day's cards, the block panel and Backlog's Gantt: `AddPane.tsx` (the Add list), `Estimate.tsx` (the hours stepper), `FoldLine.tsx` (a folded group's line) and `PlanRow.tsx` (a row with its handle and size).
 
 ### `ui/settings/`
 
@@ -168,7 +168,7 @@ The developer loop: running FocusTime on one developer's machine, not part of th
 
 Commands for developers and operators.
 
-- `focustime.ts` is the `focustime` command (export, import, counts, migrate and the other operator tasks; its header lists them). `db.ts` and `db-user.ts` run the local database (`npm run db:up`, `db:migrate`, `db:reset`, `db:down`), and `db-guard.ts` limits what a reset may drop.
+- `focustime.ts` is the `focustime` command (export, import, counts, migrate and the other operator tasks; its header and its usage text list them). `db.ts` runs the local database (`npm run db:up`, `db:migrate`, `db:reset`, `db:down`) and `db-guard.ts` limits what a reset may drop; `db-user.ts` makes the app identity's database user, run only by the deploy workflows.
 - `guards.ts` runs the repo guards (`npm run guards`), `words-guard.ts` among them; `ci-tree-match.sh` and `ci-webkit-deps.sh` are CI's helpers.
 - `tech-docs.ts` builds the Technical docs panel, `tech-docs.test.ts` is `npm run docs:check`, and `docs-diagrams.ts` renders the docs' diagrams.
 - `teams-package.ts`, `teams-icons.ts` and `teams-card-previews.ts` build the Teams app package and its previews; `pwa-icons.ts` the app's icons; `build-info.ts` and `image-digest.ts` the build's version.
@@ -194,7 +194,7 @@ Rules: Azure resources change only through `infra/` and the deploy workflows; a 
 
 ## `Dockerfile`
 
-The hosted image: a build stage, then a slim Node runtime that runs as the `node` user and starts `node server/main.ts --no-open` on port 8080. `.dockerignore` keeps local stores, secrets, config, screenshots, footage and docs out of it.
+The hosted image: a build stage, then a slim Node runtime that runs as the `node` user and starts `node server/main.ts --no-open` on port 8080. `.dockerignore` keeps local stores, secrets, config, screenshots, footage and the docs out of it, except `docs/technical/`, which the build renders into the app.
 
 ## `docs/`
 
@@ -204,7 +204,7 @@ The written docs.
 - `decisions.md` and `open-questions.md` are the logs of every decision and every open question, by step.
 - `design/` holds the style guide, the wording rules and the brand; `setup/` the setup guides for the Teams bot, meeting capture and Close the loop; `azure/` the Azure move's plan, reports and runbook.
 - `settings.md`, `guide.md` and `assistant-interface.md` say how to add a setting, how to add to the Guide, and what the assistant's interface is.
-- `history/` keeps each slice's plan as written. `ux/` holds each step's working notes and screenshots. `cleanup-step-2.md` lists what a later cleanup may drop. `analysis/` says how to run DevOps patterns; `scope/` keeps the scope documents the chat steps started from; `teams/` the Teams bot's screenshots. `demo/`, `roadmap.md`, `demo.md`, `phone.md` and `settings-inventory.md` describe an older app, and each says at its top what date it describes.
+- `history/` keeps each slice's plan as written. `ux/` holds each step's working notes and screenshots. `cleanup-step-2.md` lists what a later cleanup may drop. `analysis/` says how to run DevOps patterns; `scope/` keeps the scope documents the chat steps started from; `teams/` the Teams bot's screenshots. `demo/README.md` says how the demo works (its seeds, Reset demo and what a demo session refuses). `demo/`'s screenshots and script, `roadmap.md`, `demo.md`, `phone.md` and `settings-inventory.md` describe an older app, and each says at its top what date it describes.
 
 ## Files at the top of the repo
 
