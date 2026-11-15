@@ -271,7 +271,7 @@ export function guideProblems(guide: string, claude: string, topFolders: readonl
     const near: string[] = [];
     for (const m of line.matchAll(/`([^`\n]+)`/g)) {
       const path = m[1]!.replace(/\/$/, "");
-      if (/[\s<>*{}$=|,#()]|^\.\.|^~|^https?:|^-/.test(path)) continue;
+      if (/[\s<>*{}$=|,#()]|^\.\.|^~|^https?:|^-|^\//.test(path)) continue;
       const folder = m[1]!.endsWith("/");
       if (!folder && !path.includes("/") && !PATH_EXT.test(path) && path !== "Dockerfile") continue;
       if (/^[a-z]+:/.test(path)) continue;

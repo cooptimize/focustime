@@ -12,9 +12,9 @@ The React app: everything the browser runs, with no server code.
 
 - Entry points: `index.html` loads `ui/boot.ts`, which adds the Temporal polyfill only where the browser lacks it and then starts `ui/main.tsx`. `main.tsx` applies the theme, text size and reduce motion, then mounts `ui/App.tsx` behind the sign-in gate (`ui/Account.tsx`).
 - `App.tsx` holds the tabs, the top bar, the panels and the open week's shared state. `ui/nav.ts` is the one model of where the window is (tab, date, half, open panel, filters) and of its address; every screen reads and changes the address through it.
-- `ui/api.ts` is the UI's only way to read or change anything: a named action on the server, with the session's CSRF token on every call. No screen fetches data by itself.
+- `ui/api.ts` is how the UI reads and changes things: a named action on the server, with the session's CSRF token on every call. The only other calls are the version (`/version`) and the assistant's voice, which have routes of their own.
 - `ui/menu.ts` builds the command menu (Ctrl+K) from the action registry; `ui/keys.ts` and `ui/keyboard.ts` hold the keys and the rule that keys never fire while typing.
-- `ui/StatusBar.tsx` is the line at the foot of the window (sources, DevOps freshness, hidden personal events). `ui/layout.ts` places timed events in lanes on the rails and timelines. `ui/viewport.ts` decides phone or desktop (600 px and under is the phone); `ui/Phone.tsx` and `ui/PhoneShell.tsx` are the phone's shell.
+- `ui/StatusBar.tsx` is the line at the foot of the window (sources, DevOps freshness, hidden personal events). `ui/layout.ts` places timed events in lanes on the rails and timelines. `ui/viewport.ts` decides phone or desktop (under 600 px is the phone); `ui/Phone.tsx` and `ui/PhoneShell.tsx` are the phone's shell.
 - `ui/styles.css` holds the tokens (colors, the type scale, spacing) and the shared styles; a subfolder with a look of its own keeps its CSS beside it. `ui/theme.ts` and `ui/textsize.ts` set the theme and the Text size.
 - The screens' files sit at the top of `ui/` (`Day.tsx`, `WeekGrid.tsx`, `BlockPanel.tsx`, `Status.tsx`, `StoryCard.tsx` and the rest) or in a subfolder below.
 
@@ -64,7 +64,7 @@ Settings and Admin. `registry.ts` is the one list of Settings' groups, sections 
 
 Every named, validated operation. The UI, the command menu, the assistant, the Teams bot and the tests all call these, so each read and each change exists once.
 
-- `registry.ts` is the one list of action names, each with what it works on and how the command menu shows it. A new action starts here.
+- `registry.ts` is the one list of action names, each with what it works on and how the command menu shows it. A new action starts here, then gets its handler: in its area's file, listed in that file's `*_ACTIONS` array and reached from one branch of `dispatch.ts` (for example `PLAN_ACTIONS` and `planAction()` in `plan-actions.ts`), or inline in `dispatch.ts` for a few small ones.
 - `dispatch.ts` takes an action name and its input, rejects an unknown name or unexpected input, and calls the action. Its switch is exhaustive, so a registered action with no handler fails the type check.
 - `types.ts` holds the response shapes the server and the UI share (types only).
 - One file per area holds that area's actions (`plan-actions.ts` for to-dos and days, `weekplan-actions.ts`, `ahead-actions.ts`, `status-actions.ts`, `conversation-actions.ts`, `code-actions.ts` and the rest); a `*-types.ts` beside one holds its shapes.
@@ -110,7 +110,7 @@ The plan store: everything FocusTime keeps for people.
 - `scope.ts` adds the signed-in person to every statement, so no other code writes `user_id`. `isolation.test.ts` fails when a table is neither a user table (with `user_id` first in its keys) nor an app table.
 - `plan-store.ts` is a person's plan (to-dos, days, weeks, follow-ups, captures, markers); each other `*-store.ts` file holds one area (conversations, DevOps, Teams, meetings, admin, code views, patterns, standards).
 - `user-secrets.ts` seals a person's secrets under the app data key; `user-settings.ts` holds their settings rows; `accounts.ts` the users and sessions; `user-data.ts`, `export-local.ts` and `import.ts` Export and import; `retention.ts` what is deleted after how long.
-- `migrations/`: one timestamped file per schema change (`<UTC timestamp>_<what>.ts`), listed in `migrations/index.ts`; the numbered migrations before them are frozen. `migrations/additive.test.ts` fails on a migration that renames or drops without a `safe-drop:` reason.
+- `migrations/`: one timestamped file per schema change (`<UTC timestamp>_<what>.ts`), listed in `migrations/index.ts`; `migrations/named.ts` says how the runners apply them, after the frozen numbered migrations (in `plan-store.ts` for SQLite, `sql/migrate.ts` for SQL Server), in name order. `migrations/additive.test.ts` fails on a migration that renames or drops without a `safe-drop:` reason.
 
 Rules: SQL Server changes only through `sql/migrate.ts`; migrations only add; every write runs in a transaction; never a password or token in a file, an argument or a log. The tables are listed on [Data](technical/data.md).
 
@@ -136,15 +136,15 @@ Rule: a preference is the person's own setting with a neutral default, never the
 
 The web server and what runs beside it.
 
-- `main.ts` starts FocusTime: it reads the app config (`appconfig.ts`), picks the host, opens the store, builds the background policy and starts `app.ts`. Its usage line lists the flags.
+- `main.ts` starts FocusTime: it reads the app config (`appconfig.ts`), picks the host, opens the store, builds the background policy and starts `app.ts`. Its header gives the usage.
 - `app.ts` is the HTTP app: `guard.ts` checks Host and Origin on every request, then sign-in (`auth/`), sessions with a CSRF token, the one action endpoint (`POST /api/action`) and the UI. `demo.ts` builds a demo session's context.
-- `scheduler.ts` runs everyone's background work: the app's jobs (`retention-job.ts`, `meeting-job.ts`, `standards-job.ts` and the readers in `actions/`) and each person's ticks (`ticks.ts`: the timer, reminders, Teams status). `use.ts` knows whether anyone is using FocusTime, for the idle rule.
+- `scheduler.ts` runs everyone's background work: the app's jobs, which `main.ts` hands it (`retention-job.ts`, `meeting-job.ts`, `standards-job.ts` and the readers in `actions/`), and each person's ticks (`ticks.ts`: the timer, reminders, Teams status). `use.ts` knows whether anyone is using FocusTime, for the idle rule.
 - `teams/` is the Teams bot's endpoint: `bot.ts` receives, `assistant.ts` hands a message to the assistant, `cards.ts` and `render.ts` build the cards, `rhythm.ts` the daily messages, `gate.ts` the notification gate.
 - `notify.ts`, `push.ts` and `webpush.ts` deliver notifications; `sw.js` and `pwa.ts` are the service worker and the installable app.
 
 ## `log/`
 
-`logger.ts` is the structured logger, `redact.ts` what it removes before anything is written, `appinsights.ts` the telemetry to Application Insights, and `operation.ts` one operation's span. What may and may not be logged is on [Security](technical/security.md) and [Operations](technical/operations.md#diagnostics-logs-and-what-is-never-logged).
+`logger.ts` is the structured logger, `redact.ts` what is removed from an exception's message before it goes to telemetry, `appinsights.ts` the telemetry to Application Insights, and `operation.ts` one operation's span. What may and may not be logged is on [Security](technical/security.md) and [Operations](technical/operations.md#diagnostics-logs-and-what-is-never-logged).
 
 ## `fixtures/`
 

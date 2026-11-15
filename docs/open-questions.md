@@ -1230,3 +1230,5 @@ From the IT review (TD-1):
 - CLAUDE.md's Folder map doesn't list `docs/`, so the guide's `docs/` section is the one the check allows beyond the map. Add `docs/` to the Folder map with the next CLAUDE.md change?
 - Should `docs/open-questions.md` be split into open and closed? It holds about 780 entries and table rows (914 lines), of which 484 look open and many are answered by a later step without saying so (`docs/ux/td2/open-for-owner.md` is one pass at the open ones).
 - Should `docs/decisions.md` be split by month? It is over 1 MB, which some editors and the GitHub viewer open slowly.
+- The runners apply timestamped migrations in name order, and some existing files carry stamps later than today (up to `20261205T0900`). A migration named for the real UTC time now would sort before them. Should the rule say "later than the newest file" (a CLAUDE.md working style change, not made here)? Found by the TD-2 review.
+- `docs/technical/architecture.md` says 396 actions; the registry has about 400 now. Left for the page's next re-check.
