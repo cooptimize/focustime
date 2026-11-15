@@ -1166,3 +1166,8 @@ From the IT review (TD-1):
 - A made title is recognized by its form, not by a stored mark. If I type exactly "Deployment - <anything> - <the day's date>" myself, it follows a move like a made one. A stored mark would need a column; not worth it unless titles become editable.
 - A made title keeps the client's name as it was when saved; renaming the client later doesn't change it.
 - The deployment's date, start and end stay as I last set them after a save (they did before), so a second deployment in a row gets the same day in its title.
+- A made title goes stale one way: the deployment is made a plain to-do, moved to another day, and made a Deployment again. Its title still names the old day and no longer follows. Rare; a stored mark would fix this too.
+- The hint is the box's placeholder, and the box is one line until text is typed: a client name of about 30 characters in a narrow box (the phone's Quick capture) wraps the hint and hides its date. The line under the kinds still says the whole title.
+- At 1920 the Inbox's column ends at 944 px and the rest of the window is empty. Day's top lines do the same, but its cards fill the width. Should an open row use the space beside the list?
+- The kinds under the capture box are now a Tab stop for every kind (the keyboard way to an empty Deployment). Should Tab in an empty box cycle the kinds instead, as it does with text?
+- On an empty Deployment with no client, Enter now says "A deployment needs a client" where an empty box did nothing before.

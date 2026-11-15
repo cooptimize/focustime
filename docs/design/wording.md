@@ -295,5 +295,6 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 ## UC-1 words (Nov 15)
 
 - A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.
-- The capture box with Deployment chosen and nothing typed: the hint is that title; under the kinds: "Enter saves it as "Deployment - Northwind - Sat, Nov 7" · or type a title · ↓ to its details". With no client: "A deployment needs a client · ↓ to its details".
+- The capture box with Deployment chosen and nothing typed: the hint is that title; under the kinds: "Enter saves it as "Deployment - Northwind - Sat, Nov 7" · ↓ to its details". With no client: "A deployment needs a client · ↓ to its details".
 - The Inbox's client chips: the name, then its number when something needs me there ("Northwind 3"); read aloud as "Northwind, 3 need you", "Harbor, 1 needs you", "All clients, 5 need you". No number when nothing does.
+- A chip's hover line: "3 need you in Northwind: suggestions from chats, and promises late or due today. The same count as the Inbox tab's".

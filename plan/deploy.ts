@@ -14,7 +14,7 @@ export const DEPLOYMENT = "Deployment";
  * UC-1: the title a Deployment gets when none is typed: "Deployment - <client's name> - <date>", the date as the app
  * writes dates ("Sat, Nov 21"). Capture shows it as the box's hint and sends it as the title.
  */
-export const madeTitle = (clientName: string, date: IsoDate): string => `${DEPLOYMENT} - ${clientName.trim().slice(0, 150)} - ${dayLabel(date)}`;
+export const madeTitle = (clientName: string, date: IsoDate): string => `${DEPLOYMENT} - ${clientName.replace(/\s+/g, " ").trim().slice(0, 150)} - ${dayLabel(date)}`;
 
 /**
  * UC-1: a title FocusTime made follows its deployment to another day. A title is a made one when it still reads

@@ -118,6 +118,11 @@ describe("Deployment to-dos", () => {
     expect((await t.plan.picksFor("2026-11-07")).find((p) => p.id === moved.pick.id)?.title).toBe("Deployment - Adatum - Sat, Nov 7");
     const typed = await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-05", start: "19:00", end: "21:00", title: "Release 4.2 to production" });
     expect((await t.run<Added>("pick.move", { id: typed.pick.id, date: "2026-11-07", half: "AM" })).pick.title).toBe("Release 4.2 to production");
+    // A draft story made a Deployment keeps its own title, even one that reads like a made title: it is the draft's.
+    const draft = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Deployment - Adatum - Thu, Nov 5" });
+    const { pick: planned } = await t.run<Added>("pick.add", { date: "2026-11-05", half: "PM", clientKey: "Adatum", draftId: draft.draft.id });
+    const dep = await t.run<Added>("pick.set_kind", { id: planned.id, kind: "deployment", start: "19:00", end: "21:00" });
+    expect((await t.run<Added>("pick.move", { id: dep.pick.id, date: "2026-11-07", half: "AM" })).pick.title).toBe("Deployment - Adatum - Thu, Nov 5");
     // No title sent is still the plain word, as before (the menu's form and the assistant).
     expect((await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-06", start: "19:00", end: "21:00" })).pick.title).toBe("Deployment");
   });

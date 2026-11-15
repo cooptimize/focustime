@@ -6,7 +6,7 @@ import type { PromiseCard } from "../../plan/conversation-views.ts";
 import type { FollowUpView } from "../../actions/types.ts";
 import { actsFor, ITEM_KEYS, type ActEnv } from "./ItemActions.tsx";
 import { promiseOrder } from "./InboxPage.tsx";
-import { chipName, dueWords, lateText, needCounts } from "./model.ts";
+import { chipHint, chipName, dueWords, lateText, needCounts } from "./model.ts";
 import { suggestionActs } from "./Suggestion.tsx";
 
 const TODAY = "2026-11-05";
@@ -110,5 +110,8 @@ describe("UC-1: a chip's number", () => {
     expect(chipName("Contoso", 0)).toBe("Contoso");
     expect(chipName("Contoso", 1)).toBe("Contoso, 1 needs you");
     expect(chipName("All clients", 5)).toBe("All clients, 5 need you");
+    expect(chipHint("Contoso", 0)).toBeNull();
+    expect(chipHint("Contoso", 1)).toBe("1 needs you in Contoso: suggestions from chats, and promises late or due today. The same count as the Inbox tab's");
+    expect(chipHint(null, 5)).toMatch(/^5 need you: /);
   });
 });

@@ -29,3 +29,7 @@ export function needCounts(items: readonly { clientKey: string | null; views: re
 
 /** A chip's name for a screen reader: the client, then its number when it has one ("Harbor, 2 need you"). */
 export const chipName = (name: string, n: number) => (n > 0 ? `${name}, ${n} ${n === 1 ? "needs" : "need"} you` : name);
+
+/** A chip's hover line, saying what its number counts (review 1: the number alone didn't say). Null with no number. */
+export const chipHint = (name: string | null, n: number) =>
+  n > 0 ? `${n} ${n === 1 ? "needs" : "need"} you${name ? ` in ${name}` : ""}: suggestions from chats, and promises late or due today. The same count as the Inbox tab's` : null;

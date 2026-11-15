@@ -1800,8 +1800,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     if (p.minutes != null) base.minutes = p.minutes;
     if (p.remainingMinutes != null) Object.assign(base, { remainingMinutes: p.remainingMinutes, spentMinutes: p.spentMinutes ?? 0 });
     if (p.todoKind) Object.assign(base, { todoKind: p.todoKind, window: p.window ?? null, links: p.links ?? null, deployItems: p.deployItems ?? null, notes: p.notes });
-    // UC-1: a title FocusTime made for a deployment names its day, so it follows the move; a typed title is kept.
-    if (p.todoKind === "deployment") base.title = movedTitle(p.title, p.date, date);
+    // UC-1: a title FocusTime made for a deployment names its day, so it follows the move; a typed title is kept, and
+    // so is the title of a DevOps item, a draft or a promise that was made a Deployment (it is that thing's own).
+    if (p.todoKind === "deployment" && p.kind === "intention" && p.followUpId === null) base.title = movedTitle(p.title, p.date, date);
     return base;
   }
 

@@ -54,6 +54,8 @@ main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; ali
 /* UC-1: the capture box starts on the same edge as the heading, the chips and the lists (not on the phone). */
 @media (min-width: 640.02px) {
   .ib-capture.ib4-capture { padding-left: 0; padding-right: 0; }
+  /* Review 1: the empty lines sat centered in the column; they start on the edge like everything else. */
+  .ib4-empty { text-align: left; }
 }
 
 @media (max-width: 640px) {

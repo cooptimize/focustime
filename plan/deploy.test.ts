@@ -114,6 +114,8 @@ describe("UC-1: a deployment's made title", () => {
   it("is Deployment, the client's name and the date as the app writes dates", () => {
     expect(madeTitle("Contoso", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
     expect(madeTitle("  Fabrikam  ", "2026-12-01")).toBe("Deployment - Fabrikam - Tue, Dec 1");
+    // Spaces as the server stores a title (runs collapsed), so the hint and the stored title are the same words.
+    expect(madeTitle("Contoso   East", "2026-12-01")).toBe("Deployment - Contoso East - Tue, Dec 1");
   });
   it("follows the deployment to another day", () => {
     expect(movedTitle(madeTitle("Contoso", "2026-11-21"), "2026-11-21", "2026-11-22")).toBe("Deployment - Contoso - Sun, Nov 22");

@@ -77,7 +77,7 @@ describe.skipIf(!CHROMIUM)("UC-1: the Inbox on the left, a deployment titles its
         for (const list of ["chats", "promises", "captures"]) {
           await go(page, `#/inbox/${list}`, "main.ib4 .ib4-title");
           await page.locator(list === "captures" ? ".ib4-capture .cap-input" : ".ib4-row").first().waitFor({ timeout: 30_000 });
-          const parts = [".ib4-title", ".ib4-chips", ".ib4-chips .ib4-chip:first-child", ".ib4-list", ".ib4-group-head", ".ib4-row", ".ib4-section", ".ib4-capture", ".ib4-capture .cap-input", ".ib4-capture .cap-box-kinds", ".ib4-foot", ".ib4-keys"];
+          const parts = [".ib4-title", ".ib4-chips", ".ib4-chips .ib4-chip:first-child", ".ib4-list", ".ib4-group-head", ".ib4-row", ".ib4-section", ".ib4-capture", ".ib4-capture .cap-input", ".ib4-capture .cap-box-kinds", ".ib4-foot", ".ib4-keys", ".ib4-empty"];
           for (const sel of parts) for (const e of await edges(page, sel)) expect(e.left, `${where}, ${list}: ${sel} starts at ${e.left}, Day at ${day}`).toBe(day);
           // The switch sits on the heading's line, right after it: the head starts on the edge.
           expect((await edges(page, ".ib4-head"))[0]!.left, `${where}, ${list}: the heading's line`).toBe(day);
@@ -132,8 +132,22 @@ describe.skipIf(!CHROMIUM)("UC-1: the Inbox on the left, a deployment titles its
     await page.locator(".ib4-chips .ib4-chip", { hasText: withSome[1]!.name.split(",")[0]! }).click();
     await check("two clients chosen");
     await page.locator(".ib4-chips .ib4-chip").first().click();
+    // An empty list's line starts on the edge too (it sat centered).
+    const none = rest.find((c) => c.n === null)!;
+    await page.locator(".ib4-chips .ib4-chip", { hasText: none.name }).click();
+    await page.locator(".ib4-empty").waitFor();
+    expect((await edges(page, ".ib4-empty"))[0]!.left).toBe((await edges(page, ".ib4-title"))[0]!.left);
+    expect(await page.locator(".ib4-empty").evaluate((el) => getComputedStyle(el).textAlign)).toMatch(/left|start/);
+    await page.locator(".ib4-chips .ib4-chip").first().click();
     expect(errors).toEqual([]);
     await page.close();
+    // The phone's chips are as they were: names only.
+    const phone = await freshPage(h, { width: 390, height: 844 });
+    await go(phone.page, "#/inbox/chats", ".ib4-chips .ib4-chip");
+    expect(await phone.page.locator(".ib4-chips .ib4-count").count()).toBe(0);
+    expect(await phone.page.locator(".ib4-chips .ib4-chip").first().getAttribute("aria-label")).toBe("All clients");
+    expect(await phone.page.locator("main.ib4").evaluate((el) => getComputedStyle(el).paddingLeft)).toBe("16px");
+    await phone.page.close();
   }, T);
 
   it("Quick capture: a Deployment saves with an empty box and titles itself; the hint follows the client and the date; typed text is the title; the other kinds still need text", async () => {
@@ -224,8 +238,16 @@ describe.skipIf(!CHROMIUM)("UC-1: the Inbox on the left, a deployment titles its
     await go(page, "#/inbox/captures", ".ib4-capture .cap-input");
     const box = page.locator(".ib4-capture .cap-box");
     const n = (await deployments(page)).length;
-    await kindChip(box, "deployment").click();
+    // From the keyboard, the box empty: the kinds are one Tab stop, the arrows move between them, Enter returns to the box.
     await chooseClient(box, "Atlas");
+    await box.locator('.cap-box-kinds [role="radio"][aria-checked="true"]').focus();
+    for (const k of ["follow_up", "draft", "draft_feature", "deployment"]) {
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-kind"))).toBe(k);
+    }
+    expect(await box.locator(".cap-box-kinds [role=radio][tabindex='0']").count()).toBe(1);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => words(box).evaluate((el) => el === document.activeElement)).toBe(true);
     await expect.poll(() => words(box).getAttribute("placeholder")).toBe("Deployment - Atlas - Sat, Nov 7");
     await words(box).press("Enter");
     await box.locator(".cap-toast", { hasText: "Saved to Atlas as a deployment" }).waitFor();
