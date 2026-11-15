@@ -127,8 +127,6 @@ type Props = {
   /** Back to Day (Check-in's and Close out's Done), with an optional notice. */
   onLeave: (notice?: string) => void;
   onCloseOutDate: (d: IsoDate) => void;
-  /** Step 17.5: after Close out's Done commits (the reverse unroll). */
-  onClosedOut: (st: CloseOutState) => void;
   /** NV-1: the card for the moment of the day (nothing on today yet, Midday check-in or Close out), or none. */
   moment?: Moment | null;
   onCheckIn?: () => void;
@@ -608,7 +606,7 @@ export function Day(props: Props) {
       )}
 
       {mode === "closeout" && (
-        <CloseOutPanel date={closeDate ?? date} st={st} data={data} nameOf={nameOf} reload={loadClose} onChanged={props.onChanged} onError={setError} onDate={props.onCloseOutDate} onLeave={props.onLeave} onClosedOut={props.onClosedOut} onInbox={props.onInbox} onCaptures={props.onCaptures} act={act} onShown={date !== (closeDate ?? date)} />
+        <CloseOutPanel date={closeDate ?? date} st={st} data={data} nameOf={nameOf} reload={loadClose} onChanged={props.onChanged} onError={setError} onDate={props.onCloseOutDate} onLeave={props.onLeave} onInbox={props.onInbox} onCaptures={props.onCaptures} act={act} onShown={date !== (closeDate ?? date)} />
       )}
     </main>
   );

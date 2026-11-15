@@ -163,7 +163,6 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
         await row().waitFor({ timeout: 30_000 });
       };
       await openAdatum();
-      await page.locator("[data-moment]").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
       const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
 
       // AI off for Adatum: the button says "Break down" (WD-1 review), its tooltip follows the type; the panel says so

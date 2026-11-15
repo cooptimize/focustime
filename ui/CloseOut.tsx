@@ -73,9 +73,10 @@ export function CloseOutBlock({ slot, data, picks, tickable, ended, carryTo, nam
 
 /**
  * Close out as a side panel (U2): the numbers, where you left off, DevOps updates owed and follow-ups due, then Done.
- * Done closes the day exactly as before (closeout.commit), then the reverse unroll. Dropped picks are a count only.
+ * Done closes the day exactly as before (closeout.commit) and ends on Day with its done line (BR-1: no reverse unroll
+ * or all-done moment after it). Dropped picks are a count only.
  */
-export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onDate, onLeave, onClosedOut, onInbox, onCaptures, act, onShown }: {
+export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onDate, onLeave, onInbox, onCaptures, act, onShown }: {
   date: IsoDate;
   st: CloseOutState | null;
   data: WeekLoadData;
@@ -85,7 +86,6 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
   onError: (m: string) => void;
   onDate: (d: IsoDate) => void;
   onLeave: (m?: string) => void;
-  onClosedOut: (st: CloseOutState) => void;
   onInbox: () => void;
   onCaptures: () => void;
   act: (a: string, i: Record<string, unknown>) => Promise<boolean>;
@@ -121,8 +121,7 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
     // Step 15.1 (D275): once closed out, Done just goes back; nothing is saved again.
     if (st.closedOutAt) return onLeave();
     try {
-      const after = await call<CloseOutState>("closeout.commit", { date });
-      onClosedOut(after);
+      await call<CloseOutState>("closeout.commit", { date });
       onChanged();
       onLeave("Closed out. Nice work.");
     } catch (e) {

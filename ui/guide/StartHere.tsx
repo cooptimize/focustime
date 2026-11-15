@@ -1,6 +1,7 @@
 // UI-5: Start here. What FocusTime is for, the day in five steps, the week in three, and the two things that never
 // change. The picture is the still WeekMark (BR-1; it unrolled before), and a proposal card turns into "Done · Undo"
-// once when it scrolls into view (CSS, under 600 ms; reduced motion: the end state, still). Show me starts a tour on the person's own screens; signed out there are none, so it says so.
+// once when it scrolls into view (CSS, under 600 ms; reduced motion: the end state, still). Show me starts a tour on
+// the person's own screens; signed out there are none, so it says so.
 import { useEffect, useRef, useState } from "react";
 import { WeekMark } from "../brand/Brand.tsx";
 import { useReducedMotion } from "../brand/motion.ts";

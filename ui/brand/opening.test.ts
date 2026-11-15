@@ -1,8 +1,8 @@
-// Step 17.5: the opening's loader timing, what a source says while loading, and the Close out all-done moment.
+// Step 17.5: the opening's loader timing and what a source says while loading; BR-1: the pass and the 8 second line.
 import { describe, expect, it } from "vitest";
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
-import { allDone, openingAt, passWait, sourceLines, waitingLine } from "./opening.ts";
+import { openingAt, passWait, sourceLines, waitingLine } from "./opening.ts";
 
 const src = (source: SourceSummary["source"], status: SourceSummary["status"]) => ({ source, status, fetchedAt: null, fromCache: false, itemCount: 0 }) as SourceSummary;
 const client = (status: ClientWork["status"]) => ({ status }) as ClientWork;
@@ -55,14 +55,5 @@ describe("source lines while loading", () => {
   it("DevOps fails when a client's fetch fails or Dataverse couldn't find them", () => {
     expect(sourceLines([src("dataverse", "ok")], [client("ok"), client("auth_failed")]).at(-1)).toEqual({ name: "DevOps", state: "failed" });
     expect(sourceLines([src("dataverse", "error")], null).map((l) => l.state)).toEqual(["failed", "failed"]);
-  });
-});
-
-describe("all done today (the Close out moment, CF-1)", () => {
-  it("needs at least one to-do, all done; dropped or moved to-dos don't count", () => {
-    expect(allDone([{ status: "done" }, { status: "moved" }] as never)).toBe(true);
-    expect(allDone([{ status: "done" }, { status: "planned" }] as never)).toBe(false);
-    expect(allDone([{ status: "dropped" }] as never)).toBe(false);
-    expect(allDone([])).toBe(false);
   });
 });

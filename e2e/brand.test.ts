@@ -294,21 +294,33 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await page.close();
   }, T);
 
-  it("Close out plays the reverse, then the all-done moment (Lumen bobs), then Today; a click skips", async () => {
-    const { page, errors } = await freshPage(h);
-    await page.addInitScript(WATCH);
-    await page.reload();
-    await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+  it("Close out ends on Day with its done line and no overlay, even with every to-do done", async () => {
+    const ctx = await signedIn(base);
+    const page = await ctx.newPage();
+    await page.goto(h.url);
+    await appUp(page);
     await allDoneToday(page);
     await openCloseOut(page);
     await page.locator(".closeout-panel .done-btn").click();
-    await page.waitForSelector('[data-close="unroll"]');
-    await page.getByText("All done. See you tomorrow.").waitFor();
-    await page.waitForSelector('[data-close="moment"] [data-lumen="bob"]');
-    await page.locator(".brand-stage").click();
-    await page.waitForSelector(".brand-stage", { state: "detached" });
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day");
-    expect(errors).toEqual([]);
-    await page.close();
+    await page.getByText("Closed out. Nice work.").first().waitFor({ timeout: 5000 });
+    await page.waitForTimeout(1500);
+    expect((await seen(page)).overlays).toEqual([]);
+    expect(await page.locator(".brand-stage, [data-close], [data-moment]").count()).toBe(0);
+    await ctx.close();
+  }, T);
+
+  it("the first launch opens the app with no welcome overlay (and is still recorded)", async () => {
+    const ctx = await h.browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await ctx.addInitScript(WATCH);
+    const page = await ctx.newPage();
+    await page.goto(h.url);
+    await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 30_000 });
+    await appUp(page);
+    await page.waitForTimeout(2000);
+    expect((await seen(page)).overlays).toEqual([]);
+    expect(await page.getByText(/Welcome to FocusTime/).count()).toBe(0);
+    await expect.poll(async () => (await call(page, "ui.first_launch", {})).data?.first).toBe(false);
+    await ctx.close();
   }, T);
 });

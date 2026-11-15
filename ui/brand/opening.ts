@@ -1,6 +1,5 @@
-// Step 17.5: when the loader shows, when the app is revealed, what each source says while loading, and whether
-// today's work is all done (for the Close out moment). BR-1: the mark's pass, and the one line the loader may show
-// after 8 seconds. Pure; every time is in ms since the loader's mark started (its CSS, ui/brand/boot.css).
+// Step 17.5: when the loader shows, when the app is revealed and what each source says while loading. BR-1: the
+// mark's pass, and the one line the loader may show after 8 seconds. Pure; every time is in ms since the loader's mark started (its CSS, ui/brand/boot.css).
 import type { SourceSummary } from "../../actions/types.ts";
 import type { ClientWork } from "../../week/types.ts";
 
@@ -67,12 +66,4 @@ export function sourceLines(sources: readonly SourceSummary[] | null, devops: re
   const devopsFailed = devops == null || devops.some((c) => c.status !== "ok" && c.status !== "not_set_up");
   lines.push({ name: "DevOps", state: devopsFailed ? "failed" : "done" });
   return lines;
-}
-
-type DayPick = { status: string };
-
-/** CF-1: whether today's work is all done: at least one to-do planned or done today, and every one of them done. */
-export function allDone(picks: readonly DayPick[]): boolean {
-  const live = picks.filter((p) => p.status === "planned" || p.status === "done");
-  return live.length > 0 && live.every((p) => p.status === "done");
 }
