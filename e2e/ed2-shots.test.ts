@@ -124,6 +124,72 @@ describe.skipIf(!CHROMIUM || !DIR)("ED-2 screenshots", () => {
           await saveAll();
         });
       }
+      if (!BEFORE) {
+        const cell = (title: string) => row(title).locator("td.ah-col-item");
+        // 1. A title being edited in its cell (F2).
+        await shot(page, `rename-cell-${theme}`, async () => {
+          await cell("Shipmnt list filter by region").focus();
+          await page.keyboard.press("F2");
+          await page.getByRole("textbox", { name: "Title of #3313" }).fill("Shipment list filter by region");
+        });
+        await page.keyboard.press("Enter");
+        // 2. A row with a staged title, and a row with a staged move (under its new parent).
+        await shot(page, `staged-row-${theme}`, async () => {
+          await call(page, "ahead.stage", { clientKey: "Atlas", itemId: 3354, field: "parent", value: { id: 3310 } });
+          await call(page, "ahead.stage", { clientKey: "Atlas", itemId: 3354, field: "size", value: 3 });
+          await page.reload();
+          await go("#/backlog");
+          for (const f of ["Shipment tracking dashboard", "Delivery time estimates", "Carrier rate alerts"]) await open(f);
+          await row("Late delivery alerts for dispatchers").hover();
+        });
+        // 3. Move…'s picker, from the row (M).
+        await shot(page, `move-picker-${theme}`, async () => {
+          await cell("Weekly rate digest").focus();
+          await page.keyboard.press("m");
+          await page.getByRole("combobox", { name: "Move #3353 under" }).waitFor();
+        });
+        await page.keyboard.press("Escape");
+        // 4. A drag in progress, with the row under the pointer lit.
+        const from = (await row("Weekly rate digest").locator(".ah-title").boundingBox())!;
+        const to = (await row("Delivery time estimates").locator(".ah-title").boundingBox())!;
+        await shot(page, `drag-${theme}`, async () => {
+          await page.mouse.move(from.x + 40, from.y + 8);
+          await page.mouse.down();
+          await page.mouse.move(to.x + 120, to.y + 10, { steps: 8 });
+          await page.locator(".ah-row.ah-drop-on").waitFor();
+        });
+        await page.keyboard.press("Escape");
+        await page.mouse.up();
+        // 5. The bulk bar with rows of mixed types ticked and State… open.
+        await shot(page, `bulk-state-${theme}`, async () => {
+          await tick("Late delivery alerts for dispatchers");
+          await tick("Shipment list filter by region");
+          await tick("Carrier rate alerts");
+          await page.getByRole("toolbar", { name: "Selected items" }).getByRole("button", { name: "State…" }).click();
+          await page.locator(".ah-pop-bulk-state").waitFor();
+        });
+        await page.keyboard.press("Escape");
+        await page.getByRole("button", { name: "Clear", exact: true }).click();
+        // 6. Review, with Title and Parent rows.
+        await shot(page, `review-${theme}`, async () => {
+          await call(page, "ahead.stage", { clientKey: "Atlas", itemId: 3342, field: "title", value: "Estimate accuracy report" });
+          await call(page, "ahead.stage", { clientKey: "Atlas", itemId: 3340, field: "target", value: "2026-12-18" });
+          await page.reload();
+          await go("#/backlog");
+          await page.getByRole("button", { name: "Review" }).click();
+          await review().waitFor();
+        });
+        // 7. Save's results, one with Retry.
+        await shot(page, `saved-${theme}`, async () => {
+          await call(page, "demo.devops_change", { clientKey: "Atlas", change: { id: 3313, loseNextWrite: true } });
+          await saveAll();
+        });
+        // 8. The review's own list of what was saved, with Undo and Retry.
+        await shot(page, `saved-list-${theme}`, async () => {
+          await page.locator(".write-dialog").getByRole("button", { name: "Close", exact: true }).last().click();
+          await review().locator(".ah-landed li").first().waitFor({ timeout: 30_000 });
+        });
+      }
       await h.stop();
       started.splice(started.indexOf(h), 1);
     }

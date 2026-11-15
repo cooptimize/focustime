@@ -63,7 +63,8 @@ export function parseTeammate(v: unknown): TeammateChange | null {
 type DemoComment = { id: number; text: string; isDeleted: boolean; createdBy: string; createdDate: string; /** SR-1 */ createdByName?: string; modifiedDate?: string };
 
 export const STATES: Record<string, { name: string; category: string }[]> = Object.fromEntries(
-  ["Domain", "Epic", "Feature", "User Story", "Task", "Bug"].map((t) => [t, [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }]]),
+  // ED-2: Feature has one state the other types don't (On hold), the same as the demo's process model (sources/demo/data.ts).
+  ["Domain", "Epic", "Feature", "User Story", "Task", "Bug"].map((t) => [t, [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, ...(t === "Feature" ? [{ name: "On hold", category: "InProgress" }] : []), { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }]]),
 );
 const T = "Microsoft.VSTS.Scheduling.TargetDate";
 const S = "Microsoft.VSTS.Scheduling.StartDate";

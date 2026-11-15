@@ -87,7 +87,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 | `target_date` | Target Date, with Start Date in the same patch when set |
 | `description` | Appends to the description for a clear scope change, or (`description_edit`) a full edit with before and after shown |
 | `assign` | Assign to me (Take one), its previous assignee shown |
-| `fields` | Backlog's change set for one item: start, target, the size field, assignee (anyone on the client's project), state (one the type has) |
+| `fields` | Backlog's change set for one item: title, parent (an open item one level up in the same project, or none; the link only), start, target, the size field, assignee (anyone on the client's project), state (one the type has). Never the backlog order |
 | `remaining_work` | Remaining Work in hours, from Close out's end of day offer or Wrap it up, on a type whose process has the field |
 | `item_edit` | Title, description (repro steps for a bug) and acceptance criteria, only the parts that changed |
 | `reparent` | Moves the item under another parent, or none |

@@ -1094,3 +1094,20 @@ From the IT review (TD-1):
 - **Where no database is found** (loose SQL files) the tree is still two levels: "No schema", then the types. A flat list would be shorter there.
 - **Deep link.** Opening a link to a file in By kind doesn't open the tree to it; only changing the switch does.
 
+## ED-2
+
+- Should a moved item take its new parent's area and iteration? Still open from ED-1. ED-2 changes only the link, from the Grid as from the card.
+- Should description ever be edited in the Grid? Not in ED-2: it stays on the story card with its own preview. E on a row opens the card ready to edit.
+- Should bulk offer tags or priority? Not in ED-2: only what the Grid shows (owner, state, size, parent, target date).
+- From the DevOps documentation (STEP 0.6), left unsaid: the Update page never says in words that fields and relations may share one patch (its "Add a hyperlink" and "Add an attachment" examples do it); it doesn't say that a patch is applied all or nothing, or what a failed `test` returns; it doesn't say a `remove` on `/relations/{index}` uses the index as last read (ED-1 relies on the rev test for that); and no page read states the Title's 255 character limit (FocusTime keeps QC-1's 255). Recheck if DevOps ever returns a partial result.
+- Conflicts are per field in the Grid (a comment doesn't block a title) and per revision on the card (any newer revision refuses). ED-2 was told to keep the Grid's way. Should the card move to per field too (ED-1's open question)?
+- A row's staged title and parent are laid over the item everywhere the Backlog model is read (`buildRows`), the assistant's reads included, so the assistant names an item by the title I staged. Should it say the DevOps title instead?
+- Assign to… in bulk needs rows from one client (each client has its own people). Should it instead take a mixed selection and assign per client where the person is on both?
+- State… lists a state only some rows' types take but doesn't let it be picked. Should it be pickable, staging the rows it fits and skipping the rest with the reason?
+- The drag only reaches parents that are rows on screen (it doesn't scroll the page while dragging, and at the Stories level no parent is a row). Move… reaches all of them. Should the drag scroll, or a level always show its parents as drop rows?
+- A row's menu shows only on rows I may change; a read-only row has no menu, and E still opens its card. Should a read-only row have a menu with the reasons?
+- The move rule's words use "a" or "an" by the first letter ("An User Story doesn't go under…"), as QC-1's and ED-1's do. Fix the article for words like User?
+- Renaming in the Grid writes the title only; the card's Edit can fix the title and the description in one preview. Two ways to do one thing: keep both?
+- The Grid's hover buttons (Rename, New under, the menu) take room in the Item cell while a row is pointed at. On narrow windows the title gets short. Move Rename into the menu only?
+- The demo's features now have a state stories don't (On hold). It exists only to show State… on mixed types.
+

@@ -862,6 +862,8 @@ export function createAssistant(env: AssistantEnv) {
         const f = await item(Number(args.itemId), client);
         if (!f.editable) throw new Refusal(`You can't change #${f.item.id} (only ${f.clientName}'s leads and the owner can)`);
         const field = String(args.field) as "start" | "target" | "size" | "assignee";
+        // ED-2: the change set now also holds a title and a parent; the assistant offers neither (only these four).
+        if (!["start", "target", "size", "assignee"].includes(field)) throw new Refusal("I can change an item's start date, target date, size or owner. Rename or move it in Backlog");
         const raw = (args.value as string | null) ?? null;
         let value: unknown = raw;
         let after = raw ?? "None";
