@@ -51,6 +51,8 @@ export type AheadEnv = {
   roadmap: Map<string, RoadmapRow>;
   readOnly: boolean;
   stage: (r: Row, field: ChangeField, value: ChangeValue, half?: DayHalf | null) => Promise<boolean>;
+  /** ED-2: the same, answering why it couldn't be kept (null: staged) so the place that asked can say it. */
+  tryStage: (r: Row, field: ChangeField, value: ChangeValue) => Promise<string | null>;
   unstage: (r: Row, field?: ChangeField) => Promise<void>;
   /** BH-1: my change set after a bulk action staged it on the server. */
   setChanges: (changes: StagedChange[]) => void;
@@ -226,17 +228,21 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     await reload();
   };
 
-  const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+  const tryStage = async (r: Row, field: ChangeField, value: ChangeValue, half: DayHalf | null = null): Promise<string | null> => {
     local.current++;
     try {
       const res = await call<{ changes: StagedChange[] }>("ahead.stage", { clientKey: r.clientKey, itemId: r.item.id, field, value, ...(half ? { half } : {}) });
       local.current++;
       setLoad((l) => (l ? { ...l, changes: res.changes } : l));
-      return true;
+      return null;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That change couldn't be kept");
-      return false;
+      return e instanceof Error ? e.message : "That change couldn't be kept";
     }
+  };
+  const stage: AheadEnv["stage"] = async (r, field, value, half = null) => {
+    const why = await tryStage(r, field, value, half);
+    if (why) setError(why);
+    return !why;
   };
   const unstage: AheadEnv["unstage"] = async (r, field) => {
     local.current++;
@@ -482,12 +488,13 @@ export function Ahead({ data, mode, item, preset = null, switcher, onChanged, re
     const mine = load.changes.filter((c) => c.clientKey === clientKey && c.itemId === itemId);
     const it = load.clients.find((c) => c.clientKey === clientKey)?.items.find((i) => i.id === itemId);
     if (!mine.length || !it) return null;
-    const now = (f: ChangeField): ChangeValue => (f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
-    const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State" };
-    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : "no value") : valueText(f, v, half));
+    const items = load.clients.find((c) => c.clientKey === clientKey)?.items ?? [];
+    const now = (f: ChangeField): ChangeValue => (f === "title" ? it.title : f === "parent" ? (it.parentId === null ? null : { id: it.parentId, title: items.find((x) => x.id === it.parentId)?.title ?? "" }) : f === "start" ? it.start : f === "target" ? it.target : f === "size" ? it.size : f === "state" ? it.state : it.assignee?.email ? { email: it.assignee.email, name: it.assignee.name } : null) as ChangeValue;
+    const label: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Owner", state: "State", title: "Title", parent: "Parent" };
+    const text = (f: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null) => (v === null || v === undefined || v === "" ? (f === "assignee" ? "nobody" : f === "parent" ? "no parent" : "no value") : valueText(f, v, half));
     return mine.map((c) => ({ field: label[c.field], devops: text(c.field, now(c.field)), mine: text(c.field, c.value, c.half) }));
   };
-  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
+  const env: AheadEnv | null = load ? { load, roadmap, readOnly, stage, tryStage, unstage, setChanges, breakDown, color, focusItem: madeFocus ?? item, error: setError, view, changedUnder, filterUnder: (key) => setFilters({ ...f, epic: key }), ...(newUnder ? { newUnder } : {}) } : null;
   const anyFilter = counts.shown !== counts.total;
   const visible = counts.shown;
   const title = mode === "gantt" ? "Gantt" : "Grid";
@@ -586,7 +593,7 @@ export function changeText(c: Pick<StagedChange, "field" | "value" | "half">, si
   if (c.field === "size") return typeof c.value === "number" ? `${c.value}${sizeLabel ? ` ${sizeLabel}` : ""}` : "None";
   return valueText(c.field, c.value, c.half);
 }
-const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State" };
+const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to", state: "State", title: "Title", parent: "Parent" };
 
 /**
  * The review (D657): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now
@@ -599,7 +606,9 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [landed, setLanded] = useState<DevOpsLogView["entries"]>([]);
-  const [since] = useState(() => new Date().toISOString());
+  // What this review saved: the write log's entries newer than the newest one when it opened (by id, so it doesn't
+  // depend on the browser's clock agreeing with the server's).
+  const since = useRef<number | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   useReturnFocus();
   useEffect(() => panel.current?.focus(), []);
@@ -608,8 +617,11 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const clientName = (k: string) => a.load.clients.find((c) => c.clientKey === k)?.clientName ?? k;
   const refreshLanded = useCallback(async () => {
     const log = await call<DevOpsLogView>("devops.log", {}).catch(() => null);
-    if (log) setLanded(log.entries.filter((e) => (e.op === "fields" || e.op === "undo_fields") && e.at >= since));
-  }, [since]);
+    if (!log) return;
+    if (since.current === null) since.current = log.entries.reduce((m, e) => Math.max(m, e.id), 0);
+    const from = since.current;
+    setLanded(log.entries.filter((e) => (e.op === "fields" || e.op === "undo_fields") && e.id > from));
+  }, []);
   useEffect(() => void refreshLanded(), [refreshLanded, dw?.version]);
 
   const resolve = async (clientKey: string, itemId: number, keep: "mine" | "theirs") => {
@@ -691,12 +703,13 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
                 const conflict = g.changes.some((c) => c.theirs !== undefined);
                 const look = lookOf(g.clientKey, r?.item.type);
                 return (
-                  <section key={`${g.clientKey}:${g.itemId}`} role="listitem" className={`ah-review-item ah-rv-card${conflict ? " conflict" : ""}`} aria-label={`#${g.itemId} ${r?.item.title ?? ""}`}>
+                  <section key={`${g.clientKey}:${g.itemId}`} role="listitem" className={`ah-review-item ah-rv-card${conflict ? " conflict" : ""}`} aria-label={`#${g.itemId} ${r?.saved?.title ?? r?.item.title ?? ""}`}>
                     <h3 className="ah-rv-title">
                       <span className="dl-swatch" style={{ "--c": a.color(g.clientKey) } as CSSProperties} aria-hidden="true" />
                       {r && <TypeIcon type={r.item.type} look={look} />}
                       <span className="ah-rv-name">
-                        #{g.itemId} {r?.item.title ?? ""}
+                        {/* ED-2: the title DevOps has now; a staged one is the Title row below. */}
+                        #{g.itemId} {r?.saved?.title ?? r?.item.title ?? ""}
                       </span>
                       <span className="muted ah-rv-client">{clientName(g.clientKey)}</span>
                     </h3>
@@ -745,14 +758,18 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
               <ul>
                 {landed.map((e) => (
                   <li key={e.id} className={`wl-${e.status}`}>
-                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title} <span className="muted">{e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : "not confirmed yet"}</span>
+                    {/* A saved rename is listed by its new title (review 1). */}
+                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.status === "confirmed" ? (e.after.Title ?? e.title) : e.title}{" "}
+                    <span className="muted">
+                      {Object.keys(e.after).join(", ")} · {e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : e.status === "failed" ? "not written: DevOps refused it" : "not confirmed yet"}
+                    </span>
                     {e.undoable && (
-                      <button type="button" className="mini" onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
+                      <button type="button" className="mini" aria-label={`Undo #${e.itemId} ${e.title}`} onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
                         Undo
                       </button>
                     )}
                     {e.retryable && (
-                      <button type="button" className="mini" onClick={() => void dw?.retry(e.id)}>
+                      <button type="button" className="mini" aria-label={`Retry #${e.itemId} ${e.title}`} onClick={() => void dw?.retry(e.id)}>
                         Retry
                       </button>
                     )}
@@ -786,7 +803,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
             )}
           </div>
           <p className="muted ah-review-note">
-            Nothing is written until you save.{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
+            {items.length === 0 && landed.length > 0 ? "Nothing is waiting to be saved." : "Nothing is written until you save."}{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
           </p>
         </footer>
       </aside>

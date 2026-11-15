@@ -228,6 +228,12 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [3353, "User Story", "New", 3350, "Weekly rate digest", "Priya Shah"],
     [3360, "Feature", "Resolved", 3300, "Carrier contact list", ME],
     [3361, "User Story", "Closed", 3360, "Import carrier contacts", ME],
+    // ED-2: a backlog worth grooming, at the bottom so nothing above changes rank: a story filed under the wrong
+    // feature (late deliveries belong with the tracking dashboard, not with rate alerts) and two titles worth fixing.
+    // (A teammate's, so Carrier rate alerts stays a feature I own with only teammates' stories: PL-1's Watching.)
+    [3354, "User Story", "New", 3350, "Late delivery alerts for dispatchers", "Priya Shah"],
+    [3313, "User Story", "New", 3310, "Shipmnt list filter by region", ME],
+    [3342, "User Story", "New", 3340, "estimate accuracy report (copy)", ME],
   ],
 };
 
@@ -312,7 +318,10 @@ export function demoWorkItem(d: DemoItems, k: DemoClientKey, id: number): WorkIt
 
 /** WT-1: the demo's process (fictional, shaped like Agile): what its types look like and where they sit. */
 const DEMO_STATES = [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }];
-const demoType = (name: string, icon: string, color: string) => ({ name, icon: { id: icon }, color, states: DEMO_STATES });
+/** ED-2: features have one state stories don't (On hold), as real processes differ by type, so State… on a mixed selection can be seen. */
+export const DEMO_FEATURE_ONLY = { name: "On hold", category: "InProgress" };
+const statesOfType = (name: string) => (name === "Feature" ? [...DEMO_STATES.slice(0, 2), DEMO_FEATURE_ONLY, ...DEMO_STATES.slice(2)] : DEMO_STATES);
+const demoType = (name: string, icon: string, color: string) => ({ name, icon: { id: icon }, color, states: statesOfType(name) });
 export function demoProcess(k: DemoClientKey, overrides: ProcessOverrides = {}): ProcessModel {
   const lvl = (type: "portfolio" | "requirement" | "task", rank: number, types: string[]) => ({ type, rank, workItemTypes: types.map((name) => ({ name })), defaultWorkItemType: { name: types[0] } });
   return buildProcessModel({

@@ -223,6 +223,9 @@ export function descriptionOps(rev: number, field: string, html: string): PatchO
 }
 
 // ---- AH-1 (D660): one patch per item for Ahead's change set: start, target, size and assignee behind one rev test ----
+// ED-2: a staged title is one more field in it, and a staged move adds reparentOps' own ops (the old parent link out,
+// the new one in) after the fields, behind the same rev test: one update, so the item is written whole or not at all.
+// The backlog order field is never among them.
 
 /** The labels a fields write shows and logs (the size label is the field's own name, "Story Points"). */
 export const FIELD_LABEL = { start: "Start date", target: "Target date", assignee: "Assigned to", state: "State" } as const;
@@ -232,13 +235,15 @@ export type FieldSpec =
   /** An assignee by uniqueName (email); null is Nobody, written as add with an empty value (the Update docs' "reset an identity field"). */
   | { kind: "identity"; field: string; value: string | null; had: boolean }
   /** AH-5: a state by name (System.State always has one, so it is always a replace). */
-  | { kind: "state"; field: string; value: string; had: boolean };
+  | { kind: "state"; field: string; value: string; had: boolean }
+  /** ED-2: a title (System.Title always has one), written the way ED-1's item_edit writes it. */
+  | { kind: "text"; field: string; value: string; had: boolean };
 export function fieldsOps(rev: number, specs: readonly FieldSpec[], timeZone: string): PatchOp[] {
   const ops: PatchOp[] = [test(rev)];
   for (const f of specs) {
     const path = `/fields/${f.field}`;
     if (f.kind === "identity") ops.push({ op: "add", path, value: f.value ?? "" });
-    else if (f.kind === "state") ops.push({ op: "add", path, value: f.value });
+    else if (f.kind === "state" || f.kind === "text") ops.push({ op: "add", path, value: f.value });
     else if (f.value === null) {
       if (f.had) ops.push({ op: "remove", path });
     } else ops.push({ op: f.had ? "replace" : "add", path, value: f.kind === "date" ? dateValue(f.value, timeZone) : f.value });
@@ -250,6 +255,8 @@ export const fieldRefsOf = (ops: unknown): string[] => (Array.isArray(ops) ? (op
 
 // ---- ED-1: edit an item on its story card ----
 
+/** ED-2: the label a move shows and logs, in a reparent and in a change set's fields write. */
+export const PARENT_LABEL = "Parent";
 /** The labels an item_edit shows and logs. */
 export const EDIT_LABEL = { title: "Title", description: "Description", acceptance: "Acceptance criteria" } as const;
 export type EditPart = { label: string; field: string; value: string; markdown: boolean };

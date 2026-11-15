@@ -41,7 +41,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | `follow_ups` | User | Yes | Promises a person added or a rule opened; `changed_at` is a promise's last change |
 | `promises` | User | Yes | Promises the chat rules found in my own messages, before they join a conversation's commitments |
 | `captures`, `draft_stories`, `story_drafts`, `story_draft_writes`, `breakdown_marks`, `house_styles` | User | Yes | Captures, draft stories and features (`draft_stories.brief`: the three answers as JSON), Break down's work, each client's house style |
-| `roadmap_dates`, `ahead_changes`, `ahead_state_changes`, `ahead_halves`, `delivery_snapshots` | User | Yes | Backlog's dates, its change set (start, target, size, assignee; state changes in their own table), daily counts for trends |
+| `roadmap_dates`, `ahead_changes`, `ahead_state_changes`, `ahead_edit_changes`, `ahead_halves`, `delivery_snapshots` | User | Yes | Backlog's dates, its change set (start, target, size, assignee; state changes in their own table, and title and parent changes in theirs), daily counts for trends |
 | `inbox_marks`, `conversation_views` | User | No | What a person has seen or hidden in the Inbox: a suggestion shown (`suggested_at`) and what became of it (`outcome`, `outcome_at`), a promise touched (`touched_at`), cleared on its own as done or expired (`cleared`, `cleared_at`) or put back (`put_back_at`); Diagnostics counts them |
 | `loop_sends` | User | Yes | Close the loop's sends: channel, mode (draft, sent, marked), state, where it went and to whom (a name), counts of people inside and outside Cooptimize, the text sent, the link, Graph's reference, the audit row's id |
 | `assistant_turns`, `assistant_proposals` | User | Proposals | The assistant's history and its open proposals |
@@ -143,7 +143,7 @@ Kept elsewhere:
 
 ## Export
 
-Settings › Your data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 41, `store/user-data.ts`), without their user id. Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
+Settings › Your data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 42, `store/user-data.ts`), without their user id. Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
 
 ## What is never stored
 

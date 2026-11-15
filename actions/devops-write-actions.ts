@@ -22,12 +22,12 @@ import { AnswersError, parseAnswers, withCarried, written, type Answers } from "
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
-import { canEdit, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
+import { canEdit, parentIdIn, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
 import { canonOf, editingOf, LIGHT_MAX, lightToHtml, lookHtml, LOSSY_TEXT, NOT_EDITABLE_TEXT, sameContent, storedValue, type FieldFormat } from "../plan/light-format.ts";
 import { aOr, parentTypesOf, TITLE_MAX } from "../plan/quick-create.ts";
-import { EDIT_LABEL, editRefs, itemEditOps, parentIdOf, parentLinks, parentText, reparentOps, type EditPart } from "../plan/devopswrite.ts";
+import { EDIT_LABEL, editRefs, itemEditOps, PARENT_LABEL, PARENT_REL, parentIdOf, parentLinks, parentText, reparentOps, type EditPart } from "../plan/devopswrite.ts";
 import type { EditFieldOffer, EditOffer } from "./types.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
 const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
@@ -219,7 +219,7 @@ const SUMMARY: Record<WriteOp, string> = {
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
   assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
-  fields: "Change dates, state, size or owner in DevOps", undo_fields: "Undo: put the dates, state, size and owner back",
+  fields: "Change this item in DevOps", undo_fields: "Undo: put what this change set changed back",
   feedback: "Send feedback to the FocusTime backlog",
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
   comment_delete: "Delete your comment on a DevOps item", undo_comment_delete: "Undo: post your deleted comment's text again",
@@ -881,11 +881,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (!right.ok) throw new Refused(right.note, 403, "read_only");
       const typeHas = await writer.typeFields(org, pat, project, item.type);
       const all = await writer.fields(org, pat, project);
-      const refs: Record<ChangeField, string | null> = { start: typeHas.has(START_FIELD) ? START_FIELD : null, target: detectTargetField(all, typeHas), size: detectTypeSizeField(typeHas), assignee: "System.AssignedTo", state: "System.State" };
+      // ED-2: a title and a parent ride in the same patch. The parent has no field: its "ref" only says it is there.
+      const refs: Record<ChangeField, string | null> = { start: typeHas.has(START_FIELD) ? START_FIELD : null, target: detectTargetField(all, typeHas), size: detectTypeSizeField(typeHas), assignee: "System.AssignedTo", state: "System.State", title: "System.Title", parent: PARENT_REL };
       // AH-5: a state must be one of the type's states in the process model, read on the write path.
       const typeStates = staged.some((x) => x.field === "state") ? await writer.states(org, pat, project, item.type) : [];
       const sizeLabel = refs.size ? (fieldNames(all, [refs.size])[refs.size] ?? "Size") : "Size";
-      const label = (f: ChangeField) => (f === "size" ? sizeLabel : FIELD_LABEL[f]);
+      const label = (f: ChangeField) => (f === "size" ? sizeLabel : f === "title" ? EDIT_LABEL.title : f === "parent" ? PARENT_LABEL : FIELD_LABEL[f]);
       const now = (f: ChangeField): ChangeValue => valueNow(item, f, refs[f], tz);
       const conflicts = staged.filter((x) => !sameValue(x.field, x.baseValue, now(x.field)));
       for (const x of conflicts) await port.conflict(env.clientKey, itemId, x.field, now(x.field));
@@ -894,12 +895,32 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const before: Record<string, string | null> = {};
       const after: Record<string, string | null> = {};
       const notes: string[] = [];
+      // ED-2: the move's own ops (the old link out, the new one in), after the fields, behind the same rev test.
+      let moveOps: PatchOp[] = [];
+      let movedTo: number | null | undefined;
       for (const x of staged) {
         const ref = refs[x.field];
         if (!ref) throw new Refused(`${label(x.field)} isn't in ${env.projectName}'s process for ${item.type}. Remove that change in the review`, 409, "no_field");
         if (sameValue(x.field, x.value, now(x.field))) continue;
         const had = item.fields[ref] !== undefined && item.fields[ref] !== null && item.fields[ref] !== "";
-        if (x.field === "start" || x.field === "target") {
+        if (x.field === "title") {
+          // ED-1's title rule, checked again here.
+          const t = cleanTitle(x.value);
+          if ("problem" in t) throw new Refused(`${t.problem}. Change the title or remove that change in the review`, 409, "bad_title");
+          specs.push({ kind: "text", field: ref, value: t.title, had: true });
+          before[EDIT_LABEL.title] = item.title;
+          after[EDIT_LABEL.title] = t.title;
+        } else if (x.field === "parent") {
+          // ED-1's move rule, checked again against DevOps as it is now.
+          const to = parentIdIn(x.value);
+          const mv = await moveCheck(env, item, to, memo);
+          if (mv.nothing) continue;
+          moveOps = reparentOps(org, item.rev, item.relations, to).slice(1);
+          movedTo = to;
+          before[PARENT_LABEL] = mv.before;
+          after[PARENT_LABEL] = mv.after;
+          notes.push(...mv.notes);
+        } else if (x.field === "start" || x.field === "target") {
           specs.push({ kind: "date", field: ref, value: typeof x.value === "string" ? x.value : null, had });
           before[label(x.field)] = (now(x.field) as string | null) ?? null;
           after[label(x.field)] = typeof x.value === "string" ? x.value : null;
@@ -915,7 +936,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           before[label("size")] = typeof now("size") === "number" ? String(now("size")) : null;
           after[label("size")] = typeof x.value === "number" ? String(x.value) : null;
         } else {
-          const v = x.value && typeof x.value === "object" ? x.value : null;
+          const v = x.value && typeof x.value === "object" && "email" in x.value ? x.value : null;
           specs.push({ kind: "identity", field: ref, value: v?.email ?? null, had });
           before[label("assignee")] = assigneeText(identityName(item.fields[ref]), identityEmail(item.fields[ref]));
           after[label("assignee")] = v ? assigneeText(v.name, v.email) : null;
@@ -925,17 +946,20 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           }
         }
       }
+      // ED-2: a rename or a move of someone else's item tells its owner, as ED-1's does (its line says whose it is).
+      const said = EDIT_LABEL.title in after || PARENT_LABEL in after ? await ownerNote(env, item) : null;
       // BH-1: a bulk change can touch items that aren't mine: the preview says whose each one is.
       const owner = identityEmail(item.fields["System.AssignedTo"]);
-      if (specs.length && right.why !== "owner" && owner && owner.toLowerCase() !== env.me.email.toLowerCase() && !staged.some((x) => x.field === "assignee")) {
+      if (!said && (specs.length || moveOps.length) && right.why !== "owner" && owner && owner.toLowerCase() !== env.me.email.toLowerCase() && !staged.some((x) => x.field === "assignee")) {
         const moved = staged.some((x) => x.field === "start" || x.field === "target");
         notes.unshift(`Assigned to ${identityName(item.fields["System.AssignedTo"]) ?? owner}, not you.${moved ? " They get a quiet note in FocusTime that the dates moved." : ""}`);
       }
-      if (!specs.length) {
+      if (!specs.length && !moveOps.length) {
         for (const x of staged) await port.landed(env.clientKey, itemId, x.field);
         return `#${itemId} already has those values`;
       }
-      return { ...base(env), ...none, op: "fields", itemId: item.id, title: item.title, ops: fieldsOps(item.rev, specs, tz), rev: item.rev, before, after, type: item.type, notes };
+      if (said) notes.push(said);
+      return { ...base(env), ...none, op: "fields", itemId: item.id, title: item.title, ops: [...fieldsOps(item.rev, specs, tz), ...moveOps], rev: item.rev, before, after, type: item.type, notes, ...(movedTo !== undefined ? { parentId: movedTo } : {}) };
     }
     case "assign": {
       // PV-1 (D572): Take one: a teammate's open story (child level in the project's process) assigned to me. SW-1
@@ -1377,40 +1401,14 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       // form's pool and rule), or No parent. One patch behind the rev the card's edit read: the old link out and the
       // new one in, so the item is never left with two parents or none unless that was chosen.
       const item = await editTarget(env, o, memo);
-      const ladder = await ladderOf(env, memo);
-      const ups = parentTypesOf(ladder, item.type);
-      if (!ups.length) throw new Refused(`${cap(aOr(item.type))} has no level above it in ${env.projectName}'s process, so it has no parent to change`, 409, "no_parent_level");
       if (o.parentId === undefined) throw new Invalid("parentId is required (null for No parent)");
       const to = o.parentId === null ? null : posId(o.parentId, "parentId");
-      if (to === item.id) throw new Refused("An item can't be its own parent", 409);
-      const links = parentLinks(item.relations);
-      const was = links[0] ?? null;
-      if (links.length <= 1 && was === to) return to === null ? `#${item.id} has no parent already` : `#${item.id} is already under #${to}`;
-      let parent: ItemSnapshot | null = null;
-      if (to !== null) {
-        try {
-          parent = await writer.item(org, pat, project, to);
-        } catch (e) {
-          if (e instanceof WriteFailure && e.kind === "not_found") throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
-          throw e;
-        }
-        const inProject = String(parent.fields["System.TeamProject"] ?? "").toLowerCase();
-        if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
-        const why = parentProblem(ladder, parent.type, item.type);
-        if (why) throw new Refused(why, 409, "wrong_level");
-        const ps = await writer.states(org, pat, project, parent.type);
-        if (!isOpenCategory(ps.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime moves items only under open parents`, 409, "closed_parent");
-      }
-      const old = was !== null ? await writer.item(org, pat, project, was).catch(() => null) : null;
-      const kids = item.relations.filter((r) => r.rel === CHILD_REL).length;
-      const notes = [
-        kids ? `Its ${kids === 1 ? "child item moves" : `${kids} child items move`} with it.` : "It has no child items.",
-        "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.",
-        ...(to === null ? ["It will have no parent in DevOps."] : []),
-      ];
+      const mv = await moveCheck(env, item, to, memo);
+      if (mv.nothing) return mv.nothing;
+      const notes = [...mv.notes];
       const owner = await ownerNote(env, item);
       if (owner) notes.push(owner);
-      return { ...base(env), ...none, op: "reparent", itemId: item.id, title: item.title, ops: reparentOps(org, item.rev, item.relations, to), rev: item.rev, before: { Parent: parentText(old ?? (was !== null ? { id: was, title: "" } : null)).trim() }, after: { Parent: parentText(parent) }, type: item.type, parentId: to, notes };
+      return { ...base(env), ...none, op: "reparent", itemId: item.id, title: item.title, ops: reparentOps(org, item.rev, item.relations, to), rev: item.rev, before: { Parent: mv.before }, after: { Parent: mv.after }, type: item.type, parentId: to, notes };
     }
     case "undo": {
       const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
@@ -1470,12 +1468,19 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           else if (ref === "System.State") {
             if (!prior) throw new Refused(`The state #${item.id} had isn't in the log, so it can't be put back`, 409, "changed");
             specs.push({ kind: "state", field: ref, value: prior, had: true });
+          } else if (ref === "System.Title") {
+            // ED-2: the old title back, as ED-1's undo does.
+            if (!prior) throw new Refused(`The title #${item.id} had isn't in the log, so it can't be put back`, 409, "changed");
+            specs.push({ kind: "text", field: ref, value: prior, had: true });
           } else if (k === FIELD_LABEL.start || k === FIELD_LABEL.target) specs.push({ kind: "date", field: ref, value: prior, had });
           else specs.push({ kind: "number", field: ref, value: prior === null ? null : Number(prior), had });
         }
+        // ED-2: the old parent back (or none), the link only, in the same patch.
+        const backTo = PARENT_LABEL in entry.after ? parentIdOf(entry.before[PARENT_LABEL]) : undefined;
+        const moveBack = backTo !== undefined ? reparentOps(org, item.rev, item.relations, backTo).slice(1) : [];
         const back: Record<string, string | null> = Object.fromEntries(Object.keys(entry.after).map((k) => [k, entry.before[k] ?? null]));
         const nowShown: Record<string, string | null> = Object.fromEntries(Object.keys(entry.after).map((k) => [k, entry.after[k] ?? null]));
-        return { ...u, op: "undo_fields", ops: fieldsOps(item.rev, specs, tz), rev: item.rev, before: nowShown, after: back };
+        return { ...u, op: "undo_fields", ops: [...fieldsOps(item.rev, specs, tz), ...moveBack], rev: item.rev, before: nowShown, after: back, ...(backTo !== undefined ? { parentId: backTo } : {}) };
       }
       if (entry.op === "description") {
         const field = fieldOf(entry.ops) ?? "System.Description";
@@ -1575,7 +1580,12 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
     const out: Record<string, string | null> = {};
     for (const [k, ref] of Object.entries(labelRefs(e))) {
       const v = item.fields[ref];
-      out[k] = ref === "System.AssignedTo" ? identityEmail(v) : ref === "System.State" ? (typeof v === "string" ? v : null) : k === FIELD_LABEL.start || k === FIELD_LABEL.target ? dateOnly(v, tz) : typeof v === "number" && Number.isFinite(v) ? String(v) : null;
+      out[k] = ref === "System.Title" ? String(v ?? "").trim() : ref === "System.AssignedTo" ? identityEmail(v) : ref === "System.State" ? (typeof v === "string" ? v : null) : k === FIELD_LABEL.start || k === FIELD_LABEL.target ? dateOnly(v, tz) : typeof v === "number" && Number.isFinite(v) ? String(v) : null;
+    }
+    // ED-2: a move in the same write: the parent by its id.
+    if (PARENT_LABEL in e.after) {
+      const links = parentLinks(item.relations);
+      out[PARENT_LABEL] = links.length > 1 ? "two parents" : links[0] !== undefined ? `#${links[0]}` : null;
     }
     return out;
   }
@@ -1590,7 +1600,7 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
   return {};
 }
 /** A logged value as current() reports it. */
-const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => (e.op === "item_edit" || e.op === "undo_item_edit" ? editCurrent(e, k, v) : e.op === "reparent" || e.op === "undo_reparent" ? (parentIdOf(v) !== null ? `#${parentIdOf(v)}` : null) : (e.op === "description" || e.op === "undo_description") && (k === "Description" || k === EDIT_LABEL.acceptance) ? htmlToText(v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign" || e.op === "fields" || e.op === "undo_fields") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
+const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined) => (e.op === "item_edit" || e.op === "undo_item_edit" ? editCurrent(e, k, v) : e.op === "reparent" || e.op === "undo_reparent" ? (parentIdOf(v) !== null ? `#${parentIdOf(v)}` : null) : (e.op === "description" || e.op === "undo_description") && (k === "Description" || k === EDIT_LABEL.acceptance) ? htmlToText(v ?? "").trim() : (e.op === "fields" || e.op === "undo_fields") && k === PARENT_LABEL ? (parentIdOf(v) !== null ? `#${parentIdOf(v)}` : null) : (e.op === "fields" || e.op === "undo_fields") && k === EDIT_LABEL.title ? (v ?? "").trim() : (e.op === "assign" || e.op === "undo_assign" || e.op === "fields" || e.op === "undo_fields") && k === "Assigned to" ? assigneeEmail(v) : v ?? null);
 
 /**
  * AH-1: a fields write's labels and the fields behind them, from its ops: Start Date, System.AssignedTo, one of the
@@ -1598,9 +1608,10 @@ const asCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefined)
  */
 function labelRefs(e: Pick<DevOpsWriteEntry, "ops" | "after">): Record<string, string> {
   const out: Record<string, string> = {};
-  const sizeLabel = Object.keys(e.after).find((k) => k !== FIELD_LABEL.start && k !== FIELD_LABEL.target && k !== FIELD_LABEL.assignee && k !== FIELD_LABEL.state);
+  const sizeLabel = Object.keys(e.after).find((k) => k !== FIELD_LABEL.start && k !== FIELD_LABEL.target && k !== FIELD_LABEL.assignee && k !== FIELD_LABEL.state && k !== EDIT_LABEL.title && k !== PARENT_LABEL);
   for (const ref of fieldRefsOf(e.ops)) {
-    if (ref === START_FIELD) out[FIELD_LABEL.start] = ref;
+    if (ref === "System.Title") out[EDIT_LABEL.title] = ref;
+    else if (ref === START_FIELD) out[FIELD_LABEL.start] = ref;
     else if (ref === "System.AssignedTo") out[FIELD_LABEL.assignee] = ref;
     else if (ref === "System.State") out[FIELD_LABEL.state] = ref;
     else if ((TYPE_SIZE_FIELDS as readonly string[]).includes(ref) && sizeLabel) out[sizeLabel] = ref;
@@ -1609,8 +1620,53 @@ function labelRefs(e: Pick<DevOpsWriteEntry, "ops" | "after">): Record<string, s
   return out;
 }
 
+/**
+ * ED-1's move rule, on the write path (the story card's Move… and, since ED-2, a staged move in Backlog's change set):
+ * the new parent is an open item exactly one level up in this client's own project (levels from the process's backlog
+ * levels), or No parent; never the item itself. Returns the words for the preview, or `nothing` when it is there already.
+ */
+async function moveCheck(env: Env, item: ItemSnapshot, to: number | null, memo: Map<string, Promise<unknown>>): Promise<{ nothing: string | null; before: string; after: string; notes: string[] }> {
+  const { writer, org, pat, project } = env;
+  const ladder = await ladderOf(env, memo);
+  const ups = parentTypesOf(ladder, item.type);
+  if (!ups.length) throw new Refused(`${cap(aOr(item.type))} has no level above it in ${env.projectName}'s process, so it has no parent to change`, 409, "no_parent_level");
+  if (to === item.id) throw new Refused("An item can't be its own parent", 409);
+  const links = parentLinks(item.relations);
+  const was = links[0] ?? null;
+  if (links.length <= 1 && was === to) return { nothing: to === null ? `#${item.id} has no parent already` : `#${item.id} is already under #${to}`, before: "", after: "", notes: [] };
+  let parent: ItemSnapshot | null = null;
+  if (to !== null) {
+    try {
+      parent = await writer.item(org, pat, project, to);
+    } catch (e) {
+      if (e instanceof WriteFailure && e.kind === "not_found") throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+      throw e;
+    }
+    const inProject = String(parent.fields["System.TeamProject"] ?? "").toLowerCase();
+    if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
+    const why = parentProblem(ladder, parent.type, item.type);
+    if (why) throw new Refused(why, 409, "wrong_level");
+    const ps = await writer.states(org, pat, project, parent.type);
+    if (!isOpenCategory(ps.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime moves items only under open parents`, 409, "closed_parent");
+  }
+  const old = was !== null ? await writer.item(org, pat, project, was).catch(() => null) : null;
+  const kids = item.relations.filter((r) => r.rel === CHILD_REL).length;
+  const notes = [
+    kids ? `Its ${kids === 1 ? "child item moves" : `${kids} child items move`} with it.` : "It has no child items.",
+    "Only the parent link changes. Area, iteration, state, dates, assignee and backlog order stay as they are.",
+    ...(to === null ? ["It will have no parent in DevOps."] : []),
+  ];
+  return { nothing: null, before: parentText(old ?? (was !== null ? { id: was, title: "" } : null)).trim(), after: parentText(parent), notes };
+}
+
 /** What DevOps has now for a change set field of an item (the type's own field; null when it has none). */
 function valueNow(item: ItemSnapshot, f: ChangeField, ref: string | null, tz: string): ChangeValue {
+  // ED-2: the title as it is; the parent by its link (its title isn't needed to compare).
+  if (f === "title") return item.title;
+  if (f === "parent") {
+    const at = parentLinks(item.relations)[0];
+    return at === undefined ? null : { id: at, title: "" };
+  }
   if (!ref) return null;
   const v = item.fields[ref];
   if (f === "start" || f === "target") return dateOnly(v, tz);
@@ -1880,10 +1936,10 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
     // AH-1 (D660): the read-back goes straight into the central store and its change log, so every screen shows it.
     // ED-1: a move names the parent explicitly (null for none), so the store never keeps the old one.
-    const moved = entry.op === "reparent" || entry.op === "undo_reparent" ? { "System.Parent": parentLinks(back.relations)[0] ?? null } : {};
+    const moved = entry.op === "reparent" || entry.op === "undo_reparent" || ((entry.op === "fields" || entry.op === "undo_fields") && PARENT_LABEL in entry.after) ? { "System.Parent": parentLinks(back.relations)[0] ?? null } : {};
     await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev, ...moved } }).catch(() => {});
     if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
-    if (entry.op === "item_edit" || entry.op === "reparent") await editedNote(ctx, env, back).catch(() => {});
+    if (entry.op === "item_edit" || entry.op === "reparent" || (entry.op === "fields" && (EDIT_LABEL.title in entry.after || PARENT_LABEL in entry.after))) await editedNote(ctx, env, back).catch(() => {});
     // CV-4: an undone create's images are unlinked (the files stay in DevOps: there's no delete).
     let unlinked = 0;
     if (entry.op === "undo_create" && entry.undoOf !== null) {
@@ -1950,10 +2006,10 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
   const port = ctx.ahead;
   const itemId = back.id;
   const refs = labelRefs(entry);
-  const fieldOfLabel = (k: string): ChangeField => (k === FIELD_LABEL.start ? "start" : k === FIELD_LABEL.target ? "target" : k === FIELD_LABEL.assignee ? "assignee" : k === FIELD_LABEL.state ? "state" : "size");
+  const fieldOfLabel = (k: string): ChangeField => (k === FIELD_LABEL.start ? "start" : k === FIELD_LABEL.target ? "target" : k === FIELD_LABEL.assignee ? "assignee" : k === FIELD_LABEL.state ? "state" : k === EDIT_LABEL.title ? "title" : k === PARENT_LABEL ? "parent" : "size");
   if (port && entry.op === "fields") {
     const staged = await port.staged(env.clientKey, itemId);
-    for (const k of Object.keys(refs)) {
+    for (const k of [...Object.keys(refs), ...(PARENT_LABEL in entry.after ? [PARENT_LABEL] : [])]) {
       const f = fieldOfLabel(k);
       const x = staged.find((s) => s.field === f);
       if (!x) continue;
@@ -1963,8 +2019,8 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
   }
   // AH-7: a gap this save filled (or its undo emptied again) counts in Readiness's "N fixed this week".
   if (entry.op === "fields" || entry.op === "undo_fields") {
-    const filled = Object.keys(refs).flatMap((k) => {
-      const g = fills(fieldOfLabel(k), entry.op === "fields" ? entry.before[k] : entry.after[k], entry.op === "fields" ? entry.after[k] : entry.before[k]);
+    const filled = Object.keys(refs).filter((k) => k !== EDIT_LABEL.title).flatMap((k) => {
+      const g = fills(fieldOfLabel(k) as "start" | "target" | "size" | "assignee" | "state", entry.op === "fields" ? entry.before[k] : entry.after[k], entry.op === "fields" ? entry.after[k] : entry.before[k]);
       return g ? [g] : [];
     });
     if (filled.length) {

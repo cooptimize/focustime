@@ -1441,7 +1441,9 @@ const toInvite = (r: Row): Invite => ({
   eventId: (r.event_id as string | null) ?? null, status: r.status as Invite["status"], followUpId: (r.follow_up_id as number | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
 /** AH-5: the table a pending change lives in (state has its own, D468). */
-const changeTable = (field: ChangeField): "ahead_changes" | "ahead_state_changes" => (field === "state" ? "ahead_state_changes" : "ahead_changes");
+const changeTable = (field: ChangeField): (typeof CHANGE_TABLES)[number] => (field === "state" ? "ahead_state_changes" : field === "title" || field === "parent" ? "ahead_edit_changes" : "ahead_changes");
+/** ED-2: a pending rename or move sits in a third table, for the same reason. */
+const CHANGE_TABLES = ["ahead_changes", "ahead_state_changes", "ahead_edit_changes"] as const;
 const stampText = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
 const json = <T>(v: unknown): T | null => (typeof v === "string" ? (JSON.parse(v) as T) : null);
 const toOwn = (r: Row): OwnEvent => ({ uid: r.uid as string, timeboxId: (r.timebox_id as number | null) ?? null, eventId: r.event_id as string, fields: json<Fields>(r.fields)!, deletedAt: (r.deleted_at as string | null) ?? null });
@@ -3150,7 +3152,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** AH-1 (D657): my pending DevOps edits in Ahead, oldest first. */
     async aheadChanges(): Promise<StagedChange[]> {
       // AH-5: a pending state change sits in its own table (ahead_changes' field CHECK is kept, D468).
-      const rows = [...((await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[]), ...((await db.all("SELECT * FROM ahead_state_changes ORDER BY created_at, client_key, item_id")) as Row[])].sort((a, b) => stampText(a.created_at).localeCompare(stampText(b.created_at)) || String(a.client_key).localeCompare(String(b.client_key)) || (a.item_id as number) - (b.item_id as number));
+      const rows = [...((await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[]), ...((await db.all("SELECT * FROM ahead_state_changes ORDER BY created_at, client_key, item_id")) as Row[]), ...((await db.all("SELECT * FROM ahead_edit_changes ORDER BY created_at, client_key, item_id, field")) as Row[])].sort((a, b) => stampText(a.created_at).localeCompare(stampText(b.created_at)) || String(a.client_key).localeCompare(String(b.client_key)) || (a.item_id as number) - (b.item_id as number));
       const parse = (v: unknown) => (typeof v === "string" ? (JSON.parse(v) as ChangeValue) : null);
       return rows.map((r) => ({
         clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as ChangeField, value: parse(r.value_json), half: (r.half as DayHalf | null) ?? null,
@@ -3177,7 +3179,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async removeAheadChanges(clientKey: string | null, itemId: number | null = null, field: ChangeField | null = null): Promise<number> {
       return tx(async () => {
         let n = 0;
-        for (const t of field === null ? ["ahead_changes", "ahead_state_changes"] : [changeTable(field)]) {
+        for (const t of field === null ? CHANGE_TABLES : [changeTable(field)]) {
           if (clientKey === null) n += (await db.run(`DELETE FROM ${t}`)).changes;
           else if (itemId === null) n += (await db.run(`DELETE FROM ${t} WHERE client_key = ?`, clientKey)).changes;
           else if (field === null) n += (await db.run(`DELETE FROM ${t} WHERE client_key = ? AND item_id = ?`, clientKey, itemId)).changes;

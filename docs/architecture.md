@@ -1047,6 +1047,16 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **The now mark.** `plan/nowline.ts`: `nowSpot` answers `none` for a day drawn as one cell; `WholeDay` in `ui/WeekGrid.tsx` no longer takes a `now`.
 - **Tests.** `scripts/words-guard.test.ts`, `scripts/guards.test.ts`, `ui/settings/registry.test.ts`, `ui/menu.test.ts`, `plan/notify.test.ts`, `config/notify.test.ts`, `config/background-policy.test.ts`, `plan/nowline.test.ts`, `e2e/nm1-now-mark.test.ts`; `e2e/nm1-shots.test.ts` takes the screenshots in `docs/ux/nm1/` (only with `NM1_SHOTS=<folder>`).
 
+## ED-2: rename, move and bulk edit in Backlog's Grid (Nov 14)
+
+- **The fields.** `plan/ahead-edit.ts`: `CHANGE_FIELDS` gains `title` and `parent` (`ParentRef`, `parentIdIn`), with their `checkValue`, `sameValue` and `valueText`, and the move rule (`MoveItem`, `moveItemFrom`, `moveProblem`, `moveTargets`): ED-1's, from the ladder rung. `store/migrations/20261205T0900_ahead_edit_changes.ts` (a user table; `store/plan-store.ts` `CHANGE_TABLES`); Export schema 42.
+- **Staging.** `actions/ahead-actions.ts`: `ahead.stage` and `ahead.stage_bulk` take the two fields (`currentValue` reads a parent with its title, `moveItemOf`); `checkBulkOp` takes `assign`, `state`, `size` and `parent`. `plan/backlog.ts`: `bulkDecide` for the four, `bulkSummary`, `commonStates`, `bulkMoveBlock`.
+- **The write.** `actions/devops-write-actions.ts`: the `fields` preview adds a title (`FieldSpec` kind `text`) and a move (`moveCheck`, shared with `reparent`; `reparentOps` after the fields, behind the one rev test), its read back, `undo_fields` and `aheadLanded`; `plan/devopswrite.ts` `PARENT_LABEL`.
+- **The rows.** `plan/ahead-model.ts` `buildRows` lays a staged title and parent over the item (`Row.saved` keeps DevOps's), so `plan/backlog-list.ts` and the Gantt's tree show the row under its new parent with its rank unchanged.
+- **The Grid.** `ui/ahead/GridEdits.tsx` (`RenameBox`, `MovePicker`, `moveChoices`, `Unsaved`, `unsavedWords`); `ui/ahead/Grid.tsx` (F2, M, E, Shift+F10, the row's menu through `MenuCtx`, the drag: `startDrag`, `drops`, the live region); `ui/ahead/Bulk.tsx` (`BulkAssign`, `BulkState`, `BulkSize`, Move to… through `MovePicker`); `ui/ahead/Ahead.tsx` (`tryStage`, Review's Title and Parent rows, the saved list by entry id); `ui/ahead/Gantt.tsx` (the row menu); `ui/WorkLink.tsx` `openItemCardToEdit` and `ui/StoryCard.tsx` (the card opened ready to edit).
+- **The demo.** `sources/demo/data.ts` (Atlas's three grooming examples; `DEMO_FEATURE_ONLY`, a state only features have), `sources/demo/devops.ts` (a refused update puts the whole item back; `loseNextWrite`).
+- **Tests.** `plan/ed2-grid.test.ts`, `actions/ahead-actions.test.ts` (ED-2), `actions/ed2-change-set.test.ts`, `e2e/ed2-grid.test.ts`, `e2e/ed2-shots.test.ts`.
+
 ## NM-2: commands and settings that tell the truth
 
 - **The command menu.** `HOLLOW` in `ui/menu.ts` (a reason per command) joins `HIDDEN_FOR_NOW` in `commandList`; the assistant's `NOT_OFFERED` in `assistant/allowlist.ts` (with `offered`, used by `assistant/service.ts` where `BUTTON_ONLY` was).

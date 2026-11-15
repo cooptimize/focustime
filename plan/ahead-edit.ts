@@ -6,6 +6,9 @@
 // to themselves. Automation accounts never edit (guests can't sign in, D602). Levels come from the process model's
 // ladder, never from type names.
 
+import { aOr, cleanTitle, TITLE_MAX } from "./quick-create.ts";
+import { isOpen as isOpenCategory } from "./process.ts";
+
 export type EditWhy = "lead" | "owner" | "parent_owner";
 export type EditRight = { ok: true; why: EditWhy } | { ok: false; note: string };
 
@@ -52,14 +55,22 @@ export const rungOf = (ladder: readonly (readonly string[])[], type: string): nu
 // ---- The change set ----
 
 // AH-5: state joins the change set (kept in its own table, ahead_state_changes).
-export const CHANGE_FIELDS = ["start", "target", "size", "assignee", "state"] as const;
+// ED-2: title and parent join it (their own table, ahead_edit_changes), with ED-1's rules for each.
+export const CHANGE_FIELDS = ["start", "target", "size", "assignee", "state", "title", "parent"] as const;
 export type ChangeField = (typeof CHANGE_FIELDS)[number];
 export type DayHalf = "AM" | "PM";
 
 /** A person as the change set keeps an assignee: their DevOps uniqueName (email) and name; null is Nobody. */
 export type Assignee = { email: string; name: string } | null;
-/** A staged value: a date (start, target), a number (size), an assignee or a state name (AH-5). */
-export type ChangeValue = string | number | Assignee;
+/** ED-2: a parent as the change set keeps it: the item's id and its title (for words only); null is No parent. */
+export type ParentRef = { id: number; title: string } | null;
+/** A staged value: a date (start, target), a number (size), an assignee, a state name (AH-5), a title or a parent (ED-2). */
+export type ChangeValue = string | number | Assignee | ParentRef;
+const idOf = (v: ChangeValue | undefined): number | null => (v && typeof v === "object" && "id" in v && typeof v.id === "number" ? v.id : null);
+/** ED-2: the parent a value names (null: No parent, or not a parent value). */
+export const parentIdIn = idOf;
+/** ED-2: a title as DevOps keeps it: one line, spaces collapsed (the rule ED-1's title has, plan/quick-create.ts cleanTitle). */
+const oneLine = (v: ChangeValue | undefined) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : null);
 
 /** One pending change (one item and field), as the store keeps it for one person. */
 export type StagedChange = {
@@ -81,10 +92,13 @@ export type StagedChange = {
 /** Compare values as DevOps would store them: dates by day, sizes by number, assignees by email. */
 export function sameValue(field: ChangeField, a: ChangeValue | undefined, b: ChangeValue | undefined): boolean {
   if (field === "assignee") {
-    const ea = a && typeof a === "object" ? a.email.toLowerCase() : null;
-    const eb = b && typeof b === "object" ? b.email.toLowerCase() : null;
+    const ea = a && typeof a === "object" && "email" in a ? a.email.toLowerCase() : null;
+    const eb = b && typeof b === "object" && "email" in b ? b.email.toLowerCase() : null;
     return ea === eb;
   }
+  // ED-2: a title by its words (case counts: fixing a capital is a change); a parent by its id.
+  if (field === "title") return oneLine(a) === oneLine(b);
+  if (field === "parent") return idOf(a) === idOf(b);
   if (field === "size") return (typeof a === "number" ? a : null) === (typeof b === "number" ? b : null);
   if (field === "state") return (typeof a === "string" ? a.trim().toLowerCase() : null) === (typeof b === "string" ? b.trim().toLowerCase() : null);
   return (typeof a === "string" ? a.slice(0, 10) : null) === (typeof b === "string" ? b.slice(0, 10) : null);
@@ -114,6 +128,20 @@ export function checkValue(field: ChangeField, v: unknown): ChangeValue {
     if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 10_000) throw new Error("A size is a number from 0 to 10000");
     return Math.round(v * 100) / 100;
   }
+  if (field === "title") {
+    // ED-2: ED-1's title rule, the one the story card and the New form use.
+    const t = cleanTitle(v);
+    if ("problem" in t) throw new Error(t.problem);
+    return t.title;
+  }
+  if (field === "parent") {
+    // ED-2: an item id, or null for No parent. Which items may be a parent is checked by the caller (its client's
+    // own items, one level up, open); the title is only for words and is read again there.
+    if (v === null) return null;
+    const p = v as { id?: unknown; title?: unknown };
+    if (typeof p !== "object" || typeof p.id !== "number" || !Number.isSafeInteger(p.id) || p.id <= 0) throw new Error("A parent is { id }, or null for No parent");
+    return { id: p.id, title: typeof p.title === "string" ? p.title.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX) : "" };
+  }
   if (field === "state") {
     // A state always has a value; which names the type takes is checked against the process model by the caller.
     if (typeof v !== "string" || !v.trim() || v.length > 128) throw new Error("A state is the name of one of the type's states");
@@ -135,7 +163,7 @@ export function byItem(changes: readonly StagedChange[]): { clientKey: string; i
     if (c.createdAt < g.first) g.first = c.createdAt;
     out.set(k, g);
   }
-  const order: Record<ChangeField, number> = { state: 0, start: 1, target: 2, size: 3, assignee: 4 };
+  const order: Record<ChangeField, number> = { title: 0, parent: 1, state: 2, start: 3, target: 4, size: 5, assignee: 6 };
   return [...out.values()].sort((a, b) => a.first.localeCompare(b.first) || a.itemId - b.itemId).map(({ first: _f, ...g }) => ({ ...g, changes: g.changes.sort((a, b) => order[a.field] - order[b.field]) }));
 }
 
@@ -144,7 +172,9 @@ export const pendingText = (n: number) => (n <= 0 ? null : `${n} ${n === 1 ? "ch
 
 /** A value in words, for the review's "before → after". */
 export function valueText(field: ChangeField, v: ChangeValue | undefined, half: DayHalf | null = null): string {
-  if (field === "assignee") return v && typeof v === "object" ? v.name : "Nobody";
+  if (field === "assignee") return v && typeof v === "object" && "name" in v ? v.name : "Nobody";
+  if (field === "title") return typeof v === "string" && v ? v : "None";
+  if (field === "parent") return v && typeof v === "object" && "id" in v ? `#${v.id}${v.title ? ` ${v.title}` : ""}` : "No parent";
   if (field === "size") return typeof v === "number" ? String(v) : "None";
   if (field === "state") return typeof v === "string" ? v : "None";
   if (typeof v !== "string") return "None";
@@ -158,3 +188,29 @@ export type AheadFilters = { owner: Record<string, AheadOwner>; clients: string[
 /** AH-6: the Dates filter's quick picks. */
 export type AheadRange = "next2" | "next4" | "quarter";
 export type AheadGapKind = "needs_stories" | "no_dates" | "unassigned" | "unsized";
+
+// ---- ED-2: a move in the Grid, by ED-1's rules (the story card's Move…) ----
+
+/** What a move needs to know of an item: its rung on its client's process ladder and whether it is open. */
+export type MoveItem = { id: number; type: string; title: string; state: string; rung: number | null; open: boolean };
+
+/**
+ * Why this item can't go under that one (null: it can). ED-1's rule, from the process's backlog levels and never from
+ * type names: the new parent is an open item exactly one level up, never the item itself; No parent is always allowed
+ * for an item that has a level above it. Exactly one level up also means a move can never make a loop. Both items are
+ * one client's: the caller only ever passes that client's own items.
+ */
+export function moveProblem(item: MoveItem, to: MoveItem | null, project: string): string | null {
+  if (item.rung === null) return `${item.type} isn't a level in ${project}'s process`;
+  if (item.rung === 0) return `${cap(aOr(item.type))} has no level above it in ${project}'s process, so it has no parent to change`;
+  if (!to) return null;
+  if (to.id === item.id) return "An item can't be its own parent";
+  if (to.rung === null || to.rung !== item.rung - 1) return `${cap(aOr(item.type))} doesn't go under ${aOr(to.type)} in ${project}'s process`;
+  if (!to.open) return `#${to.id} is ${to.state}; FocusTime moves items only under open parents`;
+  return null;
+}
+/** An item as the move rule reads it (open by the one rule: Proposed or In Progress). */
+export const moveItemFrom = (i: { id: number; type: string; title: string; state: string; rung: number | null; stateCategory: string }): MoveItem => ({ id: i.id, type: i.type, title: i.title, state: i.state, rung: i.rung, open: isOpenCategory(i.stateCategory) });
+/** The items this one may move under: its client's open items exactly one level up (ED-1's picker). */
+export const moveTargets = <T extends MoveItem>(items: readonly T[], item: MoveItem, project: string): T[] => items.filter((x) => moveProblem(item, x, project) === null);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

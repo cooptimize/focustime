@@ -4,7 +4,7 @@
 // item's level), never from type names.
 import type { AheadItem, AheadLoad } from "../actions/types.ts";
 import type { AheadFilters, AheadOwner } from "./ahead-edit.ts";
-import type { Assignee, ChangeField, DayHalf, StagedChange } from "./ahead-edit.ts";
+import { parentIdIn, type Assignee, type ChangeField, type DayHalf, type StagedChange } from "./ahead-edit.ts";
 import { fixClient, gapsOf, GAP_KINDS, type FixClient, type FixEntry, type FixGroup, type GapItem, type GapKind } from "./fixnext.ts";
 import { isOpen as isOpenCategory } from "./process.ts";
 import { rangeDates } from "./ahead-view.ts";
@@ -29,8 +29,13 @@ export type Row = {
   pending: Partial<Record<ChangeField, StagedChange>>;
   conflict: boolean;
   editable: boolean;
-  /** The fields this item's type has in its process. */
+  /** The fields this item's type has in its process (a title always; a parent where its level has one above it). */
   has: Record<ChangeField, boolean>;
+  /**
+   * ED-2: what DevOps has while a rename or a move of mine waits to be saved (`item.title` and `item.parentId` then
+   * show mine, so the tree, the labels and the search all read the same). Absent: nothing of the two is staged.
+   */
+  saved?: { title: string; parentId: number | null };
   sizeLabel: string | null;
   hint: string | null;
   gaps: GapKind[];
@@ -78,7 +83,21 @@ export function siblingOrder(a: Pick<AheadItem, "id" | "order" | "target">, b: P
 
 /** Every client's rows in tree order, before filtering. */
 export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
-  const items = c.items.filter((i) => tierOf(i));
+  const changes = load.changes.filter((x) => x.clientKey === c.clientKey);
+  // ED-2: a staged rename or move lays over the item, so every reader of the tree sees one thing: the row under its
+  // new parent, with its new title. Its rank doesn't change (a move never touches the backlog order). A staged parent
+  // that isn't among the client's items here (filtered out of scope since) leaves the row where DevOps has it.
+  const known = new Set(c.items.map((i) => i.id));
+  const laid = new Map<number, { title: string; parentId: number | null }>();
+  const items = c.items.filter((i) => tierOf(i)).map((i) => {
+    const t = changes.find((x) => x.itemId === i.id && x.field === "title");
+    const p = changes.find((x) => x.itemId === i.id && x.field === "parent");
+    const to = p ? parentIdIn(p.value) : null;
+    const moved = !!p && (to === null || (known.has(to) && to !== i.id));
+    if (!(t && typeof t.value === "string") && !moved) return i;
+    laid.set(i.id, { title: i.title, parentId: i.parentId });
+    return { ...i, ...(t && typeof t.value === "string" ? { title: t.value } : {}), ...(moved ? { parentId: to } : {}) };
+  });
   const byId = new Map(items.map((i) => [i.id, i]));
   const kids = new Map<number | null, AheadItem[]>();
   for (const i of items) {
@@ -90,7 +109,6 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
   const editable = new Set(c.editable);
   // AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins).
   const me = new Set([lc(c.me), ...(c.mine ?? []).map(lc)].filter(Boolean));
-  const changes = load.changes.filter((x) => x.clientKey === c.clientKey);
   const halves = load.halves.filter((h) => h.clientKey === c.clientKey);
   const out: Row[] = [];
   const visit = (i: AheadItem, depth: number) => {
@@ -100,7 +118,7 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
     const half = (f: "start" | "target") => pending[f]?.half ?? halves.find((h) => h.itemId === i.id && h.field === f && h.day === eff[f])?.half ?? null;
     const tier = tierOf(i)!;
     const open = (kids.get(i.id) ?? []).filter(isOpen).length;
-    const has = { start: !!c.startFields[i.type], target: !!c.targetFields[i.type], size: !!c.sizeFields[i.type], assignee: true, state: (c.states?.[i.type]?.length ?? 0) > 0 };
+    const has = { start: !!c.startFields[i.type], target: !!c.targetFields[i.type], size: !!c.sizeFields[i.type], assignee: true, state: (c.states?.[i.type]?.length ?? 0) > 0, title: true, parent: (i.rung ?? 0) > 0 };
     const sizeRef = c.sizeFields[i.type];
     const gi: GapItem = { clientKey: c.clientKey, id: i.id, open: isOpen(i), needsBreakdown: tier !== "story", openChildren: open, startField: c.startFields[i.type] ?? null, targetField: c.targetFields[i.type] ?? null, sizeField: sizeRef ?? null, child: tier === "story", start: i.start, target: i.target, size: i.size, assigneeEmail: i.assignee?.email ?? null, canEdit: editable.has(i.id) };
     out.push({
@@ -116,6 +134,7 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
       conflict: changes.some((x) => x.itemId === i.id && x.theirs !== undefined),
       editable: editable.has(i.id),
       has,
+      ...(laid.has(i.id) ? { saved: laid.get(i.id)! } : {}),
       sizeLabel: sizeRef ? (c.fieldNames[sizeRef] ?? sizeRef.split(".").at(-1) ?? null) : null,
       hint: c.hints[i.id]?.text ?? null,
       gaps: gapsOf(gi, changes, c.fixGaps ?? GAP_KINDS),

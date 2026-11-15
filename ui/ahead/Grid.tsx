@@ -15,19 +15,27 @@
 // selects a row (Shift+Space or Shift+click a range); with rows selected the bulk bar offers what the Backlog mode did.
 // Esc clears the selection.
 //
+// ED-2: on the Item cell F2 renames in place, M opens Move… (ED-1's picker), E opens the story card ready to edit, and
+// the row's ⋯ (Shift+F10) has the same. A row can also be dragged onto a row one level up in the same client: only rows
+// that can take it light up, the gaps between rows do nothing, Esc cancels, and dropping stages the move. A move
+// changes the parent link only: there is no drag to reorder, and FocusTime never changes the backlog's order.
+//
 // The table's other shape is Needs attention (Readiness before BL-1), in its own order: only the items with something to
 // fix, under their parents for context, each with its fix (Break down, Set dates, Assign, Size) and Skip in its Status
 // cell.
 import type React from "react";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { ChangeField } from "../../plan/ahead-edit.ts";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { moveItemFrom, moveProblem, type ChangeField } from "../../plan/ahead-edit.ts";
 import { shortName } from "../../plan/ahead-people.ts";
 import { ageDays, ageText, isStale } from "../../plan/backlog.ts";
 import { NEED_ACTION, statusOf, statusWords, type Status } from "../../plan/backlog-status.ts";
 import type { FixEntry } from "../../plan/fixnext.ts";
 import { skipEnds, type Skips } from "../../plan/readiness.ts";
 import { isOpenRow, levelRank, setRow } from "../../plan/gantt-tree.ts";
-import { WorkLink } from "../WorkLink.tsx";
+import { openItemCardToEdit, WorkLink } from "../WorkLink.tsx";
+import { MenuCtx } from "../Menus.tsx";
+import type { MenuItem } from "../menu.ts";
+import { MovePicker, RenameBox, Unsaved, unsavedWords } from "./GridEdits.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { Avatar, usePhotos } from "../Presence.tsx";
 import { useAhead } from "./Ahead.tsx";
@@ -84,6 +92,11 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
   const [editing, setEditing] = useState<{ key: string; col: Col } | null>(null);
   const [folded, setFolded] = usePref<string[]>("grid.folded", isKeys, []);
   const [sel, setSel] = useState<Set<string>>(new Set());
+  // ED-2: the row whose Move… picker is open; a drag in progress; what a screen reader last heard.
+  const [moving, setMoving] = useState<string | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [said, setSaid] = useState("");
+  const say = (text: string) => setSaid((old) => (old === text ? `${text}\u00a0` : text));
   const anchor = useRef<string | null>(null);
   const cells = useRef(new Map<string, HTMLElement>());
   // The rows on screen, in order: a client folded hides its rows; a collapsed row hides what's under it (by depth, so
@@ -171,6 +184,91 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.focusItem, flat.length]);
 
+  // ED-2: a drag onto a new parent. The rows that can take the dragged one: same client, open, exactly one level up
+  // (ED-1's rule), and not the parent it already has. Nothing else is a target: not other rows, not the gaps between.
+  const dragged = drag ? (byKey.get(drag.key) ?? null) : null;
+  const drops = useMemo(() => {
+    const out = new Set<string>();
+    if (!dragged) return out;
+    const c = groups.find((g) => g.client.clientKey === dragged.clientKey)?.client;
+    if (!c) return out;
+    const it = moveItemFrom(dragged.item);
+    for (const r of flat) if (r.clientKey === dragged.clientKey && r.item.id !== dragged.item.parentId && moveProblem(it, moveItemFrom(r.item), c.project ?? c.clientName) === null) out.add(r.key);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragged?.key, flat.length, groups]);
+  const dropsRef = useRef(drops);
+  dropsRef.current = drops;
+  const startDrag = (r: GridRow, e: React.PointerEvent) => {
+    if (e.button !== 0 || a.readOnly || !r.editable || !r.has.parent || (e.target as HTMLElement).closest("input, button, select, textarea, [role=listbox], .cell-pop")) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    let on = false;
+    const overAt = (x: number, y: number) => {
+      const k = (document.elementFromPoint(x, y)?.closest("tr[data-key]") as HTMLElement | null)?.dataset.key ?? null;
+      return k && dropsRef.current.has(k) ? k : null;
+    };
+    const move = (ev: PointerEvent) => {
+      if (!on && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+      if (!on) {
+        on = true;
+        document.body.classList.add("ah-dragging");
+        setEditing(null);
+        setMoving(null);
+      }
+      setDrag({ key: r.key, x: ev.clientX, y: ev.clientY, over: overAt(ev.clientX, ev.clientY) });
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", key, true);
+      document.body.classList.remove("ah-dragging");
+      setDrag(null);
+    };
+    // The click that ends a drag isn't a click on the row (it would open the card or a cell's editor).
+    const eatClick = () => {
+      const eat = (c: MouseEvent) => (c.stopPropagation(), c.preventDefault());
+      window.addEventListener("click", eat, { capture: true, once: true });
+      window.setTimeout(() => window.removeEventListener("click", eat, true), 0);
+    };
+    const up = (ev: PointerEvent) => {
+      const over = on ? overAt(ev.clientX, ev.clientY) : null;
+      end();
+      if (!on) return;
+      eatClick();
+      const to = over ? byKey.get(over) : null;
+      if (!to) return say(`#${r.item.id} wasn't moved.`);
+      void a.tryStage(r, "parent", { id: to.item.id, title: to.item.title }).then((why) => {
+        if (why) return a.error(why), say(why);
+        setFold((f) => setRow(f, to, true));
+        say(`#${r.item.id} ${r.item.title} moves under ${to.item.title}. Not saved until you save.`);
+      });
+    };
+    const cancel = () => {
+      end();
+      if (!on) return;
+      say("Move cancelled.");
+      // Esc while the button is still down: the release that follows isn't a click either (review 2).
+      window.addEventListener("pointerup", eatClick, { once: true });
+    };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || !on) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cancel();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", key, true);
+  };
+  // What the drag says as it goes: how many rows can take it, then the row under the pointer.
+  const dragOver = drag?.over ?? null;
+  useEffect(() => {
+    if (!dragged) return;
+    say(dragOver ? `Move under ${byKey.get(dragOver)?.item.title ?? ""}` : drops.size ? `Dragging #${dragged.item.id} ${dragged.item.title}. ${plural(drops.size, "row", "rows")} can take it. Escape cancels.` : `Dragging #${dragged.item.id}. No row shown here can take it. Use Move… (M) instead. Escape cancels.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragged?.key, dragOver, drops.size]);
   const toggle = (r: Row, open?: boolean) => setFold((f) => setRow(f, r, open ?? !isOpenRow(f, r)));
   const foldClient = (k: string) => setFolded((xs) => (xs.includes(k) ? xs.filter((x) => x !== k) : [...xs, k]));
   const ticks = !a.readOnly;
@@ -180,7 +278,15 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
   // Select all takes the rows shown: never what sits under a closed row.
   const pickable = (rows: readonly { r: GridRow }[]) => rows.map((x) => x.r).filter((r) => !r.context);
   return (
-    <div className={`ah-grid-box lay-${layout} shape-${shape}${sel.size ? " has-sel" : ""}`} onKeyDown={(e) => e.key === "Escape" && sel.size > 0 && !editing && (e.stopPropagation(), setSel(new Set()))}>
+    <div className={`ah-grid-box lay-${layout} shape-${shape}${sel.size ? " has-sel" : ""}${drag ? " dragging" : ""}`} onKeyDown={(e) => e.key === "Escape" && sel.size > 0 && !editing && (e.stopPropagation(), setSel(new Set()))}>
+      <span className="sr-only" role="status" aria-live="polite" data-ed2-said>
+        {said}
+      </span>
+      {drag && dragged && (
+        <span className="ah-drag-say" style={{ left: drag.x + 14, top: drag.y + 16 }} aria-hidden="true">
+          {drag.over ? `Move under ${byKey.get(drag.over)?.item.title ?? ""}` : drops.size ? `Drag onto a lit row to move #${dragged.item.id}` : "No row here can take it. Use Move… (M)"}
+        </span>
+      )}
       {ticks && <BulkBar chosen={chosen} titleOf={(k, id) => byKey.get(`${k}:${id}`)?.item.title ?? ""} select={(keys) => setSel(new Set(keys))} onChanged={onChanged ?? (() => null)} />}
       {shown.map(({ g, rows }) => {
         const c = g.client;
@@ -277,6 +383,11 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
                       pick={ticks && !r.context ? (range) => pick(r, range) : null}
                       shape={shape}
                       skip={skip}
+                      moving={moving === r.key}
+                      setMoving={(on) => setMoving(on ? r.key : null)}
+                      say={say}
+                      startDrag={(e) => startDrag(r, e)}
+                      drop={drag ? (drag.key === r.key ? "from" : drag.over === r.key ? "on" : drops.has(r.key) ? "ok" : null) : null}
                     />
                   ))}
                 </tbody>
@@ -295,12 +406,18 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
   );
 }
 
-function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, up, reg, highlighted, cols, dots, selected, pick, shape, skip }: {
+/** ED-2: a row being dragged onto a new parent: where the pointer is, and the row under it that can take it. */
+type Drag = { key: string; x: number; y: number; over: string | null };
+
+function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus, edit, backTo, cellOf, move, up, reg, highlighted, cols, dots, selected, pick, shape, skip, moving, setMoving, say, startDrag, drop }: {
   r: GridRow; g: GridGroup; kids: boolean; open: boolean; toggle: (open?: boolean) => void; focus: { key: string; col: Col } | null; first: boolean; editing: Col | null;
   setFocus: (f: { key: string; col: Col }) => void; edit: (c: Col | null) => void; backTo: (c: Col) => void; cellOf: (c: Col) => HTMLElement | null; move: (dr: number, dc: number) => void; /** The row this one is opened under, if any. */ up: (() => void) | null; reg: (c: Col, el: HTMLElement | null) => void; highlighted: boolean;
   cols: readonly Col[]; dots: boolean; selected: boolean; pick: ((range: boolean) => void) | null; shape: GridShape; skip: ((k: string) => void) | undefined;
+  /** ED-2: this row's Move… picker is open; what a screen reader hears; a drag starting here; this row in a drag ("from": the dragged row, "ok": it can take it, "on": the pointer is on it). */
+  moving: boolean; setMoving: (on: boolean) => void; say: (text: string) => void; startDrag: (e: React.PointerEvent) => void; drop: "from" | "ok" | "on" | null;
 }) {
   const a = useAhead();
+  const menus = useContext(MenuCtx);
   const c = g.client;
   const rm = a.roadmap.get(r.key);
   const canChange = r.editable && !a.readOnly;
@@ -319,7 +436,8 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   const closed = (col: Col, step: 0 | 1 | -1) => {
     edit(null);
     const i = editableCols.indexOf(col);
-    const next = step && i >= 0 ? editableCols[i + step] : undefined;
+    // ED-2: Tab out of the title goes on to the row's first editable cell.
+    const next = col === "item" ? (step === 1 ? editableCols[0] : undefined) : step && i >= 0 ? editableCols[i + step] : undefined;
     backTo(next ?? col);
   };
   // Needs attention's fix for a need: Break down opens its panel; the others open the row's own cell editor.
@@ -328,6 +446,27 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     else if (need === "no_dates" && can("dates")) edit("dates");
     else if (need === "unassigned") edit("assignee");
     else if (need === "unsized" && can("size")) edit("size");
+  };
+  // ED-2: rename, move and the card's editor from the Item cell. A row I can't change offers none of them.
+  const rename = () => canChange && edit("item");
+  const moveNo = !r.has.parent ? `${r.item.type} has no level above it in ${c.project ?? c.clientName}'s process, so it has no parent to change` : null;
+  const startMove = () => {
+    if (!canChange) return;
+    if (moveNo) return say(moveNo), a.error(moveNo);
+    edit(null);
+    setMoving(true);
+  };
+  const editCard = () => openItemCardToEdit(c.clientKey, r.item.id);
+  const parentTitle = (id: number) => c.items.find((i) => i.id === id)?.title ?? "";
+  const rowMenu = (at: { x: number; y: number }) => {
+    const items: MenuItem[] = [
+      { id: "rename", label: "Rename", hint: "F2", icon: "edit", run: () => void rename() },
+      { id: "move", label: "Move…", hint: "M", icon: "move", ...(moveNo ? { disabled: moveNo, expected: true } : {}), run: () => startMove() },
+      { id: "edit", label: "Edit description…", hint: "E", run: () => editCard() },
+    ];
+    if (r.pending.title) items.push({ id: "undo-rename", label: "Undo rename", run: () => a.unstage(r, "title").then(() => say(`Rename of #${r.item.id} undone.`)) });
+    if (r.pending.parent) items.push({ id: "undo-move", label: "Undo move", run: () => a.unstage(r, "parent").then(() => say(`Move of #${r.item.id} undone.`)) });
+    menus.open(at, { title: `#${r.item.id} ${r.item.title}`, items });
   };
   const tab = (col: Col) => (focus ? (focus.key === r.key && focus.col === col ? 0 : -1) : first && col === "item" ? 0 : -1);
   const keys = (col: Col) => (e: React.KeyboardEvent) => {
@@ -344,7 +483,14 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
     else if (e.key === "ArrowLeft") move(0, -1);
     else if (e.key === " " && pick) pick(e.shiftKey);
     else if (e.key === "N" && e.shiftKey && col === "item" && a.newUnder && r.tier !== "story" && !a.readOnly) a.newUnder({ clientKey: c.clientKey, id: r.item.id, type: r.item.type, title: r.item.title });
-    else if (e.key === "Enter" && col === "item" && kids) toggle();
+    // ED-2: F2 renames, M moves, Shift+F10 (or the menu key) opens the row's menu; E opens the card ready to edit.
+    else if (e.key === "F2" && col === "item" && canChange) rename();
+    else if ((e.key === "m" || e.key === "M") && !e.ctrlKey && !e.metaKey && !e.altKey && col === "item" && canChange) startMove();
+    else if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && r.item.id > 0) editCard();
+    else if (((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") && col === "item" && canChange) {
+      const b = e.currentTarget.getBoundingClientRect();
+      rowMenu({ x: b.left + 60, y: b.bottom });
+    } else if (e.key === "Enter" && col === "item" && kids) toggle();
     else if (e.key === "Enter" && col === "status" && entry && NEED_ACTION[entry.action]) fix(entry.action);
     else if (e.key === "Enter" && col === "status" && treeBreak) a.breakDown(r);
     else if (e.key === "Enter" && field && canChange && can(col)) edit(col);
@@ -356,8 +502,9 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   };
   const cell = (col: Col, body: React.ReactNode, o: { label: string; title?: string }) => {
     const field = EDIT[col];
-    const pending = col === "dates" ? (r.pending.start ?? r.pending.target) : field ? r.pending[field] : undefined;
-    const conf = col === "dates" ? r.pending.start?.theirs !== undefined || r.pending.target?.theirs !== undefined : pending?.theirs !== undefined;
+    // ED-2: the Item cell carries the staged title and move.
+    const pending = col === "item" ? (r.pending.title ?? r.pending.parent) : col === "dates" ? (r.pending.start ?? r.pending.target) : field ? r.pending[field] : undefined;
+    const conf = col === "item" ? r.pending.title?.theirs !== undefined || r.pending.parent?.theirs !== undefined : col === "dates" ? r.pending.start?.theirs !== undefined || r.pending.target?.theirs !== undefined : pending?.theirs !== undefined;
     // QF-1: one click opens the picker (double-click and Enter still do); a cell I can change says so on hover.
     const editable = !!field && canChange && can(col);
     return (
@@ -372,11 +519,13 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
         aria-expanded={editable ? editing === col : undefined}
         onFocus={() => setFocus({ key: r.key, col })}
         onKeyDown={keys(col)}
+        {...(col === "item" ? { onPointerDown: startDrag, onDragStart: (e: React.DragEvent) => e.preventDefault() } : {})}
         onClick={(e) => editable && editing !== col && !(e.target as HTMLElement).closest("a, button, input, select, [role=listbox]") && edit(col)}
         onDoubleClick={() => editable && edit(col)}
       >
         {body}
         {editing === col && field && <CellEditor r={r} kind={col === "dates" ? "dates" : field} anchor={cellOf(col)} done={(step) => closed(col, step)} />}
+        {col === "item" && moving && <MovePicker rows={[r]} anchor={cellOf("item")} onPick={(p) => a.tryStage(r, "parent", p).then((why) => (why ? why : (say(p ? `#${r.item.id} moves under ${p.title}. Not saved until you save.` : `#${r.item.id} will have no parent. Not saved until you save.`), null)))} done={() => (setMoving(false), backTo("item"))} />}
         {pending && <span className="ah-dot" title={conf ? "Changed in DevOps too: see the review" : "Pending: not in DevOps until you save"} aria-hidden="true" />}
       </td>
     );
@@ -438,7 +587,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   const parent = shape === "list" && r.depth === 0 ? (r.parent ?? null) : null;
   /** BL-2 review: a row below the level with nothing at the level above it, listed after the ranked rows: says why. */
   const loose = shape === "list" && r.depth === 0 && !!g.level && levelRank(r.tier) > levelRank(g.level) ? `Not under any ${a.view.names[g.level].toLowerCase()}` : null;
-  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${parent ? `, in ${parent.type} ${parent.title}` : ""}${loose ? `. ${loose}` : ""}${r.lastWords ? `. Last change ${r.lastWords}` : ""}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
+  const label = `${r.rank ? `Rank ${r.rank}. ` : ""}${r.item.type} #${r.item.id} ${r.item.title}${parent ? `, in ${parent.type} ${parent.title}` : ""}${loose ? `. ${loose}` : ""}${r.lastWords ? `. Last change ${r.lastWords}` : ""}${unsavedWords(r)}${r.context ? ", shown for what's under it" : ""}${r.editable ? "" : `. ${c.note}`}${canChange ? `. F2 renames${r.has.parent ? ", M moves" : ""}, E opens it to edit` : ""}${drop === "ok" || drop === "on" ? ". Can take the dragged row" : ""}${kids ? `. ${open ? "Expanded" : "Collapsed"}: Enter, Left or Right to ${open ? "hide" : "show"} what's under it` : ""}${pick ? `. ${selected ? "Selected" : "Space to select"}` : ""}`;
   return (
     <tr
       role="row"
@@ -446,7 +595,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
       aria-expanded={kids ? open : undefined}
       aria-selected={pick ? selected : undefined}
       data-key={r.key}
-      className={`ah-row tier-${r.tier} depth-${r.depth}${r.context ? " context" : ""}${closedItem ? " closed" : ""}${r.item.inScope === false ? " out-scope" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}${selected ? " sel" : ""}${entry?.leaving ? " leaving" : ""}`}
+      className={`ah-row tier-${r.tier} depth-${r.depth}${drop ? ` ah-drop-${drop}` : ""}${r.context ? " context" : ""}${closedItem ? " closed" : ""}${r.item.inScope === false ? " out-scope" : ""}${highlighted ? " highlighted" : ""}${r.editable ? "" : " ro"}${selected ? " sel" : ""}${entry?.leaving ? " leaving" : ""}`}
       style={{ "--ah-depth": r.depth } as CSSProperties}
       title={r.editable ? undefined : c.note}
     >
@@ -475,14 +624,25 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                     <ChevronSpace />
                   )}
                   <TypeIcon clientKey={c.clientKey} type={r.item.type} className="ah-type-icon" />
-                  <span className="ah-title" title={`${r.item.type} #${r.item.id}: ${r.item.title}`}>
-                    <WorkLink clientKey={c.clientKey} url={r.item.url}>
-                      {r.item.title}
-                    </WorkLink>{" "}
-                    <span className="muted ah-id">#{r.item.id}</span>
-                  </span>
+                  {editing === "item" ? (
+                    <RenameBox r={r} done={(step) => closed("item", step)} say={say} />
+                  ) : (
+                    <span className="ah-title" title={`${r.item.type} #${r.item.id}: ${r.item.title}`}>
+                      <WorkLink clientKey={c.clientKey} url={r.item.url}>
+                        {r.item.title}
+                      </WorkLink>{" "}
+                      <span className="muted ah-id">#{r.item.id}</span>
+                    </span>
+                  )}
+                  {canChange && editing !== "item" && (
+                    <button type="button" className="mini quiet icon-btn small ah-rename-btn" tabIndex={-1} aria-label={`Rename ${r.item.title}`} title="Rename (F2)" onClick={(e) => (e.stopPropagation(), rename())}>
+                      <Icon name="edit" />
+                    </button>
+                  )}
+                  <Unsaved r={r} parentTitle={parentTitle} />
+                  {drop === "on" && <span className="ah-drop-say">Move under {r.item.title}</span>}
                   {parent && (
-                    <button type="button" className="ah-parent" tabIndex={-1} onClick={(e) => (e.stopPropagation(), a.filterUnder(parent.key))} title={`In ${parent.type} #${parent.id}. Show only what's under it`} aria-label={`Show only what's under ${parent.type} ${parent.title}`}>
+                    <button type="button" className={`ah-parent${r.pending.parent ? " pend" : ""}`} tabIndex={-1} onClick={(e) => (e.stopPropagation(), a.filterUnder(parent.key))} title={`In ${parent.type} #${parent.id}. Show only what's under it`} aria-label={`Show only what's under ${parent.type} ${parent.title}`}>
                       <TypeIcon clientKey={c.clientKey} type={parent.type} className="ah-type-icon" />
                       <span className="ah-parent-text">{parent.title}</span>
                     </button>
@@ -504,6 +664,11 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                     </span>
                   )}
                   <NewUnder clientKey={c.clientKey} item={r.item} />
+                  {canChange && (
+                    <button type="button" className="more-btn ah-row-more" tabIndex={-1} aria-label={`More for ${r.item.title}: rename, move, edit`} aria-haspopup="menu" title="Rename, move, edit (Shift F10)" onClick={(e) => { e.stopPropagation(); const b = e.currentTarget.getBoundingClientRect(); rowMenu({ x: b.right, y: b.bottom + 4 }); }}>
+                      <Icon name="more" />
+                    </button>
+                  )}
                 </span>,
                 { label },
               )}

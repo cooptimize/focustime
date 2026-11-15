@@ -269,3 +269,152 @@ describe("AH-7: Readiness's skips and progress, kept on the server", () => {
     expect((await load(s)).fixedWeek).toBe(2);
   });
 });
+
+describe("ED-2: a title and a parent in the change set, by ED-1's rules", () => {
+  const K = "Northwind";
+  // An epic with two features; stories under the first; a closed feature; a second epic.
+  function world(o: Parameters<typeof setup>[0] = { lead: true }) {
+    const s = setup(o);
+    const story = (id: number, parentId: number, more: Partial<AheadClient["items"][number]> = {}) => anAheadItem({ id, type: "User Story", level: "child", rung: 2, parentId, title: `Story ${id}`, ...more });
+    s.edit((c) => ({
+      ...c,
+      states: { "User Story": [{ name: "New", category: "Proposed", color: null }, { name: "Active", category: "InProgress", color: null }, { name: "Closed", category: "Completed", color: null }], Feature: [{ name: "New", category: "Proposed", color: null }, { name: "Active", category: "InProgress", color: null }, { name: "Done", category: "Completed", color: null }] },
+      items: [
+        anAheadItem({ id: 100, type: "Epic", level: "top", rung: 0, title: "Platform", assignee: { name: "Alex Rivera", email: ME } }),
+        anAheadItem({ id: 110, parentId: 100, title: "Import", assignee: { name: "Alex Rivera", email: ME } }),
+        anAheadItem({ id: 120, parentId: 100, title: "Export", assignee: DANA }),
+        anAheadItem({ id: 130, parentId: 100, title: "Old feature", state: "Done", stateCategory: "Completed" }),
+        story(111, 110, { assignee: DANA }),
+        story(112, 110, { assignee: { name: "Alex Rivera", email: ME } }),
+        story(113, 120, { assignee: DANA }),
+      ],
+    }));
+    return s;
+  }
+  const changes = async (s: S) => (await s.plan.aheadChanges()).map((c) => ({ itemId: c.itemId, field: c.field, value: c.value, baseValue: c.baseValue }));
+
+  it("a rename is staged trimmed with the title it started from, and goes when typed back; nothing is written", async () => {
+    const s = world();
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: "  Import   column mapping " });
+    expect(await changes(s)).toEqual([{ itemId: 111, field: "title", value: "Import column mapping", baseValue: "Story 111" }]);
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: "Story 111" });
+    expect(await changes(s)).toEqual([]);
+  });
+  it("an empty or too-long title is refused; someone without the right can't start one", async () => {
+    const s = world();
+    expect(await s.fail("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: "   " })).toMatchObject({ status: 400, error: "Type a title" });
+    expect((await s.fail("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: "x".repeat(256) })).error).toMatch(/at most 255 characters/);
+    expect(await s.fail("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: 7 })).toMatchObject({ status: 400 });
+    const other = world({});
+    expect(await other.fail("ahead.stage", { clientKey: K, itemId: 113, field: "title", value: "Not mine" })).toMatchObject({ status: 403, error: "Only Northwind Foods's leads and the owner can change this." });
+    expect(await other.fail("ahead.stage", { clientKey: K, itemId: 113, field: "parent", value: { id: 110 } })).toMatchObject({ status: 403 });
+    expect(await changes(other)).toEqual([]);
+  });
+  it("a move is staged with the parent's own title read here, and No parent is allowed", async () => {
+    const s = world();
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: 120, title: "whatever the page said" } });
+    expect(await changes(s)).toEqual([{ itemId: 111, field: "parent", value: { id: 120, title: "Export" }, baseValue: { id: 110, title: "Import" } }]);
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: null });
+    expect((await changes(s))[0]).toMatchObject({ value: null, baseValue: { id: 110, title: "Import" } });
+    // Back under where DevOps has it: no change.
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: 110 } });
+    expect(await changes(s)).toEqual([]);
+  });
+  it("forced through the action: itself, a wrong level (which is every loop), a closed parent, an id from anywhere else and the top level are refused", async () => {
+    const s = world();
+    const no = async (itemId: number, id: number) => (await s.fail("ahead.stage", { clientKey: K, itemId, field: "parent", value: { id } })).error;
+    expect(await no(110, 110)).toMatch(/doesn't go under a Feature|own parent/);
+    expect(await no(111, 100)).toMatch(/User Story doesn't go under an Epic in Portal's process$/);
+    // A feature under its own story would be a loop: the level rule refuses it.
+    expect(await no(110, 111)).toMatch(/^A Feature doesn't go under an? User Story in Portal's process$/);
+    expect(await no(111, 113)).toMatch(/User Story doesn't go under an? User Story in Portal's process$/);
+    expect(await no(111, 130)).toBe("#130 is Done; FocusTime moves items only under open parents");
+    // Another client's item id (or any id not among this client's items) is simply not found.
+    expect(await no(111, 4242)).toBe("#4242 isn't in Northwind Foods's DevOps items here");
+    expect(await no(100, 110)).toMatch(/no level above it/);
+    expect(await s.fail("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: "120" } })).toMatchObject({ status: 400 });
+    expect(await s.fail("ahead.stage", { clientKey: "Adatum", itemId: 111, field: "parent", value: { id: 120 } })).toMatchObject({ status: 404 });
+    expect(await changes(s)).toEqual([]);
+  });
+  it("a story card edit while changes are staged loses none: another field changed leaves them ready; the same field is a conflict; the same value lands", async () => {
+    const s = world();
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "title", value: "Mine" });
+    await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: 120 } });
+    await s.run("ahead.stage", { clientKey: K, itemId: 112, field: "title", value: "Also mine" });
+    // The card saved a description on 111 (a new revision, same title and parent) and a new title on 112.
+    s.setItem(111, { rev: 9 });
+    s.setItem(112, { rev: 4, title: "The card's title" });
+    let l = await load(s);
+    expect(l.changes.filter((c) => c.itemId === 111).map((c) => [c.field, c.theirs]).sort()).toEqual([["parent", undefined], ["title", undefined]]);
+    expect(l.changes.find((c) => c.itemId === 112)).toMatchObject({ value: "Also mine", theirs: "The card's title" });
+    // Keep mine: the change stays, now based on what DevOps has.
+    await s.run("ahead.resolve", { clientKey: K, itemId: 112, keep: "mine" });
+    l = await load(s);
+    expect(l.changes.find((c) => c.itemId === 112)).toMatchObject({ value: "Also mine", baseValue: "The card's title" });
+    expect(l.changes.find((c) => c.itemId === 112)!.theirs).toBeUndefined();
+    // The card moved 111 under the same parent I staged: that change landed, the rename is still mine.
+    s.setItem(111, { rev: 10, parentId: 120 });
+    l = await load(s);
+    expect(l.changes.filter((c) => c.itemId === 111).map((c) => c.field)).toEqual(["title"]);
+  });
+
+  describe("bulk", () => {
+    const items = (...ids: number[]) => ids.map((itemId) => ({ clientKey: K, itemId }));
+    type Bulk = { staged: { itemId: number }[]; skipped: { itemId: number; reason: string }[] };
+    it("Assign to… stages for the rows it fits and skips the rest with the reason; only this client's people", async () => {
+      const s = world();
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(111, 112, 113), op: { kind: "assign", email: DANA.email, name: "Dana Reyes" } });
+      expect(r.staged.map((x) => x.itemId)).toEqual([112]);
+      expect(r.skipped).toEqual([{ clientKey: K, itemId: 111, reason: "Already assigned to Dana Reyes" }, { clientKey: K, itemId: 113, reason: "Already assigned to Dana Reyes" }]);
+      const out = await s.run<Bulk>("ahead.stage_bulk", { items: items(112), op: { kind: "assign", email: "someone@elsewhere.example", name: "Someone" } });
+      expect(out.skipped[0]!.reason).toBe("Only people on Northwind Foods's DevOps project can be assigned here");
+      const none = await s.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "assign", email: null, name: "" } });
+      expect(none.staged.length).toBe(1);
+      expect((await changes(s)).find((c) => c.itemId === 111)).toMatchObject({ field: "assignee", value: null });
+    });
+    it("State… stages only a state the row's own type has, in the process's spelling", async () => {
+      const s = world();
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(110, 111, 112), op: { kind: "state", state: "closed" } });
+      expect(r.staged.map((x) => x.itemId)).toEqual([111, 112]);
+      expect(r.skipped).toEqual([{ clientKey: K, itemId: 110, reason: "closed isn't a state of Feature in Portal's process" }]);
+      expect((await changes(s)).map((c) => c.value)).toEqual(["Closed", "Closed"]);
+      const again = await s.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "state", state: "Closed" } });
+      expect(again.skipped[0]!.reason).toBe("Already Closed");
+    });
+    it("Size… skips a type with no size field", async () => {
+      const s = world();
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(110, 111), op: { kind: "size", value: 3 } });
+      expect(r.staged.map((x) => x.itemId)).toEqual([111]);
+      expect(r.skipped[0]).toMatchObject({ itemId: 110, reason: "Feature has no size in Portal's process" });
+    });
+    it("Move to… stages the move for the rows that can go there; a row already there, a wrong level and a row I can't change are skipped", async () => {
+      const s = world({});
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(111, 112, 113, 110), op: { kind: "parent", parentId: 120 } });
+      expect(r.staged.map((x) => x.itemId)).toEqual([111, 112]);
+      expect(r.skipped).toEqual([
+        { clientKey: K, itemId: 113, reason: "Only Northwind Foods's leads and the owner can change this." },
+        { clientKey: K, itemId: 110, reason: "A Feature doesn't go under a Feature in Portal's process" },
+      ]);
+      expect((await changes(s)).every((c) => c.field === "parent" && (c.value as { id: number }).id === 120 && (c.value as { title: string }).title === "Export")).toBe(true);
+      const lead = world();
+      const there = await lead.run<Bulk>("ahead.stage_bulk", { items: items(113), op: { kind: "parent", parentId: 120 } });
+      expect(there.skipped[0]!.reason).toBe("Already under it");
+      const far = await lead.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "parent", parentId: 4242 } });
+      expect(far.skipped[0]!.reason).toBe("#4242 isn't in Northwind Foods's DevOps items here");
+    });
+    it("review 2: Move to… takes one client's rows; a value DevOps already has is skipped, not counted as staged", async () => {
+      const s = world();
+      expect(await s.fail("ahead.stage_bulk", { items: [{ clientKey: K, itemId: 111 }, { clientKey: "Adatum", itemId: 111 }], op: { kind: "parent", parentId: 120 } })).toMatchObject({ status: 400, error: "Move to… takes rows from one client. A move never crosses clients" });
+      // 111 has a pending move to Export; a bulk move back under Import (where DevOps has it) takes the pending one off.
+      await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: 120 } });
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "parent", parentId: 110 } });
+      expect(r.staged).toEqual([]);
+      expect(r.skipped).toEqual([{ clientKey: K, itemId: 111, reason: "DevOps already has that, so nothing is staged" }]);
+      expect(await changes(s)).toEqual([]);
+    });
+    it("a malformed new action is refused whole", async () => {
+      const s = world();
+      for (const op of [{ kind: "state" }, { kind: "size", value: "big" }, { kind: "parent", parentId: "120" }, { kind: "assign", email: "not an address", name: "x" }, { kind: "parent", parentId: 120, order: 1 }]) expect((await s.fail("ahead.stage_bulk", { items: items(111), op })).status).toBe(400);
+    });
+  });
+});

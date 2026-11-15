@@ -16,7 +16,7 @@ import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { useDevOpsChanged } from "./DevOpsFresh.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
-import { CARD_STALE_EVENT, copyWorkLink, openItemCard, type ItemCardTarget } from "./WorkLink.tsx";
+import { CARD_STALE_EVENT, copyWorkLink, openItemCard, takeEditNext, type ItemCardTarget } from "./WorkLink.tsx";
 import type { EditOffer } from "../actions/types.ts";
 import { lookHtml } from "../plan/light-format.ts";
 import { CantEdit, CardMore, ChangedSince, changedParts, draftOf, isDirty, LightEditor, MoveEditor, type EditDraft } from "./StoryCardEdit.tsx";
@@ -122,6 +122,12 @@ export function StoryCard({ clientKey, itemId, onClose, onWrapUp }: { clientKey:
     focusAc.current = acceptance;
     setDraft(draftOf(offer, acceptance));
   };
+  // ED-2: opened from a Backlog row with E (or Edit description…): Edit starts as soon as it can, once.
+  useEffect(() => {
+    if (!offer || draft) return;
+    if (takeEditNext(clientKey, itemId) && offer.canEdit) startEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offer]);
   useEffect(() => {
     if (!draft) return;
     if (focusAc.current) {
