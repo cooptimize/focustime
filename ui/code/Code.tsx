@@ -27,8 +27,8 @@ import { LANG_NAMES, languageOf, tooLargeToColor } from "./languages.ts";
 import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
 import { SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
-import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings } from "../../plan/code-kinds.ts";
-import { ByKind, InsideResults, NAMES_TEXT, SearchBox, SearchResults, type InsideRun, type SearchRun } from "./Names.tsx";
+import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings, type SqlGrouping } from "../../plan/code-kinds.ts";
+import { ByKind, InsideResults, NAMES_TEXT, newKindsMemo, SearchBox, SearchResults, type InsideRun, type KindsMemo, type SearchRun } from "./Names.tsx";
 import "./code.css";
 import { Icon } from "../icons.tsx";
 
@@ -507,7 +507,7 @@ function FileView({ file, repo, onFolder, clientName, phone, words }: { file: Co
   );
 }
 
-export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; onClose: () => void }) {
+export default function Code({ at, onGo, onClose, sqlGroup = "schema", onSqlGroup }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; onClose: () => void; /** RB-5: how By kind groups SQL objects (the person's saved choice) and how to change it. */ sqlGroup?: SqlGrouping; onSqlGroup?: (g: SqlGrouping) => void }) {
   const phone = useNarrow();
   const [clients, setClients] = useState<Client[] | Failure | null>(null);
   const [logLine, setLogLine] = useState<string>("Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged too: who, which client and when, never the words.");
@@ -520,6 +520,8 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
   // RB-2: a client's things by kind (once per client while the panel is open), and the search: its words, where it
   // looks, the kind, and the run under way. All of it lives here only; none of it is stored or put in the address.
   const [kinds, setKinds] = useState<Map<string, KindsState>>(new Map());
+  // RB-5: what By kind has open, per client, kept here so it outlasts the list while the panel is open.
+  const [kindsMemo, setKindsMemo] = useState<Map<string, KindsMemo>>(new Map());
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<Kind | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
@@ -752,7 +754,7 @@ export default function Code({ at, onGo, onClose }: { at: CodeAt; onGo: (next: C
             ) : "message" in kindsState ? (
               <p className="cv-note problem" role="alert" data-code-state={kindsState.code ?? "error"}>{kindsState.message}</p>
             ) : (
-              <ByKind repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
+              <ByKind id={at.clientKey!} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
             )
           )}
           {view === "files" && client && !client.locked && Array.isArray(repoList) && repoList.length > 1 && (

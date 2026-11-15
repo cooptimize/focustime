@@ -1012,6 +1012,14 @@ One side panel for a block on Week and on Day, "+ Add" on every block, work drag
 - **Demo.** `sources/demo/code.ts`: tables, views and procedures inside the Gold warehouse and a Returns SQL database, a procedure in the factory repo, `demoSearch` (the fake of the code search over the demo's own files), Cooptimize without code search.
 - **Tests.** `plan/code-kinds-inside.test.ts` (the miss, the other misses, A5), `sources/devops/git.test.ts` (the request), `actions/code-inside.test.ts`, `server/code-inside-words.test.ts` (the words through the real server), `sources/demo/code.test.ts`, the RB-4 test in `store/code-views-store.test.ts`, e2e `e2e/rb4-code.test.ts` (screenshots in `docs/ux/rb4/` with `FOCUSTIME_SHOTS`).
 
+## RB-5: SQL objects by schema or by type (Nov 14)
+
+- **Pure.** `plan/code-kinds.ts`: `SqlType` and `SQL_TYPES` (the types in the order their folders show), `Thing.sqlType`, `Thing.db` and `Thing.dbName` (the database a SQL thing belongs to: its item's folder or its SQL project's), the Security and shared queries rules, `sqlTree` (a database's objects as schema then type, or type then schema, with counts) and `sqlDatabases` (a client's SQL things by database, the rest loose). No file is opened.
+- **UI.** `ui/code/SqlTree.tsx` (the Group by switch, Expand all, Collapse all, the tree as `role="tree"` with its keys, 100 a folder until Show all); `ui/code/Names.tsx` (`ByKind` draws the SQL group and an opened item's SQL objects with it; `KindsMemo`, what By kind has open); `ui/code/Code.tsx` keeps that per client while the panel is open; `ui/App.tsx` holds the person's choice.
+- **Setting.** `[ui] code_sql_group` (`config/schema.ts`, "schema" or "type"), saved by `ui.set_code_sql_group` (`actions/dispatch.ts`, `actions/registry.ts`). No Code action changed.
+- **Demo.** `sources/demo/code.ts`: four schemas, every type, a name in two schemas, Security, a shared query and a loose script in the Gold warehouse and the Returns SQL database.
+- **Tests.** `plan/code-sql-tree.test.ts`, `ui/code/sql-tree.test.ts`, the RB-5 tests in `actions/ui-actions.test.ts` and `sources/demo/code.test.ts`, e2e `e2e/rb5-code.test.ts` (screenshots in `docs/ux/rb5/`).
+
 ## ED-1: edit an item on its story card (Nov 12)
 
 - **Light formatting.** `plan/light-format.ts` (pure): HTML or Markdown to the light marks and back (`editingOf`, `lightToHtml`, `storedValue`, `lookHtml`, `sameContent`, `canonOf`, `applyMark`), with why a field can't be edited (`NOT_EDITABLE_TEXT`) and the lossy line (`LOSSY_TEXT`). `plan/sanitize.ts` allows h1 to h3.

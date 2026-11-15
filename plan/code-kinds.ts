@@ -18,6 +18,11 @@
 // item; and every other file inside an item is kept by its path (`files`), so a search for a file's own name always
 // finds that file. A folder above Tables, Views and the like is said to be a schema only where the path shows one:
 // inside an item or under a SQL project.
+//
+// RB-5: a SQL object's type (table, view, stored procedure, function, ...) is a fact of its own beside its schema,
+// from the folder it sits in, and so is the database it belongs to (a warehouse or SQL database item, or a SQL
+// project's folder). sqlTree turns a database's objects into folders: schema then type, or type then schema. Still
+// names and folders only.
 import { languageOf, LANG_NAMES } from "./code-languages.ts";
 import type { CodeRepoView } from "./code.ts";
 
@@ -38,7 +43,7 @@ export const KIND_GROUPS: Readonly<Record<Kind, string>> = {
 
 export type ThingTable = { name: string; file: string };
 /** RB-4: something inside an item that is a thing of its own (a warehouse's table): what By kind opens the item to. */
-export type ThingInside = { name: string; file: string; kind: Kind; detail: string };
+export type ThingInside = { name: string; file: string; kind: Kind; detail: string; /** RB-5: a SQL object's type and schema. */ sqlType?: SqlType; schema?: string };
 export type Thing = {
   kind: Kind;
   name: string;
@@ -58,6 +63,12 @@ export type Thing = {
   itemKind?: Kind;
   /** RB-4: a SQL object's schema, where the path shows one: "dim.Store" finds it too. */
   schema?: string;
+  /** RB-5: a SQL thing's type, from the folder it sits in ("script" for a SQL file in none of them). */
+  sqlType?: SqlType;
+  /** RB-5: the database a SQL thing belongs to: the folder of its warehouse or SQL database item, or of its SQL project. */
+  db?: string;
+  /** RB-5: that database in words ("Gold warehouse", "Warehouse SQL project"). */
+  dbName?: string;
 };
 /** RB-4: a file inside an item that is no thing of its own: found only by its own name, under Files. */
 export type RepoFile = { file: string; kind: Kind; detail: string; /** The item's folder: a folder inside it is found by name too. */ item: string };
@@ -155,13 +166,51 @@ const SYNAPSE_ROOT_FILE = "template-parameters-definition.json";
 
 // ---------- 3. SQL ----------
 
-/** The usual object folders of a SQL project (a habit, not a rule of the format): the folder above is the schema. */
-const SQL_OBJECT_FOLDERS: readonly (readonly [folder: RegExp, label: string])[] = [
-  [/^tables?$/i, "Table"],
-  [/^views?$/i, "View"],
-  [/^(stored ?procedures?|procedures?|sprocs?)$/i, "Stored procedure"],
-  [/^functions?$/i, "Function"],
+/**
+ * RB-5: a SQL object's types, in the order their folders show: the four the documentation names, then the others by
+ * name, then Scripts for a SQL file that is none of them. One row per type: its id, its folder's label, one of it.
+ */
+const SQL_TYPE_ROWS = [
+  ["table", "Tables", "Table"],
+  ["view", "Views", "View"],
+  ["procedure", "Stored procedures", "Stored procedure"],
+  ["function", "Functions", "Function"],
+  ["schema", "Schemas", "Schema"],
+  ["security", "Security", "Security object"],
+  ["shared", "Shared queries", "Shared query"],
+  ["project", "SQL projects", "SQL project"],
+  ["script", "Scripts", "SQL script"],
+] as const;
+export type SqlType = (typeof SQL_TYPE_ROWS)[number][0];
+const SQL_FIRST: readonly SqlType[] = ["table", "view", "procedure", "function"];
+const SQL_TYPE_LABEL = new Map<SqlType, string>(SQL_TYPE_ROWS.map((r) => [r[0], r[1]]));
+const SQL_TYPE_ONE = new Map<SqlType, string>(SQL_TYPE_ROWS.map((r) => [r[0], r[2]]));
+/** The types in the order their folders show: Tables, Views, Stored procedures, Functions, the others by name, Scripts. */
+export const SQL_TYPES: readonly SqlType[] = [
+  ...SQL_FIRST,
+  ...SQL_TYPE_ROWS.map((r) => r[0]).filter((t) => !SQL_FIRST.includes(t) && t !== "script").sort((a, b) => SQL_TYPE_LABEL.get(a)!.localeCompare(SQL_TYPE_LABEL.get(b)!, "en", { sensitivity: "base" })),
+  "script",
 ];
+export const sqlTypeLabel = (t: SqlType): string => SQL_TYPE_LABEL.get(t)!;
+
+/**
+ * The object folders of a database kept as a SQL project (a warehouse item, a SQL database item, a .sqlproj). The
+ * documentation gives the layout as schema, then object type ("dbo/Tables/Table1.sql"), and names Tables, Views,
+ * Functions and StoredProcedures; the other spellings are habits. The folder above is the schema.
+ */
+const SQL_OBJECT_FOLDERS: readonly (readonly [folder: RegExp, type: SqlType])[] = [
+  [/^tables?$/i, "table"],
+  [/^views?$/i, "view"],
+  [/^(stored ?procedures?|procedures?|sprocs?)$/i, "procedure"],
+  [/^functions?$/i, "function"],
+];
+/**
+ * RB-5: folders of a database that hold no schema's objects. The documentation names the shared queries folder; it
+ * names no folder for a schema's own definition or for roles and users, so Security is the folder the extract tool
+ * writes them to (docs/open-questions.md, RB-5). A file there named as one of the database's schemas is that Schema.
+ */
+const SQL_SECURITY_FOLDER = /^security$/i;
+const SQL_SHARED_FOLDER = /^\.sharedqueries$/i;
 
 // ---------- 4. Notebooks by file type ----------
 
@@ -267,7 +316,25 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
   // Folders holding a SQL project file: a folder between one of them and Tables, Views and the like is a schema.
   const projectDirs = new Set<string>();
   for (const [d, names] of filesIn) for (const n of names) if (n.endsWith(".sqlproj")) projectDirs.add(d);
-  const underProject = (dir: string): boolean => projectDirs.has(dir) || (dir !== "/" && underProject(dirOf(dir)));
+  // RB-5: each project's name, from its project file (the first by name where a folder holds two).
+  const projectNames = new Map<string, string>();
+  for (const p of [...paths].sort()) if (extOf(baseOf(p)) === "sqlproj" && !projectNames.has(dirOf(p))) projectNames.set(dirOf(p), stem(baseOf(p)));
+  const projectOf = (dir: string): string | null => (projectDirs.has(dir) ? dir : dir === "/" ? null : projectOf(dirOf(dir)));
+  const underProject = (dir: string): boolean => projectOf(dir) !== null;
+  /** RB-5: the database a folder is in: its item's folder, else its SQL project's. */
+  const dbOf = (dir: string, item: string | null): string | null => item ?? projectOf(dir);
+  // RB-5: each database's schemas, by the folders above its object folders (lower case), so a schema's own
+  // definition in Security is known by its name.
+  const schemasOf = new Map<string, Set<string>>();
+  for (const d of filesIn.keys()) {
+    if (!SQL_OBJECT_FOLDERS.some(([re]) => re.test(baseOf(d)))) continue;
+    const above = dirOf(d);
+    const db = dbOf(above, itemFor(above));
+    if (!db || above === db || above === "/") continue;
+    let set = schemasOf.get(db);
+    if (!set) schemasOf.set(db, (set = new Set()));
+    set.add(baseOf(above).toLowerCase());
+  }
   /** Rules 3 and 4 for one file: a SQL object, script or project, or a notebook by its file type; else null. */
   const named = (p: string, item: string | null): Thing | null => {
     const dir = dirOf(p);
@@ -275,15 +342,24 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
     const ext = extOf(name);
     if (ext === "sql") {
       const object = SQL_OBJECT_FOLDERS.find(([re]) => re.test(baseOf(dir)));
-      if (!object) return { kind: "sql", name: stem(name), detail: "SQL script", folder: dir, file: p };
+      if (!object) {
+        // RB-5: inside a database, Security holds a schema's own definition (a file named as one of its schemas) and
+        // its roles and users; the shared queries folder holds queries. Anything else is a script.
+        const db = dbOf(dir, item);
+        const inDb = db !== null && dirOf(dir) === db;
+        const schema = inDb && SQL_SECURITY_FOLDER.test(baseOf(dir)) && schemasOf.get(db)?.has(stem(name).toLowerCase()) ? stem(name) : null;
+        const sqlType: SqlType = schema ? "schema" : inDb && SQL_SECURITY_FOLDER.test(baseOf(dir)) ? "security" : inDb && SQL_SHARED_FOLDER.test(baseOf(dir)) ? "shared" : "script";
+        return { kind: "sql", name: stem(name), detail: SQL_TYPE_ONE.get(sqlType)!, folder: dir, file: p, sqlType, ...(schema ? { schema } : {}) };
+      }
       // The schema, only where the path shows one (RB-4): the folder above, inside an item or under a SQL project and
       // not that item's or project's own folder. "/sql/Tables/x.sql" is a Table. A dot in the file's name says nothing
       // ("Orders.v2.sql").
       const above = dirOf(dir);
       const schema = above !== "/" && above !== item && !projectDirs.has(above) && (item || underProject(above)) ? baseOf(above) : null;
-      return { kind: "sql", name: stem(name), detail: schema ? `${object[1]} in ${schema}` : object[1], folder: dir, file: p, ...(schema ? { schema } : {}) };
+      const one = SQL_TYPE_ONE.get(object[1])!;
+      return { kind: "sql", name: stem(name), detail: schema ? `${one} in ${schema}` : one, folder: dir, file: p, sqlType: object[1], ...(schema ? { schema } : {}) };
     }
-    if (ext === "sqlproj") return { kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p };
+    if (ext === "sqlproj") return { kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p, sqlType: "project" };
     const notebook = NOTEBOOK_EXT[ext];
     return notebook ? { kind: "notebook", name: stem(name), detail: notebook, folder: dir, file: p } : null;
   };
@@ -305,7 +381,14 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       out.push({ kind: factory.row[1], name: stem(name), detail: `${factory.synapse ? "Synapse" : "Data factory"} ${factory.row[2]}`, folder: dir, file: p });
       continue;
     }
-    out.push(named(p, null) ?? { kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
+    const t = named(p, null);
+    // RB-5: a SQL thing under a SQL project belongs to that database, named by its project file.
+    const project = t?.kind === "sql" ? projectOf(dir) : null;
+    if (t && project) {
+      t.db = project;
+      t.dbName = `${projectNames.get(project)!} SQL project`;
+    }
+    out.push(t ?? { kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
   }
   const rest: RepoFile[] = [];
 
@@ -352,12 +435,12 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       if (taken.has(p)) return;
       const own = f.toLowerCase();
       const t = TYPE_BY_FILE.some(([re]) => re.test(own)) || OPEN_FIRST.some((re) => re.test(own)) ? null : named(p, dir);
-      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words, itemKind: kind });
+      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words, itemKind: kind, ...(t.kind === "sql" ? { db: dir, dbName: words } : {}) });
       else rest.push({ file: p, kind, detail: `File in ${words}`, item: dir });
     });
     if (inner.length) {
       inner.sort(byName);
-      thing.inside = inner.map((t) => ({ name: t.name, file: t.file, kind: t.kind, detail: t.detail.split(" · ")[0]! }));
+      thing.inside = inner.map((t) => ({ name: t.name, file: t.file, kind: t.kind, detail: t.detail.split(" · ")[0]!, ...(t.sqlType ? { sqlType: t.sqlType } : {}), ...(t.schema ? { schema: t.schema } : {}) }));
       if (!thing.tables) thing.detail = `${label} · ${inner.length} inside`;
       out.push(...inner);
     }
@@ -394,6 +477,86 @@ export function groupThings<T extends { kind: Kind }>(things: readonly T[]): { k
     else by.set(t.kind, [t]);
   }
   return KINDS.filter((k) => by.has(k)).map((k) => ({ kind: k, label: KIND_GROUPS[k], things: by.get(k)! }));
+}
+
+// ---------- RB-5: a database's SQL objects in folders ----------
+
+export const SQL_GROUPINGS = ["schema", "type"] as const;
+/** Schema: schema folders, each holding type folders. Type: type folders, each holding schema folders. */
+export type SqlGrouping = (typeof SQL_GROUPINGS)[number];
+export const NO_SCHEMA = "No schema";
+/** What sqlTree needs of a SQL object: its name, its file, and the two facts its path gave. */
+export type SqlObject = { name: string; file: string; sqlType?: SqlType; schema?: string };
+/** The second level: a folder of objects, by name. */
+export type SqlLeaf<T> = { key: string; label: string; count: number; objects: T[] };
+/** The first level: a folder of folders. Its count is its objects in all of them. */
+export type SqlFolder<T> = { key: string; label: string; count: number; folders: SqlLeaf<T>[] };
+export type SqlTree<T> = { count: number; folders: SqlFolder<T>[] };
+
+/**
+ * A database's SQL objects as a two-level tree: by schema then type, or by type then schema. Types in SQL_TYPES'
+ * order (a SQL thing with no type is a script), schemas by name ignoring case, "No schema" after them. Every object
+ * is in exactly one folder, an empty folder never shows, and each count is the objects under it. From the facts the
+ * paths gave: nothing here opens a file.
+ */
+export function sqlTree<T extends SqlObject>(objects: readonly T[], grouping: SqlGrouping): SqlTree<T> {
+  const cmp = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : a > b ? 1 : 0);
+  const schemaKey = (o: T) => (o.schema ? `s:${o.schema.toLowerCase()}` : "s:");
+  const typeKey = (o: T) => `t:${o.sqlType ?? "script"}`;
+  // A schema spelled two ways ("Dim", "dim") is one folder, under the spelling that sorts first: a folder's
+  // spelling before the name of a schema's own definition file.
+  const spelled = new Map<string, string>();
+  for (const own of [false, true])
+    for (const o of objects) {
+      if (!o.schema || (o.sqlType === "schema") !== own) continue;
+      const k = schemaKey(o);
+      if (own ? !spelled.has(k) : !spelled.has(k) || cmp(o.schema, spelled.get(k)!) < 0) spelled.set(k, o.schema);
+    }
+  const label = (key: string) => (key === "s:" ? NO_SCHEMA : key.startsWith("s:") ? spelled.get(key)! : sqlTypeLabel(key.slice(2) as SqlType));
+  const order = (keys: string[]) =>
+    keys.sort((a, b) => (a.startsWith("t:") ? SQL_TYPES.indexOf(a.slice(2) as SqlType) - SQL_TYPES.indexOf(b.slice(2) as SqlType) : a === "s:" ? 1 : b === "s:" ? -1 : cmp(label(a), label(b))));
+  const [outer, inner] = grouping === "schema" ? [schemaKey, typeKey] : [typeKey, schemaKey];
+  const by = new Map<string, Map<string, T[]>>();
+  for (const o of objects) {
+    let m = by.get(outer(o));
+    if (!m) by.set(outer(o), (m = new Map()));
+    const l = m.get(inner(o));
+    if (l) l.push(o);
+    else m.set(inner(o), [o]);
+  }
+  const folders = order([...by.keys()]).map((k): SqlFolder<T> => {
+    const m = by.get(k)!;
+    const leaves = order([...m.keys()]).map((k2): SqlLeaf<T> => {
+      const list = [...m.get(k2)!].sort((a, b) => cmp(a.name, b.name) || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+      return { key: `${k}/${k2}`, label: label(k2), count: list.length, objects: list };
+    });
+    return { key: k, label: label(k), count: leaves.reduce((n, f) => n + f.count, 0), folders: leaves };
+  });
+  return { count: folders.reduce((n, f) => n + f.count, 0), folders };
+}
+
+/** One database of a client: its folder's key, its name in words, its objects. */
+export type SqlDatabase<T> = { key: string; label: string; objects: T[] };
+export const NOT_IN_DATABASE = "Not in a database";
+/**
+ * RB-5: a client's SQL things by database (a warehouse, a SQL database, a SQL project), by name; `loose` are the ones
+ * in none. `many` names the repo beside each database (a client with more than one repo). With more than one
+ * database the SQL group's first level is the database; with one or none the grouping starts at the top.
+ */
+export function sqlDatabases<T extends { db?: string; dbName?: string; repoId: string; repoName: string }>(objects: readonly T[], many: boolean): { databases: SqlDatabase<T>[]; loose: T[] } {
+  const by = new Map<string, SqlDatabase<T>>();
+  const loose: T[] = [];
+  for (const o of objects) {
+    if (!o.db) {
+      loose.push(o);
+      continue;
+    }
+    const key = `${o.repoId}\u0000${o.db}`;
+    const d = by.get(key);
+    if (d) d.objects.push(o);
+    else by.set(key, { key, label: `${o.dbName ?? o.db}${many ? ` · ${o.repoName}` : ""}`, objects: [o] });
+  }
+  return { databases: [...by.values()].sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }) || (a.key < b.key ? -1 : 1)), loose };
 }
 
 /** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */

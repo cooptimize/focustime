@@ -112,8 +112,11 @@ export const INBOX_GROUPINGS = ["day", "client", "due", "status"] as const;
 export const DEFAULT_INBOX_STATUSES: readonly (typeof INBOX_VIEW_NAMES)[number][] = ["needs_you", "promises", "waiting", "in_progress", "captures", "teammates", "done"];
 export type InboxPrefs = { view: (typeof INBOX_VIEW_NAMES)[number]; clients: string[]; group: (typeof INBOX_GROUPS)[number]; sort: (typeof INBOX_SORTS)[number]; statuses: (typeof INBOX_VIEW_NAMES)[number][]; grouping: (typeof INBOX_GROUPINGS)[number] };
 export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group: "client", sort: "newest", statuses: [...DEFAULT_INBOX_STATUSES], grouping: "day" };
-export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; showCatchUpDay: boolean; showWeekendDays: boolean; inbox: InboxPrefs };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, inbox: DEFAULT_INBOX };
+/** RB-5: Code's Group by switch for SQL objects. A new key, so an older build skips it (BH-1). */
+export const CODE_SQL_GROUPS = ["schema", "type"] as const;
+export type CodeSqlGroup = (typeof CODE_SQL_GROUPS)[number];
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; showCatchUpDay: boolean; showWeekendDays: boolean; /** RB-5: how Code's By kind groups a database's SQL objects: by schema then type, or by type then schema. */ codeSqlGroup: CodeSqlGroup; inbox: InboxPrefs };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -477,7 +480,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [], statuses: [...DEFAULT_INBOX_STATUSES] } };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "reduce_motion", "text_size", "show_personal", "show_catch_up_day", "show_weekend_days", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "reduce_motion", "text_size", "show_personal", "show_catch_up_day", "show_weekend_days", "code_sql_group", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -519,6 +522,11 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     if (ig !== undefined) {
       if (typeof ig !== "string" || !(INBOX_GROUPS as readonly string[]).includes(ig)) err("ui.inbox_group", `Must be one of ${INBOX_GROUPS.map((x) => `"${x}"`).join(", ")}`);
       else ui.inbox.group = ig as InboxPrefs["group"];
+    }
+    const cg = t?.code_sql_group;
+    if (cg !== undefined) {
+      if (typeof cg !== "string" || !(CODE_SQL_GROUPS as readonly string[]).includes(cg)) err("ui.code_sql_group", 'Must be "schema" or "type"');
+      else ui.codeSqlGroup = cg as CodeSqlGroup;
     }
     const sp = t?.show_personal;
     if (sp !== undefined) {
