@@ -758,7 +758,8 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
               <ul>
                 {landed.map((e) => (
                   <li key={e.id} className={`wl-${e.status}`}>
-                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title}{" "}
+                    {/* A saved rename is listed by its new title (review 1). */}
+                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.status === "confirmed" ? (e.after.Title ?? e.title) : e.title}{" "}
                     <span className="muted">
                       {Object.keys(e.after).join(", ")} · {e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : e.status === "failed" ? "not written: DevOps refused it" : "not confirmed yet"}
                     </span>
@@ -802,7 +803,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
             )}
           </div>
           <p className="muted ah-review-note">
-            Nothing is written until you save.{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
+            {items.length === 0 && landed.length > 0 ? "Nothing is waiting to be saved." : "Nothing is written until you save."}{conflicts > 0 ? ` ${plural(conflicts, "item waits", "items wait")} for Keep mine or Take theirs.` : ""}
           </p>
         </footer>
       </aside>

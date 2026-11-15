@@ -1110,4 +1110,8 @@ From the IT review (TD-1):
 - Renaming in the Grid writes the title only; the card's Edit can fix the title and the description in one preview. Two ways to do one thing: keep both?
 - The Grid's hover buttons (Rename, New under, the menu) take room in the Item cell while a row is pointed at. On narrow windows the title gets short. Move Rename into the menu only?
 - The demo's features now have a state stories don't (On hold). It exists only to show State… on mixed types.
+- From review 1, left: a click elsewhere cancels a rename (as the other cells' editors do) and the typed words go; should it keep them instead? A staged title or move says so in words, a staged date, owner, state or size only with the cell's tint and dot: give all of them words? A cell's editor says Save where it only stages. Enter on a title cell opens nothing (it folds a row with children); double-click doesn't rename. Esc in Review closes it only with focus inside. The bulk bar is a long way from a row by Tab. Move…'s popover sits over the rows above its own.
+- From review 1: after a drop, the story shows among its new parent's stories where its own rank puts it, which can be first. That is its true place, but it can read as a reorder for a moment. Say "by rank" there?
+- From review 1 (not ED-2's): "N changes to save" and Save span every client whatever the client filter shows, and the demo starts with three seeded changes.
+- From review 2, left: an item with two parent links in DevOps whose first is the staged parent is skipped as already there (the card's Move… would repair it); a title that differs only by inner spaces is announced as staged but there is nothing to stage.
 

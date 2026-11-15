@@ -278,4 +278,6 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - A button that can't open for these rows says why when pressed: "Move to… needs rows at one level, so one parent fits them all", "Move to… needs rows from one client. A move never crosses clients", "Assign to… needs rows from one client: each client has its own people".
 - State… on mixed types: "The selection has 2 types (Feature, User Story). Only states every row's type takes can be set at once. Not for every row:" then "On hold fits 1 of 2: Feature", and "Select only those rows to set one of these."
 - Review's rows: **Title** and **Parent**, before → after ("#3350 Carrier rate alerts → #3310 Shipment tracking dashboard", "No parent"). Saved: "#3313 <title> Title · in DevOps", "not confirmed yet", "not written".
-- The preview's line for a change set write: "Change title, parent, dates, state, size or owner in DevOps".
+- The preview's line for a change set write: "Change this item in DevOps" (it listed dates, state, size and owner before; the rows under it say which fields); its undo: "Undo: put what this change set changed back".
+- A title edit thrown away by a click elsewhere is said to a screen reader: "Title of #3313 not changed. Enter keeps an edit; a click elsewhere cancels it."
+- Review's foot once everything is saved: "Nothing is waiting to be saved."

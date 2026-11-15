@@ -219,7 +219,7 @@ const SUMMARY: Record<WriteOp, string> = {
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
   assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
-  fields: "Change title, parent, dates, state, size or owner in DevOps", undo_fields: "Undo: put the title, parent, dates, state, size and owner back",
+  fields: "Change this item in DevOps", undo_fields: "Undo: put what this change set changed back",
   feedback: "Send feedback to the FocusTime backlog",
   comment_edit: "Edit your comment on a DevOps item", undo_comment_edit: "Undo: put your comment's earlier text back",
   comment_delete: "Delete your comment on a DevOps item", undo_comment_delete: "Undo: post your deleted comment's text again",

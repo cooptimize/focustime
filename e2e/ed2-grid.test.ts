@@ -182,6 +182,9 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await page.getByRole("combobox", { name: "Assign 3 items to" }).fill("priya");
     await page.keyboard.press("Enter");
     await expect.poll(() => page.locator(".bl-result").first().textContent()).toContain("Assign to Priya Shah: staged 3, skipped 0. Nothing is written until you save.");
+    // The three stay ticked for a next action (review 1).
+    await expect(bar.locator("strong").textContent()).resolves.toBe("3 selected");
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
     // A mixed selection (a feature and a story): Move to… says why it can't; State… lists only what both types take.
     await row(page, "Carrier rate alerts").getByRole("checkbox").check({ force: true });
     await row(page, "Alert settings page").getByRole("checkbox").check({ force: true });
@@ -208,8 +211,8 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await expect.poll(() => page.locator(".bl-result").first().textContent()).toContain("Size 5: staged 1, skipped 1. Nothing is written until you save.");
     await page.locator(".bl-result summary").click();
     await expect(page.locator(".bl-result li").textContent()).resolves.toContain("Feature has no size in Logistics's process");
-    // The skipped row stays ticked; take the size back so the count below is the grooming's own.
-    await expect(bar.locator("strong").textContent()).resolves.toBe("1 selected");
+    // The rows stay ticked for the next action (review 1); take the size back so the count below is the grooming's own.
+    await expect(bar.locator("strong").textContent()).resolves.toBe("2 selected");
     await call(page, "ahead.unstage", { clientKey: "Atlas", itemId: 3352, field: "size" });
     await page.getByRole("button", { name: "Clear", exact: true }).click();
     await page.getByRole("button", { name: "Refresh" }).first().click();
@@ -238,6 +241,9 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     expect(entries.find((e) => e.itemId === 3313)!.after).toEqual({ Title: "Shipment list filter by region" });
 
     // --- Undo one from the saved list: the old title comes back.
+    // A saved rename is listed by its new title, and the foot no longer says nothing is written.
+    await expect(rv.locator(".ah-landed li", { hasText: "#3342 Estimate accuracy report" }).count()).resolves.toBe(1);
+    await expect(rv.locator(".ah-review-note").textContent()).resolves.toContain("Nothing is waiting to be saved.");
     await rv.getByRole("button", { name: "Undo #3342 estimate accuracy report (copy)" }).click();
     await confirmAll(page);
     await expect.poll(async () => (await log(page)).some((e) => e.op === "undo_fields" && e.itemId === 3342 && e.status === "confirmed"), { timeout: 30_000 }).toBe(true);

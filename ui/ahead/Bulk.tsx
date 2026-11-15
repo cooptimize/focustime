@@ -7,7 +7,7 @@
 // reasons: Assign to… (the client's own DevOps people, the Grid's picker), State… (the states every ticked row's type
 // takes; where types differ, the rest are listed with the rows they fit), Size… and Move to… (ED-1's picker; only
 // when the ticked rows are one level in one client, and it says so otherwise).
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WeekPlanState } from "../../actions/types.ts";
 import type { StagedChange } from "../../plan/ahead-edit.ts";
 import { bulkMoveBlock, bulkSummary, commonStates, nextMonday, type BulkOp } from "../../plan/backlog.ts";
@@ -45,6 +45,14 @@ export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[];
   // ED-2: which of the four pickers is open, anchored to its button; and why one can't open (said in the bar).
   const [pop, setPop] = useState<{ kind: "assign" | "state" | "size" | "parent"; at: HTMLElement } | null>(null);
   const [why, setWhy] = useState<string | null>(null);
+  // The line about what was staged goes once the change set shrinks (saved, removed or discarded): it would no
+  // longer be true (review 1).
+  const pendingN = a.load.changes.length;
+  const lastN = useRef(pendingN);
+  useEffect(() => {
+    if (pendingN < lastN.current) setResult(null);
+    lastN.current = pendingN;
+  }, [pendingN]);
   const oneClient = new Set(chosen.map((r) => r.clientKey)).size === 1;
   const moveBlock = bulkMoveBlock(chosen.map((r) => ({ clientKey: r.clientKey, rung: r.item.rung })));
   const assignBlock = oneClient ? null : "Assign to… needs rows from one client: each client has its own people";
@@ -89,7 +97,9 @@ export function BulkBar({ chosen, titleOf, select, onChanged }: { chosen: Row[];
       }
       a.setChanges(r.changes);
       setResult({ text: bulkSummary(op, r.staged.length, r.skipped.length), skipped: r.skipped });
-      select(r.skipped.map((s) => `${s.clientKey}:${s.itemId}`));
+      // ED-2's four keep the rows ticked, so an owner and then a size go on the same rows (review 1); the older
+      // actions leave only the skipped rows ticked, as before.
+      if (!(op.kind === "assign" || op.kind === "state" || op.kind === "size" || op.kind === "parent")) select(r.skipped.map((s) => `${s.clientKey}:${s.itemId}`));
       setDateFor(null);
       setWhy(null);
       return null;

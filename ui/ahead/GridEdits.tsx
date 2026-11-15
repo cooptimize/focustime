@@ -55,8 +55,10 @@ export function RenameBox({ r, done, say }: { r: Row; done: (step: 0 | 1 | -1) =
   const box = useRef<HTMLInputElement>(null);
   const closing = useRef(false);
   useEffect(() => {
-    box.current?.focus();
-    box.current?.select();
+    // The caret at the end, nothing selected: most renames fix a word, not the whole title (review 1).
+    const el = box.current;
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
   }, []);
   // A refusal from the server: the box is enabled again by then, so focus goes back to it (review 2).
   useEffect(() => {
@@ -100,7 +102,12 @@ export function RenameBox({ r, done, say }: { r: Row; done: (step: 0 | 1 | -1) =
           else if (e.key === "Escape") (e.preventDefault(), (closing.current = true), done(0));
           else if (e.key === "Tab") (e.preventDefault(), void save(e.shiftKey ? -1 : 1));
         }}
-        onBlur={() => !closing.current && !busy && done(0)}
+        onBlur={() => {
+          if (closing.current || busy) return;
+          // A click elsewhere cancels, as the other cells' editors do; typed words that go with it are said (review 1).
+          if (text.replace(/\s+/g, " ").trim() !== r.item.title) say?.(`Title of #${r.item.id} not changed. Enter keeps an edit; a click elsewhere cancels it.`);
+          done(0);
+        }}
       />
       {why && (
         <span id={`ah-rename-why-${r.item.id}`} className="ah-rename-why" role="alert">
