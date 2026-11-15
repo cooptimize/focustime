@@ -32,6 +32,18 @@ const open = async (page: Page, title: string) => {
   if ((await r.getAttribute("aria-expanded")) !== "true") await r.locator(".ah-chev").first().click();
 };
 const itemCell = (r: Locator) => r.locator("td.ah-col-item");
+/** Open a row's menu from the keyboard. The row can redraw as the list settles and drop the focus, so the key is
+ * pressed only once the cell holds it, and again if no menu came (it lost one on a loaded machine). */
+const openMenu = async (page: Page, r: Locator) => {
+  await expect
+    .poll(async () => {
+      await itemCell(r).focus();
+      if (!(await itemCell(r).evaluate((el) => el === document.activeElement))) return false;
+      await page.keyboard.press("Shift+F10");
+      return page.getByRole("menu").first().isVisible();
+    }, { timeout: 20_000 })
+    .toBe(true);
+};
 const order = (page: Page) => page.locator(".ah-row").evaluateAll((rows) => rows.map((r) => `${(r as HTMLElement).dataset.key}@${r.getAttribute("aria-level")}`));
 const said = (page: Page) => page.locator("[data-ed2-said]").textContent();
 const center = async (l: Locator) => {
@@ -270,8 +282,7 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await atlas(page, "Stories");
     const before = await order(page);
     const r = row(page, "Estimate from carrier history");
-    await itemCell(r).focus();
-    await page.keyboard.press("Shift+F10");
+    await openMenu(page, r);
     await page.getByRole("menuitem", { name: /^Move…/ }).click();
     await page.getByRole("combobox", { name: "Move #3341 under" }).fill("carrier rate");
     await page.keyboard.press("Enter");
@@ -279,8 +290,7 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await expect(r.locator("[data-unsaved=parent]").getAttribute("title")).resolves.toContain("In DevOps it is under #3340 Delivery time estimates. Its place in the backlog order doesn't change");
     await expect(order(page)).resolves.toEqual(before);
     // Undo from the row's menu.
-    await itemCell(r).focus();
-    await page.keyboard.press("Shift+F10");
+    await openMenu(page, r);
     await page.getByRole("menuitem", { name: "Undo move" }).click();
     await expect.poll(() => r.locator("[data-unsaved]").count()).toBe(0);
     await expect(r.locator(".ah-parent").textContent()).resolves.toBe("Delivery time estimates");
