@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
 import type { Pick } from "../plan/types.ts";
+import { madeTitle } from "../plan/deploy.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";
@@ -102,6 +103,28 @@ describe("Deployment to-dos", () => {
     expect(back.pick.todoKind).toBeUndefined();
     expect(back.pick.window).toBeUndefined();
     expect(back.pick).toMatchObject({ kind: "item", itemId: 101, notes: "reports" });
+  });
+
+  it("UC-1: a made title follows the deployment to its new day, and back with Undo; a typed title is kept", async () => {
+    const t = setup();
+    const made = await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-05", start: "19:00", end: "21:00", title: madeTitle("Adatum", "2026-11-05") });
+    expect(made.pick.title).toBe("Deployment - Adatum - Thu, Nov 5");
+    const moved = await t.run<Added>("pick.move", { id: made.pick.id, date: "2026-11-07", half: "AM" });
+    expect(moved.pick.title).toBe("Deployment - Adatum - Sat, Nov 7");
+    // The same day, another half: nothing to change.
+    const again = await t.run<Added>("pick.move", { id: moved.pick.id, date: "2026-11-08", half: "AM" });
+    expect(again.pick.title).toBe("Deployment - Adatum - Sun, Nov 8");
+    await t.run("pick.uncarry", { id: again.pick.id });
+    expect((await t.plan.picksFor("2026-11-07")).find((p) => p.id === moved.pick.id)?.title).toBe("Deployment - Adatum - Sat, Nov 7");
+    const typed = await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-05", start: "19:00", end: "21:00", title: "Release 4.2 to production" });
+    expect((await t.run<Added>("pick.move", { id: typed.pick.id, date: "2026-11-07", half: "AM" })).pick.title).toBe("Release 4.2 to production");
+    // A draft story made a Deployment keeps its own title, even one that reads like a made title: it is the draft's.
+    const draft = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Deployment - Adatum - Thu, Nov 5" });
+    const { pick: planned } = await t.run<Added>("pick.add", { date: "2026-11-05", half: "PM", clientKey: "Adatum", draftId: draft.draft.id });
+    const dep = await t.run<Added>("pick.set_kind", { id: planned.id, kind: "deployment", start: "19:00", end: "21:00" });
+    expect((await t.run<Added>("pick.move", { id: dep.pick.id, date: "2026-11-07", half: "AM" })).pick.title).toBe("Deployment - Adatum - Thu, Nov 5");
+    // No title sent is still the plain word, as before (the menu's form and the assistant).
+    expect((await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-06", start: "19:00", end: "21:00" })).pick.title).toBe("Deployment");
   });
 
   it("move like any to-do, keep their window and go where it puts them on the new day; Undo puts them back", async () => {

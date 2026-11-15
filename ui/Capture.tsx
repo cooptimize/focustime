@@ -7,7 +7,7 @@ import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, t
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, SIZES, type Capture, type Size } from "../plan/types.ts";
-import { windowProblem, windowText } from "../plan/deploy.ts";
+import { madeTitle, windowProblem, windowText } from "../plan/deploy.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
@@ -246,6 +246,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const input = useRef<HTMLTextAreaElement>(null);
   const openDraft = useContext(CreateDraftCtx);
   const fieldsRef = useRef<HTMLDivElement>(null);
+  const kindsRef = useRef<HTMLDivElement>(null);
   const done = useMemo(() => tagCompletions(text, clients), [text, clients]);
   const clearNotice = useMemo(() => () => setNotice(null), []);
   const suggested = useMemo(() => boxKind(text, client, today, clients), [text, client, today, clients]);
@@ -305,9 +306,14 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const dueNow = due ?? s.due ?? "";
   const blocked = (kind === "draft" || kind === "draft_feature" || kind === "deployment") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : kind === "deployment" ? (!depDate ? "A deployment needs a date" : depDate < today ? "Choose today or a later day" : windowProblem({ start: depStart, end: depEnd })) : null;
 
+  // UC-1: a Deployment with an empty box gets a title from its client and date; the box shows it as its hint. Typed
+  // text is the title, as before. The other kinds still need text.
+  const depTitle = kind === "deployment" && client ? madeTitle(clientName(client), depDate) : null;
+  const canSave = !!text.trim() || (kind === "deployment" && !!client);
+
   const submit = async (open = false) => {
     const body = text.trim();
-    if (!body || busy) return;
+    if (busy || (!body && kind !== "deployment")) return;
     // CP-1: the chip is the client, always (an @tag counts only once it is the chip).
     const key = client;
     if (blocked) return void setError(blocked);
@@ -316,7 +322,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (kind === "deployment" && key) {
       // WK-3: a Deployment is a to-do on its date and window (no capture row); Undo removes it.
       try {
-        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: body.slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
+        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: (body || madeTitle(clientName(key), depDate)).slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
         const moving = itemsSummary(r.pick.deployItems);
         reset();
         setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${moving ? ` · ${moving}` : ""}${r.note ? ` · ${r.note}` : ""}`, body, client: key });
@@ -428,7 +434,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           onChange={(e) => (onText(e.target.value), setError(null))}
           onKeyDown={onKey}
           maxLength={1000}
-          placeholder="Capture anything…"
+          placeholder={depTitle ?? "Capture anything…"}
           aria-label="Quick capture"
           aria-autocomplete="list"
           aria-expanded={done.length > 0}
@@ -436,7 +442,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
         />
         </div>
         {/* UI-7: ↵ is its own button between the box and the client chip, never over the box or its scrollbar. */}
-        <button type="button" className="cap-send" aria-label="Save" title="Save (Enter)" disabled={busy || !text.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
+        <button type="button" className="cap-send" aria-label="Save" title="Save (Enter)" disabled={busy || !canSave} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
           <Icon name="enter" />
         </button>
         <button
@@ -475,7 +481,21 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           ))}
         </ul>
       )}
-      <div className="cap-kinds cap-box-kinds" role="radiogroup" aria-label="Save as">
+      {/* UC-1 (review 2): the kinds are one stop in the Tab order (the chosen one), with the arrow keys between them, so
+          Deployment can be chosen from the keyboard with the box empty; Enter on a kind goes back to the box. */}
+      <div
+        className="cap-kinds cap-box-kinds"
+        role="radiogroup"
+        aria-label="Save as"
+        ref={kindsRef}
+        onKeyDown={(e) => {
+          const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+          if (!dir || (e.target as HTMLElement).getAttribute("role") !== "radio") return;
+          e.preventDefault();
+          cycle(dir);
+          requestAnimationFrame(() => kindsRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus());
+        }}
+      >
         {BOX_KINDS.map((k) => (
           <button
             key={k}
@@ -484,7 +504,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
             className="chip-btn"
             aria-checked={kind === k}
             data-kind={k}
-            tabIndex={-1}
+            tabIndex={kind === k ? 0 : -1}
             title={k === suggested && !chosen && text.trim() ? "Suggested by the rules" : undefined}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => (setChosen(k), input.current?.focus())}
@@ -493,11 +513,11 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
             {k === suggested && !chosen && k !== "later" && text.trim() && <span className="cap-suggested">suggested</span>}
           </button>
         ))}
-        <span className="muted cap-kind-hint" id="cap-kind-hint">
-          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens Create in DevOps" : ""}` : "Enter saves · Shift+Enter for a new line"}
+        <span className="muted cap-kind-hint" id="cap-kind-hint" aria-live="polite">
+          {!text.trim() && kind === "deployment" ? (depTitle ? `Enter saves it as "${depTitle}" · ↓ to its details` : "A deployment needs a client · ↓ to its details") : text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens Create in DevOps" : ""}` : "Enter saves · Shift+Enter for a new line"}
         </span>
       </div>
-      {kind !== "later" && text.trim() && (
+      {kind !== "later" && (text.trim() || kind === "deployment") && (
         <div className="cap-fields cap-box-fields" ref={fieldsRef} onKeyDown={onFieldKey} aria-label={`${BOX_NAME[kind]} details`} role="group">
           {kind === "follow_up" && (
             <>
