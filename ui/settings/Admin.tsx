@@ -557,7 +557,7 @@ function ConfirmAiOff({ onOff, onCancel }: { onOff: () => void; onCancel: () => 
   useReturnFocus();
   return (
     <div className="adm-confirm" role="alertdialog" aria-label="Turn AI off for everyone">
-      <p>Turn AI off for everyone? Break down, request sorting and promise reading stop until it's on again.</p>
+      <p>Turn AI off for everyone? Break down, chat sorting and promise reading stop until it's on again.</p>
       <button type="button" className="mini danger" onClick={onOff}>
         Turn AI off
       </button>
@@ -723,15 +723,15 @@ function AdminConversations() {
     <div className="set-form">
       <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Client chats, but never removes the team's.</p>
       <div className="set-grid">
-        {list("conv.request_phrases", "Request phrases", data.requestPhrases, "A client's message with one of these becomes a request. Commas between them.")}
-        {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never a request.")}
+        {list("conv.request_phrases", "Asking phrases", data.requestPhrases, "A client's message with one of these is checked for what it asks. Commas between them.")}
+        {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never checked.")}
         {list("conv.promise_phrases", "Commitment phrases", data.promisePhrases, "In a person's own messages: a promise to keep.")}
       </div>
       <h3>Reading client chats</h3>
       <div className="set-grid">
         {num("conv.poll_minutes", "Read client chats every (minutes)", data.pollMinutes, 1, 30, "1 to 30, in followers' working hours only. Applies from the next poll.")}
-        {num("conv.retention_days", "Keep messages that aren't requests (days)", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
-        {num("conv.closed_shown_days", "Closed conversations stay shown (days)", data.closedShownDays, 1, 90, "In Inbox › Conversations › Closed, then they're no longer listed.")}
+        {num("conv.retention_days", "Keep chat messages nothing was found in (days)", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
+        {/* NM-2: Closed conversations stay shown (conv.closed_shown_days) is hidden: no list shows closed ones since IB-4. Its value is kept and still read. */}
         {num("conv.chat_ai_daily_cap", "AI requests per chat per day", data.chatAiDailyCap, 0, 5000, "At most, for each chat.")}
       </div>
     </div>
@@ -1479,7 +1479,7 @@ function AdminStatus() {
 // ---------- Audit ----------
 
 type Entry = { id: number; at: string; actorName: string; area: string; target: string; setting: string; oldValue: string | null; newValue: string | null; note: string | null };
-const AREAS = [["", "Everything"], ["clients", "Clients"], ["ai", "AI"], ["conversations", "Conversations"], ["organization", "Organization"], ["levels", "Levels"], ["people", "People"]] as const;
+const AREAS = [["", "Everything"], ["clients", "Clients"], ["ai", "AI"], ["conversations", "Client chats"], ["organization", "Organization"], ["levels", "Levels"], ["people", "People"]] as const;
 const shown = (v: string | null) => {
   if (v === null) return "none";
   try {

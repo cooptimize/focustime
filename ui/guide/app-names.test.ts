@@ -72,7 +72,8 @@ describe("names", () => {
       // No chains: a row never points at another old name.
       expect(retiredIn(now), `${was} → ${now}`).toEqual([]);
     }
-    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(260);
+    // NM-2 adds three rows (Delivery chats, Admin › Conversations, Request phrases): 9 words over the 260 NM-1 left.
+    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(270);
   });
 });
 

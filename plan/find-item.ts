@@ -119,7 +119,7 @@ export function findAnswer(f: FindFacts, nowMs: number): FindLine[] {
     else if (item.assignee !== "me") out.push({ part: "week", ok: false, text: `Week's Your stories doesn't show it: it's ${item.assignee === "nobody" ? "not assigned to anyone" : "assigned to someone else"}. Take one or assign it to yourself to see it there.` });
     else out.push({ part: "week", ok: true, text: `Week shows it under Your stories in ${f.clientName}'s block details.` });
   } else if (item.tier === "feature" || item.tier === "epic") {
-    out.push(f.weekPlanned ? { part: "week", ok: true, text: "Week shows it: it's on this week's plan." } : { part: "week", ok: false, text: `Week's cards don't show it: it isn't on this week's plan. Add it in Week › Plan.` });
+    out.push(f.weekPlanned ? { part: "week", ok: true, text: "Week shows it: it's on this week's plan." } : { part: "week", ok: false, text: `Week's cards don't show it: it isn't on this week's plan. Add it to a block on Week.` });
   }
 
   // Ahead

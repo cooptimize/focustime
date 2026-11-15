@@ -182,7 +182,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       // Admin › Clients: register the chat. Admin › AI: Send attachments to AI for Adatum.
       await openSettings(page);
       await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
-      const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
+      const adatum = page.getByRole("group", { name: /^Client chats for Adatum/ });
       await adatum.getByRole("button", { name: "Add a chat" }).click();
       await adatum.getByRole("listbox", { name: "Your Teams group chats" }).getByRole("option").first().waitFor();
       await page.keyboard.type("alliance");

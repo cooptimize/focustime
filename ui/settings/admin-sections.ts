@@ -3,7 +3,7 @@
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
   ["admin-ai", "AI"],
-  ["admin-conversations", "Conversations"],
+  ["admin-conversations", "Client chats"],
   ["admin-people", "People"],
   ["admin-organization", "Organization"],
   ["admin-standards", "Standards"],

@@ -1,4 +1,4 @@
-// T-2 and AP-1: Settings > Clients, a client's Delivery chats: every Teams group chat registered for it (several are
+// T-2 and AP-1: Admin › Clients, a client's chats (Client chats since NM-2; Delivery chats before): every Teams group chat registered for it (several are
 // fine; a chat belongs to one client), each labelled Delivery team or Customer collaboration (suggested from its
 // members, changeable), with its members (external people flagged by tenant), the count, a warning when the members
 // don't fit the label, Open in Teams and Remove. Add a chat opens the picker (search, arrows, Enter, Esc). Saved as
@@ -140,10 +140,10 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false }: {
     return ok;
   };
   return (
-    <div className="set-field dchat" role="group" aria-label={`Delivery chats for ${clientName}`}>
+    <div className="set-field dchat" role="group" aria-label={`Client chats for ${clientName}`}>
       <div className="dchat-head">
-        <span className="set-label">Delivery chats</span>
-        <span className="muted dchat-hint">Teams group chats for {clientName}, shared with everyone on them who follows {clientName}. New messages are read for requests.</span>
+        <span className="set-label">Client chats</span>
+        <span className="muted dchat-hint">Teams group chats for {clientName}, shared with everyone on them who follows {clientName}. New messages are read for what they ask and promise.</span>
         {mine.length > 0 && (
           <button type="button" className="mini quiet" disabled={ctx.loading} onClick={() => void act("chats.refresh", { clientKey }, "Members read again")}>
             {ctx.loading ? "Refreshing…" : "Refresh"}
@@ -261,12 +261,12 @@ function ChatCard({ c, busy, onKind, onRemove, onReading }: { c: DeliveryChatVie
       )}
       {c.error && <p className="field-problem">{c.error}</p>}
       <p className={`set-hint dchat-poll${c.readOn && c.poll.state === "reconnect" ? " field-problem" : ""}`} role="status">
-        {c.readOn ? pollText(c.poll, c.registeredBy) : `${c.registeredBy ? `Added by ${c.registeredBy}. ` : ""}Not read for requests: reading is off${onReading ? "" : " until a FocusTime admin turns it on"}.`}
+        {c.readOn ? pollText(c.poll, c.registeredBy) : `${c.registeredBy ? `Added by ${c.registeredBy}. ` : ""}Not read: reading is off${onReading ? "" : " until a FocusTime admin turns it on"}.`}
         {onReading && (
           <>
             {" "}
-            <button type="button" className="mini quiet" disabled={busy} onClick={() => onReading(!c.readOn)} aria-label={`${c.readOn ? "Stop reading" : "Read"} ${c.displayName} for requests`}>
-              {c.readOn ? "Stop reading" : "Read for requests"}
+            <button type="button" className="mini quiet" disabled={busy} onClick={() => onReading(!c.readOn)} aria-label={`${c.readOn ? "Stop reading" : "Start reading"} ${c.displayName}`}>
+              {c.readOn ? "Stop reading" : "Start reading"}
             </button>
           </>
         )}
@@ -394,8 +394,8 @@ export function AsksConnections() {
   }, []);
   if (!d || !d.chats.length) return null;
   return (
-    <section className="set-asks-conn" aria-label="Client chats read for requests">
-      <h3>Client chats read for requests</h3>
+    <section className="set-asks-conn" aria-label="Client chats FocusTime reads">
+      <h3>Client chats FocusTime reads</h3>
       <ul className="set-sources">
         {d.chats.map((c) => {
           const problem = c.state === "reconnect" || c.state === "retry";
