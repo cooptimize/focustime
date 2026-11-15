@@ -87,7 +87,7 @@ export const SHORTCUTS = {
   sub: "Everything works with the mouse. These save you a few clicks a day. {key:Ctrl K} lists every action with its key.",
   // In the app's own order: the tabs, then what you do on them.
   cards: [
-    { label: "Day, Week, Backlog, Status, Inbox", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.status" }, { command: "view.inbox" }] },
+    { label: "Day, Week, Backlog, Status, Inbox, Code", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.status" }, { command: "view.inbox" }, { command: "code.clients" }] },
     { label: "Open a block (A puts the cursor in Add)", keys: [{ command: "ui.block" }, { command: "view.planweek" }] },
     { label: "Add work (on Backlog, Grid or Gantt)", keys: [{ command: "view.plan" }] },
     { label: "Midday check-in", keys: [{ command: "view.checkin" }] },
@@ -375,13 +375,13 @@ const Q_CALLS: QA[] = [
 ];
 
 const Q_CODE: QA[] = [
-  { q: "Can I read another client's code?", a: "Yes, read only. {icon:more} More › Code (or Code in {key:Ctrl K}): choose the client, then the repo, open folders or type a file's name in Find a file, and open a file. The client's name is at the top the whole time. Copy takes the whole file; Copy link opens the same file for a teammate. FocusTime never changes a repo, keeps none of the code and sends none of it to AI. A FocusTime admin can keep one client's code to its team; that client shows greyed for everyone else." },
+  { q: "Can I read another client's code?", a: "Yes, read only. {icon:code} Code in the top bar ({key:code.clients}, or Code in {key:Ctrl K}; on a phone {icon:more} More › Code): choose the client, then the repo, open folders and open a file. To find a file by its name, type it in Search code. The client's name is at the top the whole time. Copy takes the whole file; Copy link opens the same file for a teammate. FocusTime never changes a repo, keeps none of the code and sends none of it to AI. A FocusTime admin can keep one client's code to its team; that client shows greyed for everyone else." },
   { q: "Who sees that I opened a file?", a: "FocusTime admins, in Admin › Audit › Code views: who opened which client's repo or file, or used Find, and when. Listing a client by kind or searching it, by name or inside files, is logged by client, never the words you typed. Never the code. Rows are kept 12 months." },
-  { q: "How do I find a report or a pipeline when I don't know where it is?", a: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks, SQL and the rest across all its repos; a model opens to its tables. To look across clients, type part of a name in Search names and press Search: results come by client. Both go by file and folder names only. A warehouse's tables, views and procedures are found by name too." },
-  { q: "How do I see a warehouse's tables by schema, or all its stored procedures?", a: "In By kind, open a warehouse or a SQL database, or the SQL group: its SQL objects sit in folders. Group by Schema shows each schema, then its tables, views, stored procedures and functions. Group by Type shows each type, then the schemas in it. Each folder says how many it holds, and Filter by name narrows the folders to what matches. Your choice is remembered. The folders come from file and folder names only: no file is opened to sort them." },
+  { q: "How do I find a report or a pipeline when I don't know where it is?", a: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks, databases and the rest across all its repos, each in one place; a model opens to its tables. To look across clients, type part of a name in Search code, choose All clients and press Enter: results come by client. Both go by file and folder names only. A warehouse's tables, views and procedures are found by name too." },
+  { q: "How do I see a warehouse's tables by schema, or all its stored procedures?", a: "In By kind, open a warehouse, a SQL database or a SQL project in Databases: its SQL objects sit in folders, and nowhere else. Group by Schema, at the top of Databases, shows each schema, then its tables, views, stored procedures and functions. Group by Type shows each type, then the schemas in it. Each folder says how many it holds, and Filter by name narrows the folders to what matches. Your choice is remembered. The folders come from file and folder names only: no file is opened to sort them." },
   { q: "Where is a table or a column used?", a: "Switch the search to Inside files, type the table's or column's name and press Search. Each client's DevOps is asked which files hold the words, and the files come back by client and repo with how many matches each has. Open one to see every match marked, and step between them with Previous match and Next match. It finds whole words: add a * to match the start of one. A phrase in quotes and AND, OR and NOT in capitals work too." },
-  { q: "Why didn't Search names find a measure or a column?", a: "Names looks at the names of things, files and folders. Measures, columns and what a procedure uses live inside files: switch the search to Inside files for those." },
-  { q: "It says a client's DevOps doesn't have code search turned on.", a: "Inside files uses DevOps's own code search, which needs Microsoft's Code Search extension in that client's DevOps organization. An administrator of that organization can add it; FocusTime never changes anything there. Search names and By kind still work for that client." },
+  { q: "Why didn't a search by name find a measure or a column?", a: "Names looks at the names of things, files and folders. Measures, columns and what a procedure uses live inside files: switch the search to Inside files for those." },
+  { q: "It says a client's DevOps doesn't have code search turned on.", a: "Inside files uses DevOps's own code search, which needs Microsoft's Code Search extension in that client's DevOps organization. An administrator of that organization can add it; FocusTime never changes anything there. A search by name and By kind still work for that client." },
   { q: "What leaves FocusTime when I search inside files?", a: "The words you typed go to each client's DevOps you may read, and nowhere else. FocusTime reads no file to search it, keeps none of the words or results, and logs only who searched which client and when. Forks and branches other than each repo's default aren't searched." },
   { q: "It says FocusTime can't read a client's code yet.", a: "The company DevOps token for that client doesn't have Code (read) yet. It's added by hand in DevOps; ask your FocusTime admin. Until then that client's work items still show as before." },
 ];
@@ -573,11 +573,11 @@ export const AREAS: Record<"day" | "week" | "backlog" | "status" | "inbox" | "wr
     faqs: qs(Q_CALLS),
   },
   code: {
-    lead: "Read any client's code, read only, to borrow what already works. One client at a time, apart from the names a search finds.",
+    lead: "Read any client's code, read only, to borrow what already works. One client at a time, apart from what a search finds.",
     does: [
-      { title: "Find a file", text: "{icon:more} More › Code, choose the client and the repo, then open folders or type part of a file's name in Find a file.", go: { href: "#/code", label: "Open Code" } },
-      { title: "See what a client has", text: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks and SQL across all its repos." },
-      { title: "Search", text: "Type part of a name in Search names, choose This client or All clients, then Search. Switch it to Inside files to find where a table or column is used." },
+      { title: "Find a file", text: "{icon:code} Code in the top bar: choose the client, then open folders in Files.", go: { href: "#/code", label: "Open Code" } },
+      { title: "See what a client has", text: "Inside a client, By kind lists its reports, semantic models, pipelines, notebooks, databases and the rest across all its repos, each in one place." },
+      { title: "Search", text: "Type in Search code at the top. Choose Names or Inside files, and This client or All clients, then press Enter. Clear the box to go back to where you were." },
       { title: "Copy what you need", text: "Copy takes the whole file, Copy path its path, Copy DevOps link its page in DevOps. Select part of it to copy just that." },
       { title: "It's logged", text: "Opening a file is logged for FocusTime admins: who, which file and when. Listing by kind and searching are logged by client. Nothing of the code is kept." },
     ],

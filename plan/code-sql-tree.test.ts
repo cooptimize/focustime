@@ -1,7 +1,7 @@
 // RB-5: a database's SQL objects in folders, by schema then type or by type then schema, from paths alone. Every
 // name here is invented.
 import { describe, expect, it } from "vitest";
-import { NO_SCHEMA, sortRepo, sqlDatabases, sqlTree, SQL_TYPES, type SqlGrouping, type Thing } from "./code-kinds.ts";
+import { NO_SCHEMA, sortRepo, sqlTree, SQL_TYPES, type SqlGrouping, type Thing } from "./code-kinds.ts";
 
 /** An invented warehouse item, a SQL project and loose SQL files. */
 const REPO = [
@@ -28,7 +28,8 @@ const REPO = [
   "/scratch/Tables/Loose.sql",
   "/scratch/one-off.sql",
 ];
-const sql = (paths: readonly string[] = REPO): Thing[] => sortRepo(paths).things.filter((t) => t.kind === "sql");
+/** Every SQL thing: a database's objects and loose SQL files (RB-6: a SQL project's own file is its database). */
+const sql = (paths: readonly string[] = REPO): Thing[] => sortRepo(paths).things.filter((t) => t.sqlType);
 const inDb = (db: string) => sql().filter((t) => t.db === db);
 const shape = (objects: Thing[], g: SqlGrouping) => sqlTree(objects, g).folders.map((f) => `${f.label} ${f.count}: ${f.folders.map((l) => `${l.label} ${l.count} [${l.objects.map((o) => o.name).join(", ")}]`).join("; ")}`);
 
@@ -43,7 +44,9 @@ describe("a SQL object's type, schema and database are facts from its path (RB-5
     // A SQL file in a schema's folder but in no type's folder is still a script, with no schema said.
     expect(facts["/ws/Quarry.Warehouse/ore/notes.sql"]).toEqual(["script", null, "Quarry warehouse"]);
     expect(facts["/db/fire/Procedures/usp_Fire.sql"]).toEqual(["procedure", "fire", "Kiln SQL project"]);
-    expect(facts["/db/Kiln.sqlproj"]).toEqual(["project", null, "Kiln SQL project"]);
+    // RB-6: a SQL project's own file is the database itself, not one of its objects.
+    expect(facts["/db/Kiln.sqlproj"]).toBeUndefined();
+    expect(sortRepo(REPO).things.find((t) => t.file === "/db/Kiln.sqlproj")).toMatchObject({ kind: "database", name: "Kiln", detail: "SQL project · 3 objects" });
     expect(facts["/ws/Quarry.Warehouse/sqldw.sqlproj"]).toEqual(["project", null, "Quarry warehouse"]);
     // Outside a database a folder above Tables isn't said to be a schema, and there is no database.
     expect(facts["/scratch/Tables/Loose.sql"]).toEqual(["table", null, null]);
@@ -52,7 +55,7 @@ describe("a SQL object's type, schema and database are facts from its path (RB-5
   it("a schema's own definition is a Schema, not a script; other files in Security are security objects; shared queries are their own type", () => {
     const by = Object.fromEntries(sql().map((t) => [t.file, t]));
     expect(by["/ws/Quarry.Warehouse/Security/haul.sql"]).toMatchObject({ sqlType: "schema", schema: "haul", detail: "Schema · Quarry warehouse" });
-    expect(by["/db/Security/fire.sql"]).toMatchObject({ sqlType: "schema", schema: "fire", detail: "Schema" });
+    expect(by["/db/Security/fire.sql"]).toMatchObject({ sqlType: "schema", schema: "fire", detail: "Schema · Kiln SQL project" });
     expect(by["/ws/Quarry.Warehouse/Security/blasters.sql"]).toMatchObject({ sqlType: "security", detail: "Security object · Quarry warehouse" });
     expect(by["/ws/Quarry.Warehouse/Security/blasters.sql"]!.schema).toBeUndefined();
     expect(by["/ws/Quarry.Warehouse/.sharedqueries/Tonnage check.sql"]).toMatchObject({ sqlType: "shared", detail: "Shared query · Quarry warehouse" });
@@ -60,7 +63,7 @@ describe("a SQL object's type, schema and database are facts from its path (RB-5
     expect(sql(["/x/Security/haul.sql", "/x/haul/Tables/A.sql"]).map((t) => t.sqlType)).toEqual(["table", "script"]);
   });
   it("an item's things inside carry the same facts", () => {
-    const quarry = sortRepo(REPO).things.find((t) => t.name === "Quarry" && t.kind === "lake")!;
+    const quarry = sortRepo(REPO).things.find((t) => t.name === "Quarry" && t.kind === "database")!;
     expect(quarry.inside!.find((x) => x.file.endsWith("/haul/Tables/Seam.sql"))).toMatchObject({ sqlType: "table", schema: "haul" });
     expect(quarry.inside!.every((x) => x.sqlType)).toBe(true);
   });
@@ -116,27 +119,8 @@ describe("sqlTree (RB-5 A2)", () => {
     expect(sqlTree(things, "schema").folders.map((f) => [f.label, f.count])).toEqual([["Shaft", 3]]);
   });
   it("a SQL thing with no type is a script; nothing in gives nothing out", () => {
-    expect(shape([{ kind: "sql", name: "q", detail: "Synapse SQL script", folder: "/s/sqlscript", file: "/s/sqlscript/q.json" }], "schema")).toEqual([`${NO_SCHEMA} 1: Scripts 1 [q]`]);
+    expect(shape([{ kind: "script", name: "q", detail: "Synapse SQL script", folder: "/s/sqlscript", file: "/s/sqlscript/q.json" }], "schema")).toEqual([`${NO_SCHEMA} 1: Scripts 1 [q]`]);
     expect(sqlTree([], "schema")).toEqual({ count: 0, folders: [] });
     expect(sqlTree([], "type")).toEqual({ count: 0, folders: [] });
-  });
-});
-
-describe("a client's databases (RB-5, test 5)", () => {
-  const rows = (paths: readonly string[], repoId = "r1", repoName = "one") => sql(paths).map((t) => ({ ...t, repoId, repoName }));
-  it("two databases come first, by name, each with its own objects; the rest are loose", () => {
-    const { databases, loose } = sqlDatabases(rows(REPO), false);
-    expect(databases.map((d) => [d.label, d.objects.length])).toEqual([["Kiln SQL project", 4], ["Quarry warehouse", 15]]);
-    expect(loose.map((t) => t.name).sort()).toEqual(["Loose", "one-off"]);
-    expect(databases.reduce((n, d) => n + d.objects.length, 0) + loose.length).toBe(sql().length);
-  });
-  it("one database is one: the grouping starts at the top", () => {
-    const one = REPO.filter((p) => p.startsWith("/ws/"));
-    expect(sqlDatabases(rows(one), false).databases.map((d) => d.label)).toEqual(["Quarry warehouse"]);
-  });
-  it("with more than one repo the repo is named, and the same folder in two repos is two databases", () => {
-    const one = REPO.filter((p) => p.startsWith("/db/"));
-    const { databases } = sqlDatabases([...rows(one, "r1", "kiln-a"), ...rows(one, "r2", "kiln-b")], true);
-    expect(databases.map((d) => d.label)).toEqual(["Kiln SQL project · kiln-a", "Kiln SQL project · kiln-b"]);
   });
 });

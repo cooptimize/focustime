@@ -1,18 +1,46 @@
-/* RB-1: Code (#/code/<client>/<repo>/<path>) on ST-1's panel shell (.panel-shell, ui/styles.css). The left side holds
-   the client picker, the repo select, Find a file and the tree; the right side the file. The file scrolls sideways
-   inside its own box (or wraps), so the page never does, at 390 and 360 wide too. Colors come only from the theme's
-   --code-* tokens, so both themes read. Loaded only with the panel. */
-.code-panel { background: var(--bg); color: var(--text); }
-.panel-shell.code-panel:not(.phone) { grid-template-columns: clamp(260px, 22vw, 360px) minmax(0, 1fr); }
-.code-panel .ps-rail { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-.code-panel .ps-body { min-width: 0; }
+/* RB-1, RB-6: Code (#/code/<client>/<repo>/<path>), a tab of its own. The file scrolls sideways inside its own box
+   (or wraps), so the page never does, at 390 and 360 wide too. Colors come only from the theme's --code-* tokens, so
+   both themes read. Loaded only with the Code page. */
+/* RB-6: Code is a tab. One search row across the top (the client picker, "Search code", Read only) with its choices
+   under it; below it the front page, the results across the whole area, or browsing: the left side (Files or By kind,
+   the repo, the tree, the log line at its foot) and the file on the right. Each side scrolls on its own. */
+.app > .code-page { flex: 1; min-height: 0; }
+.code-page { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--bg); color: var(--text); }
+.cv-head { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 10px; border-bottom: 1px solid var(--border); }
+.cv-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cv-top > .cv-picker { flex: 0 1 260px; min-width: 0; }
+.cv-search-box { position: relative; flex: 1 1 auto; min-width: 0; max-width: 720px; display: flex; align-items: center; }
+.cv-search-box .cv-search-icon { position: absolute; left: 10px; color: var(--text-muted); pointer-events: none; }
+.cv-search-box .cv-search-input { width: 100%; padding-left: 32px; min-height: var(--h-control, 32px); }
+.cv-top > .cv-ro { flex: none; margin-left: auto; }
+.cv-head > .cv-search { max-width: 960px; }
+.cv-head > .cv-search[hidden] { display: none; }
+/* While browsing, the choices float over the page under the box, so opening and closing them never moves what is
+   under them; on a results page they sit in the row, above the results they change. */
+.cv-head { position: relative; z-index: 4; }
+.cv-head > .cv-search.floating { position: absolute; top: calc(100% - 4px); left: 24px; right: 24px; max-width: 960px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-menu); }
+.code-page.narrow .cv-head > .cv-search.floating { left: 12px; right: 12px; }
+.cv-browse { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(260px, 22vw, 360px) minmax(0, 1fr); }
+.cv-browse.kinds { grid-template-columns: clamp(320px, 30vw, 480px) minmax(0, 1fr); }
+.cv-browse.solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+.cv-browse.solo > .cv-log-line { padding: 8px 24px; border-top: 1px solid var(--border); }
+.cv-browse > .cv-side { min-height: 0; border-right: 1px solid var(--border); }
+.cv-side-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 12px 24px; }
+.cv-side > .cv-log-line, .cv-results-page > .cv-log-line, .cv-start > .cv-log-line, .cv-file-page > .cv-log-line { flex: none; padding: 8px 24px; border-top: 1px solid var(--border); }
+.cv-browse > .cv-body { min-height: 0; min-width: 0; overflow: auto; padding: 12px 24px 24px; }
+.cv-results-page, .cv-start, .cv-file-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.cv-results-scroll, .cv-start-scroll { flex: 1; min-height: 0; overflow: auto; padding: 12px 24px 24px; }
+.cv-results-scroll > * { max-width: 1100px; }
+.cv-empty { margin: 24px 0; color: var(--text-muted); }
+.cv-side { padding: 0; }
+.cv-code { max-height: none; }
 
 .cv-title { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .cv-title-repo { color: var(--text-muted); font-weight: 500; }
 .cv-ro { font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
 .cv-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-.cv-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cv-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .cv-note { margin: 4px 0; color: var(--text-muted); font-size: var(--fs-2); }
 .cv-note.problem, .cv-tree-note.problem { color: var(--watch); }
 .cv-log-line { margin: 0; color: var(--text-muted); font-size: var(--fs-1); }
@@ -105,12 +133,21 @@
 .tk-italic { font-style: italic; }
 
 /* The phone: the client, repo and tree as one list page, the file as its own page with Back. */
-.panel-shell.phone.code-panel .cv-side { padding: 12px 16px; }
-.panel-shell.phone.code-panel .ps-body { padding-inline: 16px; }
-.panel-shell.phone.code-panel .cv-tree-row { min-height: 40px; font-size: var(--fs-4); }
-.panel-shell.phone.code-panel .cv-file-head { position: static; }
-.panel-shell.phone.code-panel .cv-code { max-height: none; }
-.panel-shell.phone.code-panel .cv-lines { font-size: var(--fs-2); }
+.code-page.narrow .cv-head { padding: 10px 16px 8px; }
+.code-page.narrow .cv-top { flex-wrap: wrap; }
+.code-page.narrow .cv-top > .cv-picker { flex: 1 1 100%; order: -1; }
+.code-page.narrow .cv-search-box .cv-search-input { min-height: 44px; }
+.code-page.narrow > .cv-side { flex: 1; }
+.code-page.narrow .cv-side-scroll, .code-page.narrow .cv-results-scroll, .code-page.narrow .cv-start-scroll { padding: 12px 16px; }
+.code-page.narrow .cv-log-line { padding-inline: 16px; white-space: normal; }
+.code-page.narrow .cv-file-page > .cv-back { align-self: flex-start; margin: 8px 16px 0; }
+.code-page.narrow .cv-file-page > .cv-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 16px 16px; }
+.code-page.narrow > .cv-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; }
+.code-page.narrow .seg-btn, .code-page.narrow .cv-search-go, .code-page.narrow .cv-search-kind { min-height: 44px; }
+.code-page.narrow .cv-tree-row { min-height: 40px; font-size: var(--fs-4); }
+.code-page.narrow .cv-file-head { position: static; }
+.code-page.narrow .cv-code { max-height: none; }
+.code-page.narrow .cv-lines { font-size: var(--fs-2); }
 
 /* RS-1: the tree's rows are the app's rows: 8 radius, the faint wash on hover, the accent wash when selected, no edge. */
 .cv-tree-row { min-height: var(--h-small); border-radius: var(--radius-input); }
@@ -154,8 +191,6 @@
 .cv-search-go { flex: none; margin-left: 0; }
 .cv-search-kind { flex: 0 1 auto; min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); }
 .cv-search-note { margin: 0; color: var(--text-muted); font-size: var(--fs-1); }
-.cv-search-page, .cv-start { display: flex; flex-direction: column; gap: 12px; max-width: 920px; }
-.cv-search-page > .cv-search, .cv-start > .cv-search { max-width: 560px; }
 .cv-results { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .cv-results-status { margin: 0; }
 .cv-result-client { min-width: 0; }
@@ -165,17 +200,14 @@
 .cv-hit .cv-thing-detail { flex: 0 1 auto; }
 .cv-hit-where { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--fs-1); }
 .cv-hit-where mark { background: var(--wash-accent); color: var(--text); border-radius: 3px; padding: 0 1px; }
-.panel-shell.phone.code-panel .cv-thing-btn, .panel-shell.phone.code-panel .cv-hit, .panel-shell.phone.code-panel .cv-kind-head { min-height: 44px; font-size: var(--fs-4); }
-.panel-shell.phone.code-panel .cv-thing-caret { width: 44px; height: 44px; }
-.panel-shell.phone.code-panel .cv-thing-caret-space { width: 8px; }
-.panel-shell.phone.code-panel .cv-hit { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
-.panel-shell.phone.code-panel .cv-hit-where { flex-basis: 100%; text-align: left; }
-.panel-shell.phone.code-panel .cv-search-page, .panel-shell.phone.code-panel .cv-start { padding-top: 12px; }
-/* Review 1: By kind's rows carry a name, what it is and the repo, so its side is wider than the tree's; on the phone a
-   result's path wraps so the file's name shows, and the file's folder isn't said twice. */
-.panel-shell.code-panel.kinds:not(.phone) { grid-template-columns: clamp(320px, 30vw, 480px) minmax(0, 1fr); }
-.panel-shell.phone.code-panel .cv-hit-where { white-space: normal; overflow-wrap: anywhere; }
-.panel-shell.phone.code-panel .cv-lives > span { display: none; }
+.code-page.narrow .cv-thing-btn, .code-page.narrow .cv-hit, .code-page.narrow .cv-kind-head { min-height: 44px; font-size: var(--fs-4); }
+.code-page.narrow .cv-thing-caret { width: 44px; height: 44px; }
+.code-page.narrow .cv-thing-caret-space { width: 8px; }
+.code-page.narrow .cv-hit { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
+.code-page.narrow .cv-hit-where { flex-basis: 100%; text-align: left; }
+/* Review 1: on the phone a result's path wraps so the file's name shows, and the file's folder isn't said twice. */
+.code-page.narrow .cv-hit-where { white-space: normal; overflow-wrap: anywhere; }
+.code-page.narrow .cv-lives > span { display: none; }
 
 /* RB-4: Search inside files. A result is a file: its name, what it is, how many matches, its path. */
 .cv-hit-count { flex: none; color: var(--text-muted); font-size: var(--fs-1); white-space: nowrap; }
@@ -187,7 +219,7 @@
 .cv-mark.on span { color: inherit; }
 .cv-stepper { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-2); }
 .cv-stepper > span { min-width: 5ch; font-variant-numeric: tabular-nums; }
-.panel-shell.phone.code-panel .cv-hit-count { flex-basis: auto; }
+.code-page.narrow .cv-hit-count { flex-basis: auto; }
 
 /* RB-5: a database's SQL objects in folders. One-line rows on the app's washes, indented by level; no boxes. */
 .cv-sql { min-width: 0; }
@@ -208,7 +240,9 @@
 .cv-sql-more { color: var(--accent); font-size: var(--fs-2); }
 .cv-sql-in-item { padding-left: 22px; }
 .cv-sql-in-item .cv-sql-bar { padding-left: 6px; }
-.panel-shell.phone.code-panel .cv-sql-row { min-height: 44px; font-size: var(--fs-4); }
-.panel-shell.phone.code-panel .cv-sql-all-btn { min-height: 44px; padding-inline: 10px; font-size: var(--fs-2); }
-.panel-shell.phone.code-panel .cv-sql-bar { padding-left: 8px; row-gap: 8px; }
-.panel-shell.phone.code-panel .cv-sql-in-item { padding-left: 8px; }
+.code-page.narrow .cv-sql-row { min-height: 44px; font-size: var(--fs-4); }
+.code-page.narrow .cv-sql-all-btn { min-height: 44px; padding-inline: 10px; font-size: var(--fs-2); }
+.code-page.narrow .cv-sql-bar { padding-left: 8px; row-gap: 8px; }
+.code-page.narrow .cv-sql-in-item { padding-left: 8px; }
+
+.cv-search-scope { padding: 0 6px; color: var(--text-muted); font-size: var(--fs-2); font-weight: 500; }

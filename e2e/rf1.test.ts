@@ -49,7 +49,7 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
     it("the tabs read Day · Week · Backlog · Status · Inbox; 4 opens Status and 5 the Inbox", async () => {
       const { page, errors } = await freshPage(h);
       const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-      expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
+      expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Code"]); // RB-6: Code is the sixth tab.
       await page.keyboard.press("4");
       await expect.poll(() => hash(page)).toBe("#/status");
       await page.keyboard.press("5");

@@ -23,10 +23,15 @@
 // from the folder it sits in, and so is the database it belongs to (a warehouse or SQL database item, or a SQL
 // project's folder). sqlTree turns a database's objects into folders: schema then type, or type then schema. Still
 // names and folders only.
+//
+// RB-6: one home per thing. A thing inside another (a database's objects, a model's tables, a notebook file inside an
+// item) is listed only inside it: `things` still holds it, with `item` set, so a search finds it, and listedThings
+// leaves it out of By kind's groups. A database is a group of its own (Databases: warehouses, SQL databases and SQL
+// projects, each holding its objects), and a .sql file in no database is a SQL script.
 import { languageOf, LANG_NAMES } from "./code-languages.ts";
 import type { CodeRepoView } from "./code.ts";
 
-export const KINDS = ["report", "model", "pipeline", "notebook", "dataflow", "lake", "sql", "fabric", "other"] as const;
+export const KINDS = ["report", "model", "pipeline", "notebook", "dataflow", "lake", "database", "script", "fabric", "other"] as const;
 export type Kind = (typeof KINDS)[number];
 /** The groups, in the order they show. A group with nothing in it doesn't show. */
 export const KIND_GROUPS: Readonly<Record<Kind, string>> = {
@@ -35,8 +40,9 @@ export const KIND_GROUPS: Readonly<Record<Kind, string>> = {
   pipeline: "Pipelines",
   notebook: "Notebooks",
   dataflow: "Dataflows",
-  lake: "Lakehouses and warehouses",
-  sql: "SQL",
+  lake: "Lakehouses",
+  database: "Databases",
+  script: "SQL scripts",
   fabric: "Other Fabric items",
   other: "Other",
 };
@@ -57,7 +63,7 @@ export type Thing = {
   tables?: ThingTable[];
   /** RB-4: the things inside an item (they are also things of their own, under their own kind). */
   inside?: ThingInside[];
-  /** RB-4: for a thing inside an item, the item in words ("Sales warehouse"). */
+  /** RB-4: for a thing inside an item, the item in words ("Sales warehouse"). RB-6: set means listed only inside it. */
   item?: string;
   /** RB-4: for a thing inside an item, the item's kind: the kind filter finds a warehouse's table under either. */
   itemKind?: Kind;
@@ -89,7 +95,7 @@ const FABRIC_TYPES: readonly (readonly [type: string, kind: Kind, label: string]
   ["Notebook", "notebook", "Notebook"],
   ["Dataflow", "dataflow", "Dataflow"],
   ["Lakehouse", "lake", "Lakehouse"],
-  ["Warehouse", "lake", "Warehouse"],
+  ["Warehouse", "database", "Warehouse"],
   ["Dashboard", "fabric", "Dashboard"],
   ["Datamart", "fabric", "Datamart"],
   ["Eventhouse", "fabric", "Eventhouse"],
@@ -107,7 +113,7 @@ const FABRIC_TYPES: readonly (readonly [type: string, kind: Kind, label: string]
   ["Reflex", "fabric", "Activator"],
   ["GraphQLApi", "fabric", "GraphQL API"],
   ["MountedDataFactory", "fabric", "Mounted data factory"],
-  ["SQLDatabase", "fabric", "SQL database"],
+  ["SQLDatabase", "database", "SQL database"],
   ["CosmosDBDatabase", "fabric", "Cosmos database"],
   ["CopyJob", "fabric", "Copy job"],
   ["VariableLibrary", "fabric", "Variable library"],
@@ -155,7 +161,7 @@ const FACTORY_FOLDERS: readonly (readonly [folder: string, kind: Kind, label: st
   ["integrationRuntime", "other", "integration runtime", false],
   ["credential", "other", "credential", false],
   ["notebook", "notebook", "notebook", true],
-  ["sqlscript", "sql", "SQL script", true],
+  ["sqlscript", "script", "SQL script", true],
   ["kqlscript", "other", "KQL script", true],
   ["sparkJobDefinition", "other", "Spark job definition", true],
 ];
@@ -269,7 +275,14 @@ export function sortRepo(paths: readonly string[]): RepoSort {
   return { things, files };
 }
 
-function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> } {
+const objectCount = (n: number) => `${n.toLocaleString("en-US")} object${n === 1 ? "" : "s"}`;
+/** What an item opens to: its inner things, with the words before " · " (the item's own name isn't repeated inside it). */
+const insideOf = (inner: readonly Thing[]): ThingInside[] => inner.map((t) => ({ name: t.name, file: t.file, kind: t.kind, detail: t.detail.split(" · ")[0]!, ...(t.sqlType ? { sqlType: t.sqlType } : {}), ...(t.schema ? { schema: t.schema } : {}) }));
+
+/** RB-6: what By kind lists at the top of its groups: every thing that isn't inside another. */
+export const listedThings = <T extends { item?: string }>(things: readonly T[]): T[] => things.filter((t) => !t.item);
+
+function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing>; projectThings: Set<Thing> } {
   const itemThings = new Set<Thing>();
   // Each folder's own files (lower case, to look a marker up) and the files that sit directly in it.
   const filesIn = new Map<string, Set<string>>();
@@ -315,7 +328,8 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
 
   // Folders holding a SQL project file: a folder between one of them and Tables, Views and the like is a schema.
   const projectDirs = new Set<string>();
-  for (const [d, names] of filesIn) for (const n of names) if (n.endsWith(".sqlproj")) projectDirs.add(d);
+  // The same test as the project's name below (a file named only ".sqlproj" is no project), so every project has one.
+  for (const [d, names] of filesIn) for (const n of names) if (extOf(n) === "sqlproj") projectDirs.add(d);
   // RB-5: each project's name, from its project file (the first by name where a folder holds two).
   const projectNames = new Map<string, string>();
   for (const p of [...paths].sort()) if (extOf(baseOf(p)) === "sqlproj" && !projectNames.has(dirOf(p))) projectNames.set(dirOf(p), stem(baseOf(p)));
@@ -349,7 +363,7 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
         const inDb = db !== null && dirOf(dir) === db;
         const schema = inDb && SQL_SECURITY_FOLDER.test(baseOf(dir)) && schemasOf.get(db)?.has(stem(name).toLowerCase()) ? stem(name) : null;
         const sqlType: SqlType = schema ? "schema" : inDb && SQL_SECURITY_FOLDER.test(baseOf(dir)) ? "security" : inDb && SQL_SHARED_FOLDER.test(baseOf(dir)) ? "shared" : "script";
-        return { kind: "sql", name: stem(name), detail: SQL_TYPE_ONE.get(sqlType)!, folder: dir, file: p, sqlType, ...(schema ? { schema } : {}) };
+        return { kind: "script", name: stem(name), detail: SQL_TYPE_ONE.get(sqlType)!, folder: dir, file: p, sqlType, ...(schema ? { schema } : {}) };
       }
       // The schema, only where the path shows one (RB-4): the folder above, inside an item or under a SQL project and
       // not that item's or project's own folder. "/sql/Tables/x.sql" is a Table. A dot in the file's name says nothing
@@ -357,15 +371,18 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       const above = dirOf(dir);
       const schema = above !== "/" && above !== item && !projectDirs.has(above) && (item || underProject(above)) ? baseOf(above) : null;
       const one = SQL_TYPE_ONE.get(object[1])!;
-      return { kind: "sql", name: stem(name), detail: schema ? `${one} in ${schema}` : one, folder: dir, file: p, sqlType: object[1], ...(schema ? { schema } : {}) };
+      return { kind: "script", name: stem(name), detail: schema ? `${one} in ${schema}` : one, folder: dir, file: p, sqlType: object[1], ...(schema ? { schema } : {}) };
     }
-    if (ext === "sqlproj") return { kind: "sql", name: stem(name), detail: "SQL project", folder: dir, file: p, sqlType: "project" };
+    if (ext === "sqlproj") return { kind: "script", name: stem(name), detail: "SQL project", folder: dir, file: p, sqlType: "project" };
     const notebook = NOTEBOOK_EXT[ext];
     return notebook ? { kind: "notebook", name: stem(name), detail: notebook, folder: dir, file: p } : null;
   };
 
   const items = new Map<string, string[]>();
   const out: Thing[] = [];
+  /** RB-6: each SQL project's folder (outside an item) and the SQL things under it. */
+  const projects = new Map<string, Thing[]>();
+  const projectThings = new Set<Thing>();
   for (const p of paths) {
     const dir = dirOf(p);
     const item = itemFor(dir);
@@ -382,15 +399,36 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       continue;
     }
     const t = named(p, null);
-    // RB-5: a SQL thing under a SQL project belongs to that database, named by its project file.
-    const project = t?.kind === "sql" ? projectOf(dir) : null;
+    // RB-5: a SQL thing under a SQL project belongs to that database, named by its project file. RB-6: it is listed
+    // inside the database, which is a thing of its own (below).
+    const project = t?.sqlType ? projectOf(dir) : null;
     if (t && project) {
-      t.db = project;
-      t.dbName = `${projectNames.get(project)!} SQL project`;
+      const list = projects.get(project);
+      if (list) list.push(t);
+      else projects.set(project, [t]);
+      continue;
     }
     out.push(t ?? { kind: "other", name, detail: otherLabel(name), folder: dir, file: p });
   }
   const rest: RepoFile[] = [];
+
+  // RB-6: each SQL project outside an item is a database: it opens on its project file and holds its objects.
+  for (const [dir, objects] of projects) {
+    const name = projectNames.get(dir);
+    const own = name === undefined ? undefined : [...objects].filter((t) => t.sqlType === "project" && t.name === name).sort((a, b) => (a.file < b.file ? -1 : 1))[0];
+    // Never expected; if a project has no file of its own, its things are listed as they are rather than lost.
+    if (name === undefined || !own) {
+      out.push(...objects);
+      continue;
+    }
+    const words = `${name} SQL project`;
+    const file = own.file;
+    const inner = objects.filter((t) => t.file !== file).map((t): Thing => ({ ...t, kind: "database", detail: `${t.detail} · ${words}`, item: words, itemKind: "database", db: dir, dbName: words }));
+    inner.sort(byName);
+    const db: Thing = { kind: "database", name, detail: `SQL project · ${objectCount(inner.length)}`, folder: dir, file, inside: insideOf(inner) };
+    projectThings.add(db);
+    out.push(db, ...inner);
+  }
 
   for (const [dir, files] of items) {
     const folder = baseOf(dir);
@@ -435,13 +473,14 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
       if (taken.has(p)) return;
       const own = f.toLowerCase();
       const t = TYPE_BY_FILE.some(([re]) => re.test(own)) || OPEN_FIRST.some((re) => re.test(own)) ? null : named(p, dir);
-      if (t) inner.push({ ...t, detail: `${t.detail} · ${words}`, item: words, itemKind: kind, ...(t.kind === "sql" ? { db: dir, dbName: words } : {}) });
+      // RB-6: a database's objects are of its kind (Databases), so the kind filter finds them with it.
+      if (t) inner.push({ ...t, ...(kind === "database" && t.sqlType ? { kind } : {}), detail: `${t.detail} · ${words}`, item: words, itemKind: kind, ...(t.sqlType ? { db: dir, dbName: words } : {}) });
       else rest.push({ file: p, kind, detail: `File in ${words}`, item: dir });
     });
     if (inner.length) {
       inner.sort(byName);
-      thing.inside = inner.map((t) => ({ name: t.name, file: t.file, kind: t.kind, detail: t.detail.split(" · ")[0]!, ...(t.sqlType ? { sqlType: t.sqlType } : {}), ...(t.schema ? { schema: t.schema } : {}) }));
-      if (!thing.tables) thing.detail = `${label} · ${inner.length} inside`;
+      thing.inside = insideOf(inner);
+      if (!thing.tables) thing.detail = `${label} · ${kind === "database" ? objectCount(inner.length) : `${inner.length} inside`}`;
       out.push(...inner);
     }
     itemThings.add(thing);
@@ -450,7 +489,7 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing> 
 
   const order = new Map(KINDS.map((k, i) => [k, i]));
   rest.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-  return { things: out.sort((a, b) => order.get(a.kind)! - order.get(b.kind)! || byName(a, b)), files: rest, itemThings };
+  return { things: out.sort((a, b) => order.get(a.kind)! - order.get(b.kind)! || byName(a, b)), files: rest, itemThings, projectThings };
 }
 
 /**
@@ -462,7 +501,7 @@ export function fileLabels(paths: readonly string[]): Map<string, { kind: Kind; 
   const m = new Map<string, { kind: Kind; detail: string; itemKind?: Kind }>();
   for (const f of sorted.files) m.set(f.file, { kind: f.kind, detail: f.detail });
   for (const t of sorted.things) {
-    m.set(t.file, { kind: t.kind, detail: sorted.itemThings.has(t) ? `File in ${itemWords(t.name, t.detail.split(" · ")[0]!)}` : t.detail, ...(t.itemKind ? { itemKind: t.itemKind } : {}) });
+    m.set(t.file, { kind: t.kind, detail: sorted.itemThings.has(t) ? `File in ${itemWords(t.name, t.detail.split(" · ")[0]!)}` : sorted.projectThings.has(t) ? "SQL project" : t.detail, ...(t.itemKind ? { itemKind: t.itemKind } : {}) });
     for (const tb of t.tables ?? []) m.set(tb.file, { kind: t.kind, detail: `Table in ${t.name}` });
   }
   return m;
@@ -535,30 +574,6 @@ export function sqlTree<T extends SqlObject>(objects: readonly T[], grouping: Sq
   return { count: folders.reduce((n, f) => n + f.count, 0), folders };
 }
 
-/** One database of a client: its folder's key, its name in words, its objects. */
-export type SqlDatabase<T> = { key: string; label: string; objects: T[] };
-export const NOT_IN_DATABASE = "Not in a database";
-/**
- * RB-5: a client's SQL things by database (a warehouse, a SQL database, a SQL project), by name; `loose` are the ones
- * in none. `many` names the repo beside each database (a client with more than one repo). With more than one
- * database the SQL group's first level is the database; with one or none the grouping starts at the top.
- */
-export function sqlDatabases<T extends { db?: string; dbName?: string; repoId: string; repoName: string }>(objects: readonly T[], many: boolean): { databases: SqlDatabase<T>[]; loose: T[] } {
-  const by = new Map<string, SqlDatabase<T>>();
-  const loose: T[] = [];
-  for (const o of objects) {
-    if (!o.db) {
-      loose.push(o);
-      continue;
-    }
-    const key = `${o.repoId}\u0000${o.db}`;
-    const d = by.get(key);
-    if (d) d.objects.push(o);
-    else by.set(key, { key, label: `${o.dbName ?? o.db}${many ? ` · ${o.repoName}` : ""}`, objects: [o] });
-  }
-  return { databases: [...by.values()].sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }) || (a.key < b.key ? -1 : 1)), loose };
-}
-
 /** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */
 export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null; /** For a file inside an item, the item's kind. */ itemKind?: Kind };
 /** RB-4: one client's answer to a search inside files. */
@@ -568,7 +583,8 @@ export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps coun
  * RB-4: a kind DevOps's code search can narrow by itself, by file type (its documented "ext:" filter). Only where the
  * type says the kind well enough; the other kinds are narrowed in FocusTime after the answer. One row per kind.
  */
-export const KIND_EXT: Readonly<Partial<Record<Kind, string>>> = { sql: "sql" };
+// RB-6: SQL scripts and Databases (whose objects are .sql files) narrow by .sql, as RB-4's one SQL kind did.
+export const KIND_EXT: Readonly<Partial<Record<Kind, string>>> = { database: "sql", script: "sql" };
 
 /**
  * RB-4: the plain words of a search inside files, to mark in a file once it is opened: phrases in quotes and words
@@ -671,8 +687,8 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
   // the folders inside its item, never by the item's own folder (which would make everything in it a match).
   const slashy = words.some((w) => w.includes("/"));
   for (const t of things) {
-    // A thing inside an item passes its own kind's filter and its item's (a warehouse's table under SQL and under
-    // Lakehouses and warehouses).
+    // A thing inside an item passes its own kind's filter and its item's (RB-6: a warehouse's table is found under
+    // Databases, its item's group and its own).
     if (kind && t.kind !== kind && t.itemKind !== kind) continue;
     // A SQL object is found as schema.name too ("dim.Store", "[dim].[Store]").
     const alias = t.schema ? ` ${t.schema}.${t.name} [${t.schema}].[${t.name}]` : "";

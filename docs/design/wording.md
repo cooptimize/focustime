@@ -292,6 +292,15 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - A title edit thrown away by a click elsewhere is said to a screen reader: "Title of #3313 not changed. Enter keeps an edit; a click elsewhere cancels it."
 - Review's foot once everything is saved: "Nothing is waiting to be saved."
 
+## RB-6 words (Nov 15)
+
+- **Code** is a tab (the sixth, key 6), not a panel: say "the Code tab" or "Code in the top bar"; on the phone "More › Code". It has no Close.
+- The one box: **Search code** (its placeholder and name). Its choices: **Names** and **Inside files**, **This client** and **All clients**, **All kinds** and the groups, **Search**. The line under them: **"Searches names only. Measures, columns and report pages live inside files: switch to Inside files for those."** or **"Each client's DevOps is asked which files hold the words. FocusTime reads no file to search it."**
+- By kind's groups, in this order: **Reports**, **Semantic models**, **Pipelines**, **Notebooks**, **Dataflows**, **Lakehouses**, **Databases**, **SQL scripts**, **Other Fabric items**, **Other**. A database's row: **"Warehouse · 42 objects"**, **"SQL database · 12 objects"**, **"SQL project · 30 objects"**; an object inside one: **"Table in dbo · Gold warehouse"**. Retired: **Lakehouses and warehouses**, **SQL** (as a group).
+- Empty right side, one line each: **"Choose a client to look around its code, or search above."**, **"Choose a repo on the left."**, **"Choose a file in the tree, or search for one above."**, **"Choose something in the list to open its file."**
+- The log line, one line at the foot of every Code screen: **"FocusTime admins can see who opened, listed or searched which client's code, and when. Never the words."**
+- Retired: **Find a file** (on Code's left side; a file is found with Search code), **Search names** as the box's name (the command "Code: search names" stays).
+
 ## UC-1 words (Nov 15)
 
 - A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.
