@@ -835,7 +835,7 @@ describe("AH-1: Ahead's change set as one fields write per item (D657 to D660)",
     await stage(437, "start", "2026-11-16", null, "PM");
     await stage(437, "target", "2026-12-11", null, "AM");
     const p = await s.preview({ kind: "fields", itemId: 437 });
-    expect(p.summary).toBe("Change dates, state, size or owner in DevOps");
+    expect(p.summary).toBe("Change title, parent, dates, state, size or owner in DevOps");
     expect(p.fields).toEqual(expect.arrayContaining([{ label: "Start date", before: null, after: "2026-11-16", changed: true }, { label: "Target date", before: null, after: "2026-12-11", changed: true }]));
     expect(p.notes.join(" ")).toContain("Mon, Nov 16 PM in FocusTime");
     const r = await s.confirm(p);

@@ -617,8 +617,11 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const clientName = (k: string) => a.load.clients.find((c) => c.clientKey === k)?.clientName ?? k;
   const refreshLanded = useCallback(async () => {
     const log = await call<DevOpsLogView>("devops.log", {}).catch(() => null);
-    if (log) setLanded(log.entries.filter((e) => (e.op === "fields" || e.op === "undo_fields") && e.at >= since));
-  }, [since]);
+    if (!log) return;
+    if (since.current === null) since.current = log.entries.reduce((m, e) => Math.max(m, e.id), 0);
+    const from = since.current;
+    setLanded(log.entries.filter((e) => (e.op === "fields" || e.op === "undo_fields") && e.id > from));
+  }, []);
   useEffect(() => void refreshLanded(), [refreshLanded, dw?.version]);
 
   const resolve = async (clientKey: string, itemId: number, keep: "mine" | "theirs") => {
@@ -700,12 +703,13 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
                 const conflict = g.changes.some((c) => c.theirs !== undefined);
                 const look = lookOf(g.clientKey, r?.item.type);
                 return (
-                  <section key={`${g.clientKey}:${g.itemId}`} role="listitem" className={`ah-review-item ah-rv-card${conflict ? " conflict" : ""}`} aria-label={`#${g.itemId} ${r?.item.title ?? ""}`}>
+                  <section key={`${g.clientKey}:${g.itemId}`} role="listitem" className={`ah-review-item ah-rv-card${conflict ? " conflict" : ""}`} aria-label={`#${g.itemId} ${r?.saved?.title ?? r?.item.title ?? ""}`}>
                     <h3 className="ah-rv-title">
                       <span className="dl-swatch" style={{ "--c": a.color(g.clientKey) } as CSSProperties} aria-hidden="true" />
                       {r && <TypeIcon type={r.item.type} look={look} />}
                       <span className="ah-rv-name">
-                        #{g.itemId} {r?.item.title ?? ""}
+                        {/* ED-2: the title DevOps has now; a staged one is the Title row below. */}
+                        #{g.itemId} {r?.saved?.title ?? r?.item.title ?? ""}
                       </span>
                       <span className="muted ah-rv-client">{clientName(g.clientKey)}</span>
                     </h3>
@@ -754,14 +758,17 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
               <ul>
                 {landed.map((e) => (
                   <li key={e.id} className={`wl-${e.status}`}>
-                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title} <span className="muted">{e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : "not confirmed yet"}</span>
+                    {e.op === "undo_fields" ? "Undone: " : ""}#{e.itemId} {e.title}{" "}
+                    <span className="muted">
+                      {Object.keys(e.after).join(", ")} · {e.status === "confirmed" ? "in DevOps" : e.status === "refused" ? "not written" : e.status === "failed" ? "not written: DevOps refused it" : "not confirmed yet"}
+                    </span>
                     {e.undoable && (
-                      <button type="button" className="mini" onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
+                      <button type="button" className="mini" aria-label={`Undo #${e.itemId} ${e.title}`} onClick={() => void dw?.begin(e.clientKey, [{ kind: "undo", writeId: e.id }])}>
                         Undo
                       </button>
                     )}
                     {e.retryable && (
-                      <button type="button" className="mini" onClick={() => void dw?.retry(e.id)}>
+                      <button type="button" className="mini" aria-label={`Retry #${e.itemId} ${e.title}`} onClick={() => void dw?.retry(e.id)}>
                         Retry
                       </button>
                     )}
