@@ -291,3 +291,9 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - The preview's line for a change set write: "Change this item in DevOps" (it listed dates, state, size and owner before; the rows under it say which fields); its undo: "Undo: put what this change set changed back".
 - A title edit thrown away by a click elsewhere is said to a screen reader: "Title of #3313 not changed. Enter keeps an edit; a click elsewhere cancels it."
 - Review's foot once everything is saved: "Nothing is waiting to be saved."
+
+## UC-1 words (Nov 15)
+
+- A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.
+- The capture box with Deployment chosen and nothing typed: the hint is that title; under the kinds: "Enter saves it as "Deployment - Northwind - Sat, Nov 7" · or type a title · ↓ to its details". With no client: "A deployment needs a client · ↓ to its details".
+- The Inbox's client chips: the name, then its number when something needs me there ("Northwind 3"); read aloud as "Northwind, 3 need you", "Harbor, 1 needs you", "All clients, 5 need you". No number when nothing does.

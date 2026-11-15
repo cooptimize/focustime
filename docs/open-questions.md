@@ -1153,3 +1153,16 @@ From the IT review (TD-1):
   - The demo's Lunch reads "12:30-12:30"; Profile promises first-run setup, which the demo says isn't part of it.
   - On the phone's Week, the week's Previous and Next sit just above the day's and look the same (each is named).
   - "1 late" chips and the Demo tag are about 22 px tall on the phone.
+
+## UC-1
+
+- Are other full-page screens centered, and should they move left too? Status already starts at 24 px like Day and Backlog. Settings, Admin, the Guide and the Technical docs are panels with their own nav and a reading column, not tabs, and were left alone. Week starts at 16 px (its grid's gutter), 8 px left of the others; UC-1 lined the Inbox up with Day, Backlog and Status at 24.
+- Should the tab's number include captures to sort? It counts suggestions from chats and my promises late or due today (IB-4), and the chips now show the same count per client, so a client with only captures or drafts shows no number while its Captures list has rows.
+- A counted row with no client (a promise I added with no client) is in the tab's and All clients' number and in no chip, so the chips can add up to less than the tab. Should there be a "No client" chip?
+- The chips' numbers don't follow the list I'm on: on Captures a chip still says how many chats and promises need me there. That is "counted the way the tab counts", as decided; a per-list number would be a different count.
+- STEP 0.5, a title shown differently: none. But two places read worse with the made title than with typed words. The draft to the client when no items are ticked says "Deployment - Northwind - Sat, Nov 7 is deployed." (it said "Deployment is deployed." for an untitled one before), and the promise says "Tell Northwind it's deployed: Deployment - Northwind - Sat, Nov 7". The draft is editable and goes only from its preview. Should the draft say "The deployment is done" for a made title?
+- Week's weekend column is narrow (WK-3): a made title there breaks mid-word and is cut after two lines ("Deployme nt -…"), as "Deployment" alone already broke. The whole title is on Day and in the block panel. Should the weekend column show a deployment's client and window instead of its title?
+- Plan a deployment… (the day menu and the command menu) and the assistant still make an untitled deployment as "Deployment". Should they make the same "Deployment - <client> - <date>"? UC-1 named only the capture box, so `deploy.add` was left alone.
+- A made title is recognized by its form, not by a stored mark. If I type exactly "Deployment - <anything> - <the day's date>" myself, it follows a move like a made one. A stored mark would need a column; not worth it unless titles become editable.
+- A made title keeps the client's name as it was when saved; renaming the client later doesn't change it.
+- The deployment's date, start and end stay as I last set them after a save (they did before), so a second deployment in a row gets the same day in its title.
