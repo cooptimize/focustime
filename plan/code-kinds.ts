@@ -328,7 +328,8 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing>;
 
   // Folders holding a SQL project file: a folder between one of them and Tables, Views and the like is a schema.
   const projectDirs = new Set<string>();
-  for (const [d, names] of filesIn) for (const n of names) if (n.endsWith(".sqlproj")) projectDirs.add(d);
+  // The same test as the project's name below (a file named only ".sqlproj" is no project), so every project has one.
+  for (const [d, names] of filesIn) for (const n of names) if (extOf(n) === "sqlproj") projectDirs.add(d);
   // RB-5: each project's name, from its project file (the first by name where a folder holds two).
   const projectNames = new Map<string, string>();
   for (const p of [...paths].sort()) if (extOf(baseOf(p)) === "sqlproj" && !projectNames.has(dirOf(p))) projectNames.set(dirOf(p), stem(baseOf(p)));
@@ -413,9 +414,15 @@ function sortAll(paths: readonly string[]): RepoSort & { itemThings: Set<Thing>;
 
   // RB-6: each SQL project outside an item is a database: it opens on its project file and holds its objects.
   for (const [dir, objects] of projects) {
-    const name = projectNames.get(dir)!;
+    const name = projectNames.get(dir);
+    const own = name === undefined ? undefined : [...objects].filter((t) => t.sqlType === "project" && t.name === name).sort((a, b) => (a.file < b.file ? -1 : 1))[0];
+    // Never expected; if a project has no file of its own, its things are listed as they are rather than lost.
+    if (name === undefined || !own) {
+      out.push(...objects);
+      continue;
+    }
     const words = `${name} SQL project`;
-    const file = [...objects].filter((t) => t.sqlType === "project" && t.name === name).sort((a, b) => (a.file < b.file ? -1 : 1))[0]!.file;
+    const file = own.file;
     const inner = objects.filter((t) => t.file !== file).map((t): Thing => ({ ...t, kind: "database", detail: `${t.detail} · ${words}`, item: words, itemKind: "database", db: dir, dbName: words }));
     inner.sort(byName);
     const db: Thing = { kind: "database", name, detail: `SQL project · ${objectCount(inner.length)}`, folder: dir, file, inside: insideOf(inner) };

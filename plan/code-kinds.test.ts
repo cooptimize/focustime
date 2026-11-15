@@ -194,6 +194,11 @@ describe("searching names", () => {
 });
 
 describe("one home per thing (RB-6)", () => {
+  it("review: a project file named only .sqlproj is no project, and nothing is lost or thrown", () => {
+    const t = thingsOf(["/db/.sqlproj", "/db/dbo/Tables/Orders.sql", "/db/dbo/Views/vOrders.sql"]);
+    expect(t.map((x) => x.file).sort()).toEqual(["/db/.sqlproj", "/db/dbo/Tables/Orders.sql", "/db/dbo/Views/vOrders.sql"]);
+    expect(t.some((x) => x.kind === "database" && !x.item)).toBe(false);
+  });
   /** A repo with every kind of home: a warehouse, a SQL database, a SQL project, a model, items with things inside, loose SQL. */
   const REPO = [
     "/ws/Kiln.Warehouse/.platform",

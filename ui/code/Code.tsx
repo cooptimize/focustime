@@ -453,7 +453,7 @@ const isSearch = (at: CodeAt) => at.view === "search" || at.view === "inside";
 export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at: CodeAt; onGo: (next: CodeAt, opts?: { replace?: boolean }) => void; /** RB-5: how By kind groups SQL objects (the person's saved choice) and how to change it. */ sqlGroup?: SqlGrouping; onSqlGroup?: (g: SqlGrouping) => void }) {
   const narrow = useNarrow();
   const [clients, setClients] = useState<Client[] | Failure | null>(null);
-  const [logLine, setLogLine] = useState<string>("FocusTime admins can see who opened which file, or searched which client, and when. Never the words.");
+  const [logLine, setLogLine] = useState<string>("FocusTime admins can see who opened, listed or searched which client's code, and when. Never the words.");
   const [repos, setRepos] = useState<Map<string, CodeRepoView[] | Failure | "loading">>(new Map());
   const [folders, setFolders] = useState<Map<string, Folder>>(new Map());
   const [open, setOpen] = useState<Map<string, Set<string>>>(new Map());
@@ -494,7 +494,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   // RB-6: where browsing was before a search, to go back to when the box is cleared (same client, tree and file).
   // A file opened from the results isn't browsing: Back to results returns to them, and leaving the search still goes
   // back to where browsing was before it.
-  const browseAt = useRef<CodeAt>(searching ? { clientKey: at.clientKey, repoId: null, path: null } : at);
+  const browseAt = useRef<CodeAt | null>(searching ? null : at);
   const openingResult = useRef(false);
   useEffect(() => {
     if (searching) return;
@@ -635,7 +635,8 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   const leaveSearch = () => {
     setQ("");
     setHushed(true);
-    if (searching) onGo(browseAt.current);
+    // A results page opened by its address has no browsing to go back to: it stays, so a key in the box reads nothing.
+    if (searching && browseAt.current) onGo(browseAt.current);
   };
   const kindsState = at.clientKey ? kinds.get(at.clientKey) : undefined;
   // A file opened from the results keeps its way back until the person goes somewhere else in Code.
@@ -916,7 +917,12 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
         {logFoot}
       </div>
     ) : (
-      left ?? <div className="cv-body">{body}</div>
+      left ?? (
+        <div className="cv-file-page">
+          <div className="cv-body">{body}</div>
+          {logFoot}
+        </div>
+      )
     );
   else
     main = (
@@ -925,6 +931,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
         <section className="cv-body" aria-label={at.path ? baseName(at.path) : "File"}>
           {body}
         </section>
+        {!left && logFoot}
       </div>
     );
 

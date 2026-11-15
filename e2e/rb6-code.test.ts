@@ -98,6 +98,10 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     };
     await go(page, "#/code");
     await seen("front page");
+    // Review 2: a client only its team may open still has the search box, so the line is there too.
+    await go(page, "#/code/Fabrikam");
+    await page.locator("[data-code-state=team_only]").waitFor();
+    await seen("team only");
     await go(page, `#/code/Northwind/${SALES}`);
     await page.locator('[role="tree"] [role="treeitem"]').first().waitFor();
     await seen("Files");
