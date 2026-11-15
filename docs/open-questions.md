@@ -1219,3 +1219,14 @@ From the IT review (TD-1):
   - `public/prefs.js` is served `no-cache`, so a load with a cold service worker revalidates it before the first paint (one small request).
   - Sign-in, About and the Guide's Start here show the week mark where the bent mark or the unroll was; the prompt made the week mark the only mark, so they carry it.
   - While the loader finishes, a key skips it and does nothing else, and a click skips it, as Close out's reverse did before. Keys before the app is ready reach nothing, as before.
+
+## TD-2
+
+- Facts found nowhere else and where they went: only how tests stay apart (the old guide's Testing section), now in `docs/technical/development.md` (How tests stay apart). Everything else in the old guide is in its step's decisions, a file's header comment or a `docs/technical/` page (`docs/ux/td2/architecture.md` has the table).
+- Docs left as history that someone may want true again: `docs/demo.md` and `docs/demo/` (a walkthrough with screenshots of Nov 2), `docs/phone.md` (the phone on Nov 7), `docs/settings-inventory.md` (the Settings proposal of Nov 6), `docs/roadmap.md` (the direction on Nov 1) and `KICKOFF_PROMPT.md`. Rewrite any of them for the app now, or leave them as records?
+- `docs/technical/architecture.md` opens by saying the per-file detail is in `docs/architecture.md`. The per-file detail is now in each file's header; the guide says where folders and entry points are. Left, since `docs/technical/` changes only for a rescued fact here; reword it with the page's next re-check?
+- `docs/open-questions.md`'s first line says it mirrors spec section 16; the spec is in `docs/history/` now. Left (only this step's section is edited).
+- `store/retention.ts` points to "docs/architecture.md, Retention", a section neither the old guide nor the new one has; retention is on `docs/technical/data.md`. Fix the comment with the next code step there?
+- CLAUDE.md's Folder map doesn't list `docs/`, so the guide's `docs/` section is the one the check allows beyond the map. Add `docs/` to the Folder map with the next CLAUDE.md change?
+- Should `docs/open-questions.md` be split into open and closed? It holds about 900 entries, of which about 480 look open and many are answered by a later step without saying so (`docs/ux/td2/open-for-owner.md` is one pass at the open ones).
+- Should `docs/decisions.md` be split by month? It is over 1 MB, which some editors and the GitHub viewer open slowly.
