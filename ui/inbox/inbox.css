@@ -1,5 +1,7 @@
-/* IB-4: the slim Inbox. One column: the switch, the client chips, rows grouped by client that open in place. */
-main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; align-content: start; width: 100%; box-sizing: border-box; padding: 16px max(24px, calc((100% - 960px) / 2)) 40px; min-width: 0; }
+/* IB-4: the slim Inbox. One column: the switch, the client chips, rows grouped by client that open in place.
+   UC-1: the column starts at the tabs' shared left edge (24px, where Day, Backlog and Status start) and is at most
+   920px wide at the Default text size, scaled with it; nothing is centered. */
+main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; align-content: start; width: 100%; box-sizing: border-box; grid-template-columns: minmax(0, calc(920px * var(--text-scale))); padding: 16px 24px 40px; min-width: 0; }
 .ib4-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
 .ib4-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
 .ib4-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
@@ -12,6 +14,7 @@ main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; ali
 .ib4-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ib4-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }
 .ib4-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--text-faint)); }
+.ib4-chip .ib4-count { min-width: 0; padding: 0; background: none; color: inherit; font-size: inherit; font-variant-numeric: tabular-nums; }
 .ib4-chip.on { border-color: var(--border-strong); background: var(--raised); color: var(--text); }
 
 .ib4-list { display: grid; gap: 16px; min-width: 0; }
@@ -47,6 +50,11 @@ main.ib4 { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 12px; ali
 
 .ib4-keys { margin: 0; font-size: var(--fs-2); }
 .ib4-keyhelp ul { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-2); }
+
+/* UC-1: the capture box starts on the same edge as the heading, the chips and the lists (not on the phone). */
+@media (min-width: 640.02px) {
+  .ib-capture.ib4-capture { padding-left: 0; padding-right: 0; }
+}
 
 @media (max-width: 640px) {
   main.ib4 { padding: 12px 16px 96px; }

@@ -6,7 +6,7 @@ import type { PromiseCard } from "../../plan/conversation-views.ts";
 import type { FollowUpView } from "../../actions/types.ts";
 import { actsFor, ITEM_KEYS, type ActEnv } from "./ItemActions.tsx";
 import { promiseOrder } from "./InboxPage.tsx";
-import { dueWords, lateText } from "./model.ts";
+import { chipName, dueWords, lateText, needCounts } from "./model.ts";
 import { suggestionActs } from "./Suggestion.tsx";
 
 const TODAY = "2026-11-05";
@@ -91,5 +91,24 @@ describe("the keys", () => {
   it("the command menu offers the same keys as the key help", async () => {
     const { ASK_KEYS } = await import("../menu.ts");
     expect(ASK_KEYS.map((k) => k.hint)).toEqual(ITEM_KEYS.map((k) => k.key));
+  });
+});
+
+describe("UC-1: a chip's number", () => {
+  const r = (clientKey: string | null, ...views: string[]) => ({ clientKey, views });
+  it("counts what the tab counts, by client, and adds up to the tab's number", () => {
+    const items = [r("contoso", "needs_you"), r("contoso", "needs_you", "promises"), r("fabrikam", "needs_you"), r("fabrikam", "promises"), r("adatum", "captures")];
+    const n = needCounts(items);
+    expect([...n]).toEqual([["contoso", 2], ["fabrikam", 1]]);
+    expect([...n.values()].reduce((a, b) => a + b, 0)).toBe(items.filter((i) => i.views.includes("needs_you")).length);
+  });
+  it("a client with nothing that needs me has no number", () => {
+    expect(needCounts([r("adatum", "captures"), r("adatum", "promises")]).has("adatum")).toBe(false);
+    expect(needCounts([r(null, "needs_you")]).size).toBe(0);
+  });
+  it("the number is part of the chip's name", () => {
+    expect(chipName("Contoso", 0)).toBe("Contoso");
+    expect(chipName("Contoso", 1)).toBe("Contoso, 1 needs you");
+    expect(chipName("All clients", 5)).toBe("All clients, 5 need you");
   });
 });
