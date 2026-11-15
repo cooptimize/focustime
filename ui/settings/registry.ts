@@ -92,7 +92,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "text-size", section: "display", label: "Text size", keywords: ["font", "larger", "zoom"] },
   { id: "timelines", section: "display", label: "Timelines", keywords: ["business hours", "12 hours", "24 hours", "view range"] },
   { id: "personal-events", section: "display", label: "Show personal events", old: ["Personal events"], keywords: ["google"] },
-  { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], keywords: ["animation", "lumen"] },
+  { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], keywords: ["animation", "loader"] },
   // Day and Week
   { id: "level", section: "planning", label: "Your level", keywords: ["guidance", "consultant", "senior", "lead"] },
   { id: "break-down-offered", section: "planning", label: "Offer Break down", old: ["Break down", "Draft stories"] },

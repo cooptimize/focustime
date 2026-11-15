@@ -1323,6 +1323,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .set-label { font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); }
 .set-hint { font-size: var(--fs-2); color: var(--text-faint); }
+/* Step 17.5, BR-1: "<Source> is connected again." under Sources, one plain line. */
+.reconnect-line { margin: 0; padding: 14px 0; color: var(--text-muted); }
 .set-value { font-size: var(--fs-3); overflow-wrap: anywhere; }
 .set-field.readonly .set-value { padding: 6px 0; }
 .set-field input, .set-field select, .set-row input, .set-row select, .set-playlists input, .focus-sound select {

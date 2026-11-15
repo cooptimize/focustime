@@ -310,6 +310,28 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await ctx.close();
   }, T);
 
+  it("a reconnect in Settings shows its one plain line", async () => {
+    const ctx = await signedIn(base);
+    await ctx.route("**/api/action", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"auth.connect_microsoft"')) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, data: { status: "connected" } }) });
+      if (!body.includes('"week.load"')) return route.continue();
+      const r = await route.fetch();
+      const j = await r.json();
+      for (const s of j?.data?.sources ?? []) if (s.source === "outlook") Object.assign(s, { status: "auth_required", sample: false, fixAction: "connect_microsoft", cause: null, message: null });
+      return route.fulfill({ response: r, body: JSON.stringify(j) });
+    });
+    const page = await ctx.newPage();
+    await page.goto(h.url);
+    await appUp(page);
+    await page.evaluate(() => (location.hash = "#/settings/connections"));
+    await page.locator("li.source button").filter({ hasText: /^Reconnect$/ }).first().click();
+    const line = page.locator(".reconnect-line[role=status]");
+    await expect.poll(() => line.textContent()).toBe("Outlook is connected again.");
+    expect(await line.locator("svg").count()).toBe(0);
+    await ctx.close();
+  }, T);
+
   it("the first launch opens the app with no welcome overlay (and is still recorded)", async () => {
     const ctx = await h.browser.newContext({ viewport: { width: 1440, height: 900 } });
     await ctx.addInitScript(WATCH);
