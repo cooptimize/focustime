@@ -287,20 +287,30 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
   }, T);
 
   it("a source failing at load: the app opens as fast and the status bar names it", async () => {
-    const ctx = await signedIn(base);
-    await ctx.route("**/api/action", async (route) => {
-      if (!isAction("week.load")(route)) return route.continue();
-      const r = await route.fetch();
-      const j = await r.json();
-      for (const s of j?.data?.sources ?? []) if (s.source === "outlook") Object.assign(s, { status: "unreachable", sample: false, message: "Outlook didn't answer" });
-      return route.fulfill({ response: r, body: JSON.stringify(j) });
-    });
-    const page = await ctx.newPage();
-    await page.goto(h.url);
-    await appUp(page);
-    expect((await seen(page)).goneAt!).toBeLessThan(1500);
-    await expect(page.locator("footer.statusbar").textContent()).resolves.toContain("Outlook");
-    await ctx.close();
+    // "As fast" is measured against a load in the same test through the same route, so a slow runner
+    // moves both; a fixed wall-clock budget failed on a busy CI runner (1715 ms against 1500).
+    const open = async (fail: boolean) => {
+      const ctx = await signedIn(base);
+      await ctx.route("**/api/action", async (route) => {
+        if (!isAction("week.load")(route)) return route.continue();
+        const r = await route.fetch();
+        const j = await r.json();
+        if (fail) for (const s of j?.data?.sources ?? []) if (s.source === "outlook") Object.assign(s, { status: "unreachable", sample: false, message: "Outlook didn't answer" });
+        return route.fulfill({ response: r, body: JSON.stringify(j) });
+      });
+      const page = await ctx.newPage();
+      await page.goto(h.url);
+      await appUp(page);
+      const gone = (await seen(page)).goneAt!;
+      const bar = (await page.locator("footer.statusbar").textContent()) ?? "";
+      await ctx.close();
+      return { gone, bar };
+    };
+    const healthy = await open(false);
+    const failing = await open(true);
+    expect(failing.gone, `healthy ${Math.round(healthy.gone)} ms`).toBeLessThan(healthy.gone + 500);
+    expect(failing.gone).toBeLessThan(8000); // never held to the 8 s line
+    expect(failing.bar).toContain("Outlook");
   }, T);
 
   it("the sign-in screen finishes the loader too", async () => {
