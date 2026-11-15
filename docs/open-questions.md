@@ -1228,5 +1228,5 @@ From the IT review (TD-1):
 - `docs/open-questions.md`'s first line says it mirrors spec section 16; the spec is in `docs/history/` now. Left (only this step's section is edited).
 - `store/retention.ts` points to "docs/architecture.md, Retention", a section neither the old guide nor the new one has; retention is on `docs/technical/data.md`. Fix the comment with the next code step there?
 - CLAUDE.md's Folder map doesn't list `docs/`, so the guide's `docs/` section is the one the check allows beyond the map. Add `docs/` to the Folder map with the next CLAUDE.md change?
-- Should `docs/open-questions.md` be split into open and closed? It holds about 900 entries, of which about 480 look open and many are answered by a later step without saying so (`docs/ux/td2/open-for-owner.md` is one pass at the open ones).
+- Should `docs/open-questions.md` be split into open and closed? It holds about 780 entries and table rows (914 lines), of which 484 look open and many are answered by a later step without saying so (`docs/ux/td2/open-for-owner.md` is one pass at the open ones).
 - Should `docs/decisions.md` be split by month? It is over 1 MB, which some editors and the GitHub viewer open slowly.
