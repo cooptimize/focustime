@@ -230,7 +230,8 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [3361, "User Story", "Closed", 3360, "Import carrier contacts", ME],
     // ED-2: a backlog worth grooming, at the bottom so nothing above changes rank: a story filed under the wrong
     // feature (late deliveries belong with the tracking dashboard, not with rate alerts) and two titles worth fixing.
-    [3354, "User Story", "New", 3350, "Late delivery alerts for dispatchers", ME],
+    // (A teammate's, so Carrier rate alerts stays a feature I own with only teammates' stories: PL-1's Watching.)
+    [3354, "User Story", "New", 3350, "Late delivery alerts for dispatchers", "Priya Shah"],
     [3313, "User Story", "New", 3310, "Shipmnt list filter by region", ME],
     [3342, "User Story", "New", 3340, "estimate accuracy report (copy)", ME],
   ],

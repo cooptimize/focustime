@@ -273,6 +273,9 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const list = o && Array.isArray(o.items) && o.items.length > 0 && o.items.length <= 200 ? (o.items as unknown[]) : null;
     const keys = list?.every((x) => !!x && typeof x === "object" && !Array.isArray(x) && Object.keys(x).every((k) => k === "clientKey" || k === "itemId") && isKey((x as Obj).clientKey) && isId((x as Obj).itemId)) ? (list as { clientKey: string; itemId: number }[]) : null;
     if (!op || !keys) return bad("ahead.stage_bulk takes { items: [{ clientKey, itemId }] (1 to 200), op: { kind: push, weeks: 2 | 4 } | { kind: move | set_missing, date } | { kind: assign_me } | { kind: assign, email, name } | { kind: state, state } | { kind: size, value } | { kind: parent, parentId } }");
+    // ED-2 (review 2): one parent is one client's item, so a move takes rows of one client only (ids repeat across
+    // organizations: the same number in another client would be a parent nobody picked).
+    if (op.kind === "parent" && new Set(keys.map((k) => k.clientKey)).size > 1) return bad("Move to… takes rows from one client. A move never crosses clients");
     const staged: { clientKey: string; itemId: number }[] = [];
     const skipped: { clientKey: string; itemId: number; reason: string }[] = [];
     for (const clientKey of [...new Set(keys.map((k) => k.clientKey))]) {
@@ -321,7 +324,11 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
           : d.step.value;
         const half = d.step.field === "target" ? (pt?.half ?? null) : null;
         const why = await stageOne(c, item, d.step.field, value, half, lead);
+        // ED-2 (review 2): a value that is what DevOps already has stages nothing (and takes back a pending change
+        // of that field): it is counted as skipped, with why, never as staged.
+        const kept = why ? false : (await plan.aheadChanges()).some((x) => x.clientKey === clientKey && x.itemId === itemId && x.field === d.step.field);
         if (why) skipped.push({ clientKey, itemId, reason: why });
+        else if (!kept) skipped.push({ clientKey, itemId, reason: "DevOps already has that, so nothing is staged" });
         else staged.push({ clientKey, itemId });
       }
     }

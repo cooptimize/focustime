@@ -235,6 +235,8 @@ describe("ED-2: a title and a parent in the change set's one write per item", ()
     await stage(lead, 501, "title", "Dana's renamed story", "Dana's story");
     const p = (await lead.preview({ kind: "fields", itemId: 501 })).preview!;
     expect(p.notes.join(" ")).toMatch(/dana/i);
+    // Whose it is, said once (review 2).
+    expect(p.notes.filter((n) => /not you/.test(n)).length).toBe(1);
     await lead.confirm(p);
     expect(await lead.notes.editedTo!(["dana@cooptimize.example"], "2026-11-01T00:00:00Z")).toEqual([expect.objectContaining({ itemId: 501 })]);
   });

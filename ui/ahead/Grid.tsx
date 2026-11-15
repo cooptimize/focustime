@@ -225,14 +225,17 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
       document.body.classList.remove("ah-dragging");
       setDrag(null);
     };
+    // The click that ends a drag isn't a click on the row (it would open the card or a cell's editor).
+    const eatClick = () => {
+      const eat = (c: MouseEvent) => (c.stopPropagation(), c.preventDefault());
+      window.addEventListener("click", eat, { capture: true, once: true });
+      window.setTimeout(() => window.removeEventListener("click", eat, true), 0);
+    };
     const up = (ev: PointerEvent) => {
       const over = on ? overAt(ev.clientX, ev.clientY) : null;
       end();
       if (!on) return;
-      // The click that ends a drag isn't a click on the row (it would open the card or a cell's editor).
-      const eat = (c: MouseEvent) => (c.stopPropagation(), c.preventDefault());
-      window.addEventListener("click", eat, { capture: true, once: true });
-      window.setTimeout(() => window.removeEventListener("click", eat, true), 0);
+      eatClick();
       const to = over ? byKey.get(over) : null;
       if (!to) return say(`#${r.item.id} wasn't moved.`);
       void a.tryStage(r, "parent", { id: to.item.id, title: to.item.title }).then((why) => {
@@ -241,7 +244,13 @@ export function Grid({ groups, layout = "wide", shape = "list", skip, unskip, sk
         say(`#${r.item.id} ${r.item.title} moves under ${to.item.title}. Not saved until you save.`);
       });
     };
-    const cancel = () => (end(), on && say("Move cancelled."));
+    const cancel = () => {
+      end();
+      if (!on) return;
+      say("Move cancelled.");
+      // Esc while the button is still down: the release that follows isn't a click either (review 2).
+      window.addEventListener("pointerup", eatClick, { once: true });
+    };
     const key = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || !on) return;
       ev.preventDefault();

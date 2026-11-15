@@ -132,6 +132,9 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await expect(page.locator(".ah-row.ah-drop-on, .ah-row.ah-drop-ok").count()).resolves.toBe(0);
     await expect(page.locator("[data-unsaved=parent]").count()).resolves.toBe(0);
     await expect(said(page)).resolves.toContain("Move cancelled");
+    // Letting go over a title after Esc isn't a click on it: no card opens (review 2).
+    await page.waitForTimeout(300);
+    await expect(page.getByRole("dialog").count()).resolves.toBe(0);
     // Now for real: dropped on the feature, the move is staged and the story shows under it, marked.
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();

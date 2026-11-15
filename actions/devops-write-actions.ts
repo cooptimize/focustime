@@ -946,9 +946,11 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
           }
         }
       }
+      // ED-2: a rename or a move of someone else's item tells its owner, as ED-1's does (its line says whose it is).
+      const said = EDIT_LABEL.title in after || PARENT_LABEL in after ? await ownerNote(env, item) : null;
       // BH-1: a bulk change can touch items that aren't mine: the preview says whose each one is.
       const owner = identityEmail(item.fields["System.AssignedTo"]);
-      if ((specs.length || moveOps.length) && right.why !== "owner" && owner && owner.toLowerCase() !== env.me.email.toLowerCase() && !staged.some((x) => x.field === "assignee")) {
+      if (!said && (specs.length || moveOps.length) && right.why !== "owner" && owner && owner.toLowerCase() !== env.me.email.toLowerCase() && !staged.some((x) => x.field === "assignee")) {
         const moved = staged.some((x) => x.field === "start" || x.field === "target");
         notes.unshift(`Assigned to ${identityName(item.fields["System.AssignedTo"]) ?? owner}, not you.${moved ? " They get a quiet note in FocusTime that the dates moved." : ""}`);
       }
@@ -956,11 +958,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         for (const x of staged) await port.landed(env.clientKey, itemId, x.field);
         return `#${itemId} already has those values`;
       }
-      // ED-2: a rename or a move of someone else's item tells its owner, as ED-1's does.
-      if (EDIT_LABEL.title in after || PARENT_LABEL in after) {
-        const said = await ownerNote(env, item);
-        if (said) notes.push(said);
-      }
+      if (said) notes.push(said);
       return { ...base(env), ...none, op: "fields", itemId: item.id, title: item.title, ops: [...fieldsOps(item.rev, specs, tz), ...moveOps], rev: item.rev, before, after, type: item.type, notes, ...(movedTo !== undefined ? { parentId: movedTo } : {}) };
     }
     case "assign": {

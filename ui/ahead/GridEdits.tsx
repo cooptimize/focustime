@@ -58,6 +58,10 @@ export function RenameBox({ r, done, say }: { r: Row; done: (step: 0 | 1 | -1) =
     box.current?.focus();
     box.current?.select();
   }, []);
+  // A refusal from the server: the box is enabled again by then, so focus goes back to it (review 2).
+  useEffect(() => {
+    if (why && !busy) box.current?.focus();
+  }, [why, busy]);
   const save = async (step: 0 | 1 | -1) => {
     const t = cleanTitle(text);
     if ("problem" in t) return setWhy(t.problem);
@@ -68,9 +72,7 @@ export function RenameBox({ r, done, say }: { r: Row; done: (step: 0 | 1 | -1) =
     setBusy(false);
     if (no) {
       closing.current = false;
-      setWhy(no);
-      box.current?.focus();
-      return;
+      return setWhy(no);
     }
     say?.(`Title of #${r.item.id} staged: ${t.title}. Not saved until you save.`);
     done(step);

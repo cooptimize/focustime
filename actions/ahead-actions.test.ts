@@ -402,6 +402,16 @@ describe("ED-2: a title and a parent in the change set, by ED-1's rules", () => 
       const far = await lead.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "parent", parentId: 4242 } });
       expect(far.skipped[0]!.reason).toBe("#4242 isn't in Northwind Foods's DevOps items here");
     });
+    it("review 2: Move to… takes one client's rows; a value DevOps already has is skipped, not counted as staged", async () => {
+      const s = world();
+      expect(await s.fail("ahead.stage_bulk", { items: [{ clientKey: K, itemId: 111 }, { clientKey: "Adatum", itemId: 111 }], op: { kind: "parent", parentId: 120 } })).toMatchObject({ status: 400, error: "Move to… takes rows from one client. A move never crosses clients" });
+      // 111 has a pending move to Export; a bulk move back under Import (where DevOps has it) takes the pending one off.
+      await s.run("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: 120 } });
+      const r = await s.run<Bulk>("ahead.stage_bulk", { items: items(111), op: { kind: "parent", parentId: 110 } });
+      expect(r.staged).toEqual([]);
+      expect(r.skipped).toEqual([{ clientKey: K, itemId: 111, reason: "DevOps already has that, so nothing is staged" }]);
+      expect(await changes(s)).toEqual([]);
+    });
     it("a malformed new action is refused whole", async () => {
       const s = world();
       for (const op of [{ kind: "state" }, { kind: "size", value: "big" }, { kind: "parent", parentId: "120" }, { kind: "assign", email: "not an address", name: "x" }, { kind: "parent", parentId: 120, order: 1 }]) expect((await s.fail("ahead.stage_bulk", { items: items(111), op })).status).toBe(400);
