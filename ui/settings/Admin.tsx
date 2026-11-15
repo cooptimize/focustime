@@ -24,16 +24,8 @@ import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../plan/fixnext.ts";
 import { WhoSetUp } from "./WhoSetUp.tsx";
 import { Icon } from "../icons.tsx";
 
-export const ADMIN_UI_SECTIONS = [
-  ["admin-clients", "Clients"],
-  ["admin-ai", "AI"],
-  ["admin-conversations", "Conversations"],
-  ["admin-people", "People"],
-  ["admin-organization", "Organization"],
-  ["admin-standards", "Standards"],
-  ["admin-status", "Status"],
-  ["admin-audit", "Audit"],
-] as const;
+import { ADMIN_UI_SECTIONS } from "./admin-sections.ts";
+export { ADMIN_UI_SECTIONS };
 export type AdminUiSection = (typeof ADMIN_UI_SECTIONS)[number][0];
 /** TP-1b: Admin sections taken out of the app (Work templates). An old address opens Admin's first page. */
 export const RETIRED_ADMIN_SECTIONS: readonly string[] = ["admin-templates"];
