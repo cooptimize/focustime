@@ -18,7 +18,7 @@ P1 (phone and PWA, D476 to D482): under 600 px (`viewport.ts`: `PHONE_MAX_PX`, `
 
 ## ui/brand/: the brand module
 
-`ui/brand/`: the brand module (step 17.5, docs/design/brand.md): Brand.tsx (WeekMark, BentMark, Lockup, Lumen poses, LumenLoading, Unroll), Opening.tsx (Opening, CloseReverse, MomentOverlay, InlineMoment), geometry.ts (the marks and the unroll as numbers), opening.ts (loader timing, source lines, allDone: every to-do today done), motion.ts (reduced motion), brand.css (the only place mascot-highlight is used)
+`ui/brand/`: the brand module (step 17.5, BR-1, docs/design/brand.md): Brand.tsx (WeekMark, WeekLoader, Lockup), boot.css and boot.ts (the loader `index.html` draws from the first paint, and its move onto the top bar's mark), Opening.tsx (tells the loader when the app is ready, and after 8 s which sources it still waits on), geometry.ts (the week mark as numbers), opening.ts (loader timing, the waiting line, source lines), motion.ts (reduced motion), brand.css
 
 ## actions/: named actions
 
@@ -86,7 +86,7 @@ P1: `pwa.ts` serves `/sw.js` from `sw.js` with the build's sha and the shell's p
 
 ## public/: files served as they are
 
-`public/` (P1): manifest.webmanifest (FocusTime, standalone, start at Today, the dark background) and icons/ (192 and 512 any, 512 maskable, the 180 apple-touch-icon). Vite copies them into dist; the service worker caches them with the shell.
+`public/` (P1): prefs.js (BR-1: the theme, text size and reduce motion from localStorage before the first paint), manifest.webmanifest (FocusTime, standalone, start at Today, the dark background) and icons/ (192 and 512 any, 512 maskable, the 180 apple-touch-icon). Vite copies them into dist; the service worker caches them with the shell.
 
 ## e2e/: browser tests
 

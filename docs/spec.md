@@ -853,6 +853,16 @@ Calmer, more consistent controls, with colors, the font, every word, layout and 
 - **Not in it:** any color or font change, any layout, word, key or behavior change beyond "+ Add" and menu group labels, the phone's layout, the brand marks, Code's syntax colors, new themes, new features.
 - **Store:** none. One new dependency, the icon package (`lucide-react`). **Rollback:** revert the PR and redeploy.
 
+## 54. BR-1: A quiet loader, and Lumen removed (authorized Nov 15)
+
+The product owner: "i want to change the loader and remove the lightbulb/headlight mark", "remove the text at the loader"; the mark goes everywhere, the loader is the week mark alone with its blocks filling and no words. Decisions under "BR-1" in `docs/decisions.md`; details in `docs/design/brand.md`.
+
+- **Loader.** The week mark alone, centered, its blocks lighting in turn, no words, drawn by `index.html` from the first paint so the sign-in check and the app's own wait look the same. Nothing within 400 ms; once shown, at least 600 ms. Then the mark moves onto the top bar's while the app fades in. After 8 s one quiet line, "Still waiting on Outlook". Screen readers hear "Loading FocusTime" and "FocusTime is ready".
+- **Reduced motion.** The mark holds still, every block lit; the app appears with no movement.
+- **Lumen removed everywhere** (the opening, Close out's reverse, the first launch, the reconnect moment, sign-in, About, the Guide's Start here, footer and tour card, empty states, /styleguide) with its assets, tokens and components; nothing replaces it. Sign-in, About and Start here show the week mark.
+- **Not in it:** redrawing the week mark, the app icon, the favicon or the Teams icons; new colors; other loading states; the Focus screen; words beyond these.
+- **Store:** none. **Rollback:** revert the PR and redeploy.
+
 ## Part 0: a shared owner and state per conversation
 
 One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.

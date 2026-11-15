@@ -188,14 +188,12 @@ Tokens, in every theme (`ui/styles.css`, domain layer):
 |---|---|---|---|
 | `--brand-am` | #1E3A55 | #7FA6C9 | the marks' AM bars |
 | `--brand-pm` | #4FA3DD | #00416B | the marks' PM bars |
-| `--brand-accent` | #9CC24F | #42783C | Lumen's body, the hollow Mon AM |
-| `--brand-ghost` | #2B3A4D | #B9C6D3 | the dashed inner AM band |
-| `--mascot-highlight` | #B2D235 | #B2D235 | Lumen's light bar and beam; only inside `ui/brand/` (tested) |
-| `--brand-beam-blend` | screen | multiply | how the beam blends |
+| `--brand-accent` | #9CC24F | #42783C | the hollow Mon AM |
+| `--brand-ghost` | #2B3A4D | #B9C6D3 | not used since BR-1 (it drew the bent mark's dashed band; Q in open-questions) |
 
 Neutral uses the dark values in dark mode and the light values in light mode. The brief's full surface and text palette is not applied (Q93).
 
-Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px tall), `BentMark` (sign-in), `Lockup` (About), `Lumen` (`pose` still, idle or bob), `LumenLoading` (the loader), `Unroll` (`direction` open or close), and the overlays `Opening`, `CloseReverse`, `MomentOverlay`, plus `InlineMoment`. Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
+Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar about 18 px tall, sign-in, the Guide's Start here), `Lockup` (About) and `WeekLoader` (the loader, drawn by `index.html` from the first paint; `Opening` hands it to the top bar). Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
 
 ## 5. Core components
 
