@@ -75,7 +75,7 @@ export function WorkLink({ clientKey, url, className, title, children }: { clien
 }
 
 /** FN-1: an item known by its id (an Inbox link, a promise's item): its title opens the card even without a URL. */
-export function ItemTitleLink({ clientKey, id, url, className, children }: { clientKey: string | null | undefined; id: number; url?: string | null | undefined; className?: string; children: ReactNode }) {
+export function ItemTitleLink({ clientKey, id, url, className, title, children }: { clientKey: string | null | undefined; id: number; url?: string | null | undefined; className?: string; title?: string; children: ReactNode }) {
   const tabIndex = useScopedTab();
   if (!clientKey) return <span className={className}>{children}</span>;
   const open = (e: MouseEvent) => {
@@ -84,7 +84,7 @@ export function ItemTitleLink({ clientKey, id, url, className, children }: { cli
     openItemCard(clientKey, id);
   };
   return (
-    <a href={url && isDevOpsUrl(url) ? url : `#/item/${encodeURIComponent(clientKey)}/${id}`} className={className} tabIndex={tabIndex} data-card={`${clientKey}:${id}`} aria-haspopup="dialog" onClick={open} onAuxClick={(e) => e.button === 1 && open(e)}>
+    <a href={url && isDevOpsUrl(url) ? url : `#/item/${encodeURIComponent(clientKey)}/${id}`} className={className} title={title} tabIndex={tabIndex} data-card={`${clientKey}:${id}`} aria-haspopup="dialog" onClick={open} onAuxClick={(e) => e.button === 1 && open(e)}>
       {children}
     </a>
   );
