@@ -49,7 +49,7 @@ const rel = (id: string) => {
 
 type Chunk = { fileName: string; imports: string[]; css: string[]; modules: Record<string, number>; facade: string | null };
 
-/** Builds the UI into a temp folder (or reads `dist` as already built with `collect`) and measures it. */
+/** Builds the UI into a temp folder, as `vite build` does for a release, and measures it. */
 export async function measure(): Promise<Report> {
   const outDir = mkdtempSync(join(tmpdir(), "focustime-first-download-"));
   const chunks = new Map<string, Chunk>();
@@ -65,8 +65,11 @@ export async function measure(): Promise<Report> {
       }
     },
   };
+  // The build people get: a test run sets NODE_ENV to "test", which would bundle React's development build.
+  const env = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
   try {
-    await build({ root: ROOT, configFile: join(ROOT, "vite.config.ts"), logLevel: "error", plugins: [collect], build: { outDir, emptyOutDir: true } });
+    await build({ root: ROOT, configFile: join(ROOT, "vite.config.ts"), mode: "production", logLevel: "error", plugins: [collect], build: { outDir, emptyOutDir: true } });
     const size = (file: string): FileSize => {
       const b = readFileSync(join(outDir, file));
       return { file, raw: b.length, gzip: gzipSync(b, { level: 9 }).length };
@@ -119,6 +122,8 @@ export async function measure(): Promise<Report> {
     };
     return { files, first, fonts, script: sum(first.filter((f) => f.file.endsWith(".js"))), styles: sum(first.filter((f) => f.file.endsWith(".css"))), modules, chunkOf, why };
   } finally {
+    if (env === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = env;
     rmSync(outDir, { recursive: true, force: true });
   }
 }
@@ -148,6 +153,26 @@ export function grew(now: Record<string, number>, then: Record<string, number>, 
     .map(([module, n]) => ({ module, by: n - (then[module] ?? 0), isNew: !(module in then) }))
     .filter((g) => g.by >= floor)
     .sort((a, b) => b.by - a.by);
+}
+
+/** The screens' own files, as ui/screens.ts names them in import(): none of them may be in the first download. */
+export function onDemand(): string[] {
+  const src = readFileSync(join(ROOT, "ui", "screens.ts"), "utf8");
+  return [...src.matchAll(/import\("\.\/([^"]+)"\)/g)].map((m) => `ui/${m[1]}`);
+}
+
+/**
+ * The check: what is wrong with this build's first download against the record, in words that name what to look at.
+ * Empty when it is within its limits and holds no screen that loads on demand.
+ */
+export function check(r: Pick<Report, "script" | "styles" | "modules" | "why">, record: Record_, lazy: readonly string[] = onDemand()): string[] {
+  const out: string[] = [];
+  for (const m of lazy) if (m in r.modules) out.push(`${m} loads when first opened (ui/screens.ts) but is in the first download again, imported through: ${r.why(m).join(" → ") || "(chain not found)"}. Import what is needed from a small file of its own, or use screen() / useScreen().`);
+  const named = grew(r.modules, record.modules).slice(0, 12).map((g) => `  ${g.isNew ? "new" : "grew"}: ${g.module} +${kb(g.by)}${g.isNew && r.why(g.module).length ? ` (through ${r.why(g.module).slice(-3, -1).join(" → ")})` : ""}`);
+  if (r.script.gzip > record.limit.script)
+    out.push(`The first download's script is ${kb(r.script.gzip)} gzipped, over its limit of ${kb(record.limit.script)} (it was ${kb(record.measured.script)} when the limit was set). What grew, before minifying:\n${named.join("\n") || "  nothing over 0.2 kB in one module: many small changes"}\nIf the first screen needs it, raise the limit with: node scripts/first-download.ts --write`);
+  if (r.styles.gzip > record.limit.styles) out.push(`The first download's styles are ${kb(r.styles.gzip)} gzipped, over their limit of ${kb(record.limit.styles)} (they were ${kb(record.measured.styles)}). Styles a screen brings in its own file travel with that screen; ui/styles.css is all in the first download. Raise the limit with: node scripts/first-download.ts --write`);
+  return out;
 }
 
 const kb = (n: number) => `${(n / 1000).toFixed(1)} kB`;
