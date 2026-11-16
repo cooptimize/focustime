@@ -3,8 +3,8 @@
 // screenshots/ps1); nothing runs otherwise. Demo data only.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { buildState, PS_CLOCK, type PsState } from "./ps1-states.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { buildState, PS_CLOCK, type PsState } from "../ps1-states.ts";
 
 const DIR = process.env.PS1_SHOTS ?? null;
 const DEFAULT = { dayPanel: "default" } as const;

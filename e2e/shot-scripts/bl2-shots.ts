@@ -5,8 +5,8 @@
 // reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { moreItem, openFilter, pickLevel } from "./backlog-helpers.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { moreItem, openFilter, pickLevel } from "../backlog-helpers.ts";
 
 const DIR = process.env.BL2_SHOTS ?? null;
 const T = 900_000;

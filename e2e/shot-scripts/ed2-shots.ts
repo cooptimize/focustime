@@ -4,8 +4,8 @@
 // they offered before this step. A shot that can't be reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { pickLevel } from "./backlog-helpers.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { pickLevel } from "../backlog-helpers.ts";
 
 const DIR = process.env.ED2_SHOTS ?? null;
 const BEFORE = !!DIR && /before\/?$/.test(DIR);

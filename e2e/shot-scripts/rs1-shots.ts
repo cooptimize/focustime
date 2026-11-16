@@ -5,9 +5,9 @@
 // skipped, so one missing control never loses the rest.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { phonePage } from "./mb1-helpers.ts";
-import { buildState, PS_CLOCK } from "./ps1-states.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { phonePage } from "../mb1-helpers.ts";
+import { buildState, PS_CLOCK } from "../ps1-states.ts";
 
 const DIR = process.env.RS1_SHOTS ?? null;
 const T = 900_000;

@@ -5,8 +5,8 @@
 // and the phone's day bar. Demo data only. A shot that can't be reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { PS_CLOCK } from "./ps1-states.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { PS_CLOCK } from "../ps1-states.ts";
 
 const DIR = process.env.NM2_SHOTS ?? null;
 const T = 900_000;

@@ -6,9 +6,9 @@
 // at 390x844. A screen that can't be reached is named in the log and skipped, so one missing control never loses the rest.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page, Route } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { call, phonePage } from "./mb1-helpers.ts";
-import { buildState, PS_CLOCK } from "./ps1-states.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { call, phonePage } from "../mb1-helpers.ts";
+import { buildState, PS_CLOCK } from "../ps1-states.ts";
 
 const DIR = process.env.RS2_SHOTS ?? null;
 const T = 900_000;

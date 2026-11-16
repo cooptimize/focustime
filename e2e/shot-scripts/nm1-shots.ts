@@ -8,7 +8,7 @@
 // title text in a caption under the bar, read from the page.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const DIR = process.env.NM1_SHOTS ?? null;
 const T = 900_000;

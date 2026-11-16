@@ -4,9 +4,9 @@
 // WK5_SHOTS names a folder (screenshots/wk5/before or screenshots/wk5); nothing runs otherwise. Demo data only.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { buildWk5, WK5_CLOCK } from "./wk5-states.ts";
-import { call } from "./sg1-helpers.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { buildWk5, WK5_CLOCK } from "../wk5-states.ts";
+import { call } from "../sg1-helpers.ts";
 
 const DIR = process.env.WK5_SHOTS ?? null;
 const AFTER = !!DIR && !DIR.endsWith("before");

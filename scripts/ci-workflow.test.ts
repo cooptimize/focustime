@@ -87,4 +87,12 @@ describe("ci.yml runs the same tests (CI-3)", () => {
   it("always runs the unit job, infra and the gate", () => {
     for (const job of ["unit", "infra", "test"]) expect(J[job], job).not.toMatch(/needs\.changes|^ {4}if:/m);
   });
+
+  // D: the screenshot scripts run only on purpose (npm run shots), never in the suite.
+  it("keeps the screenshot scripts out of the suite", () => {
+    const scripts = readdirSync(join(ROOT, "e2e/shot-scripts"));
+    expect(scripts.length).toBeGreaterThan(0);
+    expect(scripts.filter((f) => /\.test\.tsx?$/.test(f))).toEqual([]);
+    expect(readFileSync(join(ROOT, "vite.config.ts"), "utf8")).toMatch(/"e2e\/\*\*\/\*\.test\.ts"/);
+  });
 });

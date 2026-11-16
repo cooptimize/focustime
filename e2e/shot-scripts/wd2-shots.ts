@@ -3,8 +3,8 @@
 // 390x844. The "before" ones (screenshots/wd2/before) were taken from main before the change.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { phonePage } from "./mb1-helpers.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { phonePage } from "../mb1-helpers.ts";
 
 const DIR = process.env.WD2_SHOTS ?? null;
 const T = 300_000;

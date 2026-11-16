@@ -3,10 +3,10 @@
 // (UI10_WHEN is "before" or "after"), plus the overflowing box at Large text in dark and light. Nothing without FOCUSTIME_SHOTS.
 // Only steps that also work before UI-10, so the same file takes the before shots on main.
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { CHROMIUM, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
-import { phonePage } from "./mb1-helpers.ts";
-import { SHOTS } from "./shots.ts";
-import { FIELDS, lines, openField, setTheme } from "./ui10-helpers.ts";
+import { CHROMIUM, freshPage, NOW, startDemo, type Harness } from "../harness.ts";
+import { phonePage } from "../mb1-helpers.ts";
+import { SHOTS } from "../shots.ts";
+import { FIELDS, lines, openField, setTheme } from "../ui10-helpers.ts";
 
 let h: Harness;
 const T = 180_000;

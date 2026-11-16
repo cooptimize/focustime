@@ -7,7 +7,7 @@
 import { writeFileSync } from "node:fs";
 import { afterAll, describe, it } from "vitest";
 import type { BrowserContext, Page, Route } from "playwright-core";
-import { CHROMIUM, freshPage, openApp, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openApp, startDemo, type Harness } from "../harness.ts";
 
 const DIR = process.env.BR1_SHOTS ?? null;
 const T = 1_800_000;

@@ -3,7 +3,7 @@
 // the phone at 390x844.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const DIR = process.env.CF1_SHOTS ?? null;
 const T = 180_000;

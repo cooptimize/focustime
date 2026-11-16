@@ -3,8 +3,8 @@
 // with the selectors of the layout before RB-6 (git history), the "after" set with these.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { SHOTS } from "./shots.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { SHOTS } from "../shots.ts";
 
 let h: Harness;
 const T = 240_000;

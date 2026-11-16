@@ -6,9 +6,9 @@
 // today); the compound card and the Saturday move are the real demo service.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import type { HandleResult } from "../assistant/types.ts";
-import { CHROMIUM, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
-import { SHOTS, shotBoth } from "./shots.ts";
+import type { HandleResult } from "../../assistant/types.ts";
+import { CHROMIUM, freshPage, NOW, startDemo, type Harness } from "../harness.ts";
+import { SHOTS, shotBoth } from "../shots.ts";
 
 const T = 300_000;
 const QUESTION: HandleResult = {

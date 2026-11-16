@@ -3,7 +3,7 @@
 // 1440x900, light and dark. The same script took the "before" set from main and the "after" set from the branch.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const DIR = process.env.QT1_SHOTS ?? null;
 const T = 300_000;

@@ -4,8 +4,8 @@
 // PS2_SHOTS names a folder; nothing runs otherwise. Demo data only.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { buildState, PS_CLOCK } from "./ps1-states.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { buildState, PS_CLOCK } from "../ps1-states.ts";
 
 const DIR = process.env.PS2_SHOTS ?? null;
 const DEFAULT = { dayPanel: "default" } as const;

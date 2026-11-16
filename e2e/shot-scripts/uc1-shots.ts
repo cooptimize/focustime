@@ -3,7 +3,7 @@
 // can't be reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const DIR = process.env.UC1_SHOTS ?? null;
 const T = 900_000;

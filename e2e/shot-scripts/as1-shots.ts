@@ -5,10 +5,10 @@
 // handed to the page in place of that one request. Nothing otherwise.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import type { HandleResult } from "../assistant/types.ts";
-import { VISIBILITY } from "../plan/devopswrite.ts";
-import { CHROMIUM, FAKE_MIC, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
-import { SHOTS, shotBoth } from "./shots.ts";
+import type { HandleResult } from "../../assistant/types.ts";
+import { VISIBILITY } from "../../plan/devopswrite.ts";
+import { CHROMIUM, FAKE_MIC, freshPage, NOW, startDemo, type Harness } from "../harness.ts";
+import { SHOTS, shotBoth } from "../shots.ts";
 
 const T = 300_000;
 const COMMENT: HandleResult = {

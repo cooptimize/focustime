@@ -42,7 +42,7 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 
 A step's screenshots never go on `main` or on the step's branch (CI-3). Kept true by `npm run guards`, which fails on an image or video under `docs/ux` and on any file over 300 KB outside the few named in `scripts/guards.ts` (`LARGE_OK`, each with its reason).
 
-1. **Take them** from the demo only, into `screenshots/<step>/` (ignored by git): a behavior test with `FOCUSTIME_SHOTS=screenshots/<step>` set, or a script in `scripts/` whose first argument is the folder.
+1. **Take them** from the demo only, into `screenshots/<step>/` (ignored by git): a behavior test with `FOCUSTIME_SHOTS=screenshots/<step>` set, a screenshot script in `e2e/shot-scripts/` (`<STEP>_SHOTS=screenshots/<step> npm run shots -- e2e/shot-scripts/<step>-shots.ts`; each file's header names its variable), or a script in `scripts/` whose first argument is the folder. The screenshot scripts are not tests: `npm test` and CI never run them (`vitest.shots.config.ts` is their only config).
 2. **Put them on their branch**: `node scripts/shots-branch.ts screenshots/<step> <step>` makes or updates `shots/<step>` with exactly those images (no other file, and nothing on the working branch or `main` changes), pushes it and prints one line per image.
 3. **Show them in the pull request** by pasting those lines into its body. Each is the image's raw address pinned to the branch's commit (`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<file>`), so the pictures stay as they were whatever is pushed later.
 

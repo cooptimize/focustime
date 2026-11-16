@@ -3,8 +3,8 @@
 // 1920. Nothing otherwise.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { SHOTS, shotBoth } from "./shots.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { SHOTS, shotBoth } from "../shots.ts";
 
 const T = 300_000;
 const SIZES = [[1920, 1080], [1600, 900], [1366, 768], [970, 800], [390, 844]] as const;

@@ -5,9 +5,9 @@
 // split 9:00 to 12:00 and 1:00 to 5:00) and after the day (5:30 PM).
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { call, phonePage, planMonday } from "./mb1-helpers.ts";
-import { SHOTS } from "./shots.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { call, phonePage, planMonday } from "../mb1-helpers.ts";
+import { SHOTS } from "../shots.ts";
 
 const T = 600_000;
 const TAG = process.env.MB1_TAG ?? "after";

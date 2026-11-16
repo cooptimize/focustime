@@ -4,9 +4,9 @@
 // can't be reached is named in the log and skipped.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
-import { SECTIONS } from "../ui/guide/sections.ts";
-import { TOURS } from "../ui/guide/tours.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { SECTIONS } from "../../ui/guide/sections.ts";
+import { TOURS } from "../../ui/guide/tours.ts";
 
 const DIR = process.env.GU1_SHOTS ?? null;
 const T = 900_000;
