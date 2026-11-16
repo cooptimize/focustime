@@ -367,6 +367,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const line = page.locator(".reconnect-line[role=status]");
     await expect.poll(() => line.textContent()).toBe("Outlook is connected again.");
     expect(await line.locator("svg").count()).toBe(0);
+    // A week read still in flight through the route when the context closes is not this test's failure.
+    await ctx.unrouteAll({ behavior: "ignoreErrors" });
     await ctx.close();
   }, T);
 

@@ -12,4 +12,6 @@ export async function emptyFrom(page: Page, from: string, only?: readonly string
     if (date >= from) for (const p of d.picks) if (p.status === "planned" && (!only || only.includes(`${date}:${p.half}`))) await call(page, "pick.remove", { id: p.id });
   await page.reload();
   await page.waitForSelector(".topbar", { timeout: 60_000 });
+  // A key pressed while the loader finishes only skips it (BR-1): callers press a tab's key next.
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
 }
