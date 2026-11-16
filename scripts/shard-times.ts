@@ -14,7 +14,8 @@ import { readShardTimes, SHARD_TIMES } from "../test/shards.ts";
 
 const ANSI = /(\x1b|\^\[)\[[0-9;]*m/g;
 // A file's line in vitest's default reporter: "✓ e2e/day/today.test.ts (4 tests) 19704ms".
-const FILE_LINE = /[✓❯×] (e2e\/[\w./-]+\.test\.ts) \(\d+ tests?[^)]*\) (\d+)ms/;
+// "✓ e2e/…" before BT-1's projects, "✓  browser  e2e/…" with them (vitest names the project).
+const FILE_LINE = /[✓❯×]\s+(?:[a-z]+\s+)?(e2e\/[\w./-]+\.test\.ts) \(\d+ tests?[^)]*\)\s+(\d+)ms/;
 
 /** Each browser file's time in seconds from one log, as vitest printed it. */
 export function timesFromLog(log: string): Record<string, number> {
