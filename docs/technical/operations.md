@@ -20,7 +20,7 @@ Both run in the same subscription and share the Entra tenant, the "FocusTime" ap
 
 **Not verified:** how long dev waits before scaling to zero. The Bicep sets no cooldown, so it is Container Apps' default; the runbook says 300 seconds.
 
-The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/vm2.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
+The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm-stop-and-autostart.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2). The budget only alerts; it never stops or changes anything (`infra/modules/budget.bicep`).
 
@@ -136,7 +136,7 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in six shards and WebKit's own job, the Bicep and the image; a pull request that changes only docs outside `docs/technical/` skips the browser and image jobs ([Development](development.md#what-ci-runs-and-when)) |
+| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in six shards filled by time and WebKit's own job, the Bicep and the image; a pull request that changes only docs outside `docs/technical/` skips the browser and image jobs, and its own run on a push to `main` skips the tests, which the pull request ran and deploy-dev reruns when it finds no tested tree ([Development](development.md#what-ci-runs-and-when)). The shards' times: `node scripts/shard-times.ts <ci run ids>` rewrites `test/shard-times.json` from those runs' logs (read with `gh`); refresh it when a file's time changes a lot or many files are added |
 | `deploy-dev.yml` | Every push to `main`, or by hand | Above |
 | `deploy-prod.yml` | By hand only | Above |
 | `ci-webkit-deps.yml` | A pull request that changes `scripts/ci-webkit-deps.sh` or the CI workflows, or by hand | Proves the webkit job's packages install from the cache with the package servers unreachable; tests nothing of FocusTime's and isn't part of the gate |

@@ -10,7 +10,7 @@ import { createServer as createHttps } from "node:https";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, webkit, type Browser, type Locator, type Page } from "playwright-core";
+import { chromium, webkit, type Browser, type BrowserContext, type Locator, type Page } from "playwright-core";
 import { onFreePort } from "../test/ports.ts";
 
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
@@ -150,7 +150,7 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
 /**
  * PF-1: the screens that load when first opened are fetched in the background once the first screen is usable
  * (ui/screens.ts marks `html[data-screens]` when that is done). Tests press keys the moment the app opens and expect
- * the screen at once, as a person who has looked at Day for a few seconds gets it; e2e/pf1.test.ts covers the moments
+ * the screen at once, as a person who has looked at Day for a few seconds gets it; e2e/shell/first-download.test.ts covers the moments
  * before. Goes on after 20 s either way.
  */
 export async function screensIn(page: Page): Promise<void> {
@@ -163,18 +163,62 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   const errors: string[] = [];
   // Vite's dev client reports its websocket (HMR is off in the server): not an app error.
   page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
-  await page.addInitScript((keepDefault) => {
-    localStorage.setItem("focustime.hint.flow", "dismissed");
-    localStorage.setItem("focustime.hint.picktime", "1");
-    // PS-1: Day opens with its panel on a wide window the first time; the tests written before start with it closed,
-    // as a person who closed it once would (e2e/ps1.test.ts checks the first visit).
-    if (!keepDefault && localStorage.getItem("focustime.day.panel") === null) localStorage.setItem("focustime.day.panel", "closed");
-  }, opts.dayPanel === "default");
+  await page.addInitScript(hints, opts.dayPanel === "default");
   if (h.gone()) throw new Error(h.gone()!);
   await page.goto(h.url);
   await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
   // Step 17.5: a slow first load plays the opening over the app; tests start once it's gone.
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+  await screensIn(page);
+  return { page, errors };
+}
+
+/** The local hints every test page starts with (freshPage and pageAs). */
+function hints(keepDefault: boolean) {
+  localStorage.setItem("focustime.hint.flow", "dismissed");
+  localStorage.setItem("focustime.hint.picktime", "1");
+  // PS-1: Day opens with its panel on a wide window the first time; the tests written before start with it closed,
+  // as a person who closed it once would (e2e/day/polish-measures.test.ts checks the first visit).
+  if (!keepDefault && localStorage.getItem("focustime.day.panel") === null) localStorage.setItem("focustime.day.panel", "closed");
+}
+
+/**
+ * BT-1: how a browser test file starts, cheapest first. Pick the first that fits:
+ *
+ *   1. One start for the file and one person for tests that only read (or change only what no other test in the file
+ *      looks at): `startDemo()` in beforeAll, `you = await person(h)` once, then `pageAs(h, you)` in each test. Each
+ *      test gets a fresh page (its own browser context: no local storage, only the person's cookies) on the same demo
+ *      data. Signing in and seeding the demo happen once, not per test.
+ *   2. One start for the file and a fresh person per test, for tests that change stored data another test reads, or
+ *      need the demo exactly as seeded: `freshPage(h)` in each test.
+ *   3. A start of its own, for a test that needs its own clock (`startDemo("chromium", {}, clock)`) or its own server
+ *      settings (environment variables): its own describe with its own beforeAll.
+ *
+ * Tests that share a person still pass alone and in any order: none may rely on what an earlier one left.
+ */
+export type Person = { cookies: Awaited<ReturnType<BrowserContext["cookies"]>> };
+
+/** BT-1: signs in one demo person ("Try the demo") for `pageAs`. */
+export async function person(h: Harness): Promise<Person> {
+  const { page } = await freshPage(h);
+  const cookies = await page.context().cookies();
+  await page.close();
+  return { cookies };
+}
+
+/** BT-1: a fresh page for that person, in its own context, the app open and its screens loaded (as freshPage). */
+export async function pageAs(h: Harness, you: Person, viewport = { width: 1920, height: 1080 }, opts: { dayPanel?: "default" } = {}): Promise<{ page: Page; errors: string[] }> {
+  if (h.gone()) throw new Error(h.gone()!);
+  const ctx = await h.browser.newContext({ viewport });
+  await ctx.addCookies(you.cookies);
+  const page = await ctx.newPage();
+  page.once("close", () => void ctx.close().catch(() => {}));
+  const errors: string[] = [];
+  page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
+  await page.addInitScript(hints, opts.dayPanel === "default");
+  await page.goto(h.url);
+  await page.waitForSelector(".topbar", { timeout: 60_000 });
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
   await screensIn(page);
   return { page, errors };

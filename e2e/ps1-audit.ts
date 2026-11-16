@@ -1,4 +1,4 @@
-// PS-1: the measurements the browser checks share (e2e/ps1.test.ts): every clickable thing on Day, Week and the panel
+// PS-1: the measurements the browser checks share (e2e/day/polish-measures.test.ts): every clickable thing on Day, Week and the panel
 // at least the minimum target, chips clear of ⋯, nothing under the phone's capture button, and the card's first lines.
 import type { Page } from "playwright-core";
 

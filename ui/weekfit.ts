@@ -25,7 +25,7 @@ export const FOCUS_SHARE = 2;
 
 /**
  * WK-5: each card form's narrowest readable width, in CSS px at Default text (scaled with the text), measured in the
- * demo (`e2e/wk5.test.ts` checks them): a working day's card (checkbox, type icon and about twelve characters of a
+ * demo (`e2e/week/room-for-today.test.ts` checks them): a working day's card (checkbox, type icon and about twelve characters of a
  * title; the client name cut cleanly with "…"; "12:30–5:00" whole on its own line), the catch-up day ("Catch-up" whole
  * and a to-do's title), a weekend day (its plain list) and a PTO or holiday day (its one word, the name wrapping).
  */

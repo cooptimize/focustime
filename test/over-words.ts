@@ -1,5 +1,5 @@
 // QT-2: the words that tell a person they planned too much, and the phrases with "over" or "fit" that mean something
-// else. Used by assistant/over-words.test.ts (answers, Teams cards, notices, the Guide) and e2e/qt2.test.ts (the
+// else. Used by assistant/over-words.test.ts (answers, Teams cards, notices, the Guide) and e2e/day/no-over-words.test.ts (the
 // demo's screens). "overdue", "leftover", "hover", "overview", "override" and "overflow" are other words: the word
 // boundaries below never match inside them (a promise can be overdue).
 
