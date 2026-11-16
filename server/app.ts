@@ -4,8 +4,8 @@
 import type { BuildInfo } from "./buildinfo.ts";
 import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { extname, join, normalize, sep } from "node:path";
+import { posix } from "node:path";
+import { loadStaticFiles, makeStaticFile, sendMissingFile, sendStatic, type StaticFile } from "./static-files.ts";
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
@@ -114,17 +114,6 @@ export const DB_STATUS_PATH = "/api/db-status";
 /** An API call without a live session: the page shows the sign-in screen. */
 export const SIGNED_OUT_CODE = "signed_out";
 
-const TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".json": "application/json",
-  ".woff2": "font/woff2",
-  ".webmanifest": "application/manifest+json",
-};
-
 /** CV-2: a chat image, only through here (never Graph's URL): `/media/chat-images/<id>`. */
 export const CHAT_IMAGE_PREFIX = "/media/chat-images/";
 const CHAT_IMAGE_PATH = /^\/media\/chat-images\/([1-9]\d{0,9})$/;
@@ -183,8 +172,12 @@ const same = (a: string | undefined, b: string) => {
 
 export function createApp(opts: AppOptions) {
   let lastReopen = 0;
-  /** P1: the service worker's source, made once per process (the build doesn't change while it runs). */
-  let sw: string | null = null;
+  /**
+   * PF-2: the built files, read and compressed once here, before the server listens (the build doesn't change while
+   * it runs), with the service worker's source for this build (P1) among them. None in the dev UI (Vite serves it).
+   */
+  const files: Map<string, StaticFile> | null = opts.distDir && !opts.devMiddleware ? loadStaticFiles(opts.distDir) : null;
+  if (files) files.set(SW_PATH, makeStaticFile(SW_PATH, Buffer.from(serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!))), "no-cache"));
   const https = opts.publicUrl.startsWith("https://");
   const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = []) => {
     res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
@@ -475,12 +468,8 @@ export function createApp(opts: AppOptions) {
       });
     }
     // P1: the service worker, for this build (never in the dev UI, where Vite serves changing files).
-    if (url.pathname === SW_PATH && (method === "GET" || method === "HEAD")) {
-      sw ??= serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!));
-      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
-      return res.end(method === "HEAD" ? undefined : sw);
-    }
-    return serveStatic(opts.distDir!, url.pathname, res);
+    if (url.pathname === SW_PATH && (method === "GET" || method === "HEAD")) return sendStatic(req, res, files!.get(SW_PATH)!);
+    return serveFile(files!, url.pathname, req, res);
   };
 
   return createServer((req, res) => {
@@ -497,31 +486,20 @@ export function createApp(opts: AppOptions) {
   });
 }
 
-async function serveStatic(root: string, pathname: string, res: ServerResponse): Promise<ServerResponse> {
-  let rel: string;
+/**
+ * A built file from memory (PF-2): a file the build wrote, in the form the browser accepts; under /assets/ a file this
+ * build doesn't have is "not found" (B); any other address is the page, which routes it.
+ */
+function serveFile(files: Map<string, StaticFile>, pathname: string, req: IncomingMessage, res: ServerResponse): void {
+  let path: string;
   try {
-    rel = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, "");
+    path = posix.normalize(decodeURIComponent(pathname));
   } catch {
     res.writeHead(400);
-    return res.end();
+    return void res.end();
   }
-  let file = join(root, rel);
-  if (!file.startsWith(root + sep) && file !== root) {
-    res.writeHead(403);
-    return res.end();
-  }
-  const isFile = await stat(file).then((s) => s.isFile()).catch(() => false);
-  // PF-2 (B): a built file this build doesn't have (a page from an earlier release asking for its old screen) is "not
-  // found", never the page under a script's name. Every other unknown address still gets the page (the app's routes).
-  if (!isFile && (rel.startsWith(`assets${sep}`) || rel.startsWith("assets/") || rel === "assets")) {
-    res.writeHead(404, { "content-type": "text/plain; charset=utf-8", "content-length": 0, "cache-control": "no-store" });
-    return res.end();
-  }
-  if (!isFile) file = join(root, "index.html");
-  const type = TYPES[extname(file)] ?? "application/octet-stream";
-  const body = await readFile(file);
-  // Hashed build files (/assets/) never change; the page, the manifest and the icons (public/) are checked each time.
-  const hashed = rel.startsWith(`assets${sep}`) || rel.startsWith("assets/");
-  res.writeHead(200, { "content-type": type, "cache-control": file.endsWith("index.html") ? "no-store" : hashed && isFile ? "public, max-age=31536000, immutable" : "no-cache" });
-  return res.end(body);
+  const f = path === SW_PATH ? undefined : files.get(path);
+  if (f) return sendStatic(req, res, f);
+  if (path === "/assets" || path.startsWith("/assets/")) return sendMissingFile(res);
+  return sendStatic(req, res, files.get("/index.html")!);
 }
