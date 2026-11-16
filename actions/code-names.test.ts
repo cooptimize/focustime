@@ -224,3 +224,48 @@ describe("what a search across clients costs (STEP 0.5)", () => {
     expect(d.ops.length).toBe(before);
   });
 });
+
+// RB-3: the New form's and the draft editor's "Where is it?" read the same names through code.kinds, saying where.
+describe("RB-3: names for Where is it?", () => {
+  it.each([["new_form", "where_new_form"], ["draft_editor", "where_draft_editor"]] as const)("from %s: one row naming where it was used, never the words, and only what the box offers", async (from, event) => {
+    const d = devops();
+    const { c, views } = ctx(d.git);
+    const r = (await codeAction(c, "code.kinds", { clientKey: "Contoso", from })) as Names;
+    expect(r.ok).toBe(true);
+    expect([...d.ops].sort()).toEqual(["files Contoso", "files Contoso", "files Contoso", "files Contoso", "repos Contoso"]);
+    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "", path: "", event }]);
+    // A factory dataset (Other) isn't offered, and no file inside an item is sent.
+    expect(r.data.repos[0]!.things.map((t) => [t.kind, t.name])).toEqual([["report", "Orders 11"], ["model", "Orders 11"], ["pipeline", "pl_load_11"], ["script", "Stock11"]]);
+    expect(r.data.repos.every((x) => x.files.length === 0)).toBe(true);
+  });
+  it("takes only new_form or draft_editor, and only on code.kinds; nothing is read otherwise", async () => {
+    const d = devops();
+    const { c, views } = ctx(d.git);
+    for (const from of ["code", "", 1, null, "New form"]) expect(await codeAction(c, "code.kinds", { clientKey: "Contoso", from })).toMatchObject({ ok: false, status: 400 });
+    expect(await codeAction(c, "code.search", { clientKey: "Contoso", from: "new_form" })).toMatchObject({ ok: false, status: 400 });
+    expect(await codeAction(c, "code.file", { clientKey: "Contoso", repoId: repoId(1, 1), path: "/a.sql", from: "new_form" })).toMatchObject({ ok: false, status: 400 });
+    expect(d.ops).toEqual([]);
+    expect(views).toEqual([]);
+  });
+  it("Code's own rule decides: off the team of an Its team only client, or not a Cooptimizer, nothing is read and no row is written", async () => {
+    const d = devops();
+    const off = ctx(d.git, { rules: { Fabrikam: "team" }, onTeam: ["Contoso"] });
+    expect(await codeAction(off.c, "code.kinds", { clientKey: "Fabrikam", from: "new_form" })).toMatchObject({ ok: false, status: 403, code: "team_only" });
+    const guest = ctx(d.git, { why: "guest" });
+    expect(await codeAction(guest.c, "code.kinds", { clientKey: "Contoso", from: "draft_editor" })).toMatchObject({ ok: false, status: 403, code: "guest" });
+    expect(d.ops).toEqual([]);
+    expect([...off.views, ...guest.views]).toEqual([]);
+  });
+  it("no row means no names", async () => {
+    const d = devops();
+    const r = await codeAction(ctx(d.git, { views: "fail" }).c, "code.kinds", { clientKey: "Contoso", from: "new_form" });
+    expect(r).toMatchObject({ ok: false, code: "not_logged" });
+    expect(JSON.stringify(r)).not.toMatch(/Orders|pl_load|Stock/);
+  });
+  it("one repo that can't be read says so in its line; the others still list", async () => {
+    const d = devops({ fail: (c, repo) => (c === "Contoso" && repo === repoId(1, 2) ? 500 : null) });
+    const r = (await codeAction(ctx(d.git).c, "code.kinds", { clientKey: "Contoso", from: "new_form" })) as Names;
+    expect(r.ok).toBe(true);
+    expect(r.data.repos.map((x) => [x.repo.name, x.things.length, !!x.problem])).toEqual([["repo-11", 4, false], ["repo-12", 0, true], ["repo-13", 4, false], ["repo-14", 4, false]]);
+  });
+});

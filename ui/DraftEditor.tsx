@@ -130,7 +130,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             <span className="set-label">Title</span>
             <input ref={first} value={title} required maxLength={200} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" />
+          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" lookup={{ clientKey: client, clientName: clientName(client), from: "draft_editor" }} />
           <label className="set-field">
             <span className="set-label">Description</span>
             <TextBox value={description} minRows={4} maxRows={14} maxLength={descriptionMax(draft.carried)} onChange={(e) => setDescription(e.target.value)} />

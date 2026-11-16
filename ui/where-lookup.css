@@ -1,0 +1,52 @@
+/* RB-3: "Where is it?" with the client's things offered as you type (ui/WhereLookup.tsx). Loaded with the New form
+   and the draft editor, never in the first download. The box is the three questions' own box (.tq-box) with room at
+   its end for the browse button; the list hangs under it (over it when the keyboard leaves no room) as a menu does. */
+.wl { position: relative; display: grid; gap: 3px; min-width: 0; }
+.wl-field { position: relative; display: block; min-width: 0; }
+.wl-box.text-box { padding-right: calc(var(--h-small) + 6px); }
+.wl-browse {
+  position: absolute; top: 1px; right: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--h-small); height: var(--h-small);
+  border: 0; border-radius: 99px; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0;
+}
+/* The target is the app's (28, 44 on the phone) without growing the round button that shows (style guide 10). */
+.wl-browse::before { content: ""; position: absolute; inset: calc((var(--h-small) - var(--target)) / 2); border-radius: 99px; }
+.wl-browse:hover { background: var(--wash-1); color: var(--text); }
+.wl-browse:active { background: var(--wash-2); }
+.wl-browse[data-off] { color: var(--text-faint); cursor: default; }
+.wl-browse:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+.wl-pop {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+  display: grid; gap: 2px; padding: 4px; max-height: min(320px, 50vh); overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-menu); background: var(--raised, var(--surface)); box-shadow: var(--shadow-menu);
+}
+/* In the New form's grid the label stays beside the box when a line shows under it. */
+.tq-grid .tq-row:has(.wl-line) > .set-label { align-self: start; margin-top: 6px; }
+.wl-up .wl-pop { top: auto; bottom: calc(100% + 4px); }
+.wl-list, .wl-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.wl-title { padding: 4px 8px 2px; font-size: var(--fs-2); font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.wl-head { display: block; padding: 6px 8px 2px; font-size: var(--fs-2); color: var(--text-muted); }
+.wl-row {
+  display: grid; grid-template-columns: auto minmax(0, max-content) minmax(0, 1fr) auto; align-items: center; gap: 2px 8px;
+  min-height: var(--target); padding: 2px 8px; border-radius: var(--radius-input); color: var(--text); cursor: pointer; font-size: var(--fs-3);
+}
+.wl-row.on { background: var(--wash-accent); }
+.wl-row .ft-icon { color: var(--text-muted); }
+.wl-name { overflow-wrap: anywhere; }
+.wl-name mark { background: var(--wash-accent); color: inherit; border-radius: 3px; padding: 0 1px; font-weight: 600; }
+.wl-row.on .wl-name mark { background: transparent; }
+.wl-what { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.wl-back { grid-template-columns: auto 1fr; color: var(--text-muted); }
+.wl-go { justify-self: end; }
+.wl-open { display: inline-flex; align-items: center; gap: 4px; min-height: var(--target); padding: 0 6px; font-size: var(--fs-2); white-space: nowrap; }
+.wl-more, .wl-note { padding: 4px 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.wl-line { font-size: var(--fs-2); line-height: 1.4; }
+.wl-line .link-btn { font-size: inherit; }
+
+/* The phone: what it is goes under the name. */
+.app.phone .wl-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.app.phone .wl-what { grid-column: 2; grid-row: 2; }
+.app.phone .wl-open { grid-column: 3; grid-row: 1 / span 2; }
+.app.phone .wl-pop { max-height: min(260px, 40dvh); }

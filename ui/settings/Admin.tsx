@@ -1468,9 +1468,9 @@ const shown = (v: string | null) => {
   }
 };
 
-type CodeViewRow = { id: number; at: string; actorId: string; actorName: string; clientKey: string; repoName: string; path: string; event: "repo_opened" | "file_opened" | "find_used" | "kinds_listed" | "names_searched" | "inside_searched" };
+type CodeViewRow = { id: number; at: string; actorId: string; actorName: string; clientKey: string; repoName: string; path: string; event: "repo_opened" | "file_opened" | "find_used" | "kinds_listed" | "names_searched" | "inside_searched" | "where_new_form" | "where_draft_editor" };
 type CodeViewsData = { views: CodeViewRow[]; counts: { clientKey: string; views: number }[]; people: { id: string; name: string }[]; shown: number };
-const CODE_EVENT_WORDS: Record<CodeViewRow["event"], string> = { repo_opened: "Opened the repo", file_opened: "Opened a file", find_used: "Used Find", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files" };
+const CODE_EVENT_WORDS: Record<CodeViewRow["event"], string> = { repo_opened: "Opened the repo", file_opened: "Opened a file", find_used: "Used Find", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files", where_new_form: "Listed names for Where is it? (New form)", where_draft_editor: "Listed names for Where is it? (draft editor)" };
 /** RB-1: Admin › Audit › Code views: who opened which client's code, newest first, never any content. */
 function CodeViews() {
   const [clientKey, setClientKey] = useState("");
@@ -1534,7 +1534,7 @@ function CodeViews() {
                   <td>{when(v.at)}</td>
                   <td>{v.actorName}</td>
                   <td>{v.clientKey}</td>
-                  <td>{v.repoName || (v.event === "kinds_listed" || v.event === "names_searched" || v.event === "inside_searched" ? "All its repos" : "")}</td>
+                  <td>{v.repoName || (v.event === "kinds_listed" || v.event === "names_searched" || v.event === "inside_searched" || v.event === "where_new_form" || v.event === "where_draft_editor" ? "All its repos" : "")}</td>
                   <td>{CODE_EVENT_WORDS[v.event]}</td>
                   <td className="adm-val">{v.event === "file_opened" ? v.path : ""}</td>
                 </tr>
