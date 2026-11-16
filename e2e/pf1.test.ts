@@ -141,12 +141,21 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     const a = await session(h);
     const asked: string[] = [];
     a.page.on("request", (r) => lazy.test(r.url()) && asked.push(r.url().replace(/.*\/assets\//, "").replace(/-.*/, "")));
+    // The moment Day is drawn, on the page's own clock.
+    await a.ctx.addInitScript(() => {
+      const seen = () => document.querySelector("main.today-view") && ((window as unknown as { pf1Day?: number }).pf1Day ??= performance.now());
+      new MutationObserver(seen).observe(document, { childList: true, subtree: true });
+    });
     await a.page.goto("about:blank");
     await a.page.goto(h.url + "#/day");
-    await a.page.waitForSelector("main.today-view");
-    expect(asked, "asked for before Day was drawn").toEqual([]);
     await usable(a.page);
     await expect.poll(() => ["Ahead", "Status", "InboxPage", "Code", "Capture", "Settings"].every((n) => asked.includes(n)), { timeout: 30_000 }).toBe(true);
+    const early = await a.page.evaluate(() => {
+      const day = (window as unknown as { pf1Day?: number }).pf1Day ?? 0;
+      return { day, before: performance.getEntriesByType("resource").filter((r) => /\/assets\/(?!main-|index-|boot-|rolldown-runtime-)[^/]+\.js$/.test(r.name) && r.startTime < day).map((r) => r.name.replace(/.*\/assets\//, "")) };
+    });
+    expect(early.day).toBeGreaterThan(0);
+    expect(early.before, "asked for before Day was drawn").toEqual([]);
     // In the tabs' order.
     expect(asked.filter((n) => ["Ahead", "Status", "InboxPage", "Code"].includes(n))).toEqual(["Ahead", "Status", "InboxPage", "Code"]);
     expect(asked, "the Guide and the Technical docs wait to be opened").not.toContain("TechDocs");
@@ -226,6 +235,25 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect(await page.getByRole("dialog", { name: "Quick capture" }).count()).toBe(0);
     await page.keyboard.press("n");
     await page.getByRole("dialog", { name: "Quick capture" }).waitFor();
+    await page.keyboard.press("Escape");
+
+    // N and typing at once while the file is slow: nothing typed is lost, and none of it runs as a shortcut on the
+    // screen behind (the w, the 3 and the e would each have gone somewhere).
+    await cold(page, h, "#/week");
+    let let3: () => void = () => {};
+    const held3 = new Promise<void>((r) => (let3 = r));
+    await page.route(screenFile("Capture"), async (route) => (await held3, route.continue()));
+    await page.keyboard.press("n");
+    await page.keyboard.type("Call Dana about the w3 export", { delay: 15 });
+    expect(await page.locator("main.grid").count()).toBe(1);
+    expect(await page.evaluate(() => location.hash)).toBe("#/week");
+    let3();
+    const cap = page.getByRole("dialog", { name: "Quick capture" });
+    await cap.waitFor();
+    const capBox = cap.getByRole("textbox", { name: "Quick capture" });
+    await expect.poll(() => capBox.inputValue()).toBe("Call Dana about the w3 export");
+    await page.keyboard.type(" today");
+    expect(await capBox.inputValue()).toBe("Call Dana about the w3 export today");
     expect(errors).toEqual([]);
     await ctx.close();
   }, 180_000);
@@ -328,7 +356,9 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     await a.page.keyboard.press("4");
     const failed = a.page.locator(".screen-line.failed");
     await failed.waitFor({ timeout: 30_000 });
-    expect(await failed.textContent()).toBe("You're offline. This screen needs a connection the first time it opens. Retry");
+    expect(await failed.textContent()).toBe("This screen needs a connection the first time it opens. Retry");
+    // The app's own line says it is offline, once.
+    expect(await a.page.locator(".offline-line").textContent()).toBe("You're offline. FocusTime needs a connection.");
     expect(await a.page.locator("main.ib4").count()).toBe(1);
     // At a phone's width the line wraps inside the screen and Retry can be reached.
     await a.page.setViewportSize({ width: 390, height: 844 });

@@ -193,11 +193,11 @@ export const BOX_NAME: Record<BoxKind, string> = { later: "Decide later", ...KIN
  * inline, and Enter saves as that kind. Sort later saves an unsorted capture for the Inbox. A draft gets its AI version
  * in the background; Ctrl or Cmd+Enter saves it and opens the create preview at once.
  */
-export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, initialKind = null, large = false, onOpenedDraft }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean; defaultClient?: string | null; initialKind?: BoxKind | null; large?: boolean; /** CP-1: the create preview opened from here (the dialog closes itself). */ onOpenedDraft?: () => void }) {
+export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, initialKind = null, initialText = "", large = false, onOpenedDraft }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean; defaultClient?: string | null; initialKind?: BoxKind | null; /** PF-1: letters typed while Quick capture's file was arriving. */ initialText?: string; large?: boolean; /** CP-1: the create preview opened from here (the dialog closes itself). */ onOpenedDraft?: () => void }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const known = (k: string | null) => (k && clients.some((c) => c.clientKey === k) ? k : null);
   const today = data.planDay.date;
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [client, setClient] = useState<string | null>(() => known(defaultClient));
   const [choosing, setChoosing] = useState(false);
   const [tip, setTip] = useState(() => !tipSeen());
@@ -236,6 +236,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const pool = useMemo(() => parentPool(kind === "draft_feature" ? features?.epics : features?.features, kind === "draft_feature" ? "epic" : "feature"), [features, kind]);
   useEffect(() => {
     if (autoFocus) input.current?.focus();
+    // PF-1: text typed while the box was arriving: the caret goes after it.
+    if (autoFocus && initialText) input.current?.setSelectionRange(initialText.length, initialText.length);
   }, [autoFocus]);
   useEffect(() => setPick(0), [done.length]);
   useEffect(() => {
@@ -568,7 +570,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
 }
 
 /** The capture box over any view (N, the top-bar button, the command menu, or the global key via focustime-open). */
-export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultClient = null, initialKind = null }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void; defaultClient?: string | null; initialKind?: BoxKind | null }) {
+export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultClient = null, initialKind = null, initialText = "" }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void; defaultClient?: string | null; initialKind?: BoxKind | null; initialText?: string }) {
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => () => back.current?.focus?.(), []);
   // P1: a full-screen sheet on the phone; UI-3: closed with the same × as everywhere (a 44 px target).
@@ -596,7 +598,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultCli
           </button>
           <CloseButton onClose={onClose} />
         </div>
-        <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} initialKind={initialKind} onOpenedDraft={onClose} />
+        <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} initialKind={initialKind} initialText={initialText} onOpenedDraft={onClose} />
       </div>
     </div>
   );

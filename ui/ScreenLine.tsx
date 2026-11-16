@@ -7,7 +7,8 @@ import "./screens.css";
 
 export const SCREEN_LOADING_MS = 300;
 export const SCREEN_FAILED: Record<Failed, string> = {
-  offline: "You're offline. This screen needs a connection the first time it opens.",
+  // The app's own offline line says "You're offline" above this one.
+  offline: "This screen needs a connection the first time it opens.",
   missing: "This screen didn't load.",
 };
 

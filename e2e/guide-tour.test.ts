@@ -139,6 +139,15 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
 
         // The page under the tour takes no click and no key of its own.
         const hashBefore = await page.evaluate(() => location.hash);
+        // The card slides to its place over about 0.3 s after it shows; the click is aimed once it has stopped (PF-1: a
+        // click aimed while it moved landed on its Close when the tour's file arrived sooner).
+        let was = "";
+        await expect.poll(async () => {
+          const now = JSON.stringify(await page.locator(".tour-card").boundingBox());
+          const still = now === was;
+          was = now;
+          return still;
+        }, { interval: 150 }).toBe(true);
         const cb = await page.locator(".tour-card").boundingBox();
         const x = cb && cb.x > viewport.width / 2 ? 40 : viewport.width - 40;
         await page.mouse.click(x, Math.min(200, viewport.height / 3));

@@ -4,8 +4,8 @@
   "styles": 87000
  },
  "measured": {
-  "script": 326261,
-  "styles": 83750
+  "script": 326825,
+  "styles": 83814
  },
  "modules": {
   "actions/feedback-types.ts": 81,
@@ -235,7 +235,7 @@
   "ui/About.tsx": 4072,
   "ui/Account.tsx": 52270,
   "ui/Agenda.tsx": 4275,
-  "ui/App.tsx": 131233,
+  "ui/App.tsx": 132488,
   "ui/BlockCard.tsx": 28780,
   "ui/BlockPanel.tsx": 50383,
   "ui/BreakDownPanel.tsx": 50078,
@@ -274,7 +274,7 @@
   "ui/Presence.tsx": 5999,
   "ui/ReadLine.tsx": 585,
   "ui/Reopen.tsx": 1729,
-  "ui/ScreenLine.tsx": 1101,
+  "ui/ScreenLine.tsx": 1085,
   "ui/SendLoop.tsx": 22703,
   "ui/Setup.tsx": 23253,
   "ui/StandardsNote.tsx": 888,
@@ -346,7 +346,7 @@
   "ui/scope.ts": 150,
   "ui/screen-names.ts": 213,
   "ui/screens.css": 0,
-  "ui/screens.ts": 6516,
+  "ui/screens.ts": 8075,
   "ui/send-event.ts": 314,
   "ui/settings/autosave.tsx": 7830,
   "ui/settings/use-admin.ts": 327,

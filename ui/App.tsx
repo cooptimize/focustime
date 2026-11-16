@@ -401,6 +401,25 @@ export function App() {
   // While its file is on its way it already counts as open for the keys, so letters typed ahead for its box don't run
   // as shortcuts; if the file failed, it is not open.
   const captureOpen = captureWanted && (!!CaptureDialog || screenArriving("capture"));
+  // What is typed while its file arrives is kept for its box (and no key reaches the screen behind), so pressing N
+  // and typing at once loses nothing. Esc still takes the ask back.
+  const typedAhead = useRef("");
+  const captureArriving = captureWanted && !CaptureDialog && screenArriving("capture");
+  useEffect(() => {
+    if (!captureWanted) typedAhead.current = "";
+  }, [captureWanted]);
+  useEffect(() => {
+    if (!captureArriving) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.length === 1) typedAhead.current += e.key;
+      else if (e.key === "Backspace") typedAhead.current = typedAhead.current.slice(0, -1);
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", on, true);
+    return () => window.removeEventListener("keydown", on, true);
+  }, [captureArriving]);
   // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
   const [assistantAt, setAssistantAt] = useState<{ text: string; turn?: number } | null>(() => {
     const turn = askTurnOf(location.hash);
@@ -2055,11 +2074,11 @@ export function App() {
               <span className="top-word">Focus</span> <kbd>F</kbd>
             </button>
           )}
-          <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
+          <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} onPointerEnter={() => fetchAhead("capture")} onFocus={() => fetchAhead("capture")} title="Quick capture: one line, saved at once (N)">
             <Icon name="capture" />
             <span className="top-word">Capture</span> <kbd>N</kbd>
           </button>
-          <button type="button" className="top-btn assistant-btn" data-tour="ask" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
+          <button type="button" className="top-btn assistant-btn" data-tour="ask" onPointerEnter={() => fetchAhead("assistant")} onFocus={() => fetchAhead("assistant")} onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
             <Icon name="ask" />
             <span className="top-word">Ask</span> <kbd>Ctrl J</kbd>
           </button>
@@ -2632,7 +2651,7 @@ export function App() {
           onGuide={() => openGuide()}
         />
       )}
-      {captureOpen && CaptureDialog && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {captureOpen && CaptureDialog && <CaptureDialog initialText={typedAhead.current} data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {newAt && NewItemDialog && <NewItemDialog key={newAt.n} place={newAt.place} hooks={{ ...newAt.hooks, onCreated: (c) => { newAt.hooks.onCreated?.(c); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }, onDraft: (d) => { newAt.hooks.onDraft?.(d); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); } }} clients={captureClients(data)} colors={(k) => clientColor(k, data.clients)} today={data.planDay.date} onClose={() => setNewAt(null)} />}
       {draftEdit && DraftEditor && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}

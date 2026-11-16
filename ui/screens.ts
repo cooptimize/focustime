@@ -43,7 +43,7 @@ export { SCREENS };
 export type ScreenModule<K extends ScreenName> = Awaited<ReturnType<(typeof LOADERS)[K]>>;
 
 /** Fetched in the background once the first screen is usable, in this order: the tabs as the top bar lists them, then what a key opens from any of them. The Guide and the Technical docs wait until they are opened. */
-export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "code", "card", "capture", "assistant", "checkin", "closeout", "focus", "newItem", "draft", "settings"];
+export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "code", "capture", "card", "assistant", "checkin", "closeout", "focus", "newItem", "draft", "settings"];
 
 /** Why a screen's file didn't load: no connection, or it can't be had from the server (after the one reload). */
 export type Failed = "offline" | "missing";

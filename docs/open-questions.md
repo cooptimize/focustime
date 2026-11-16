@@ -1288,3 +1288,9 @@ From the IT review (TD-1):
   - During a deploy, if the worker's install asks a server that doesn't have a screen's file yet, the page it gets back (200) is cached under the script's name, and that screen fails until the next release. The same fault before this step would have broken the whole app; fixing it means the server answering 404 for a missing `/assets/` file, which is outside this step.
   - A screen opened after a release can reload the page mid-session (once), and typed text in a box on the screen before is lost. The background fetching narrows this to the first minute, the Guide, the Technical docs and slow or data-saving connections.
   - With the server down while the browser says it is online, the line says "You're offline", as the app's own offline line does.
+- **From review 1 (a phone on a weak signal), left as they are:**
+  - A tap on a screen not yet fetched shows nothing for 300 ms, then the Loading pill, and the tapped tab is not marked until its screen arrives (the step's rule: the screen before stays, Loading past about 300 ms). On a weak signal that is 1 to 2.5 s of the old screen. Should the tapped tab be marked at once?
+  - After the connection comes back the failed line stays until the screen is asked for again or Retry is pressed; nothing retries by itself. That try may reload the app once (a browser can remember a file that failed while offline). Should the app try again by itself when the connection returns?
+  - On a computer the Loading pill hangs over the top-left corner of the screen's own header for the moment it shows.
+  - The same jumps as before this step: Week's "to place" row arriving, the story card's buttons reshuffling when its rights are read, the Inbox's counts starting at 0.
+  - Backlog is not offered on the phone's bars or in More (as before); the reviewer could not open it.
