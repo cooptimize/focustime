@@ -43,22 +43,6 @@ export function firstDownload(): { plugin: Plugin; groups: { name: string; test:
         queue.push(...(this.getModuleInfo(id)?.importedIds ?? []));
       }
     },
-    // The page names `main` and its styles so the browser fetches them alongside the entry instead of after it has
-    // run (one round trip sooner on a slow connection). A preload only fetches: nothing of `main` runs until the
-    // entry imports it, after the Temporal check. Link tags only, no inline script (the content security policy).
-    transformIndexHtml: {
-      order: "post",
-      handler(html, ctx) {
-        const files = Object.values(ctx.bundle ?? {});
-        const main = files.find((f) => f.type === "chunk" && f.name === "main");
-        if (!main || main.type !== "chunk") return [];
-        const css = [...((main as unknown as { viteMetadata?: { importedCss?: Set<string> } }).viteMetadata?.importedCss ?? [])];
-        return [
-          ...[...main.imports.filter((f) => f.endsWith(".js") && !html.includes(f)), main.fileName].map((f) => ({ tag: "link", attrs: { rel: "modulepreload", crossorigin: true, href: `/${f}` }, injectTo: "head" as const })),
-          ...css.map((f) => ({ tag: "link", attrs: { rel: "preload", as: "style", crossorigin: true, href: `/${f}` }, injectTo: "head" as const })),
-        ];
-      },
-    },
   };
   return {
     plugin,

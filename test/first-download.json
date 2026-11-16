@@ -4,7 +4,7 @@
   "styles": 87000
  },
  "measured": {
-  "script": 326846,
+  "script": 326849,
   "styles": 83814
  },
  "modules": {
@@ -235,7 +235,7 @@
   "ui/About.tsx": 4072,
   "ui/Account.tsx": 52270,
   "ui/Agenda.tsx": 4275,
-  "ui/App.tsx": 132501,
+  "ui/App.tsx": 132542,
   "ui/BlockCard.tsx": 28780,
   "ui/BlockPanel.tsx": 50383,
   "ui/BreakDownPanel.tsx": 50078,
@@ -346,7 +346,7 @@
   "ui/scope.ts": 150,
   "ui/screen-names.ts": 213,
   "ui/screens.css": 0,
-  "ui/screens.ts": 8075,
+  "ui/screens.ts": 8125,
   "ui/send-event.ts": 314,
   "ui/settings/autosave.tsx": 7830,
   "ui/settings/use-admin.ts": 327,

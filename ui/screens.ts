@@ -57,6 +57,12 @@ const changed = () => {
   listeners.forEach((f) => f());
 };
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f));
+/**
+ * A screen's state changed: the app draws again only if that screen is asked for on screen now. A file fetched ahead
+ * in the background arrives silently, so the app isn't drawn again a dozen times in its first seconds; when the
+ * screen is asked for later, asking draws it.
+ */
+const seen = (en: { wanted: number }) => void (en.wanted > 0 && changed());
 
 /** Stands in for the loaders in tests (ui/screens.test.ts): a screen's file arriving, failing or throwing. */
 let loaderOf: (name: ScreenName) => Promise<unknown> = (name) => LOADERS[name]();
@@ -148,13 +154,13 @@ async function failedLoad(name: ScreenName, e: unknown): Promise<void> {
   const fail = (why: Failed) => {
     Object.assign(en, { status: "failed", why });
     delete en.promise;
-    changed();
+    seen(en);
   };
   if (!isLoadError(e)) {
     // The screen's own code threw: not a missing file. Asked again, it is tried again.
     Object.assign(en, { status: "idle", threw: true });
     delete en.promise;
-    changed();
+    seen(en);
     return page.rethrow(e);
   }
   const css = /Unable to preload CSS for (\S+)/.exec(e instanceof Error ? e.message : "")?.[1];
@@ -186,11 +192,11 @@ export function loadScreen(name: ScreenName, retry = false): Promise<void> {
       // This screen loaded: if it fails in a later release, the app may reload once for it again.
       const rest = noted().filter((n) => n !== name);
       if (rest.length !== noted().length) page.note.set(rest.length ? rest.join(",") : null);
-      changed();
+      seen(en);
     },
     (e) => failedLoad(name, e),
   );
-  changed();
+  seen(en);
   return en.promise;
 }
 

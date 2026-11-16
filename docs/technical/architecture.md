@@ -97,7 +97,7 @@ The first screen downloads only what Day, Week, the top bar and the loader need.
 | File the build writes | What it holds | When it is fetched |
 |---|---|---|
 | `index`, `boot`, `rolldown-runtime` | The page's entry (`ui/boot.ts`), Vite's import helper, the bundler's runtime: about 3 kB together | With the page |
-| `main` (script and styles) | Everything `ui/main.tsx` imports statically: Day, Week, the block panel, the top bar, menus and keys, and all of `ui/styles.css` | With the page (the page names them as preloads) |
+| `main` (script and styles) | Everything `ui/main.tsx` imports statically: Day, Week, the block panel, the top bar, menus and keys, and all of `ui/styles.css` | With the page, once the entry has run |
 | One file per screen | Backlog, Status, the Inbox, Code, Settings with Admin, the story card with its editor, the New form, the draft editor, Capture, the assistant, the Focus screen, the Midday check-in, Close out, the Guide, a tour, these docs | When the screen is first asked for, or in the background |
 | `shared` | What two or more of those screens use and `main` doesn't hold (date and time fields, the cell popover, the people field) | With the first screen that needs it |
 | `guide-text` | The Guide's words and frame, shared by the Guide, its tours and these docs | With the first of those |

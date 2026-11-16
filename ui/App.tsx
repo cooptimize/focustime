@@ -263,6 +263,9 @@ export function App() {
   }), []);
   const goNav = useCallback((nav: Nav) => go({ nav, overlay: null }), [go]);
   useEffect(() => {
+    // PF-1: not before the place's screen is drawn. A screen reads what its address carries as it opens (Backlog's
+    // level and filters); written here first, while its file was still arriving, the address had already lost them.
+    if (!firstScreen) return;
     const h = hashOf(loc);
     // NV-1: an older address that lands on the same place (a redirect) is replaced, so Back doesn't loop on it.
     const was = parseHash(location.hash);
@@ -273,7 +276,7 @@ export function App() {
     } catch {
       /* per-window convenience only */
     }
-  }, [loc]);
+  }, [loc, firstScreen]);
   useEffect(() => {
     const on = () => {
       if (location.hash === CAPTURE_HASH) {
