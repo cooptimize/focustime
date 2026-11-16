@@ -130,6 +130,7 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const p1 = await fast.newPage();
     await p1.goto(h.url);
     await appUp(p1);
+    await expect.poll(async () => (await seen(p1)).goneAt, { timeout: 10_000 }).not.toBeNull();
     const s1 = await seen(p1);
     expect(s1.goneAt).not.toBeNull();
     if (s1.goneAt! < 400) expect(s1.shownAt).toBeNull(); // under 400 ms: nothing was shown
@@ -140,6 +141,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const p2 = await slow.newPage();
     await p2.goto(h.url);
     await appUp(p2);
+    // The probe runs once a frame: on a busy machine its frame can come after the stage has left the page.
+    await expect.poll(async () => (await seen(p2)).goneAt, { timeout: 10_000 }).not.toBeNull();
     const s2 = await seen(p2);
     const log = await p2.evaluate(() => (window as unknown as { __log?: string[] }).__log ?? []);
     expect(s2.shownAt).not.toBeNull();

@@ -306,6 +306,7 @@ export function prefetchScreens(names: readonly ScreenName[] = BACKGROUND, idle:
 
 function whenIdle(f: () => void): void {
   const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
-  if (w.requestIdleCallback) w.requestIdleCallback(f, { timeout: 4000 });
+  // At most a second's wait per file, so on a page that is never idle the files are still in within a quarter of a minute.
+  if (w.requestIdleCallback) w.requestIdleCallback(f, { timeout: 1000 });
   else setTimeout(f, 200);
 }

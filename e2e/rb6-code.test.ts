@@ -170,7 +170,8 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     const before = sent.length;
     await box.pressSequentially("store", { delay: 30 });
     await page.waitForTimeout(400);
-    expect(sent.slice(before).filter((s) => s.action.startsWith("code."))).toEqual([]);
+    // (Not the app's own read of which clients Code can open, made three seconds after it opens: it carries no words.)
+    expect(sent.slice(before).filter((s) => s.action.startsWith("code.") && s.action !== "code.clients")).toEqual([]);
     await page.locator('[data-code-scope="all"]').click();
     // The click kept the caret in the box and the choices open.
     expect(await page.evaluate(() => document.activeElement?.hasAttribute("data-code-search"))).toBe(true);
