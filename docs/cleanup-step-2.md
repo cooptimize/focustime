@@ -46,6 +46,39 @@ Not on the list yet:
   parsed for the one-time org bootstrap; see D1043 (CL-1). Removing them from the settings model later needs no
   migration (BH-1's loader ignores unknown keys).
 
+## RM-1 (Nov 15): what nothing writes since the hidden features' code was removed
+
+RM-1 removed code only; every table, column and stored value below is still in the database and in Export, Delete
+my data and the retention cleanups exactly as before. None is on the drop list above yet: each needs the product
+owner's OK, and a user table needs release 2a's two-step (out of `USER_TABLES` first, then the drop). Row counts:
+**count not checked** (as above).
+
+| Table, column or setting | Kind | Written by (before RM-1) | Still read by | What a drop needs |
+|---|---|---|---|---|
+| `patterns_runs`, `patterns_snapshots`, `patterns_items`, `patterns_labels`, `patterns_type_lists`, `patterns_ignored`, `patterns_platforms`, `patterns_layout`, `patterns_projects`, `patterns_scopes`, `patterns_kinds` | App | WP-1 to WP-3's DevOps patterns page | Nothing | One release (app tables, not in `USER_TABLES`). `patterns_runs.started_by` and `patterns_type_lists.made_by` hold user ids, so Delete my data never cleared them; a drop removes them |
+| `work_templates`, `work_template_uses` | App | TP-1's Admin › Work templates and create path | Nothing | One release. `data.md` says they were kept "on purpose for a later use": ask before dropping |
+| `look_asks` | App | Ask to look (SW-1) | `team.looksOf` in `actions/team-actions.ts` (old asks and replies of the last 14 days), Delete my data | First stop reading them, then drop |
+| `week_quiet` | User | WD-1's Nothing this week (`weekplan.nothing`) | `weekplan.load` (`quiet`), Export, Delete my data | Release 2a, then 2b |
+| `breakdown_marks` | User | WD-1's Mark as being broken down (`feature.mark_breakdown`) | `weekplan.load` (`marks`), Export, Delete my data | Release 2a, then 2b |
+| `week_features.position` | User column | U6's local reorder (`weekplan.reorder`); new rows get NULL | Nothing: the store maps it, but the week list sorts by stack rank only (already so on main) | Stop mapping it, then drop the column |
+| `markers` row `carry_hint` | User row | `planday.carry_hint` | Nothing | A delete of the rows, no schema change |
+| `conversation_merges`, `conversations.merged_into` | App | Merge and unmerge (CV-1) | `merged_into IS NULL` in the conversation lists (old merges stay hidden behind their target) | Keep reading until old merged rows age out with retention, then drop |
+| `conversations.claimed_by`, `claimed_name`, `claimed_at`, `helpers_json` | App columns | Claim, give, add helper, release (IB-4) | The views, the reopen notice, `conversations.undo_ownership`; still written by the one-time ownership backfill and that undo | Not a drop candidate yet: the backfill and the undo still write them |
+| `conversation_events` rows of kind claim, give, helper, release, merge | App rows | The same actions | The conversation's history in the detail pane | None (rows of a live table) |
+| `conversation_views.hidden`, `hidden_at` | User columns | `conversations.hide` (Hide for me) | The Inbox lists (old hides still apply), Export, Delete my data | Stop reading, then 2a and 2b for the columns |
+| `inbox_marks.snoozed_until`, `hidden_at` | User columns | `inbox.snooze`, `inbox.hide` | `inbox.list` (old marks still apply), Export, Delete my data | As above |
+| `kv_state` key `inbox_last_looked` | User row | `inbox.looked` | `inbox.list` (`lastLooked`) | A delete of the rows |
+| `requests.ai_shown` | App column | `requests.show` | The requests list (`shown`), the daily requests cleanup's filter | Stop reading, then drop |
+| Org setting `devops_patterns` (Admin › People) | Rule | An admin, for the patterns page | `config/org.ts` still parses it (an old saved value loads with no error) | Remove the key from the model; no migration |
+| Notification kinds `look_ask`, `look_reply` | Saved settings text | Settings › Notifications | Parsed as retired (`RETIRED_KINDS`), kept in the text, unread | Nothing to drop |
+
+Still written, so not on this list: `draft_stories.brief` (TP-1b's answers on a draft), `week_commitments` (the
+status report reads them), and the one-time ownership backfill's columns above.
+
+Also unwritten, but already before RM-1: `conversation_suggestions`. Its only writer, the store's `addSuggestion`,
+was called by tests alone on main (8e233104); RM-1 removed the follow-through comment task that would have fed it.
+Stored suggestions still show with Post and Skip, and retention deletes them with their conversation.
+
 ## The migration (text for step 2b, not a file)
 
 ```ts

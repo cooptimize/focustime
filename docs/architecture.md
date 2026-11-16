@@ -104,7 +104,7 @@ The plan store: everything FocusTime keeps for people.
 
 - `open.ts` opens the database from the app config (SQL Server, or SQLite for the demo, the fallback and tests). `sql/` holds the SQL Server driver (`sqlserver.ts`, `conn.ts`), the SQLite one (`sqlite.ts`), the T-SQL translation (`tsql.ts`), SQL Server's baseline schema (`baseline.ts`) and the migration runner (`migrate.ts`).
 - `scope.ts` adds the signed-in person to every statement, so no other code writes `user_id`. `isolation.test.ts` fails when a table is neither a user table (with `user_id` first in its keys) nor an app table.
-- `plan-store.ts` is a person's plan (to-dos, days, weeks, follow-ups, captures, markers); each other `*-store.ts` file holds one area (conversations, DevOps, Teams, meetings, admin, code views, patterns, standards).
+- `plan-store.ts` is a person's plan (to-dos, days, weeks, follow-ups, captures, markers); each other `*-store.ts` file holds one area (conversations, DevOps, Teams, meetings, admin, code views, standards).
 - `user-secrets.ts` seals a person's secrets under the app data key; `user-settings.ts` holds their settings rows; `accounts.ts` the users and sessions; `user-data.ts`, `export-local.ts` and `import.ts` Export and import; `retention.ts` what is deleted after how long.
 - `migrations/`: one timestamped file per schema change (`<UTC timestamp>_<what>.ts`), listed in `migrations/index.ts`; `migrations/named.ts` says how the runners apply them, after the frozen numbered migrations (in `plan-store.ts` for SQLite, `sql/migrate.ts` for SQL Server), in name order. `migrations/additive.test.ts` fails on a migration that renames or drops without a `safe-drop:` reason.
 
@@ -200,7 +200,7 @@ The written docs.
 - `decisions.md` and `open-questions.md` are the logs of every decision and every open question, by step.
 - `design/` holds the style guide, the wording rules and the brand; `setup/` the setup guides for the Teams bot, meeting capture and Close the loop; `azure/` the Azure move's plan, reports and runbook.
 - `settings.md`, `guide.md` and `assistant-interface.md` say how to add a setting, how to add to the Guide, and what the assistant's interface is.
-- `history/` keeps each slice's plan as written. `ux/` holds each step's working notes and screenshots. `cleanup-step-2.md` lists what a later cleanup may drop. `analysis/` says how to run DevOps patterns; `scope/` keeps the scope documents the chat steps started from; `teams/` the Teams bot's screenshots. `demo/README.md` says how the demo works (its seeds, Reset demo and what a demo session refuses). `demo/`'s screenshots and script, `roadmap.md`, `demo.md`, `phone.md` and `settings-inventory.md` describe an older app, and each says at its top what date it describes.
+- `history/` keeps each slice's plan as written. `ux/` holds each step's working notes and screenshots. `cleanup-step-2.md` lists what a later cleanup may drop. `analysis/` holds old notes on DevOps patterns, which the app does not have; `scope/` keeps the scope documents the chat steps started from; `teams/` the Teams bot's screenshots. `demo/README.md` says how the demo works (its seeds, Reset demo and what a demo session refuses). `demo/`'s screenshots and script, `roadmap.md`, `demo.md`, `phone.md` and `settings-inventory.md` describe an older app, and each says at its top what date it describes.
 
 ## Files at the top of the repo
 

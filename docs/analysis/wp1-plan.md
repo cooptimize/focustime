@@ -1,5 +1,7 @@
 # WP-1: What is in DevOps (plan)
 
+> RM-1 (Nov 15) removed the DevOps patterns page and its code. This file is kept as a record of what it did; its tables stay in the store, unwritten (`docs/cleanup-step-2.md`).
+
 Written before any code (Nov 11), then updated to what was built. The code "WP" was free in `docs/decisions.md`.
 
 ## Step 0
