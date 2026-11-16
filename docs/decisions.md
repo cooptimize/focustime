@@ -2950,3 +2950,16 @@ Unnumbered until merge.
 | - | Done | The merge summary and follow-through comment AI tasks leave the tiers, Admin › AI's labels, the demo and the eval; their stored outputs stay |
 | - | Done | The background policy is unchanged: no removed feature ran on its own |
 | - | Done | CLAUDE.md: the Team and Ask to look glossary rows move to the Renamed list's "Gone" line; the hard rules are not edited |
+
+## PV-1: The real screenshots' zip off main (Nov 16)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | `docs/ux/U1/designer-handoff.zip` is deleted from main: it held screenshots of a real FocusTime session (the 32 CI-3 took off main from `screens/live/`), and the repository is public. Nothing from it is copied to any branch |
+| - | Done | History is not rewritten and nothing is force-pushed. Making the repository private, or a rewrite with a request to GitHub Support, is the product owner's decision (an open question) |
+| - | Done | Every file that pointed at the zip or at `screens/live/` says in one line that it was removed and why, naming nothing in the pictures. CI-3's decision rows stay as its record |
+| - | Done | The files guard fails on an archive anywhere under `docs/` (zip, 7z, rar, tar, tgz, gz, bz2, xz, zst, jar), whatever its size, because what is inside one can't be checked. The zip leaves `LARGE_OK`, and a test keeps every archive out of it |
+| - | Done | 29 files under `docs/demo/` from steps 15.4, 15.5, 16.2, 16.3 and 17.6 may hold real screens: the scripts for 15.4 to 16.3 take demo mode only with `--demo`, 17.6's have no script on main, and nothing records that any of them came from the demo. They are listed by path in open questions and not removed here (`docs/ux/pv1/step0.md`) |
+| - | Done | `docs/technical/development.md` says pictures of a real session are never committed or pushed to any branch, in any form. Its "Checked against" line is unchanged, since the whole page wasn't re-checked |
