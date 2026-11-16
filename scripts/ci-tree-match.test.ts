@@ -100,6 +100,35 @@ describe("deploy-dev's reuse after a docs-only merge (CI-3)", () => {
     expect(match(m.bin, m.work, m.merged, { FAKE_PR: "", FAKE_HEAD: "", FAKE_RUN: "", FAKE_TREE: "" })).toBe("tested=false pr=none");
   });
 
+  // BT-1 F: what runs on a push to main, as the two workflows decide it: ci's own push run answers code=main (no
+  // test), and deploy-dev either reuses the pull request's run (same tree) or calls ci.yml, where the answer is code=true
+  // and everything runs. So a tested tree is deployed with no second full run anywhere, and an untested one is fully
+  // tested once, before the deploy (scripts/ci-workflow.test.ts checks the jobs follow these answers).
+  const CHANGES = join(import.meta.dirname, "ci-changes.sh");
+  const ciAnswer = (cwd: string, workflow: string) => spawnSync("bash", [CHANGES, "push", workflow], { cwd, encoding: "utf8" }).stdout.trim();
+  function onPushToMain(m: ReturnType<typeof docsOnlyMerge>, fake: Record<string, string>) {
+    const own = ciAnswer(m.work, "ci");
+    const reuse = match(m.bin, m.work, m.merged, fake);
+    const called = reuse.startsWith("tested=true") ? null : ciAnswer(m.work, "deploy-dev");
+    return { own, reuse, called, fullRuns: [own, called].filter((a) => a === "code=true").length };
+  }
+
+  it("deploys a merged tree a pull request's run already tested with no second full run anywhere", () => {
+    const m = docsOnlyMerge();
+    expect(onPushToMain(m, { FAKE_PR: "7", FAKE_HEAD: m.head, FAKE_RUN: "101", FAKE_TREE: m.testedTree })).toEqual({ own: "code=main", reuse: "tested=true pr=7", called: null, fullRuns: 0 });
+  });
+
+  it("tests an untested tree fully, once, before deploying it (main moved, a docs-only run, a direct push)", () => {
+    const moved = docsOnlyMerge({ mainMovesAfterTheRun: true });
+    const docs = docsOnlyMerge();
+    for (const [m, fake] of [
+      [moved, { FAKE_PR: "7", FAKE_HEAD: moved.head, FAKE_RUN: "101", FAKE_TREE: moved.testedTree }],
+      [docs, { FAKE_PR: "7", FAKE_HEAD: docs.head, FAKE_RUN: "101", FAKE_TREE: "" }],
+      [docs, { FAKE_PR: "", FAKE_HEAD: "", FAKE_RUN: "", FAKE_TREE: "" }],
+    ] as const)
+      expect(onPushToMain(m, fake)).toMatchObject({ own: "code=main", called: "code=true", fullRuns: 1 });
+  });
+
   it("the image leaves out docs/ except docs/technical, so docs-only changes can't change it", () => {
     const ignore = readFileSync(join(import.meta.dirname, "../.dockerignore"), "utf8").split("\n");
     expect(ignore).toContain("docs");

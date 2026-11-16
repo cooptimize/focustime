@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# CI-3: does this ci run need the heavy jobs (the browser shards, the WebKit job, the image)? Prints code=true or
-# code=false (for $GITHUB_OUTPUT) and says why on stderr. Read-only: git only.
+# CI-3: does this ci run need the heavy jobs (the browser shards, the WebKit job, the image)? Prints code=true,
+# code=false or code=main (for $GITHUB_OUTPUT) and says why on stderr. Read-only: git only.
+#
+# BT-1: code=main for ci's own run on a push to main (the event is push and the workflow is ci itself). That run tests
+# nothing and only saves the caches pull requests restore: the tree was tested by its pull request's run, or, when it
+# wasn't, deploy-dev calls ci.yml on it (its reuse check, scripts/ci-tree-match.sh), where the workflow is deploy-dev
+# and the answer is code=true. So every tree on main is tested once, before it is deployed.
 #
 # code=false only when all of these hold, else code=true:
-#   - the run is for a pull request (a push to main, and deploy-dev calling ci, always run everything);
+#   - the run is for a pull request (deploy-dev calling ci always runs everything);
 #   - HEAD is GitHub's merge of the pull request into main and its first parent (main at that moment) is here;
 #   - at least one file changed, and every changed path, before and after a rename, is under docs/ but not under
 #     docs/technical/ (the app shows those pages and the image carries them). Nothing else under docs/ is read by a
@@ -11,7 +16,7 @@
 #     there (decisions, the build guide, the guards) are in the unit job, which always runs.
 # Anything else, including a file at the top of the repo (the image copies those), is code.
 #
-# Usage: ci-changes.sh <event name>              compares HEAD^1 with HEAD
+# Usage: ci-changes.sh <event name> [<workflow>]   compares HEAD^1 with HEAD
 #        ci-changes.sh --classify < paths        one path per line, for the tests
 set -uo pipefail
 
@@ -32,6 +37,7 @@ if [[ ${1:-} == --classify ]]; then
   docs_only && answer false "only docs outside docs/technical" || answer true "a path that can change the app or its tests"
 fi
 
+[[ ${1:-} == push && ${2:-} == ci ]] && answer main "ci's own push to main: tested by its pull request's run, or by deploy-dev's call of ci"
 [[ ${1:-} == pull_request ]] || answer true "event ${1:-none}: not a pull request"
 git rev-parse -q --verify 'HEAD^1' >/dev/null 2>&1 || answer true "no first parent to compare with"
 git rev-parse -q --verify 'HEAD^2' >/dev/null 2>&1 || answer true "HEAD is not a merge commit"

@@ -45,6 +45,15 @@ describe("which changes skip the heavy jobs (CI-3)", () => {
     for (const event of ["push", "workflow_dispatch", ""]) expect(spawnSync("bash", [SCRIPT, event], { encoding: "utf8" }).stdout.trim()).toBe("code=true");
   });
 
+  // BT-1: ci's own run on a push to main saves the caches only; deploy-dev's call of ci (the workflow is deploy-dev)
+  // runs everything, as does any other workflow name or none.
+  it("answers main only for ci's own push run, and true when deploy-dev calls ci on the same push", () => {
+    const run = (...a: string[]) => spawnSync("bash", [SCRIPT, ...a], { encoding: "utf8" }).stdout.trim();
+    expect(run("push", "ci")).toBe("code=main");
+    for (const [event, workflow] of [["push", "deploy-dev"], ["push", ""], ["push", "CI"], ["workflow_dispatch", "ci"], ["pull_request", "ci"]]) expect(run(event!, workflow!), `${event} ${workflow}`).not.toBe("code=main");
+    expect(run("push", "deploy-dev")).toBe("code=true");
+  });
+
   /** A repo whose HEAD is a merge of a branch changing `paths` into main, as GitHub's refs/pull/N/merge is. */
   function merged(paths: string[], opts: { rename?: [string, string] } = {}): string {
     const d = mkdtempSync(join(tmpdir(), "ci-changes-"));

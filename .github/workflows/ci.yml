@@ -2,6 +2,10 @@
 # Runs on pull requests and on pushes to main only (S1, D455): a branch push with an open PR used to run it twice.
 # A newer push to the same ref cancels the run in progress. deploy-dev.yml calls it only when the merged tree was not
 # already tested by the PR's run (D456): the test job saves the tree it tested as the artifact "tested-tree".
+# BT-1: ci's own run on a push to main tests nothing (What changed answers code=main): it only saves the caches pull
+# requests restore (WebKit's browser and system packages; npm's is saved by deploy-dev's jobs on main). Every tree on
+# main is still tested once before it is deployed: by its pull request's run, or by deploy-dev calling this file when
+# its reuse check finds no passing run that tested exactly that tree (a docs-only merge, a direct push, main moved).
 name: ci
 on:
   pull_request:
@@ -20,8 +24,9 @@ jobs:
   # docs/technical/ (scripts/ci-changes.sh, with its reasons); then the browser shards, the webkit job and the image
   # skip their steps and pass, so each still reports under its own name; the test gate passes but records no tested
   # tree, so deploy-dev never reuses a docs-only run.
-  # Pushes to main and deploy-dev's call always run everything. The unit job (the typecheck, the guards, the docs
-  # checks and every unit and store test) and infra always run.
+  # deploy-dev's call always runs everything. On a pull request the unit job (the typecheck, the guards, the docs
+  # checks and every unit and store test) and infra always run. BT-1: ci's own push to main answers code=main: the
+  # unit job, the shards, the image and the gate are skipped, and the webkit job only fills its caches.
   changes:
     name: What changed
     runs-on: ubuntu-latest
@@ -37,7 +42,7 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Only docs outside docs/technical?
         id: changes
-        run: bash scripts/ci-changes.sh "${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci-changes.sh "${{ github.event_name }}" "${{ github.workflow }}" >> "$GITHUB_OUTPUT"
   # Runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on four
   # others (six since HK-5, plus WebKit's own since CI-3). On one four-core runner they ran together with SQL Server and
   # about 30 demo servers and browsers, which took 16 to 18 minutes and pushed browser pages past their timeouts. The
@@ -45,6 +50,10 @@ jobs:
   unit:
     name: Unit and store tests (SQLite and SQL Server)
     runs-on: ubuntu-latest
+    needs: changes
+    # BT-1: skipped only on ci's own push to main (tested by the pull request's run or deploy-dev's call of ci). Runs
+    # when What changed gave no answer at all.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'main' }}
     timeout-minutes: 30
     env:
       FOCUSTIME_TEST_SQL: required
@@ -112,6 +121,7 @@ jobs:
     name: Browser tests ${{ matrix.shard }}/6 (Chromium and WebKit)
     runs-on: ubuntu-latest
     needs: changes
+    if: needs.changes.outputs.code != 'main'
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -213,14 +223,16 @@ jobs:
         with:
           path: ~/apt-webkit
           key: apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-${{ steps.deps.outputs.hash }}
-      # The UI is built once for the run (test/e2e-build.ts) and the demo server serves it.
+      # The UI is built once for the run (test/e2e-build.ts) and the demo server serves it. BT-1: not on ci's own push to
+      # main, where this job only fills the caches above.
       - name: Browser tests
-        if: needs.changes.outputs.code != 'false'
+        if: needs.changes.outputs.code != 'false' && needs.changes.outputs.code != 'main'
         run: |
           echo "cores: $(nproc)"
           npx vitest run e2e/shell/safari.test.ts --reporter=default
   test:
     needs: [changes, unit, browser, webkit]
+    if: needs.changes.outputs.code != 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -254,6 +266,7 @@ jobs:
   image:
     runs-on: ubuntu-latest
     needs: changes
+    if: needs.changes.outputs.code != 'main'
     timeout-minutes: 20
     steps:
       - name: Docs only, nothing to run here
