@@ -17,11 +17,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("six tabs in order (Day · Week · Backlog · Status · Inbox · Code), no Plan or Team tab, no ritual chips, no context line; 1–6 switch them", async () => {
+  it("six tabs in order (Day · Week · Backlog · Status · Inbox · Code), no Plan or Team tab, no ritual chips, no context line; 1–6 and T switch them", async () => {
     const { page, errors } = await freshPage(h);
     await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/), "Code"]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["6", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["t", "Day", "#/day"], ["6", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       expect(await hash(page)).toBe(h2);

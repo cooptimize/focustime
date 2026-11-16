@@ -42,13 +42,10 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     const { page, errors } = await freshPage(h);
     page.setDefaultTimeout(30_000);
 
-    // WD-1, RF-1: five tabs, Day first, Status fourth and the Inbox last; 1 to 5 pick them.
-    expect(await page.getByRole("navigation", { name: "Tabs" }).getByRole("button").allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Week/), expect.stringMatching(/^Backlog/), expect.stringMatching(/^Inbox/), expect.stringMatching(/^Status/)]));
-    for (const [key, name, where] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["1", "Day", "#/day"]] as const) {
-      await page.keyboard.press(key);
-      await expect.poll(() => tab(page).textContent()).toMatch(new RegExp(`^${name}`));
-      expect(await hash(page)).toBe(where);
-    }
+    // BT-1: the tabs and their keys 1 to 5 were checked here too; e2e/shell/tabs-and-addresses.test.ts's first test
+    // checks them in order with 6 and T (docs/ux/bt1/removed.md).
+    await page.keyboard.press("1");
+    await expect.poll(() => hash(page)).toBe("#/day");
 
     // Day has no modes: what's next, then the morning's card. CF-1: it shows only while today has no to-dos, so take
     // the demo's off first.
