@@ -5,6 +5,7 @@ import type { BuildInfo } from "./buildinfo.ts";
 import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { posix } from "node:path";
+import { writeJson } from "./compress-data.ts";
 import { loadStaticFiles, makeStaticFile, sendMissingFile, sendStatic, type StaticFile } from "./static-files.ts";
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
@@ -179,10 +180,6 @@ export function createApp(opts: AppOptions) {
   const files: Map<string, StaticFile> | null = opts.distDir && !opts.devMiddleware ? loadStaticFiles(opts.distDir) : null;
   if (files) files.set(SW_PATH, makeStaticFile(SW_PATH, Buffer.from(serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!))), "no-cache"));
   const https = opts.publicUrl.startsWith("https://");
-  const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = []) => {
-    res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
-    res.end(JSON.stringify(body));
-  };
   const redirect = (res: ServerResponse, to: string, cookies: string[] = []) => {
     res.writeHead(302, { location: to, "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
     res.end();
@@ -195,6 +192,8 @@ export function createApp(opts: AppOptions) {
   };
 
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
+    // Every JSON answer is written through here (PF-2: server/compress-data.ts decides, from `read`, what is compressed).
+    const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = [], read?: unknown) => writeJson(req, res, status, body, cookies, read);
     const url = new URL(req.url ?? "/", opts.publicUrl);
     const method = req.method ?? "GET";
     const header = (n: string) => {
@@ -367,8 +366,11 @@ export function createApp(opts: AppOptions) {
         }
         const started = performance.now();
         let out: Awaited<ReturnType<typeof dispatch>>;
+        /** PF-2: the action named, so the writer can tell a large read on the list (compressed) from anything else. */
+        let named: unknown;
         try {
           const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
+          named = body.action;
           // HK-1: the operation names the action (only a registered one) and the client key it names (sent as a ref).
           if (isActionName(body.action)) {
             const k = body.input && typeof body.input === "object" ? (body.input as { clientKey?: unknown }).clientKey : undefined;
@@ -381,7 +383,7 @@ export function createApp(opts: AppOptions) {
         }
         const status = out.ok ? 200 : out.status;
         opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
-        return json(res, status, out);
+        return json(res, status, out, [], named);
       }
       if (url.pathname === ASSISTANT_VOICE_PATH) {
         // AS-1: push-to-talk. The audio is read into memory (2 MB at most), handed to the transcription and dropped;
