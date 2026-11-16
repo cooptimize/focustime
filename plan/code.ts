@@ -16,11 +16,13 @@ export const PATH_MAX = 1_024;
 /**
  * What happened, for the view log (C1). Opening and closing folders isn't logged. RB-2: "Listed by kind" and
  * "Searched names" are one row per client whose file names were read, with no repo and no path. RB-4: "Searched inside
- * files" is one row per client whose DevOps was asked, with no repo, no path and never the words.
+ * files" is one row per client whose DevOps was asked, with no repo, no path and never the words. RB-3: "Listed for
+ * Where is it?" is one row per client whose names were read for the New form's or the draft editor's first question,
+ * by where it was used, with no repo, no path and never the words typed.
  */
-export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used", "kinds_listed", "names_searched", "inside_searched"] as const;
+export const CODE_EVENTS = ["repo_opened", "file_opened", "find_used", "kinds_listed", "names_searched", "inside_searched", "where_new_form", "where_draft_editor"] as const;
 export type CodeEvent = (typeof CODE_EVENTS)[number];
-export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files" };
+export const CODE_EVENT_TEXT: Record<CodeEvent, string> = { repo_opened: "Repo opened", file_opened: "File opened", find_used: "Find used", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files", where_new_form: "Listed for Where is it? on the New form", where_draft_editor: "Listed for Where is it? in the draft editor" };
 /** RB-4: a search inside files shows at most this many files for a client (one request's worth; never paged). */
 export const INSIDE_MAX = 100;
 /** RB-4: the words of a search inside files are at most this long. */

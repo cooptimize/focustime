@@ -271,7 +271,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             />
             {titleProblem && <span className="set-problem nf-line" role="alert">{titleProblem}</span>}
           </span>
-          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" />}
+          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" lookup={{ clientKey, clientName, from: "new_form" }} />}
           <span className="set-label">Parent</span>
           <span className="nf-parent">
             {type && !allowedParents.size ? (
@@ -294,7 +294,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
           <Icon name={more ? "open" : "closed"} /> {phone ? "More: details, description and size" : "More: description and size"}
         </button>
-        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" />}
+        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" lookup={{ clientKey, clientName, from: "new_form" }} />}
         {more && (
           <div className="nf-grid nf-more-body">
             <label className="set-label" htmlFor="nf-desc">Description</label>

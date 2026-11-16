@@ -74,7 +74,9 @@ describe("RB-3: matching the word at the cursor", () => {
       "cleanup customers (SQL script)",
       "pl_customer_load (data factory pipeline)",
     ]);
-    // A thing before a thing inside another when both start with the word.
+    // Two letters: only names that start with them ("to" in a sentence doesn't list every name holding it).
+    expect(suggest(ENTRIES, "us")!.total).toBe(0);
+    // A thing before a thing inside another when both start with the word; the same name in By kind's order.
     expect(suggest(ENTRIES, "sal")!.shown.map(writtenOf)).toEqual(["Sales (report)", "Sales (semantic model)"]);
   });
 

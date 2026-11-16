@@ -21,6 +21,9 @@
 // and are never stored, logged, put in an error or the view log, or returned. One row ("Searched inside files", no
 // repo, no path, no words) is written before DevOps is asked; no row, no search. No text of a file is returned: a
 // file is shown only when a person opens it (code.file), logged as a file open.
+// RB-3: code.kinds also serves the New form's and the draft editor's "Where is it?" (`from`: new_form or
+// draft_editor). The same checks and the same read; its row says where it was used ("Listed for Where is it? on the
+// New form"), never the words typed, and only the things the box offers are returned (plan/where-lookup.ts).
 // Repo opened (its top folder), File opened and Find used are written to the view log (code_views) with who, when, the
 // client, the repo and the path, never content; a file's row is written before its text is returned, and if it can't
 // be written the text isn't returned. This is the one deliberate exception to "one client's data never shows outside
@@ -32,6 +35,7 @@ import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { whereOnly, WHERE_FROM, type WhereFrom } from "../plan/where-lookup.ts";
 import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type Kind, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
@@ -149,7 +153,7 @@ export function devopsLink(repo: GitRepo, path: string): string | null {
 export async function codeAction(ctx: CodeContext, action: CodeAction, input: unknown): Promise<ActionResponse> {
   const i = obj(input ?? {});
   if (!i) return bad("input must be an object");
-  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"] };
+  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey", "from"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"] };
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
 
@@ -183,6 +187,10 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     rows.sort((a, b) => (a.mine !== b.mine ? (a.mine ? -1 : 1) : a.name.localeCompare(b.name, "en", { sensitivity: "base" })));
     return { ok: true, data: { clients: rows, available: !!ctx.git, logLine: CODE_TEXT.logLine } };
   }
+
+  // RB-3: where a names read is used, checked before anything is read.
+  if (i.from !== undefined && (action !== "code.kinds" || !(WHERE_FROM as readonly unknown[]).includes(i.from))) return bad("from is new_form or draft_editor", 400, "bad_from");
+  const from = i.from as WhereFrom | undefined;
 
   // 2. The client is listed (never hidden), by its key; 3. its Rule.
   if (typeof i.clientKey !== "string" || !i.clientKey || i.clientKey.length > 100) return bad("clientKey names the client");
@@ -232,7 +240,9 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
         try {
           const f = await git.files(client.clientKey, r);
           read = true;
-          out[n] = { repo: v, ...sortRepo(f.paths), cut: f.cut, problem: null };
+          const sorted = sortRepo(f.paths);
+          // RB-3: for Where is it?, only what the box offers, and no file inside an item.
+          out[n] = { repo: v, ...(from ? whereOnly(sorted) : sorted), cut: f.cut, problem: null };
         } catch (e) {
           const f = failure(e instanceof CodeFailure ? e.reason : "error", client.name);
           out[n] = { repo: v, things: [], files: [], cut: false, problem: f.ok ? null : f.error };
@@ -244,7 +254,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     if (read) {
       try {
         if (!ctx.views) throw new Error("no view log");
-        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: action === "code.kinds" ? "kinds_listed" : "names_searched" });
+        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: from ? `where_${from}` : action === "code.kinds" ? "kinds_listed" : "names_searched" });
       } catch {
         return bad(CODE_TEXT.namesNotLogged, 503, "not_logged");
       }
