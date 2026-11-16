@@ -102,14 +102,13 @@ describe("command menu (built from the action registry)", () => {
   });
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !(name in HOLLOW) && !name.startsWith("patterns.") && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
+    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !(name in HOLLOW) && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
     // RB-1: Code is one entry ("Code") plus "Code: <client>" per client; its reads never show, and no repo or file does.
     expect(listed.filter((n) => n.startsWith("code."))).toEqual(["code.clients"]);
     const withCode = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
     expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code: Northwind", "Code"]);
-    // WP-1: DevOps patterns is offered only to people an admin turned it on for, and only as the page.
+    // RM-1: DevOps patterns is gone; nothing of it is offered to anyone.
     expect(listed.filter((n) => n.startsWith("patterns."))).toEqual([]);
-    expect(commandList({ ...env().e, showPatterns: () => {} }).map((c) => c.action).filter((n) => n.startsWith("patterns."))).toEqual(["patterns.status"]);
     // WD-1: Team is hidden for now: its commands aren't offered.
     for (const name of HIDDEN_FOR_NOW) expect(listed, name).not.toContain(name);
     // CL-1: Make it a follow-up (gone from the UI in IB-1) is gone from the server too.
@@ -591,7 +590,7 @@ describe("RS-1: an icon before every item", () => {
   it("every command and every ⋯ menu item gets an icon that says what it does, never the plain dot", () => {
     const e = env().e;
     const steps: MenuStep[] = [
-      { title: "Commands", items: commandList({ ...e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }], showPatterns: () => {} }) },
+      { title: "Commands", items: commandList({ ...e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] }) },
       slotMenu(e, "2026-11-03", "AM"),
       dayMenu(e, "2026-11-03"),
       pickMenu(e, pick),

@@ -68,7 +68,7 @@ DevOps write kinds newer than the `op` column's CHECK are kept in `write_kind`, 
 
 ### DevOps patterns
 
-A hidden working page for the people an admin turned it on for ([Integrations](integrations.md#azure-devops)). All app tables, per client, never description, acceptance or comment text and never people's names.
+WP-1's hidden working page wrote these; RM-1 removed the page and its code, and nothing writes or reads them now. The rows stay until a later cleanup drops them ([cleanup step 2](../cleanup-step-2.md)). All app tables, per client, never description, acceptance or comment text and never people's names.
 
 | Table | Holds |
 |---|---|
@@ -156,7 +156,6 @@ Settings › Your data › Export my data gives a person every user table's rows
 - **AI prompts and answers.** The request log keeps counts, cost and outcome only.
 - **Status report text.** Feature comments are read live from DevOps and never stored. AI suggestions are held in server memory for 6 hours. Lines not pushed yet, features added by hand and dismissed suggestions stay only in that browser (`localStorage`). Upcoming PTO and Holidays is read from Dataverse each time (names and dates only).
 - **Calendar link details with Busy only.** Only start, end and busy, free or tentative; Show titles keeps titles only. A calendar link's own address is never shown again, logged or exported; only its host is shown.
-- **DevOps item text on the patterns page.** Descriptions and acceptance criteria are read to measure them and, for a classification, to send; the text is dropped once the request is done.
 - **Client code.** Repo lists, folder lists, file names and file text are read from DevOps on each click and held in server memory at most 5 minutes; never written to the database, disk, logs, Export or the browser's storage. Only the view log's row is kept.
 - **Teams chat previews** (`lastMessagePreview`), status messages, out of office notes and work location are never read.
 
@@ -167,7 +166,6 @@ Settings › Your data › Export my data gives a person every user table's rows
 - **Meeting transcripts and proposals** show only to the call's reviewers and attendees (`store/meeting-store.ts`).
 - **Team views** (sends, priorities, the status report's committed features) show a snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
-- **DevOps patterns** shows counts, shares, labels and shapes for every client to the people an admin turned it on for, and item rows (id, title, labels) only for clients they are on, checked on every request. Being an admin changes nothing.
 - **Code** shows any client's code to every Cooptimizer, except a client an admin set to its team only; Code views shows admins who opened what, never the code.
 - **Diagnostics** (Settings › Your data › Diagnostics) is counts only, for a person's own chats, with no admin view.
 

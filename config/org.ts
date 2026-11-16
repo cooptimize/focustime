@@ -359,7 +359,7 @@ const GUIDANCE_KEY: Record<LevelKeyName, keyof Guidance> = { draft_stories: "dra
 /** ADM-2: per-person keys (scope "person:<id>"), set by an admin. */
 export const PERSON_SPECS = {
   automation: { kind: "rule", area: "people", label: "Automation account", builtin: false, parse: bool },
-  /** WP-1: the hidden DevOps patterns page, per person, off by default; only an admin sets it. */
+  /** WP-1: the DevOps patterns page's per-person switch. The page went in RM-1; the key stays so stored rows and Admin › Audit still read (nothing sets or reads it). */
   devops_patterns: { kind: "rule", area: "people", label: "DevOps patterns (preview)", builtin: false, parse: bool },
 } satisfies Record<string, Spec>;
 
@@ -396,8 +396,6 @@ export type OrgRules = {
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
   automation: string[];
-  /** WP-1: ids an admin gave the DevOps patterns page (lower case). */
-  devopsPatterns: string[];
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
@@ -480,7 +478,6 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
     clients,
     levels,
     automation: rows.filter((r) => r.scope.startsWith("person:") && r.key === "automation" && parsed(r) === true).map((r) => r.scope.slice(7)).sort(),
-    devopsPatterns: rows.filter((r) => r.scope.startsWith("person:") && r.key === "devops_patterns" && parsed(r) === true).map((r) => r.scope.slice(7).toLowerCase()).sort(),
     problems,
   };
 }

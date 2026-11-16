@@ -41,7 +41,7 @@ const BY_WORDS: readonly (readonly [RegExp, IconName])[] = [
   [/^Code\b/i, "code"], [/^Capture/i, "capture"], [/^Guide\b/i, "guide"], [/^Technical docs\b/i, "docs"], [/^Keyboard\b/i, "keys"], [/^Commands?\b/i, "commands"],
   [/^(Send feedback|Feedback)\b/i, "feedback"], [/^About\b/i, "about"], [/^Settings\b/i, "settings"], [/^Admin\b/i, "admin"], [/^Sign out\b/i, "sign-out"],
   [/^Notifications?\b/i, "notices"], [/^(Install|On your phone)\b/i, "phone"], [/^(Text size|Larger text|Smaller text)\b/i, "text-size"], [/^Theme\b/i, "theme"],
-  [/^(Export|Download)\b/i, "download"], [/^Demo\b/i, "data"], [/^Diagnostics\b/i, "activity"], [/^DevOps patterns\b/i, "backlog"],
+  [/^(Export|Download)\b/i, "download"], [/^Demo\b/i, "data"], [/^Diagnostics\b/i, "activity"],
   [/^(Day|Today|Go to today|Back to today)\b/i, "day"], [/^(Week|Previous week|Next week|Back to this week|Friday)\b/i, "week"],
   [/^Backlog\b/i, "backlog"], [/^Status\b/i, "status"], [/^Inbox\b/i, "inbox"], [/^Promises?\b|What I owe/i, "promise"], [/^From chats\b/i, "chats"],
   [/^(Previous|Next) region\b/i, "keys"], [/^Open\b/i, "next"], [/^Start\b/i, "play"], [/^VM\b/i, "vm"], [/^(PTO|Holiday)\b/i, "pto"],

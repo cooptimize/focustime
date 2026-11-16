@@ -86,7 +86,6 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
 | Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |
 | Settings, Admin | `ui/Settings.tsx`, `ui/settings/` | `settings.load`, `admin.load` | `config/` |
-| DevOps patterns | `ui/patterns/` (`#/patterns`, only for people an admin turned on) | `patterns.status` | `plan/patterns/` |
 | The Guide, these docs | `ui/guide/`, `ui/docs/` | `guide.*`, `docs.access` | `scripts/tech-docs.ts` (at build time) |
 
 Where the window is (tab, date, open panel, filters) is one pure model in `ui/nav.ts`, mirrored in the address (`#/day/<date>/<half>`, `#/week/day/<date>/<half>`, `#/backlog?…`, `#/inbox/<list>`, `#/item/<client>/<id>`, `#/code/<client>/<repo>/<path>`), so Back and a copied link land in the same place. Older addresses still land on the nearest screen.

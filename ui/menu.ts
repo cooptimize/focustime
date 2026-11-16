@@ -166,8 +166,6 @@ export type MenuEnv = {
   showGuide: (section?: string) => void;
   /** DOC-1: the Technical docs (#/docs/<page>/<heading>); absent signed out. */
   showDocs?: (page?: string, heading?: string) => void;
-  /** WP-1: opens the DevOps patterns page; absent unless an admin turned it on for this person (then not in the menu). */
-  showPatterns?: () => void;
   /** RB-1: open Code (#/code), on a client when one is named. Absent: signed out. */
   showCode?: (clientKey: string | null) => void;
   /** RB-2: open Code on Search names across clients, the box focused. Absent: signed out, or Code isn't for this account. */
@@ -1260,19 +1258,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "code.search":
     case "code.inside":
       return { disabled: "Open Code to read a client's code" };
-    case "patterns.status": return env.showPatterns ? { run: () => env.showPatterns!() } : { disabled: "Not available" };
-    case "patterns.access":
-    case "patterns.run_inventory":
-    case "patterns.estimate":
-    case "patterns.run_classification":
-    case "patterns.resume":
-    case "patterns.set_platform":
-    case "patterns.set_scope":
-    case "patterns.set_kind":
-    case "patterns.check":
-    case "patterns.download":
-    case "patterns.list_change":
-    case "patterns.suggestion": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -1860,9 +1845,8 @@ export const HOLLOW: Readonly<Record<string, string>> = {
 
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
-  // WP-1: the DevOps patterns page is hidden: one entry, only for people it is on for; its own actions never show.
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
-  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || n in HOLLOW || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
+  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || n in HOLLOW || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   // RS-2 D7: only the window commands are grouped; the registry's keep their place after them, so a search's first
   // result (what Enter runs) is what it was.

@@ -48,10 +48,6 @@ The Inbox: `InboxPage.tsx` is the screen with its three lists (From chats, Promi
 
 Client calls (`#/meetings`): `Meetings.tsx` lists a person's registered calls and opens a call's review; `calls.ts` is its model. Registering a call is in Admin (`ui/settings/AdminMeetings.tsx`).
 
-### `ui/patterns/`
-
-DevOps patterns (`#/patterns`), a working page an admin turns on per person: `Patterns.tsx` is the page, `Classification.tsx` and `RequestTypes.tsx` its two parts. Its rules are in `plan/patterns/`.
-
 ### `ui/plan/`
 
 Four small planning components shared by Week's and Day's cards, the block panel and Backlog's Gantt: `AddPane.tsx` (the Add list), `Estimate.tsx` (the hours stepper), `FoldLine.tsx` (a folded group's line) and `PlanRow.tsx` (a row with its handle and size).
@@ -94,7 +90,7 @@ Rule: no I/O and no clock of its own; everything comes in as arguments.
 
 ## `plan/`
 
-Pure: every planning rule behind the screens (fit and estimates, to-dos, the block panel, Day's timeline, suggestions, promises and conversations, the timer, notifications, Backlog's model and readiness, the status report, Code's kinds, the client boundary's checks). One file per rule, named for what it decides; `plan/patterns/` holds DevOps patterns' analysis; `types.ts` the shared planning types. Which rules each screen uses is in [The screens](technical/architecture.md#the-screens).
+Pure: every planning rule behind the screens (fit and estimates, to-dos, the block panel, Day's timeline, suggestions, promises and conversations, the timer, notifications, Backlog's model and readiness, the status report, Code's kinds, the client boundary's checks). One file per rule, named for what it decides; `types.ts` the shared planning types. Which rules each screen uses is in [The screens](technical/architecture.md#the-screens).
 
 Rule: no I/O, no store, no sources; a rule takes data and returns data, so it is tested on its own.
 

@@ -64,7 +64,6 @@ ui/docs/           the Technical docs panel (#/docs), rendered from docs/technic
 ui/guide/          the in-app Guide
 ui/inbox/          the Inbox: its three lists and the detail pane
 ui/meetings/       Client calls (#/meetings)
-ui/patterns/       DevOps patterns (#/patterns), a working page for people an admin turned it on for
 ui/plan/           four small planning components still used (AddPane, Estimate, FoldLine, PlanRow)
 ui/settings/       Settings and Admin sections
 actions/           named, validated actions (registry.ts is the one list); every write path
