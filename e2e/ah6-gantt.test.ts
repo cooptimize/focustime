@@ -2,7 +2,7 @@
 // but the hierarchy in the label column, each label on its bar's row (two-line titles, Larger text, after folding,
 // callouts hidden), the callout marker and its popover with fixes, Show callouts remembered, Show: Epics · Features ·
 // Stories with roll-ups and carets, arrow caps, the column resize remembered, keyboard, and no native inputs in Ahead.
-// Screenshots go to FOCUSTIME_SHOTS when set (docs/ux/ah6/ for the PR).
+// Screenshots go to FOCUSTIME_SHOTS when set (screenshots/ah6/ for the PR).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

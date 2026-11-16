@@ -1,5 +1,5 @@
 // BL-2: the before and after screenshots, one script for both so the pairs match. Only when BL2_SHOTS names a folder
-// (docs/ux/bl2/before or docs/ux/bl2/after); nothing runs otherwise. Dark and light at 1440x900: the Grid at Epics,
+// (screenshots/bl2/before or screenshots/bl2/after); nothing runs otherwise. Dark and light at 1440x900: the Grid at Epics,
 // Features and Stories; a feature opened to its stories; Epics with everything opened; the Epic filter on at Features;
 // the Gantt at Features; a client listed by target date; the Filter popover. Demo data only. A shot that can't be
 // reached is named in the log and skipped.

@@ -1,6 +1,6 @@
 // WD-2: the "after" screenshots, on the demo (Monday Nov 2, 9:30 AM; Tuesday for a past day). Only when WD2_SHOTS
-// names a folder (docs/ux/wd2); nothing runs otherwise. 1440x900 and 1280x720, light and dark, and the phone at
-// 390x844. The "before" ones (docs/ux/wd2/before) were taken from main before the change.
+// names a folder (screenshots/wd2); nothing runs otherwise. 1440x900 and 1280x720, light and dark, and the phone at
+// 390x844. The "before" ones (screenshots/wd2/before) were taken from main before the change.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

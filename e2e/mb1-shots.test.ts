@@ -1,6 +1,6 @@
 // MB-1: screenshots of the phone (390 and 360 px, 17 px root font as on an iPhone) and the desktop (1920), in demo
 // mode, only when FOCUSTIME_SHOTS names a folder. MB1_TAG (before or after) prefixes each file, so the same run on
-// main and on the branch gives the before and after sets in docs/ux/mb1/. Today's Now card in each state needs its own
+// main and on the branch gives the before and after sets in screenshots/mb1/. Today's Now card in each state needs its own
 // clock: before the day (8:00), in a block (9:30), in a meeting (11:15), between blocks (12:15, with Monday's hours
 // split 9:00 to 12:00 and 1:00 to 5:00) and after the day (5:30 PM).
 import { afterAll, describe, it } from "vitest";

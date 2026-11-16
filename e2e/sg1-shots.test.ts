@@ -1,5 +1,5 @@
 // SG-1: screenshots of the board's suggestions on the demo, Tuesday Nov 3, 9:30 AM (Monday is past, Wednesday
-// is the next working day; the demo's Thursday is PTO). Only when SG1_SHOTS names a folder (docs/ux/sg1 or docs/ux/sg1/before); nothing
+// is the next working day; the demo's Thursday is PTO). Only when SG1_SHOTS names a folder (screenshots/sg1 or screenshots/sg1/before); nothing
 // runs otherwise. SG1_STAGE=before takes the three "before" views; otherwise the full "after" set at 1440x900 and
 // 1280x720, light and dark, and the phone at 390x844.
 import { afterAll, beforeAll, describe, it } from "vitest";

@@ -6,7 +6,7 @@ import { mkdirSync } from "node:fs";
 import type { Page } from "playwright-core";
 import { startDemo } from "../e2e/harness.ts";
 
-const out = process.argv[2] ?? "docs/ux/rf1";
+const out = process.argv[2] ?? "screenshots/rf1";
 const phase = (process.argv[3] ?? "after") as "before" | "after";
 mkdirSync(out, { recursive: true });
 

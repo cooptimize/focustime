@@ -4,7 +4,7 @@
 // turns every database round, and the choice is remembered in the demo session only; switching asks the server for nothing but to
 // remember it; the filter narrows the tree and clearing it puts it back; a client with more than one database gets
 // the database first; the keyboard walks the tree; the phone shows the same. With FOCUSTIME_SHOTS set, screenshots
-// for docs/ux/rb5/after (dark and light at 1440×900, and the phone).
+// for screenshots/rb5/after (dark and light at 1440×900, and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

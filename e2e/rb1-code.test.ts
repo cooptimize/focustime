@@ -2,7 +2,7 @@
 // open folders, read SQL, TMDL and JSON colored with line numbers, Format a squashed report, the Copy buttons, a file
 // found by name with Search code by keyboard (RB-6; Find a file before), reopen the address; a client set to its team only is greyed with no repos; a client whose token
 // can't read code yet says so; binary and oversize files show no text; Esc stays (RB-6) and Back; the phone; an admin flips the Rule
-// and sees Code views. With FOCUSTIME_SHOTS set, screenshots for docs/ux/rb1 (dark and light, 1440×900 and the phone).
+// and sees Code views. With FOCUSTIME_SHOTS set, screenshots for screenshots/rb1 (dark and light, 1440×900 and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";

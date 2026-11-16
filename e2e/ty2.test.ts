@@ -1,6 +1,6 @@
 // TY-2: the checklist beside each block on Today's timeline: the list view's rows in order, ticking with PK-1's offer and
 // Undo, hover and click linked to the hours, drag both ways, the tray gone, hour labels on the left with the first hour,
-// solid bands and dashed suggestions, the overlap marker, and the layout under 1100 px. With FOCUSTIME_SHOTS: docs/ux/ty2.
+// solid bands and dashed suggestions, the overlap marker, and the layout under 1100 px. With FOCUSTIME_SHOTS: screenshots/ty2.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

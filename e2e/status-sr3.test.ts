@@ -2,7 +2,7 @@
 // "AI suggests" line (Use, Edit, Dismiss), inline lines (Enter opens the next, Shift+Enter a new line in the same
 // comment, Esc closes, Tab to the next feature's + Add a line), click-to-edit my own comment, the header's pending count,
 // Push all grouped by client and feature; the client report's Add a feature and its holidays; the phone at 390 writing
-// with 44px targets and no horizontal scroll. With FOCUSTIME_SHOTS: the screens for docs/ux/sr3.
+// with 44px targets and no horizontal scroll. With FOCUSTIME_SHOTS: the screens for screenshots/sr3.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

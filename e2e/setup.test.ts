@@ -124,7 +124,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
       await shot("setup-5-vm");
       const vm2 = process.env.VM2_SHOTS;
       if (vm2) {
-        // VM-2's own screenshots: 1440x900, light and dark (docs/ux/vm2).
+        // VM-2's own screenshots: 1440x900, light and dark (screenshots/vm2).
         const size = page.viewportSize();
         await page.setViewportSize({ width: 1440, height: 900 });
         for (const theme of ["light", "dark"] as const) {

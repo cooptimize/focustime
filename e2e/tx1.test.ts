@@ -1,6 +1,6 @@
 // TX-1: the progress check-in at Midday check-in and Close out, the chip "1h of 2h left", the end of day DevOps offer with
 // its preview, and the phone (390 wide, a 17px root font as on iPhone, 44px targets, the page itself scrolling).
-// With FOCUSTIME_SHOTS: docs/ux/tx1 (demo data only).
+// With FOCUSTIME_SHOTS: screenshots/tx1 (demo data only).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

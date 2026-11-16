@@ -1,5 +1,5 @@
 // CF-1: screenshots of the screens that lost Confirm and musts, on the demo (Monday Nov 2, 9:30 AM). Only when
-// CF1_SHOTS names a folder (docs/ux/cf1 or docs/ux/cf1/before); nothing runs otherwise. 1440x900 light and dark, and
+// CF1_SHOTS names a folder (screenshots/cf1 or screenshots/cf1/before); nothing runs otherwise. 1440x900 light and dark, and
 // the phone at 390x844.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";

@@ -1,4 +1,4 @@
-// PS-2: before and after screenshots of the clipped text under titles (docs/ux/ps2/). Day with the panel open on the
+// PS-2: before and after screenshots of the clipped text under titles (screenshots/ps2/). Day with the panel open on the
 // morning block (three long DevOps to-dos, e2e/ps1-states.ts), Day without it, Day's Timeline and Week, at 1440x900 and
 // 1280x720 in both themes, the phone at 390x844, and close crops of a card's to-do rows and the panel's rows. Only when
 // PS2_SHOTS names a folder; nothing runs otherwise. Demo data only.

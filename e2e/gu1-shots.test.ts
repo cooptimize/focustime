@@ -1,5 +1,5 @@
 // GU-1: the before and after screenshots of the Guide, one script for both so the pairs match. Only when GU1_SHOTS
-// names a folder (docs/ux/gu1/before or docs/ux/gu1/after); nothing runs otherwise. Every section, top and scrolled,
+// names a folder (screenshots/gu1/before or screenshots/gu1/after); nothing runs otherwise. Every section, top and scrolled,
 // dark and light, at 1440x900 and on the phone; each try-it; every tour's every step. Demo data only. A shot that
 // can't be reached is named in the log and skipped.
 import { afterAll, beforeAll, describe, it } from "vitest";

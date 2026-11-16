@@ -38,6 +38,16 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 - **Claude Code never merges** a pull request, never deploys prod and never pushes to `main`. A person reviews and merges.
 - Never commit secrets or real personal or client data. Tests use fakes (`@example` addresses, `contoso` and `fabrikam` orgs); screenshots come from the demo only. `npm run guards` checks for real names and desktop words.
 
+## Screenshots
+
+A step's screenshots never go on `main` or on the step's branch (CI-3). Kept true by `npm run guards`, which fails on an image or video under `docs/ux` and on any file over 300 KB outside the few named in `scripts/guards.ts` (`LARGE_OK`, each with its reason).
+
+1. **Take them** from the demo only, into `screenshots/<step>/` (ignored by git): a behavior test with `FOCUSTIME_SHOTS=screenshots/<step>` set, or a script in `scripts/` whose first argument is the folder.
+2. **Put them on their branch**: `node scripts/shots-branch.ts screenshots/<step> <step>` makes or updates `shots/<step>` with exactly those images (no other file, and nothing on the working branch or `main` changes), pushes it and prints one line per image.
+3. **Show them in the pull request** by pasting those lines into its body. Each is the image's raw address pinned to the branch's commit (`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<file>`), so the pictures stay as they were whatever is pushed later.
+
+The images from before CI-3 are on `shots/archive`, in their old `docs/ux/<step>/` folders; [docs/ux/README.md](../ux/README.md) gives its commit. A step's notes, tables and audits stay in `docs/ux/<step>/` as text.
+
 ## Tests and CI
 
 - **The inner loop:** `npx vitest related <files>` or `npx vitest --changed`, plus `npm run typecheck`. Run the full suite once before the pull request; CI runs it again.

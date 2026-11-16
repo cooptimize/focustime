@@ -4,7 +4,7 @@
 // procedures and pipelines that use it across clients, each client that can't answer says why, a result opens with
 // its matches marked and a stepper, Back returns; the words are in no address and no browser storage, and a names
 // search still sends none; an admin sees Searched inside files with a client and never the words; the phone. With
-// FOCUSTIME_SHOTS set, screenshots for docs/ux/rb4 (dark and light at 1440×900, and the phone).
+// FOCUSTIME_SHOTS set, screenshots for screenshots/rb4 (dark and light at 1440×900, and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

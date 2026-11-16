@@ -1,5 +1,5 @@
 // UC-1: the before and after screenshots, one script for both so the pairs match. Only when UC1_SHOTS names a folder
-// (docs/ux/uc1/before or docs/ux/uc1/after); nothing runs otherwise. Dark and light, demo data only. A shot that
+// (screenshots/uc1/before or screenshots/uc1/after); nothing runs otherwise. Dark and light, demo data only. A shot that
 // can't be reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";

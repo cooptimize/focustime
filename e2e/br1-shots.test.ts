@@ -1,5 +1,5 @@
 // BR-1: the before and after screenshots, one script for both so the pairs match. Only when BR1_SHOTS names a folder
-// (docs/ux/br1/before or docs/ux/br1/after); nothing runs otherwise. Demo data only. The opening as frames on a slow
+// (screenshots/br1/before or screenshots/br1/after); nothing runs otherwise. Demo data only. The opening as frames on a slow
 // load (first paint, the plain loading state, the loader mid-pass, the line at 8 seconds, the move to the top bar, the
 // app), sign-in, About, the Guide's Start here, a tour's last card, the Guide's footer, an empty state, the end of
 // Close out and Settings after a reconnect; dark and light at 1440x900, and the phone's loader. It also times the

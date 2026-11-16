@@ -1,5 +1,5 @@
 // ED-2: the before and after screenshots, one script for both so the pairs match. Only when ED2_SHOTS names a folder
-// (docs/ux/ed2/before or docs/ux/ed2/after); nothing runs otherwise. Dark and light at 1440x900, demo data only
+// (screenshots/ed2/before or screenshots/ed2/after); nothing runs otherwise. Dark and light at 1440x900, demo data only
 // (Atlas Freight's backlog, with ED-2's grooming examples). The before set is the same places on main's screens: what
 // they offered before this step. A shot that can't be reached is named in the log and skipped.
 import { afterAll, describe, it } from "vitest";

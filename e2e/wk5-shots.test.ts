@@ -1,7 +1,7 @@
 // WK-5: the before and after screenshots of Week on a Thursday (e2e/wk5-states.ts), both themes, at 1440x900 and
 // 1280x720, Cards and Timeline, the block panel closed and open on today's morning block. The after set adds the
 // catch-up day and the weekend hidden (with the note), a folded day and past days with their to-dos. Only when
-// WK5_SHOTS names a folder (docs/ux/wk5/before or docs/ux/wk5); nothing runs otherwise. Demo data only.
+// WK5_SHOTS names a folder (screenshots/wk5/before or screenshots/wk5); nothing runs otherwise. Demo data only.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

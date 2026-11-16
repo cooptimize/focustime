@@ -1,7 +1,7 @@
 // NL-1: the "now" mark only on a block that is under way. Demo mode, the clock pinned to Wednesday Nov 4 at 6:30 AM
 // (before the day), 10:03 AM (the morning block), 12:30 PM exactly (the afternoon block starts) and 10:03 PM (after the
 // day): Week and Day, Cards and Timeline, at 1920; then the phone's Day and Week. No mark, line, tick or row anywhere
-// outside a block's hours; inside, only on that block. FOCUSTIME_SHOTS also writes docs/ux/nl1's screenshots.
+// outside a block's hours; inside, only on that block. FOCUSTIME_SHOTS also writes screenshots/nl1's screenshots.
 import { afterAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, timelineOn, type Harness } from "./harness.ts";
@@ -84,7 +84,7 @@ describe.skipIf(!CHROMIUM)("NL-1: the now mark only on a block under way", () =>
     }, T);
   }
 
-  it.skipIf(!SHOTS)("screenshots for docs/ux/nl1 (dark, 1440×900)", async () => {
+  it.skipIf(!SHOTS)("screenshots for screenshots/nl1 (dark, 1440×900)", async () => {
     for (const at of ["22:03", "10:03"]) {
       // NL1_WHEN=before takes the same pictures on main's code (the report's "before").
       const when = process.env.NL1_WHEN ?? "after";

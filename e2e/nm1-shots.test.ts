@@ -1,5 +1,5 @@
 // NM-1: the before and after screenshots, one script for both so the pairs match. Only when NM1_SHOTS names a folder
-// (docs/ux/nm1/before or docs/ux/nm1/after); nothing runs otherwise. Dark, at 1440x900 and on the phone: Keyboard
+// (screenshots/nm1/before or screenshots/nm1/after); nothing runs otherwise. Dark, at 1440x900 and on the phone: Keyboard
 // shortcuts, the Guide's Every key, each tab's tooltip, Settings' section list with Day and Week open, Settings ›
 // Notifications, Admin's renamed rules, the phone's Backlog notice, the Focus screen, and Week on a catch-up day with
 // no working hours. Demo data only. A shot that can't be reached is named in the log and skipped.

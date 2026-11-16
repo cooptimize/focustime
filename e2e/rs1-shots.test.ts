@@ -1,5 +1,5 @@
 // RS-1: the before and after screenshots of the restyle, one script for both so the pairs match. Only when RS1_SHOTS
-// names a folder (docs/ux/rs1/before or docs/ux/rs1/after); nothing runs otherwise. Demo data only (e2e/ps1-states.ts,
+// names a folder (screenshots/rs1/before or screenshots/rs1/after); nothing runs otherwise. Demo data only (e2e/ps1-states.ts,
 // the "ordinary" state: a few to-dos a block, a promise due, an at-risk block). Dark and light at 1440x900; Day and
 // Week also at the largest Text size; the phone at 390x844. A screen that can't be reached is named in the log and
 // skipped, so one missing control never loses the rest.

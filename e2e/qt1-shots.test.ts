@@ -1,5 +1,5 @@
 // QT-1: screenshots of Week and Day on the demo, Wednesday Nov 4, 2:30 PM (Monday and Tuesday are past, Wednesday's
-// morning has ended). Only when QT1_SHOTS names a folder (docs/ux/qt1 or docs/ux/qt1/before); nothing runs otherwise.
+// morning has ended). Only when QT1_SHOTS names a folder (screenshots/qt1 or screenshots/qt1/before); nothing runs otherwise.
 // 1440x900, light and dark. The same script took the "before" set from main and the "after" set from the branch.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";

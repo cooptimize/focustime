@@ -7,8 +7,8 @@
 // AS-2 adds the question with choices (and after a tap), a move across clients with Undo, and a compound update.
 // PK-1 adds Done's follow-up (Set #id to its done state) and Undo's (put it back), on the check-in and close out cards.
 // TB-3 adds the Ask parity set from the real service on the fictional test world; pass "tb3" as the second argument for
-// only those (docs/ux/tb3).
-// FN-1 adds Wrap it up from Done (Finished) and Partly (Made progress); pass "fn1" for only those (docs/ux/fn1).
+// only those (the TB-3 set).
+// FN-1 adds Wrap it up from Done (Finished) and Partly (Made progress); pass "fn1" for only those (the FN-1 set).
 // Usage: node scripts/teams-card-previews.ts <outDir> [tb3|fn1]
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";

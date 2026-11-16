@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { runGuards } from "./guards.ts";
+import { LARGE_OK, runGuards } from "./guards.ts";
 
 const SCRIPT = join(import.meta.dirname, "guards.ts");
 const client = Buffer.from("VyZD", "base64").toString("utf8");
@@ -69,5 +69,41 @@ describe("one guard script (HK-1)", () => {
     const r = cli(d);
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/1 process hit.*\n\s+ui\/kind\.ts:1/);
+  });
+
+  // CI-3: images leave main; a step's screenshots go on its shots/<step> branch.
+  it("fails on an image or a video added under docs/ux, tracked or not, and names nothing else", () => {
+    const d = repo();
+    mkdirSync(join(d, "docs/ux/zz1"), { recursive: true });
+    writeFileSync(join(d, "docs/ux/zz1/notes.md"), "# ZZ-1\n");
+    writeFileSync(join(d, "docs/ux/zz1/after.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    execFileSync("git", ["add", "-A"], { cwd: d });
+    writeFileSync(join(d, "docs/ux/zz1/walk.webm"), "x");
+    const r = cli(d);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/2 files hit.*shots\/<step>/);
+    expect(r.stderr).toContain("docs/ux/zz1/after.png: an image or video under docs/ux");
+    expect(r.stderr).toContain("docs/ux/zz1/walk.webm");
+    expect(r.stderr).not.toContain("notes.md");
+  });
+
+  it("fails on a file over 300 KB outside the folders that need large files, and passes one inside them", () => {
+    const d = repo();
+    const big = Buffer.alloc(301 * 1024, 1);
+    mkdirSync(join(d, "assets"), { recursive: true });
+    writeFileSync(join(d, "assets/huge.bin"), big);
+    mkdirSync(join(d, "docs/demo"), { recursive: true });
+    writeFileSync(join(d, "docs/demo/walk.gif"), big);
+    writeFileSync(join(d, "ui/small.png"), Buffer.alloc(299 * 1024, 1));
+    expect(runGuards(d).hits.map((h) => h.at)).toEqual(["assets/huge.bin: 301 KB"]);
+    expect(cli(d).status).toBe(1);
+  });
+
+  it("names a reason for every file that may be large", () => {
+    for (const [path, why] of Object.entries(LARGE_OK)) expect(why.length, path).toBeGreaterThan(20);
+  });
+
+  it("passes this repo: no image under docs/ux and no unexpected large file", () => {
+    expect(runGuards(join(import.meta.dirname, "..")).hits.filter((h) => h.guard === "files")).toEqual([]);
   });
 });

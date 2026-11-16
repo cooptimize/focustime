@@ -1,5 +1,5 @@
 // NM-2: the before and after screenshots, one script for both so the pairs match. Only when NM2_SHOTS names a folder
-// (docs/ux/nm2/before or docs/ux/nm2/after); nothing runs otherwise. Dark, at 1440x900 and on the phone: the command
+// (screenshots/nm2/before or screenshots/nm2/after); nothing runs otherwise. Dark, at 1440x900 and on the phone: the command
 // menu with "conversation" and with "request" typed, Admin › Clients' chats group, Settings › Client chats, the Admin
 // section that held the conversation rules, the chat permission's note, a block card with a to-do's title hovered,
 // and the phone's day bar. Demo data only. A shot that can't be reached is named in the log and skipped.

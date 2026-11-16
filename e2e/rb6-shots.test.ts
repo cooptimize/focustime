@@ -1,4 +1,4 @@
-// RB-6: the screenshots for docs/ux/rb6/<set>/ (dark and light at 1440×900, the top bar at 1280 and 1920, the phone),
+// RB-6: the screenshots for screenshots/rb6/<set>/ (dark and light at 1440×900, the top bar at 1280 and 1920, the phone),
 // taken on the demo when FOCUSTIME_SHOTS names a folder. It runs on the layout as it is: the "before" set was taken
 // with the selectors of the layout before RB-6 (git history), the "after" set with these.
 import { afterAll, beforeAll, describe, it } from "vitest";

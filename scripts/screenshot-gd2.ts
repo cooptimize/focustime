@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import type { Page } from "playwright-core";
 import { startDemo } from "../e2e/harness.ts";
 
-const out = process.argv[2] ?? "docs/ux/gd2";
+const out = process.argv[2] ?? "screenshots/gd2";
 const only = process.argv[3] ?? null;
 mkdirSync(out, { recursive: true });
 const harness = await startDemo("chromium", {}, "2026-11-05T10:00:00-05:00");

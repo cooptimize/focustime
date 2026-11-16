@@ -1,5 +1,5 @@
 // RS-2: the before and after screenshots, one script for both so the pairs match. Only when RS2_SHOTS names a folder
-// (docs/ux/rs2/before or docs/ux/rs2/after); nothing runs otherwise. Demo data only: the demo person, with Friday
+// (screenshots/rs2/before or screenshots/rs2/after); nothing runs otherwise. Demo data only: the demo person, with Friday
 // Nov 6 given working hours 9:00 to 5:00 through the app's own action (hours.set_day), so the catch-up day is a
 // working one; the PS-1 "ordinary" state on top (e2e/ps1-states.ts). Two clocks: Friday Nov 6 at 10:00 AM (every
 // client block of the week is past) and Tuesday Nov 3 at 9:30 AM (midweek). Dark and light at 1440x900; the phone

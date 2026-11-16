@@ -1,6 +1,6 @@
 // PS-1: the before and after screenshots of Day, Week and the block panel, in three states (e2e/ps1-states.ts), both
-// themes, at 1440x900, 1280x720 and the phone at 390x844. Only when PS1_SHOTS names a folder (docs/ux/ps1/before or
-// docs/ux/ps1); nothing runs otherwise. Demo data only.
+// themes, at 1440x900, 1280x720 and the phone at 390x844. Only when PS1_SHOTS names a folder (screenshots/ps1/before or
+// screenshots/ps1); nothing runs otherwise. Demo data only.
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
