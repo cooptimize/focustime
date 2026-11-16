@@ -11,10 +11,26 @@
 // - online: a release may have replaced the file (the server then answers with the page, which isn't a script). The
 //   app reloads once, at the place that was asked for, to pick the release up. If the file still can't be loaded
 //   after that reload, the line says so with Retry. The one reload is remembered in sessionStorage until a screen
-//   loads again, so it can never loop.
+//   loads again, so it can never loop. Retry tries the file again and, if it still can't be had, reloads once more
+//   (one reload per press).
 // - an error thrown by the screen's own code is not a missing file: it is thrown on, as an error in any other part of
 //   the app is, with no reload and no line.
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { SCREENS, type ScreenName } from "./screen-names.ts";
+// Still in the first download until its own commit: imported here, so ready from the start.
+import * as aheadNow from "./ahead/Ahead.tsx";
+import * as statusNow from "./Status.tsx";
+import * as inboxNow from "./inbox/InboxPage.tsx";
+import * as settingsNow from "./Settings.tsx";
+import * as cardNow from "./StoryCard.tsx";
+import * as newItemNow from "./NewItem.tsx";
+import * as draftNow from "./DraftEditor.tsx";
+import * as captureNow from "./Capture.tsx";
+import * as assistantNow from "./Assistant.tsx";
+import * as focusNow from "./FocusScreen.tsx";
+import * as checkinNow from "./Checkin.tsx";
+import * as closeoutNow from "./CloseOut.tsx";
+
 
 const LOADERS = {
   ahead: () => import("./ahead/Ahead.tsx"),
@@ -33,20 +49,22 @@ const LOADERS = {
   guide: () => import("./guide/Guide.tsx"),
   tour: () => import("./guide/tour/Tour.tsx"),
   docs: () => import("./docs/TechDocs.tsx"),
-} as const;
+} as const satisfies Record<ScreenName, () => Promise<unknown>>;
 
-export type ScreenName = keyof typeof LOADERS;
+const NOW: Partial<Record<ScreenName, unknown>> = { ahead: aheadNow, status: statusNow, inbox: inboxNow, settings: settingsNow, card: cardNow, newItem: newItemNow, draft: draftNow, capture: captureNow, assistant: assistantNow, focus: focusNow, checkin: checkinNow, closeout: closeoutNow };
+
+export type { ScreenName };
+export { SCREENS };
 export type ScreenModule<K extends ScreenName> = Awaited<ReturnType<(typeof LOADERS)[K]>>;
-export const SCREENS = Object.keys(LOADERS) as ScreenName[];
 
 /** Fetched in the background once the first screen is usable, in this order: the tabs as the top bar lists them, then what a key opens from any of them. The Guide and the Technical docs wait until they are opened. */
 export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "code", "card", "capture", "assistant", "checkin", "closeout", "focus", "newItem", "draft", "settings"];
 
 /** Why a screen's file didn't load: no connection, or it can't be had from the server (after the one reload). */
 export type Failed = "offline" | "missing";
-type Entry = { status: "idle" | "loading" | "ready" | "failed"; mod?: unknown; why?: Failed; promise?: Promise<void>; wanted: number; since: number };
+type Entry = { status: "idle" | "loading" | "ready" | "failed"; mod?: unknown; why?: Failed; promise?: Promise<void>; wanted: number; since: number; /** This try was asked for with Retry. */ retry?: boolean };
 
-const entries = new Map<ScreenName, Entry>(SCREENS.map((n) => [n, { status: "idle", wanted: 0, since: 0 }]));
+const entries = new Map<ScreenName, Entry>(SCREENS.map((n) => [n, n in NOW ? { status: "ready", mod: NOW[n], wanted: 0, since: 0 } : { status: "idle", wanted: 0, since: 0 }]));
 const listeners = new Set<() => void>();
 let version = 0;
 const changed = () => {
@@ -135,7 +153,9 @@ async function failedLoad(name: ScreenName, e: unknown): Promise<void> {
   }
   if (!page.online() || !(await page.reach())) return fail("offline");
   // Wanted on screen now (not only fetched ahead): one reload picks up a release. Fetched ahead, it waits to be asked.
-  if (en.wanted > 0 && page.note.get() === null) {
+  // Retry pressed and the file still can't be had: a browser may remember a failed file for as long as the page
+  // lives, so Retry reloads too, once per press.
+  if (en.wanted > 0 && (en.retry || page.note.get() === null)) {
     page.note.set(name);
     return page.reload();
   }
@@ -143,11 +163,11 @@ async function failedLoad(name: ScreenName, e: unknown): Promise<void> {
 }
 
 /** Starts fetching a screen (once) and resolves when it is ready or has failed. */
-export function loadScreen(name: ScreenName): Promise<void> {
+export function loadScreen(name: ScreenName, retry = false): Promise<void> {
   const en = entries.get(name)!;
   if (en.status === "ready") return Promise.resolve();
   if (en.promise) return en.promise;
-  Object.assign(en, { status: "loading", since: Date.now() });
+  Object.assign(en, { status: "loading", since: Date.now(), retry });
   delete en.why;
   en.promise = loaderOf(name).then(
     (mod) => {
@@ -202,7 +222,17 @@ export function waiting(): Waiting {
 
 /** Retry on the line: every asked-for screen that failed is fetched again. */
 export function retryScreens(): void {
-  for (const [n, en] of entries) if (en.wanted > 0 && en.status === "failed") void loadScreen(n);
+  for (const [n, en] of entries) if (en.wanted > 0 && en.status === "failed") void loadScreen(n, true);
+}
+
+/**
+ * A screen that opens over the place (a dialog or a panel): asked for while `wanted`, its module once the file is in,
+ * null until then. The caller draws nothing for it meanwhile, so the place under it stays as it is.
+ */
+export function useScreen<K extends ScreenName>(name: K, wanted: boolean): ScreenModule<K> | null {
+  useScreens();
+  useEffect(() => (wanted ? wantScreens([name]) : undefined), [name, wanted]);
+  return wanted ? screen(name) : null;
 }
 
 /** Rerenders when any screen's state changes. */

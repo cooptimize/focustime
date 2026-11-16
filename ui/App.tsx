@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
@@ -20,12 +20,10 @@ import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
 import { DevOpsFreshCtx, useDevOpsChanged, useDevOpsFreshFlow } from "./DevOpsFresh.tsx";
 import { DoneOfferCtx } from "./DoneOffer.tsx";
 import { useWrapUpFlow } from "./WrapUp.tsx";
-import { StoryCard } from "./StoryCard.tsx";
 import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost } from "./Team.tsx";
-import { StatusView } from "./Status.tsx";
 import { useStatusNeeds } from "./status-needs.ts";
 import { StatusMark } from "./StatusMark.tsx";
 import { dotText, dotTone } from "../plan/status-dot.ts";
@@ -53,30 +51,23 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
-import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
-import { InboxPage } from "./inbox/InboxPage.tsx";
 import { useInboxToday } from "./inboxcount.ts";
 import { railItems } from "../plan/inbox-items.ts";
-import { Ahead } from "./ahead/Ahead.tsx";
 import { Day } from "./Day.tsx";
 import { pickNeed, type DraftStory, type Pick } from "../plan/types.ts";
-import { CaptureDialog } from "./Capture.tsx";
 import { captureClients } from "./capture-clients.ts";
-import { AssistantPanel } from "./Assistant.tsx";
 import { COMMANDS_HREF } from "./assistant-links.ts";
 import type { AssistantContext } from "../assistant/types.ts";
 import { CreateDraftCtx } from "./CreateDraft.tsx";
-import { NewItemDialog } from "./NewItem.tsx";
 import { NewItemCtx, type NewHooks, type NewPlace } from "./newitem-ctx.ts";
 import { newTypesOf } from "./new-types.ts";
-import { DraftEditor } from "./DraftEditor.tsx";
 import { DraftEditorCtx } from "./drafteditor-ctx.tsx";
 import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
@@ -94,7 +85,6 @@ import { FeedbackDialog } from "./Feedback.tsx";
 import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { CarryProvider } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
-import { Settings } from "./Settings.tsx";
 import { useAdmin } from "./settings/use-admin.ts";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
@@ -115,12 +105,10 @@ import { tourById } from "./guide/tours.ts";
 import type { Checklist } from "../actions/guide-actions.ts";
 import type { DocsAccess } from "../actions/docs-actions.ts";
 // UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
-const Guide = lazy(() => import("./guide/Guide.tsx"));
-const Tour = lazy(() => import("./guide/tour/Tour.tsx"));
 // DOC-1: the Technical docs, their pages and diagrams load only when opened.
-const TechDocs = lazy(() => import("./docs/TechDocs.tsx"));
 // RB-1: Code and its coloring library load only when opened.
-const CodePanel = lazy(() => import("./code/Code.tsx"));
+import { drawnLoc, loadScreen, prefetchScreens, retryScreens, screen, screensReady, setReloadAddress, useScreen, useScreens, wantScreens } from "./screens.ts";
+import { ScreenLine } from "./ScreenLine.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 import { CoworkCtx, openChat, useCowork } from "./cowork.tsx";
@@ -162,6 +150,9 @@ const TAB_TITLES: Record<Tab, string> = {
 };
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+/** PF-1: a tab's file fetched ahead, on its button's hover or focus (the key and the click ask for it anyway). */
+const aheadOf = (t: Tab) => locScreens({ nav: defaultNav(t), overlay: null }).forEach((n) => void loadScreen(n));
 
 /** A5: the address that opens Quick capture (Super+Alt+N on the hosted app). */
 const CAPTURE_HASH = "#/capture";
@@ -226,6 +217,8 @@ export function App() {
   );
   const afterOpening = useCallback(() => {
     void loadSetup(true);
+    // PF-1: the first screen is usable: the other tabs' files are fetched while the page is idle.
+    prefetchScreens();
     // G1: a person's first Today offers the tour once (per person, in the plan store).
     call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});
   }, [loadSetup]);
@@ -247,7 +240,21 @@ export function App() {
    */
   // A5: #/capture (the hosted app's Super+Alt+N) opens Quick capture over the last place, then leaves the address.
   const captureAsked = useRef(location.hash === CAPTURE_HASH);
-  const [loc, setLocState] = useState<Loc>(() => (arriveAt(location.hash), parseHash(location.hash)) ?? (location.hash && !captureAsked.current && askTurnOf(location.hash) === null ? HOME : storedLoc()) ?? HOME);
+  const [askedLoc, setLocState] = useState<Loc>(() => (arriveAt(location.hash), parseHash(location.hash)) ?? (location.hash && !captureAsked.current && askTurnOf(location.hash) === null ? HOME : storedLoc()) ?? HOME);
+  // PF-1: the place asked for, and the place drawn. A screen that loads when first opened (ui/screens.ts) is drawn
+  // once its file is in; until then the place the person was on stays, and everything below works on that place.
+  useScreens();
+  const lastDrawn = useRef<Loc | null>(null);
+  const loc = drawnLoc(askedLoc, locScreens, lastDrawn.current, HOME);
+  if (screensReady(locScreens(loc))) lastDrawn.current = loc;
+  useEffect(() => wantScreens(locScreens(askedLoc)), [askedLoc]);
+  /** The first screen can be drawn: its file is in (or failed, and Day is drawn instead). */
+  const firstScreen = screensReady(locScreens(loc));
+  const askedLocRef = useRef(askedLoc);
+  const captureWantedRef = useRef(false);
+  askedLocRef.current = askedLoc;
+  // A reload to pick up a release lands on the place that was asked for.
+  useEffect(() => setReloadAddress(() => (captureWantedRef.current ? CAPTURE_HASH : hashOf(askedLocRef.current))), []);
   const locRef = useRef(loc);
   locRef.current = loc;
   const go = useCallback((next: Loc | ((l: Loc) => Loc)) => setLocState((l) => {
@@ -385,7 +392,11 @@ export function App() {
   const [statusVersion, setStatusVersion] = useState(0);
   const statusNeeds = useStatusNeeds(statusVersion);
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
-  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureWanted, setCaptureOpen] = useState(false);
+  // PF-1: Quick capture loads when first opened (ui/screens.ts): asked for, it is open once its file is in.
+  const CaptureDialog = useScreen("capture", captureWanted)?.CaptureDialog;
+  captureWantedRef.current = captureWanted;
+  const captureOpen = captureWanted && !!CaptureDialog;
   // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
   const [assistantAt, setAssistantAt] = useState<{ text: string; turn?: number } | null>(() => {
     const turn = askTurnOf(location.hash);
@@ -400,6 +411,12 @@ export function App() {
   const newN = useRef(0);
   const openNew = useCallback((place: NewPlace, hooks: NewHooks = {}) => setNewAt({ place, hooks, n: ++newN.current }), []);
   // CP-1's Create in DevOps from a captured draft (Capture, the draft editor) opens the New form on that draft.
+  // PF-1: the other dialogs over the place, the same way: each appears once its file is in, and the place stays.
+  const AssistantPanel = useScreen("assistant", !!assistantAt)?.AssistantPanel;
+  const NewItemDialog = useScreen("newItem", !!newAt)?.NewItemDialog;
+  const DraftEditor = useScreen("draft", !!draftEdit)?.DraftEditor;
+  /** A dialog asked for whose file hasn't arrived (or failed): Esc takes the ask back. */
+  const dialogWaiting = (captureWanted && !CaptureDialog) || (!!assistantAt && !AssistantPanel) || (!!newAt && !NewItemDialog) || (!!draftEdit && !DraftEditor);
   const openDraftForm = useCallback((draftId: number) => openNew({ from: "draft", clientKey: null, draftId }), [openNew]);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -1420,7 +1437,13 @@ export function App() {
       const typing = isTypingTarget(e.target as HTMLElement | null);
       const free = !typing && !captureOpen;
       const k = e.key;
-      if (loc.overlay && k === "Escape" && !captureOpen) {
+      if (k === "Escape" && dialogWaiting) {
+        e.preventDefault();
+        if (captureWanted && !CaptureDialog) setCaptureOpen(false);
+        if (assistantAt && !AssistantPanel) setAssistantAt(null);
+        if (newAt && !NewItemDialog) setNewAt(null);
+        if (draftEdit && !DraftEditor) setDraftEdit(null);
+      } else if (loc.overlay && k === "Escape" && !captureOpen) {
         // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running). Settings' own
         // shell takes Esc first (ST-1), so its unsaved fields are saved on the way out.
         e.preventDefault();
@@ -1470,9 +1493,10 @@ export function App() {
         e.preventDefault();
         openNew({ from: "command", clientKey: envRef.current?.selection.clientKey ?? null });
       } else if ((e.key === "n" || (e.key === "N" && !e.shiftKey) || ((e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
-        // P1: C opens Capture too.
+        // P1: C opens Capture too. PF-1: pressed again after its file failed to load, it is tried again.
         e.preventDefault();
         setCaptureOpen(true);
+        retryScreens();
       } else if ((e.key === "f" || e.key === "F") && !typing) {
         e.preventDefault();
         // Under the Focus button when it is on screen (it hides on narrow widths).
@@ -1482,7 +1506,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt, tabShown]);
+  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt, tabShown, dialogWaiting, captureWanted, CaptureDialog, assistantAt, AssistantPanel, newAt, NewItemDialog, draftEdit, DraftEditor]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1777,7 +1801,7 @@ export function App() {
   openSettingsRef.current = env?.openSettings ?? null;
 
   // BR-1: the opening (the loader, index.html's week mark, into the top bar's mark; ui/brand/boot.ts).
-  const opening = <Opening key="opening" ready={state.kind !== "loading"} lines={sourceLines(data?.sources ?? null, data?.devops)} onFinished={afterOpening} />;
+  const opening = <Opening key="opening" ready={state.kind !== "loading" && firstScreen} lines={sourceLines(data?.sources ?? null, data?.devops)} onFinished={afterOpening} />;
 
   if (state.kind === "session") {
     return (
@@ -1789,7 +1813,8 @@ export function App() {
       </div>
     );
   }
-  if (!data || !env || !target) {
+  // PF-1: opened at an address whose screen is still arriving: the loader stays, and nothing is drawn under it.
+  if (!data || !env || !target || !firstScreen) {
     return (
       <>
         {opening}
@@ -1799,6 +1824,17 @@ export function App() {
   }
 
   const { week } = shownData ?? data;
+  // PF-1: the screens that load when first opened; each is null until its file is in (the place is drawn only then).
+  const AheadM = screen("ahead");
+  const StatusM = screen("status");
+  const InboxM = screen("inbox");
+  const Settings = screen("settings")?.Settings;
+  const FocusM = screen("focus");
+  const StoryCard = screen("card")?.StoryCard;
+  const CodePanel = screen("code")?.default;
+  const Guide = screen("guide")?.default;
+  const Tour = screen("tour")?.default;
+  const TechDocs = screen("docs")?.default;
   // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
   // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
   const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && underTour);
@@ -1959,7 +1995,7 @@ export function App() {
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.filter(tabShown).map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
@@ -1967,6 +2003,7 @@ export function App() {
             </button>
           ))}
         </nav>}
+        <ScreenLine />
         <div className="top-actions">
           {!phone && <VmChip />}
           {phone && <>
@@ -2057,8 +2094,7 @@ export function App() {
         </div>
       )}
 
-      {tourAt && (
-        <Suspense fallback={null}>
+      {tourAt && Tour && (
           <Tour
             key={tourAt.id}
             tour={tourAt}
@@ -2066,14 +2102,13 @@ export function App() {
             onEnd={(to) => go((l) => ({ nav: l.nav, overlay: to === "guide" ? { kind: "guide", chapter: tourAt.section } : null }))}
             onNav={(nav) => go(() => ({ nav, overlay: { kind: "tour", id: tourAt.id } }))}
           />
-        </Suspense>
       )}
       {showTour && (
         <div className="today-tour">
           <TourLink onOpen={() => (endTourOffer(), openGuide())} onDismiss={endTourOffer} />
         </div>
       )}
-      {settingsAt !== null ? (
+      {settingsAt !== null && Settings ? (
         <Settings
           section={settingsAt}
           setting={settingAt}
@@ -2116,8 +2151,7 @@ export function App() {
           runTime={runTime}
           onSetup={(step) => setSetupAt(step)}
         />
-      ) : guideAt ? (
-        <Suspense fallback={null}>
+      ) : guideAt && Guide ? (
           <Guide
             chapter={guideAt.chapter}
             onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
@@ -2128,9 +2162,7 @@ export function App() {
             }}
             checklist={guideChecklist}
           />
-        </Suspense>
-      ) : docsAt ? (
-        <Suspense fallback={null}>
+      ) : docsAt && TechDocs ? (
           <TechDocs
             page={docsAt.page}
             heading={docsAt.heading}
@@ -2138,11 +2170,10 @@ export function App() {
             onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
             access={docsAccess}
           />
-        </Suspense>
       ) : meetingAt ? (
         <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
-      ) : focusOpen ? (
-        <FocusScreen
+      ) : focusOpen && FocusM ? (
+        <FocusM.FocusScreen
           t={data.timer}
           nowMs={secondMs}
           pick={timerPick}
@@ -2157,7 +2188,7 @@ export function App() {
           onClose={() => setView("today")}
           onDeep={(on) => void runTimer("timer.deep", { on })}
           sound={
-            <SoundControl
+            <FocusM.SoundControl
               settings={data.focus}
               media={data.media}
               choice={sessionSound ?? data.focus.sound}
@@ -2175,10 +2206,9 @@ export function App() {
         />
       ) : nav.tab === "status" ? (
         // SR-1, WD-1: Status is its own tab (was Week › Status). SR-3: the phone can write too.
-        <StatusView tz={userZone(data)} colors={data.clients} readOnly={false} phone={phone} group={nav.group} version={planWeekVersion} onChanged={() => (reloadQuiet(), setStatusVersion((n) => n + 1))} />
-      ) : codeAt ? (
+        StatusM && <StatusM.StatusView tz={userZone(data)} colors={data.clients} readOnly={false} phone={phone} group={nav.group} version={planWeekVersion} onChanged={() => (reloadQuiet(), setStatusVersion((n) => n + 1))} />
+      ) : codeAt && CodePanel ? (
         // RB-6: Code is a tab: a page with no Close; Esc stays in it and the other tabs' keys work from it.
-        <Suspense fallback={null}>
           <CodePanel
             at={codeAt}
             sqlGroup={codeSqlGroup}
@@ -2189,14 +2219,13 @@ export function App() {
               go(to);
             }}
           />
-        </Suspense>
       ) : followUpsOpen ? (
         <div className="inbox-page">
-          {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
+          {nav.tab === "inbox" && InboxM && <InboxM.InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
         </div>
       ) : roadmapOpen ? (
-        nav.tab === "ahead" ? (
-          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} preset={nav.preset ?? null} switcher={switches.ahead} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+        nav.tab === "ahead" && AheadM ? (
+          phone && !aheadAnyway && loc.overlay?.kind !== "tour" ? <AheadNotice onOpen={() => setAheadAnyway(true)} onToday={() => openTab("today")} /> : <PhoneGate phone={phone}><AheadM.Ahead data={data} mode={nav.mode} item={nav.item ?? null} preset={nav.preset ?? null} switcher={switches.ahead} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
         ) : null
       ) : base === "today" ? (
         <CarryProvider {...carryProps(now ?? new Date(clock).toISOString())}>
@@ -2475,7 +2504,7 @@ export function App() {
           onClose={() => setPhoneMoreAt(null)}
         />
       )}
-      {assistantAt && (
+      {assistantAt && AssistantPanel && (
         <AssistantPanel
           phone={phone}
           skewMs={skew}
@@ -2573,7 +2602,7 @@ export function App() {
           onClose={() => setHelpTarget(null)}
         />
       )}
-      {itemAt && <StoryCard clientKey={itemAt.clientKey} itemId={itemAt.itemId} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onWrapUp={doneOffer.open} />}
+      {itemAt && StoryCard && <StoryCard clientKey={itemAt.clientKey} itemId={itemAt.itemId} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onWrapUp={doneOffer.open} />}
       {writes.dialog}
       {devopsWrites.dialog}
       {doneOffer.sheet}
@@ -2598,8 +2627,8 @@ export function App() {
         />
       )}
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
-      {newAt && <NewItemDialog key={newAt.n} place={newAt.place} hooks={{ ...newAt.hooks, onCreated: (c) => { newAt.hooks.onCreated?.(c); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }, onDraft: (d) => { newAt.hooks.onDraft?.(d); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); } }} clients={captureClients(data)} colors={(k) => clientColor(k, data.clients)} today={data.planDay.date} onClose={() => setNewAt(null)} />}
-      {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {newAt && NewItemDialog && <NewItemDialog key={newAt.n} place={newAt.place} hooks={{ ...newAt.hooks, onCreated: (c) => { newAt.hooks.onCreated?.(c); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }, onDraft: (d) => { newAt.hooks.onDraft?.(d); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); } }} clients={captureClients(data)} colors={(k) => clientColor(k, data.clients)} today={data.planDay.date} onClose={() => setNewAt(null)} />}
+      {draftEdit && DraftEditor && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}
     </div>
     </TodoSheetCtx.Provider>
