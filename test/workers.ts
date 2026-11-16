@@ -47,9 +47,13 @@ export function unitWorkers(m: Machine): number {
   return override(m) ?? Math.max(1, Math.min(Math.floor(idle(m)), byMemory(m, PER_UNIT_BYTES), m.cpus));
 }
 
-/** Files that use SQL Server. */
+/**
+ * Files that use SQL Server. On CI, half the runner's CPUs (2 of 4, as before BT-1): the container runs on the same
+ * runner, and at 4 at once the store isolation test's slowest case took 89 s of its 120 s there (run 43880638572)
+ * against about 50 s at 2. Elsewhere 60% of the idle CPUs, at most SQL_MAX.
+ */
 export function sqlWorkers(m: Machine): number {
-  return override(m) ?? Math.max(1, Math.min(SQL_MAX, m.ci ? m.cpus : Math.floor(idle(m) * CPU_SHARE), byMemory(m, PER_UNIT_BYTES), m.cpus));
+  return override(m) ?? Math.max(1, Math.min(SQL_MAX, m.ci ? Math.floor(m.cpus / 2) : Math.floor(idle(m) * CPU_SHARE), byMemory(m, PER_UNIT_BYTES), m.cpus));
 }
 
 export const thisMachine = (): Machine => ({ cpus: availableParallelism(), load1: loadavg()[0] ?? 0, freeBytes: freemem(), ci: !!process.env.CI, override: process.env.FOCUSTIME_TEST_WORKERS });

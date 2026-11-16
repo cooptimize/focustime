@@ -58,15 +58,15 @@ describe("SQL Server workers (BT-1): the store isolation test stays well inside 
     expect(idleLaptop + second).toBeLessThanOrEqual(12);
   });
 
-  it("on CI's four cores is four, the unit count, so both run as one group", () => {
+  it("on CI's four cores is two, as before BT-1, so the store isolation test keeps its time (the unit files get four)", () => {
     const ci = { cpus: 4, load1: 3.5, freeBytes: 14 * GB, ci: true };
-    expect(sqlWorkers(ci)).toBe(4);
-    expect(sqlWorkers(ci)).toBe(unitWorkers(ci));
+    expect(sqlWorkers(ci)).toBe(2);
+    expect(unitWorkers(ci)).toBe(4);
   });
 
-  it("on a private repository's two-core runner is two, and the unit count is two", () => {
+  it("on a private repository's two-core runner is one, and the unit count is two", () => {
     const two = { cpus: 2, load1: 1.5, freeBytes: 6 * GB, ci: true };
-    expect([sqlWorkers(two), unitWorkers(two), testWorkers(two)]).toEqual([2, 2, 1]);
+    expect([sqlWorkers(two), unitWorkers(two), testWorkers(two)]).toEqual([1, 2, 1]);
   });
 
   it("FOCUSTIME_TEST_WORKERS sets it too", () => expect(sqlWorkers({ cpus: 20, load1: 0, freeBytes: 20 * GB, ci: false, override: "2" })).toBe(2));

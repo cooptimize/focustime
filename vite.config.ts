@@ -38,7 +38,7 @@ export default defineConfig({
     sequence: { sequencer: TimedSequencer },
     // BT-1: one project per kind of file, each with its own limit. Projects with different limits run one after the
     // other (vitest's groupOrder): the SQL Server files first, then the other unit files, then the browser files. When
-    // the SQL Server and unit limits are equal (CI's runner) they run as one group, mixed, which packs best.
+    // the SQL Server and unit limits are equal they run as one group, mixed, which packs best.
     projects: [
       { extends: true, test: { name: "sql", include: SQL_FILES, maxWorkers: workers.sql, sequence: { groupOrder: 0 } } },
       { extends: true, test: { name: "unit", include: UNIT_DIRS.map((d) => `${d}/**/*.test.ts`), exclude: [...configDefaults.exclude, ...SQL_FILES], maxWorkers: workers.unit, sequence: { groupOrder: workers.unit === workers.sql ? 0 : 1 } } },
