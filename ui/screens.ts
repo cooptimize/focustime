@@ -18,7 +18,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { SCREENS, type ScreenName } from "./screen-names.ts";
 // Still in the first download until its own commit: imported here, so ready from the start.
-import * as settingsNow from "./Settings.tsx";
 import * as cardNow from "./StoryCard.tsx";
 import * as newItemNow from "./NewItem.tsx";
 import * as draftNow from "./DraftEditor.tsx";
@@ -48,7 +47,7 @@ const LOADERS = {
   docs: () => import("./docs/TechDocs.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;
 
-const NOW: Partial<Record<ScreenName, unknown>> = { settings: settingsNow, card: cardNow, newItem: newItemNow, draft: draftNow, capture: captureNow, assistant: assistantNow, focus: focusNow, checkin: checkinNow, closeout: closeoutNow };
+const NOW: Partial<Record<ScreenName, unknown>> = { card: cardNow, newItem: newItemNow, draft: draftNow, capture: captureNow, assistant: assistantNow, focus: focusNow, checkin: checkinNow, closeout: closeoutNow };
 
 export type { ScreenName };
 export { SCREENS };
