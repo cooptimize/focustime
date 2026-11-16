@@ -116,6 +116,53 @@ describe("the app's files, compressed once (PF-2)", () => {
   });
 });
 
+describe("a file checked each time is answered \"not changed\" when it hasn't changed (PF-2, D)", () => {
+  it("the manifest: its tag back gives 304 with no body; another tag gives the file whole", async () => {
+    const first = await get("/manifest.webmanifest", "br");
+    const tag = first.headers.etag as string;
+    expect(tag).toMatch(/^"[\w-]+-br"$/);
+    const again = await get("/manifest.webmanifest", "br", "GET", { "if-none-match": tag });
+    expect([again.status, again.raw.length, again.headers.etag, again.headers.vary, again.headers["cache-control"]]).toEqual([304, 0, tag, "Accept-Encoding", "no-cache"]);
+    expect(again.headers["content-encoding"]).toBeUndefined();
+    // The same content in another form (a browser that changed what it accepts) is still not changed.
+    const plainTag = (await get("/manifest.webmanifest")).headers.etag as string;
+    expect(plainTag).not.toBe(tag);
+    expect((await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": plainTag })).status).toBe(304);
+    expect((await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": `W/${plainTag}` })).status).toBe(304);
+    // A tag from an earlier release: sent whole.
+    const changed = await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": '"an-earlier-release"' });
+    expect(changed.status).toBe(200);
+    expect(decode(changed)).toBe(MANIFEST);
+  });
+
+  it("the worker, an icon and a hashed file have tags too; the page has none (never kept)", async () => {
+    for (const p of ["/sw.js", "/icons/focustime-192.png", "/assets/main-abc.js"]) {
+      const r = await get(p, "br");
+      expect(r.headers.etag, p).toBeTruthy();
+      expect((await get(p, "br", "GET", { "if-none-match": r.headers.etag as string })).status, p).toBe(304);
+    }
+    const page = await get("/", "br");
+    expect(page.headers.etag).toBeUndefined();
+    expect((await get("/", "br", "GET", { "if-none-match": "*" })).status).toBe(200);
+  });
+
+  it("a changed file is sent whole: a new build's worker has a new tag", async () => {
+    const d2 = mkdtempSync(join(tmpdir(), "pf2-dist2-"));
+    writeFileSync(join(d2, "index.html"), PAGE);
+    writeFileSync(join(d2, "manifest.webmanifest"), MANIFEST.replace("FocusTime", "FocusTime 2"));
+    const other = await startTestApp({ ctx: () => ({}) as ActionContext, distDir: d2 });
+    try {
+      const old = (await get("/manifest.webmanifest", "br")).headers.etag as string;
+      const r = await other.browser().send("/manifest.webmanifest", { "accept-encoding": "br", "if-none-match": old });
+      expect(r.status).toBe(200);
+      expect(decode(r)).toContain("FocusTime 2");
+    } finally {
+      await other.close();
+      rmSync(d2, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("pickEncoding", () => {
   it("never picks a form the file doesn't have, nor one the browser refuses", () => {
     expect(pickEncoding("br", { gzip: 1 })).toBeNull();

@@ -5,9 +5,10 @@
 // images are already compressed and tiny files gain nothing: they are sent as they are.
 //
 // What a request gets: the best form its Accept-Encoding allows (Brotli, then gzip, then the plain file), with its
-// length, its type, its cache line and "Vary: Accept-Encoding" on every file that has
+// length, its type, its cache line, a tag to check against (ETag) and "Vary: Accept-Encoding" on every file that has
 // more than one form, so nothing between the app and the browser hands one browser another's form.
 import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { extname, join, relative, sep } from "node:path";
 import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -40,6 +41,8 @@ export type StaticFile = {
   plain: Buffer;
   br?: Buffer;
   gzip?: Buffer;
+  /** The plain form's tag; the encoded forms add "-br" or "-gz". Null for the page (never kept, never checked). */
+  etag: string | null;
 };
 
 /** PF-2 tests: how many times a file has been compressed in this process (the hashed files once each, at start). */
@@ -50,9 +53,9 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 const CHECK_EACH_TIME = "no-cache";
 
 /** One file's forms, made once. */
-export function makeStaticFile(path: string, plain: Buffer, cache: string): StaticFile {
+export function makeStaticFile(path: string, plain: Buffer, cache: string, page = false): StaticFile {
   const ext = extname(path);
-  const f: StaticFile = { type: TYPES[ext] ?? "application/octet-stream", cache, plain };
+  const f: StaticFile = { type: TYPES[ext] ?? "application/octet-stream", cache, plain, etag: page ? null : `"${createHash("sha256").update(plain).digest("base64url").slice(0, 22)}"` };
   if (TEXT.has(ext) && plain.length >= MIN_COMPRESS_BYTES) {
     staticWork.compressed++;
     const br = brotliCompressSync(plain, { params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY, [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT, [constants.BROTLI_PARAM_SIZE_HINT]: plain.length } });
@@ -76,7 +79,7 @@ export function loadStaticFiles(root: string): Map<string, StaticFile> {
         const page = url === "/index.html";
         // Hashed build files (/assets/) never change; the page is never kept; the rest (public/) is checked each time.
         const cache = page ? NO_STORE : url.startsWith("/assets/") ? IMMUTABLE : CHECK_EACH_TIME;
-        out.set(url, makeStaticFile(url, readFileSync(p), cache));
+        out.set(url, makeStaticFile(url, readFileSync(p), cache, page));
       }
     }
   };
@@ -102,14 +105,31 @@ export function pickEncoding(accept: string | undefined, has: { br?: unknown; gz
   return br >= gz ? "br" : "gzip";
 }
 
-/** One file's answer: the chosen form with its length, type, cache line and Vary. */
+/** True when If-None-Match names any form of this file (the content is the same in each), or "*". */
+function notModified(f: StaticFile, ifNoneMatch: string | undefined): boolean {
+  if (!f.etag || !ifNoneMatch) return false;
+  const base = f.etag.slice(1, -1);
+  return ifNoneMatch.split(",").some((t) => {
+    const tag = t.trim().replace(/^W\//, "");
+    return tag === "*" || tag === f.etag || tag === `"${base}-br"` || tag === `"${base}-gz"`;
+  });
+}
+
+/** One file's answer: the chosen form with its length, type, cache line, tag and Vary; 304 when the tag matches. */
 export function sendStatic(req: IncomingMessage, res: ServerResponse, f: StaticFile): void {
   const varies = !!(f.br || f.gzip);
   const enc = pickEncoding(header(req, "accept-encoding"), f);
   const body = enc === "br" ? f.br! : enc === "gzip" ? f.gzip! : f.plain;
+  const etag = f.etag && (enc === "br" ? `${f.etag.slice(0, -1)}-br"` : enc === "gzip" ? `${f.etag.slice(0, -1)}-gz"` : f.etag);
   const head: Record<string, string | number> = { "content-type": f.type, "cache-control": f.cache };
+  if (etag) head.etag = etag;
   if (varies) head.vary = "Accept-Encoding";
   const method = req.method ?? "GET";
+  if ((method === "GET" || method === "HEAD") && notModified(f, header(req, "if-none-match"))) {
+    res.writeHead(304, head);
+    res.end();
+    return;
+  }
   if (enc) head["content-encoding"] = enc;
   head["content-length"] = body.length;
   res.writeHead(200, head);
