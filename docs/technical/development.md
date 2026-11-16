@@ -26,7 +26,8 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 | `npm run test:zones` | The suite under four US time zones, one after another |
 | `npm run docs:check` | These pages' checks (`scripts/tech-docs.test.ts`) |
 | `node scripts/first-download.ts` | Builds the UI and reports every file, what the first screen downloads and what its script is made of; `--why <module>` prints the imports that pull a module in, `--write` rewrites the limit's record |
-| `node scripts/first-screen-times.ts` | Times opening the app and each tab in a browser on the demo, slowed and unslowed (needs `FOCUSTIME_E2E_DIST=<a built dist>`) |
+| `node scripts/first-screen-times.ts` | Times opening the app and each tab in a browser on the demo, slowed and unslowed (needs `FOCUSTIME_E2E_DIST=<a built dist>`); `--first-visit` blocks the service worker so every file comes from the server, `--bytes` counts the bytes on the wire, files and data apart (PF-2) |
+| `node scripts/data-sizes.ts` | Opens each place on the demo and lists every data read by action: calls, typical and largest size, and how it was sent (needs `FOCUSTIME_E2E_DIST`) |
 | `npm run docs:diagrams` | Draws the Mermaid diagrams in these pages as SVG (`scripts/docs-diagrams.ts`); `-- --check` only checks |
 | `npm run demo:check -- --url <site>` | Opens a demo session on a deployed site and checks the demo works (`scripts/demo-check.ts`); prints no cookie, token or body |
 | `npm run screenshot` | Screenshots of the running local server (`scripts/screenshot.mjs`) |

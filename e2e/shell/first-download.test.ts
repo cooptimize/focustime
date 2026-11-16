@@ -262,16 +262,20 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
   }, 180_000);
 
   it("a release replaced a screen's file: one reload onto the screen asked for; a file truly missing says so with Retry; a screen's own error is neither", async () => {
-    // The server answers a file it no longer has with the page itself, which is not a script.
+    // PF-2: the server answers a file it no longer has with "not found" (nothing worth keeping, nothing kept). An older
+    // server answered with the page itself, which is not a script: both are covered below.
     const html = await (await fetch(h.url)).text();
     const asPage = { status: 200, contentType: "text/html", body: html };
+    const gone404 = await fetch(new URL("/assets/Ahead-no-such-build.js", h.url));
+    expect([gone404.status, gone404.headers.get("cache-control"), await gone404.text()]).toEqual([404, "no-store", ""]);
+    const asMissing = { status: 404, contentType: "text/plain; charset=utf-8", headers: { "cache-control": "no-store" }, body: "" };
     const { ctx, page, errors } = await session(h, { metered: true });
     await cold(page, h, "#/day");
     let loads = 0;
     page.on("load", () => loads++);
 
     // The old page's file is gone; after the reload the new page's file is there.
-    await page.route(screenFile("Ahead"), (route) => (loads === 0 ? route.fulfill(asPage) : route.continue()));
+    await page.route(screenFile("Ahead"), (route) => (loads === 0 ? route.fulfill(asMissing) : route.continue()));
     await page.keyboard.press("3");
     await page.waitForSelector("main.ahead", { timeout: 30_000 });
     expect(loads).toBe(1);
@@ -294,7 +298,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     await cold(page, h, "#/day");
     loads = 0;
     let gone = true;
-    await page.route(screenFile("Status"), (route) => (gone ? route.fulfill(asPage) : route.continue()));
+    await page.route(screenFile("Status"), (route) => (gone ? route.fulfill(asMissing) : route.continue()));
     await page.keyboard.press("4");
     const failed = page.locator(".screen-line.failed");
     await failed.waitFor({ timeout: 30_000 });

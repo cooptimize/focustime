@@ -1331,6 +1331,17 @@ From the IT review (TD-1):
   - The same jumps as before this step: Week's "to place" row arriving, the story card's buttons reshuffling when its rights are read, the Inbox's counts starting at 0.
   - Backlog is not offered on the phone's bars or in More (as before); the reviewer could not open it.
 
+## PF-2
+
+- **Should the hosted app's front door do more?** Container Apps' ingress passes answers through as they are (no compression, no cache), so the app compresses its own. A CDN or Front Door in front could cache the hashed files near people and compress at the edge; that is a change to Azure, not made here.
+- **What the first download is now, and what is left to cut.** 440 kB of files on the wire for the first screen: the fonts (100.6 kB, compressed already), the styles (85 kB compressed of 472 kB) and `main`'s script (about 270 kB compressed of 1,068 kB). The stylesheet is the next thing to split (PF-1's question stands). Brotli 11 at build time would save about 8% more on the files; left for when the build is the place for it.
+- **The time compression adds:** about 11 ms for a 1 MB answer (Code's largest file), under 1 ms for the demo's largest read (the week, 61.6 kB). On real data the week and Backlog are larger; worth reading `dataWork` or a timing in telemetry once real numbers matter.
+- **Large reads left off the list:** `settings.load` (7.9 kB, never: it shows each secret's state), `planday.start` (6.0 kB), `roadmap.ahead` (5.1 kB), `team.commit` (4.5 kB), `inbox.today` (2.6 kB), `data.export` (a whole person's data, a download) and `item.card`. None carries a secret except settings; adding one is one line and its test.
+- **Small reads go plain.** Week's 11 kB is mostly many reads under 1 kB (people's photos, the week's plan). Batching them is a different step.
+- **Dev and the demo differed in one way:** dev answers over HTTP/2 through the ingress (no length line on the plain answers before PF-2), the demo over HTTP/1.1 from the app itself. Both sent everything plain. After the merge deploys, the check in `docs/technical/operations.md` (What the server sends) against dev is the proof.
+- **Public files during a release** (review 2, older than PF-2): if two revisions serve at once, a new worker can fetch `/prefs.js`, the manifest, the icons or `/` from the old replica and keep them until the next release (hashed files are safe: the old replica answers 404 for the new names). Container Apps switches a single revision's traffic at once today.
+- **A tag for the same form across releases:** each form's tag is taken from its own bytes, so a change of compression level or zlib gives new tags (one download each, once).
+
 ## BT-1
 
 - **CLAUDE.md, for the product owner to change (BT-1 doesn't edit it):** the folder map's `e2e/` line could say "browser tests in one folder per screen (day, week, backlog, inbox, code, status, settings, admin, shell, phone) on a throwaway demo server (harness.ts)"; the inner loop line could add `npx vitest run e2e/<screen>/` for one screen's browser tests and `npx vitest related --run --project unit --project sql <files>` for only the unit tests; "One e2e per feature" could point at the harness's three ways to start.
