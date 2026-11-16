@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, unfoldAddWork, startDemo, type Harness } from "../harness.ts";
 import { emptyFrom } from "../sg1-helpers.ts";
+import { phonePage } from "../mb1-helpers.ts";
 
 const T = 180_000;
 const WED = "2026-11-04T13:30:00-05:00";
@@ -56,5 +57,23 @@ describe.skipIf(!CHROMIUM)("Unfinished picks suggested in the next block (UI-B, 
     // PS-1 (C1): with no rail, "now" is a marker in the header of the block under way.
     await expect(page.locator(".day.today :is(.now-line, .now-mark)").first().textContent()).resolves.toContain("1:30");
     expect(errors).toEqual([]);
+  }, T);
+
+  // BT-1: from the UI-B screenshots (e2e/shot-scripts/uib-shots.ts), which CI never ran: on a 390 px phone with the
+  // iPhone's 17 px root font, mid-block, Today and Week are no wider than the screen.
+  it("on a 390 px phone with a 17 px root font, Today and Week are no wider than the screen", async () => {
+    const page = await phonePage(h, 390);
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    await page.locator("main").first().waitFor();
+    await page.waitForTimeout(800);
+    expect(await wide(), "Today is wider than the phone").toBeLessThanOrEqual(0);
+    await page.getByRole("button", { name: "Week", exact: true }).first().click();
+    await page.waitForFunction(() => location.hash.startsWith("#/week"));
+    await page.waitForTimeout(800);
+    expect(await wide(), "Week is wider than the phone").toBeLessThanOrEqual(0);
+    expect(errors).toEqual([]);
+    await page.close();
   }, T);
 });

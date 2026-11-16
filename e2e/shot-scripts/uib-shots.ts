@@ -1,9 +1,11 @@
-// Was e2e/uib-shots.test.ts until BT-1.
+// Was e2e/uib-shots.test.ts until BT-1, which moved it here with the other screenshot scripts: its two checks run in
+// CI now, the phone's width in e2e/week/suggest-unfinished.test.ts and no now mark before the day in
+// e2e/day/now-mark.test.ts ("at 6:30 AM"). Usage: FOCUSTIME_SHOTS=screenshots/uib npm run shots -- e2e/shot-scripts/uib-shots.ts.
 // UI-B: the screenshots for the report (demo data only), when FOCUSTIME_SHOTS names a folder: the Board with the
 // suggested cards and the summary line, the fallback list open, the now line mid-block (Wed 1:30 PM) and none in the
 // gap before the day (Wed 7:30 AM, NL-1), Today's agenda and Plan today with the line; at 1920×1080 (and Text size Larger),
 // 1366×768 and a phone (390×844, a 17px root font as on iPhone; the page must not be wider than the screen).
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS, shotBoth } from "../shots.ts";
@@ -53,7 +55,6 @@ describe.skipIf(!CHROMIUM || !SHOTS)("UI-B screenshots", () => {
     hs.push(h);
     const { page } = await freshPage(h);
     await week(page);
-    await expect(page.locator(".day.today :is(.now-line, .now-mark, .now-tick)").count()).resolves.toBe(0);
     await shotBoth(page, "uib-board-early-1920");
     await page.close();
   }, T);
@@ -70,13 +71,10 @@ describe.skipIf(!CHROMIUM || !SHOTS)("UI-B screenshots", () => {
     await page.waitForSelector(".demo-tag", { timeout: 30_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await page.addStyleTag({ content: "html { font-size: 17px; }" });
-    const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     await page.screenshot({ path: `${SHOTS}/uib-phone-today.png` });
-    expect(await wide(), "Today is wider than the phone").toBeLessThanOrEqual(0);
     await page.getByRole("button", { name: "Week", exact: true }).first().click();
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${SHOTS}/uib-phone-week.png` });
-    expect(await wide(), "Week is wider than the phone").toBeLessThanOrEqual(0);
     await page.locator(".suggested-card").first().scrollIntoViewIfNeeded().catch(() => {});
     await page.screenshot({ path: `${SHOTS}/uib-phone-week-card.png` });
     await page.close();
