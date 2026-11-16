@@ -25,6 +25,8 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 | `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests. Run `npm run db:up` first, or the SQL Server tests are skipped (`FOCUSTIME_TEST_SQL=required` makes them fail instead, `off` skips them) |
 | `npm run test:zones` | The suite under four US time zones, one after another |
 | `npm run docs:check` | These pages' checks (`scripts/tech-docs.test.ts`) |
+| `node scripts/first-download.ts` | Builds the UI and reports every file, what the first screen downloads and what its script is made of; `--why <module>` prints the imports that pull a module in, `--write` rewrites the limit's record |
+| `node scripts/first-screen-times.ts` | Times opening the app and each tab in a browser on the demo, slowed and unslowed (needs `FOCUSTIME_E2E_DIST=<a built dist>`) |
 | `npm run docs:diagrams` | Draws the Mermaid diagrams in these pages as SVG (`scripts/docs-diagrams.ts`); `-- --check` only checks |
 | `npm run demo:check -- --url <site>` | Opens a demo session on a deployed site and checks the demo works (`scripts/demo-check.ts`); prints no cookie, token or body |
 | `npm run screenshot` | Screenshots of the running local server (`scripts/screenshot.mjs`) |
@@ -85,6 +87,32 @@ Any order and any number at once gives the same result:
 | test | The gate: passes when all of the above passed, and records the tree it tested for deploy-dev, except on a docs-only run (deploy-dev then runs all of CI after the merge) | Always |
 
 A skipped job still starts and passes under its own name, with one step saying it was docs only, so a required check is never left waiting. Anything else is code: a push to `main`, deploy-dev's call, `docs/technical/` (the app shows it), any file at the top of the repo (the image copies them), and any change the script can't read. The rule for what counts as docs is in the script's header; a file under `docs/` that a browser test or the image starts to read must make it code there first.
+
+## Adding a screen that loads when first opened
+
+The first download holds Day, Week, the top bar and the loader; how the rest is split is under [How the app is split into files](architecture.md#how-the-app-is-split-into-files). A new tab, overlay or dialog should load when it is first opened:
+
+1. **Name it.** Add its name to `ui/screen-names.ts` and its `import()` to `LOADERS` in `ui/screens.ts`. Add it to `BACKGROUND` there if a key or a tab opens it and it should show at once.
+2. **Say which places need it.** For a tab or an overlay with an address, add it to `locScreens` in `ui/nav.ts`. `ui/App.tsx` then draws that place only once the file is in, and keeps the screen before it until then.
+3. **Draw it from the loader.** In `ui/App.tsx`, take the module with `screen("<name>")` for a place, or `useScreen("<name>", open)` for a dialog over the place, and draw nothing while it is null. Never import the screen's file statically from anything Day, Week or the top bar imports.
+4. **Keep small things small.** If the first download needs a constant, a context or a hook from the screen's file, move that one thing to a small file of its own and import it from there (as `ui/capture-clients.ts` and `ui/newitem-ctx.ts` do).
+5. **Styles.** A stylesheet the screen imports in its own file travels with it. Rules added to `ui/styles.css` are in the first download.
+6. **Check it.** `node scripts/first-download.ts --why ui/<YourScreen>.tsx` should print "not in the first download". Add the screen to `SCREENS` in `e2e/pf1.test.ts` (how it opens and where the focus lands).
+
+### The first download's size
+
+`scripts/first-download.test.ts` runs in the unit job. It builds the UI as a release does and fails when:
+
+- the first download's script or styles, gzipped, are over the limit in `test/first-download.json`; the failure lists the modules that arrived or grew since the record was written, largest first, and for a new module the imports that brought it;
+- a screen from `ui/screens.ts` is in the first download again; the failure prints the chain of imports from `ui/main.tsx` to it.
+
+Reading the report (`node scripts/first-download.ts`):
+
+- **Every file** is each file the build wrote, raw and gzipped (gzip level 9, as `vite build` prints).
+- **The first download** is the page, the files it names, and every script and stylesheet the entry and `ui/main.tsx` import statically. Fonts are counted apart: they are fetched as text is drawn.
+- **What the first download's script is made of** adds up each module's bytes before minifying, by screen folder and by package, so the shares are right and the totals are about twice the minified size.
+
+When the first screen really needs more, raise the limit on purpose: `node scripts/first-download.ts --write` rewrites the record (the limit is 3% over what it measures), and the pull request says why. Otherwise find what pulled the code in (`--why`) and move it behind the loader.
 
 ## Dependencies
 

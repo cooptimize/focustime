@@ -12,7 +12,7 @@ import { userZone } from "../../week/zone.ts";
 import { call } from "../api.ts";
 import { CaptureBox, captureClients } from "../Capture.tsx";
 import { CreateDraftCtx } from "../createdraft-ctx.ts";
-import { DraftEditorCtx } from "../DraftEditor.tsx";
+import { DraftEditorCtx } from "../drafteditor-ctx.tsx";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { markSeen } from "../inboxcount.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";

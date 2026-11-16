@@ -12,7 +12,7 @@ import type { StandardsUsed } from "../plan/standards.ts";
 import { MentionFlag } from "./DevOpsWrite.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { useOpenNew } from "./NewItem.tsx";
+import { useOpenNew } from "./newitem-ctx.ts";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";

@@ -2,6 +2,7 @@
 // to-dos a count, each unfinished to-do with its Move to…), then walk-on work once at the foot. QT-2: nothing says
 // a to-do doesn't fit or that a block is over; the afternoon's free time is said once, in the header, as a fact.
 // Day opens it from its moment card; Done marks the day checked in.
+export { TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState, type CSSProperties } from "react";
 import type { WeekLoadData } from "../actions/types.ts";

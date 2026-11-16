@@ -6,6 +6,7 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
 import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
+import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 
 export const TABS = ["today", "week", "ahead", "status", "inbox", "code"] as const;
@@ -180,6 +181,23 @@ const mondayOf = (d: IsoDate): IsoDate => {
 export function tabForKey(key: string): Tab | null {
   const i = ["1", "2", "3", "4", "5", "6"].indexOf(key);
   return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;
+}
+
+/**
+ * PF-1: the screens a place needs that load when first opened (ui/screens.ts); Day and Week need none. App draws a
+ * place only once these are in.
+ */
+export function locScreens(loc: Loc): ScreenName[] {
+  const out: ScreenName[] = [];
+  const n = loc.nav;
+  if (n.tab === "ahead" || n.tab === "status" || n.tab === "inbox" || n.tab === "code") out.push(n.tab);
+  else if (n.tab === "today" && n.flow) out.push(n.flow);
+  const o = loc.overlay;
+  // A tour is not here: its screen is drawn at once and the tour's card arrives over it (App asks for its file), so
+  // the screen's own loading has the same head start on the tour's first step as it always had.
+  if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs") out.push(o.kind);
+  else if (o?.kind === "item") out.push("card");
+  return out;
 }
 
 /** A mode on the switch: the place it opens. */

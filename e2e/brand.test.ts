@@ -130,6 +130,7 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const p1 = await fast.newPage();
     await p1.goto(h.url);
     await appUp(p1);
+    await expect.poll(async () => (await seen(p1)).goneAt, { timeout: 10_000 }).not.toBeNull();
     const s1 = await seen(p1);
     expect(s1.goneAt).not.toBeNull();
     if (s1.goneAt! < 400) expect(s1.shownAt).toBeNull(); // under 400 ms: nothing was shown
@@ -140,6 +141,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const p2 = await slow.newPage();
     await p2.goto(h.url);
     await appUp(p2);
+    // The probe runs once a frame: on a busy machine its frame can come after the stage has left the page.
+    await expect.poll(async () => (await seen(p2)).goneAt, { timeout: 10_000 }).not.toBeNull();
     const s2 = await seen(p2);
     const log = await p2.evaluate(() => (window as unknown as { __log?: string[] }).__log ?? []);
     expect(s2.shownAt).not.toBeNull();
@@ -301,14 +304,20 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
       const page = await ctx.newPage();
       await page.goto(h.url);
       await appUp(page);
-      const gone = (await seen(page)).goneAt!;
+      await expect.poll(async () => (await seen(page)).goneAt, { timeout: 10_000 }).not.toBeNull();
+      const { goneAt, shownAt } = await seen(page);
       const bar = (await page.locator("footer.statusbar").textContent()) ?? "";
+      await ctx.unrouteAll({ behavior: "ignoreErrors" });
       await ctx.close();
-      return { gone, bar };
+      return { gone: goneAt!, shown: shownAt !== null, bar };
     };
     const healthy = await open(false);
     const failing = await open(true);
-    expect(failing.gone, `healthy ${Math.round(healthy.gone)} ms`).toBeLessThan(healthy.gone + 500);
+    // A load that ends just under 400 ms never shows the loader; one that ends just over shows it for its 600 ms and its
+    // 0.4 s move. When the two loads fall either side of that line (PF-1: the app's script is smaller, and loads on CI
+    // now end near it), the loader's own second is not the failing source's doing.
+    const loaderOnly = failing.shown && !healthy.shown ? 1050 : 0;
+    expect(failing.gone, `healthy ${Math.round(healthy.gone)} ms${loaderOnly ? ", which never showed the loader" : ""}`).toBeLessThan(healthy.gone + 500 + loaderOnly);
     expect(failing.gone).toBeLessThan(8000); // never held to the 8 s line
     expect(failing.bar).toContain("Outlook");
   }, T);
@@ -367,6 +376,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     const line = page.locator(".reconnect-line[role=status]");
     await expect.poll(() => line.textContent()).toBe("Outlook is connected again.");
     expect(await line.locator("svg").count()).toBe(0);
+    // A week read still in flight through the route when the context closes is not this test's failure.
+    await ctx.unrouteAll({ behavior: "ignoreErrors" });
     await ctx.close();
   }, T);
 

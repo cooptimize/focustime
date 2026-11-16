@@ -116,7 +116,8 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     }
     await page.keyboard.press("Escape");
     await sheet.waitFor({ state: "detached" });
-    expect(await row.evaluate((b) => b === document.activeElement)).toBe(true);
+    // Focus goes back on the next frame (useReturnFocus); a busy page's frame can come after this line.
+    await expect.poll(() => row.evaluate((b) => b === document.activeElement)).toBe(true);
 
     // Done, then Undo.
     await row.click();

@@ -23,7 +23,7 @@ import { reach, type Reach } from "../../plan/reach.ts";
 import { STATE_WORDS } from "../../plan/roadmap.ts";
 import type { DraftStory } from "../../plan/types.ts";
 import { call } from "../api.ts";
-import { DraftEditorCtx } from "../DraftEditor.tsx";
+import { DraftEditorCtx } from "../drafteditor-ctx.tsx";
 import { MenuCtx } from "../Menus.tsx";
 import { HoursStepper } from "../plan/Estimate.tsx";
 import { placePopover } from "../popover-place.ts";

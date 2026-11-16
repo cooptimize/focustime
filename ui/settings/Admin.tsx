@@ -31,19 +31,7 @@ export type AdminUiSection = (typeof ADMIN_UI_SECTIONS)[number][0];
 export const RETIRED_ADMIN_SECTIONS: readonly string[] = ["admin-templates"];
 export const isAdminSection = (s: string): s is AdminUiSection => ADMIN_UI_SECTIONS.some(([id]) => id === s);
 
-/** Whether the signed-in person is a FocusTime admin (null while asking). */
-export function useAdmin(): boolean | null {
-  const [admin, setAdmin] = useState<boolean | null>(null);
-  useEffect(() => {
-    let live = true;
-    call<{ admin: boolean }>("admin.status", {}).then(
-      (r) => live && setAdmin(r.admin),
-      () => live && setAdmin(false),
-    );
-    return () => void (live = false);
-  }, []);
-  return admin;
-}
+export { useAdmin } from "./use-admin.ts";
 
 // ---------- saving ----------
 

@@ -31,7 +31,6 @@ import { checkIn, type CheckSlot } from "../plan/checkin.ts";
 import { boxedMinutes } from "../plan/timebox.ts";
 import { formatDuration } from "../week/format.ts";
 import { call, planAction } from "./api.ts";
-import { TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { planMyDay } from "../plan/agenda.ts";
@@ -51,8 +50,7 @@ import { inboxSource, dueTodayNotUrgent, urgentLines, type UrgentLine, type Urge
 import { railItems, type InboxItemView } from "../plan/inbox-items.ts";
 import { canAddWork } from "../plan/days.ts";
 import { aboveBlocks, dayHeadline, nextTodo } from "../plan/dayview.ts";
-import { CheckinBlock, CheckinFoot, checkLeft } from "./Checkin.tsx";
-import { CloseOutBlock, CloseOutPanel } from "./CloseOut.tsx";
+import { screen } from "./screens.ts";
 import { WeekendDay } from "./DayWeekend.tsx";
 import { Icon } from "./icons.tsx";
 import { ReadLine } from "./ReadLine.tsx";
@@ -166,6 +164,9 @@ export function Day(props: Props) {
   const view = useContext(PlanCtx);
   // MB-1: today on the phone: the Now card, Needs you, the to-dos by block and Next up (other days and the flows use the cards).
   const phoneToday = phone && mode === "now" && isToday;
+  // PF-1: the check-in and Close out load when first opened (ui/screens.ts); App draws their flow only once the file is in.
+  const CheckinM = mode === "checkin" ? screen("checkin") : null;
+  const CloseOutM = mode === "closeout" ? screen("closeout") : null;
   const dnd = useContext(WeekDnd);
   const tickWithUndo = (p: Pick, done = true) => {
     view.toggle(p.id, done);
@@ -378,7 +379,7 @@ export function Day(props: Props) {
         <div className="ph-title">
           {mode === "checkin" ? (
             <h1>
-              Midday check-in <span className="muted">{clock(now, tz)} · {checkLeft(check)}</span>
+              Midday check-in <span className="muted">{clock(now, tz)} · {CheckinM?.checkLeft(check)}</span>
             </h1>
           ) : (
             <>
@@ -483,7 +484,7 @@ export function Day(props: Props) {
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={nameOf(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); props.onChanged(); }} />}
-      {mode === "checkin" && <TimeboxCheckin date={date} moment="midday" color={(k) => clientColor(k, data.clients)} onChanged={props.onChanged} onError={setError} />}
+      {CheckinM && <CheckinM.TimeboxCheckin date={date} moment="midday" color={(k) => clientColor(k, data.clients)} onChanged={props.onChanged} onError={setError} />}
 
       {mode === "now" && ptoDay && (
         <p className="today-pto" role="status">
@@ -580,16 +581,16 @@ export function Day(props: Props) {
                 mode === "checkin" ? (
                   (() => {
                     const c = check.find((x) => x.half === s.half);
-                    return c ? (
-                      <CheckinBlock key={s.half} slot={s} data={data} check={c} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))} carryTo={checkinTo} nameOf={nameOf} act={act} makeUp={makeUp} />
+                    return c && CheckinM ? (
+                      <CheckinM.CheckinBlock key={s.half} slot={s} data={data} check={c} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))} carryTo={checkinTo} nameOf={nameOf} act={act} makeUp={makeUp} />
                     ) : null;
                   })()
-                ) : (
-                  <CloseOutBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} carryTo={st?.carryTo ?? null} nameOf={nameOf} act={act} />
+                ) : !CloseOutM ? null : (
+                  <CloseOutM.CloseOutBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half)} tickable={tickable} ended={ended(s)} carryTo={st?.carryTo ?? null} nameOf={nameOf} act={act} />
                 ),
               )}
             </section>
-            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} act={act} onAsks={props.onAsks ?? props.onInbox} />}
+            {CheckinM && <CheckinM.CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} act={act} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
       )}
@@ -605,8 +606,8 @@ export function Day(props: Props) {
         </p>
       )}
 
-      {mode === "closeout" && (
-        <CloseOutPanel date={closeDate ?? date} st={st} data={data} nameOf={nameOf} reload={loadClose} onChanged={props.onChanged} onError={setError} onDate={props.onCloseOutDate} onLeave={props.onLeave} onInbox={props.onInbox} onCaptures={props.onCaptures} act={act} onShown={date !== (closeDate ?? date)} />
+      {CloseOutM && (
+        <CloseOutM.CloseOutPanel date={closeDate ?? date} st={st} data={data} nameOf={nameOf} reload={loadClose} onChanged={props.onChanged} onError={setError} onDate={props.onCloseOutDate} onLeave={props.onLeave} onInbox={props.onInbox} onCaptures={props.onCaptures} act={act} onShown={date !== (closeDate ?? date)} />
       )}
     </main>
   );

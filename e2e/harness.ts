@@ -147,6 +147,16 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
   };
 }
 
+/**
+ * PF-1: the screens that load when first opened are fetched in the background once the first screen is usable
+ * (ui/screens.ts marks `html[data-screens]` when that is done). Tests press keys the moment the app opens and expect
+ * the screen at once, as a person who has looked at Day for a few seconds gets it; e2e/pf1.test.ts covers the moments
+ * before. Goes on after 20 s either way.
+ */
+export async function screensIn(page: Page): Promise<void> {
+  await page.waitForSelector("html[data-screens]", { timeout: 20_000 }).catch(() => undefined);
+}
+
 /** A fresh page in its own browser context: the sign-in page, then "Try the demo" (a new demo session, a fresh store). */
 export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }, /** PS-1: "default" leaves Day's panel to open on a wide window, as for a first visit. */ opts: { dayPanel?: "default" } = {}): Promise<{ page: Page; errors: string[] }> {
   const page = await h.browser.newPage({ viewport });
@@ -166,6 +176,7 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
   // Step 17.5: a slow first load plays the opening over the app; tests start once it's gone.
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
+  await screensIn(page);
   return { page, errors };
 }
 

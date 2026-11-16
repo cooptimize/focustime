@@ -4,10 +4,10 @@
 // was opened. Create in DevOps opens the write framework's preview (confirm, read back, audit log, undo); Save as draft
 // keeps it local. Without the client's write PAT it says so in one line and Save as draft is the way. No browser
 // controls: the app's own select, date field and people list (AH-5). Works with no AI; a draft's AI version is offered.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { aOr, formDefaults, parentTypesOf, TITLE_MAX, type NewOptions, type NewPlace } from "../plan/quick-create.ts";
 import type { DraftStory } from "../plan/types.ts";
-import { PeopleField } from "./ahead/Editors.tsx";
+import { PeopleField } from "./ahead/People.tsx";
 import { call } from "./api.ts";
 import { Segmented } from "./CellPopover.tsx";
 import { CloseButton } from "./CloseButton.tsx";
@@ -21,22 +21,9 @@ import { answersEmpty, descriptionMax, NO_ANSWERS, withCarried, type Answers } f
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
 import { usePhone } from "./viewport.ts";
 import { Icon } from "./icons.tsx";
+import { CREATED_EVENT, type Created, type NewHooks } from "./newitem-ctx.ts";
 
-export type { NewPlace };
-/** What the opener hears back: the item it made (Ahead selects it, the panel places it) or the draft it saved. */
-export type NewHooks = {
-  onCreated?: (c: Created) => void;
-  onDraft?: (d: DraftStory) => void;
-  /** The block panel: the draft is put on the block first, so the created item takes its place there (or it stays as a draft). */
-  place?: (d: DraftStory) => Promise<void>;
-};
-export type Created = { clientKey: string; itemId: number; url: string | null; title: string; type: string; parentId: number | null; assignTo: string | null };
-export type OpenNew = (place: NewPlace, hooks?: NewHooks) => void;
-/** App provides it; null outside App (the form then isn't offered). */
-export const NewItemCtx = createContext<OpenNew | null>(null);
-export const useOpenNew = () => useContext(NewItemCtx);
-/** Every open screen hears a new item at once (Ahead rereads and selects it); DV-2's signal carries it to others. */
-export const CREATED_EVENT = "focustime:devops-created";
+export * from "./newitem-ctx.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");

@@ -104,7 +104,8 @@ describe.skipIf(!CHROMIUM)("Code lists a database's SQL objects by schema then t
     expect(await tree.locator('[data-code-table="Store"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-sql-file")))).toEqual(["/lake/Gold.Warehouse/dim/Tables/Store.sql", "/lake/Gold.Warehouse/stg/Tables/Store.sql"]);
     await shots(page, "03-by-type");
     // Names only: switching asked the server for nothing but to remember the choice.
-    await expect.poll(() => sent.slice(before)).toEqual(["ui.set_code_sql_group"]);
+    // (The app's own read of which clients Code can open, three seconds after it opens, is not the switch's.)
+    await expect.poll(() => sent.slice(before).filter((a) => a !== "code.clients")).toEqual(["ui.set_code_sql_group"]);
     expect([...new Set(sent.filter((a) => a.startsWith("code.")))].sort()).toEqual(["code.clients", "code.file", "code.kinds", "code.repos"]);
 
     // RB-6: the switch shows once, at the top of Databases, and turns every database round: the SQL database too.

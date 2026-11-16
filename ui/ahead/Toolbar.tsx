@@ -16,7 +16,7 @@ import { DatePicker } from "../DatePicker.tsx";
 import { MenuCtx } from "../Menus.tsx";
 import type { MenuItem } from "../menu.ts";
 import { SelectField } from "../SelectField.tsx";
-import { useAdmin } from "../settings/Admin.tsx";
+import { useAdmin } from "../settings/use-admin.ts";
 import { DEFAULT_FILTERS, epicsOf, type Tier } from "./model.ts";
 import { Icon } from "../icons.tsx";
 
