@@ -7,9 +7,11 @@
 .wl-browse {
   position: absolute; top: 1px; right: 2px;
   display: inline-flex; align-items: center; justify-content: center;
-  width: var(--h-small); height: var(--h-small); min-width: var(--target); min-height: var(--target);
+  width: var(--h-small); height: var(--h-small);
   border: 0; border-radius: 99px; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0;
 }
+/* The target is the app's (28, 44 on the phone) without growing the round button that shows (style guide 10). */
+.wl-browse::before { content: ""; position: absolute; inset: calc((var(--h-small) - var(--target)) / 2); border-radius: 99px; }
 .wl-browse:hover { background: var(--wash-1); color: var(--text); }
 .wl-browse:active { background: var(--wash-2); }
 .wl-browse[data-off] { color: var(--text-faint); cursor: default; }
@@ -20,6 +22,8 @@
   display: grid; gap: 2px; padding: 4px; max-height: min(320px, 50vh); overflow: auto; overscroll-behavior: contain;
   border: 1px solid var(--border-strong); border-radius: var(--radius-menu); background: var(--raised, var(--surface)); box-shadow: var(--shadow-menu);
 }
+/* In the New form's grid the label stays beside the box when a line shows under it. */
+.tq-grid .tq-row:has(.wl-line) > .set-label { align-self: start; margin-top: 6px; }
 .wl-up .wl-pop { top: auto; bottom: calc(100% + 4px); }
 .wl-list, .wl-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
 .wl-title { padding: 4px 8px 2px; font-size: var(--fs-2); font-weight: 600; color: var(--text); overflow-wrap: anywhere; }

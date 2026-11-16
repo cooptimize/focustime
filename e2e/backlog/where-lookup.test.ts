@@ -121,12 +121,11 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     expect(kindsReads(seen)[0]!.input).toEqual({ clientKey: "Northwind", from: "new_form" });
     // The box is a text box with suggestions.
     await expect(box.getAttribute("aria-autocomplete")).resolves.toBe("list");
-    await expect(box.getAttribute("aria-expanded")).resolves.toBe("false");
 
     // A word: matches, best first, the typed letters marked; nothing chosen until Down.
     await page.keyboard.type("On fact.sal");
     await list(page).waitFor();
-    await expect(box.getAttribute("aria-expanded")).resolves.toBe("true");
+    await expect(box.getAttribute("aria-controls")).resolves.toBe(await list(page).getAttribute("id"));
     const first = await list(page).getByRole("option").first().getAttribute("aria-label");
     expect(first).toBe("fact.SalesLine, Table · Gold warehouse · sales-analytics");
     await expect(list(page).locator("mark").first().textContent()).resolves.toBe("fact.Sal");
@@ -261,8 +260,11 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await expect(box.inputValue()).resolves.toBe("Sales report, the margin page\n");
     await box.focus();
     await f.getByText("Atlas's code couldn't be read just now. Type the name, or try again.").waitFor({ timeout: 30_000 });
-    // Try again reads again (now answered by the demo's own code).
-    await f.getByRole("button", { name: "Try again" }).click();
+    // Tab goes on to the next question as before (Try again is out of the Tab order); Alt+Down or a click tries again.
+    await box.press("Tab");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-question"))).toBe("change");
+    await box.focus();
+    await box.press("Alt+ArrowDown");
     await expect.poll(() => kindsReads(seen).map((s) => s.input.clientKey)).toEqual(["Northwind", "Atlas", "Atlas"]);
     await expect.poll(() => f.locator(".wl-line").count(), { timeout: 30_000 }).toBe(0);
     await box.press("End");

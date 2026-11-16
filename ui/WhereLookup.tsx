@@ -25,7 +25,7 @@ import "./where-lookup.css";
 type Names =
   | { state: "idle" }
   | { state: "loading"; slow: boolean }
-  | { state: "ready"; entries: WhereEntry[]; repos: number; problems: string[] }
+  | { state: "ready"; entries: WhereEntry[]; repos: number; problems: string[]; /** The client they were read for. */ client: string }
   | { state: "failed"; line: string; retry: boolean };
 
 /** A second level once asked for: its rows, or why there are none. */
@@ -99,7 +99,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
         const problems = r.repos.filter((x) => x.problem).map((x) => x.repo.name);
         if (!r.repos.length) return setNames({ state: "failed", line: WHERE_TEXT.noRepos(clientName), retry: false });
         if (!entries.length) return setNames(problems.length ? { state: "failed", ...whereRefusal("error", clientName) } : { state: "failed", line: WHERE_TEXT.nothingOffered(clientName), retry: false });
-        setNames({ state: "ready", entries, repos: r.repos.filter((x) => x.repo.state === "ok").length, problems });
+        setNames({ state: "ready", entries, repos: r.repos.filter((x) => x.repo.state === "ok").length, problems, client: k });
       },
       (e: unknown) => {
         clearTimeout(slow);
@@ -109,7 +109,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     );
   }, [clientKey, clientName, from]);
 
-  const entries = names.state === "ready" ? names.entries : null;
+  // Only names read for the client chosen now are ever drawn (an answer for the one before can't show, even for a frame).
+  const entries = names.state === "ready" && names.client === clientKey ? names.entries : null;
   const word = useMemo(() => wordAt(value, cursor), [value, cursor]);
   const matches = useMemo(() => (entries && mode.type === "typing" ? suggest(entries, word.word) : null), [entries, mode.type, word.word]);
   const manyRepos = names.state === "ready" && names.repos > 1;
@@ -159,15 +160,21 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   // A word that matches nothing shows nothing: the box is just a text box then.
   const shownList = !!entries && (mode.type === "browse" || (mode.type === "typing" && (matches?.total ?? 0) > 0));
 
-  // Where the list goes: under the box, or over it when the keyboard (or the screen's foot) leaves no room under it.
+  // Where the list goes: under the box, or over it when the room left under it (the dialog's own edge, the screen's,
+  // or the phone's keyboard) is short; never taller than the room it has.
+  const [room, setRoom] = useState<number | null>(null);
   useLayoutEffect(() => {
     if (!shownList || !box.current) return;
     const r = box.current.getBoundingClientRect();
     const vv = window.visualViewport;
-    const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    const top = vv ? vv.offsetTop : 0;
-    const want = 300;
-    setUp(bottom - r.bottom < Math.min(want, 200) && r.top - top > bottom - r.bottom);
+    const frame = box.current.closest("[data-overlay]")?.getBoundingClientRect();
+    const bottom = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, frame?.bottom ?? Infinity) - 8;
+    const top = Math.max(vv ? vv.offsetTop : 0, frame?.top ?? -Infinity) + 8;
+    const below = bottom - r.bottom;
+    const above = r.top - top;
+    const goUp = below < 200 && above > below;
+    setUp(goUp);
+    setRoom(Math.max(120, Math.min(320, goUp ? above : below)));
   }, [shownList, rows.length]);
 
   // What a screen reader hears as the list changes: how many there are, and whether Down chooses one.
@@ -247,6 +254,11 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (!shownList) {
       // The new keys with the list closed: Down in an empty box, or Alt+Down anywhere, opens the list by kind (the browse
       // button is out of the Tab order, so Tab still goes from this box to the next question).
+      // After a failed read, Alt+Down tries again (Try again is out of the Tab order, so Tab is as before).
+      if (e.key === "ArrowDown" && e.altKey && names.state === "failed" && names.retry) {
+        e.preventDefault();
+        return read();
+      }
       if (e.key === "ArrowDown" && (!value || e.altKey) && !e.ctrlKey && !e.metaKey && !e.shiftKey && clientKey && names.state !== "failed") {
         e.preventDefault();
         browse();
@@ -296,6 +308,10 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
 
   const activeRow = active >= 0 ? rows[active] : undefined;
   const activeId = shownList && activeRow ? `${listId}-${active}` : undefined;
+  // The chosen row stays in sight as the keys move through a long list.
+  useEffect(() => {
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
   const line =
     !clientKey ? note : names.state === "failed" ? names.line : names.state === "loading" ? (names.slow ? WHERE_TEXT.slow(clientName) : mode.type === "browse" ? WHERE_TEXT.reading(clientName) : null) : note ?? (names.state === "ready" && names.problems.length ? WHERE_TEXT.someRepos(names.problems.join(", ")) : null);
   const retry = names.state === "failed" && names.retry;
@@ -405,9 +421,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
           maxLength={maxLength}
           placeholder={placeholder}
           value={value}
-          aria-autocomplete="list"
+          aria-autocomplete={canLook ? "list" : undefined}
           aria-controls={shownList ? listId : undefined}
-          aria-expanded={shownList}
           aria-activedescendant={activeId}
           aria-describedby={line ? lineId : undefined}
           onFocus={() => {
@@ -432,7 +447,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
           <Icon name="repo" />
         </button>
         {shownList && (
-          <span className="wl-pop">
+          <span className="wl-pop" style={room ? { maxHeight: room } : undefined}>
             {title && <span className="wl-title">{title}</span>}
             <ul id={listId} role="listbox" aria-label={title ?? (mode.type === "typing" ? WHERE_TEXT.listName(clientName) : WHERE_TEXT.browse(clientName))} className="wl-list">
               {body}
@@ -447,7 +462,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
           {retry && (
             <>
               {" "}
-              <button type="button" className="link-btn" onClick={() => (read(), box.current?.focus())}>
+              <button type="button" className="link-btn" tabIndex={-1} aria-keyshortcuts="Alt+ArrowDown" title="Alt+Down" onMouseDown={(e) => e.preventDefault()} onClick={() => (read(), box.current?.focus())}>
                 {WHERE_TEXT.tryAgain}
               </button>
             </>
