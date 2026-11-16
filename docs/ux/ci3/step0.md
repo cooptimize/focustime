@@ -33,7 +33,7 @@ In [before.md](before.md).
 | `e2e/bl2-shots.test.ts`, `br1-shots`, `cf1-shots`, `ed2-shots`, `gu1-shots`, `nm1-shots`, `nm2-shots`, `ps1-shots`, `ps2-shots`, `qt1-shots`, `rs1-shots`, `rs2-shots`, `sg1-shots`, `uc1-shots`, `wd2-shots`, `wk5-shots` | `<STEP>_SHOTS` names a folder | Screenshots |
 | `e2e/rs1-audit.test.ts`, `e2e/rs1-scan.test.ts` | `RS1_AUDIT` or `RS1_SCAN` names a file | A layout audit as JSON, not screenshots: left in the suite (open question) |
 
-`e2e/adm2-shots.test.ts` has assertions despite its name and stays.
+`e2e/adm2-shots.test.ts` and `e2e/kb1-shots.test.ts` have assertions despite their names and stay. So does `e2e/uib-shots.test.ts`, whose assertions sit inside a block skipped unless `FOCUSTIME_SHOTS` is set (found by the review; an open question).
 
 ### Tests that check behavior and can also take screenshots
 
