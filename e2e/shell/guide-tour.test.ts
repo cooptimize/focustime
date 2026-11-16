@@ -5,13 +5,15 @@
 // same before and after. Reduced motion: no animation runs and a tour still completes. FOCUSTIME_SHOTS: a frame a step.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { CHROMIUM, freshPage, pageAs, person, startDemo, type Harness, type Person } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
 import { START, TOUR_UI } from "../../ui/guide/content.ts";
 import { TOURS, tourById, type Tour } from "../../ui/guide/tours.ts";
 import { hashOf } from "../../ui/nav.ts";
 
 let h: Harness;
+/** BT-1: the tours only read, so they share one demo person; each test still opens its own fresh page. */
+let you: Person;
 const T = 240_000;
 const THEMES = { dark: "cooptimize-dark", light: "cooptimize-light" } as const;
 const VIEWPORTS = [["1920", { width: 1920, height: 1080 }, false], ["1366", { width: 1366, height: 768 }, false], ["phone", { width: 390, height: 844 }, true]] as const;
@@ -114,14 +116,15 @@ async function walk(page: Page, t: Tour, frames: string | null): Promise<string[
 describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
   beforeAll(async () => {
     h = await startDemo();
+    you = await person(h);
   }, T);
   afterAll(async () => h?.stop());
 
   for (const t of TOURS)
     for (const [name, viewport, phone] of VIEWPORTS)
       it(`${t.title}: end to end with the keyboard at ${name}, writes nothing and leaves the plan as it was`, { timeout: T }, async () => {
-        // What the tour's screens call on their own, without a tour (another demo session, same seed).
-        const base = await freshPage(h, viewport);
+        // What the tour's screens call on their own, without a tour (another page, the same person).
+        const base = await pageAs(h, you, viewport);
         const baseline = recordActions(base.page);
         for (const hash of screensOf(t)) {
           await base.page.evaluate((x) => (location.hash = x), hash);
@@ -132,7 +135,7 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
         }
         await base.page.close();
 
-        const { page, errors } = await freshPage(h, viewport);
+        const { page, errors } = await pageAs(h, you, viewport);
         const before = await snapshot(page);
         const calls = recordActions(page);
         await startTour(page, t);
