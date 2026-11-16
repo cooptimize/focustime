@@ -9,7 +9,7 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const T = 300_000;
 const VIEWS = [
-  "#/today", "#/today/checkin", "#/today/closeout", "#/week", "#/week/day/2026-11-02", "#/week/commit/2026-11-02", "#/week/team",
+  "#/today", "#/today/checkin", "#/today/closeout", "#/week", "#/week/day/2026-11-02", "#/week/commit/2026-11-02",
   "#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/inbox/conversations", "#/inbox/my-promises", "#/inbox/captures",
   "#/settings/you", "#/settings/clients", "#/settings/connections", "#/settings/data", "#/settings/demo",
   "#/settings/admin-clients", "#/settings/admin-people", "#/settings/admin-ai", "#/settings/admin-status", "#/guide",

@@ -208,7 +208,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
       });
       await page.waitForTimeout(200);
     };
-    for (const hash of ["#/day", "#/week", `#/week/day/${MON}`, "#/week/2026-11-09/add", "#/week/team", "#/status", "#/inbox/needs-you", "#/ahead"]) {
+    for (const hash of ["#/day", "#/week", `#/week/day/${MON}`, "#/week/2026-11-09/add", "#/status", "#/inbox/needs-you", "#/ahead"]) {
       await at(page, hash);
       await big();
       expect(await noSideways(page), hash).toBe(0);

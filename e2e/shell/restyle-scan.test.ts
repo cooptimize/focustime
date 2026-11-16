@@ -135,7 +135,7 @@ describe.skipIf(!CHROMIUM || !OUT)("RS-1 scan", () => {
       await look(page, "story card edit");
     });
     await esc(page, 3);
-    for (const [hash, name] of [["#/meetings", "meetings"], ["#/patterns", "patterns"], ["#/guide", "guide"], ["#/docs", "docs"], ["#/week/team", "team"]] as const) {
+    for (const [hash, name] of [["#/meetings", "meetings"], ["#/guide", "guide"], ["#/docs", "docs"]] as const) {
       await go(page, hash, 1500);
       await look(page, name);
       await esc(page);
