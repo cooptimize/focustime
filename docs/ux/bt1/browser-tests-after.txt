@@ -1,0 +1,612 @@
+# Every browser test by name, after BT-1 (611; chore/bt1-tests)
+e2e/admin/admin-screens-shots.test.ts › ADM-2 screenshots desktop 1366
+e2e/admin/admin-screens-shots.test.ts › ADM-2 screenshots desktop 1920
+e2e/admin/admin-screens-shots.test.ts › ADM-2 screenshots phone
+e2e/admin/console.test.ts › Admin an admin registers a chat, sets a color, allows AI and adds a lead; someone else sees them read-only and picks their own color
+e2e/admin/delivery-chats.test.ts › Delivery chats Add a chat opens the picker while the saved chats are still loading
+e2e/admin/delivery-chats.test.ts › Delivery chats Connections lists every Microsoft permission, Chat.ReadBasic among them
+e2e/admin/delivery-chats.test.ts › Delivery chats adds two chats by keyboard, flags external members, relabels one with a warning, removes one
+e2e/admin/invite-send.test.ts › IN-2: send the invite from FocusTime Send in Teams: preview, send, result, and the row reads Invited by Alex via Teams
+e2e/admin/invite-send.test.ts › IN-2: send the invite from FocusTime at 390 px the sheet and its preview don't scroll sideways
+e2e/admin/invite-send.test.ts › IN-2: send the invite from FocusTime without the permission: IN-1's buttons with LP-1's note, and no send buttons
+e2e/admin/invite.test.ts › Who's set up and Invite lists Cooptimizers with yes or no marks, invites the one who hasn't signed in, and records it
+e2e/admin/register-client-call.test.ts › registering a client call (browser, demo mode, MC-1c) each failure's message beside the calendar list
+e2e/admin/register-client-call.test.ts › registering a client call (browser, demo mode, MC-1c) registers a teammate's call from my calendar and by pasted link; a failure says why beside the link and keeps the form
+e2e/admin/settings-rail.test.ts › Settings rail a phone gets the rail as a list page, each section a page with Back and ×, and Admin pages fit the width
+e2e/admin/settings-rail.test.ts › Settings rail at 1366×768 the last Admin item is reachable by scroll and keyboard; a deep link shows its item
+e2e/admin/standards.test.ts › KB-1 standards drafts with the standards, answers from them and shows them to admins
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) AH-2, BL-1: Cooptimize's scope: the client's own area left out, said in ⋯; Show the whole project brings it back marked, Needs attention never has it, and an admin's scope applies
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) AH-3, BL-1: Needs attention ranked by each client's backlog, grouped client › epic › feature, one row per item with its status and one fix; Size goes into the change set; a project with no backlog order says so; an admin turns a gap off
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) AH-3: the Grid at every window size: Item never under its minimum, no page scroll; Dates under 1400, dots under 1200, cards under 900 and on the phone
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) AH-5: each editor is a popover anchored to its cell and on screen; keyboard; dates; state from the process; assignees from the client's project; nothing written before Save to DevOps
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) AH-5: no native select or date input anywhere in Ahead; no horizontal scroll at 1280 and 1440; status chips stay in their cells
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) Gantt: bars grouped client › epic › feature, a dashed edge where a date is missing, an item with no dates on its own row, one callout marker per bar
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) Grid: every level grouped by client, one status chip per row, an empty cell empty (+ date on hover where I may fill it), my changes to save; items I can't change say who can
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) QF-1: one click opens each picker (start, target, assigned to, size) and stages a change; hover marks the cells I can change
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) a click on a bar opens Break down's side panel, whose action list has Send to… (SW-1's dialog)
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) a notice's link opens the item in the Grid, focused
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) cell edits (AH-5 popovers): Enter opens, Enter saves, Esc cancels, arrows move; the change is pending and survives a reload
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) phone and 1366: read only on a phone (D476); the pane folds under at 1366
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) the drag bug: with a slow reload, a second drag right after a drop keeps its row under the pointer; drops snap to half-days
+e2e/backlog/change-set.test.ts › Backlog (browser, demo mode) the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm
+e2e/backlog/client-identities.test.ts › client DevOps identities (browser, demo mode) a linked login shows the FocusTime name; a suggestion changes nothing until Confirm; then it's Sam everywhere
+e2e/backlog/create-quickly.test.ts › QC-1: no write PAT (browser, real session) the one line with the way to add it; Save as draft is the main button and works
+e2e/backlog/create-quickly.test.ts › QC-1: one New form, straight to DevOps (browser, demo mode) Backlog: + New, Enter, the preview, Create; selected in Grid even when a filter would hide it; New under; a level above epic
+e2e/backlog/create-quickly.test.ts › QC-1: one New form, straight to DevOps (browser, demo mode) Capture: a draft feature, Ctrl+Enter, Create, without the Inbox
+e2e/backlog/create-quickly.test.ts › QC-1: one New form, straight to DevOps (browser, demo mode) the block panel's New feature lands on the block; a draft story's Create from its row stays on the block
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) arrow caps for items past the timeline's edges, the date in their tooltip; an item with no bar in range keeps an aligned row
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) each label sits on its bar's row: two-line titles, Larger text, after folding, callouts hidden
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) keyboard: the level control in Filter; Up and Down move between rows, Left collapses, Right expands
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) levels: Epics, Features and Stories list that level; a roll-up spans its children with their count; carets work after a level; the choice is remembered
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) no native selects or date inputs anywhere in Ahead
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) screens: 1920, Larger text
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) the callout marker: its count, its popover lists them, each fix opens its flow; Callouts in ⋯ hides them and is remembered
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) the label column resizes and is remembered
+e2e/backlog/gantt.test.ts › AH-6: Backlog › Gantt layout (browser, demo mode) type icons at every level, indentation by level only, nothing but the hierarchy in the label column
+e2e/backlog/grid-grooming.test.ts › ED-2 rename, move and bulk edit in Backlog's Grid (browser, demo mode) in the ranked list a staged move changes the parent label, marked, and not the row's place; reduced motion makes the drag's feedback instant
+e2e/backlog/grid-grooming.test.ts › ED-2 rename, move and bulk edit in Backlog's Grid (browser, demo mode) rename two, drag one and Move… another, assign three in bulk, Review, Save, Undo one; the order never changes
+e2e/backlog/grid-grooming.test.ts › ED-2 rename, move and bulk edit in Backlog's Grid (browser, demo mode) the Gantt's rows have Rename and Move… in their menu, staged into the same change set; E on a Grid row opens its card ready to edit
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) Needs attention shows only rows with a fix, each with its action
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) no cell shows a dash, and a row never shows two chips that mean one thing
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) review fixes: after a Skip the grid keeps a Tab stop; Start here isn't offered on the Gantt
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) review fixes: tree semantics, Break down in the tree, Select all takes only what's shown, one needs attention, ⋯ looks like a button, Stale only in Filter
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) selecting rows shows the bulk bar, and its actions stage changes (nothing written before Save)
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) the chevron: at least 16 px, the row's full height, at least 28 px wide; Left and Right fold the focused row
+e2e/backlog/layout.test.ts › BL-1: Backlog, measured (browser, demo mode) the first row of data starts within about 200 px at 1440×900 and 1280×720, with one row of filters
+e2e/backlog/needs-attention.test.ts › AH-7, BL-1: Needs attention you can finish (browser, demo mode) Skip: into Skipped (folded), not in Start here, kept on the server (a cleared browser still has it), Unskip
+e2e/backlog/needs-attention.test.ts › AH-7, BL-1: Needs attention you can finish (browser, demo mode) Start here: the five most urgent by the rule, the rule in its tooltip, narrowed by the filters
+e2e/backlog/needs-attention.test.ts › AH-7, BL-1: Needs attention you can finish (browser, demo mode) fixing in the row: each editor opens on the row into the change set, the piece goes, a ready item fades out with Undo; Break down opens its panel; nothing written before Save
+e2e/backlog/needs-attention.test.ts › AH-7, BL-1: Needs attention you can finish (browser, demo mode) progress: a fix counts as pending until it's saved to DevOps, then as fixed this week
+e2e/backlog/needs-attention.test.ts › AH-7, BL-1: Needs attention you can finish (browser, demo mode) the counts by kind match the list; one applies that kind, again clears it
+e2e/backlog/new-form-questions.test.ts › TP-1b: a draft TP-1 saved, and someone who isn't an admin (browser, real session) a TP-1 draft opens with every word (the answers, then the rest in its description); old addresses land safely
+e2e/backlog/new-form-questions.test.ts › TP-1b: three plain questions in the New form (browser, demo mode) Save as draft keeps the answers; the draft editor shows and edits them; Create in DevOps writes them
+e2e/backlog/new-form-questions.test.ts › TP-1b: three plain questions in the New form (browser, demo mode) the old Work templates addresses land on the section's first page, and nothing offers them
+e2e/backlog/new-form-questions.test.ts › TP-1b: three plain questions in the New form (browser, demo mode) the phone: the three boxes under More, above Description, at Default and the largest text size
+e2e/backlog/new-form-questions.test.ts › TP-1b: three plain questions in the New form (browser, demo mode) title only is as before TP-1; the three answers reach the preview in plain words; the card shows them with no chip
+e2e/backlog/rank-order.test.ts › BL-2: Backlog in rank order (browser, demo mode) a story opened under its feature edits, reviews, saves and undoes like any row
+e2e/backlog/rank-order.test.ts › BL-2: Backlog in rank order (browser, demo mode) each level reads in rank order in the Grid, and the Gantt lists the same rows in the same order
+e2e/backlog/rank-order.test.ts › BL-2: Backlog in rank order (browser, demo mode) no saved level opens at Features; a level picked is kept; old links open their level
+e2e/backlog/rank-order.test.ts › BL-2: Backlog in rank order (browser, demo mode) review 2: Needs attention shows a story's gap under its feature at the default level, and the level stays Features
+e2e/backlog/stories-level.test.ts › Backlog › one level as a list (browser, demo mode) each client's stories in its backlog order with the rank; stale counted and narrowed; a bulk date and Plan it
+e2e/backlog/stories-level.test.ts › Backlog › one level as a list (browser, demo mode) the client multi-select and the levels; light, 1366 and the phone (read only, no sideways scroll)
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) Readiness, Gaps and Fix next's old addresses land on the Grid with Needs attention on
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) filters, the level and Callouts carry across views; the header and the Showing line agree; one chip per filter; Clear filters
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) screenshots at 1920: the same filters in both views
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) the address round-trips the view: a copied link opens the same filters and level in a new browser
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) the level lists in both views; Needs attention's rows fold under their parents with the chevron and Left, Right, Up and Down
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) the same row in both views; what can't apply is disabled in ⋯ with its reason, never removed
+e2e/backlog/toolbar.test.ts › AH-6, BL-1: Backlog's one row of filters (browser, demo mode) the search narrows Needs attention and the one-level list
+e2e/code/browse-repos.test.ts › Code (RB-1) a team-only client, a token without Code (read), an empty repo, binary, image and oversize files
+e2e/code/browse-repos.test.ts › Code (RB-1) an admin sets a client to its team only and sees who opened what in Code views
+e2e/code/browse-repos.test.ts › Code (RB-1) opens from its tab, reads a client's folders and files colored with line numbers, and Esc stays (RB-6)
+e2e/code/browse-repos.test.ts › Code (RB-1) the command menu opens a client; Search code opens a file by keyboard; the address reopens it; the Copy buttons
+e2e/code/browse-repos.test.ts › Code (RB-1) the phone: client and tree first, the file as its own page with Back; no sideways scroll
+e2e/code/by-kind-and-search.test.ts › Code by kind and Search names (RB-2) By kind lists every group across a client's repos; a model opens to its tables; a row opens its file; Show in files lands on its folder
+e2e/code/by-kind-and-search.test.ts › Code by kind and Search names (RB-2) a search across clients groups by client, names the client left out and the one that failed; the keyboard opens a result and Back returns; the words go nowhere
+e2e/code/by-kind-and-search.test.ts › Code by kind and Search names (RB-2) an admin sees Listed by kind and Searched names in Code views, with a client and nothing else
+e2e/code/by-kind-and-search.test.ts › Code by kind and Search names (RB-2) inside a client the search starts on This client, and All clients widens it
+e2e/code/by-kind-and-search.test.ts › Code by kind and Search names (RB-2) the phone: By kind as a list, a row's file as its own page; a search and its results; no sideways scroll
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) By kind: the groups in order, the warehouse's objects only under Databases, no file listed twice
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) every old address still opens Code where it said
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) no Code tab, and 6 does nothing, for someone who may not read code (the same test More used)
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) six tabs, Code last; 6 opens it; it is a page with no Close; Esc stays; the other keys work; not in More
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) the line about the log is on screen wherever a file can be opened or a search run
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) the phone: Code from More, the same search row and groups
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) the search: choices on focus, This client first, nothing asked before Enter, no words sent for names, Esc goes back
+e2e/code/code-tab.test.ts › Code is a tab with one search box; each thing is listed once (RB-6) the top bar is one row at 1280, 1366 and 1920, at every text size
+e2e/code/search-inside.test.ts › Code's search finds what is inside items, and inside files (RB-4) a result opens that client's Code at the file with every match marked and a stepper; Back returns to the results
+e2e/code/search-inside.test.ts › Code's search finds what is inside items, and inside files (RB-4) a table inside a warehouse is found by name, with and without the SQL kind; By kind opens the warehouse; a plain file is found under Files; the words stay in the browser
+e2e/code/search-inside.test.ts › Code's search finds what is inside items, and inside files (RB-4) an admin sees Searched inside files and the opened file in Code views, with a client and never the words
+e2e/code/search-inside.test.ts › Code's search finds what is inside items, and inside files (RB-4) inside files: a table's name lists what uses it across clients; each client that can't answer says why; the words are in no address or storage
+e2e/code/search-inside.test.ts › Code's search finds what is inside items, and inside files (RB-4) the phone: the switch, a search inside files and its results, a result and Back; no sideways scroll
+e2e/code/sql-objects.test.ts › Code lists a database's SQL objects by schema then type, or by type then schema (RB-5) a warehouse opens to schemas then types; Type turns it round with the table still open; the switch is one, remembered, and asks for nothing else
+e2e/code/sql-objects.test.ts › Code lists a database's SQL objects by schema then type, or by type then schema (RB-5) the filter narrows the tree: folders without a match hide, the others open, counts show matches; clearing puts it back
+e2e/code/sql-objects.test.ts › Code lists a database's SQL objects by schema then type, or by type then schema (RB-5) the keyboard walks the tree: Down and Up move, Right opens, Left closes, Enter opens the file
+e2e/code/sql-objects.test.ts › Code lists a database's SQL objects by schema then type, or by type then schema (RB-5) the phone: the same switch and tree in its list, kept open when a file is opened and closed
+e2e/day/any-day.test.ts › QF-1 (browser, demo mode) Day steps to any day: ‹ › and [ ], the date in the address, Today comes back; a day ahead takes work, a past day ticks and moves; [ never fires while typing
+e2e/day/any-day.test.ts › QF-1 (browser, demo mode) This isn't work: from a suggestion's ⋯ it leaves From chats; Undo brings it back
+e2e/day/any-day.test.ts › QF-1 (browser, demo mode) Timebox my day from Today on a never-confirmed day (CF-1) and from the Board's day menu; the same proposals on the timeline
+e2e/day/any-day.test.ts › QF-1 (browser, demo mode) the demo's PTO day: You're off, read only, no nudges, a link to the next working day
+e2e/day/block-meetings.test.ts › Meetings on Day and Week (browser, demo mode) WD-2: Day's cards show each block's meetings as one line that opens to the list in time order; the block panel's meetings line opens the agenda
+e2e/day/block-meetings.test.ts › Meetings on Day and Week (browser, demo mode) Week: a block's meetings are one line that opens to the list; its panel's meetings line opens the agenda with free gaps (WD-1, WD-2)
+e2e/day/block-panel-day.test.ts › WD-2: a past day (browser, demo on Tuesday) Day on yesterday: the block opens the panel with no + Add; an unfinished to-do can be ticked, and moved to today
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Day has no This week chips and no A day ahead line; Day's Timeline has + Add on each block, opening the same panel
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Day remembers on this device whether its panel was left open, and its address names the block
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Day today: ticking a to-do on the card and in the panel opens the wrap-up sheet each time
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Day › → to tomorrow › + Add on the PM block › add a story › Week shows it on tomorrow PM
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Week › + Add on a block: the cursor is in the box; part of a story's title then Enter adds it; it's under On this block and on the card; Undo
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) Week › a click on Wednesday's header › Day on Wednesday; Today comes back
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) a click on a block's header opens the panel with what's on it and the meetings line; a click on another block moves it there; a click on a row doesn't open it
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) a plain to-do taken off isn't destroyed: it waits under To place, and + puts it back on a block
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) drag a to-do from a block onto the panel: it's off the block and back in its feature's list as not placed; Undo puts it back. The same with ⋯ › Take off the plan
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) follow-up: More in <client> opens the rest of the client's open work; a teammate's story there adds to the block
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) follow-up: the header has one status line; no browser select anywhere in the panel or on Day
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) follow-up: the panel's ⋯ sorts the list by target date or backlog order, remembered across a reload; a row's hover has its state, target date and size
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) only one side panel exists: + Add, a click and the keyboard open the same panel, on Week and on Day; Esc closes it and gives focus back to the block
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) phone (390×844): + Add on a block opens the sheet; a story added from it is on the block, on Week and on Day
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) review: inside the panel the block keys stay out of the way: Space ticks a to-do's checkbox, the arrows don't move the panel, and typing a doesn't reopen it
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) text that matches nothing: the highlight is on New to-do, and Enter makes a plain to-do on the block
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) the block's ⋯ menu has no Details, Add work…, Add an intention or Add a work item: it opens the block, and has the calls
+e2e/day/block-panel-day.test.ts › WD-2: one panel, one Day (browser, demo) with the panel closed, starting to drag a to-do out opens the panel as the drop area; dropped on another block instead, the panel closes again
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) Cards: Week's two Catch-up cards; + Add in the header; Add, tick, move, each undone
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) Timeline: two Catch-up bands in the neutral color, and a to-do timeboxed there with T, then undone
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) a person who hid the catch-up day on Week still sees it on Day
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) over the demo's week (Friday: no hours), each day's blocks on Day are Week's cards, in Cards and in Timeline
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) over the demo's week (Friday: working), each day's blocks on Day are Week's cards, in Cards and in Timeline
+e2e/day/catch-up-day.test.ts › RS-2: Day shows the catch-up day (browser, demo) the phone's Day on the catch-up day: its blocks, named Catch-up, with their to-dos
+e2e/day/coworking-calls.test.ts › co-working calls (browser, demo mode) Week's card and Day's card show the live call with Join; the block's ⋯ and the block panel's ⋯ offer Join and Start a call
+e2e/day/coworking-calls.test.ts › co-working calls (browser, demo mode) the phone at 360: the line and Join fit on the Now card and the Week card, 44 px, no sideways scroll
+e2e/day/coworking-calls.test.ts › co-working calls (browser, demo mode) the phone at 390: the line and Join fit on the Now card and the Week card, 44 px, no sideways scroll
+e2e/day/no-over-words.test.ts › QT-2: no over-planning words (browser, demo) screenshots: the check-in and the assistant's answer about today
+e2e/day/no-over-words.test.ts › QT-2: no over-planning words (browser, demo) the check-in shows free time and Move to… on each to-do, nothing amber; the assistant names the meetings and no over-planning
+e2e/day/now-mark.test.ts › NL-1: the now mark only on a block under way at 10:03 AM: Week and Day, Cards and Timeline, then the phone
+e2e/day/now-mark.test.ts › NL-1: the now mark only on a block under way at 10:03 PM: Week and Day, Cards and Timeline, then the phone
+e2e/day/now-mark.test.ts › NL-1: the now mark only on a block under way at 12:30 PM exactly: Week and Day, Cards and Timeline, then the phone
+e2e/day/now-mark.test.ts › NL-1: the now mark only on a block under way at 6:30 AM: Week and Day, Cards and Timeline, then the phone
+e2e/day/now-mark.test.ts › NL-1: the now mark only on a block under way screenshots for screenshots/nl1 (dark, 1440×900)
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week Day opens with its panel on a wide window; closed once, it stays closed; a narrow window opens without it
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week a holiday shows like PTO, by its name, on Week, on Day and on the phone, with no + Add or suggestions
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week a tick on a heavy block today keeps focus on its checkbox (the row doesn't fold away)
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1280, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1280: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1280: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1440, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1440: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 1440: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 390, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 390: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week heavy at 390: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1280, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1280: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1280: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1440, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1440: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 1440: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 390, Larger text: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 390: no line of text shows in part, no focus ring is cut
+e2e/day/polish-measures.test.ts › PS-1: polish sweep on Day and Week ordinary at 390: targets, chips, first lines, the capture button, one filled + Add
+e2e/day/progress-checkin.test.ts › TX-1 timeboxes and check-ins (browser, demo mode) Close out rolls up what's unanswered and offers one batched DevOps update, previewed and confirmed
+e2e/day/progress-checkin.test.ts › TX-1 timeboxes and check-ins (browser, demo mode) TX-1b: All went to plan on a page left open: an error offers Retry, a row answered elsewhere goes, every applied row has Undo, a Done gets PK-1's offer
+e2e/day/progress-checkin.test.ts › TX-1 timeboxes and check-ins (browser, demo mode) TX-1c: a plain tick takes the story's later to-do off with one notice, and Undo puts it back
+e2e/day/progress-checkin.test.ts › TX-1 timeboxes and check-ins (browser, demo mode) asks only at the two moments; Partly, Didn't get to it and Done work, with Undo; the chip shows what's left
+e2e/day/progress-checkin.test.ts › TX-1 timeboxes and check-ins (browser, demo mode) phone: one screen, 44px targets, nothing wider than the phone, the page scrolls
+e2e/day/tick-without-confirm.test.ts › CF-1: no confirm, no musts (browser, demo mode) a feature placed on my week shows at once in the status report as planned (published on change)
+e2e/day/tick-without-confirm.test.ts › CF-1: no confirm, no musts (browser, demo mode) a story ticked on a day nobody confirmed opens Wrap it up
+e2e/day/tick-without-confirm.test.ts › CF-1: no confirm, no musts (browser, demo mode) an empty Day: Nothing on today yet, + Add (the block panel, on Day); once a to-do is on today the card goes
+e2e/day/tick-without-confirm.test.ts › CF-1: no confirm, no musts (browser, demo mode) none of the old words on Day, Week, Ahead, Status, Inbox, Add work, a chip's popover, the command menu or the keys
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline drag from Not timeboxed yet to the hours timeboxes it; a band dragged to the checklist loses its time; both Undo
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline hour labels on the left in Week's type, the first hour too
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline hover links the row and its band both ways; a click on a row brings its band into view
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline lists all of a block's to-dos: timed first in time order with their times, then Not timeboxed yet with sizes; the tray is gone
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline placed to-dos are solid; only Timebox my day's suggestions are dashed; a suggested to-do stays on the checklist
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline screenshot 01-today-1920 (screenshots only)
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline screenshot 02-today-1280 (screenshots only)
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline screenshot 05-larger-text-1920 (screenshots only)
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline the keyboard works from checklist rows: T, Up, Down, Shift, Backspace
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline the phone keeps TY-1's tray and no column, with solid bands
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline ticking is the list view's: Wrap it up (FN-1) with Undo, and done on both sides
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline two overlapping meetings both get the marker, nothing else does
+e2e/day/timeline-checklist.test.ts › TY-2: the checklist beside Today's timeline under 1100 px the checklist is above the block's hours and folds; at 1100 it is beside them; sticky at 1920
+e2e/day/timeline.test.ts › TY-1: Today's timeline SZ-1: an unsized to-do reads the setting in the tray and gets its length when dragged onto the timeline
+e2e/day/timeline.test.ts › TY-1: Today's timeline Timebox my day: placeholders on the timeline, ✓, ✕, drag first, Accept all, Discard, no popup, nothing outside
+e2e/day/timeline.test.ts › TY-1: Today's timeline Today and Week's same day side by side look like one system (screenshots only)
+e2e/day/timeline.test.ts › TY-1: Today's timeline at the largest Text size (screenshots only)
+e2e/day/timeline.test.ts › TY-1: Today's timeline drag: tray to timeline, move, resize, back to the tray, each with Undo; nothing leaves FocusTime
+e2e/day/timeline.test.ts › TY-1: Today's timeline draws Week's parts: overlapping meetings side by side, blocks, now line, Evening band, PTO
+e2e/day/timeline.test.ts › TY-1: Today's timeline keyboard: T at the next free slot, Up and Down move, Shift resizes, Backspace un-timeboxes
+e2e/day/timeline.test.ts › TY-1: Today's timeline phone at 360 with a 17 px root font: nothing past the edge, the page scrolls
+e2e/day/timeline.test.ts › TY-1: Today's timeline phone at 360 with a 21 px root font: nothing past the edge, the page scrolls
+e2e/day/timeline.test.ts › TY-1: Today's timeline phone at 360: tap for a time, placeholders with Accept all, 44px, no sideways scroll
+e2e/day/timeline.test.ts › TY-1: Today's timeline the switch shows and hides the timeline, remembered; off is the list
+e2e/day/today.test.ts › Today: Now, Check-in and Close out (U2) Check-in: done picks are a count; every unfinished to-do has exactly one move; no fit words, nothing in the risk color
+e2e/day/today.test.ts › Today: Now, Check-in and Close out (U2) Close out: a panel over Today; no pick twice, a to-do taken off today is gone (CF-1); Done closes the day
+e2e/day/today.test.ts › Today: Now, Check-in and Close out (U2) Day: one Start focus, on the next to-do's row; nothing above the blocks but the strip, the chips and the moment card; risk says why; the word count
+e2e/day/today.test.ts › Today: Now, Check-in and Close out (U2) the attention line is absent when healthy, and a failed source shows only in the status bar, with its age and Retry (RF-1)
+e2e/day/wrap-up-setting.test.ts › PK-1 checking off a to-do offers the DevOps update (browser, demo mode) Always skip DevOps in Settings › Planning: a tick opens nothing
+e2e/day/wrap-up-setting.test.ts › PK-1 checking off a to-do offers the DevOps update (browser, demo mode) Close out asks once for the day's done to-dos: Finished or Made progress, time left and a comment per row, one preview, one Confirm
+e2e/inbox/capture-to-devops.test.ts › Capture to DevOps (CP-1) capture, Undo, the AI version in the background, the straight preview, the New form, and the create
+e2e/inbox/chat-images.test.ts › Chat images, CV-4 the switch, images described in the same AI request, read on view, Open in Teams when gone, attached to the new DevOps item
+e2e/inbox/client-boundary.test.ts › GD-2: held back, sorted by hand, tagged and flagged Close the loop's flag with Replace
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows Today on the phone (390 px, 17 px root font)
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows closes one loop for real, with how and a note
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows screenshots: Close the loop open in the block panel, Captures and Close out, dark and light
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows the Inbox, Week's block panel and Close out at 1366
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows the Inbox, Week's block panel and Close out at 1366 Larger
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows the Inbox, Week's block panel and Close out at 1920
+e2e/inbox/close-the-loop-layout.test.ts › IB-1: Close the loop never overflows the Inbox, Week's block panel and Close out at 1920 Larger
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call a promise on a DevOps item: Comment with a state change through the write framework
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call call: a Teams call link and a note that closes the loop
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call email: an Outlook draft stays open with I sent it; Send now without approval falls back to Outlook prefilled and Mark sent
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call on the phone at 360 px: no sideways scroll, 44 px targets, Send above the home indicator
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call on the phone at 390 px: no sideways scroll, 44 px targets, Send above the home indicator
+e2e/inbox/close-the-loop-send.test.ts › LP-1: Close the loop by Teams, Email, Comment or Call posts in the customer chat after a preview that names the people outside Cooptimize, and keeps the promise with Undo
+e2e/inbox/conversations-chart-and-reactions.test.ts › Conversations, CV-2 a suggestion with Teams-style messages, images and the viewer, the PersonPicker, an overdue loose promise with the DevOps offer, Day's From chats chip
+e2e/inbox/conversations-without-ai.test.ts › CV-3 follow-ups rules-only grouping with AI off, likely items for a loose promise, the strip and agenda, the Board rail, Capture's Who
+e2e/inbox/conversations.test.ts › Conversations the Alliance conversation: my promise, the DevOps draft and create; the Wingtip promise on Today (IB-4)
+e2e/inbox/create-item-from-chat.test.ts › Create DevOps item and Link to item, CV-5 a conversation In discussion and a promise without an item: create, link with a comment, In progress, Item closed
+e2e/inbox/left-edge.test.ts › UC-1: the Inbox on the left, a deployment titles itself (browser, demo mode) Quick capture: a Deployment saves with an empty box and titles itself; the hint follows the client and the date; typed text is the title; the other kinds still need text
+e2e/inbox/left-edge.test.ts › UC-1: the Inbox on the left, a deployment titles itself (browser, demo mode) the Inbox's capture box does the same
+e2e/inbox/left-edge.test.ts › UC-1: the Inbox on the left, a deployment titles itself (browser, demo mode) the Inbox's heading, chips, capture box and lists share Day's left edge at every width and text size, and no row is wider than the limit
+e2e/inbox/left-edge.test.ts › UC-1: the Inbox on the left, a deployment titles itself (browser, demo mode) the chips' numbers add up to the tab's number, for one client chosen and for several; a chip with nothing shows none
+e2e/inbox/slim-inbox.test.ts › the slim Inbox (IB-4) From chats: two suggestions grouped by client, open in place, Dismiss with Undo, and the tab's number follows
+e2e/inbox/slim-inbox.test.ts › the slim Inbox (IB-4) Promises: late first; Cleared on their own lists why, and Put back brings one back for good
+e2e/inbox/slim-inbox.test.ts › the slim Inbox (IB-4) keys never fire while typing, and Day's From chats chip opens the list
+e2e/inbox/slim-inbox.test.ts › the slim Inbox (IB-4) phone (390 px, 17 px root font): no sideways scroll on any list or an open row
+e2e/inbox/slim-inbox.test.ts › the slim Inbox (IB-4) the list I used last comes back; old links land on the nearest list; a conversation that isn't waiting says so
+e2e/phone/assistant-close.test.ts › HK-7: the Assistant sheet's close button on the phone at 360 px the × is inside the sheet
+e2e/phone/assistant-close.test.ts › HK-7: the Assistant sheet's close button on the phone at 390 px the × is inside the sheet
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul Backlog on the phone: the notice, then Open anyway shows it
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul Today: the Now card, one heading over the urgent strip (3 lines at most), to-dos by block, Next up
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul Week at 360: each row's title on its own line, never squeezed; the agenda folded; ⋯ opens the same sheet
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul at 360 and the largest Text size (and a 21 px root font): no sideways scroll on the phone's screens; the bar's and the sheet's targets at least 44 px
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul the bar is Day, Week, Capture, Inbox, Ask; Capture and Ask open; the computer keeps its five tabs
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul the status dot opens the sources sheet; no source footer on the phone
+e2e/phone/bottom-bar-and-sheets.test.ts › MB-1: the phone overhaul the to-do sheet: focus kept inside, Esc and focus back; Done, Move to tomorrow and Snooze run at once with Undo; Add time opens the time menu
+e2e/phone/layout.test.ts › P1: FocusTime on a phone CV-3: the FocusTime name stays whole at the phone's 17px root font (and 21px), with no sideways overflow; the person chip is ⋯'s first row
+e2e/phone/layout.test.ts › P1: FocusTime on a phone has the bottom bar and a small top bar, no hover-only controls, Add work as a sheet on the phone, Ahead read-only
+e2e/phone/layout.test.ts › P1: FocusTime on a phone runs the day: Today, start focus, mark done, capture
+e2e/phone/polish.test.ts › MB-1b: phone polish at 360 px: the late chip ends the title line with no status, stays on the chips line beside one; the status sheet fits
+e2e/phone/polish.test.ts › MB-1b: phone polish at 390 px: the late chip ends the title line with no status, stays on the chips line beside one; the status sheet fits
+e2e/phone/week-day-bar.test.ts › NM-2: the phone's day bar icon buttons with names, Week's name, and Next day works
+e2e/settings/ai.test.ts › AI settings read-only AI rules; Test AI with AI off, with no key, then OK with a key; an admin's changes show; a $0 cap says so
+e2e/settings/autosave.test.ts › Settings saves itself a DevOps write PAT keeps its one explicit button, Check and save
+e2e/settings/autosave.test.ts › Settings saves itself a change saves on blur with Saved; an unchanged blur saves nothing; Undo restores it; no Save buttons
+e2e/settings/autosave.test.ts › Settings saves itself a refused value: the message under the field, the typed value stays, nothing saved; a network error offers Retry
+e2e/settings/autosave.test.ts › Settings saves itself an edited field saves when Settings closes with it focused
+e2e/settings/autosave.test.ts › Settings saves itself the body scrolls on its own beside the rail; the rail stays in view and marks the section shown (ADM-2, ST-1)
+e2e/settings/calendar-by-link.test.ts › CAL-1: Add a calendar by link a link that stops working: the error line and Replace link, and the link never in a response or the page
+e2e/settings/calendar-by-link.test.ts › CAL-1: Add a calendar by link adds a calendar by link: help, Check link, Found N, Save, Busy events on Week, the source line
+e2e/settings/close-returns.test.ts › NM-2: Settings closes back to where you were a tab, a Guide section, a story card and Code; its own address closes to Day
+e2e/settings/demo-reset.test.ts › Reset demo (DM-1) puts every change back as it started, in under 5 seconds
+e2e/settings/demo-reset.test.ts › Reset demo (DM-1) the command menu's Reset demo opens Settings › Demo
+e2e/settings/diagnostics.test.ts › DX-1 Diagnostics (browser, demo mode) the command opens Settings › Data › Diagnostics; Run checks shows both checks; Copy as text is counts only
+e2e/settings/first-run-setup.test.ts › first-run setup a new person goes through the five screens, resumes after a reload, and Day has no line once through (RF-1)
+e2e/settings/notifications.test.ts › Notifications and the VM start setting (browser, demo mode) Settings > Notifications: a switch per kind and quiet hours, saved
+e2e/settings/notifications.test.ts › Notifications and the VM start setting (browser, demo mode) Start without a preview off: the morning box's Start shows the preview instead
+e2e/settings/notifications.test.ts › Notifications and the VM start setting (browser, demo mode) clicking a notification opens its view: each route
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) a jump to a setting that lands late doesn't take focus from a new search (TX-1b: the flake on main)
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) each section's first switch still saves, and stays saved after a reload
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) every registry setting is in its section; its deep link lands on it with a brief highlight
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) going to the search box right after a jump keeps the focus there
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) left alone, a jump puts the focus on the setting, and the late data leaves it there
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) no secret value appears in Settings or in what the server sends it
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) on a phone the rail is a list page and each section a page with Back and × that fits the width
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) search finds settings by new and old labels and jumps there; old section ids still land
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) the keyboard alone opens, moves and closes Settings; focus goes back to what opened it
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) the section's data landing late doesn't pull the focus out of an empty search box
+e2e/settings/panel-shell.test.ts › Settings shell (ST-1) × and Esc close every section back to where I was; Back leaves the client page; no bottom-left Back
+e2e/settings/teams-bot.test.ts › TB-1: Let FocusTime message me in Teams TB-2: each kind off by default; a kind, its time and Friday save; a test says where it runs
+e2e/settings/teams-bot.test.ts › TB-1: Let FocusTime message me in Teams is off by default, turns on, and stays on
+e2e/settings/teams-bot.test.ts › TB-1: Let FocusTime message me in Teams serves the privacy and terms page without signing in (TB-1b)
+e2e/settings/text-size.test.ts › app-wide type scale and text size (U5) Ctrl+plus steps up and stops at Larger, Ctrl+minus steps down, Ctrl+0 goes back to Default; nothing while typing
+e2e/settings/text-size.test.ts › app-wide type scale and text size (U5) Inbox (IB-4): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips
+e2e/settings/text-size.test.ts › app-wide type scale and text size (U5) Roadmap, Plan ahead, Inbox, every Settings section, the focus screen and each dialog are on the scale, at Default and Larger
+e2e/settings/text-size.test.ts › app-wide type scale and text size (U5) Settings > Display Text size changes every screen at once and survives a restart; Default puts it back
+e2e/settings/text-size.test.ts › app-wide type scale and text size (U5) the sign-in screen is on the scale
+e2e/shell/assistant-answers.test.ts › AS-3: the assistant answers a question answers "what should I look out for next week" from my data, by client, with a step to confirm
+e2e/shell/assistant-answers.test.ts › AS-3: the assistant answers a question screenshots: three answers in the panel and as Teams cards
+e2e/shell/assistant.test.ts › AS-1 the assistant panel TB-3: Open in FocusTime's address opens the panel at that answer
+e2e/shell/assistant.test.ts › AS-1 the assistant panel asks, proposes, confirms, talks and clears
+e2e/shell/capture-address.test.ts › The capture address (browser, demo mode) opens Quick capture on load and on a hash change, over the place you were, and back doesn't reopen it
+e2e/shell/capture-button.test.ts › Capture's save button (UI-7) the phone: no overlap and nothing off the page
+e2e/shell/capture-button.test.ts › Capture's save button (UI-7) ↵ beside the box at 1920 and Larger; Enter and ↵ both save
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Add to a block adds the draft to a block in the 15.2 order, and the same editor opens from Add work
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Ctrl+K Add a follow-up opens the capture box with Follow-up chosen; Close out is the panel, with no capture box (U2)
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Draft feature with a target date; Sort later keeps an unsorted capture
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Draft story: a parent feature from the lookup and a size; a draft needs a client first
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Follow-up: who and due from the rules, channel and a linked item inline; Enter saves it as a follow-up
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) Inbox: a prominent box, no explainer (U5: the kind chips say it), and no separate Add a follow-up button
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) draft editor: edits round-trip; Create in DevOps asks to enable writes in demo; Delete removes it
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) the rules highlight a chip while typing; Tab and a click change it; Sort later is the default
+e2e/shell/capture-drafts.test.ts › One capture flow and the draft editor (browser, demo mode) the type box: a lookup result adds that item; Shift+Enter on plain text adds an intention, not in DevOps
+e2e/shell/close-button.test.ts › UI-3: one close button About, the Guide, Capture and a side panel close with × and Esc and give focus back
+e2e/shell/close-button.test.ts › UI-3: one close button on the phone the × fits in About's header and Capture's sheet, with no sideways scroll
+e2e/shell/csp-signin.test.ts › sign-in under the CSP the sign-in page, Try the demo and the opening raise no CSP violation
+e2e/shell/demo-check.test.ts › demo:check (DM-1) fails when the build isn't the expected one
+e2e/shell/demo-check.test.ts › demo:check (DM-1) passes every check and prints only names, counts and timings
+e2e/shell/demo-names.test.ts › no real names in the demo (DM-1) every main view, and the assistant's answers, use only fictional names
+e2e/shell/demo-script.test.ts › the demo script (DM-1) runs from Today to Close out
+e2e/shell/feedback.test.ts › Send feedback (F1, FB-1) opens from ⋯, previews the exact story as me, and sends it
+e2e/shell/feedback.test.ts › Send feedback (F1, FB-1) says Not sent when DevOps refuses, and keeps the text with Copy text
+e2e/shell/feedback.test.ts › Send feedback (F1, FB-1) without a write PAT says Turn on DevOps writes, offers Copy text, and shows the same in Settings > Connections
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) a release replaced a screen's file: one reload onto the screen asked for; a file truly missing says so with Retry; a screen's own error is neither
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) a slow file: the screen before it stays, Loading shows only past the delay, and nothing moves
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) every tab and screen opens from a cold start by click, by key and by address, with the focus where it lands today
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) offline: Day and Week open, a tab opened earlier opens, one never fetched says it needs a connection; the installed app keeps every split file
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) the built page has no inline script or style, and the policy header is unchanged
+e2e/shell/first-download.test.ts › PF-1: the first download, split by screen (browser, demo mode, built app) the first screen asks for no other screen's file; the others are fetched in the background, or on a data-saving connection only on hover, focus or the key
+e2e/shell/focus-and-capture.test.ts › Top bar Focus and Quick capture (browser, demo mode) F opens the same menu; with nothing planned it offers a plain timer
+e2e/shell/focus-and-capture.test.ts › Top bar Focus and Quick capture (browser, demo mode) Focus idle opens the start menu with the next pick first; running shows the countdown and opens the focus screen
+e2e/shell/focus-and-capture.test.ts › Top bar Focus and Quick capture (browser, demo mode) Quick capture pre-fills the client from the selected block
+e2e/shell/focus-and-capture.test.ts › Top bar Focus and Quick capture (browser, demo mode) Quick capture: one client chip; @nickname sets it and leaves the text; a click changes it; the tip shows once
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling Close the loop's message: Enter is a new line there, as before
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling Quick capture: Enter saves, Shift+Enter adds a line, nothing saves while composing
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling a textarea added anywhere gets no resize handle and the styled scrollbar
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling assistant on the phone at 390 px: grows, scrolls, no sideways scroll, and stays above the bottom bar
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling assistant: grows from its minimum to its maximum, then scrolls, at Normal and Large, light and dark
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling capture on the phone at 390 px: grows, scrolls, no sideways scroll, and stays above the bottom bar
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling capture: grows from its minimum to its maximum, then scrolls, at Normal and Large, light and dark
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling message on the phone at 390 px: grows, scrolls, no sideways scroll, and stays above the bottom bar
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling message: grows from its minimum to its maximum, then scrolls, at Normal and Large, light and dark
+e2e/shell/growing-text-boxes.test.ts › UI-10: text boxes that grow instead of scrolling the Assistant: Enter sends, Shift+Enter adds a line, nothing sends while composing
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours #/guide/tour/<id> opens each tour directly; an unknown tour opens nothing
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Add work to your week: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Add work to your week: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Add work to your week: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Backlog: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Backlog: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Backlog: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Day, focus and close out: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Day, focus and close out: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Day, focus and close out: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Status: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Status: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Status: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The Inbox: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The Inbox: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The Inbox: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The assistant: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The assistant: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours The assistant: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Your week and to-dos: end to end with the keyboard at 1366, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Your week and to-dos: end to end with the keyboard at 1920, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours Your week and to-dos: end to end with the keyboard at phone, writes nothing and leaves the plan as it was
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours reduced motion: no animation runs on Start here or in a tour, and the tour still completes
+e2e/shell/guide-tour.test.ts › UI-5: Start here and the tours screenshots: Start here and the Guide's sections at 1920, Larger text and phone, light and dark
+e2e/shell/guide.test.ts › the Guide (UI-5) ? does nothing while typing; the ⋯ menu and the command menu open the Guide, and a section by name
+e2e/shell/guide.test.ts › the Guide (UI-5) Settings, phone and keys: the shortcut cards draw keys.ts's keys
+e2e/shell/guide.test.ts › the Guide (UI-5) Your first day: the demo says it isn't checked; a person's states show without a single value
+e2e/shell/guide.test.ts › the Guide (UI-5) every section at 1920 px, dark: no page errors, no sideways scroll
+e2e/shell/guide.test.ts › the Guide (UI-5) every section at 1920 px, light: no page errors, no sideways scroll
+e2e/shell/guide.test.ts › the Guide (UI-5) every section at 390 px, dark: no page errors, no sideways scroll
+e2e/shell/guide.test.ts › the Guide (UI-5) every section at 390 px, light: no page errors, no sideways scroll
+e2e/shell/guide.test.ts › the Guide (UI-5) old addresses land on their new section; an unknown one on Start here
+e2e/shell/guide.test.ts › the Guide (UI-5) opens from the sign-in page, signed out, at phone width, with no Do it now links, and goes back to sign in
+e2e/shell/guide.test.ts › the Guide (UI-5) search: finds as you type, Enter opens the first hit, a question opens unfolded; Esc clears
+e2e/shell/guide.test.ts › the Guide (UI-5) the tour link shows on a person's first Today once: not again after a reload
+e2e/shell/guide.test.ts › the Guide (UI-5) the try-its work, start over when you leave, and call nothing on the server
+e2e/shell/harness.test.ts › the e2e harness's demo servers (TX-1c) one stopped from outside fails the next page with what happened, not a refused connection
+e2e/shell/harness.test.ts › the e2e harness's demo servers (TX-1c) their command line doesn't match the pattern scripts use for their own servers
+e2e/shell/item-lookup.test.ts › Work item lookup (browser, demo mode) Enter on text that matches nothing keeps the plain text
+e2e/shell/item-lookup.test.ts › Work item lookup (browser, demo mode) capture box follow-up: disabled without a client, searches the client's items, links one, a new client clears it
+e2e/shell/item-lookup.test.ts › Work item lookup (browser, demo mode) flex session form uses the same lookup
+e2e/shell/navigation.test.ts › NV-1 navigation Coop brief opens Break down's side panel: copies at once, Copy again and Close; Break down's panel beside it
+e2e/shell/navigation.test.ts › NV-1 navigation tabs and keys, Day's cards, Plan today opens Week with Add work on today, Backlog, the Inbox, Status and the old addresses
+e2e/shell/navigation.test.ts › NV-1 navigation the Midday check-in card after lunch and the Close out card at the end of the day open their flows; done is one small line
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) Close out ends on Day with its done line and no overlay, even with every to-do done
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) a click or a key while it finishes goes straight to the app, and the key does nothing else
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) a fast load shows nothing before the app; a slow one shows the loader from 400 ms for at least 600 ms, then moves it into the top bar's mark
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) a reconnect in Settings shows its one plain line
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) a source failing at load: the app opens as fast and the status bar names it
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) no words on screen before 8 seconds in any theme; after 8 seconds one line names what it still waits on; a screen reader hears loading, then ready
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) reduced motion (the setting): the mark holds still and the app appears with no movement
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) reduced motion (the system): the mark holds still and the app appears with no movement
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the built app has nothing of Lumen: no element, asset, style, token or word for it
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the first launch opens the app with no welcome overlay (and is still recorded)
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the mark is in the same place at the same size from the first paint through the loader, about 96 px wide
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the move lands on the top bar's mark
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the sign-in screen finishes the loader too
+e2e/shell/opening-and-brand.test.ts › BR-1: the loader is the week mark alone (browser, demo mode) the top bar's mark is the week and goes to Day
+e2e/shell/presence.test.ts › Teams presence and status (browser, demo mode) Ask to collaborate: a mark and a word for each Cooptimizer, Available now first
+e2e/shell/presence.test.ts › Teams presence and status (browser, demo mode) Settings > Focus: Teams status on by default, plain focus sets Busy
+e2e/shell/presence.test.ts › Teams presence and status (browser, demo mode) deep focus from the Focus button: the focus screen says Teams: Do not disturb until …; switching to plain says Busy
+e2e/shell/presence.test.ts › Teams presence and status (browser, demo mode) the VM notifications open the header chip's menu
+e2e/shell/real-session.test.ts › a real session never shows demo data (no-demo-leak) Dataverse down: the week says so with the fix, and shows no stand-in clients
+e2e/shell/real-session.test.ts › a real session never shows demo data (no-demo-leak) DevOps down: Plan the week says so per client, and offers no stand-in items
+e2e/shell/real-session.test.ts › a real session never shows demo data (no-demo-leak) calendars that aren't set up say so with where to set them up; no stand-in meetings
+e2e/shell/real-session.test.ts › a real session never shows demo data (no-demo-leak) every screen, the client panel, Settings > Clients and the capture client picker: no demo client, person or sample meeting
+e2e/shell/real-session.test.ts › a real session never shows demo data (no-demo-leak) the fake live sources answer as a real person's (the check below has something to look at)
+e2e/shell/restyle-audit.test.ts › RS-1 audit numbers a computer at 1440x900
+e2e/shell/restyle-audit.test.ts › RS-1 audit numbers a computer at 1440x900, Larger text
+e2e/shell/restyle-audit.test.ts › RS-1 audit numbers the phone at 390x844
+e2e/shell/restyle-scan.test.ts › RS-1 scan a computer
+e2e/shell/restyle-scan.test.ts › RS-1 scan the phone
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family cooptimize-dark: buttons, tabs, a switch, pills, rows and block cards, at every text size
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family cooptimize-light: buttons, tabs, a switch, pills, rows and block cards, at every text size
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family menus: an icon before every item, group labels with no capitals, the shortcut in a key chip, 12 radius
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family neutral: buttons, tabs, a switch, pills, rows and block cards, at every text size
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family the phone: the bottom bar's tabs are an icon over a label; Add and the round buttons are 44 px targets
+e2e/shell/restyle-shapes.test.ts › RS-1: pill controls, tabs with icons, one-line rows and one icon family the top bar is one row at 1024, 1280 and 1440; Focus, Capture and Ask keep their words; the focus ring shows on a washed tab
+e2e/shell/row-menus.test.ts › row menu headers (D459) Add work's features: A then B; the header is a label the keys skip; a nested story shows its own ⋯
+e2e/shell/row-menus.test.ts › row menu headers (D459) Today: picks, A then B
+e2e/shell/row-menus.test.ts › row menu headers (D459) WD-2: the block panel's story rows, A then B
+e2e/shell/row-menus.test.ts › row menu headers (D459) Week's cards: to-dos, A then B
+e2e/shell/safari.test.ts › Safari: WebKit loads the app the sign-in page, demo Day and demo Week with Add work, with no page errors
+e2e/shell/safari.test.ts › Safari: WebKit loads the app with Temporal taken away too (the polyfill's path, whatever this build ships)
+e2e/shell/safari.test.ts › Temporal polyfill: only where Temporal is missing (Chromium) built-in Temporal: the polyfill is never fetched
+e2e/shell/safari.test.ts › Temporal polyfill: only where Temporal is missing (Chromium) no Temporal: the polyfill loads first and the app runs on it
+e2e/shell/signin-needed.test.ts › Outlook needs sign-in and no Microsoft identity yet (A2) keeps the status bar one line at the bottom and the top bar whole, with a Sign in button
+e2e/shell/tab-order.test.ts › RF-1: tab order, Status's dot, the top of Day Tuesday: the amber day Status has an amber ring and no number, and says why; the phone's ⋯ shows the same
+e2e/shell/tab-order.test.ts › RF-1: tab order, Status's dot, the top of Day Tuesday: the amber day a day ahead is a day: + Add on its blocks, never Plan, and the block panel opens on Day on that date (WD-2)
+e2e/shell/tab-order.test.ts › RF-1: tab order, Status's dot, the top of Day Tuesday: the amber day no dot when nothing is owed
+e2e/shell/tab-order.test.ts › RF-1: tab order, Status's dot, the top of Day Tuesday: the amber day the top of Day has no source strip, and the status bar still offers Reconnect
+e2e/shell/tab-order.test.ts › RF-1: tab order, Status's dot, the top of Day Wednesday: the red day Status has a filled red dot and no number
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) + Add on a Week card: the panel on that day and block
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) Backlog: Grid · Gantt; the ⋯ menu has Commands, the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) Day has no switch; P opens Week with Add work; Back returns; a to-do on today and the card goes
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) Midday check-in Done returns to Day; Close out has its own day in the address
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) Week: header with the week, no mode switch; P toggles Add work; ] steps to next week and the panel follows
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) a day header's Add work opens the panel on that day; the address survives a reload
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) notification routes open tab and mode
+e2e/shell/tabs-and-addresses.test.ts › Navigation: tabs, modes and addresses (browser, demo mode) six tabs in order (Day · Week · Backlog · Status · Inbox · Code), no Plan or Team tab, no ritual chips, no context line; 1–6 and T switch them
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) a heading deep link opens its page and focuses the heading; the diagram has its styles
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) an automation account gets not available, with no pages
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) at 360 px every page fits with no sideways scroll, and the contents list has Back
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) at 390 px every page fits with no sideways scroll, and the contents list has Back
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) opens from ⋯ on the Overview with every page in the rail; × closes and focus goes back to ⋯
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) search finds a heading and opens it
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) the Guide's footer link opens them
+e2e/shell/tech-docs.test.ts › the Technical docs (DOC-1) the command menu opens a page by name, and Esc closes
+e2e/shell/todo-wording.test.ts › TD-1 to-do, not pick (browser, demo mode) Day, Week with Add work, Settings › Planning and the command menu say to-do; the menu still finds by pick
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) D475: the chip shows the auto-shutdown time read only; its menu has no Delay, Skip tonight or Restore (VM-2: Stop while running)
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) Inbox sorting uses the capture box's kind chips
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) Settings › Profile: signed in; Accounts and calendars: Find my VM by the Owner tag, the confirmed VM
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) Start from the prompt: Starting… then Running, logged in Settings › Activity
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) an ended session says You're signed out with Sign in again, never Session expired (A2)
+e2e/shell/vm-chip.test.ts › My VM and the sign-in (browser, demo mode) shows who is signed in and the VM chip; the morning prompt asks to start it, Not today hides it
+e2e/shell/vm-stop-and-autostart.test.ts › VM-2 as dev (the demo told it is dev) Start and Stop pressed by a person work on dev too, each with its preview
+e2e/shell/vm-stop-and-autostart.test.ts › VM-2 as dev (the demo told it is dev) a VM with no auto-shutdown asks for one more tick before auto-start turns on
+e2e/shell/vm-stop-and-autostart.test.ts › VM-2 as dev (the demo told it is dev) opted in, the clock past the time: nothing starts; the form says production only; no auto-start in the menu
+e2e/shell/vm-stop-and-autostart.test.ts › VM-2 as production (the demo told it is prod) after 3 working days without FocusTime it pauses: said once with Resume; the form says paused
+e2e/shell/vm-stop-and-autostart.test.ts › VM-2 as production (the demo told it is prod) on with 5 minutes: the next time, the start at it, the chip and the log; Skip this one; Stop with its preview
+e2e/status/client-report.test.ts › the client report (SR-2) on the phone at 390 the report reads with no horizontal scroll
+e2e/status/client-report.test.ts › the client report (SR-2) shows Northwind's whole report, and a line added from No update yet lands in it after Push all
+e2e/status/finish-report.test.ts › Status you can finish (SR-3) Needs your update with suggestions, inline lines with their keys, and Push all grouped by feature
+e2e/status/finish-report.test.ts › Status you can finish (SR-3) on the phone at 390: reads with no horizontal scroll, and Use, Add a line and Push all work with 44px targets
+e2e/status/finish-report.test.ts › Status you can finish (SR-3) the client report: Add a feature in stack rank with its line open, and holidays among the PTO
+e2e/status/push-all.test.ts › Status (SR-1) adds a line to a feature with no update yet and pushes it, one preview for all
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 1366, dark
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 1366, light
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 1920, dark
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 1920, light
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 390, dark
+e2e/status/push-all.test.ts › Status (SR-1) screenshots Status at 390, light
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) + in Assigned to you and in Promises: each lands on the block and says so (More in <client> is in e2e/day/block-panel-day.test.ts)
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) A on a selected card opens the panel on it; Esc closes it and the keys still work after a click on +
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) a day header's ⋯: no Confirm (CF-1), and Timebox my day goes to Day's timeline with no popup
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) drag a row onto its client's block adds it there; another client's block refuses it
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) rows show their type as an icon named for the type; the panel is 380 px wide and nothing in it overflows sideways
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) the Add box searches this client's work: results replace the list and end with the two New rows; Esc clears the text first, then closes the panel
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) the Add box: with no match Enter makes a plain to-do on the block; Down then Enter makes a draft story, not in DevOps yet
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) type scale: Week's header, the cards and the panel use only 11, 12, 13 and 15 px at 400, 500 and 600
+e2e/week/add-work.test.ts › Add work: the moved Plan scenarios (browser, demo) ⋯ → Add to the plan offers the selected block first; another client's block is under Different client and asks first
+e2e/week/block-panel-real.test.ts › Week block panel (PV-1) WD-2: the block panel lists my work under its features → drag to another day and back → a new draft story under a feature, created in DevOps → it is in the block
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) Clear on a block: gone, still gone after a reload, the other block unaffected; Clear on a row: it doesn't come back in another block
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) Day: both empty blocks suggest; Keep all on one makes to-dos there and leaves the other's; Undo takes them back
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) Keep all for the day from Day's header: every block's become to-dos, one Undo takes them all back
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) Settings › Planning off: none anywhere; on again: they return
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) adding my own to-do to a block with suggestions: they go
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) an unfinished to-do from yesterday is the first suggestion in its client's next block, saying so on hover
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) suggestions don't change free time, and today stays empty for the start-of-day reminder until one is kept
+e2e/week/board-suggests.test.ts › SG-1: the board suggests (browser, demo) the phone: Keep all on a block
+e2e/week/board-suggests.test.ts › SG-1: today and the next working day only (browser, demo, Monday) Week: today and the next working day show suggestions; the day after doesn't
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) + Add on Tuesday AM: add a story with +, it's on the card and the room updates, then Undo takes it off
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) 1440×900 with the notice line: the first block starts within 200 px of the top; Review opens the panel
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) CF-1: add, take off, add again: no Confirm, Confirmed, Draft or Changed anywhere on Week
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) Team isn't in the tabs, the command menu or the keys list; Status has no count on the tab (RF-1: a dot)
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) a feature dragged onto a block is a placeholder with Needs stories · Break down; breaking it down brings its stories
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) every old address lands where it should
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) no button or link on Day, Week, Inbox or Status reads Plan, Plan it, Plan the day or Plan the week
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) no star (CF-1); Remove from this week is refused while one of its stories is placed
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) phone (390×844): + Add on a block opens the sheet; add a story from it
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) review fix: phone: ⋯ › Status opens Status (the bottom bar has no room for it)
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) review fix: the panel opened on next week closes onto next week (Esc, + Add, W)
+e2e/week/board.test.ts › WD-1: one Week (browser, demo) with the panel open, clicking another block moves it there: title and room change, the panel stays; Esc closes it
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) WD-2: a past block and a PTO day open the panel to read and tick, with no Add; a day's header opens Day on that date
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) WD-2: from a block, Assigned to you comes first; To place and You sent are folded at the bottom; Review opens To place
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) an unfinished to-do from yesterday shows in the notice line; keep its suggestion: the count drops
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) review fix: 1280 with the panel open: day headers keep a short date and Today; each card's status chip is on its header row
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) review fix: 1440 with the panel open: day headers keep a short date and Today; each card's status chip is on its header row
+e2e/week/board.test.ts › WD-1: the To place line (browser, demo on Tuesday) review fix: phone (390×844): the week title, + Add and ⋯ share one row; the notice is one line, "N to place · Review"
+e2e/week/break-down.test.ts › Break down Needs stories → Break down → Run → drop one, edit one → Create all → the row no longer needs stories
+e2e/week/card-title-opens-story.test.ts › NM-2: a to-do's title on a card opens its story card click and Enter open the card, and Esc closes it
+e2e/week/carry-over.test.ts › From last week and Watching (PL-1) proposes, watches with a check-in, keeps one, and proposes next week in Commit
+e2e/week/client-calls.test.ts › meeting capture (browser, demo mode) the Week card's call mark opens the review; skip one, Confirm the rest, the call is reviewed
+e2e/week/client-colors.test.ts › RS-2: Week's blocks keep their client color (browser, demo) cooptimize-dark: on Week and Day, client cards are filled in their color, past ones lighter but not plain, all with the full edge
+e2e/week/client-colors.test.ts › RS-2: Week's blocks keep their client color (browser, demo) cooptimize-light: on Week and Day, client cards are filled in their color, past ones lighter but not plain, all with the full edge
+e2e/week/client-colors.test.ts › RS-2: Week's blocks keep their client color (browser, demo) neutral: on Week and Day, client cards are filled in their color, past ones lighter but not plain, all with the full edge
+e2e/week/deployment-items.test.ts › DP-2: Deployment items by data platform Admin › Clients: the platform and the list; a change reaches new deployments only
+e2e/week/deployment-items.test.ts › DP-2: Deployment items by data platform Quick capture: the client's list with its defaults, a switch, the unset client, no native inputs, the warning
+e2e/week/deployment-items.test.ts › DP-2: Deployment items by data platform Week's summary, editing keeps the ticks, and the done draft lists them through Close the loop's preview
+e2e/week/deployment-items.test.ts › DP-2: Deployment items by data platform the phone at 390: Quick capture and the summary with no sideways scroll
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Ahead: a teammate's change shows in place within a poll, the scroll and the selection held; a new feature under an epic appears
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Ahead: an item with my staged change that changes in DevOps says so, and shows DevOps's values beside mine
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Find an item: out of the area, a fine one, and one DevOps doesn't have
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Refresh on Ahead says what it found; the status bar says when DevOps was checked
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Refresh on Status says what it found
+e2e/week/devops-changes-live.test.ts › DV-2: DevOps changes show up on their own Week: a story's new title shows in the block panel's Add list after a poll, with the panel left open (WD-2)
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) QT-1: Week has no client chips and never says over; the panel's header says the free time, never amber
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) SZ-1: Count unsized work as has its scale beside it, and an unsized to-do's chip follows it
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) a feature's ⋯ › Estimate: whole hours, out of range changes nothing; a story's size from its to-do's chip
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) no block as an amount on Week, in Add work, the client chips or Plan ahead: estimates are hours, with about where estimated
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) no decimals or fractions anywhere: Week with Add work, Day, Check-in, Close out, Status, Ahead's Grid and Gantt
+e2e/week/estimating.test.ts › estimating in hours and photos (browser, demo mode) photos: generated avatars with presence on the corner; initials when someone has none
+e2e/week/fits-and-widths.test.ts › Today and Week fit (U5.1) Day at 1920 with AM, PM and Evening blocks: the cards sit side by side, each at least 560 px wide, across the full width
+e2e/week/fits-and-widths.test.ts › Today and Week fit (U5.1) a Week card header at 1920 shows a 12-character client name untruncated; a longer one shortens and the time stays in view
+e2e/week/fits-and-widths.test.ts › Today and Week fit (U5.1) a long meeting or pick title never paints outside its card on Today and Week; the full title is on hover
+e2e/week/fits-and-widths.test.ts › Today and Week fit (U5.1) the Timelines note and borrowed time are chips inside the status bar, never below it
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1024: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1280: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1366: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1440: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1600: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 1920: no sideways scroll, every day in view, each day takes a drag (panel open and closed, Default and Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 the now line and the PTO day show in the fold tier (1024, panel, Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 the now line and the PTO day show in the mini tier (1280, panel, Larger)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 the now line and the PTO day show in the rail tier (1920)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 the now line and the PTO day show in the ruler tier (1600)
+e2e/week/fits-laptops.test.ts › WK-1: Week fits every width from 1024 the now line and the PTO day show in the strip tier (1366)
+e2e/week/fits-laptops.test.ts › WK-1: unfinished suggestions at every tier (Wednesday 2:00 PM) shows them at 1024, Larger, with the panel open and closed
+e2e/week/fits-laptops.test.ts › WK-1: unfinished suggestions at every tier (Wednesday 2:00 PM) shows them at 1024, with the panel open and closed
+e2e/week/fits-laptops.test.ts › WK-1: unfinished suggestions at every tier (Wednesday 2:00 PM) shows them at 1440, with the panel open and closed
+e2e/week/fits-laptops.test.ts › WK-1: unfinished suggestions at every tier (Wednesday 2:00 PM) shows them at 1920, with the panel open and closed
+e2e/week/friday-drop-and-sheet-close.test.ts › UI-8 bug round Friday takes a pick dragged from Monday with the panel open, nothing over it (1366)
+e2e/week/friday-drop-and-sheet-close.test.ts › UI-8 bug round Friday takes a pick dragged from Monday with the panel open, nothing over it (1920)
+e2e/week/friday-drop-and-sheet-close.test.ts › UI-8 bug round Send feedback creates the item once and shows its number
+e2e/week/friday-drop-and-sheet-close.test.ts › UI-8 bug round a feature that needs stories offers Break down in the block's panel, opening the same panel as Fix next (QT-1: was the client chip's Not ready)
+e2e/week/friday-drop-and-sheet-close.test.ts › UI-8 bug round every screen ⋯ opens has the × at its top right, Back at the top left where there's one, and Esc closes
+e2e/week/late-chip.test.ts › UI-9: the late chip on Week's cards 1 late and 3 late by the rail's placement and the card's client, with the timeline hidden or shown
+e2e/week/late-chip.test.ts › UI-9: the late chip on Week's cards keeping or closing a promise updates the chip, with no reload
+e2e/week/late-chip.test.ts › UI-9: the late chip on Week's cards on the phone (390 px, 17 px root font): on the chips line beside the status, no taller with a status, a 44 px target, no sideways scroll
+e2e/week/late-chip.test.ts › UI-9: the late chip on Week's cards one opens that promise, from a tap or the keyboard; several open Promises, late ones, for the card's client
+e2e/week/loading.test.ts › RS-2: changing week or day answers at once (browser, demo) Day: the next week's Monday shows in the header within 150 ms, busy; a failed read says so with Retry
+e2e/week/loading.test.ts › RS-2: changing week or day answers at once (browser, demo) Week: a failed read says so with Retry; the address is the week asked for; Back works; Retry loads it
+e2e/week/loading.test.ts › RS-2: changing week or day answers at once (browser, demo) Week: the header within 150 ms, busy and dimmed with one Loading…; three presses end three weeks on; an old answer never paints
+e2e/week/now-mark-catch-up.test.ts › NM-1: no now mark on a cell that isn't a block a catch-up day with no working hours, at 10:30 AM: Week, Day and the phone draw the cell and no now mark
+e2e/week/nowline-label.test.ts › The now line's time on a compact rail (HK-3) moves off the hour mark it would cover, at Default and Larger, and the line stays put
+e2e/week/pto-and-about.test.ts › PTO on Week, and About (S1) Thursday's PTO is one PTO cell on Week, with Add work open too; About shows the build line
+e2e/week/quieter-board.test.ts › QT-1: a quieter board (browser, demo) free time only, no chips; an ended block takes work; past days list their to-dos and still open
+e2e/week/rail-and-panel.test.ts › Week and the detail panel (U3) WD-2: Day uses the same panel from a block card, at its own address
+e2e/week/rail-and-panel.test.ts › Week and the detail panel (U3) WD-2: the block panel opens from a card and a due badge; Esc closes it; ticking there updates the card; no Details dialog
+e2e/week/rail-and-panel.test.ts › Week and the detail panel (U3) cards: meetings only on the rail, risk with its reason in the tooltip, no AM/PM labels; no Plan chip; done as a count off today; needs stories on the chip; under 175 words
+e2e/week/rail-and-panel.test.ts › Week and the detail panel (U3) type scale: Day and Week use only 11, 12, 13 and 15 px at 400, 500 and 600, at 1920 and 3840
+e2e/week/room-for-today.test.ts › WK-5: Week makes room for today (browser, demo Thursday) 1280: titles readable, times under titles on one line, headers whole, the focus day widest, no overlap
+e2e/week/room-for-today.test.ts › WK-5: Week makes room for today (browser, demo Thursday) 1440: titles readable, times under titles on one line, headers whole, the focus day widest, no overlap
+e2e/week/room-for-today.test.ts › WK-5: Week makes room for today (browser, demo Thursday) 1920: titles readable, times under titles on one line, headers whole, the focus day widest, no overlap
+e2e/week/room-for-today.test.ts › WK-5: Week makes room for today (browser, demo Thursday) a folded day opens on a click and on Enter, and takes the focus
+e2e/week/room-for-today.test.ts › WK-5: Week makes room for today (browser, demo Thursday) hide the catch-up day from Week's ⋯: still hidden after a reload, the note counts a to-do moved there, Show brings it back
+e2e/week/room-for-today.test.ts › WK-5: keyboard and phone (browser, demo Friday) focus stays in the grid when the arrows open a folded day and the panel closes
+e2e/week/room-for-today.test.ts › WK-5: keyboard and phone (browser, demo Friday) the phone: a day tab goes straight to its day; a hidden today is never the day shown
+e2e/week/room-for-today.test.ts › WK-5: keyboard and phone (browser, demo Friday) with today (the catch-up day) hidden: the grid keeps a tab stop on a shown day, and Enter opens a shown day
+e2e/week/send-work.test.ts › Send to someone's week (SW-1) Today's line, Accept, Send to… a Must, the Sent list and Team
+e2e/week/send-work.test.ts › Send to someone's week (SW-1) screenshots 1366
+e2e/week/send-work.test.ts › Send to someone's week (SW-1) screenshots 1920
+e2e/week/send-work.test.ts › Send to someone's week (SW-1) screenshots phone
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) Move… puts a story under another feature; the Backlog shows it there; undo moves it back
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) a table description keeps a line with Add to the end; fonts and colors are said before Save; Cancel with typed words asks once
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) changed in DevOps under an open edit: nothing written, my words kept, what it says now, Save again
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) keyboard only: E, fix the title typo, Ctrl+Enter, one preview; bullets and bold with the live look; acceptance criteria added; each undone from the write log
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) someone who may not edit sees why, and no Edit or Move…
+e2e/week/story-card-edit.test.ts › ED-1 edit an item on its story card (browser, demo mode) the phone: one column, no sideways scroll, 44 px buttons
+e2e/week/story-card.test.ts › FN-1 story card and Wrap it up (browser, demo mode) a tick on a client with DevOps writes off says so once a session, linking to Settings › DevOps
+e2e/week/story-card.test.ts › FN-1 story card and Wrap it up (browser, demo mode) a title opens the story card: fields, parent, comments, Copy DevOps link; the parent opens its own card; Esc closes
+e2e/week/story-card.test.ts › FN-1 story card and Wrap it up (browser, demo mode) a to-do's ⋯ copies the DevOps link and has no Open in browser
+e2e/week/story-card.test.ts › FN-1 story card and Wrap it up (browser, demo mode) phone at 360: the card and the sheet are full-height sheets with no sideways scroll
+e2e/week/story-card.test.ts › FN-1 story card and Wrap it up (browser, demo mode) ticking a story opens Wrap it up: Finished with a comment, one preview, Confirm writes; closing writes nothing
+e2e/week/suggest-unfinished.test.ts › Unfinished picks suggested in the next block (UI-B, SG-1) on a 390 px phone with a 17 px root font, Today and Week are no wider than the screen
+e2e/week/suggest-unfinished.test.ts › Unfinished picks suggested in the next block (UI-B, SG-1) suggests, keeps with Undo, drops from the list, and shows the now line
+e2e/week/switches.test.ts › Week's all-day chips and view switches (U5.1) G hides personal events on Week and Today; the status bar counts them; risk reasons still name them; it survives a restart
+e2e/week/switches.test.ts › Week's all-day chips and view switches (U5.1) V cycles the Timelines range, the rail follows it, and Week's ⋯ shows which; Settings › Display holds the default
+e2e/week/switches.test.ts › Week's all-day chips and view switches (U5.1) a three-day all-day event is one chip on each weekday it covers, PTO and Catch-up days too, and no text line in those cells
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1366, panel open, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1366, panel open, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1366, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1366, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1896, panel open, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1896, panel open, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1896, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1896, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1920, panel open, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1920, panel open, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1920, timeline hidden: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 1920, timeline shown: columns take their own tier; no header text is cut; promises clear the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers 2560: Friday's rail is the slim strip (WD-1) with the overdue promise marked; nothing overlaps the now line
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers hidden: full-width cards, the now line on today, meetings as lines, and drag and drop as before
+e2e/week/timeline-toggle.test.ts › WK-2: the Board's Timeline toggle and per-column tiers the toggle hides and shows the timeline in one click, from the button, B, Week's ⋯ and the command menu, and is remembered
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos Board at 1440: a quiet Saturday column, Friday's Evening band, the after-hours total; Show weekend is remembered
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos Done on a Deployment offers Tell <client> (a draft, never sent by itself) or Not now
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos Today steps onto a weekend day with something on it, as a Weekend day with no planning prompts
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos moves a to-do onto Saturday by the menu and by drag, each with Undo
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos plans a Deployment from Capture, the day menu and the command menu; a window is required
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos the phone at 360: Saturday's chip and the after-hours total, no horizontal scroll
+e2e/week/weekends-evening.test.ts › WK-3: weekends, the Evening band and Deployment to-dos with nothing on the weekend, Week at 1440 is Monday to Friday

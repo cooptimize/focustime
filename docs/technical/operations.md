@@ -136,7 +136,7 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in six shards and WebKit's own job, the Bicep and the image; a pull request that changes only docs outside `docs/technical/` skips the browser and image jobs ([Development](development.md#what-ci-runs-and-when)) |
+| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in six shards filled by time and WebKit's own job, the Bicep and the image; a pull request that changes only docs outside `docs/technical/` skips the browser and image jobs, and its own run on a push to `main` skips the tests, which the pull request ran and deploy-dev reruns when it finds no tested tree ([Development](development.md#what-ci-runs-and-when)). The shards' times: `node scripts/shard-times.ts <ci run ids>` rewrites `test/shard-times.json` from those runs' logs (read with `gh`); refresh it when a file's time changes a lot or many files are added |
 | `deploy-dev.yml` | Every push to `main`, or by hand | Above |
 | `deploy-prod.yml` | By hand only | Above |
 | `ci-webkit-deps.yml` | A pull request that changes `scripts/ci-webkit-deps.sh` or the CI workflows, or by hand | Proves the webkit job's packages install from the cache with the package servers unreachable; tests nothing of FocusTime's and isn't part of the gate |
