@@ -45,6 +45,9 @@ describe("which screens a place needs (ui/nav.ts)", () => {
     expect(needs("#/focus")).toEqual(["focus"]);
     expect(needs("#/guide")).toEqual(["guide"]);
     expect(needs("#/docs")).toEqual(["docs"]);
+    // A tour's screen is drawn at once; the tour's own file is asked for by App, like a dialog's.
+    expect(needs("#/guide/tour/board")).toEqual([]);
+    expect(needs("#/guide/tour/ahead")).toEqual(["ahead"]);
     expect(needs("#/item/Northwind/12")).toEqual(["card"]);
   });
   it("every name a place can need is a screen with a loader", () => {

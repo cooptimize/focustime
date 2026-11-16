@@ -4,7 +4,7 @@
   "styles": 87000
  },
  "measured": {
-  "script": 326848,
+  "script": 326846,
   "styles": 83814
  },
  "modules": {
@@ -235,7 +235,7 @@
   "ui/About.tsx": 4072,
   "ui/Account.tsx": 52270,
   "ui/Agenda.tsx": 4275,
-  "ui/App.tsx": 132488,
+  "ui/App.tsx": 132501,
   "ui/BlockCard.tsx": 28780,
   "ui/BlockPanel.tsx": 50383,
   "ui/BreakDownPanel.tsx": 50078,
@@ -331,7 +331,7 @@
   "ui/meetings/calls.ts": 1888,
   "ui/menu-icons.ts": 5026,
   "ui/menu.ts": 92111,
-  "ui/nav.ts": 21048,
+  "ui/nav.ts": 21026,
   "ui/new-types.ts": 227,
   "ui/newitem-ctx.ts": 190,
   "ui/plan/AddPane.tsx": 401,

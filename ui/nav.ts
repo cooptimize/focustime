@@ -193,7 +193,9 @@ export function locScreens(loc: Loc): ScreenName[] {
   if (n.tab === "ahead" || n.tab === "status" || n.tab === "inbox" || n.tab === "code") out.push(n.tab);
   else if (n.tab === "today" && n.flow) out.push(n.flow);
   const o = loc.overlay;
-  if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs" || o?.kind === "tour") out.push(o.kind);
+  // A tour is not here: its screen is drawn at once and the tour's card arrives over it (App asks for its file), so
+  // the screen's own loading has the same head start on the tour's first step as it always had.
+  if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs") out.push(o.kind);
   else if (o?.kind === "item") out.push("card");
   return out;
 }

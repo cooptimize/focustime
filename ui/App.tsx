@@ -318,6 +318,8 @@ export function App() {
   const codeAt = nav.tab === "code" ? nav : null;
   /** UI-5: a Show me tour over the real screen (#/guide/tour/<id>); it only highlights and explains. */
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
+  // PF-1: the tour's own file is asked for when a tour starts and its card appears once it is in; the screen under it is drawn at once.
+  const Tour = useScreen("tour", !!tourAt)?.default;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   /** FN-1: a story card over the place (#/item/<client>/<id>). */
@@ -1858,7 +1860,6 @@ export function App() {
   const StoryCard = screen("card")?.StoryCard;
   const CodePanel = screen("code")?.default;
   const Guide = screen("guide")?.default;
-  const Tour = screen("tour")?.default;
   const TechDocs = screen("docs")?.default;
   // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
   // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
