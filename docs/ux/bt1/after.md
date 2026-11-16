@@ -23,9 +23,11 @@ The last three full runs on the final tree (fab70ee9 plus documentation): a whol
 - **Runner time** is about the same (2,402 to 2,582 s, against 2,460). The browser files themselves ran 6 to 10% slower than the ten-run medians on these days' runners: main's own run of Nov 16 (43866488225) was 6% slower on the same files, and this branch's unchanged files 7 to 10%, so at most a few percent of it could be the new order (longest files first). The guide tours, where B shares one signed-in person, went from 190 s to 172 s on this machine but took 277 and 281 s on CI (222 s before): sharing the person saves its sign-ins, but on CI the file now starts first in its shard beside another of the longest files (longest first), and its time follows that. B's saving doesn't show in CI's numbers.
 - **A merge to main (F)** is tested once, not twice: `ci`'s own run on the push to main now runs only What changed, infra and the WebKit job's cache steps, instead of every test again (about 2,460 s of runner time). Not seen yet: it shows on the first merge after this one.
 
-## The flaky failure
+## The flaky failures
 
 Attempt 1 failed in shard 4: `e2e/shell/opening-and-brand.test.ts` › "no words on screen before 8 seconds…", `expected 2 to be greater than 2` (the loader's animation sampled sixteen times saw only two opacities). BT-1 changed only that file's import path; it passed in the two runs before, on the rerun, and in eight copies at once on three cores on main's tree and on this branch alike. It is in the open questions with a way to make the sampler steadier.
+
+The run on the documentation commit (43890805790) then failed once in shard 6: `e2e/shell/first-download.test.ts` (PF-1's, merged the same day), and passed on the rerun. Under load it fails on main's own tree and config too (12 of 24 copies at 8 on 3 cores), so it is not BT-1's doing, but BT-1 makes it likelier on CI: browser files now start together, longest first, beside the heaviest. In the open questions with the evidence.
 
 ## Tests
 
