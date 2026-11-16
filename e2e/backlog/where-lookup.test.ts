@@ -20,7 +20,7 @@ const VIEW = { width: 1440, height: 900 };
 const call = <R = unknown>(page: Page, action: string, input: unknown) =>
   page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: R; error?: string }>;
 
-async function shot(page: Page, name: string, themes: readonly ("dark" | "light")[] = ["dark"]) {
+async function shot(page: Page, name: string, themes: readonly ("dark" | "light")[] = ["dark"], large = false) {
   if (!SHOTS) return;
   for (const theme of themes) {
     await page.emulateMedia({ colorScheme: theme });
@@ -29,6 +29,17 @@ async function shot(page: Page, name: string, themes: readonly ("dark" | "light"
     await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png` });
   }
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
+  if (large) {
+    // CLAUDE.md: changed screens at 1920 and at the largest Text size too.
+    const was = page.viewportSize()!;
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.evaluate(() => document.documentElement.setAttribute("data-text-size", "larger"));
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${SHOTS}/${name}-1920-larger.png` });
+    await page.evaluate(() => document.documentElement.removeAttribute("data-text-size"));
+    await page.setViewportSize(was);
+    await page.waitForTimeout(200);
+  }
   await page.emulateMedia({ colorScheme: "light" });
 }
 
@@ -131,7 +142,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await expect(list(page).locator("mark").first().textContent()).resolves.toBe("fact.Sal");
     await expect(box.getAttribute("aria-activedescendant")).resolves.toBeNull();
     await expect(page.getByRole("status").filter({ hasText: /names? match/ }).count()).resolves.toBeGreaterThan(0);
-    await shot(page, "rb3-typing", ["dark", "light"]);
+    await shot(page, "rb3-typing", ["dark", "light"], true);
     await page.keyboard.press("ArrowDown");
     const active = await box.getAttribute("aria-activedescendant");
     expect(active).toBeTruthy();
@@ -175,7 +186,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     const heads = await list(page).getByRole("group").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
     expect(heads.slice(0, 3)).toEqual(["Reports", "Semantic models", "Pipelines"]);
     expect(heads).toContain("Databases");
-    await shot(page, "rb3-by-kind");
+    await shot(page, "rb3-by-kind", ["dark"], true);
     await downTo(page, "Gold, Warehouse", "ArrowRight");
     await downTo(page, "dim,", "ArrowRight");
     await shot(page, "rb3-schema");

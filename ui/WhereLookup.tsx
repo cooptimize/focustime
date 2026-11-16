@@ -166,9 +166,9 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (!shownList || !box.current) return;
     const r = box.current.getBoundingClientRect();
     const vv = window.visualViewport;
-    const frame = box.current.closest("[data-overlay]")?.getBoundingClientRect();
-    const bottom = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, frame?.bottom ?? Infinity) - 8;
-    const top = Math.max(vv ? vv.offsetTop : 0, frame?.top ?? -Infinity) + 8;
+    const frame = box.current.closest("[role=dialog], [data-overlay]")?.getBoundingClientRect();
+    const bottom = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, frame?.bottom ?? Infinity) - 16;
+    const top = Math.max(vv ? vv.offsetTop : 0, frame?.top ?? -Infinity) + 16;
     const below = bottom - r.bottom;
     const above = r.top - top;
     const goUp = below < 200 && above > below;
