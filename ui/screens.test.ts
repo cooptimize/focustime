@@ -4,23 +4,23 @@
 // fetched in the background, in which order, and when not.
 import { afterEach, describe, expect, it } from "vitest";
 import { locScreens, parseHash } from "./nav.ts";
-import { BACKGROUND, drawnLoc, isLoadError, loadScreen, prefetchScreens, retryScreens, screen, screenReady, SCREENS, screensForTest, slowOrMetered, waiting, wantScreens, type Page, type ScreenName } from "./screens.ts";
+import { BACKGROUND, drawnLoc, fetchAhead, isLoadError, loadScreen, prefetchScreens, retryScreens, screen, screenReady, SCREENS, screensForTest, slowOrMetered, tryAgain, waiting, wantScreens, type Page, type ScreenName } from "./screens.ts";
 
 const LOAD_ERROR = new TypeError("Failed to fetch dynamically imported module: https://focustime.example/assets/Ahead-abc.js");
 
 /** Loaders the test settles by hand, and a page that records what was done to it. */
-function setup(over: Partial<Page> & { online?: boolean; reach?: boolean } = {}) {
+function setup(over: { online?: boolean; reach?: boolean; note?: Page["note"] } = {}) {
   const asked: ScreenName[] = [];
   const settle = new Map<ScreenName, { ok: (m: unknown) => void; fail: (e: unknown) => void }[]>();
   let note: string | null = null;
-  const did = { reloads: 0, thrown: [] as unknown[] };
+  const did = { reloads: 0, thrown: [] as unknown[], restyled: [] as string[] };
   const state = { online: over.online ?? true, reach: over.reach ?? true };
   screensForTest(
     (name) => {
       asked.push(name);
       return new Promise((ok, fail) => settle.set(name, [...(settle.get(name) ?? []), { ok, fail }]));
     },
-    { online: () => state.online, reach: async () => state.reach, note: { get: () => note, set: (v) => void (note = v) }, reload: () => void did.reloads++, rethrow: (e) => void did.thrown.push(e) },
+    { online: () => state.online, reach: async () => state.reach, note: { get: () => note, set: (v) => void (note = v) }, reload: () => void did.reloads++, rethrow: (e) => void did.thrown.push(e), restyle: async (hrefs) => void did.restyled.push(...hrefs), ...(over.note ? { note: over.note } : {}) },
   );
   const last = (name: ScreenName) => settle.get(name)!.at(-1)!;
   const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -151,11 +151,63 @@ describe("a screen's file that doesn't arrive", () => {
     await t2.fail("ahead");
     expect(t2.did.reloads).toBe(0);
     expect(waiting()).toEqual({ since: null, failed: "missing" });
-    // Another screen loads: the release's files can be had, so a later failure may reload once again.
+    // Another screen loading doesn't forget it (or each new ask for the missing one would reload again).
     void loadScreen("status");
     await t2.arrive("status");
-    expect(t2.note()).toBeNull();
+    expect(t2.note()).toBe("ahead");
+    // Asked for again (its tab, its key): one more try, the line again, no reload.
+    tryAgain(["ahead"]);
+    await t2.fail("ahead");
+    expect(t2.did.reloads).toBe(0);
+    expect(waiting().failed).toBe("missing");
+    // A second screen missing gets its own one reload.
+    const off3 = wantScreens(["inbox"]);
+    await t2.fail("inbox");
+    expect(t2.did.reloads).toBe(1);
+    expect(t2.note()).toBe("ahead,inbox");
+    // Once the screen itself loads, it is forgotten: a later release may reload once for it again.
+    retryScreens();
+    await t2.arrive("ahead");
+    expect(t2.note()).toBe("inbox");
     off2();
+    off3();
+  });
+
+  it("the note can't be written (storage full): no reload at all, so nothing can loop", async () => {
+    const t = setup({ note: { get: () => null, set: () => undefined } });
+    const off = wantScreens(["ahead"]);
+    await t.fail("ahead");
+    expect(t.did.reloads).toBe(0);
+    expect(waiting().failed).toBe("missing");
+    off();
+  });
+
+  it("hover or focus never tries a failed screen again: only asking for it or Retry does", async () => {
+    const t = setup();
+    t.setNote("ahead");
+    const off = wantScreens(["ahead"]);
+    await t.fail("ahead");
+    fetchAhead("ahead");
+    expect(t.asked).toEqual(["ahead"]);
+    fetchAhead("status");
+    fetchAhead("status");
+    expect(t.asked).toEqual(["ahead", "status"]);
+    off();
+  });
+
+  it("a stylesheet that failed is fetched again before the screen's next try, so it never draws unstyled", async () => {
+    const t = setup({ online: false });
+    const off = wantScreens(["inbox"]);
+    await t.fail("inbox", new Error("Unable to preload CSS for https://focustime.example/assets/InboxPage-1.css"));
+    expect(waiting().failed).toBe("offline");
+    t.state.online = true;
+    retryScreens();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(t.did.restyled).toEqual(["https://focustime.example/assets/InboxPage-1.css"]);
+    expect(t.asked).toEqual(["inbox", "inbox"]);
+    await t.arrive("inbox");
+    expect(screenReady("inbox")).toBe(true);
+    off();
   });
 
   it("Retry tries again and, if the file still can't be had, reloads once for that press", async () => {
@@ -194,6 +246,8 @@ describe("a screen's file that doesn't arrive", () => {
     expect(waiting()).toEqual({ since: null, failed: null });
     expect(t.note()).toBeNull();
     off();
+    // Opened at that address: Day is drawn, not an empty page under a loader that never leaves.
+    expect(drawnLoc("x", () => ["capture"] as const, null, "day")).toBe("day");
     const off2 = wantScreens(["capture"]);
     expect(t.asked).toEqual(["capture", "capture"]);
     off2();

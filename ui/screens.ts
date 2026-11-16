@@ -10,8 +10,8 @@
 //   browser tab would lose the app).
 // - online: a release may have replaced the file (the server then answers with the page, which isn't a script). The
 //   app reloads once, at the place that was asked for, to pick the release up. If the file still can't be loaded
-//   after that reload, the line says so with Retry. The one reload is remembered in sessionStorage until a screen
-//   loads again, so it can never loop. Retry tries the file again and, if it still can't be had, reloads once more
+//   after that reload, the line says so with Retry. The one reload is remembered in sessionStorage, by the screen's
+//   name, until that screen loads again, so it can never loop. Retry tries the file again and, if it still can't be had, reloads once more
 //   (one reload per press).
 // - an error thrown by the screen's own code is not a missing file: it is thrown on, as an error in any other part of
 //   the app is, with no reload and no line.
@@ -47,7 +47,7 @@ export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "c
 
 /** Why a screen's file didn't load: no connection, or it can't be had from the server (after the one reload). */
 export type Failed = "offline" | "missing";
-type Entry = { status: "idle" | "loading" | "ready" | "failed"; mod?: unknown; why?: Failed; promise?: Promise<void>; wanted: number; since: number; /** This try was asked for with Retry. */ retry?: boolean };
+type Entry = { status: "idle" | "loading" | "ready" | "failed"; mod?: unknown; why?: Failed; promise?: Promise<void>; wanted: number; since: number; /** This try was asked for with Retry. */ retry?: boolean; /** Its own code threw while loading. */ threw?: boolean; /** Stylesheets that failed to load for it, to fetch again before its next try. */ styles?: string[] };
 
 const entries = new Map<ScreenName, Entry>(SCREENS.map((n) => [n, { status: "idle", wanted: 0, since: 0 }]));
 const listeners = new Set<() => void>();
@@ -61,7 +61,7 @@ const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.del
 /** Stands in for the loaders in tests (ui/screens.test.ts): a screen's file arriving, failing or throwing. */
 let loaderOf: (name: ScreenName) => Promise<unknown> = (name) => LOADERS[name]();
 /** The page: its connection, its one-reload note and the reload itself; replaced in tests. */
-export type Page = { online: () => boolean; reach: () => Promise<boolean>; note: { get: () => string | null; set: (v: string | null) => void }; reload: () => void; rethrow: (e: unknown) => void };
+export type Page = { online: () => boolean; reach: () => Promise<boolean>; note: { get: () => string | null; set: (v: string | null) => void }; reload: () => void; rethrow: (e: unknown) => void; restyle: (hrefs: readonly string[]) => Promise<void> };
 const RELOADED_KEY = "focustime.screen.reloaded";
 let reloadAt: () => string | null = () => null;
 const realPage: Page = {
@@ -91,6 +91,24 @@ const realPage: Page = {
     if (at && location.hash !== at) history.replaceState(history.state, "", at);
     location.reload();
   },
+  // Vite's import helper asks for a file's stylesheet once per page: after a failed try it never asks again, and the
+  // screen would draw unstyled. So a stylesheet that failed is fetched here before the screen is tried again.
+  restyle: (hrefs) =>
+    Promise.all(
+      hrefs.map(
+        (href) =>
+          new Promise<void>((ok, fail) => {
+            for (const l of [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]) if (l.href === href) l.remove();
+            const link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.crossOrigin = "";
+            link.href = href;
+            link.addEventListener("load", () => ok());
+            link.addEventListener("error", () => (link.remove(), fail(new Error(`Unable to preload CSS for ${href}`))));
+            document.head.appendChild(link);
+          }),
+      ),
+    ).then(() => undefined),
   // Out of the promise chain, so it reaches the page as an uncaught error like any other.
   rethrow: (e) => void setTimeout(() => {
     throw e;
@@ -122,6 +140,9 @@ export function isLoadError(e: unknown): boolean {
   return /dynamically imported module|importing a module script failed|module script|MIME type|preload CSS/i.test(text);
 }
 
+/** The screens this page has already reloaded for. */
+const noted = (): string[] => (page.note.get() ?? "").split(",").filter(Boolean);
+
 async function failedLoad(name: ScreenName, e: unknown): Promise<void> {
   const en = entries.get(name)!;
   const fail = (why: Failed) => {
@@ -131,18 +152,21 @@ async function failedLoad(name: ScreenName, e: unknown): Promise<void> {
   };
   if (!isLoadError(e)) {
     // The screen's own code threw: not a missing file. Asked again, it is tried again.
-    Object.assign(en, { status: "idle" });
+    Object.assign(en, { status: "idle", threw: true });
     delete en.promise;
     changed();
     return page.rethrow(e);
   }
+  const css = /Unable to preload CSS for (\S+)/.exec(e instanceof Error ? e.message : "")?.[1];
+  if (css) en.styles = [...new Set([...(en.styles ?? []), css])];
   if (!page.online() || !(await page.reach())) return fail("offline");
   // Wanted on screen now (not only fetched ahead): one reload picks up a release. Fetched ahead, it waits to be asked.
   // Retry pressed and the file still can't be had: a browser may remember a failed file for as long as the page
   // lives, so Retry reloads too, once per press.
-  if (en.wanted > 0 && (en.retry || page.note.get() === null)) {
-    page.note.set(name);
-    return page.reload();
+  if (en.wanted > 0 && (en.retry || !noted().includes(name))) {
+    page.note.set([...new Set([...noted(), name])].join(","));
+    // The note couldn't be written (storage full): no reload, or nothing would stop the next one.
+    if (noted().includes(name)) return page.reload();
   }
   fail("missing");
 }
@@ -154,11 +178,14 @@ export function loadScreen(name: ScreenName, retry = false): Promise<void> {
   if (en.promise) return en.promise;
   Object.assign(en, { status: "loading", since: Date.now(), retry });
   delete en.why;
-  en.promise = loaderOf(name).then(
+  delete en.threw;
+  en.promise = (en.styles?.length ? page.restyle(en.styles).then(() => loaderOf(name)) : loaderOf(name)).then(
     (mod) => {
       Object.assign(en, { status: "ready", mod });
-      // A screen loaded: whatever release this page is on, its files can be had. The next failure may reload once again.
-      page.note.set(null);
+      delete en.styles;
+      // This screen loaded: if it fails in a later release, the app may reload once for it again.
+      const rest = noted().filter((n) => n !== name);
+      if (rest.length !== noted().length) page.note.set(rest.length ? rest.join(",") : null);
       changed();
     },
     (e) => failedLoad(name, e),
@@ -166,6 +193,17 @@ export function loadScreen(name: ScreenName, retry = false): Promise<void> {
   changed();
   return en.promise;
 }
+
+/** Fetches a screen ahead of its being asked for (a tab's hover or focus). Never a new try of one that failed: that is Retry's, or asking for it. */
+export function fetchAhead(name: ScreenName): void {
+  if (entries.get(name)!.status === "idle") void loadScreen(name);
+}
+/** Asked for again (its tab clicked, its key pressed) after it failed: one more try, with no reload beyond the usual one. */
+export function tryAgain(names: readonly ScreenName[]): void {
+  for (const n of names) if (entries.get(n)!.status === "failed") void loadScreen(n);
+}
+/** Its file is on its way (asked for and not yet in or failed). */
+export const screenArriving = (name: ScreenName) => entries.get(name)!.status === "loading";
 
 /** A screen's module once it has loaded, else null. Asking doesn't fetch it. */
 export function screen<K extends ScreenName>(name: K): ScreenModule<K> | null {
@@ -233,7 +271,7 @@ export function drawnLoc<L>(asked: L, needs: (l: L) => readonly ScreenName[], la
   const names = needs(asked);
   if (screensReady(names)) return asked;
   if (last !== null) return last;
-  return names.some((n) => entries.get(n)!.status === "failed") ? home : asked;
+  return names.some((n) => entries.get(n)!.status === "failed" || entries.get(n)!.threw) ? home : asked;
 }
 
 type Connection = { saveData?: boolean; effectiveType?: string };
@@ -247,14 +285,19 @@ let prefetching = false;
  * Once the first screen is usable: the other screens' files, one at a time while the page is idle, in BACKGROUND's
  * order, so a tab's key or click shows it at once. Not on a slow or metered connection (then a tab's file is fetched
  * on hover, focus or its key), and not offline. A file that fails here says nothing: it is tried again when asked for.
+ *
+ * `html[data-screens]` says where this stands, for the browser tests and the timing script, which press keys the
+ * moment the app opens: "in" once the background fetching is done, "asked" when there is none on this connection.
  */
 export function prefetchScreens(names: readonly ScreenName[] = BACKGROUND, idle: (f: () => void) => void = whenIdle): void {
-  if (prefetching || slowOrMetered() || !page.online()) return;
+  const mark = (v: string) => typeof document !== "undefined" && (document.documentElement.dataset.screens = v);
+  if (prefetching) return;
+  if (slowOrMetered() || !page.online()) return void mark("asked");
   prefetching = true;
   const rest = [...names];
   const next = () => {
     const n = rest.shift();
-    if (!n) return void (prefetching = false);
+    if (!n) return void ((prefetching = false), mark("in"));
     if (screenReady(n)) return next();
     idle(() => void loadScreen(n).then(next));
   };

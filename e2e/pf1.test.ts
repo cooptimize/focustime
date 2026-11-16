@@ -1,19 +1,22 @@
-// PF-1 (browser, demo mode, the built app): the first download holds Day and Week; every other screen loads when it
+// PF-1 (browser, demo mode, the app built as a release is): the first download holds Day and Week; every other screen loads when it
 // is first opened. Each one opens from a cold start by click, by key and by address with the keyboard focus where it
 // landed before the split (FOCUS below was read from the build before it; PF1_PROBE=1 prints what a build does).
 // While a screen's file arrives the screen before it stays, "Loading…" shows only past 300 ms and nothing moves. A
 // release that replaced the file reloads the app once onto the screen asked for; a file that still can't be had says
 // so with Retry; a screen's own error is not mistaken for either. Offline, what was opened stays usable, and the
 // installed app keeps every split file. The page has no inline script or style and the policy header is unchanged.
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BrowserContext, Page } from "playwright-core";
 import { CHROMIUM, startDemo, type Harness } from "./harness.ts";
 import { CSP } from "../server/app.ts";
 
 const PROBE = !!process.env.PF1_PROBE;
-const DIST = process.env.FOCUSTIME_E2E_DIST && process.env.FOCUSTIME_E2E_DIST !== "dev" ? process.env.FOCUSTIME_E2E_DIST : null;
+/** The app as a release builds it (the run's shared build is made in test mode: no service worker, React's development build). */
+let DIST = "";
 const VIEW = { width: 1440, height: 900 };
 
 /** What has the keyboard focus, in words that don't depend on the build: its tag, first classes and label. */
@@ -85,12 +88,27 @@ async function cold(page: Page, h: Harness, hash: string): Promise<void> {
 }
 const screenFile = (name: string) => `**/assets/${name}-*.js`;
 
-describe.skipIf(!CHROMIUM || !DIST)("PF-1: the first download, split by screen (browser, demo mode, built app)", () => {
+describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, demo mode, built app)", () => {
   let h: Harness;
   beforeAll(async () => {
-    h = await startDemo();
-  }, 120_000);
-  afterAll(async () => h?.stop());
+    DIST = mkdtempSync(join(tmpdir(), "focustime-pf1-dist-"));
+    const root = resolve(import.meta.dirname, "..");
+    const env = { node: process.env.NODE_ENV, dist: process.env.FOCUSTIME_E2E_DIST };
+    process.env.NODE_ENV = "production";
+    try {
+      await build({ root, configFile: join(root, "vite.config.ts"), mode: "production", logLevel: "error", build: { outDir: DIST, emptyOutDir: true } });
+      process.env.FOCUSTIME_E2E_DIST = DIST;
+      h = await startDemo();
+    } finally {
+      process.env.NODE_ENV = env.node;
+      if (env.dist === undefined) delete process.env.FOCUSTIME_E2E_DIST;
+      else process.env.FOCUSTIME_E2E_DIST = env.dist;
+    }
+  }, 180_000);
+  afterAll(async () => {
+    await h?.stop();
+    if (DIST) rmSync(DIST, { recursive: true, force: true });
+  });
 
   it("every tab and screen opens from a cold start by click, by key and by address, with the focus where it lands today", async () => {
     const { ctx, page, errors } = await session(h);
@@ -312,6 +330,16 @@ describe.skipIf(!CHROMIUM || !DIST)("PF-1: the first download, split by screen (
     await failed.waitFor({ timeout: 30_000 });
     expect(await failed.textContent()).toBe("You're offline. This screen needs a connection the first time it opens. Retry");
     expect(await a.page.locator("main.ib4").count()).toBe(1);
+    // At a phone's width the line wraps inside the screen and Retry can be reached.
+    await a.page.setViewportSize({ width: 390, height: 844 });
+    await failed.waitFor();
+    const box = (await failed.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    const retry = (await failed.getByRole("button", { name: "Retry" }).boundingBox())!;
+    expect(retry.x + retry.width).toBeLessThanOrEqual(390);
+    await a.page.setViewportSize(VIEW);
+    await failed.waitFor();
     // Back online, Retry opens it; nothing reloaded.
     await a.ctx.setOffline(false);
     await failed.getByRole("button", { name: "Retry" }).click();
@@ -344,7 +372,7 @@ describe.skipIf(!CHROMIUM || !DIST)("PF-1: the first download, split by screen (
   }, 240_000);
 
   it("the built page has no inline script or style, and the policy header is unchanged", async () => {
-    const html = readFileSync(join(DIST!, "index.html"), "utf8");
+    const html = readFileSync(join(DIST, "index.html"), "utf8");
     expect(html.match(/<script(?![^>]*\bsrc=)[^>]*>/g) ?? []).toEqual([]);
     expect(html.match(/<style\b/g) ?? []).toEqual([]);
     expect(html.match(/\sstyle="/g) ?? []).toEqual([]);
@@ -359,6 +387,6 @@ describe.skipIf(!CHROMIUM || !DIST)("PF-1: the first download, split by screen (
     for (const k of ["3", "5", "6", ",", "Escape", "?"]) (await page.keyboard.press(k), await page.waitForTimeout(400));
     expect(broken).toEqual([]);
     await ctx.close();
-    expect(existsSync(join(DIST!, "index.html"))).toBe(true);
+    expect(existsSync(join(DIST, "index.html"))).toBe(true);
   }, 120_000);
 });

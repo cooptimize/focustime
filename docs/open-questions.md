@@ -1278,3 +1278,13 @@ From the IT review (TD-1):
 - **The check's limit and other steps.** The limit is 3% over today's size (about 11 kB gzipped of script, 3 kB of styles). A step that adds to Day, Week or `ui/styles.css` will hit it and must raise it on purpose. Is 3% the right room, or should styles have more until the stylesheet is split?
 - **The browser tests build React's development build** (a build inside a test run has `NODE_ENV=test`), so the app they test is larger and slower than a release. The size check sets the release mode itself. Found while writing it; unchanged.
 - **Hover fetches on every connection.** A tab's hover or focus fetches its file even on an ordinary connection (it is about to be fetched in the background anyway).
+- **From review 2, left as they are:**
+  - The address, the tab's mark and the remembered place follow the screen drawn, so they change when the file arrives, not at the press. Back pressed while a tab is arriving leaves the place before it.
+  - Opened at an address whose file fails, the address becomes Day's (Day is what is drawn); a reload then opens Day, and Back returns to the failed address.
+  - A file that never answers (no failure, no data) has no timeout: at a cold-start address the loader stays on "Still waiting on FocusTime", as it does today when the main script never answers.
+  - A dialog that arrives late opens and takes the focus even if the person has started on something else.
+  - A tour gives a step's screen 3 s to appear; on a very slow connection a tab still arriving after that has its steps skipped.
+  - Planning rules that only Backlog, Status or Code use (`plan/ahead-model.ts`, `plan/status-report.ts`, `plan/code.ts` and others) are in `main`, because something in the first download imports from the same files. Not measured apart; a later step could cut those files in two.
+  - During a deploy, if the worker's install asks a server that doesn't have a screen's file yet, the page it gets back (200) is cached under the script's name, and that screen fails until the next release. The same fault before this step would have broken the whole app; fixing it means the server answering 404 for a missing `/assets/` file, which is outside this step.
+  - A screen opened after a release can reload the page mid-session (once), and typed text in a box on the screen before is lost. The background fetching narrows this to the first minute, the Guide, the Technical docs and slow or data-saving connections.
+  - With the server down while the browser says it is online, the line says "You're offline", as the app's own offline line does.

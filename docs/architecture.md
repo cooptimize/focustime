@@ -11,6 +11,7 @@ The screens people see are Day, Week, Backlog, Status, Inbox and Code, with the 
 The React app: everything the browser runs, with no server code.
 
 - Entry points: `index.html` loads `ui/boot.ts`, which adds the Temporal polyfill only where the browser lacks it and then starts `ui/main.tsx`. `main.tsx` applies the theme, text size and reduce motion, then mounts `ui/App.tsx` behind the sign-in gate (`ui/Account.tsx`).
+- Screens that load when first opened: `ui/screens.ts` is the one list (names in `ui/screen-names.ts`); Day, Week and the top bar are the first download, and `scripts/split-chunks.ts` cuts the build's files to match. A new screen is added there, never imported statically from what the first download holds (`docs/technical/development.md`).
 - `App.tsx` holds the tabs, the top bar, the panels and the open week's shared state. `ui/nav.ts` is the one model of where the window is (tab, date, half, open panel, filters) and of its address; every screen reads and changes the address through it.
 - `ui/api.ts` is how the UI reads and changes things: a named action on the server, with the session's CSRF token on every call. The only other calls are the version (`/version`) and the assistant's voice, which have routes of their own.
 - `ui/menu.ts` builds the command menu (Ctrl+K) from the action registry; `ui/keys.ts` and `ui/keyboard.ts` hold the keys and the rule that keys never fire while typing.
@@ -168,6 +169,7 @@ Commands for developers and operators.
 - `guards.ts` runs the repo guards (`npm run guards`), `words-guard.ts` among them; `ci-tree-match.sh` and `ci-webkit-deps.sh` are CI's helpers.
 - `tech-docs.ts` builds the Technical docs panel, `tech-docs.test.ts` is `npm run docs:check`, and `docs-diagrams.ts` renders the docs' diagrams.
 - `teams-package.ts`, `teams-icons.ts` and `teams-card-previews.ts` build the Teams app package and its previews; `pwa-icons.ts` the app's icons; `build-info.ts` and `image-digest.ts` the build's version.
+- `split-chunks.ts` cuts the UI build into its files; `first-download.ts` measures what the first screen downloads (its test is the size limit) and `first-screen-times.ts` times opening the app and each tab.
 - `demo-check.ts` and `demo-walkthrough.mjs` check the demo; the `screenshot*` scripts take the screenshots for a screen; `ai-eval.ts` and `assistant-eval.ts` run the AI evaluations.
 
 ## `assets/`

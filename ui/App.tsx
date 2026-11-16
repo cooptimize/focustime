@@ -107,7 +107,7 @@ import type { DocsAccess } from "../actions/docs-actions.ts";
 // UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
 // DOC-1: the Technical docs, their pages and diagrams load only when opened.
 // RB-1: Code and its coloring library load only when opened.
-import { drawnLoc, loadScreen, prefetchScreens, retryScreens, screen, screensReady, setReloadAddress, useScreen, useScreens, wantScreens } from "./screens.ts";
+import { drawnLoc, fetchAhead, prefetchScreens, screen, screenArriving, screensReady, tryAgain, setReloadAddress, useScreen, useScreens, wantScreens } from "./screens.ts";
 import { ScreenLine } from "./ScreenLine.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
@@ -152,7 +152,7 @@ const TAB_TITLES: Record<Tab, string> = {
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /** PF-1: a tab's file fetched ahead, on its button's hover or focus (the key and the click ask for it anyway). */
-const aheadOf = (t: Tab) => locScreens({ nav: defaultNav(t), overlay: null }).forEach((n) => void loadScreen(n));
+const aheadOf = (t: Tab) => locScreens({ nav: defaultNav(t), overlay: null }).forEach(fetchAhead);
 
 /** A5: the address that opens Quick capture (Super+Alt+N on the hosted app). */
 const CAPTURE_HASH = "#/capture";
@@ -291,7 +291,9 @@ export function App() {
       const next = parseHash(location.hash) ?? HOME;
       // ST-1: a Settings address carries no tab: a link into Settings (Status, Feedback, the Guide's Do it now) opens it
       // over the tab I'm on, so closing returns there.
-      setLocState(next.overlay?.kind === "settings" || (next.overlay?.kind === "item" && locRef.current.overlay?.kind !== "item" && locRef.current.overlay === null) ? { ...next, nav: locRef.current.nav } : next);
+      // PF-1: over the place asked for, which may still be arriving.
+      const at = askedLocRef.current;
+      setLocState(next.overlay?.kind === "settings" || (next.overlay?.kind === "item" && at.overlay?.kind !== "item" && at.overlay === null) ? { ...next, nav: at.nav } : next);
     };
     window.addEventListener("popstate", on);
     return () => window.removeEventListener("popstate", on);
@@ -396,7 +398,9 @@ export function App() {
   // PF-1: Quick capture loads when first opened (ui/screens.ts): asked for, it is open once its file is in.
   const CaptureDialog = useScreen("capture", captureWanted)?.CaptureDialog;
   captureWantedRef.current = captureWanted;
-  const captureOpen = captureWanted && !!CaptureDialog;
+  // While its file is on its way it already counts as open for the keys, so letters typed ahead for its box don't run
+  // as shortcuts; if the file failed, it is not open.
+  const captureOpen = captureWanted && (!!CaptureDialog || screenArriving("capture"));
   // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
   const [assistantAt, setAssistantAt] = useState<{ text: string; turn?: number } | null>(() => {
     const turn = askTurnOf(location.hash);
@@ -1226,6 +1230,8 @@ export function App() {
   const openTab = useCallback(
     (t: Tab) => {
       if (t === "week" && data) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
+      // PF-1: a tab whose file failed is tried again when it is asked for again.
+      tryAgain(locScreens({ nav: defaultNav(t), overlay: null }));
       goNav(defaultNav(t));
     },
     [goNav, data],
@@ -1496,8 +1502,8 @@ export function App() {
         // P1: C opens Capture too. PF-1: pressed again after its file failed to load, it is tried again.
         e.preventDefault();
         setCaptureOpen(true);
-        retryScreens();
-      } else if ((e.key === "f" || e.key === "F") && !typing) {
+        tryAgain(["capture"]);
+      } else if ((e.key === "f" || e.key === "F") && !typing && !(captureWanted && !CaptureDialog && captureOpen)) {
         e.preventDefault();
         // Under the Focus button when it is on screen (it hides on narrow widths).
         const r = document.querySelector(".top-btn.timer-btn")?.getBoundingClientRect();
@@ -2476,7 +2482,7 @@ export function App() {
           }}
           captureOpen={captureOpen}
           onCapture={() => (setAssistantAt(null), setCaptureOpen(true))}
-          askOpen={!!assistantAt}
+          askOpen={!!assistantAt && !!AssistantPanel}
           onAsk={() => (setCaptureOpen(false), setAssistantAt((a) => (a ? null : { text: "" })))}
         />
       )}
@@ -2626,7 +2632,7 @@ export function App() {
           onGuide={() => openGuide()}
         />
       )}
-      {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {captureOpen && CaptureDialog && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {newAt && NewItemDialog && <NewItemDialog key={newAt.n} place={newAt.place} hooks={{ ...newAt.hooks, onCreated: (c) => { newAt.hooks.onCreated?.(c); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }, onDraft: (d) => { newAt.hooks.onDraft?.(d); setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); } }} clients={captureClients(data)} colors={(k) => clientColor(k, data.clients)} today={data.planDay.date} onClose={() => setNewAt(null)} />}
       {draftEdit && DraftEditor && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {phone && todoSheet && <TodoSheet pick={todoSheet} data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setTodoSheet(null)} onChanged={reloadQuiet} />}
