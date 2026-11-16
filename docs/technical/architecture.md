@@ -80,7 +80,7 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Status | `ui/Status.tsx`, `ui/StatusMark.tsx` | `status.load`, `status.report` | `plan/status-report.ts`, `plan/status-dot.ts` |
 | Inbox | `ui/inbox/` | `conversations.suggestions`, `inbox.list`, `capture.load` | `plan/slim-inbox.ts`, `plan/inbox-items.ts` |
 | Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
-| New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx` | `new.*`, `devops.preview` | `actions/new-item-actions.ts` |
+| New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx`, `ui/WhereLookup.tsx` | `new.*`, `devops.preview`, `code.kinds`, `code.file` | `actions/new-item-actions.ts`, `actions/code-actions.ts` |
 | Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file`, `code.kinds`, `code.search` | `plan/code.ts`, `plan/code-kinds.ts` |
 | Client calls | `ui/meetings/` | `meeting.mine`, `meeting.review` | `plan/meetings.ts`, `plan/meeting-views.ts` |
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
@@ -197,12 +197,12 @@ sequenceDiagram
 ## Creating work
 
 - **Capture** (`ui/Capture.tsx`, `capture.add`): one line saved at once to the plan store with Undo; its kind chips make it a promise, a draft story, a draft feature, or leave it To sort. A draft gets an AI-prepared DevOps version in the background when AI is on.
-- **The New form** (`ui/NewItem.tsx`, `actions/new-item-actions.ts`): any level the client's process has, with client, level, title, parent, assignee, target date, and three optional questions (Where is it?, What should change?, How will we know it's right?, `ui/ThreeQuestions.tsx`). Enter opens the write preview; Save as draft keeps it local. Before the preview the type's fields are read, so a required field without a default is refused there.
+- **The New form** (`ui/NewItem.tsx`, `actions/new-item-actions.ts`): any level the client's process has, with client, level, title, parent, assignee, target date, and three optional questions (Where is it?, What should change?, How will we know it's right?, `ui/ThreeQuestions.tsx`). RB-3: Where is it? offers the client's things from its code as you type (`ui/WhereLookup.tsx`, `plan/where-lookup.ts`, read once through `code.kinds` with `from`, a report's pages or a table's measures through `code.file`); a pick is plain text, and nothing of the code is kept or sent to an AI ([Security](security.md#client-code)). The draft editor uses the same box. Enter opens the write preview; Save as draft keeps it local. Before the preview the type's fields are read, so a required field without a default is refused there.
 - **Break down** (`ui/BreakDownPanel.tsx`, `stories.*`): AI proposes child items from the parent and the same client's past items; nothing is written until Create all after one batch preview.
 
 ## Code
 
-A read-only tab, Code, showing any client's repos to every Cooptimizer (`ui/code/`, `actions/code-actions.ts`, `actions/code-git.ts`, `sources/devops/git.ts`). Each read checks who is asking and the client's Rule, writes the view log row for a file before returning its text, and keeps folder lists and file text in server memory at most 5 minutes. Files are colored by Prism in its manual mode, each piece drawn as text, so nothing in a file runs. No AI, no background work. The rules are on [Security](security.md#client-code).
+A read-only tab, Code, showing any client's repos to every Cooptimizer (`ui/code/`, `actions/code-actions.ts`, `actions/code-git.ts`, `sources/devops/git.ts`). The New form and the draft editor reach the same reads for Where is it? (RB-3). Each read checks who is asking and the client's Rule, writes the view log row for a file before returning its text, and keeps folder lists and file text in server memory at most 5 minutes. Files are colored by Prism in its manual mode, each piece drawn as text, so nothing in a file runs. No AI, no background work. The rules are on [Security](security.md#client-code).
 
 ## Check-ins about timeboxes
 

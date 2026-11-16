@@ -296,7 +296,7 @@ export const WHERE_TEXT = {
   browse: (client: string) => `Browse ${client}'s code`,
   listName: (client: string) => `Names in ${client}'s code`,
   chooseClient: "Choose a client first",
-  chooseClientLine: "Choose a client first, then you can pick from its code.",
+  chooseClientLine: "Choose a client first, then you can choose from its code.",
   reading: (client: string) => `Reading ${client}'s code…`,
   slow: (client: string) => `Still reading ${client}'s code. Type as usual; names show when they're in.`,
   more: (n: number) => `${n.toLocaleString("en-US")} more. Keep typing to narrow it.`,

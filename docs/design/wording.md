@@ -301,6 +301,19 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - The log line, one line at the foot of every Code screen: **"FocusTime admins can see who opened, listed or searched which client's code, and when. Never the words."**
 - Retired: **Find a file** (on Code's left side; a file is found with Search code), **Search names** as the box's name (the command "Code: search names" stays).
 
+## RB-3 words (Nov 16)
+
+All in one place in code: `WHERE_TEXT` in `plan/where-lookup.ts`. The three questions' labels and grey text are unchanged.
+
+- The button at the end of **Where is it?**: **"Browse <client>'s code"** (its name and tooltip), or **"Choose a client first"** before a client is chosen; pressed then, the line under the box: **"Choose a client first, then you can choose from its code."**
+- A row: the name as the repo has it, then what it is in a few words (**"Table · Gold warehouse"**, **"Report"**, **"Data factory pipeline"**), then the repo's name when the client has more than one. Under the list: **"12 more. Keep typing to narrow it."** The list's name: **"Names in <client>'s code"** while typing, **"Browse <client>'s code"** by kind.
+- A row that opens: **Pages** (a report), **Measures and columns** (a model's table), **Open** (a model, a database, a schema or a type). The first row of a deeper level: **Back**.
+- What a pick writes: **"dim.Customer (table, Gold warehouse)"**, **"Sales (report)"**, **"Customer (table, Sales semantic model)"**, a page **"Margin by region, page of Sales report"**, a measure or column **"Total Sales (measure, Sales table, Sales semantic model)"**.
+- Screen readers: **"5 names match. Press Down to choose one."**, **"1 name matches. Press Down to choose it."**, **"40 in the list."**, **"Added dim.Customer."**
+- The quiet line under the box, one at a time: **"Reading Northwind's code…"** (browsing before the names are in), **"Still reading Northwind's code. Type as usual; names show when they're in."**, **"Only Fabrikam's team can read its code, so no names are offered. Type the name."**, **"Code is for Cooptimizers, so no names are offered. Type the name."**, **"FocusTime can't read Harbor's code yet, so no names are offered. Type the name."**, **"Contoso has no DevOps set up, so there are no names to offer. Type the name."**, **"Contoso has no code in DevOps yet, so there are no names to offer. Type the name."**, **"Contoso's code has no reports, models, tables or pipelines to offer. Type the name."**, **"Contoso's code couldn't be read just now. Type the name, or try again."** with **Try again**, **"Names from archive couldn't be read."**, **"There's no room for that in this answer."**
+- Inside a second level: **"Reading the file…"**, **"This file is too large to list. Type the name."**, **"This report has no pages to list."**, **"This table has no measures or columns to list."**, **"This file couldn't be read. Type the name."**, **"This file wasn't read because FocusTime couldn't record that you opened it."**
+- Admin › Audit › Code views: **"Listed names for Where is it? (New form)"** and **"Listed names for Where is it? (draft editor)"**.
+
 ## UC-1 words (Nov 15)
 
 - A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.

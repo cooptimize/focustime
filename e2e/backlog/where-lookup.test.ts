@@ -100,7 +100,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     let f = await openNew(page, null);
     const btn = f.getByRole("button", { name: "Choose a client first" });
     await btn.click();
-    await expect(f.getByText("Choose a client first, then you can pick from its code.").count()).resolves.toBe(1);
+    await expect(f.getByText("Choose a client first, then you can choose from its code.").count()).resolves.toBe(1);
     await whereBox(f).click();
     await page.keyboard.type("sales report");
     await expect(list(page).count()).resolves.toBe(0);
