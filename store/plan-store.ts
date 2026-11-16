@@ -2831,24 +2831,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /**
-     * A local order for one client's tier: positions 1..n for the items given (the rest of the tier follows in DevOps
-     * order). `null` resets the client's whole list (both tiers) to DevOps order. Never written back to DevOps.
-     */
-    async reorderWeekItems(weekStart: IsoDate, clientKey: string, order: readonly { itemId: number; position: number }[] | null): Promise<WeekPlanRecord> {
-      await tx(async () => {
-        const at = stamp();
-        if (order === null) (await db.run("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL", at, weekStart, clientKey));
-        else
-          for (const o of order) {
-            if (!Number.isInteger(o.position) || o.position < 1) throw new PlanError("position must be a whole number from 1");
-            const r = (await db.run("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND item_id = ?", o.position, at, weekStart, clientKey, o.itemId));
-            if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't on this client's week`);
-          }
-        (await touchWeek(weekStart, at));
-      });
-      return (await this.weekPlan(weekStart));
-    },
     /** Take an item off the week list (its pins go with it). */
     async removeWeekItem(id: number): Promise<void> {
       await tx(async () => {
@@ -2938,18 +2920,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** U6: clients marked "Nothing this week" for a week. */
     weekQuiet: async (weekStart: IsoDate): Promise<string[]> => ((await db.all("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key", weekStart)) as Row[]).map((r) => r.client_key as string),
-    async setWeekQuiet(weekStart: IsoDate, clientKey: string, on: boolean): Promise<void> {
-      return tx(async () => {
-        if (on) (await db.run("INSERT INTO week_quiet (week_start, client_key, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", weekStart, clientKey, stamp()));
-        else (await db.run("DELETE FROM week_quiet WHERE week_start = ? AND client_key = ?", weekStart, clientKey));
-      });
-    },
-    async markBreakdown(clientKey: string, itemId: number, on: boolean): Promise<void> {
-      return tx(async () => {
-        if (on) (await db.run("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", clientKey, itemId, stamp()));
-        else (await db.run("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?", clientKey, itemId));
-      });
-    },
     breakdownMarks: async (): Promise<{ clientKey: string; itemId: number; markedAt: ZonedStamp }[]> =>
       ((await db.all("SELECT * FROM breakdown_marks ORDER BY marked_at, client_key, item_id")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, markedAt: r.marked_at as string })),
     /** True the first time (kind, date) is marked, false after: "only once a day" across restarts. */

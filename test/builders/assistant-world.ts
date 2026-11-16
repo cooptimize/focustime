@@ -121,7 +121,6 @@ export function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"
       return { ok: true, data: { pick: await plan.move(x.id, x.date, x.half) } };
     },
     "pick.uncarry": async (i) => ({ ok: true, data: { pick: await plan.uncarry((i as { id: number }).id) } }),
-    "weekplan.commit": (i) => ((confirmed[(i as { weekStart: string }).weekStart] = true), { ok: true, data: {} }),
     "devops.done_offer": (i) => ({ ok: true, data: { offers: [{ clientKey: Tailspin, itemId: 8101, followUpId: null, choices: ["Closed"] }], itemOffers: [{ clientKey: (i as { clientKey?: string }).clientKey ?? Tailspin, clientName: "Tailspin", itemId: (i as { itemIds?: number[] }).itemIds?.[0] ?? 8101, title: "t", type: "User Story", state: "Active", choices: ["Closed"] }], why: null } }),
     // FN-1: Wrap it up's offer, its one preview and its writes (wrap_up on a Teams card).
     "wrapup.offer": () => ({ ok: true, data: { pick: { id: 1, title: "t", status: "done", date: "2026-11-05", leftMinutes: 60, spentMinutes: 0, timeboxedMinutes: 0 }, clientKey: Tailspin, itemId: 8101, offer: { clientKey: Tailspin, clientName: "Tailspin", itemId: 8101, title: "Stale flags", type: "User Story", state: "Active", done: false, choices: ["Closed"], chosen: "Closed", activate: null, hasRemaining: true, remaining: 3, canEdit: true, editNote: null, parent: null }, why: null, code: null, setting: "ask" } }),
@@ -139,7 +138,6 @@ export function setup(o: { rules?: Partial<AiRules>; channel?: "panel" | "teams"
     "pick.remove": () => ({ ok: true, data: { result: "removed" } }),
     "pick.mark_done": () => ({ ok: true, data: {} }),
     "closeout.commit": () => ({ ok: true, data: {} }),
-    "planday.commit": () => ({ ok: true, data: {} }),
     "weekplan.add": () => ({ ok: true, data: {} }),
     "ahead.stage": () => ({ ok: true, data: { changes: [] } }),
     "team.commit": () => ({ ok: true, data: { weekStart: "2026-11-02", clients: [] } }),

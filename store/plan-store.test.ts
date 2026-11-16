@@ -328,21 +328,14 @@ describe("week plan (step 8)", () => {
     expect((await store.dayHasWork("2026-11-17"))).toBe(false);
     expect([...(await store.weeksWithWork(["2026-11-16"]))]).toEqual([]);
   });
-  it("marks a feature as being broken down (local only), and the reset and export cover the week plan", async () => {
+  it("the reset and export cover the week plan (RM-1: breakdown marks are covered by the isolation test's fill)", async () => {
     const { store } = await fresh();
-    (await store.markBreakdown("Adatum", 240, true));
-    expect((await store.breakdownMarks())).toEqual([{ clientKey: "Adatum", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
-    (await store.markBreakdown("Adatum", 240, false));
-    expect((await store.breakdownMarks())).toEqual([]);
     (await store.setWeekFeature({ ...f, estimate: 480 }));
-    (await store.markBreakdown("Adatum", 240, true));
     const e = (await store.exportJson());
     expect(e.weekPlans).toHaveLength(1);
     expect(e.weekFeatures).toHaveLength(1);
-    expect(e.breakdownMarks).toHaveLength(1);
     (await store.reset());
     expect((await store.weekPlan(W)).features).toEqual([]);
-    expect((await store.breakdownMarks())).toEqual([]);
   });
 });
 
@@ -441,17 +434,6 @@ describe("week plan by client (step 11)", () => {
     expect((await store.weekItem(a.id))?.itemId).toBe(210);
   });
 
-  it("keeps a local order per client (stored; CF-1 lists by backlog order) and resets to DevOps order", async () => {
-    const { store } = await fresh();
-    for (const itemId of [210, 220, 230]) (await store.addWeekItem({ ...base, itemId, level: "feature" }));
-    (await store.addWeekItem({ ...base, clientKey: "T&W", itemId: 300, level: "feature" }));
-    (await store.reorderWeekItems(W, "Adatum", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]));
-    const pos = async () => Object.fromEntries((await store.weekPlan(W)).features.map((x) => [x.itemId, x.position]));
-    expect((await pos())).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
-    await expect(store.reorderWeekItems(W, "T&W", [{ itemId: 210, position: 1 }])).rejects.toThrow();
-    (await store.reorderWeekItems(W, "Adatum", null));
-    expect((await pos())).toEqual({ 210: null, 220: null, 230: null, 300: null });
-  });
 });
 
 describe("quick capture (step 9)", () => {

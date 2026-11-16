@@ -2488,21 +2488,14 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "weekplan.load":
     case "weekplan.set_feature":
     case "weekplan.place":
-    case "weekplan.commit":
     case "weekplan.add":
-    case "weekplan.set_tier":
     case "weekplan.set_estimate":
     case "weekplan.set_size":
-    case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":
-    case "weekplan.headsup":
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
-    case "weekplan.nothing":
     case "feature.brief":
-    case "feature.mark_breakdown":
-    case "followup.ask_priorities":
       return weekPlanAction(weekCtx(ctx), action, req.input);
     case "weekplan.proposal":
     case "weekplan.carry_decide":
@@ -2558,7 +2551,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       );
     case "planday.start":
     case "planday.carry":
-    case "planday.commit":
     case "pick.add":
     case "pick.remove":
     case "pick.take_off":
@@ -2570,7 +2562,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.set_kind":
     case "pick.uncarry":
     case "pick.undrop":
-    case "planday.carry_hint":
     case "suggest.load":
     case "suggest.clear":
     case "suggest.unclear":

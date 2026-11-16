@@ -61,7 +61,6 @@ describe("demo mode (D272)", () => {
     await ok(ctx, "planday.start", { date: "2026-11-02" });
     await ok(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411 });
     await ok(ctx, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", itemId: 1112 });
-    await ok(ctx, "planday.commit", { date: "2026-11-02" });
     await ok(ctx, "timer.start", { kind: "focus" });
     await ok(ctx, "timer.stop", {});
     const fus = await ok<{ followUps: { id: number }[] }>(ctx, "followups.list", {});
@@ -112,7 +111,6 @@ describe("demo mode (D272)", () => {
     const ctx = await demo();
     await ok(ctx, "week.load", {});
     await ok(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411 });
-    await ok(ctx, "planday.commit", { date: "2026-11-02" });
     await ok(ctx, "ui.set_view_range", { range: "24h" });
     await ok(ctx, "plan.reset", { confirm: "RESET" }).catch(() => null);
 
@@ -137,12 +135,11 @@ describe("demo mode (D272)", () => {
 });
 
 describe("No confirm (CF-1)", () => {
-  it("work comes on and off today freely: a removed to-do is taken off, and an old Confirm changes nothing", async () => {
+  it("work comes on and off today freely: a removed to-do is taken off, and nothing asks to confirm", async () => {
     const ctx = await demo();
     const added = await ok<{ pick: { id: number } }>(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4412 });
     const removed = await ok<{ result: string }>(ctx, "pick.remove", { id: added.pick.id });
     expect(removed.result).not.toBe("dropped");
-    expect(await ok(ctx, "planday.commit", { date: "2026-11-02" })).toMatchObject({ unchanged: true });
   });
 });
 

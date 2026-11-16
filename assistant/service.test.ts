@@ -100,8 +100,6 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     // AS-2: an item's done states come from its process; this fake's process calls it "Done" (Basic), not "Closed".
     "devops.done_offer": (i) => ({ ok: true, data: { itemOffers: [{ clientKey: (i as { clientKey: string }).clientKey, clientName: "x", itemId: (i as { itemIds: number[] }).itemIds[0], title: "t", type: "Issue", state: "Doing", choices: ["Done"] }], why: null } }),
     "inbox.list": () => ({ ok: true, data: { today: TODAY, items: [], counts: {}, needsYou: 0 } }),
-    "planday.commit": () => ({ ok: true, data: {} }),
-    "weekplan.commit": () => ({ ok: true, data: {} }),
     "weekplan.add": () => ({ ok: true, data: {} }),
     "ahead.stage": () => ({ ok: true, data: { changes: [] } }),
     "capture.add": () => ({ ok: true, data: { capture: { id: 5 } } }),

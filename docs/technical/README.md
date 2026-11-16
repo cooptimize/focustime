@@ -77,7 +77,7 @@ Where the code keeps a name people don't see, these pages use the screen's name 
 | `pick`, `picks`, `pick.*` actions | To-do | `actions/plan-actions.ts`, `store/plan-store.ts` |
 | `planday.*`, `day_plans` | A day's plan on Day | `actions/plan-actions.ts` |
 | `weekplan.*`, `week_plans`, `week_features` | A week's features per client, shown on Week and Backlog | `actions/weekplan-actions.ts` |
-| `committedAt`, `weekplan.commit`, `planday.commit` | Nothing on screen: the actions are hidden from the command menu ("There's nothing to confirm now") | `ui/menu.ts` |
+| `committedAt` | Nothing on screen: confirming a day or a week is gone (CF-1), and its actions were removed in RM-1 | `store/plan-store.ts` |
 | `followup.*`, `follow_ups` | A promise I added (Inbox › Promises) | `actions/followup-actions.ts` |
 | `my_promises.*`, `promises` | Inbox › Promises: the promises found in chats and the ones I added, one list | `actions/conversation-actions.ts` |
 | `conversations.*`, `conversations`, `suggest.*` | Inbox › From chats | `actions/conversation-actions.ts` |

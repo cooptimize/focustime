@@ -7,7 +7,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
-import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HIDDEN_FOR_NOW, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -102,15 +102,15 @@ describe("command menu (built from the action registry)", () => {
   });
   it("lists every dispatcher action, so new actions appear automatically", () => {
     const listed = commandList(env().e).map((c) => c.action);
-    for (const name of ACTION_NAMES) if (!HIDDEN_FOR_NOW.has(name) && !(name in HOLLOW) && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
+    for (const name of ACTION_NAMES) if (!(name in HOLLOW) && !(name.startsWith("code.") && name !== "code.clients")) expect(listed, name).toContain(name);
     // RB-1: Code is one entry ("Code") plus "Code: <client>" per client; its reads never show, and no repo or file does.
     expect(listed.filter((n) => n.startsWith("code."))).toEqual(["code.clients"]);
     const withCode = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
     expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code: Northwind", "Code"]);
     // RM-1: DevOps patterns is gone; nothing of it is offered to anyone.
     expect(listed.filter((n) => n.startsWith("patterns."))).toEqual([]);
-    // WD-1: Team is hidden for now: its commands aren't offered.
-    for (const name of HIDDEN_FOR_NOW) expect(listed, name).not.toContain(name);
+    // RM-1: the removed features' actions are gone from the registry, so nothing can list them.
+    for (const name of ["team.view", "look.ask", "look.reply", "weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup", "weekplan.nothing", "feature.mark_breakdown", "followup.ask_priorities", "planday.carry_hint", "ui.first_launch", "patterns.status"]) expect(ACTION_NAMES as readonly string[], name).not.toContain(name);
     // CL-1: Make it a follow-up (gone from the UI in IB-1) is gone from the server too.
     for (const name of ["my_promises.followup", "promises.followup"]) expect(ACTION_NAMES as readonly string[]).not.toContain(name);
   });
@@ -121,8 +121,6 @@ describe("command menu (built from the action registry)", () => {
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
     for (const id of ["view.checkin", "view.closeout", "view.planweek"]) expect(list.find((c) => c.id === id)?.disabled).toBeUndefined();
     expect(list.find((c) => c.id === "view.planweek")?.hint).toBe("W");
-    // CF-1: nothing confirms a plan; the retired commands aren't listed.
-    for (const a of ["weekplan.commit", "planday.commit"]) expect(list.find((c) => c.action === a)).toBeUndefined();
     // A send's own Must (G5) stays.
     for (const l of list.map((c) => c.label).filter((l) => l !== "Withdraw a Must")) expect(l).not.toMatch(/Confirm (week|today|the (week|day))|Nice to have|\bmusts?\b/i);
   });
@@ -162,9 +160,6 @@ describe("command menu (built from the action registry)", () => {
     expect(filterCommands(list, "break down with").map((c) => c.action)).toEqual(["stories.prepare"]);
     expect(filterCommands(list, "draft stories").map((c) => c.action)).toContain("stories.prepare");
     expect(list.find((c) => c.action === "stories.prepare")?.label).toBe("Break down with AI");
-  });
-  it("WD-1: Confirm today runs from anywhere (there is no Plan the day to open first)", () => {
-    expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBeUndefined();
   });
   it("a pick action asks which pick, then acts on it", async () => {
     const t = env({ selection: { date: "2026-11-03", half: "AM" } });

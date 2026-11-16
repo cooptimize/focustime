@@ -1201,7 +1201,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     }
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
-    case "planday.commit": return { disabled: "There's nothing to confirm now" };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
     case "pick.set_size": return { next: () => choosePick(env, "Set the size of which to-do?", (p) => sizeStep(env, p)) };
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
@@ -1215,7 +1214,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.set_kind": return { next: () => choosePick(env, "Change the kind of which to-do?", (p) => kindStep(env, p)) };
     case "pick.uncarry":
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };
-    case "planday.carry_hint": return { run: () => env.setView("week") };
     case "suggest.load": return { run: () => env.setView("today") };
     case "suggest.clear":
     case "suggest.unclear": return { disabled: "Use Clear, or its Undo, beside the suggestions on a block or a day" };
@@ -1507,21 +1505,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("roadmap") };
     case "ahead.stage_bulk":
       return { run: () => env.setView("backlog") };
-    case "weekplan.commit": return { disabled: "There's nothing to confirm now" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
     case "weekplan.place":
     case "weekplan.add":
-    case "weekplan.set_tier":
     case "weekplan.set_estimate":
     case "weekplan.set_size":
-    case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":
-    case "weekplan.headsup":
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
-    case "weekplan.nothing":
     // SW-1: sends, priorities and asks start from a row's ⋯ (Send to…) or Commit; the command menu opens the place.
     case "send.people":
     case "send.create":
@@ -1575,8 +1568,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.watch_checkin":
     case "weekplan.watch_remove":
     case "feature.brief":
-    case "feature.mark_breakdown":
-    case "followup.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "auth.connect_outlook_write": return { run: env.connectWrite };
     // NM-2: a draft feature is added on Backlog's Gantt.
@@ -1780,9 +1771,6 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 }
 
 /** Every command: window commands, then one per registered action (built from the registry). */
-// CF-1: confirming and tiers are retired; their old actions stay (they answer plainly) but leave the command menu.
-export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
-
 /**
  * NM-2: commands that name a place or a button the app no longer has, or that can't finish, each with the reason.
  * They leave the command menu, the assistant and the Teams bot; their actions, data and tests stay
@@ -1830,17 +1818,13 @@ export const HOLLOW: Readonly<Record<string, string>> = {
   "followups.review": "Nothing reviews heads-ups any more",
   "weekplan.add_draft": "The type box for a draft feature went with WD-2",
   "weekplan.draft_tier": "Draft features on the week's list went with WD-2",
-  "weekplan.nothing": "No screen offers Nothing this week since WD-1",
-  "feature.mark_breakdown": "No screen offers Mark as being broken down since WD-1",
-  "followup.ask_priorities": "No screen offers it since WD-1",
-  "planday.carry_hint": "The suggested to-dos hint is gone",
   "chats.social": "No screen marks a client chat as a Social chat",
 };
 
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
-  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || n in HOLLOW || (n.startsWith("code.") && n !== "code.clients");
+  const hidden = (n: string) => n in HOLLOW || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   // RS-2 D7: only the window commands are grouped; the registry's keep their place after them, so a search's first
   // result (what Enter runs) is what it was.

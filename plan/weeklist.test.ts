@@ -1,7 +1,7 @@
 import { DEFAULT_SIZE_SCALE } from "./estimate.ts";
 import { describe, expect, it } from "vitest";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { devopsStateFrom, headsUpKey, pickDoneFrom, weekList, itemDone, otherStoriesLine, orderList, stackRank, validHours, type ListItem } from "./weeklist.ts";
+import { devopsStateFrom, pickDoneFrom, weekList, itemDone, otherStoriesLine, orderList, stackRank, validHours, type ListItem } from "./weeklist.ts";
 
 const item = (o: Partial<ListItem> & { itemId: number }): ListItem => ({ clientKey: "Adatum", level: "feature", estimate: 240, position: null, doneAt: null, slots: [], createdAt: "2026-11-05T10:00:00-05:00[America/New_York]", ...o });
 const wi = (id: number, stateCategory = "InProgress"): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "x", stateCategory, level: "story", order: id, parentId: null, changedAt: "2026-11-01T00:00:00Z", url: "" });
@@ -47,11 +47,6 @@ describe("done against the current plan", () => {
   });
 });
 
-describe("an old week heads-up (CF-1 makes none)", () => {
-  it("is still found by its key: one per week, client and item", () => {
-    expect(headsUpKey("2026-11-09", "Adatum", 210)).toBe("slip:week:2026-11-09:Adatum:210");
-  });
-});
 
 describe("weekList (every view's order, done and progress)", () => {
   it("orders by stack rank and marks done from DevOps, a local mark or a done pick", () => {
