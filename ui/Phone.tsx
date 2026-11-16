@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { urgentFollowUps } from "../plan/today.ts";
-import { captureClients } from "./Capture.tsx";
+import { captureClients } from "./capture-clients.ts";
 import { FollowUpRow } from "./FollowUps.tsx";
 import { userZone } from "../week/zone.ts";
 import { Icon, type IconName } from "./icons.tsx";

@@ -16,7 +16,7 @@ import { fixCount } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
 import { useDevOpsChanged, useDevOpsFresh } from "../DevOpsFresh.tsx";
-import { CREATED_EVENT, useOpenNew, type Created } from "../NewItem.tsx";
+import { CREATED_EVENT, useOpenNew, type Created } from "../newitem-ctx.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { openBreakDown, type PanelAction } from "../menu.ts";
 import { openSend } from "../send-event.ts";

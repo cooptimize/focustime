@@ -5,11 +5,11 @@
 // DevOps writes these values after its preview. Plan it adds it to a block (the 15.2 target order); Delete is local.
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { SIZES, type DraftStory, type Size } from "../plan/types.ts";
 import { call } from "./api.ts";
-import { captureClients, useClientFeatures } from "./Capture.tsx";
+import { captureClients, useClientFeatures } from "./capture-clients.ts";
 import { DevOpsAction } from "./DevOpsWrite.tsx";
 import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.tsx";
 import { MenuCtx } from "./Menus.tsx";
@@ -21,19 +21,7 @@ import { ThreeQuestions } from "./ThreeQuestions.tsx";
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
-/** Opens the editor for a draft. App provides it; null outside App (the title then shows as plain text). */
-export const DraftEditorCtx = createContext<((d: DraftStory) => void) | null>(null);
-
-/** A draft's title as a button that opens the editor. */
-export function DraftTitle({ draft, className }: { draft: DraftStory; className?: string }): ReactNode {
-  const open = useContext(DraftEditorCtx);
-  if (!open) return <span className={className}>{draft.title}</span>;
-  return (
-    <button type="button" className={`link-btn draft-title${className ? ` ${className}` : ""}`} title="Edit this draft" onClick={(e) => (e.stopPropagation(), open(draft))}>
-      {draft.title}
-    </button>
-  );
-}
+export { DraftEditorCtx, DraftTitle } from "./drafteditor-ctx.tsx";
 
 const NO_POOL = { items: [], children: [] };
 

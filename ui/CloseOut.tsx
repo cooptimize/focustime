@@ -12,7 +12,7 @@ import { PlanCtx } from "./planview.ts";
 import { dayFocus } from "../plan/focus.ts";
 import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
-import { captureClients } from "./Capture.tsx";
+import { captureClients } from "./capture-clients.ts";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { DoneBatch } from "./DoneOffer.tsx";
 import { ProgressOfferCard, TimeboxCheckin } from "./TimeboxCheckin.tsx";

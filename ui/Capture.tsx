@@ -4,7 +4,7 @@
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
+import type { WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, SIZES, type Capture, type Size } from "../plan/types.ts";
 import { madeTitle, windowProblem, windowText } from "../plan/deploy.ts";
@@ -14,6 +14,7 @@ import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.tsx";
 import { clientColor } from "./labels.ts";
+import { captureClients, useClientFeatures } from "./capture-clients.ts";
 import { keyAction, onLastLine, savedText, TOAST_MS } from "./capturebox.ts";
 import { CreateDraftCtx } from "./createdraft-ctx.ts";
 import { DateField } from "./DatePicker.tsx";
@@ -32,14 +33,7 @@ const when = (z: string, tz: string) => {
   return `${t.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${t.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
 
-/** Followed clients to tag (Open half-day choices and DevOps clients), or the configured ones when those aren't known. */
-export function captureClients(data: WeekLoadData): CaptureClient[] {
-  const m = new Map<string, string>();
-  for (const c of data.planClients) m.set(c.clientKey, c.clientName);
-  for (const c of data.devops ?? []) if (!m.has(c.clientKey)) m.set(c.clientKey, c.clientName);
-  if (!m.size) for (const k of Object.keys(data.clients)) m.set(k, k);
-  return [...m].map(([clientKey, clientName]) => ({ clientKey, clientName })).sort((a, b) => a.clientName.localeCompare(b.clientName));
-}
+export { captureClients, useClientFeatures };
 
 function ClientSelect({ value, clients, onChange, required, label }: { value: string | null; clients: CaptureClient[]; onChange: (k: string | null) => void; required?: boolean; label: string }) {
   return (
@@ -182,20 +176,6 @@ const tipSeen = () => {
   }
 };
 
-/** A client's open features and epics from DevOps (read-only), for a draft's parent; null while loading. */
-export function useClientFeatures(client: string | null, on: boolean): CaptureFeatures | null {
-  const [features, setFeatures] = useState<CaptureFeatures | null>(null);
-  useEffect(() => {
-    setFeatures(null);
-    if (!on || !client) return;
-    let live = true;
-    call<CaptureFeatures>("capture.features", { clientKey: client }).then((f) => live && setFeatures(f), () => live && setFeatures({ clientKey: client, status: "unavailable", features: [], epics: [] }));
-    return () => {
-      live = false;
-    };
-  }, [client, on]);
-  return features;
-}
 
 const NO_POOL = { items: [], children: [] };
 const BOX_KINDS: readonly BoxKind[] = ["later", "follow_up", "draft", "draft_feature", "deployment"];

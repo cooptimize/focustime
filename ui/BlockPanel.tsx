@@ -8,7 +8,7 @@
 // plan. Everything here writes only FocusTime's plan store, through named actions, with Undo.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
-import { DraftTitle } from "./DraftEditor.tsx";
+import { DraftTitle } from "./drafteditor-ctx.tsx";
 import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
@@ -38,7 +38,7 @@ import { openSend } from "./send-event.ts";
 import { DEFAULT_FEATURE_MINUTES } from "../plan/estimate.ts";
 import { AddSection } from "./plan/AddPane.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { useOpenNew } from "./NewItem.tsx";
+import { useOpenNew } from "./newitem-ctx.ts";
 import { WeekDnd, pickDragged, useDragSource } from "./WeekStories.tsx";
 import { FromYourTeam, useTeamCommit } from "./Team.tsx";
 import { CarryCtx, CarrySummary } from "./Carry.tsx";

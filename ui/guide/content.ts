@@ -107,13 +107,7 @@ export const TECH_DOCS_LINK = { label: "How FocusTime works under the hood", hre
 
 // ---------- Ways in ----------
 
-export const TOUR = {
-  /** The sign-in page and a person's first Day. */
-  link: "New here? Start here (about 10 minutes)",
-  dismiss: "Not now",
-  close: "Close",
-  signIn: "Back to sign in",
-};
+export { TOUR } from "./tour-words.ts";
 
 /** Start here. About 250 words: what FocusTime is for, the day in five steps, the week in three. */
 export const START = {

@@ -4,6 +4,7 @@
 // calls, run by the server only after Confirm. Esc and × close it; Ctrl+J (or /) opens it (ui/App.tsx).
 // AS-2: a question shows its choices as chips (a tap answers it; typing works too), a change of several parts shows
 // each part's outcome with its own Undo, and moved to-dos have one Undo for all of them (assistant.undo).
+import { COMMANDS_HREF } from "./assistant-links.ts";
 import { TextBox } from "./TextBox.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { AssistantContext, Card, Choice, ConfirmResult, HandleResult, Link, PartResult, Proposal, Turn, UndoResult } from "../assistant/types.ts";
@@ -20,7 +21,7 @@ type Outcome = { tone: "ok" | "warn"; text: string; undo?: { clientKey: string; 
 const fromTurn = (t: Turn): Entry => ({ id: `t${t.id}`, role: t.role, text: t.text, cards: t.cards, proposals: t.proposals, links: [] });
 
 export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
-export const COMMANDS_HREF = "#/commands";
+export { COMMANDS_HREF };
 
 export function AssistantPanel(props: {
   phone: boolean;
