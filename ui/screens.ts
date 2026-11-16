@@ -38,8 +38,6 @@ const LOADERS = {
   docs: () => import("./docs/TechDocs.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;
 
-const NOW: Partial<Record<ScreenName, unknown>> = {};
-
 export type { ScreenName };
 export { SCREENS };
 export type ScreenModule<K extends ScreenName> = Awaited<ReturnType<(typeof LOADERS)[K]>>;
@@ -51,7 +49,7 @@ export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "c
 export type Failed = "offline" | "missing";
 type Entry = { status: "idle" | "loading" | "ready" | "failed"; mod?: unknown; why?: Failed; promise?: Promise<void>; wanted: number; since: number; /** This try was asked for with Retry. */ retry?: boolean };
 
-const entries = new Map<ScreenName, Entry>(SCREENS.map((n) => [n, n in NOW ? { status: "ready", mod: NOW[n], wanted: 0, since: 0 } : { status: "idle", wanted: 0, since: 0 }]));
+const entries = new Map<ScreenName, Entry>(SCREENS.map((n) => [n, { status: "idle", wanted: 0, since: 0 }]));
 const listeners = new Set<() => void>();
 let version = 0;
 const changed = () => {
