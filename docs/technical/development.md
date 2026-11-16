@@ -97,7 +97,7 @@ The first download holds Day, Week, the top bar and the loader; how the rest is 
 3. **Draw it from the loader.** In `ui/App.tsx`, take the module with `screen("<name>")` for a place, or `useScreen("<name>", open)` for a dialog over the place, and draw nothing while it is null. Never import the screen's file statically from anything Day, Week or the top bar imports.
 4. **Keep small things small.** If the first download needs a constant, a context or a hook from the screen's file, move that one thing to a small file of its own and import it from there (as `ui/capture-clients.ts` and `ui/newitem-ctx.ts` do).
 5. **Styles.** A stylesheet the screen imports in its own file travels with it. Rules added to `ui/styles.css` are in the first download.
-6. **Check it.** `node scripts/first-download.ts --why ui/<YourScreen>.tsx` should print "not in the first download". Add the screen to `SCREENS` in `e2e/shell/pf1.test.ts` (how it opens and where the focus lands).
+6. **Check it.** `node scripts/first-download.ts --why ui/<YourScreen>.tsx` should print "not in the first download". Add the screen to `SCREENS` in `e2e/shell/first-download.test.ts` (how it opens and where the focus lands).
 
 ### The first download's size
 

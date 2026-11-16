@@ -20,7 +20,7 @@ Both run in the same subscription and share the Entra tenant, the "FocusTime" ap
 
 **Not verified:** how long dev waits before scaling to zero. The Bicep sets no cooldown, so it is Container Apps' default; the runbook says 300 seconds.
 
-The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm2.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
+The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm-stop-and-autostart.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2). The budget only alerts; it never stops or changes anything (`infra/modules/budget.bicep`).
 

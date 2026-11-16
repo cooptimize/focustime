@@ -150,7 +150,7 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
 /**
  * PF-1: the screens that load when first opened are fetched in the background once the first screen is usable
  * (ui/screens.ts marks `html[data-screens]` when that is done). Tests press keys the moment the app opens and expect
- * the screen at once, as a person who has looked at Day for a few seconds gets it; e2e/shell/pf1.test.ts covers the moments
+ * the screen at once, as a person who has looked at Day for a few seconds gets it; e2e/shell/first-download.test.ts covers the moments
  * before. Goes on after 20 s either way.
  */
 export async function screensIn(page: Page): Promise<void> {
@@ -167,7 +167,7 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
     localStorage.setItem("focustime.hint.flow", "dismissed");
     localStorage.setItem("focustime.hint.picktime", "1");
     // PS-1: Day opens with its panel on a wide window the first time; the tests written before start with it closed,
-    // as a person who closed it once would (e2e/day/ps1.test.ts checks the first visit).
+    // as a person who closed it once would (e2e/day/polish-measures.test.ts checks the first visit).
     if (!keepDefault && localStorage.getItem("focustime.day.panel") === null) localStorage.setItem("focustime.day.panel", "closed");
   }, opts.dayPanel === "default");
   if (h.gone()) throw new Error(h.gone()!);
