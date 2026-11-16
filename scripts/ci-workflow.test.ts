@@ -22,8 +22,9 @@ function jobs(yml: string): Record<string, string> {
 const J = jobs(CI);
 const runs = (job: string) => [...J[job]!.matchAll(/npx vitest run ([^\n]*)/g)].map((m) => m[1]!);
 
-/** Browser test files that start WebKit. */
-const webkitUsers = readdirSync(join(ROOT, "e2e"))
+/** Browser test files that start WebKit, in any screen's folder (BT-1). */
+const webkitUsers = (readdirSync(join(ROOT, "e2e"), { recursive: true }) as string[])
+  .map((f) => f.split("\\").join("/"))
   .filter((f) => f.endsWith(".test.ts"))
   .filter((f) => /startDemo\(\s*["']webkit["']|webkit\.launch\(/.test(readFileSync(join(ROOT, "e2e", f), "utf8")))
   .map((f) => `e2e/${f}`);
@@ -42,7 +43,7 @@ describe("ci.yml runs the same tests (CI-3)", () => {
   it("runs the unit and store half on every file outside e2e/", () => expect(runs("unit")).toEqual(["--exclude 'e2e/**' --reporter=default"]));
 
   it("runs every browser file in the shards except the WebKit ones, and those in the webkit job", () => {
-    expect(webkitUsers).toEqual(["e2e/safari.test.ts"]);
+    expect(webkitUsers).toEqual(["e2e/shell/safari.test.ts"]);
     const excluded = [...runs("browser")[0]!.matchAll(/--exclude (\S+)/g)].map((m) => m[1]);
     expect(runs("browser")).toHaveLength(1);
     expect(runs("browser")[0]).toMatch(/^e2e\/ --shard=\$\{\{ matrix\.shard \}\}\/6 /);

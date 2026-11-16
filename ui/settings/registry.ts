@@ -1,6 +1,6 @@
 // ST-1: the one list of Settings' sections and settings. The rail, search, deep links (#/settings/<section>[/<setting>]),
 // the command menu and the Guide read it; every setting in it renders with data-setting="<id>" in its section, and
-// e2e/settings-shell.test.ts checks each one is there. Adding a setting: docs/settings.md.
+// e2e/settings/settings-shell.test.ts checks each one is there. Adding a setting: docs/settings.md.
 //
 // Old section ids (before ST-1) still open: they map to their new section and, where it moved inside one, the setting.
 

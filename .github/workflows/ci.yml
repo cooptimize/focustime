@@ -106,7 +106,7 @@ jobs:
   # Six shards (HK-5; four before): the runners have four cores, where test/workers.ts runs two files at once (each a
   # demo server and a browser; vitest's default of three overloaded them). Two at a time took the slowest of four
   # shards from 180 to 231 s; six shards keep it near where it was. Each shard takes a sixth of the files.
-  # CI-3: every browser test file but e2e/safari.test.ts, in the system's Chromium, with no WebKit set up (the webkit
+  # CI-3: every browser test file but e2e/shell/safari.test.ts, in the system's Chromium, with no WebKit set up (the webkit
   # job below runs that one file). The job keeps its name, which still says WebKit: nothing may depend on a new one.
   browser:
     name: Browser tests ${{ matrix.shard }}/6 (Chromium and WebKit)
@@ -137,7 +137,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: |
           echo "cores: $(nproc)"
-          npx vitest run e2e/ --shard=${{ matrix.shard }}/6 --exclude e2e/safari.test.ts --reporter=default
+          npx vitest run e2e/ --shard=${{ matrix.shard }}/6 --exclude e2e/shell/safari.test.ts --reporter=default
   # CI-3: the one browser test file that uses WebKit (Safari's engine), in its own job with WebKit's setup and caches as
   # the shards had them before. Every other browser file runs in the shards above.
   webkit:
@@ -161,7 +161,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
         if: needs.changes.outputs.code != 'false'
-      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts. Both are cached between
+      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/shell/safari.test.ts. Both are cached between
       # runs (AP-2): the browser keyed on the Playwright version, the system packages (.deb files) on the runner image and
       # the Playwright version. A slow Ubuntu mirror once took 8 to 17 minutes for the packages alone and cancelled a shard.
       # The browser comes first: the packages step launches WebKit to check them.
@@ -218,7 +218,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: |
           echo "cores: $(nproc)"
-          npx vitest run e2e/safari.test.ts --reporter=default
+          npx vitest run e2e/shell/safari.test.ts --reporter=default
   test:
     needs: [changes, unit, browser, webkit]
     runs-on: ubuntu-latest

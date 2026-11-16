@@ -32,7 +32,7 @@ from before ST-1; only where and how it is shown moved. The before and after map
    put `data-setting="<id>"` on the element around it. An `AutoField` whose key is in `SID` gets it already.
 4. **Link to it.** `settingsHref(section, id)` for an `<a>`, `openSettings(section, id)` from the command menu
    (`ui/menu.ts`), or `go(section, id)` inside Settings. Don't write `#/settings/...` strings by hand.
-5. **Check it.** `e2e/settings-shell.test.ts` opens every section and fails when a registry setting has no
+5. **Check it.** `e2e/settings/settings-shell.test.ts` opens every section and fails when a registry setting has no
    `data-setting` on its page; `ui/settings/registry.test.ts` checks the ids and search.
 
 A **new section**: add it to `SECTIONS` with its group and a one-line description (no em dashes), a `case` in

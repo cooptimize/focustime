@@ -23,7 +23,7 @@ describe("which changes skip the heavy jobs (CI-3)", () => {
   it.each([
     ["docs/technical", ["docs/technical/operations.md"]],
     ["a technical diagram", ["docs/technical/diagrams/flow.svg"]],
-    ["a test", ["e2e/today.test.ts"]],
+    ["a test", ["e2e/day/today.test.ts"]],
     ["a unit test", ["plan/fit.test.ts"]],
     ["a script", ["scripts/guards.ts"]],
     ["a workflow", [".github/workflows/ci.yml"]],
