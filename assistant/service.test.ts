@@ -100,8 +100,6 @@ function setup(o: { rules?: Partial<AiRules>; mine?: string[]; ahead?: ReturnTyp
     // AS-2: an item's done states come from its process; this fake's process calls it "Done" (Basic), not "Closed".
     "devops.done_offer": (i) => ({ ok: true, data: { itemOffers: [{ clientKey: (i as { clientKey: string }).clientKey, clientName: "x", itemId: (i as { itemIds: number[] }).itemIds[0], title: "t", type: "Issue", state: "Doing", choices: ["Done"] }], why: null } }),
     "inbox.list": () => ({ ok: true, data: { today: TODAY, items: [], counts: {}, needsYou: 0 } }),
-    "planday.commit": () => ({ ok: true, data: {} }),
-    "weekplan.commit": () => ({ ok: true, data: {} }),
     "weekplan.add": () => ({ ok: true, data: {} }),
     "ahead.stage": () => ({ ok: true, data: { changes: [] } }),
     "capture.add": () => ({ ok: true, data: { capture: { id: 5 } } }),
@@ -399,10 +397,10 @@ describe("IB-4: no ownership or snooze from the assistant", () => {
   it("conversation_owner and snooze aren't tools: naming one makes no proposal and changes nothing", async () => {
     expect(TOOL_NAMES).not.toContain("conversation_owner");
     expect(TOOL_NAMES).not.toContain("snooze");
-    const s = setup({ handlers: { "conversations.claim": () => ({ ok: true as const, data: {} }), "inbox.snooze": () => ({ ok: true as const, data: {} }) } });
+    const s = setup();
     s.script(["conversation_owner"], call(["conversation_owner", { conversationId: 9, change: "claim", person: null }]), say("Done."));
     expect((await s.a.handle("I'll take the Fabrikam Invoices conversation")).proposals).toEqual([]);
-    expect(s.writes().filter((w) => w.action === "conversations.claim" || w.action === "inbox.snooze")).toEqual([]);
+    expect(s.writes()).toEqual([]);
   });
 });
 

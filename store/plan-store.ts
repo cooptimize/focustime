@@ -2831,24 +2831,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /**
-     * A local order for one client's tier: positions 1..n for the items given (the rest of the tier follows in DevOps
-     * order). `null` resets the client's whole list (both tiers) to DevOps order. Never written back to DevOps.
-     */
-    async reorderWeekItems(weekStart: IsoDate, clientKey: string, order: readonly { itemId: number; position: number }[] | null): Promise<WeekPlanRecord> {
-      await tx(async () => {
-        const at = stamp();
-        if (order === null) (await db.run("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL", at, weekStart, clientKey));
-        else
-          for (const o of order) {
-            if (!Number.isInteger(o.position) || o.position < 1) throw new PlanError("position must be a whole number from 1");
-            const r = (await db.run("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND item_id = ?", o.position, at, weekStart, clientKey, o.itemId));
-            if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't on this client's week`);
-          }
-        (await touchWeek(weekStart, at));
-      });
-      return (await this.weekPlan(weekStart));
-    },
     /** Take an item off the week list (its pins go with it). */
     async removeWeekItem(id: number): Promise<void> {
       await tx(async () => {
@@ -2938,18 +2920,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** U6: clients marked "Nothing this week" for a week. */
     weekQuiet: async (weekStart: IsoDate): Promise<string[]> => ((await db.all("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key", weekStart)) as Row[]).map((r) => r.client_key as string),
-    async setWeekQuiet(weekStart: IsoDate, clientKey: string, on: boolean): Promise<void> {
-      return tx(async () => {
-        if (on) (await db.run("INSERT INTO week_quiet (week_start, client_key, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", weekStart, clientKey, stamp()));
-        else (await db.run("DELETE FROM week_quiet WHERE week_start = ? AND client_key = ?", weekStart, clientKey));
-      });
-    },
-    async markBreakdown(clientKey: string, itemId: number, on: boolean): Promise<void> {
-      return tx(async () => {
-        if (on) (await db.run("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", clientKey, itemId, stamp()));
-        else (await db.run("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?", clientKey, itemId));
-      });
-    },
     breakdownMarks: async (): Promise<{ clientKey: string; itemId: number; markedAt: ZonedStamp }[]> =>
       ((await db.all("SELECT * FROM breakdown_marks ORDER BY marked_at, client_key, item_id")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, markedAt: r.marked_at as string })),
     /** True the first time (kind, date) is marked, false after: "only once a day" across restarts. */
@@ -3345,15 +3315,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const had = (await db.get("SELECT seen_version FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
         if (had) await db.run("UPDATE conversation_views SET seen_version = ?, seen_at = ? WHERE conversation_id = ? AND seen_version < ?", version, now, id, version);
         else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, seen_at, hidden) VALUES (?, ?, ?, 0)", id, version, now);
-      });
-    },
-    /** Hide for me (or show again): personal, never anyone else's view. */
-    async hideConversation(id: number, hidden: boolean): Promise<void> {
-      await tx(async () => {
-        const now = opts.now().toInstant().toString();
-        const had = (await db.get("SELECT 1 AS x FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
-        if (had) await db.run("UPDATE conversation_views SET hidden = ?, hidden_at = ? WHERE conversation_id = ?", hidden ? 1 : 0, hidden ? now : null, id);
-        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, hidden, hidden_at) VALUES (?, 0, ?, ?)", id, hidden ? 1 : 0, hidden ? now : null);
       });
     },
     // ---- IB-1: my marks on Inbox items (seen, snoozed until, hidden), by item key (plan/inbox-items.ts) ----

@@ -2,7 +2,7 @@
 // closeout.load with what is already in memory. Local only; nothing is posted or written anywhere else.
 import type { Pick } from "../plan/types.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { detectFollowUps, reviewHeadsUps, type DetectInput, type WorkState } from "../plan/followups.ts";
+import { detectFollowUps, type DetectInput, type WorkState } from "../plan/followups.ts";
 import type { FollowUp, PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { hoursOn } from "../week/hours.ts";
@@ -61,8 +61,6 @@ export async function ruleInput(plan: PlanStore, o: RuleOptions): Promise<Detect
   };
 }
 
-/** Open heads-ups that wouldn't open under the step 13.5 rule: listed, never closed automatically. */
-export const reviewOpenHeadsUps = async (plan: PlanStore, o: RuleOptions) => reviewHeadsUps((await ruleInput(plan, o)));
 
 export async function applyFollowUpRules(plan: PlanStore, o: RuleOptions): Promise<{ opened: number; closed: number }> {
   const r = detectFollowUps((await ruleInput(plan, o)));

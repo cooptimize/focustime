@@ -1,6 +1,6 @@
 // SW-1: sending work to someone's week, the main path on the demo (Monday Nov 2): Today's lines for what was sent (IB-1 slice 4: each opens in the Inbox),
 // Accept in Commit's From your team (it joins the week as a must), Send to… from a Commit row (a Must, as a Northwind
-// lead), the Sent list, and Week › Team (committed features only, Not committed yet, Not on FocusTime yet). With
+// lead) and the Sent list (RM-1: Week › Team is gone; #/week/team opens the week). With
 // FOCUSTIME_SHOTS, the screenshots for the report at 1920, 1366×768, Text size Larger and a phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -29,10 +29,6 @@ async function weekRow(page: Page, text: string) {
   await row.waitFor({ timeout: 20_000 });
   return row;
 }
-const team = async (page: Page) => {
-  await page.evaluate(() => (location.hash = "#/week/team"));
-  await page.locator(".team-view .team-client").first().waitFor({ timeout: 30_000 });
-};
 async function openSendFor(page: Page, title: string) {
   const row = await weekRow(page, title);
   await row.locator(":scope > .aw-feat-head").getByRole("button", { name: /^More for / }).click();
@@ -94,12 +90,9 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     await expect(mine.textContent()).resolves.toContain("Waiting");
     await expect(group.locator(".sent-row", { hasText: "Invoice PDF totals" }).textContent()).resolves.toContain("Can't: Out Thursday and Friday");
 
-    // Team: each person's week features; Sam has nothing on his week; Taylor Kim isn't on FocusTime yet.
-    await team(page);
-    const nw = page.locator(".team-client", { hasText: "Northwind" }).first();
-    await expect(nw.locator(".team-person", { hasText: "Priya Shah" }).textContent()).resolves.toContain("Order history export");
-    await expect(nw.locator(".team-person", { hasText: "Sam Ortiz" }).textContent()).resolves.toContain("Nothing on their week yet");
-    await expect(page.locator(".team-client", { hasText: "Harbor" }).locator(".team-person", { hasText: "Taylor Kim" }).textContent()).resolves.toContain("Not on FocusTime yet");
+    // RM-1: Team's old address opens the week, with no error.
+    await page.evaluate(() => (location.hash = "#/week/team"));
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -123,8 +116,6 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
       await snap("commit-from-your-team");
       await page.locator(".sent-row").first().scrollIntoViewIfNeeded();
       await snap("sent-list");
-      await page.locator(".look").first().scrollIntoViewIfNeeded();
-      await snap("ask-to-look");
       const dlg = await openSendFor(page, "Order history export");
       await dlg.getByRole("combobox", { name: "Send to" }).click();
       await page.waitForTimeout(300);
@@ -133,10 +124,6 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
       await dlg.getByRole("button", { name: /priority instead/ }).click();
       await snap("send-dialog-priority");
       await dlg.getByRole("button", { name: "Cancel", exact: true }).first().click();
-      await team(page);
-      await snap("team");
-      await page.locator(".team-priorities").first().scrollIntoViewIfNeeded();
-      await snap("team-priority");
       await page.close();
     }, T);
   }
@@ -159,10 +146,6 @@ describe.skipIf(!CHROMIUM)("Send to someone's week (SW-1)", () => {
     };
     await page.locator(".sent-line").first().waitFor({ timeout: 30_000 });
     await fits("today-line");
-    await team(page);
-    await fits("team");
-    await page.locator(".team-client", { hasText: "Harbor" }).scrollIntoViewIfNeeded();
-    await fits("team-harbor");
     await page.close();
   }, T);
 });

@@ -13,7 +13,7 @@ import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
-import type { FollowUpView, WeekLoadData, WeekPlanState, WeekPlanView } from "./types.ts";
+import type { WeekLoadData, WeekPlanState, WeekPlanView } from "./types.ts";
 
 const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
   .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
@@ -108,12 +108,10 @@ describe("Plan the week actions (step 8)", () => {
     expect(withTitles({ weekStart: NEXT, updatedAt: null, features: (await t.plan.weekPlan(NEXT)).features }, () => null).features[0]).toMatchObject({ title: "Name at commit", titleSource: "saved" });
   });
 
-  it("the week is always editable with no confirm, and week.load shows it; an old Confirm week changes nothing", async () => {
+  it("the week is always editable with no confirm, and week.load shows it", async () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
     await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
-    expect(await t.run("weekplan.commit", { weekStart: NEXT })).toMatchObject({ unchanged: true, message: "There's nothing to confirm now. What's on your week is your plan." });
-    expect(await t.run("weekplan.set_tier", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, tier: "must" })).toMatchObject({ unchanged: true, message: "Every feature on the week counts the same now. Nothing changed." });
     t.at("2026-11-05T19:45:00Z");
     const e = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 12 });
     expect(e.plan).not.toHaveProperty("changed");
@@ -126,7 +124,6 @@ describe("Plan the week actions (step 8)", () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
     await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
-    await t.run("weekplan.commit", { weekStart: NEXT });
     t.at("2026-11-09T13:30:00Z"); // Mon Nov 9, 8:30 AM
     const week = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
     const adatum = week.devops!.find((w) => w.clientKey === "Adatum")!;
@@ -164,25 +161,11 @@ describe("Plan the week actions (step 8)", () => {
     expect(t.ado.calls.slice(before).filter((c) => c.body?.includes("System.Description"))).toHaveLength(1);
   });
 
-  it("marks a feature as being broken down, and creates the 'ask about priorities' follow-up once per client and week", async () => {
-    const t = setup();
-    await t.run("feature.mark_breakdown", { clientKey: "Adatum", itemId: 240, on: true });
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).marks).toEqual([expect.objectContaining({ clientKey: "Adatum", itemId: 240 })]);
-    const l = await t.run<{ followUp: FollowUpView; created: boolean }>("followup.ask_priorities", { weekStart: NEXT, clientKey: "Adatum" });
-    expect(l.created).toBe(true);
-    expect(l.followUp).toMatchObject({ kind: "priorities", clientKey: "Adatum" });
-    expect(l.followUp.what).toMatch(/^Ask .+ about priorities for the week of Mon, Nov 9$/);
-    expect(l.followUp.draft).toContain("Nothing open is assigned to me in DevOps right now.");
-    expect((await t.run<{ created: boolean }>("followup.ask_priorities", { weekStart: NEXT, clientKey: "Adatum" })).created).toBe(false);
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).followUps).toHaveLength(1);
-  });
-
-  it("week.load raises the Plan the week badge after Thursday's nudge until next week is committed", async () => {
+  it("week.load raises the Plan the week badge after Thursday's nudge until next week has work", async () => {
     const t = setup();
     expect((await t.run<WeekLoadData>("week.load", {})).weekNudge.badge).toBe(NEXT);
     await t.run("weekplan.load", { weekStart: NEXT });
     await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 4 });
-    await t.run("weekplan.commit", { weekStart: NEXT });
     expect((await t.run<WeekLoadData>("week.load", {})).weekNudge.badge).toBeNull();
   });
 });
@@ -210,17 +193,13 @@ describe("week plan by client (step 11)", () => {
     expect((await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 240, tier: "must" })).plan.features.map((f) => f.itemId)).toContain(240);
   });
 
-  it("an old tab's reorder and tier still answer; sizes and estimates; nothing goes to DevOps", async () => {
+  it("sizes and estimates; nothing goes to DevOps", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
     for (const itemId of [210, 240, 201]) await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId });
     const posts = t.ado.calls.length;
     const id = async (n: number) => (await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === n)!.id;
-    const r = await t.run<{ plan: WeekPlanView }>("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", order: [201, 210, 240] });
-    expect(Object.fromEntries(r.plan.features.map((f) => [f.itemId, f.position]))).toEqual({ 210: 2, 240: 3, 201: 1 });
-    // CF-1: set_tier changes nothing.
-    expect(await t.run("weekplan.set_tier", { id: await id(240) })).toMatchObject({ unchanged: true });
     await t.run("weekplan.set_estimate", { id: await id(210), hours: 10 });
     expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 210)!.estimate).toBe(600);
     await t.run("weekplan.set_estimate", { id: await id(210), hours: 12 });
@@ -233,16 +212,13 @@ describe("week plan by client (step 11)", () => {
     await t.run("weekplan.set_size", { id: await id(201), size: "S" });
     expect((await t.fail("weekplan.set_size", { id: await id(210), size: "S" })).status).toBe(422);
     await t.run("weekplan.mark_done", { id: await id(201), on: true });
-    const z = await t.run<{ plan: WeekPlanView }>("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", reset: true });
-    expect(z.plan.features.every((f) => f.position === null)).toBe(true);
-    expect(z.plan.features.find((f) => f.itemId === 201)!.doneAt).toBeTruthy();
-    expect((await t.fail("weekplan.reorder", { weekStart: NEXT, clientKey: "Adatum", order: [201, 201] })).status).toBe(400);
+    expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 201)!.doneAt).toBeTruthy();
     // Local only: no DevOps writes, and no reads beyond what's cached.
     expect(t.ado.calls.slice(posts).filter((c) => c.method !== "GET" && c.method !== "POST")).toEqual([]);
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
   });
 
-  it("CF-1 (E1): taking a feature off the week offers no heads-up, and an old tab's heads-up creates nothing", async () => {
+  it("CF-1 (E1): taking a feature off the week offers no heads-up", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
@@ -250,8 +226,6 @@ describe("week plan by client (step 11)", () => {
     const id = async (n: number) => (await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === n)!.id;
     const r = await t.run<Res>("weekplan.remove", { id: await id(210) });
     expect(r.headsUp ?? null).toBeNull();
-    const l = await t.run<{ followUp: FollowUpView | null; created: boolean }>("weekplan.headsup", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, title: "Dana's feature", trigger: "dropped" });
-    expect(l).toEqual({ followUp: null, created: false });
     expect((await t.plan.openFollowUps()).filter((f) => f.kind === "slip")).toEqual([]);
   });
 
@@ -281,7 +255,6 @@ describe("week plan by client (step 11)", () => {
   it("a past week stays a review for the new actions too", async () => {
     const t = setup();
     expect((await t.fail("weekplan.add", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210 })).status).toBe(409);
-    expect((await t.fail("weekplan.reorder", { weekStart: "2026-10-26", clientKey: "Adatum", reset: true })).status).toBe(409);
   });
 });
 
@@ -326,14 +299,6 @@ describe("Plan the week one client at a time (U6)", () => {
     expect(s.plan.features.map((f) => [f.itemId, f.level])).toEqual([[feature.id, "feature"]]);
   });
 
-  it("Nothing this week is kept per week and client, and taken back", async () => {
-    const t = setup();
-    await t.run("weekplan.nothing", { weekStart: NEXT, clientKey: "Adatum", on: true });
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).quiet).toEqual(["Adatum"]);
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: "2026-11-16" })).quiet).toEqual([]);
-    await t.run("weekplan.nothing", { weekStart: NEXT, clientKey: "Adatum", on: false });
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).quiet).toEqual([]);
-  });
 });
 
 describe("S1 (D453): Plan the week takes PTO the same way as Week", () => {

@@ -116,8 +116,6 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(breakDown(c));
     case "conversations_draft_item":
       return reply(conversationDraft(c));
-    case "conversations_comment":
-      return reply({ lines: conversationComment(c) });
     case "meeting_capture":
       return reply(demoMeetingAnswer(c.input));
     case "status_draft":
@@ -135,10 +133,6 @@ async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderRep
       return reply(demoStandardsAnswer(c.input));
     case "loop_draft":
       return reply({ text: loopDraft(c.input) });
-    case "conversations_merge_summary": {
-      const i = JSON.parse(c.input) as { into?: { title?: string; summary?: string } };
-      return reply({ title: i.into?.title ?? "Merged conversation", summary: i.into?.summary ?? "Two threads about the same question, now one." });
-    }
     default: {
       const v = sampleOf(c.schema);
       return reply(v);
@@ -226,11 +220,6 @@ function conversationDraft(c: ProviderCall) {
     likely_item: null,
     acceptance_criteria: fee ? ["The export has a Delivery fee column", "Order totals are unchanged", "Orders with no fee show 0"] : ["The client has confirmed the change"],
   };
-}
-
-function conversationComment(c: ProviderCall): string[] {
-  const i = JSON.parse(c.input) as { conversation?: { title?: string; summary?: string } };
-  return (i.conversation?.summary ?? "Discussed with the client in Teams.").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3);
 }
 
 /**

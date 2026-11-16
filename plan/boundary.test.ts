@@ -4,7 +4,7 @@
 // Fictional clients only.
 import { describe, expect, it } from "vitest";
 import { aChatMember, aClientEntry, HOME_TENANT } from "../test/builders/index.ts";
-import { ANOTHER, chatAudience, exitCheck, highlightMatches, mentionedClients, mentionMatches, nameList, replaceMentions, type AudienceRules } from "./boundary.ts";
+import { ANOTHER, chatAudience, exitCheck, mentionedClients, mentionMatches, nameList, replaceMentions, type AudienceRules } from "./boundary.ts";
 
 const rules: AudienceRules = { homeTenant: HOME_TENANT, automation: [], domains: ["contoso.example"] };
 const dir = [
@@ -84,11 +84,6 @@ describe("GD-3: what a held message matched", () => {
     for (const t of ["01J has weight on the other lines", "This screenshot is 04JS", "Image attached", "off by 4410 and #4410", "see https://x.example/Harbor%20Health/a", "Wing Portal"]) expect(mentionMatches(t, "contoso", dir)).toEqual([]);
   });
   it("its own names never count", () => expect(mentionMatches("Contoso again", "contoso", dir)).toEqual([]));
-  it("marks only text between tags, whole words, and keeps entities", () => {
-    expect(highlightMatches('<p>Harbor Health &amp; <a href="https://x.example/Harbor Health">Harbor Healthy</a></p>', ["Harbor Health"])).toBe('<p><mark class="held-match">Harbor Health</mark> &amp; <a href="https://x.example/Harbor Health">Harbor Healthy</a></p>');
-    expect(highlightMatches("<p>AT&amp;T says</p>", ["AT&T"])).toBe('<p><mark class="held-match">AT&amp;T</mark> says</p>');
-    expect(highlightMatches("<p>plain</p>", [])).toBe("<p>plain</p>");
-  });
 });
 
 describe("replace", () => {

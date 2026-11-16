@@ -9,7 +9,6 @@
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
 import { whoNotOwner } from "../plan/follow-who.ts";
 import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
-import { IS_WORK_PLACE } from "../plan/diagnostics.ts";
 import { groupingRules } from "./conversations-pipeline.ts";
 import { likelyItems } from "../plan/promise-items.ts";
 import { typeChoices } from "./work-item-types.ts";
@@ -17,21 +16,20 @@ import type { ProcessModel } from "../plan/process.ts";
 import type { AiService } from "../ai/service.ts";
 import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { askTitle, messageLink } from "../plan/asks.ts";
-import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
-import { chatAudience, highlightMatches, mentionedClients, nameList, HELD_LINE, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
+import { messageLink } from "../plan/asks.ts";
+import { isExternal, teamsLink } from "../plan/chats.ts";
+import { chatAudience, NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_SCHEMA_STANDARDS, DRAFT_TASK, draftFrom, draftInput, emptyDraft, withStandards, type DraftAnswer } from "../plan/conversation-draft.ts";
 import { STANDARDS_DRAFT } from "../plan/standards.ts";
 import type { StandardsLookup } from "./standards.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
-import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type HeldData, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard, type ClearedPromise, type SuggestionRow, type SuggestionsData, type SuggestionsFoot } from "../plan/conversation-views.ts";
+import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard, type ClearedPromise, type SuggestionRow, type SuggestionsData, type SuggestionsFoot } from "../plan/conversation-views.ts";
 import { HELD_REASONS, daysWaiting, oneLine, statusLine, unsortedLine, unsortedText, type Commitment, type UnsortedLine, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import { followersOf, type ClientChat, type FocusUser } from "../plan/requests.ts";
 import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
 import type { MessageImage } from "../store/teams-store.ts";
-import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import { isMeetingChat, type ConversationStore, type ConversationView } from "../store/conversation-store.ts";
-import { eventLine, firstName, mayHandOff, offerOf, personView, placeOf, sharedState, undoableEvent, type ClaimOffer, type Person } from "../plan/ownership.ts";
+import { eventLine, mayHandOff, offerOf, personView, placeOf, sharedState, undoableEvent, type Person } from "../plan/ownership.ts";
 import { PlanError } from "../store/plan-store.ts";
 import { itemKey, parseKey, type InboxFacts, type InboxMark } from "../plan/inbox-items.ts";
 import { clearedReason, clearedRecently, clearsAs, isSuggestion, levelWord } from "../plan/slim-inbox.ts";
@@ -45,27 +43,22 @@ import { visibleChats, type RequestContext } from "./request-actions.ts";
 import type { ConversationPerson } from "./people-picker.ts";
 import { personRef, type PersonRef } from "../plan/person-ref.ts";
 import { mapSeq } from "./seq.ts";
-import { mergePreview, type MergeSide } from "../plan/merge-preview.ts";
 import type { ActionResponse } from "./types.ts";
 
 export type { ConversationCard, ConversationMessage, ConversationsData, DayPromise, HeldData, HeldMessage, MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
 
 export const CONVERSATION_ACTIONS = [
-  "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.not_work", "conversations.not_work_undo", "conversations.reopen",
-  "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
+  "conversations.list", "conversations.refresh", "conversations.messages", "conversations.not_work", "conversations.not_work_undo",
+  "conversations.link", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   // IB-1: a promise is never read-only: its due, whom it is to, and Close the loop.
   "my_promises.due", "my_promises.who", "my_promises.close",
-  "suggestions.skip", "conversations.merge", "conversations.unmerge", "conversations.merge_preview", "my_promises.start_draft",
+  "suggestions.skip", "my_promises.start_draft",
   "my_promises.search",
   // CV-5: Link to item over the client's items in scope, and its undo.
   "conversations.search_items", "conversations.unlink", "my_promises.unlink",
-  // GD-2: the held-back list and Not work-related for one held message.
-  "conversations.held", "conversations.held_not_work",
-  // GD-3: every held message of one client, sorted by hand or marked not work-related.
-  "conversations.held_bulk",
-  // Part 0: the shared owner. Each applies at once, with Undo.
-  "conversations.claim", "conversations.give", "conversations.add_helper", "conversations.release", "conversations.close_out", "conversations.undo_ownership",
+  // Part 0: Undo of a conversation_owner proposal the assistant made before RM-1 (its history keeps 30 days).
+  "conversations.undo_ownership",
   // IB-4: From chats (suggestions, Dismiss and its Undo) and promises that clear themselves (Put back, the first look's note).
   "conversations.suggestions", "conversations.dismiss", "conversations.undismiss", "my_promises.put_back", "my_promises.cleared_seen",
 ] as const;
@@ -422,21 +415,6 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
 }
 
 /**
- * NV-1: the Inbox badge's count only: how many conversations need me (the same rule as Needs you) and my open
- * promises. Reads what list reads for the cards; no unsorted, chatter or write-access lookups, no card text returned.
- */
-async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needsYou: number; myPromisesOpen: number }> {
-  const v = await seen(ctx);
-  if (!v) return { needsYou: 0, myPromisesOpen: 0 };
-  const now = Date.parse(ctx.now());
-  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < closedShownMs(cfg));
-  let needsYou = 0;
-  for (const card of await cards(ctx, v, cfg, all)) if (!card.hidden && viewOf(card) === "needs") needsYou++;
-  const myPromisesOpen = (await v.convs.commitmentsBy(v.promiseChatIds)).filter((k) => k.state === "open").length;
-  return { needsYou, myPromisesOpen };
-}
-
-/**
  * IB-4: the Inbox's facts from chats: my suggestions (conversations that need an item no one has made) and my chat
  * promises, settled first (cleared ones are left out). Conversations that aren't suggestions, Waiting on and Chatter no
  * longer show (their rows are kept). No card text.
@@ -776,22 +754,6 @@ async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { c
   };
 }
 
-/** CV-2: the merged conversation's title and summary: AI (my own cap, that client only), else the two joined. */
-async function mergeSummary(ctx: ConversationContext, v: Seen, cfg: AppConfig, into: Conversation, from: Conversation): Promise<{ title: string; summary: string }> {
-  const ai = ctx.ai ? await ctx.ai().catch(() => null) : null;
-  if (!ai) return joinedSummary(into, from);
-  const side = async (c: Conversation) => {
-    const messages = [];
-    for (const p of (await v.convs.placesIn([c.id])).filter((x) => x.role === "work")) {
-      const m = await v.teams.message(p.chatId, p.messageId);
-      if (m) messages.push({ from: first(m.senderName), at: m.createdAt, text: m.text });
-    }
-    return { title: c.title, summary: c.summary, messages };
-  };
-  const r = await ai.run<MergeAnswer>({ name: MERGE_TASK, client: into.clientKey, instructions: MERGE_INSTRUCTIONS }, mergeInput({ clientName: cfg.clientSettings[into.clientKey]?.name ?? into.clientKey, into: await side(into), from: await side(from) }), MERGE_SCHEMA);
-  return (r.ok ? mergeFrom(r.value) : null) ?? joinedSummary(into, from);
-}
-
 // ---- actions ----
 
 export async function conversationAction(ctx: ConversationContext, action: ConversationAction, input: unknown): Promise<ActionResponse> {
@@ -817,14 +779,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
   /** Me, as the shared record names me. */
   const actor = async (c: Conversation): Promise<Person> => ({ id: v!.me, name: v!.byId.get(c.chatId)?.members?.find((m) => same(m.userId, v!.me))?.displayName ?? (await ctx.users().catch((): FocusUser[] => [])).find((u) => same(u.id, v!.me))?.name ?? "Someone at Cooptimize" });
   const refresh = (id: number) => ctx.homeTenant().then((homeTenant) => refreshStatus({ convs: v!.store, teams: ctx.requests!.teams, homeTenant }, id));
-  /** Someone a conversation can go to: a Cooptimizer on this chat who uses FocusTime. */
-  const teammate = async (c: Conversation, id: unknown): Promise<Person | null> => (typeof id === "string" ? (cooptimizersOn(v!.byId.get(c.chatId)!, await ctx.users().catch((): FocusUser[] => []), await ctx.homeTenant()).find((p) => same(p.id, id)) ?? null) : null);
-  /** Why I'm claiming, for the history: I said I'd do it, I wrote in it, or neither. */
-  const claimVia = async (c: Conversation): Promise<ClaimOffer | null> => {
-    if ((await v!.convs.commitmentsIn([c.id])).some((k) => k.state === "open" && same(k.whoId, v!.me))) return "committed";
-    for (const p of (await v!.convs.placesIn([c.id])).filter((x) => x.role === "work")) if (same((await v!.teams.message(p.chatId, p.messageId))?.senderId, v!.me)) return "replied";
-    return null;
-  };
   // CV-1 migration: my AP-2 promises move to the shared commitments the first time I look (idempotent).
   if (v && ctx.plan && ctx.requests && (action === "conversations.list" || action === "my_promises.list" || action === "my_promises.today")) {
     const meName = v.chats.flatMap((c) => c.members ?? []).find((m) => same(m.userId, v.me))?.displayName ?? "You";
@@ -838,64 +792,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (!o || (o.select !== undefined && !posInt(o.select))) return bad("conversations.list takes { select? }");
         return { ok: true as const, data: await list(ctx, cfg, posInt(o.select)) };
       }
-      case "conversations.merge": {
-        // CV-2: Merge into… (one, or several picked in a client's list): everything moves into the target, one undo each.
-        const o = only(input, ["ids", "into"]);
-        const ids = o && Array.isArray(o.ids) && o.ids.length >= 1 && o.ids.length <= 20 ? o.ids.map(posInt) : null;
-        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.merge takes { ids: [id, ...], into: id }");
-        const into = await conv(o.into);
-        if (!into) return bad("No such conversation", 404);
-        const froms = [];
-        for (const id of new Set(ids as number[])) {
-          const c = await conv(id);
-          if (!c) return bad("No such conversation", 404);
-          if (c.id === into.id) return bad("Pick another conversation to merge into", 409);
-          if (c.chatId !== into.chatId) return bad("Merge only conversations of the same chat", 409);
-          froms.push(c);
-        }
-        const merges: number[] = [];
-        let target = into;
-        for (const from of froms) {
-          const summary = await mergeSummary(ctx, v, cfg, target, from);
-          merges.push((await v.convs.merge(from.id, target.id, summary)).id);
-          target = (await v.convs.conversation(target.id))!;
-        }
-        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, into.id);
-        ctx.log({ source: "plan", op: "conversation_merged", count: merges.length });
-        return { ok: true as const, data: { ...(await list(ctx, cfg, into.id)), merges } };
-      }
-      case "conversations.merge_preview": {
-        // IB-1 slice 4: the before → after shown in the detail pane before Merge runs. Reads only.
-        const o = only(input, ["id", "into"]);
-        if (!o || !v || !posInt(o.id) || !posInt(o.into)) return bad("conversations.merge_preview takes { id, into }");
-        const from = await conv(o.id);
-        const into = await conv(o.into);
-        if (!from || !into) return bad("No such conversation", 404);
-        if (from.id === into.id) return bad("Pick another conversation to merge into", 409);
-        if (from.chatId !== into.chatId) return bad("Merge only conversations of the same chat", 409);
-        const side = async (c: Conversation): Promise<MergeSide> => ({
-          id: c.id, title: c.title, ...(await v.convs.contents(c.id)), people: c.participants.map((p) => p.name),
-          item: c.itemId ? { id: c.itemId, title: c.itemTitle } : null,
-        });
-        return { ok: true as const, data: mergePreview(await side(from), await side(into)) };
-      }
-      case "conversations.unmerge": {
-        const o = only(input, ["merges"]);
-        const ids = o && Array.isArray(o.merges) && o.merges.length >= 1 && o.merges.length <= 20 ? o.merges.map(posInt) : null;
-        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.unmerge takes { merges: [id, ...] }");
-        const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
-        // The latest first, so a chain of merges comes apart in the order it was made.
-        for (const id of [...(ids as number[])].sort((a, b) => b - a)) {
-          const m = await v.convs.unmerge(id);
-          await refreshStatus(deps, m.fromId);
-          await refreshStatus(deps, m.intoId);
-        }
-        ctx.log({ source: "plan", op: "conversation_unmerged", count: ids.length });
-        return respond();
-      }
-      case "conversations.count":
-        if (!only(input, [])) return bad("conversations.count takes {}");
-        return { ok: true as const, data: await counts(ctx, cfg) };
       case "conversations.refresh":
         if (!only(input, [])) return bad("conversations.refresh takes {}");
         if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId), await ctx.me());
@@ -923,27 +819,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (ctx.plan && o.before === undefined) await ctx.plan.seeConversation(c.id, c.version);
         return { ok: true, data: { messages: out, chatLink: teamsLink(chat), earlier: page.length ? (places.indexOf(page[0]!) > 0 ? page[0]!.messageId : null) : null, total: places.length } };
       }
-      case "conversations.seen": {
-        const o = only(input, ["id"]);
-        const c = o && (await conv(o.id));
-        if (!c) return bad("No such conversation", 404);
-        if (ctx.plan) await ctx.plan.seeConversation(c.id, c.version);
-        return { ok: true, data: { id: c.id } };
-      }
-      case "conversations.resolve":
-      case "conversations.close_out":
-      case "conversations.not_request": {
-        const o = only(input, ["id"], ["reason"]);
-        const c = o && (await conv(o.id));
-        if (!o || !c || !v) return bad("No such conversation", 404);
-        if (o.reason !== undefined && o.reason !== null && (typeof o.reason !== "string" || o.reason.length > 400)) return bad("reason is text of at most 400 characters");
-        const status = action === "conversations.not_request" ? "closed" : "resolved";
-        if (c.status === status) return respond();
-        const reason = typeof o.reason === "string" && o.reason.trim() ? o.reason.trim() : null;
-        await v.convs.applyOwnership(c.id, { kind: "close", by: await actor(c), status, reason, changeNote: status === "resolved" ? "Closed out" : "Marked not a request" });
-        ctx.log({ source: "plan", op: "conversation_closed", kind: status });
-        return respond();
-      }
       case "conversations.not_work": {
         // QF-1: Not work-related: one click moves its messages to Chatter and closes it for everyone on the chat. The
         // places remember the conversation (reason not_work:<id>) only so Undo can put them back; nothing is learned.
@@ -966,51 +841,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (c.closedAt && c.closeReason === NOT_WORK) await v.convs.applyOwnership(c.id, { kind: "reopen", by: await actor(c), note: "Back from Chatter", changeNote: "Back from Chatter" });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         ctx.log({ source: "plan", op: "conversation_not_work_undone", count: moved.length });
-        return respond();
-      }
-      case "conversations.reopen": {
-        const o = only(input, ["id"]);
-        const c = o && (await conv(o.id));
-        if (!c || !v) return bad("No such conversation", 404);
-        if (!c.closedAt) return respond();
-        await v.convs.applyOwnership(c.id, { kind: "reopen", by: await actor(c), changeNote: "Opened again" });
-        await refresh(c.id);
-        ctx.log({ source: "plan", op: "conversation_reopened" });
-        return respond();
-      }
-      case "conversations.claim": {
-        // Part 0: I'll take it. Of two at once the first wins; the second is told who has it (the store's conditional update).
-        const o = only(input, ["id"]);
-        const c = o && (await conv(o.id));
-        if (!c || !v) return bad("No such conversation", 404);
-        await v.convs.applyOwnership(c.id, { kind: "claim", by: await actor(c), via: await claimVia(c) });
-        ctx.log({ source: "plan", op: "conversation_claimed" });
-        return respond();
-      }
-      case "conversations.give":
-      case "conversations.add_helper": {
-        // Part 0: to another Cooptimizer on this chat. Give to: its owner or a lead, or anyone while nobody has it.
-        const o = only(input, ["id", "toId"]);
-        const c = o && (await conv(o.id));
-        if (!o || !c || !v) return bad("No such conversation", 404);
-        const to = await teammate(c, o.toId);
-        if (!to) return bad("Choose someone on this chat who uses FocusTime");
-        if (action === "conversations.give") {
-          if (same(to.id, v.me)) return bad("That's you: use I'll take it");
-          if (!mayHandOff(c.claimedBy, v.me, await ctx.isLead(c.clientKey).catch(() => false))) return bad(`${firstName(c.claimedName)} has this. Ask them to hand it over`, 409);
-          await v.convs.applyOwnership(c.id, { kind: "give", by: await actor(c), to });
-        } else await v.convs.applyOwnership(c.id, { kind: "helper", by: await actor(c), to });
-        ctx.log({ source: "plan", op: action === "conversations.give" ? "conversation_given" : "conversation_helper" });
-        return respond();
-      }
-      case "conversations.release": {
-        // Part 0: back to Open, by its owner or a lead.
-        const o = only(input, ["id"]);
-        const c = o && (await conv(o.id));
-        if (!c || !v) return bad("No such conversation", 404);
-        if (c.claimedBy && !same(c.claimedBy, v.me) && !(await ctx.isLead(c.clientKey).catch(() => false))) return bad(`${firstName(c.claimedName)} has this. Ask them to release it`, 409);
-        await v.convs.applyOwnership(c.id, { kind: "release", by: await actor(c) });
-        ctx.log({ source: "plan", op: "conversation_released" });
         return respond();
       }
       case "conversations.undo_ownership": {
@@ -1038,50 +868,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await ctx.plan.markInbox([key], { outcome: action === "conversations.dismiss" ? ((o.as as "dismissed" | "promised" | undefined) ?? "dismissed") : null });
         ctx.log({ source: "plan", op: "suggestion_dismissed", kind: action === "conversations.dismiss" ? String(o.as ?? "dismissed") : "undone" });
         return { ok: true, data: await suggestionsList(ctx, cfg) };
-      }
-      case "conversations.hide": {
-        const o = only(input, ["id", "hidden"]);
-        const c = o && (await conv(o.id));
-        if (!o || !c || typeof o.hidden !== "boolean") return bad("conversations.hide takes { id, hidden }");
-        if (!ctx.plan) return bad("The plan store isn't available", 503);
-        await ctx.plan.hideConversation(c.id, o.hidden);
-        return respond();
-      }
-      case "conversations.move":
-      case "conversations.this_is_work": {
-        // Move: a message to another conversation of the same chat; Split (to "new"): a new conversation from it.
-        // This is work: a message filtered as chatter (or waiting) starts its own conversation.
-        const o = action === "conversations.move" ? only(input, ["chatId", "messageId", "to"]) : only(input, ["chatId", "messageId"]);
-        if (!o || !v || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || typeof o.messageId !== "string" || !MESSAGE_ID.test(o.messageId)) return bad(`${action} takes { chatId, messageId${action === "conversations.move" ? ", to: id | \"new\"" : ""} }`);
-        const chat = v.byId.get(o.chatId);
-        const m = chat ? await v.teams.message(o.chatId, o.messageId) : null;
-        const place = m ? await v.convs.placeOf(o.chatId, o.messageId) : null;
-        if (!chat || !m) return bad("No such message", 404);
-        const from = place?.conversationId ?? null;
-        let to: number;
-        if (action === "conversations.move" && o.to !== "new") {
-          const target = await conv(o.to);
-          if (!target || target.chatId !== o.chatId) return bad("Move a message only to a conversation of the same chat", 409);
-          to = target.id;
-        } else {
-          const b = batchOf(m, chat, await ctx.homeTenant());
-          const created = await v.convs.addConversation({ chatId: o.chatId, clientKey: chat.clientKey, title: askTitle(m.text), summary: oneLine(m.text, 300), participants: b.senderId ? [{ id: b.senderId, name: b.senderName ?? "Someone", external: b.external }] : [], firstAt: m.createdAt, lastAt: m.createdAt, lastWorkAt: m.createdAt, changeNote: action === "conversations.this_is_work" ? "Pulled back in as work" : "Split from another conversation" });
-          to = created.id;
-        }
-        // DX-1: This is work marks its place, so Diagnostics counts it apart from Move and Split.
-        await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: to, role: "work", reason: action === "conversations.this_is_work" ? IS_WORK_PLACE : null, placedBy: "person", at: m.createdAt }]);
-        const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
-        // GD-2 point 7: a message naming another client (a held one sorted by hand) tags the conversation it went to.
-        const b = ctx.boundary ? await ctx.boundary(chat.clientKey).catch(() => null) : null;
-        const named = b && !b.internal ? mentionedClients(m.text, chat.clientKey, b.directory).map((x) => x.key) : [];
-        const tc = named.length ? await v.convs.conversation(to) : null;
-        const mentions = tc ? [...new Set([...(tc.mentions ?? []), ...named])] : null;
-        await v.convs.updateConversation(to, { changeNote: "A message was moved here", ...(mentions ? { mentions } : {}) }, { bump: true });
-        await refreshStatus(deps, to);
-        if (from !== null && from !== to) await refreshStatus(deps, from);
-        ctx.log({ source: "plan", op: "conversation_moved", kind: action === "conversations.this_is_work" ? "work" : o.to === "new" ? "split" : "move" });
-        // CV-5: the conversation it went to, so chatter's ⋯ › Create DevOps item can open the draft on it.
-        return { ok: true as const, data: { ...(await list(ctx, cfg)), conversationId: to } };
       }
       case "conversations.link": {
         const o = only(input, ["id", "itemId"], ["commitmentId"]);
@@ -1127,101 +913,6 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const items = await linkable(ctx, cfg, clientKey);
         if (!items) return { ok: true, data: { available: false, items: [] } };
         return { ok: true, data: { available: true, items: matching(items, String(o.query ?? "")).map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, tier: i.tier ?? null })) } };
-      }
-      case "conversations.take_over": {
-        const o = only(input, ["commitmentId"]);
-        const id = o && posInt(o.commitmentId);
-        const k = id && v ? await v.convs.commitment(id) : null;
-        if (!k || !v || !v.byId.has(k.chatId)) return bad("No such commitment", 404);
-        if (same(k.whoId, v.me)) return respond();
-        if (k.state !== "open") return bad("That's already handled", 409);
-        const meName = v.byId.get(k.chatId)?.members?.find((m) => same(m.userId, v.me))?.displayName ?? "Someone at Cooptimize";
-        // I become its committer and the conversation's owner; whoever had it is told quietly, once (their own tick).
-        await v.convs.updateCommitment(k.id, { takenFrom: k.whoId, takenBy: v.me, takenAt: stamp, whoId: v.me, whoName: meName, escalatedAt: null, remindedAt: null, reason: `Taken over from ${first(k.whoName)}` });
-        if (k.conversationId !== null) {
-          await v.convs.updateConversation(k.conversationId, { ownerId: v.me, changeNote: `${first(meName)} took it over` }, { bump: true });
-          // Part 0: taking over a promise takes an unowned conversation too; it never moves one a teammate has.
-          await v.convs.applyOwnership(k.conversationId, { kind: "claim", by: { id: v.me, name: meName }, via: "take_over" }).catch((e) => {
-            if (!(e instanceof PlanError)) throw e;
-          });
-        }
-        ctx.log({ source: "plan", op: "commitment_taken_over" });
-        return respond();
-      }
-      case "conversations.held": {
-        // GD-2 Part 2, GD-3: the messages held back in my chats, newest first, as Teams shows them to me, each with what
-        // it matched and that word marked. Only for members of that chat (the viewer's chats); never logged.
-        if (!only(input, [])) return bad("conversations.held takes {}");
-        const data: HeldData = { messages: [], conversations: {}, clients: [] };
-        if (!v) return { ok: true, data };
-        const home = await ctx.homeTenant();
-        const places = (await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted")).filter((p) => HELD_REASONS.has(p.reason ?? ""));
-        const nameOf = (key: string) => cfg.clientSettings[key]?.name ?? key;
-        const perClient = new Map<string, number>();
-        for (const p of places) {
-          const key = v.byId.get(p.chatId)?.clientKey;
-          if (key) perClient.set(key, (perClient.get(key) ?? 0) + 1);
-        }
-        data.clients = [...perClient].map(([clientKey, count]) => ({ clientKey, clientName: nameOf(clientKey), count })).sort((a, b) => b.count - a.count || a.clientName.localeCompare(b.clientName));
-        const aliases = new Map<string, string>();
-        let unknown = 0;
-        for (const p of [...places].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200)) {
-          const chat = v.byId.get(p.chatId);
-          const m = chat ? await v.teams.message(p.chatId, p.messageId) : null;
-          if (!chat || !m) continue;
-          const view = await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases });
-          const words = [...new Set((p.matched ?? []).map((x) => x.word))];
-          if (!words.length) unknown++;
-          data.messages.push({
-            chatId: chat.chatId, chatName: chat.displayName, clientKey: chat.clientKey, clientName: nameOf(chat.clientKey),
-            messageId: m.messageId, author: view.author, at: m.createdAt, matched: words, reason: words.length ? `Mentions ${nameList(words)}` : "Reason unknown",
-            html: highlightMatches(view.html, words), text: m.text, why: HELD_LINE,
-          });
-          if (!data.conversations[chat.chatId]) data.conversations[chat.chatId] = (await v.convs.conversations([chat.chatId])).filter((c) => !c.closedAt).slice(0, 30).map((c) => ({ id: c.id, title: c.title }));
-        }
-        // GD-3: the re-check leaves none of these; one that appears is logged (a count, never the text).
-        if (unknown) ctx.log({ source: "plan", op: "held_reason_unknown", count: unknown });
-        return { ok: true, data };
-      }
-      case "conversations.held_bulk": {
-        // GD-3: every held message of one client that I can see. `count` is what the confirm showed: a list that has
-        // changed since is refused, so nobody confirms a number that isn't the real one. Never calls AI.
-        const o = only(input, ["clientKey", "mode", "count"]);
-        if (!o || !v || typeof o.clientKey !== "string" || (o.mode !== "sort" && o.mode !== "not_work") || !posInt(o.count)) return bad("conversations.held_bulk takes { clientKey, mode: \"sort\" | \"not_work\", count }");
-        const chats = v.chats.filter((c) => same(c.clientKey, o.clientKey as string));
-        const places = (await v.convs.placesByRole(chats.map((c) => c.chatId), "unsorted")).filter((p) => HELD_REASONS.has(p.reason ?? ""));
-        if (places.length !== o.count) return bad("The held messages changed. Look at the list again.", 409, "changed");
-        const home = await ctx.homeTenant();
-        for (const chat of chats) {
-          const here = places.filter((p) => p.chatId === chat.chatId);
-          const ms = (await mapSeq(here, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-          if (!ms.length) continue;
-          if (o.mode === "not_work") {
-            await v.convs.place(ms.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: null, role: "chatter" as const, reason: "person", placedBy: "person" as const, at: m.createdAt })));
-            continue;
-          }
-          // One new conversation per chat, its title from the first message; each named client tags it (GD-2 point 7).
-          const first = ms[0]!, last = ms.at(-1)!;
-          const created = await v.convs.addConversation({ chatId: chat.chatId, clientKey: chat.clientKey, title: askTitle(first.text), summary: oneLine(first.text, 300), participants: withParticipants([], ms.map((m) => participantOf(batchOf(m, chat, home)))), firstAt: first.createdAt, lastAt: last.createdAt, lastWorkAt: last.createdAt, changeNote: "Sorted by hand from held messages" });
-          await v.convs.place(ms.map((m) => ({ chatId: chat.chatId, messageId: m.messageId, conversationId: created.id, role: "work" as const, reason: null, placedBy: "person" as const, at: m.createdAt })));
-          const mentions = [...new Set(here.flatMap((p) => (p.matched ?? []).map((x) => x.key)))];
-          if (mentions.length) await v.convs.updateConversation(created.id, { mentions });
-          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: home }, created.id);
-        }
-        ctx.log({ source: "plan", op: "held_bulk", kind: o.mode, count: places.length });
-        return respond();
-      }
-      case "conversations.held_not_work": {
-        // GD-2 Part 2: a held message isn't work: it goes to Chatter (This is work brings it back), placed by me.
-        const o = only(input, ["chatId", "messageId"]);
-        if (!o || !v || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || typeof o.messageId !== "string" || !MESSAGE_ID.test(o.messageId)) return bad("conversations.held_not_work takes { chatId, messageId }");
-        const chat = v.byId.get(o.chatId);
-        const m = chat ? await v.teams.message(o.chatId, o.messageId) : null;
-        const place = m ? await v.convs.placeOf(o.chatId, o.messageId) : null;
-        if (!chat || !m || !place || place.role !== "unsorted" || !HELD_REASONS.has(place.reason ?? "")) return bad("No such held message", 404);
-        await v.convs.place([{ chatId: o.chatId, messageId: o.messageId, conversationId: null, role: "chatter", reason: "person", placedBy: "person", at: m.createdAt }]);
-        ctx.log({ source: "plan", op: "held_not_work" });
-        return respond();
       }
       case "conversations.sort_unsorted": {
         if (!only(input, [])) return bad("conversations.sort_unsorted takes {}");

@@ -1,5 +1,7 @@
 # DevOps patterns: how to run it
 
+> RM-1 (Nov 15) removed the DevOps patterns page and its code. This file is kept as a record of what it did; its tables stay in the store, unwritten (`docs/cleanup-step-2.md`).
+
 For the person running the DevOps patterns page (`#/patterns`) on dev. The page is hidden: an admin turns it on for you in Admin › People ("DevOps patterns (preview)"). It reads DevOps and never writes to it. Nothing runs unless you press a button.
 
 ## Before you start

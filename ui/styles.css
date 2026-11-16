@@ -146,8 +146,6 @@
   --p-brand-am-l: #7fa6c9;
   --p-brand-pm-d: #4fa3dd;
   --p-brand-accent-d: #9cc24f;
-  --p-brand-ghost-d: #2b3a4d;
-  --p-brand-ghost-l: #b9c6d3;
 
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -230,7 +228,6 @@
   --brand-am: var(--p-brand-am-d);
   --brand-pm: var(--p-brand-pm-d);
   --brand-accent: var(--p-brand-accent-d);
-  --brand-ghost: var(--p-brand-ghost-d);
   color-scheme: dark;
 }
 
@@ -307,7 +304,6 @@
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
-  --brand-ghost: var(--p-brand-ghost-l);
   color-scheme: light;
 }
 
@@ -380,7 +376,6 @@
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
-  --brand-ghost: var(--p-brand-ghost-l);
   color-scheme: light;
 }
 
@@ -431,7 +426,6 @@
     --brand-am: var(--p-brand-am-d);
     --brand-pm: var(--p-brand-pm-d);
     --brand-accent: var(--p-brand-accent-d);
-    --brand-ghost: var(--p-brand-ghost-d);
     color-scheme: dark;
   }
 }
@@ -3494,13 +3488,9 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .about-dialog { width: min(560px, calc(100vw - 32px)); }
 .about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
 .about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
-/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives); others' avatars overlap. */
+/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives). */
 .owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .owner .avatar { margin-right: 0; }
-.owner-stack { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; }
-.owner-stack .avatar { margin-right: 0; box-shadow: 0 0 0 1.5px var(--surface); }
-.owner-stack .avatar + .avatar { margin-left: -5px; }
-.owner-more { margin-left: 4px; font-size: var(--fs-1); color: var(--text-muted); }
 /* D461: a row's target date, only when it matters this week; amber when it may land too late, never red. */
 .pw-due { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
 .pw-due.late { color: var(--watch); }
@@ -4176,7 +4166,7 @@ button.ask-label { cursor: pointer; }
 .conv-msg-body .attached { color: var(--text-muted); font-style: italic; }
 .conv-msg-body table { border-collapse: collapse; margin: 4px 0; font-size: var(--fs-2); display: block; max-inline-size: 100%; overflow-x: auto; }
 .conv-msg-body td, .conv-msg-body th { border: 1px solid var(--border); padding: 2px 6px; text-align: start; vertical-align: top; }
-/* CV-2: Merge into…, Select, and a deep link's note. */
+/* CV-2: Select, and a deep link's note. */
 .conv-pick { margin: 0; inline-size: 16px; block-size: 16px; flex: none; }
 .conv-merge-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); font-size: var(--fs-2); }
 .conv-merge-bar .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4381,7 +4371,7 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
   .carry-head .carry-all { margin-left: 0; }
 }
 
-/* SW-1: Send to…, From your team, the Sent list, client priorities, Ask <lead> to look, Week › Team, Today's line. */
+/* SW-1: Send to…, From your team, the Sent list, client priorities, Today's line. */
 .person-picker-option.disabled { cursor: default; opacity: 0.6; }
 .person-picker-why { margin-left: auto; font-size: var(--fs-2); }
 .send-dialog { width: min(600px, 100%); }
@@ -4413,35 +4403,11 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .priority-mark { color: var(--accent); flex: none; font-size: var(--fs-2); }
 .team-group { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 8px; }
 .team-sub { margin: 4px 0 0; color: var(--text-muted); font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.look { display: grid; gap: 2px; padding: 2px 8px; }
-.look-line { margin: 0; font-size: var(--fs-3); }
-.look-who { font-weight: 600; }
-.look-ask { justify-self: start; font-size: var(--fs-2); }
-.look-for-me { border-left: 3px solid var(--accent); padding-left: 8px; }
-.team-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
-.team-weeks { display: inline-flex; gap: 4px; }
-.team-intro { margin: 0; font-size: var(--fs-2); }
-.team-client { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
-.team-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.team-person { display: grid; grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 6px 8px; border-radius: 6px; }
-.team-person:hover { background: var(--sunken); }
-.team-who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.team-name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.team-lead { flex: none; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: var(--fs-1); color: var(--text-muted); }
-.team-state { font-size: var(--fs-3); padding-top: 2px; }
-.team-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.team-feature { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-3); }
-.team-feature .muted, .team-feature .team-quiet { font-size: var(--fs-2); white-space: nowrap; }
-.team-quiet { color: var(--watch); }
 @media (max-width: 700px) {
   .send-row, .sent-row { grid-template-columns: minmax(0, 1fr); }
-  .team-view { padding: 8px 16px 24px; }
-  .team-person { grid-template-columns: minmax(0, 1fr); }
   .send-form input[type="text"], .send-priority-form input { min-width: 0; width: 100%; }
 }
 .send-acts { align-items: center; }
-.look-others { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; padding: 2px 8px; font-size: var(--fs-2); }
-.look-others .look { padding: 0; }
 /* CV-3: a send in the urgent strip: neutral, not a risk. IB-1 slice 4: one line per send, like the others. */
 .us-sends .us-line { border-left-color: var(--accent); }
 .us-sends .us-tag { color: var(--accent); }
@@ -5429,18 +5395,6 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
 .mtg-view .page-head { flex-wrap: wrap; row-gap: 4px; }
 .mtg-view > * { max-width: 1100px; }
-/* WP-1: DevOps patterns: the shared view, wide tables side by side where they fit. */
-.pat-view > * { max-width: 1280px; }
-.pat-section { display: grid; gap: 8px; align-content: start; }
-.pat-section h3 { margin: 12px 0 0; }
-.pat-section h4 { margin: 8px 0 0; }
-.pat-buttons { flex-wrap: wrap; gap: 8px; }
-td > .pat-buttons { margin-top: 0; }
-.pat-change input:not([type="radio"]) { max-width: 420px; width: 100%; }
-.pat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
-.pat-detail { display: grid; gap: 6px; padding: 4px 0 12px 16px; border-left: 2px solid var(--border); }
-.pat-detail p { margin: 0; }
-.pat-view .adm-table td, .pat-view .adm-table th { vertical-align: top; }
 .mtg-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
 .mtg-series, .mtg-group, .mtg-upload, .mtg-done { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); }
 .mtg-series-head { display: grid; gap: 2px; }
@@ -5790,7 +5744,7 @@ td > .pat-buttons { margin-top: 0; }
   .app.phone .us-who, .app.phone .us-what { min-width: 0; overflow-wrap: anywhere; }
   /* Plan, read only on the phone: nothing in it widens the page at the largest Text size. */
   .phone-ro-body .pl-frame { overflow-x: clip; }
-  .team-feature, .carry-title { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .carry-title { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 
   /* The agenda, folded by default on the phone; open, titles wrap to two lines. */
   .pd-agenda .ag-title { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 0; }
@@ -6093,7 +6047,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ib-row-sub .mention-tag { margin: 0 6px 0 0; }
 .ib-mentions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
 .ib-mentions .mention-tag { margin-left: 0; }
-.held-back { margin: 12px 0; }
 .held-list { margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
 .held-list ul { list-style: none; margin: 0; padding: 0; }
 .held-why { margin: 0 0 8px; }

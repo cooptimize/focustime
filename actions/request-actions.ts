@@ -8,11 +8,10 @@
 import type { ConversationStore } from "../store/conversation-store.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { askTitle, CONTEXT_MESSAGES, type ContextMessage, messageLink, ruleLabel, type PromiseView, type PromisesData, type RequestChatStatus, type RequestsData, type RequestView } from "../plan/asks.ts";
+import { askTitle, messageLink, ruleLabel, type PromiseView, type PromisesData, type RequestChatStatus, type RequestsData, type RequestView } from "../plan/asks.ts";
 import { LIKELY_MIN, notSortedText, promiseClosedBy, type StoredPromise } from "../plan/asks-ai.ts";
 import type { AiService } from "../ai/service.ts";
-import { classifyAsk } from "./ask-ai.ts";
-import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
+import { CHAT_ID, isExternal } from "../plan/chats.ts";
 import { POLL_MINUTES, type ClientChat, type FocusUser, type Request } from "../plan/requests.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { TeamsStore, TeamsView } from "../store/teams-store.ts";
@@ -28,8 +27,8 @@ import type { AudienceRules } from "../plan/boundary.ts";
 
 export type { ContextMessage, PromisesData, PromiseView, RequestChatStatus, RequestsData, RequestView } from "../plan/asks.ts";
 export const REQUEST_ACTIONS = [
-  "requests.list", "requests.refresh", "requests.context", "requests.resolve", "requests.reopen", "requests.search", "requests.purge",
-  "requests.sort_again", "requests.show", "promises.list", "promises.resolve", "promises.reopen", "promises.link",
+  "requests.list", "requests.purge",
+  "promises.list", "promises.resolve", "promises.reopen", "promises.link",
 ] as const;
 export type RequestAction = (typeof REQUEST_ACTIONS)[number];
 
@@ -245,93 +244,11 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
   const plan = ctx.plan;
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
-  /** One request this person may see, or null. */
-  const mine = async (k: { chatId: string; messageId: string }) => {
-    const v = await seen(ctx);
-    if (!v || !v.byId.has(k.chatId)) return null;
-    const r = await v.teams.request(k.chatId, k.messageId);
-    return r ? { r, v } : null;
-  };
   try {
     switch (action) {
       case "requests.list": {
         if (!only(input, [])) return bad("requests.list takes {}");
         return { ok: true, data: await list(ctx, plan, cfg) };
-      }
-      case "requests.refresh": {
-        if (!only(input, [])) return bad("requests.refresh takes {}");
-        const v = await seen(ctx);
-        if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId), await ctx.me());
-        return { ok: true, data: await list(ctx, plan, cfg) };
-      }
-      case "requests.context": {
-        const o = only(input, ["chatId", "messageId"]);
-        const k = o && ids(o);
-        if (!k) return bad("requests.context takes { chatId, messageId }");
-        const hit = await mine(k);
-        const m = hit && (await hit.v.teams.message(k.chatId, k.messageId));
-        if (!hit || !m) return bad("No such request", 404);
-        const chat = hit.v.byId.get(k.chatId)!;
-        const who = people(chat, await ctx.homeTenant());
-        const before = await hit.v.teams.messagesBefore(k.chatId, m.createdAt, CONTEXT_MESSAGES);
-        const messages: ContextMessage[] = before.map((x) => {
-          const w = who(x.senderId, x.senderTenant, x.senderName);
-          const self = same(x.senderId, hit.v.me);
-          return { messageId: x.messageId, author: self ? "You" : w.name, external: w.external, mine: self, at: x.createdAt, text: x.text, hasImage: x.hasImage, hasFile: x.hasFile };
-        });
-        return { ok: true, data: { messages, chatLink: teamsLink(chat) } };
-      }
-      case "requests.resolve": {
-        const o = only(input, ["chatId", "messageId", "status"], ["note", "itemId"]);
-        const k = o && ids(o);
-        if (!o || !k || !["linked", "handled", "dismissed"].includes(o.status as string)) return bad("requests.resolve takes { chatId, messageId, status: linked | handled | dismissed, note?, itemId? }");
-        const status = o.status as "linked" | "handled" | "dismissed";
-        if (o.note !== undefined && o.note !== null && (typeof o.note !== "string" || o.note.length > 1000)) return bad("note is text of at most 1000 characters");
-        const hit = await mine(k);
-        if (!hit) return bad("No such request", 404);
-        const req = hit.r;
-        let item: { itemId: number; itemUrl: string; itemTitle: string } | null = null;
-        if (status === "linked") {
-          if (typeof o.itemId !== "number" || !Number.isSafeInteger(o.itemId) || o.itemId <= 0) return bad("Link needs an itemId");
-          const items = await ctx.openItems(cfg, req.clientKey);
-          if (!items) return bad(`DevOps couldn't be read for ${cfg.clientSettings[req.clientKey]?.name ?? req.clientKey}. Try again in a moment`, 503);
-          const found = items.find((i) => i.id === o.itemId);
-          if (!found) return bad("That isn't one of this client's open items", 404);
-          item = { itemId: found.id, itemUrl: found.url, itemTitle: found.title };
-        }
-        const note = typeof o.note === "string" && o.note.trim() ? o.note.trim() : null;
-        // Idempotent: the same resolution again changes nothing.
-        if (req.status === status && (status !== "linked" || req.itemId === item?.itemId)) return { ok: true, data: await list(ctx, plan, cfg) };
-        await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status, ...(item ?? {}), note });
-        ctx.log({ source: "plan", op: "request_resolved", kind: status });
-        return { ok: true, data: await list(ctx, plan, cfg) };
-      }
-      case "requests.reopen": {
-        const o = only(input, ["chatId", "messageId"]);
-        const k = o && ids(o);
-        if (!k) return bad("requests.reopen takes { chatId, messageId }");
-        const hit = await mine(k);
-        if (!hit) return bad("No such request", 404);
-        if (hit.r.status === "created") return bad(`#${hit.r.itemId} was created in DevOps. Undo it from Settings › Activity; the request opens again`, 409, "created");
-        if (hit.r.status !== "open") {
-          await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status: "open" });
-          ctx.log({ source: "plan", op: "request_reopened", kind: hit.r.status });
-        }
-        return { ok: true, data: await list(ctx, plan, cfg) };
-      }
-      case "requests.search": {
-        const o = only(input, ["chatId", "messageId"], ["query"]);
-        const k = o && ids(o);
-        if (!o || !k || (o.query !== undefined && (typeof o.query !== "string" || o.query.length > 200))) return bad("requests.search takes { chatId, messageId, query? }");
-        // A request's or (AP-2) one of my promises' client.
-        const clientKey = (await mine(k))?.r.clientKey ?? (plan ? (await plan.promise(k.chatId, k.messageId))?.clientKey : undefined);
-        if (!clientKey) return bad("No such request", 404);
-        const items = await ctx.openItems(cfg, clientKey);
-        if (!items) return { ok: true, data: { available: false, items: [] } };
-        const q = String(o.query ?? "").trim().toLowerCase().replace(/^#/, "");
-        const words = q.split(/\s+/).filter(Boolean);
-        const hits = items.filter((i) => !q || String(i.id) === q || words.every((w) => i.title.toLowerCase().includes(w))).slice(0, 20);
-        return { ok: true, data: { available: true, items: hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url })) } };
       }
       case "requests.purge": {
         const o = only(input, ["clientKey"]);
@@ -342,29 +259,6 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         const n = await v.teams.purgeClient(o.clientKey);
         ctx.log({ source: "plan", op: "requests_purged", count: n });
         return { ok: true, data: { ...(await list(ctx, plan, cfg)), purged: n } };
-      }
-      case "requests.sort_again": {
-        const o = only(input, ["chatId", "messageId"]);
-        const k = o && ids(o);
-        if (!k) return bad("requests.sort_again takes { chatId, messageId }");
-        const hit = await mine(k);
-        if (!hit) return bad("No such request", 404);
-        if (hit.r.status !== "open") return bad("This request is already resolved", 409);
-        const ai = ctx.ai ? await ctx.ai() : null;
-        if (!ai) return bad("AI isn't available here", 409);
-        // My own switches and caps: the sort is saved on the shared row as mine.
-        const r = await classifyAsk({ teams: hit.v.teams, by: hit.v.me, ai: async () => ai, homeTenant: await ctx.homeTenant(), me: null, openItems: ctx.openItems }, cfg, hit.r);
-        ctx.log({ source: "plan", op: "request_sorted", kind: r?.status ?? "none" });
-        return { ok: true, data: await list(ctx, plan, cfg) };
-      }
-      case "requests.show": {
-        const o = only(input, ["chatId", "messageId", "shown"]);
-        const k = o && ids(o);
-        if (!o || !k || typeof o.shown !== "boolean") return bad("requests.show takes { chatId, messageId, shown }");
-        const hit = await mine(k);
-        if (!hit) return bad("No such request", 404);
-        await hit.v.teams.setShown(k.chatId, k.messageId, o.shown);
-        return { ok: true, data: await list(ctx, plan, cfg) };
       }
     }
     if (!plan) return bad("The plan store isn't available", 503);

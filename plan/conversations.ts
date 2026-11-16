@@ -78,21 +78,6 @@ export type Conversation = {
   updatedAt: string;
 };
 
-/** CV-2: one Merge into…, as kept for Undo: what moved, and both conversations as they were. Ids only, no message text. */
-export type ConversationMerge = {
-  id: number;
-  intoId: number;
-  fromId: number;
-  byUser: string;
-  at: string;
-  moved: { messageIds: string[]; commitmentIds: number[]; suggestionIds: number[] };
-  before: { into: MergeState; from: Pick<Conversation, "status" | "closedAt" | "closedBy" | "closeReason"> };
-  /** The summary the merge wrote (Undo puts the old one back only while it is still this). */
-  afterSummary: string | null;
-  undoneAt: string | null;
-};
-export type MergeState = Pick<Conversation, "title" | "summary" | "participants" | "firstAt" | "lastAt" | "lastWorkAt" | "ownerId" | "itemId" | "itemUrl" | "itemTitle" | "likelyItem"> & Partial<Pick<Conversation, "claimedBy" | "claimedName" | "claimedAt" | "helpers">>;
-
 /** A message's place in conversations (conversation_messages). */
 export type MessagePlace = { chatId: string; messageId: string; conversationId: number | null; role: MessageRole; reason: string | null; placedBy: "ai" | "rule" | "person"; at: string; /** GD-3: on a held message, what it matched (never logged). */ matched?: HeldMatch[] | null };
 
@@ -714,19 +699,6 @@ export function statusLine(c: Pick<Conversation, "status" | "itemId">, committer
   if (c.status === "committed" && committer) return `${committer} committed`;
   if (c.status === "tracked" && c.itemId) return `Tracked #${c.itemId}`;
   return STATUS_WORD[c.status];
-}
-
-/** The follow-through pause: a conversation with no new message this long has paused. */
-export const PAUSE_MINUTES = 30;
-/**
- * Whether to draft a DevOps comment now: a linked item, a meaningful change not suggested yet, and the conversation
- * paused (30 minutes quiet) or resolved; at most one a day per item unless it resolved.
- */
-export function suggestionDue(c: Pick<Conversation, "itemId" | "itemChange" | "lastAt" | "status">, now: string, suggestedToday: boolean): boolean {
-  if (!c.itemId || !c.itemChange) return false;
-  const resolved = c.status === "resolved";
-  if (suggestedToday && !resolved) return false;
-  return resolved || Date.parse(now) - Date.parse(c.lastAt) >= PAUSE_MINUTES * 60_000;
 }
 
 /**

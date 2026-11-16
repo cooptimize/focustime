@@ -86,7 +86,6 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
 | Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |
 | Settings, Admin | `ui/Settings.tsx`, `ui/settings/` | `settings.load`, `admin.load` | `config/` |
-| DevOps patterns | `ui/patterns/` (`#/patterns`, only for people an admin turned on) | `patterns.status` | `plan/patterns/` |
 | The Guide, these docs | `ui/guide/`, `ui/docs/` | `guide.*`, `docs.access` | `scripts/tech-docs.ts` (at build time) |
 
 Where the window is (tab, date, open panel, filters) is one pure model in `ui/nav.ts`, mirrored in the address (`#/day/<date>/<half>`, `#/week/day/<date>/<half>`, `#/backlog?…`, `#/inbox/<list>`, `#/item/<client>/<id>`, `#/code/<client>/<repo>/<path>`), so Back and a copied link land in the same place. Older addresses still land on the nearest screen.
@@ -113,7 +112,7 @@ The week, risks, free time and estimates are pure code in `week/` and `plan/`: n
 
 - **One status.** A card shows At risk with its short reason only when the calendar cuts into the block; how much is planned never makes a status (`plan/blockstatus.ts`). Watch shows only on hover. The block panel says the free time left ("1h free", "No free time").
 - **Hours, never blocks.** Sizes and estimates are hours (`plan/estimate.ts`, `plan/weekplan.ts`): XS 30 minutes, S 1h, M 2h, L 4h, and unsized work counts as the person's own Count unsized work as. A to-do's time left starts at its size and moves only with a check-in answer or a new size (`pickNeed` in `plan/types.ts`).
-- **No confirm.** Nothing confirms a day or a week, and every feature on a week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for the team view and the status report, never for a past week. The old confirm and tier actions answer plainly and change nothing (`plan/no-confirm.ts`).
+- **No confirm.** Nothing confirms a day or a week, and every feature on a week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for the status report, never for a past week. The old confirm and tier actions answer plainly and change nothing (`plan/no-confirm.ts`).
 
 ## Week and Day
 
@@ -147,7 +146,7 @@ Three lists (`ui/inbox/InboxPage.tsx`), each with a count, client chips, rows gr
 - **Promises** is `inbox.list`'s promise rows, late first. Reading them first settles my open chat promises (`settlePromises`): one clears as done when its linked item is finished, or as expired when I never touched it, 7 days after its due day or after it was found. No job runs it and no AI is asked. Cleared ones show 14 days under Cleared on their own; Put back reopens one for good.
 - **Captures** is `capture.load`: captures with no kind (To sort) and drafts not in DevOps, by client.
 - **The count** (the tab and `inbox.today`) is suggestions plus late or due-today promises, so it agrees with the lists. `inbox.today` also carries Day's urgent strip and the From chats chip.
-- **Kept, not shown.** Conversation ownership, snooze, merges, held messages, Unsorted and Chatter stay in the database with their actions; no screen draws them.
+- **Kept, not shown.** Conversation ownership, snooze, merges, held messages, Unsorted and Chatter stay in the database; no screen draws them. Their actions were removed in RM-1, except an old assistant proposal's Undo (`conversations.undo_ownership`) and Not work-related and its Undo; old Hide for me and Snooze marks still keep an item out of the lists.
 
 ## The story card, Edit and Wrap it up
 

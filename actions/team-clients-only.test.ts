@@ -15,7 +15,7 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { teamStore } from "../store/team-store.ts";
 import { anAccount, aDirectoryPerson, aWeek, ZONE } from "../test/builders/index.ts";
 import { createOrgRuntime } from "./org.ts";
-import { publishWeek, teamAction, type TeamAction, type TeamContext, type TeamData } from "./team-actions.ts";
+import { publishWeek, teamAction, type TeamAction, type TeamContext } from "./team-actions.ts";
 
 const NOW = "2026-11-03T14:00:00Z";
 const THIS_WEEK = "2026-11-02";
@@ -67,29 +67,20 @@ describe.each([
   ["account types missing (the fallback)", false],
   ["after account types are read", true],
 ])("a prospect I own never appears, %s", (_label, typed) => {
-  it("in Team, Send to…, priorities, Ask to look and the published week", async () => {
+  it("in Send to…, priorities, Commit's From your team and the published week", async () => {
     const w = await world(typed);
     // A record left on the prospect from before (as if made while it counted): stored, hidden.
     await w.team.flag({ clientKey: PROSPECT, itemId: 77, title: "Prospect ask", itemType: "Feature", url: null, note: null, flaggedBy: { id: me.personId.toLowerCase(), name: me.name } }, NOW);
-
-    const view = await w.run<TeamData>("team.view", { weekStart: THIS_WEEK });
-    expect(view.ok).toBe(true);
-    const keys = view.data!.clients.map((c) => c.clientKey);
-    expect(keys).toContain(CLIENT);
-    expect(keys).not.toContain(PROSPECT);
-    // The lead label comes from isClientLead on clients only.
-    expect(view.data!.clients.find((c) => c.clientKey === CLIENT)!.people.find((p) => p.you)?.lead).toBe(true);
-    expect(JSON.stringify(view.data)).not.toContain("Prospect ask");
 
     const people = await w.run<{ people: unknown[]; canSend: boolean }>("send.people", { clientKey: PROSPECT });
     expect(people.data).toMatchObject({ people: [], canSend: false });
     const send = await w.run("send.create", { clientKey: PROSPECT, itemId: 5, level: "feature", title: "x", weekStart: THIS_WEEK, kind: "suggested", toId: pat.personId });
     expect(send.ok).toBe(false);
     expect((await w.run("priority.flag", { clientKey: PROSPECT, itemId: 9, title: "x" })).ok).toBe(false);
-    expect((await w.run("look.ask", { clientKey: PROSPECT, weekStart: THIS_WEEK, toId: pat.personId })).ok).toBe(false);
 
     const commit = await w.run<{ clients: { clientKey: string }[] }>("team.commit", { weekStart: THIS_WEEK });
     expect(commit.data!.clients.map((c) => c.clientKey)).not.toContain(PROSPECT);
+    expect(JSON.stringify(commit.data)).not.toContain("Prospect ask");
 
     // My week has a feature of each; only the client's is published (week_commitments).
     await w.plan.addWeekItem({ weekStart: THIS_WEEK, clientKey: CLIENT, itemId: 1, title: "Client feature", itemType: "Feature", url: null, level: "feature" });

@@ -13,7 +13,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 | Microsoft Graph | A chat image | 30 seconds |
 | Microsoft Graph | Group membership (admin check), mailbox settings at first sign-in | 10 seconds |
 | Microsoft identity | Token refresh | 20 seconds |
-| Azure DevOps | Reads (items, process, teams, the poll, the patterns page) | 15 seconds |
+| Azure DevOps | Reads (items, process, teams, the poll) | 15 seconds |
 | Azure DevOps | Writes and the identity check; Code's repo reads | 20 seconds |
 | Dataverse | Every read | 20 seconds |
 | Google Calendar | Every read | 20 seconds |
@@ -100,14 +100,6 @@ Work items are never deleted; undoing a create sets the item to its type's remov
 - `item_edit`: `add` on `/fields/System.Title`, `/fields/System.Description` (`Microsoft.VSTS.TCM.ReproSteps` for a bug) and `/fields/Microsoft.VSTS.Common.AcceptanceCriteria`; an emptied field is a `remove`. A field DevOps stores as Markdown is read and written with API `7.2-preview.3`, the only version with `multilineFieldsFormat`, so it stays Markdown; FocusTime never converts a field. Reads fall back to 7.1 (everything HTML) when the preview version is refused. Undo writes the old values back, only while DevOps still shows FocusTime's.
 - `reparent`: `remove` on `/relations/<i>` for each `System.LinkTypes.Hierarchy-Reverse` link (highest index first), then `add` on `/relations/-` with the new parent's url, or nothing for No parent. The single patch behind the revision test keeps the item from ever having two parents. Undo moves it back, only while it is still under the parent FocusTime chose.
 - Neither touches area, iteration, state, dates, assignee or backlog order.
-
-**The DevOps patterns page.** A hidden working page (`#/patterns`, `ui/patterns/`, `plan/patterns/`, the `patterns.*` actions) that reads how work is entered and broken down in every client's DevOps over the last 24 months. Only for people an admin turned on in Admin › People; everyone else, admins included, gets the same answer as for a page that doesn't exist.
-
-- *Reads*: read only. A second app-level DevOps reader with the poller's targets (the company read PAT in memory) and a limiter of its own: WIQL by created month, batch reads of 100 ids, parents up to 3 levels, each client's first item, and the history of up to 200 closed items per client. One request at a time, at least 2 seconds apart; it waits while DevOps asked the poller to wait, while the poller's next check is due within 15 seconds or ran in the last minute, while under half the rate budget is left and after a delayed response. A 429 holds the shared limiter too.
-- *Scope*: each client is read within a scope (whole projects, teams or area paths), set on the page or taken from Admin › Clients; only items in scope are read in full and classified, and the scope is checked again before every classification request.
-- *Sends*: only on Run classification, after an estimate that names the expected cost; each request is ten of one client's items (type, title, tags, up to 15 child titles, description and acceptance as plain text capped at 1,500 characters each), masked first (other clients as "[another client]", emails as "[email]") and checked by the AI guard, under AI for FocusTime, that client's Allow AI and the caps. A run stops when it has spent 1.5 times its estimate. Changing the request types list, opening the page and both downloads make no AI request.
-- *Stores*: the `patterns_*` app tables ([Data](data.md#devops-patterns)); never description, acceptance criteria or comment text or people's names.
-- *Nothing on its own*: no scheduler job, tick or start-up work. A run lives in the request's process; after a restart it shows Stopped with Resume.
 
 **Code.** The read-only Code tab reads each client's repos with the same company read PAT, from Dataverse at each read and dropped after it, through the shared DevOps limiter. The token needs **Code (read)**; it is added to each client's token by hand. The token is sent only to `https://dev.azure.com/<org>/` and, for Search inside files, `https://almsearch.dev.azure.com/<org>/`. The reader (`sources/devops/git.ts`) can build only these GETs under `https://dev.azure.com/<the client's org>/<its registered project>/_apis/git/` with `api-version=7.1` (its `ALLOWED` list; anything else throws before a request):
 

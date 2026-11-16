@@ -151,7 +151,6 @@ describe("Plan the day actions", () => {
     // Monday was planned on Monday; now it is Tuesday morning.
     t.at("2026-11-02T14:00:00Z");
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "Adatum", itemId: 101 });
-    await t.run("planday.commit", { date: mon });
     t.at(NOW);
     const s = await t.run<PlanDayState>("planday.start", { date: D });
     expect(s.carryOver.map((p) => p.id)).toEqual([pick.id]);
@@ -231,7 +230,6 @@ describe("Plan the day actions", () => {
     await t.run("pick.move", { id: pick.id, date: "2026-11-06", half: "AM", anyway: true });
     const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: 130, title: "Draft" });
     const p2 = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", draftId: draft.id });
-    await t.run("planday.commit", { date: D });
     await t.run("pick.mark_done", { id: p2.pick.id, done: true });
     await t.run("pick.remove", { id: p2.pick.id });
     expect(t.ado.calls.length).toBe(before);
@@ -420,8 +418,7 @@ describe("Plan any day", () => {
       for (const s of [tue, wed, nextMon]) expect(s.carryTarget).toBe(D);
       // The past day itself never offers carry-over.
       expect((await t.run<PlanDayState>("planday.start", { date: MON })).carryOver).toEqual([]);
-      // An old Confirm on Tuesday changes nothing: Tuesday stays the carry-over day.
-      await t.run("planday.commit", { date: D });
+      // Tuesday stays the carry-over day.
       expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver.map((p) => p.id).sort()).toEqual(ids);
       expect((await t.run<PlanDayState>("planday.start", { date: WED })).carryOver).toEqual([]);
     });
@@ -437,7 +434,6 @@ describe("Plan any day", () => {
     it("after the usual end of day, today's unfinished picks go to the next day that can be planned", async () => {
       const t = setup();
       const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", intention: "Tuesday work" });
-      await t.run("planday.commit", { date: D });
       t.at("2026-11-03T23:30:00Z"); // Tue 18:30 New York
       const tue = await t.run<PlanDayState>("planday.start", { date: D });
       expect(tue).toMatchObject({ access: "plan", carryOver: [], carryTarget: WED });
@@ -624,9 +620,9 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     await t.run("planday.start", { date: D });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", intention: "Write the release notes" });
     t.at("2026-11-04T14:00:00Z"); // Wed 9:00: Tuesday's pick is unfinished
-    const carry = await t.run<{ picks: Pick[]; hint: boolean }>("planday.carry", {});
+    const carry = await t.run<{ picks: Pick[] }>("planday.carry", {});
     expect(carry.picks.map((p) => p.id)).toEqual([pick.id]);
-    expect(carry.hint).toBe(true);
+    expect(carry).not.toHaveProperty("hint");
 
     const kept = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-04", half: "PM" });
     const week = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
@@ -778,13 +774,6 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks.map((p) => p.id)).toEqual([pick.id]);
   });
 
-  it("the hint shows until it is dismissed once", async () => {
-    const t = setup();
-    expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(true);
-    await t.run("planday.carry_hint", {});
-    expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(false);
-  });
-
   it("WD-1: placing a story adds its feature to the week, once; a story with no parent adds nothing; no DevOps call", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
@@ -799,12 +788,6 @@ describe("UI-B: unfinished picks suggested in the next block", () => {
     expect(added[0]!.id).toBeTypeOf("number");
   });
 
-  it("CF-1: an old Confirm today changes nothing and says so", async () => {
-    const t = setup();
-    await t.run("week.load", { weekStart: "2026-11-02" });
-    const r = await t.run<{ unchanged: boolean; message: string }>("planday.commit", { date: D });
-    expect(r).toMatchObject({ unchanged: true, message: "There's nothing to confirm now. Your plan is what's on your day." });
-  });
 });
 
 describe("SG-1: the board's suggestions", () => {

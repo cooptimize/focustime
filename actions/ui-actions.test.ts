@@ -69,29 +69,6 @@ describe("ui.set_text_size (U5)", () => {
   });
 });
 
-describe("ui.first_launch (step 17.5)", () => {
-  it("is true exactly once, across restarts (kept in the plan store)", async () => {
-    const t = setup();
-    const db = join(mkdtempSync(join(tmpdir(), "c-first-")), "plan.db");
-    const now = () => Temporal.Instant.from("2026-11-02T14:00:00Z").toZonedDateTimeISO("America/New_York");
-    const run = async () => {
-      const plan = createPlanStore({ path: db, now });
-      try {
-        return (await dispatch({ ...t.c, plan }, { action: "ui.first_launch", input: {} })) as { data: { first: boolean } };
-      } finally {
-        plan.close();
-      }
-    };
-    expect((await run()).data.first).toBe(true);
-    expect((await run()).data.first).toBe(false);
-    expect((await run()).data.first).toBe(false);
-  });
-  it("never in demo mode or without a plan store", async () => {
-    const t = setup();
-    expect(await dispatch(t.c, { action: "ui.first_launch", input: {} })).toEqual({ ok: true, data: { first: false } });
-  });
-});
-
 describe("ui.tour_offer (G1): the tour link on a first Today, once per person", () => {
   it("shows until done, then never again, across restarts; asking alone never marks it", async () => {
     const t = setup();

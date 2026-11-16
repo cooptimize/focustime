@@ -202,7 +202,7 @@ describe("the kinds are what can be sent", () => {
   });
 
   it("the removed kinds are gone from the list, the labels and the builders, and each kind still has a label and a hint", () => {
-    expect(RETIRED_KINDS).toEqual(["commitment_item", "taken_over", "conversation_given", "conversation_activity"]);
+    expect(RETIRED_KINDS).toEqual(["commitment_item", "taken_over", "conversation_given", "conversation_activity", "look_ask", "look_reply"]);
     for (const k of RETIRED_KINDS) {
       expect(NOTIFY_KINDS as readonly string[], k).not.toContain(k);
       expect(builders, k).not.toContain(`"${k}"`);

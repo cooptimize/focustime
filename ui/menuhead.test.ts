@@ -7,7 +7,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import { PopupMenu } from "./Menus.tsx";
-import { itemMenu, pickMenu, roadmapRowMenu, rowHead, weekItemMenu, withoutClient, type MenuEnv, type MenuStep, type RoadmapRowOps, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { itemMenu, pickMenu, rowHead, weekItemMenu, withoutClient, type MenuEnv, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: {} });
 const wi = (id: number, title: string): WorkItem => ({ id, title, type: "User Story", state: "New", stateCategory: "Proposed", level: "story", order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/contoso/P/_workitems/edit/${id}` });
@@ -18,7 +18,6 @@ const pick = (id: number, itemId: number | null, title: string): Pick => ({ id, 
 const facts = (itemId: number, title: string): WeekItemFacts => ({ itemId, title, clientName: "Northwind", level: "feature", first: false, last: false, past: false, done: null, minutes: 240, places: [], pinned: [], openStories: 0, targetDate: null, drafts: 0, canWrite: true });
 const noop = () => {};
 const wops: WeekItemOps = { move: noop, tier: noop, pin: noop, hours: noop, done: noop, help: noop, targetDate: noop, brief: noop, createDrafts: noop, enableWrites: noop, remove: noop };
-const rops: RoadmapRowOps = { open: noop, brief: noop, help: noop, addToWeek: noop, targetDate: noop, enableWrites: noop };
 const head = (s: MenuStep) => ("items" in s ? s.head?.text : undefined);
 
 describe("row menu header (D459)", () => {
@@ -46,11 +45,6 @@ describe("row menu header (D459)", () => {
   it("Plan the day and Week's detail panel (DevOps items): follows the row", () => {
     expect(head(itemMenu(env, "northwind", wi(412, "Northwind - Order export")))).toBe("#412 · Order export");
     expect(head(itemMenu(env, "northwind", wi(413, "Invoice import")))).toBe("#413 · Invoice import");
-  });
-  it("Roadmap: follows the row", () => {
-    const f = { tier: "feature" as const, targetDate: null, open: 0, onWeek: false, canWrite: true, hasLink: true, clientName: "Northwind" };
-    expect(head(roadmapRowMenu({ ...f, id: 412, title: "Order export" }, rops))).toBe("#412 · Order export");
-    expect(head(roadmapRowMenu({ ...f, id: 413, title: "Invoice import" }, rops))).toBe("#413 · Invoice import");
   });
 
   it("renders as a label outside the list: not focusable, not a menu item, full title on hover", () => {

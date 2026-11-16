@@ -5,9 +5,8 @@
 // from the work read, one description on demand).
 import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
-import { NO_TIERS, NOTHING_TO_CONFIRM_WEEK } from "../plan/no-confirm.ts";
-import { headsUpKey, validHours, type ItemLevel } from "../plan/weeklist.ts";
+import { briefMarkdown, withCurrentTitles } from "../plan/weekplan.ts";
+import { validHours, type ItemLevel } from "../plan/weeklist.ts";
 import { validStorySize, type StorySize } from "../plan/estimate.ts";
 import { resizedRemaining } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
@@ -23,21 +22,14 @@ export type WeekPlanAction =
   | "weekplan.load"
   | "weekplan.set_feature"
   | "weekplan.place"
-  | "weekplan.commit"
   | "weekplan.add"
-  | "weekplan.set_tier"
   | "weekplan.set_estimate"
   | "weekplan.set_size"
-  | "weekplan.reorder"
   | "weekplan.remove"
   | "weekplan.mark_done"
-  | "weekplan.headsup"
   | "weekplan.add_draft"
   | "weekplan.draft_tier"
-  | "weekplan.nothing"
-  | "feature.brief"
-  | "feature.mark_breakdown"
-  | "followup.ask_priorities";
+  | "feature.brief";
 
 export type WeekPlanContext = {
   plan: PlanStore | undefined;
@@ -117,8 +109,6 @@ export const weekPlanView = (p: WeekPlanRecord): WeekPlanView => ({
   features: p.features,
 });
 
-const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const HALF_WORDS = { AM: "morning", PM: "afternoon" } as const;
 
 /** A feature of the client's portfolio (feature tier only), from the last portfolio read. */
 async function featureOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate, key: string, itemId: number, tier: "feature" | "any" = "feature"): Promise<{ item: PortfolioItem; portfolio: ClientPortfolio } | null> {
@@ -292,12 +282,6 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const placed = (await plan.placeFeature(feature.id, d, h, on));
         return { ok: true, data: { feature: placed, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
       }
-      case "weekplan.commit":
-        // CF-1 (F3): nothing confirms a week now; the week is shared on every change. A plain answer, nothing changes.
-        return { ok: true, data: { unchanged: true, message: NOTHING_TO_CONFIRM_WEEK } };
-      case "weekplan.set_tier":
-        // CF-1 (F3): musts are gone; every feature on the week counts the same. A plain answer, nothing changes.
-        return { ok: true, data: { unchanged: true, message: NO_TIERS } };
       case "weekplan.add": {
         const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "hours", "size"]);
         const weekStart = monday(o.weekStart);
@@ -359,36 +343,6 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const item = (await plan.markWeekItemDone(before.id, bool(o.on, "on")));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
-      case "weekplan.reorder": {
-        // The order as shown, top first; or reset: back to DevOps stack rank for the client's whole list. CF-1: nothing
-        // in FocusTime offers it (Move up and Move down went); `tier` is accepted from an old tab and ignored.
-        const o = fields(input, ["weekStart", "clientKey"], ["tier", "order", "reset"]);
-        const weekStart = monday(o.weekStart);
-        editable(weekStart);
-        const key = clientKey(o.clientKey);
-        if (o.reset !== undefined) {
-          if (o.reset !== true) throw new Invalid("reset must be true");
-          if (o.order !== undefined || o.tier !== undefined) throw new Invalid("reset takes no order");
-          return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, null))) } };
-        }
-        if (!Array.isArray(o.order) || !o.order.length || o.order.length > 200) throw new Invalid("order must be a list of item numbers");
-        const ids = o.order.map((x) => id(x, "order"));
-        if (new Set(ids).size !== ids.length) throw new Invalid("order has an item twice");
-        return { ok: true, data: { plan: weekPlanView((await plan.reorderWeekItems(weekStart, key, ids.map((itemId, i) => ({ itemId, position: i + 1 }))))) } };
-      }
-      case "weekplan.headsup": {
-        const o = fields(input, ["weekStart", "clientKey", "itemId", "title"], ["trigger"]);
-        if (o.trigger !== undefined && o.trigger !== "dropped" && o.trigger !== "demoted") throw new Invalid("trigger must be dropped or demoted");
-        const weekStart = monday(o.weekStart);
-        const key = clientKey(o.clientKey);
-        const itemId = id(o.itemId, "itemId");
-        if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 500) throw new Invalid("title must be text");
-        // CF-1 (E1): no new heads-up. One opened before is returned as it is (E2); nothing is created.
-        const clients = await ctx.clients(cfg, weekStart, false);
-        const name = nameOf(cfg, (k) => clients.find((c) => c.clientKey === k)?.clientName)(key);
-        const existing = (await plan.allFollowUps()).find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
-        return { ok: true, data: { followUp: existing ? await followUpView(plan, existing, today, () => name) : null, created: false } };
-      }
       case "weekplan.add_draft": {
         // U6 (D414): the type box in Plan the week. A local draft feature on the client's list, shown with its Draft
         // marker until it is created in DevOps. CF-1: no tier; the stored column only marks it as on the week.
@@ -411,14 +365,6 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         (await plan.setWeekDraft(weekStart, draftId, o.tier === "off" ? null : KEPT_TIER));
         return { ok: true, data: { weekDrafts: (await plan.weekDrafts(weekStart)) } };
       }
-      case "weekplan.nothing": {
-        // U6: "Nothing this week" for a client counts it as planned in the header's "N of M clients planned".
-        const o = fields(input, ["weekStart", "clientKey", "on"]);
-        const weekStart = monday(o.weekStart);
-        editable(weekStart);
-        (await plan.setWeekQuiet(weekStart, clientKey(o.clientKey), bool(o.on, "on")));
-        return { ok: true, data: { quiet: (await plan.weekQuiet(weekStart)) } };
-      }
       case "feature.brief": {
         const o = fields(input, ["clientKey", "itemId"], ["weekStart"]);
         const key = clientKey(o.clientKey);
@@ -440,24 +386,6 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
             contains: ["The client's name", `The ${it.type.toLowerCase()}'s title, type, state, target date and link`, description !== null ? "Its description from DevOps" : "No description (it couldn't be read)", it.children.length ? `Its ${it.children.length} child items: title, type and state` : "No child items yet", "A request to propose user stories, sized S, M or L"],
           },
         };
-      }
-      case "feature.mark_breakdown": {
-        const o = fields(input, ["clientKey", "itemId", "on"]);
-        (await plan.markBreakdown(clientKey(o.clientKey), id(o.itemId, "itemId"), bool(o.on, "on")));
-        return { ok: true, data: { marks: (await plan.breakdownMarks()) } };
-      }
-      case "followup.ask_priorities": {
-        const o = fields(input, ["weekStart", "clientKey"]);
-        const weekStart = monday(o.weekStart);
-        const key = clientKey(o.clientKey);
-        const week = await ctx.blocks(cfg, weekStart);
-        const blocks = week.days.flatMap((d) => [d.am, d.pm].filter((s) => s.focus[0]?.clientKey === key).map((s) => `${shortDay(s.date)} ${HALF_WORDS[s.half as "AM" | "PM"]}`));
-        if (!blocks.length) return bad(`No focus blocks with ${key} that week`, 422);
-        const name = nameOf(cfg, (k) => week.days.flatMap((d) => [d.am, d.pm]).find((s) => s.focus[0]?.clientKey === k)?.focus[0]?.clientName)(key);
-        const draft = [`Hi ${name}, I have focus time with you the week of ${shortDay(weekStart)}:`, ...blocks.map((b) => `- ${b}`), "Nothing open is assigned to me in DevOps right now. What should I work on first?"].join("\n");
-        const followUp = (await plan.openRuleFollowUp({ kind: "priorities", ruleKey: prioritiesKey(weekStart, key), clientKey: key, who: name, what: `Ask ${name} about priorities for the week of ${shortDay(weekStart)}`, draft }));
-        const existing = followUp ?? (await plan.allFollowUps()).find((l) => l.ruleKey === prioritiesKey(weekStart, key)) ?? null;
-        return { ok: true, data: { followUp: existing ? await followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
       }
     }
   } catch (e) {

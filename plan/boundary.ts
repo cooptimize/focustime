@@ -17,8 +17,6 @@ import type { ChatMember } from "./chats.ts";
 export const ANOTHER = "another client";
 /** The notice on a draft whose AI text had another client's name taken out. */
 export const NAME_REMOVED = "Another client's name was removed";
-/** The held-back line, for a message in a chat with people outside Cooptimize. */
-export const HELD_LINE = "Held back: mentions another client in a chat with people outside Cooptimize.";
 
 /**
  * GD-2 point 5: the line every generator of a client's DevOps text adds to its instructions (Internal's doesn't: its
@@ -133,15 +131,6 @@ export function mentionMatches(text: string, client: string, directory: readonly
     }
   }
   return out;
-}
-
-/** GD-3: the words a held message matched, marked in its sanitized HTML; only text between tags is touched. */
-export function highlightMatches(html: string, words: readonly string[]): string {
-  const sorted = [...new Set(words)].filter(Boolean).sort((a, b) => b.length - a.length);
-  if (!sorted.length) return html;
-  const enc = (w: string) => w.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${sorted.map((w) => esc(enc(w).trim()).replace(/\s+/g, "\\s+")).join("|")})(?=$|[^\\p{L}\\p{N}])`, "gu");
-  return html.split(/(<[^>]*>)/).map((part, i) => (i % 2 ? part : part.replace(re, (_m, pre: string, w: string) => `${pre}<mark class="held-match">${w}</mark>`))).join("");
 }
 
 /**

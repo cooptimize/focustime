@@ -357,10 +357,7 @@ export function snoozeDayOf(model: TimeModel, ptoDays: ReadonlySet<string>): Sno
   };
 }
 const workday = (day: SnoozeDay, d: IsoDate) => !!day.hours(d) && !day.pto(d);
-const DEFAULT_START = "09:00";
 const at = (d: IsoDate, hhmm: string, zone: string) => Temporal.PlainDate.from(d).toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(hhmm) }).toInstant();
-const startOf = (day: SnoozeDay, d: IsoDate) => at(d, day.hours(d)?.start ?? DEFAULT_START, day.zone);
-const LATER_MS = 3 * 3600_000;
 const LATER_MIN_LEFT_MS = 3600_000;
 
 /** The choices to offer now: Later today only on a workday with an hour or more of my day left. */
@@ -371,23 +368,3 @@ export function snoozeChoices(now: string, day: SnoozeDay): SnoozeChoice[] {
   return [...(left >= LATER_MIN_LEFT_MS ? (["later"] as const) : []), "tomorrow", "next_week"];
 }
 
-/**
- * When a snooze ends: Later today is 3 hours, never past my end of day; Tomorrow is the start of my next workday
- * (skipping days off and PTO); Next week is Monday's start; a date is that day's start. Never changes a due date.
- * Null when Later today isn't offered now.
- */
-export function snoozeUntil(choice: SnoozeChoice | IsoDate, now: string, day: SnoozeDay): string | null {
-  const today = Temporal.Instant.from(now).toZonedDateTimeISO(day.zone).toPlainDate();
-  if (choice === "later") {
-    if (!snoozeChoices(now, day).includes("later")) return null;
-    const end = at(today.toString(), day.hours(today.toString())!.end, day.zone).epochMilliseconds;
-    return new Date(Math.min(Date.parse(now) + LATER_MS, end)).toISOString();
-  }
-  if (choice === "tomorrow") {
-    let d = today.add({ days: 1 });
-    for (let i = 0; i < 60 && !workday(day, d.toString()); i++) d = d.add({ days: 1 });
-    return startOf(day, d.toString()).toString();
-  }
-  if (choice === "next_week") return startOf(day, today.add({ days: 8 - today.dayOfWeek }).toString()).toString();
-  return startOf(day, choice).toString();
-}

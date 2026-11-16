@@ -23,9 +23,9 @@ describe("[notify]", () => {
     expect(text).toContain("[notify]");
   });
 
-  // NM-1: four kinds were removed (nothing sent them). A choice someone saved for one stays in their settings, unread.
+  // NM-1: four kinds were removed (nothing sent them); RM-1 removed Ask to look's two. A choice someone saved for one stays in their settings, unread.
   it("a saved choice for a removed kind is kept and skipped: the settings still load, and a later save leaves it alone", () => {
-    const saved = `${TOML}\n[notify]\ncommitment_item = false\ntaken_over = false\nconversation_given = true\nconversation_activity = false\ncheckin = false\n`;
+    const saved = `${TOML}\n[notify]\ncommitment_item = false\ntaken_over = false\nconversation_given = true\nconversation_activity = false\nlook_ask = true\nlook_reply = false\ncheckin = false\n`;
     // Not an error even where unknown fields are errors, and not listed as ignored either.
     const strict = parseConfig(saved, { strict: true });
     expect(strict.ok ? [] : strict.errors).toEqual([]);
@@ -36,7 +36,7 @@ describe("[notify]", () => {
     for (const k of RETIRED_KINDS) expect(k in p.config.notify.kinds, k).toBe(false);
     // Saving another switch keeps the old lines where they were (nothing is deleted or migrated).
     const text = settingsEdit("notify", { kinds: { vm: false } })(saved);
-    for (const line of ["commitment_item = false", "taken_over = false", "conversation_given = true", "conversation_activity = false"]) expect(text).toContain(line);
+    for (const line of ["commitment_item = false", "taken_over = false", "conversation_given = true", "conversation_activity = false", "look_ask = true", "look_reply = false"]) expect(text).toContain(line);
     expect(parseConfig(text).ok).toBe(true);
     // A removed kind can't be switched any more, and a field nobody ever had is still refused.
     expect(() => settingsEdit("notify", { kinds: { taken_over: true } })).toThrow();

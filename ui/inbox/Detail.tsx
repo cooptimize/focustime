@@ -26,16 +26,6 @@ import type { Entry } from "./data.ts";
 import { ItemActions, type Act, type FormId } from "./ItemActions.tsx";
 import { lateText, dueWords } from "./model.ts";
 
-/** "Mon 9:00 AM", "today 3:30 PM": when a snooze ends, in my zone. */
-export function wakeWords(at: string, tz: string, today: string): string {
-  const z = Temporal.Instant.from(at).toZonedDateTimeISO(tz);
-  const time = z.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-  const d = z.toPlainDate();
-  const days = Temporal.PlainDate.from(today).until(d).days;
-  const day = days === 0 ? "today" : days === 1 ? "tomorrow" : days < 7 ? d.toLocaleString("en-US", { weekday: "short" }) : d.toLocaleString("en-US", { month: "short", day: "numeric" });
-  return `${day} ${time}`;
-}
-
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
 export type DetailProps = {

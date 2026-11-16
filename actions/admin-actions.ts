@@ -314,8 +314,6 @@ async function peopleSection(ops: AdminOps, meId: string) {
         notCooptimizer: e.notCooptimizer,
         notCooptimizerText: e.notCooptimizer ? NOT_COOPTIMIZER_TEXT[e.notCooptimizer] : null,
         automation: rules.automation.includes(id) || (!!e.dir && rules.automation.includes(e.dir.personId)),
-        // WP-1: the DevOps patterns page (preview), only for people an admin turns it on for.
-        devopsPatterns: rules.devopsPatterns.includes(id.toLowerCase()),
         level: level.level,
         levelName: level.level ? LEVEL_NAMES[level.level] : null,
         levelSource: level.source,
@@ -438,8 +436,6 @@ const TASK_LABELS: Record<string, string> = {
   "status_draft": "Status drafts",
   "status_suggest": "Status suggestions",
   "conversations.draft_item": "Draft a DevOps item from a conversation",
-  "conversations.merge_summary": "Merging conversations",
-  "conversations.comment": "Follow-through comments",
   "capture.prepare": "Capture drafts",
   "loop_draft": "Close the loop drafts",
   "wrapup_suggest": "Wrap it up comments",

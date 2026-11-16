@@ -64,7 +64,6 @@ ui/docs/           the Technical docs panel (#/docs), rendered from docs/technic
 ui/guide/          the in-app Guide
 ui/inbox/          the Inbox: its three lists and the detail pane
 ui/meetings/       Client calls (#/meetings)
-ui/patterns/       DevOps patterns (#/patterns), a working page for people an admin turned it on for
 ui/plan/           four small planning components still used (AddPane, Estimate, FoldLine, PlanRow)
 ui/settings/       Settings and Admin sections
 actions/           named, validated actions (registry.ts is the one list); every write path
@@ -194,8 +193,6 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Take one | Assigning a teammate's open story under one of my week's features to me in DevOps (`assign_to_me`, preview, undo); they get a quiet note "<name> took #<id>" in FocusTime |
 | Send to… | Sending one feature or story of a client to a Cooptimizer on it, for this week or next, Suggested (anyone on the client) or Must (only its leads), with a note and "Ask them to take it in DevOps". The recipient answers Accept, Accept and schedule, Pass to… or Can't this week; the sender sees You sent in the block panel |
 | Client priority | A feature a client's lead flags as the client's top ask, with Add to my week; drops off once resolved |
-| Team | A hidden view of what each person put on their week for the clients I'm on (`#/week/team`, no tab or key), read-only on the phone; Ask to look's replies come from it |
-| Ask to look | Asking one of a client's leads to look at my week, with a note; they reply from Team |
 | Ask to collaborate | The collaboration finder: Cooptimizers ranked (on this client that day, on this client, anyone else; PTO as "away"), free times from free/busy in everyone's working hours, then a help invite after preview. The command menu also finds "Needs help from" |
 | Help invite | A meeting on the person's calendar with chosen Cooptimizers, "<client>: help on <item>", marker `inv-…`; opens a promise until the meeting ends; undo cancels it |
 | Write framework | The only path for external writes: named action, preview, confirm, read back, audit log, undo |
@@ -280,7 +277,7 @@ Older names still found in decisions, specs and the command menu, with what they
 | ⋯ (the menu) | More |
 | Use AI (personal) | AI for FocusTime (the team's) |
 
-Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have on a week's list (Send to… keeps its own Must), Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). Four notification kinds nothing sent were removed in NM-1 (`commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`); a saved choice for one stays in the store, unread.
+Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice to have on a week's list (Send to… keeps its own Must), Features line, Plan layer, the four lines, Request type, Ready, Shared owner, Follow-through, Unsorted and the Chatter list in the Inbox (their data kept). RM-1 removed the code behind Team (`#/week/team`, now Week), Ask to look, DevOps patterns, work templates, conversation merges, Snooze and Hide for me in the Inbox, and sorting held-back messages by hand; their rows stay in the store, and Ask to look's two notification kinds (`look_ask`, `look_reply`) stay in saved settings, unread. Four notification kinds nothing sent were removed in NM-1 (`commitment_item`, `taken_over`, `conversation_given`, `conversation_activity`); a saved choice for one stays in the store, unread.
 
 ## Working style
 

@@ -1,7 +1,7 @@
 // CV-1's conversation pieces, shared by the Inbox's detail pane (IB-1, ui/inbox/): the messages like Teams (CV-2,
 // ui/MessageThread.tsx: grouped by person with avatars, mine on the other side, quotes, reactions, the latest 20 with
-// Show earlier), Link to item, Create DevOps item (the draft), Not a request, Merge into…, a suggested update, and the
-// linked item with its live state. Nothing is posted in Teams. Chat text shows only on its own client's item.
+// Show earlier), Link to item, Create DevOps item (the draft), a suggested update, and the linked item with its live
+// state. Nothing is posted in Teams. Chat text shows only on its own client's item.
 import { ItemTitleLink } from "./WorkLink.tsx";
 import { StandardsNote } from "./StandardsNote.tsx";
 import { TextBox } from "./TextBox.tsx";
@@ -19,9 +19,7 @@ import { Stamp } from "./Stamp.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 type Suggest = ConversationCard["suggestions"][number];
-export const PRIMARY_WORD = { create: "Create DevOps item", link: "Link", resolve: "Resolve", take_over: "Take it over", reopen: "Open again", mark_done: "Mark done" } as const;
 
-/** CV-2: Merge into…: the same chat's other conversations; the one picked keeps its place, this one moves into it. */
 export function SuggestionBox({ s, onPost, onSkip }: { s: Suggest; onPost: (includeInternal: boolean) => void; onSkip: () => void }) {
   const [include, setInclude] = useState(false);
   const lines = [...(s.body ? s.body.split("\n") : []), ...(include ? s.internal : [])];
@@ -52,20 +50,6 @@ export function SuggestionBox({ s, onPost, onSkip }: { s: Suggest; onPost: (incl
         </button>
       </div>
     </div>
-  );
-}
-
-export function NotRequest({ onSave, onCancel }: { onSave: (reason: string) => void; onCancel: () => void }) {
-  const [reason, setReason] = useState("");
-  return (
-    <form className="ask-form" onClick={(e) => e.stopPropagation()} onSubmit={(e) => (e.preventDefault(), onSave(reason.trim()))} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
-      <label>
-        Why isn't it a request? <span className="muted">(optional, everyone on the chat sees it)</span>
-        <input autoFocus maxLength={400} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Answered on a call" />
-      </label>
-      <button type="submit" className="mini primary">Not a request</button>
-      <button type="button" className="mini quiet" onClick={onCancel}>Cancel</button>
-    </form>
   );
 }
 

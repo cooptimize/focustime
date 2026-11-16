@@ -7,17 +7,16 @@ import type { AppConfig } from "../config/schema.ts";
 import { inviteDomains } from "../config/schema.ts";
 import { domainAllowed, isExcluded } from "../plan/collab.ts";
 import { dueOrder } from "../plan/due.ts";
-import type { WorkState } from "../plan/followups.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { PeopleReader } from "../sources/graph/source.ts";
 import { CLOSE_HOW, PlanError, type CloseHow, type FollowUpFields, type PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
-import { followUpView, internalClients, nameOf, reviewOpenHeadsUps, workdayOf } from "./followup-rules.ts";
-import type { ActionResponse, FollowUpView, PeopleData, ReviewData } from "./types.ts";
+import { followUpView, nameOf } from "./followup-rules.ts";
+import type { ActionResponse, FollowUpView, PeopleData } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const FOLLOWUP_ACTIONS = ["followups.list", "followup.add", "followup.edit", "followup.close", "followup.not_needed", "followup.snooze", "followup.delete", "followup.people", "followups.review"] as const;
+export const FOLLOWUP_ACTIONS = ["followups.list", "followup.add", "followup.edit", "followup.close", "followup.not_needed", "followup.snooze", "followup.delete", "followup.people"] as const;
 export type FollowUpAction = (typeof FOLLOWUP_ACTIONS)[number];
 
 export type FollowUpContext = {
@@ -178,12 +177,6 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
           }
         }
         return { ok: true, data: { teammates, attendees, problems } satisfies PeopleData };
-      }
-      case "followups.review": {
-        fields(input ?? {}, []);
-        const work: WorkState[] | null = null;
-        const list = (await reviewOpenHeadsUps(plan, { today, work, internal: internalClients(cfg), clientName: name, isWorkday: workdayOf(cfg) }));
-        return { ok: true, data: { headsUps: await mapSeq(list, async (r) => ({ id: r.id, what: (await plan.getFollowUp(r.id))?.what ?? "", reason: r.reason })) } satisfies ReviewData };
       }
     }
   } catch (e) {

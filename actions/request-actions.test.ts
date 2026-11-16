@@ -1,7 +1,8 @@
-// Inbox › Requests on the shared store (D515, D516): each person sees the Requests of chats they are a member of and
-// whose client they follow; a resolution is shared (one person resolves, everyone sees it, with their name); Refresh
-// polls my visible chats through the job and shows the fetch time; Show context reads the shared messages; purge is
-// for someone who sees the client's chats and keeps Requests. Never another client's text, never in a log.
+// Requests on the shared store (D515, D516), as Settings › Clients reads them: each person sees the Requests of chats
+// they are a member of and whose client they follow; a resolution is shared (one person resolves, everyone sees it,
+// with their name); the list shows the job's fetch time; purge is for someone who sees the client's chats and keeps
+// Requests. Never another client's text, never in a log. RM-1: the old list's Refresh, Resolve, Reopen, Show context,
+// Search, Sort again and Show it anyway are gone.
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
@@ -82,10 +83,11 @@ async function setup() {
 }
 
 describe("Inbox › Requests on the shared store", () => {
-  it("Refresh polls the chats I see through the job and shows when they were fetched", async () => {
+  it("the job polls the chats and the list shows when they were fetched", async () => {
     const s = await setup();
     s.say(FAB);
-    const d = await s.run(ANA, "requests.refresh");
+    await pollCycle(s.deps);
+    const d = await s.run(ANA, "requests.list");
     expect(d.requests.map((r) => [r.clientKey, r.author, r.text])).toEqual([["fabrikam", "Dana Client", "Can you check the export?"]]);
     expect(d.chats.map((c) => [c.chatId, c.fetchedAt, c.state])).toEqual([[FAB, "2026-11-04T15:00:00Z", "ok"]]);
     expect([d.lastPoll, d.lastFetch, d.pollMinutes]).toEqual(["2026-11-04T15:00:00Z", "2026-11-04T15:00:00Z", 5]);
@@ -101,42 +103,13 @@ describe("Inbox › Requests on the shared store", () => {
     expect((await s.run(BEN, "requests.list", {}, new Set(["northwind"]))).requests).toEqual([]);
   });
 
-  it("a resolution is shared: Ben dismisses it, Ana sees it dismissed by Ben; Ana's Undo opens it for both", async () => {
+  it("a resolution is shared: Ben's shows to Ana with his name", async () => {
     const s = await setup();
     const m = s.say(FAB);
     await pollCycle(s.deps);
-    await s.run(BEN, "requests.resolve", { chatId: FAB, messageId: m.messageId, status: "dismissed" });
+    await s.teams.viewer(BEN).resolveRequest(FAB, m.messageId, { status: "dismissed" });
     expect((await s.run(ANA, "requests.list")).requests[0]).toMatchObject({ status: "dismissed", resolvedBy: "Ben" });
     expect((await s.run(BEN, "requests.list")).requests[0]).toMatchObject({ resolvedBy: "you" });
-    await s.run(ANA, "requests.reopen", { chatId: FAB, messageId: m.messageId });
-    expect((await s.run(BEN, "requests.list")).requests[0]).toMatchObject({ status: "open", resolvedBy: null });
-    expect((await s.teams.request(FAB, m.messageId))?.resolvedBy).toBeNull();
-  });
-
-  it("Link takes an open item of the client; someone who doesn't see the chat can't resolve, search or show it", async () => {
-    const s = await setup();
-    const m = s.say(FAB);
-    await pollCycle(s.deps);
-    const d = await s.run(ANA, "requests.resolve", { chatId: FAB, messageId: m.messageId, status: "linked", itemId: 501 });
-    expect(d.requests[0]).toMatchObject({ status: "linked", item: { id: 501, title: "Export fix" }, resolvedBy: "you" });
-    const k = { chatId: FAB, messageId: m.messageId };
-    expect(await s.refused(CY, "requests.resolve", { ...k, status: "handled" })).toBe(404);
-    expect(await s.refused(CY, "requests.reopen", k)).toBe(404);
-    expect(await s.refused(CY, "requests.context", k)).toBe(404);
-    expect(await s.refused(CY, "requests.search", k)).toBe(404);
-    expect(await s.refused(CY, "requests.show", { ...k, shown: true })).toBe(404);
-  });
-
-  it("Show context: the 5 messages before, from the shared store, with names; mine as You", async () => {
-    const s = await setup();
-    for (let i = 0; i < 6; i++) s.say(FAB, { createdAt: `2026-11-04T14:1${i}:00Z`, text: `note ${i}`, ...(i === 5 ? { authorId: ANA, authorTenant: HOME_TENANT } : {}) });
-    const m = s.say(FAB, { createdAt: "2026-11-04T14:30:00Z" });
-    await pollCycle(s.deps);
-    const c = await s.run<{ messages: { author: string; mine: boolean; text: string }[] }>(BEN, "requests.context", { chatId: FAB, messageId: m.messageId });
-    expect(c.messages.map((x) => x.text)).toEqual(["note 1", "note 2", "note 3", "note 4", "note 5"]);
-    expect(c.messages.at(-1)).toMatchObject({ author: "Ana", mine: false });
-    const mine = await s.run<{ messages: { author: string; mine: boolean }[] }>(ANA, "requests.context", { chatId: FAB, messageId: m.messageId });
-    expect(mine.messages.at(-1)).toMatchObject({ author: "You", mine: true });
   });
 
   it("Delete stored messages: for someone who sees the client's chats; requests stay", async () => {
@@ -153,8 +126,10 @@ describe("Inbox › Requests on the shared store", () => {
   it("no chat id or message text in a log line", async () => {
     const s = await setup();
     const m = s.say(FAB, { text: "Can you fix the ZEBRA totals?" });
-    await s.run(ANA, "requests.refresh");
-    await s.run(ANA, "requests.resolve", { chatId: FAB, messageId: m.messageId, status: "handled", note: "QUOKKA" });
+    await pollCycle(s.deps);
+    await s.teams.viewer(ANA).resolveRequest(FAB, m.messageId, { status: "handled", note: "QUOKKA" });
+    await s.run(ANA, "requests.list");
+    await s.run(ANA, "requests.purge", { clientKey: "fabrikam" });
     const text = JSON.stringify(s.logs);
     for (const secret of ["ZEBRA", "QUOKKA", FAB, m.messageId]) expect(text).not.toContain(secret);
   });

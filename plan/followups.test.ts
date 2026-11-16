@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFollowUps, isBlocked, reviewHeadsUps, watchedIds, type DetectInput, type FollowUpLike, type WorkState } from "./followups.ts";
+import { detectFollowUps, isBlocked, watchedIds, type DetectInput, type FollowUpLike, type WorkState } from "./followups.ts";
 import type { Pick } from "./types.ts";
 import type { WorkItem } from "../week/types.ts";
 
@@ -152,14 +152,5 @@ describe("CF-1 (E1, E2): no automatic client heads-up offers", () => {
     const open = followUp({ id: 1, kind: "slip", itemId: null, ruleKey: "slip:2026-11-02:Adatum:6", detail: { picks: [6, 12], date: "2026-11-02" } });
     const r = detectFollowUps(input({ picks, movedTo: (id) => (id === 6 ? fri : null), followUps: [{ ...open, draft: "old\n- dup\n- dup" }] }));
     expect(r).toEqual({ open: [], update: [], close: [] });
-  });
-  it("review still lists an old open heads-up that wouldn't have opened under step 13.5's rule; it closes none", () => {
-    const S = (hm: string) => T(hm, "2026-11-01");
-    const fri = pick({ id: 9, date: "2026-11-06", half: "AM", carriedFrom: 6 });
-    const picks = [pick({ id: 6, status: "moved", updatedAt: S("11:43") }), pick({ id: 12, status: "dropped", updatedAt: S("11:45") }), fri];
-    const open = followUp({ id: 1, kind: "slip", itemId: null, ruleKey: "slip:2026-11-02:Adatum:6", detail: { picks: [6, 12], date: "2026-11-02" } });
-    const i = input({ today: "2026-11-01", picks, movedTo: (id) => (id === 6 ? fri : null), followUps: [open] });
-    expect(reviewHeadsUps(i)).toEqual([{ id: 1, reason: "Moved within the same week before its day; nothing left the week" }]);
-    expect(detectFollowUps(i).close).toEqual([]);
   });
 });

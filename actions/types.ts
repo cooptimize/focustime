@@ -363,7 +363,6 @@ export type SuggestData = { slots: SlotView[]; checked: number; problems: string
 
 /** followup.people (step 13.5): names to suggest for Who. */
 export type PeopleData = { teammates: { name: string; email: string }[]; attendees: { name: string; email: string }[]; problems: string[] };
-export type ReviewData = { headsUps: { id: number; what: string; reason: string }[] };
 
 // ---- Step 14: DevOps writes ----
 /** One DevOps change shown before it is written: where, which item, each field before and after, who it writes as. */

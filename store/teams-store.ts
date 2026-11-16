@@ -458,9 +458,6 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         [status.slice(0, 40), t, by, v?.kind ?? null, v?.urgency ?? null, v?.itemType ?? null, v?.title.slice(0, 200) ?? null, v?.description.slice(0, 2000) ?? null, v?.likely?.id ?? null, v?.likely?.confidence ?? null, v?.reason.slice(0, 400) ?? null, t, chatId, messageId],
       ));
     },
-    async setShown(chatId: string, messageId: string, shown: boolean): Promise<void> {
-      await db.tx(() => db.run("UPDATE requests SET ai_shown = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?", [shown ? 1 : 0, stamp(), chatId, messageId]));
-    },
   };
   return store;
 }
@@ -513,10 +510,6 @@ function viewerOf(store: BaseStore, userId: string) {
     async setSort(chatId: string, messageId: string, status: "sorted" | NotSorted, sort: AskSort | null, _by?: string | null): Promise<void> {
       await gate(chatId);
       await store.setSort(chatId, messageId, status, sort, userId);
-    },
-    async setShown(chatId: string, messageId: string, shown: boolean): Promise<void> {
-      await gate(chatId);
-      await store.setShown(chatId, messageId, shown);
     },
     /** Register a chat I'm in (with members unread, it's registered but nobody sees it until the poll reads them). */
     async addChat(c: Omit<Parameters<BaseStore["addChat"]>[0], "by">): Promise<ClientChat> {

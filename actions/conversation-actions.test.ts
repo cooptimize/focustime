@@ -51,7 +51,7 @@ describe("views", () => {
     const p = await people(w);
     const outsider = await p.as(OUTSIDER).run("conversations.list");
     expect([outsider.needsYou, outsider.teammates, outsider.closed].flat()).toEqual([]);
-    await p.as(OUTSIDER).fail("conversations.resolve", { id: 1 });
+    await p.as(OUTSIDER).fail("conversations.messages", { id: 1 });
     const notFollowing = await (await people(w, { followed: ["wingtip"] })).as(EVAN).run("conversations.list");
     expect([notFollowing.needsYou, notFollowing.teammates].flat()).toEqual([]);
   });
@@ -69,53 +69,17 @@ describe("views", () => {
   });
 });
 
-describe("Hide for me and Not a request", () => {
-  it("Hide is mine alone; Not a request closes it for everyone with who and why; reopen; a new work message reopens", async () => {
+describe("an old Not a request (RM-1 removed Hide, Not a request, Reopen, Resolve, Move, Split and This is work)", () => {
+  it("shows in Closed for everyone with who and why, and a new work message from the client reopens it", async () => {
     const w = world({ respond: allianceAnswer });
     const c = await alliance(w);
     const p = await people(w);
-    let lena = await p.as(LENA).run("conversations.hide", { id: c.id, hidden: true });
-    expect([lena.teammates.length, lena.hiddenCount]).toEqual([0, 1]);
-    expect((await p.as(EVAN).run("conversations.list")).needsYou).toHaveLength(1);
-    const evan = await p.as(EVAN).run("conversations.not_request", { id: c.id, reason: "Handled on a call" });
-    expect(evan.closed[0]!.closed).toMatchObject({ kind: "not_request", by: "you", reason: "Handled on a call" });
+    await w.convs.applyOwnership(c.id, { kind: "close", by: { id: EVAN.userId!, name: EVAN.displayName! }, status: "closed", reason: "Handled on a call", changeNote: "Marked not a request" });
+    expect((await p.as(EVAN).run("conversations.list")).closed[0]!.closed).toMatchObject({ kind: "not_request", by: "you", reason: "Handled on a call" });
     expect((await p.as(SAM).run("conversations.list")).closed[0]!.closed).toMatchObject({ kind: "not_request", by: "Evan Ford" });
-    expect((await p.as(SAM).run("conversations.reopen", { id: c.id })).closed).toEqual([]);
-    await p.as(SAM).run("conversations.resolve", { id: c.id });
-    expect((await w.convs.conversation(c.id))!.status).toBe("resolved");
-    // A new work message from the client opens it again.
     w.setNow("2026-11-04T22:00:00Z");
     await w.run(CHAT, [await w.say(CHAT, BLAKE, "2026-11-04T21:59:00Z", "Evan, one more thing on 4417001: the gap is back today")]);
     expect((await w.convs.conversation(c.id))!.closedAt).toBeNull();
-    lena = await p.as(LENA).run("conversations.hide", { id: c.id, hidden: false });
-    expect(lena.hiddenCount).toBe(0);
-  });
-});
-
-describe("Move and Split", () => {
-  it("a message moves to a new conversation (Split) and back (Move); This is work pulls a chatter message in", async () => {
-    const w = world({ respond: allianceAnswer });
-    const c = await alliance(w);
-    const p = await people(w);
-    const [first, second] = await w.convs.placesIn([c.id]);
-    await p.as(EVAN).run("conversations.move", { chatId: CHAT.chatId, messageId: second!.messageId, to: "new" });
-    const all = await w.convs.conversations([CHAT.chatId]);
-    expect(all).toHaveLength(2);
-    const split = all.find((x) => x.id !== c.id)!;
-    expect((await w.convs.placeOf(CHAT.chatId, second!.messageId))!.conversationId).toBe(split.id);
-    await p.as(EVAN).run("conversations.move", { chatId: CHAT.chatId, messageId: second!.messageId, to: c.id });
-    expect((await w.convs.placeOf(CHAT.chatId, second!.messageId))!.conversationId).toBe(c.id);
-    expect((await w.convs.placeOf(CHAT.chatId, first!.messageId))!.conversationId).toBe(c.id);
-    const other = aClientChat({ chatId: "19:other@thread.v2", clientKey: "contoso", members: CHAT.members });
-    await w.say(other, BLAKE, "2026-11-04T20:00:00Z", "x");
-    const r = await conversationAction((await people(w)).as(EVAN).ctx, "conversations.move", { chatId: CHAT.chatId, messageId: second!.messageId, to: 99 });
-    expect(r.ok).toBe(false);
-    // Chatter: weather, then "This is work".
-    const chatter = await w.say(CHAT, BLAKE, "2026-11-04T20:30:00Z", "🙂");
-    await w.run(CHAT, [chatter]);
-    expect((await p.as(EVAN).run("conversations.list")).chatter[0]?.messages.length ?? 0).toBeGreaterThanOrEqual(0);
-    await p.as(EVAN).run("conversations.this_is_work", { chatId: CHAT.chatId, messageId: chatter.messageId });
-    expect((await w.convs.placeOf(CHAT.chatId, chatter.messageId))!.role).toBe("work");
   });
 });
 
@@ -198,7 +162,7 @@ describe("the Rules (ADM-2, D604)", () => {
     ];
     const config = applyOrg(cfg, resolveRules(rows, { model: "m", appCapUsd: 100, inviteDomains: [], feedback: null }), { level: null, levelSource: null });
     const p = await people(w, { config });
-    await p.as(EVAN).run("conversations.resolve", { id: c.id });
+    await w.convs.applyOwnership(c.id, { kind: "close", by: { id: EVAN.userId!, name: EVAN.displayName! }, status: "resolved", reason: null, changeNote: "Closed out" });
     w.setNow(Temporal.Instant.from(w.now()).add({ hours: 48 }).toString());
     const two = await p.as(EVAN).run("conversations.list");
     expect(two.closed.map((x) => x.id)).toEqual([c.id]);

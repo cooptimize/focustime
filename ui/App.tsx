@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
-import { Patterns } from "./patterns/Patterns.tsx";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -25,7 +24,7 @@ import { StoryCard } from "./StoryCard.tsx";
 import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
-import { SendHost, TeamView } from "./Team.tsx";
+import { SendHost } from "./Team.tsx";
 import { StatusView, useStatusNeeds } from "./Status.tsx";
 import { StatusMark } from "./StatusMark.tsx";
 import { dotText, dotTone } from "../plan/status-dot.ts";
@@ -221,8 +220,6 @@ export function App() {
     [],
   );
   const afterOpening = useCallback(() => {
-    // BR-1: the first launch is still recorded in the plan store, with no welcome overlay: the app just opens.
-    call("ui.first_launch", {}).catch(() => {});
     void loadSetup(true);
     // G1: a person's first Today offers the tour once (per person, in the plan store).
     call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});
@@ -311,18 +308,6 @@ export function App() {
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   /** FN-1: a story card over the place (#/item/<client>/<id>). */
   const itemAt = loc.overlay?.kind === "item" ? loc.overlay : null;
-  // WP-1: DevOps patterns (#/patterns), only for people an admin turned it on for. The server says; until it has, the
-  // page waits, and when it says no the address behaves like any unknown one: Today opens.
-  const [patternsOn, setPatternsOn] = useState<boolean | null>(null);
-  useEffect(() => {
-    let live = true;
-    call<{ on: boolean }>("patterns.access", {}).then((r) => live && setPatternsOn(r.on), () => live && setPatternsOn(false));
-    return () => void (live = false);
-  }, []);
-  const patternsAt = loc.overlay?.kind === "patterns" && patternsOn === true;
-  useEffect(() => {
-    if (loc.overlay?.kind === "patterns" && patternsOn === false) go({ nav: navOf.today(), overlay: null });
-  }, [loc.overlay, patternsOn, go]);
   // FN-1: any work item title asks for its card; it opens over what's on screen, and Back closes it.
   useEffect(() => {
     const on = (e: Event) => {
@@ -1498,7 +1483,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       // WD-2: the block keys work on Week and on Day (the day's own blocks; [ and ] step Day's days in its own handler).
       const onDay = nav.tab === "today" && !nav.flow;
-      if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || codeAt || meetingAt || patternsAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (!(onDay || nav.tab === "week") || focusOpen || guideAt || docsAt || codeAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
@@ -1561,7 +1546,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, codeAt, meetingAt, patternsAt, base, captureOpen, layout, nav, weekDays, revealDays]);
+  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, codeAt, meetingAt, base, captureOpen, layout, nav, weekDays, revealDays]);
 
   // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
   useEffect(() => {
@@ -1760,7 +1745,6 @@ export function App() {
       planFeature: (date: IsoDate, half: Half) => addWork(date, half),
       demo: data.demo,
       admin: isAdmin === true,
-      ...(patternsOn ? { showPatterns: () => (setCmdOpen(false), go((l) => ({ nav: l.nav, overlay: { kind: "patterns" } }))) } : {}),
       asksOpen,
       setDemo: (on: boolean) => void switchDemo(on),
       exportPlan: () =>
@@ -1769,7 +1753,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork, devopsWrites.env, openNew, patternsOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork, devopsWrites.env, openNew]); // eslint-disable-line react-hooks/exhaustive-deps
   // QC-1: Shift+N reads the selection at the moment it is pressed.
   const envRef = useRef<MenuEnv | null>(null);
   envRef.current = env;
@@ -2150,8 +2134,6 @@ export function App() {
             access={docsAccess}
           />
         </Suspense>
-      ) : patternsAt ? (
-        <Patterns onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : meetingAt ? (
         <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (
@@ -2203,9 +2185,6 @@ export function App() {
             }}
           />
         </Suspense>
-      ) : nav.tab === "week" && nav.mode === "team" ? (
-        // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
-        <TeamView weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
           {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
@@ -2453,7 +2432,7 @@ export function App() {
 
       {phone && (
         <BottomBar
-          current={settingsAt !== null || guideAt || docsAt || meetingAt || patternsAt || focusOpen || nav.tab === "status" || nav.tab === "code" ? null : nav.tab}
+          current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen || nav.tab === "status" || nav.tab === "code" ? null : nav.tab}
           inboxCount={inboxCount}
           onTab={(t: BottomTab) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.

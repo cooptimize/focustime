@@ -28,10 +28,7 @@ export type TeamStore = {
   unflag(clientKey: string, itemId: number): Promise<boolean>;
   priorities(clientKeys: readonly string[]): Promise<Priority[]>;
 
-  addLook(a: Omit<LookAsk, "id" | "reply" | "repliedAt" | "createdAt">, at: string): Promise<LookAsk>;
-  look(id: number): Promise<LookAsk | null>;
-  reply(id: number, reply: string, at: string): Promise<LookAsk>;
-  /** Asks to or from this person since an instant. */
+  /** Asks to or from this person since an instant (RM-1: nothing makes or answers one now; old ones are still read). */
   looksOf(personId: string, since: string): Promise<LookAsk[]>;
 
   /** A person's hard delete: their commitments, the sends and asks they're in. */
@@ -81,10 +78,6 @@ export function teamStore(conn: Conn, now: () => Temporal.Instant): TeamStore {
   const send = async (id: number) => {
     const r = await conn.get("SELECT * FROM sends WHERE id = ?", [id]);
     return r ? toSend(r) : null;
-  };
-  const look = async (id: number) => {
-    const r = await conn.get("SELECT * FROM look_asks WHERE id = ?", [id]);
-    return r ? toLook(r) : null;
   };
   return {
     async addSend(n) {
@@ -163,17 +156,6 @@ export function teamStore(conn: Conn, now: () => Temporal.Instant): TeamStore {
       return rows.map((r) => ({ clientKey: String(r.client_key), itemId: Number(r.item_id), title: String(r.title), itemType: s(r.item_type), url: s(r.url), note: s(r.note), flaggedBy: { id: String(r.flagged_by_id), name: String(r.flagged_by_name) }, flaggedAt: String(r.flagged_at) }));
     },
 
-    async addLook(a, at) {
-      const r = await conn.tx(() =>
-        conn.run("INSERT INTO look_asks (client_key, week_start, from_id, from_name, to_id, to_name, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [a.clientKey, a.weekStart, low(a.from.id), a.from.name.slice(0, 200), low(a.to.id), a.to.name.slice(0, 200), cut(a.note, 500), at]),
-      );
-      return (await look(r.lastId!))!;
-    },
-    look,
-    async reply(id, reply, at) {
-      await conn.tx(() => conn.run("UPDATE look_asks SET reply = ?, replied_at = ? WHERE id = ?", [reply.slice(0, 500), at, id]));
-      return (await look(id))!;
-    },
     async looksOf(personId, since) {
       const id = low(personId);
       return (await conn.all("SELECT * FROM look_asks WHERE (from_id = ? OR to_id = ?) AND created_at >= ? ORDER BY created_at, id", [id, id, since])).map(toLook);

@@ -1,17 +1,14 @@
-// SW-1: sending work to someone's week, client priorities, Week › Team and Ask <lead> to look, in the page.
+// SW-1: sending work to someone's week and client priorities, in the page.
 //   Send to…          one dialog from any feature or story's ⋯ (openSend), on any screen (SendHost in App)
 //   From your team    Commit's group beside From last week: what was sent to me (Accept, Accept and schedule, Pass
-//                     to…, Can't this week), client priorities (Add to my week), what I sent with its state, and Ask
-//                     <lead> to look with their reply
-//   Team              Week's third mode: per client I'm on, each teammate's features on their week, the sends, the
-//                     priorities and the watched features. Read-only on the phone. Never day plans, focus, notes or hours
+//                     to…, Can't this week), client priorities (Add to my week), and what I sent with its state
 //   Today's line      one line in the urgent strip when something waits for me ("Priya sent you Loyalty points (Must)")
 // Plain words; nothing here reads as anyone checking on anyone.
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
-import type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView, TeamData, TeamPerson } from "../plan/team-types.ts";
+import type { CommitData, PickerPersonView, PriorityView, SendView } from "../plan/team-types.ts";
 import type { IsoDate } from "../week/types.ts";
 
 type Half = "AM" | "PM";
@@ -19,10 +16,7 @@ import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { clientColor } from "./labels.ts";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
-import { Avatar, usePhotos } from "./Presence.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
-import { ModeArea } from "./ModeSwitch.tsx";
-import { EyeIcon } from "./Watching.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
 export { openSend, SEND_EVENT, type SendTarget } from "./send-event.ts";
@@ -212,13 +206,6 @@ export function useTeamCommit(weekStart: IsoDate, version: unknown) {
 }
 
 const kindChip = (kind: SendView["kind"]) => <span className={`send-kind kind-${kind}`}>{kind === "must" ? "Must" : "Suggested"}</span>;
-/** In Team: "you" for me; a first name, or the full name when two people on the client share it. */
-function teamName(people: readonly { id: string; name: string; you: boolean }[], p: { id: string; name: string }): string {
-  const id = p.id.toLowerCase();
-  if (people.some((q) => q.you && q.id.toLowerCase() === id)) return "you";
-  const f = first(p.name);
-  return people.some((q) => q.id.toLowerCase() !== id && first(q.name) === f) ? p.name : f;
-}
 const fromWords = (s: SendView) => `from ${first(s.from.name)}${s.by && s.by.id !== s.from.id ? `, passed on by ${first(s.by.name)}` : ""}`;
 
 /** One thing sent to me: Accept (with Also assign to me in DevOps), Accept and schedule, Pass to…, Can't this week. */
@@ -357,50 +344,11 @@ function PriorityRow({ p, weekStart, past, act }: { p: PriorityView; weekStart: 
   );
 }
 
-/** Ask <lead> to look: one of the client's leads, preset to the first, with a note; their reply shows here. */
-function AskToLook({ c, weekStart, act, label }: { c: CommitClient; weekStart: IsoDate; act: (a: string, i: Record<string, unknown>) => Promise<unknown>; label?: string }) {
-  const [open, setOpen] = useState(false);
-  const lead0 = c.leads[0];
-  const [to, setTo] = useState<PersonValue>(lead0 ? { who: lead0.name, whoRef: { kind: "cooptimizer", id: lead0.id, name: lead0.name } } : { who: "", whoRef: null });
-  const [note, setNote] = useState("");
-  if (!c.leads.length && !c.looks.length) return null;
-  const toId = to.whoRef?.kind === "cooptimizer" ? to.whoRef.id : null;
-  const picker: PeoplePickerData = { groups: [{ key: "client", label: `${c.clientName} leads`, people: c.leads.map((l) => ({ name: l.name, ref: { kind: "cooptimizer", id: l.id, name: l.name }, email: null, external: false })) }], problems: [] };
-  return (
-    <div className="look">
-      {c.looks.map((l: LookView) => (
-        <p key={l.id} className="look-line">
-          {l.reply ? (
-            <>
-              <span className="look-who">{first(l.to.name)} replied:</span> “{l.reply}”
-            </>
-          ) : (
-            <span className="muted">Asked {first(l.to.name)} to look{l.note ? `: “${l.note}”` : ""} · no reply yet</span>
-          )}
-        </p>
-      ))}
-      {c.leads.length > 0 && !open && (
-        <button type="button" className="link-btn look-ask" onClick={() => setOpen(true)} title={`Sends a link to your planned ${c.clientName} features in Team`}>
-          {label ? `${label} (${c.leads.map((l) => first(l.name)).join(", ")})` : `Ask ${c.leads.length === 1 ? first(lead0!.name) : "a lead"} to look`}
-        </button>
-      )}
-      {open && (
-        <span className="send-form">
-          <PersonPicker label="Ask" clientKey={c.clientKey} value={to} onChange={setTo} people={picker} strict />
-          <input type="text" maxLength={300} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note for the lead" />
-          <button type="button" className="mini primary" disabled={!toId} onClick={() => void act("look.ask", { clientKey: c.clientKey, weekStart, toId, ...(note.trim() ? { note: note.trim() } : {}) }).then(() => setOpen(false))}>Ask</button>
-          <button type="button" className="link-btn" onClick={() => setOpen(false)}>Cancel</button>
-        </span>
-      )}
-    </div>
-  );
-}
-
 /**
- * Commit's "From your team": per client, sent to me (top), client priorities, what I sent, and Ask <lead> to look.
- * Hidden for a client with nothing in it but a lead to ask, so Commit stays calm; nothing counts until accepted.
+ * The block panel's "From your team": per client, sent to me and client priorities (part "answer"), or what I sent
+ * (part "mine"). Hidden for a client with nothing in it; nothing counts until accepted.
  */
-export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule, part = "all" }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void; /** WD-1: "answer" (sent to me and priorities: Add work's To place), "mine" (what I sent: its group at the bottom; NM-2: Ask a lead to look only in "all", Team's). */ part?: "all" | "answer" | "mine" }) {
+export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, onSchedule, part }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void; onSchedule?: (date: IsoDate, half: Half) => void; /** WD-1: "answer" (sent to me and priorities: Add work's To place), "mine" (what I sent: its group at the bottom; NM-2: Ask a lead to look only in "all", Team's). */ part: "answer" | "mine" }) {
   const t = useTeamCommit(weekStart, version);
   const past = weekStart < thisWeek;
   const answerPart = part !== "mine";
@@ -421,32 +369,17 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
     },
     [t, onChanged],
   );
-  const clients = (t.data?.clients ?? []).filter((c) => (answerPart && (c.incoming.length || c.priorities.length)) || (minePart && (c.sent.length || (part === "all" && c.looks.length))));
-  // Clients with nothing here but a lead to ask: one quiet line at the foot, not a section each.
-  const askOnly = past || part !== "all" ? [] : (t.data?.clients ?? []).filter((c) => !clients.includes(c) && c.leads.length);
+  const clients = (t.data?.clients ?? []).filter((c) => (answerPart && (c.incoming.length || c.priorities.length)) || (minePart && c.sent.length > 0));
   const waiting = clients.reduce((n, c) => n + c.incoming.filter((s) => !s.conflict).length, 0);
-  const answer = clients.reduce((n, c) => n + c.incoming.length, 0);
-  // Open by itself only while something waits on me (or a Must I couldn't take); otherwise one line, like From last week.
-  const [open, setOpen] = useState<boolean | null>(null);
-  // A part is already inside its own fold in Add work: always open there.
-  const shown = part !== "all" || (open ?? answer > 0);
-  if (!clients.length && !askOnly.length) return t.error ? <p className="error-line" role="alert">{t.error}</p> : null;
-  const count = (n: number, one: string, many = `${one}s`) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
-  const sum = (f: (c: CommitClient) => number) => clients.reduce((n, c) => n + f(c), 0);
-  const folded = [...count(sum((c) => c.priorities.length), "priority", "priorities"), ...count(sum((c) => c.sent.length), "sent", "sent"), ...count(sum((c) => c.looks.filter((l) => l.reply).length), "reply", "replies")].join(" · ") || "Ask a lead to look";
+  if (!clients.length) return t.error ? <p className="error-line" role="alert">{t.error}</p> : null;
   return (
     <section className="carry team-group" aria-label={part === "mine" ? "You sent" : "From your team"}>
       {part !== "mine" && <header className="carry-head">
         <h2 className="section-label">From your team</h2>
-        {answer === 0 && part === "all" && (
-          <button type="button" className="link-btn carry-fold" aria-expanded={shown} onClick={() => setOpen(!shown)} title={shown ? "Hide these rows" : "Show priorities, what you sent and Ask to look"}>
-            {folded}
-          </button>
-        )}
         {waiting > 0 && answerPart && <span className="muted">{waiting} to answer · nothing counts on your week until you accept</span>}
       </header>}
       {t.error && <p className="error-line" role="alert">{t.error}</p>}
-      {shown && clients.map((c) => (
+      {clients.map((c) => (
         <div key={c.clientKey} className="carry-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties}>
           <h3 className="carry-client-name">
             <span className="swatch" aria-hidden="true" />
@@ -476,163 +409,8 @@ export function FromYourTeam({ weekStart, thisWeek, version, colors, onChanged, 
               </ul>
             </>
           )}
-          {/* NM-2: Ask a lead to look only in Team: a lead replies there, and Team is hidden for now. */}
-          {!past && part === "all" && <AskToLook c={c} weekStart={weekStart} act={act} />}
         </div>
       ))}
-      {shown && part === "all" && askOnly.length > 0 && (
-        <div className="look-others">
-          <span className="muted">Ask a lead to look at your week:</span>
-          {askOnly.map((c) => (
-            <AskToLook key={c.clientKey} c={c} weekStart={weekStart} act={act} label={c.clientName} />
-          ))}
-        </div>
-      )}
     </section>
-  );
-}
-
-const STATE_WORDS: Record<TeamPerson["state"], string> = { shared: "", empty: "Nothing on their week yet", not_on_focustime: "Not on FocusTime yet" };
-
-/** Week › Team: per client I'm on, the features on everyone's week (CF-1: shared on every change), the sends, the priorities, the watched features. */
-export function TeamView({ switcher, weekStart, thisWeek, colors, readOnly, onWeek, version, onChanged }: { switcher?: React.ReactNode; weekStart: IsoDate; thisWeek: IsoDate; colors: Record<string, string>; readOnly: boolean; onWeek: (w: IsoDate) => void; version: unknown; onChanged: () => void }) {
-  const [data, setData] = useState<TeamData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reply, setReply] = useState<Record<number, string>>({});
-  const load = useCallback(async () => {
-    try {
-      setData(await call<TeamData>("team.view", { weekStart }));
-      setError(null);
-    } catch (e) {
-      setError(errText(e));
-    }
-  }, [weekStart]);
-  useEffect(() => {
-    void load();
-  }, [load, version]);
-  const emails = (data?.clients ?? []).flatMap((c) => c.people.flatMap((p) => (p.email ? [p.email] : []))).slice(0, 60);
-  const photos = usePhotos({ emails: [...new Set(emails)] });
-  const act = async (action: string, input: Record<string, unknown>) => {
-    try {
-      await call(action, input);
-    } catch (e) {
-      setError(errText(e));
-    }
-    await load();
-    onChanged();
-  };
-  const step = (n: number) => onWeek(Temporal.PlainDate.from(weekStart).add({ days: 7 * n }).toString());
-  const title = weekStart === thisWeek ? "This week" : `Week of ${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })}`;
-  return (
-    <main className="team-view" aria-label="Team">
-      <header className="page-head">
-        <h2>Team · {title}</h2>
-        <span className="team-weeks">
-          <button type="button" className="mini quiet icon-btn small" onClick={() => step(-1)} aria-label="Previous week"><Icon name="back" /></button>
-          <button type="button" className="mini quiet icon-btn small" onClick={() => step(1)} aria-label="Next week"><Icon name="next" /></button>
-        </span>
-        <ModeArea>{switcher}</ModeArea>
-      </header>
-      <p className="muted team-intro">What each person planned for the clients you're on. Day plans, focus and notes stay with each person.</p>
-      {error && <p className="error-line" role="alert">{error}</p>}
-      {!data ? (
-        <p className="muted">Reading the team's week…</p>
-      ) : !data.clients.length ? (
-        <p className="muted">You aren't on a client's team yet. Account Workers in Dataverse decide who is.</p>
-      ) : (
-        data.clients.map((c) => (
-          <section key={c.clientKey} className="team-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} aria-label={c.clientName}>
-            <h3 className="carry-client-name">
-              <span className="swatch" aria-hidden="true" />
-              {c.clientName}
-            </h3>
-            {c.priorities.length > 0 && (
-              <ul className="carry-rows team-priorities" aria-label={`${c.clientName} priorities`}>
-                {c.priorities.map((p) => (
-                  <PriorityRow key={p.itemId} p={p} weekStart={weekStart} past={readOnly || weekStart < thisWeek} act={act} />
-                ))}
-              </ul>
-            )}
-            <ul className="team-people">
-              {c.people.map((p) => (
-                <li key={p.id} className={`team-person state-${p.state}`}>
-                  <span className="team-who">
-                    <Avatar name={p.name} photo={photos.photoFor(p.email)} size={24} />
-                    <span className="team-name">{p.you ? "You" : p.name}</span>
-                    {p.lead && <span className="team-lead">Lead</span>}
-                  </span>
-                  {p.state !== "shared" ? (
-                    <span className="muted team-state">{STATE_WORDS[p.state]}</span>
-                  ) : !p.features.length && !p.watching.length ? (
-                    <span className="muted team-state">Nothing planned for {c.clientName}</span>
-                  ) : (
-                    <ul className="team-features">
-                      {p.features.map((f) => (
-                        <li key={f.itemId} className="team-feature">
-                          {f.itemType && <TypeIcon clientKey={c.clientKey} type={f.itemType} decorative />}
-                          <WorkLink clientKey={c.clientKey} url={f.url} className="carry-title" title={f.title}>
-                            {f.title}
-                          </WorkLink>
-                        </li>
-                      ))}
-                      {p.watching.map((f) => (
-                        <li key={`w${f.itemId}`} className="team-feature team-watch">
-                          {f.itemType && <TypeIcon clientKey={c.clientKey} type={f.itemType} decorative />}
-                          <EyeIcon title="Watching" />
-                          <WorkLink clientKey={c.clientKey} url={f.url} className="carry-title" title={f.title}>
-                            {f.title}
-                          </WorkLink>
-                          <span className={f.moved === false ? "team-quiet" : "muted"}> · {f.moved === null ? "movement not known yet" : f.moved ? "moved this week" : "no movement this week"}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {c.sends.length > 0 && (
-              <>
-                <p className="team-sub">Sent this week</p>
-                <ul className="carry-rows" aria-label={`Sent for ${c.clientName}`}>
-                  {c.sends.map((s) => (
-                    <li key={s.id} className={`carry-row sent-row state-${s.shown}${s.conflict ? " conflict" : ""}`}>
-                      <span className="carry-main">
-                        {s.itemType && <TypeIcon clientKey={s.clientKey} type={s.itemType} decorative />}
-                        <WorkLink clientKey={s.clientKey} url={s.url} className="carry-title" title={s.title}>
-                          {s.title}
-                        </WorkLink>
-                        {kindChip(s.kind)}
-                      </span>
-                      <span className="carry-kind">
-                        {teamName(c.people, s.from)} → {teamName(c.people, s.to)} · <span className={`sent-state state-${s.shown}`}>{s.words}</span>
-                      </span>
-                      <span className="carry-acts" />
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {c.looks.filter((l) => l.role === "lead").map((l) => (
-              <div key={l.id} className="look look-for-me">
-                <p className="look-line">
-                  <span className="look-who">{first(l.from.name)} asked you to look at their {c.clientName} week</span>
-                  {l.note && <span className="send-note-text"> · “{l.note}”</span>}
-                </p>
-                {l.reply ? (
-                  <p className="look-line muted">You replied: “{l.reply}”</p>
-                ) : (
-                  !readOnly && (
-                    <span className="send-form">
-                      <input type="text" maxLength={300} placeholder={`A note back to ${first(l.from.name)}`} value={reply[l.id] ?? ""} onChange={(e) => setReply({ ...reply, [l.id]: e.target.value })} aria-label={`Reply to ${l.from.name}`} />
-                      <button type="button" className="mini primary" disabled={!(reply[l.id] ?? "").trim()} onClick={() => void act("look.reply", { id: l.id, reply: reply[l.id] })}>Reply</button>
-                    </span>
-                  )
-                )}
-              </div>
-            ))}
-          </section>
-        ))
-      )}
-    </main>
   );
 }

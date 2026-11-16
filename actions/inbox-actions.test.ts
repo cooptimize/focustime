@@ -101,19 +101,17 @@ describe("slice 2: rows, Hide for me, and promises never read-only", () => {
     for (const i of list.items) for (const k of Object.keys(i)) expect(allowed.has(k), k).toBe(true);
   });
 
-  it("Hide for me takes an item out of every view and the count, and back again; a conversation keeps its own Hide", async () => {
+  it("an old Hide for me (RM-1 removed the action) still takes an item out of every view and the count", async () => {
     const { plan, run } = await setup();
     const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
     const before = await run<{ needsYou: number }>("inbox.count");
-    expect(await run("inbox.hide", { key: `f${f.id}`, hidden: true })).toEqual({ hidden: true });
+    await plan.markInbox([`f${f.id}`], { hidden: true });
     let list = await run<InboxListData>("inbox.list");
     expect(list.items.find((i) => i.key === `f${f.id}`)?.views).toEqual([]);
     expect((await run<{ needsYou: number }>("inbox.count")).needsYou).toBe(before.needsYou - 1);
-    await run("inbox.hide", { key: `f${f.id}`, hidden: false });
+    await plan.markInbox([`f${f.id}`], { hidden: false });
     list = await run<InboxListData>("inbox.list");
     expect(list.items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
-    await expect(run("inbox.hide", { key: "v1", hidden: true })).rejects.toThrow(/conversations.hide/);
-    await expect(run("inbox.hide", { key: "f999999", hidden: true })).rejects.toThrow(/404/);
   });
 
   it("a linked chat promise keeps due, who and Close the loop (how and note kept); Open again clears them", async () => {
@@ -157,64 +155,25 @@ describe("slice 3: Waiting on, reasons and Snooze", () => {
     expect(row.reason).toMatch(/^You (added|promised) it, \d+ days late$/);
   });
 
-  it("Snooze takes it out of every view and the count until then, never changes its due, and null wakes it", async () => {
+  it("an old Snooze (RM-1 removed the action) still keeps it out of every view and the count until then, never changing its due", async () => {
     const nine = [{ start: "09:00", end: "17:00" }];
     const model = { timeZone: ZONE, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as unknown as TimeModel;
     const { plan, run } = await setup({ day: snoozeDayOf(model, new Set()) });
     const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
     const before = (await run<{ needsYou: number }>("inbox.count")).needsYou;
-    const r = await run<{ snoozedUntil: string }>("inbox.snooze", { key: `f${f.id}`, until: "tomorrow" });
-    expect(r.snoozedUntil).toBe("2026-11-05T15:00:00Z");
+    const r = { snoozedUntil: "2026-11-05T15:00:00Z" };
+    await plan.markInbox([`f${f.id}`], r);
     const list = await run<InboxListData>("inbox.list");
     expect(list.items.find((i) => i.key === `f${f.id}`)).toMatchObject({ views: [], due: "2026-11-01", snoozedUntil: r.snoozedUntil });
     expect(list.needsYou).toBe(before - 1);
     expect((await plan.openFollowUps()).find((x) => x.id === f.id)?.due).toBe("2026-11-01");
-    await run("inbox.snooze", { key: `f${f.id}`, until: null });
+    await plan.markInbox([`f${f.id}`], { snoozedUntil: null });
     expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
-    await expect(run("inbox.snooze", { key: `f${f.id}`, until: "2026-10-01" })).rejects.toThrow(/after today/);
-    await expect(run("inbox.snooze", { key: `f${f.id}`, until: "soon" })).rejects.toThrow(/400/);
-    await expect(run("inbox.snooze", { key: "f999999", until: "tomorrow" })).rejects.toThrow(/404/);
   });
 
-  it("a former follow-up's own snooze date gives way to the Inbox's", async () => {
-    const nine = [{ start: "09:00", end: "17:00" }];
-    const model = { timeZone: ZONE, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as unknown as TimeModel;
-    const { plan, run } = await setup({ day: snoozeDayOf(model, new Set()) });
-    const f = await plan.addFollowUp({ who: null, what: "Overdue one", due: "2026-11-01", clientKey: "contoso" });
-    await plan.snoozeFollowUp(f.id, "2026-11-20");
-    await run("inbox.snooze", { key: `f${f.id}`, until: null });
-    expect((await plan.openFollowUps()).find((x) => x.id === f.id)?.snoozedUntil).toBeNull();
-    expect((await run<InboxListData>("inbox.list")).items.find((i) => i.key === `f${f.id}`)?.views).toContain("needs_you");
-  });
 });
 
-describe("IB-2: the Everything timeline", () => {
-  it("last looked lives on the server: a second device reads what the first wrote, and it only moves forward", async () => {
-    const { w, run } = await setup();
-    // Two devices are two reads of the same store; nothing is kept in a browser.
-    const deviceA = () => run<InboxListData>("inbox.list");
-    const deviceB = () => run<InboxListData>("inbox.list");
-    expect((await deviceA()).lastLooked).toBeNull();
-    const first = (await deviceA()).now!;
-    expect(first).toBe(w.now());
-    await run("inbox.looked", { at: first });
-    expect((await deviceB()).lastLooked).toBe(first);
-    // An older device can't move it back.
-    expect(await run("inbox.looked", { at: "2020-01-01T00:00:00Z" })).toEqual({ lastLooked: first });
-    expect((await deviceB()).lastLooked).toBe(first);
-    await expect(run("inbox.looked", { at: "2099-01-01T00:00:00Z" })).rejects.toThrow(/future/);
-    await expect(run("inbox.looked", { at: "nope" })).rejects.toThrow(/takes/);
-    await expect(run("inbox.looked", {})).rejects.toThrow(/takes/);
-  });
-
-  it("each person has their own marker", async () => {
-    const { w, plan, run } = await setup();
-    await run("inbox.looked", { at: w.now() });
-    const other = planStoreOn(w.conn, { now: () => Temporal.Instant.from(w.now()).toZonedDateTimeISO(ZONE), userId: LENA.userId! });
-    expect(await plan.getState("inbox_last_looked")).toBe(w.now());
-    expect(await other.getState("inbox_last_looked")).toBeNull();
-  });
-
+describe("IB-2: activity and Done", () => {
   it("a promise's activity is its last change, not when it was opened", async () => {
     const { plan, run } = await setup();
     const a = await plan.addFollowUp({ who: "Lena", what: "Send the mapping notes", due: null, clientKey: "contoso" });

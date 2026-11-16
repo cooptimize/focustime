@@ -20,10 +20,10 @@ export const TODAY_FLOWS = ["checkin", "closeout"] as const;
 export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /**
- * WD-1: Week is one screen with no mode switch; Team (SW-1) is hidden but keeps its address (#/week/team). Plan mode
+ * WD-1: Week is one screen with no mode switch; Team (SW-1) went in RM-1 (#/week/team opens the week). Plan mode
  * and Plan the day are gone: adding work is the block panel beside the week.
  */
-export type WeekMode = "board" | "team";
+export type WeekMode = "board";
 /**
  * AH-1 (D653): Ahead is one model in views. BL-1: two, Grid and Gantt; Readiness is the Grid's Needs attention filter
  * and the old Backlog mode is the Grid listing Stories (BL-2: every level is a list in its own rank order).
@@ -32,7 +32,7 @@ export type AheadMode = "grid" | "gantt";
 /** BL-1: what an old address (#/ahead/fix, #/ahead/backlog) turns on in the Grid when it lands. */
 export type AheadPreset = "attention" | "stories";
 
-export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt" } as const;
+export const MODE_NAMES = { board: "Week", grid: "Grid", gantt: "Gantt" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [], code: [] };
@@ -97,7 +97,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | { kind: "patterns" } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -221,7 +221,6 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
   // DOC-1: the Technical docs, at a page and a heading.
   if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
-  if (l.overlay?.kind === "patterns") return "#/patterns";
   if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
@@ -230,8 +229,6 @@ export function hashOf(l: Loc): string {
   // SR-1, WD-1: always this week's report (the one Kat sends next Monday).
   if (n.tab === "status") return n.group === "needs" ? "#/status/needs" : "#/status";
   if (n.tab === "week") {
-    // SW-1: the client team view (hidden in WD-1; its address still opens it).
-    if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
     if (n.add?.date) return ["#/week/day", n.add.date, n.add.half].filter(Boolean).join("/");
     if (n.add) return n.week ? `#/week/${n.week}/add` : "#/week/add";
     return ["#/week", n.week].filter(Boolean).join("/");
@@ -397,9 +394,9 @@ export function parseHash(full: string): Loc | null {
     // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
     case "meetings":
       return b !== undefined ? null : a === undefined ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } } : ID.test(a) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: Number(a) } } : null;
-    // WP-1: #/patterns, the DevOps patterns page, over Today. App opens Today instead when the person's switch is off.
+    // WP-1's #/patterns (the DevOps patterns page, removed in RM-1): Today, like it opened for anyone without the switch.
     case "patterns":
-      return a === undefined ? { nav: navOf.today(), overlay: { kind: "patterns" } } : null;
+      return a === undefined ? { nav: navOf.today(), overlay: null } : null;
     // FN-1: #/item/<client>/<id>, a story card (over Today when opened from a link; App keeps the tab under it).
     case "item": {
       if (a === undefined || b === undefined || c !== undefined || !ID.test(b)) return null;
@@ -423,7 +420,8 @@ export function parseHash(full: string): Loc | null {
       // WD-1: #/week/add and #/week/<monday>/add; Plan (#/week/commit, #/week/plan) lands on the week with the panel.
       if (a === "add") return weekAdd(b, c);
       if (a === "commit" || a === "plan") return weekAdd(b, c);
-      if (a === "team") return week("team", b, c);
+      // SW-1's Team (#/week/team, #/week/team/<monday>), removed in RM-1: that week.
+      if (a === "team") return week("board", b, c);
       // SR-1: Week › Status before WD-1.
       if (a === "status") return b === undefined ? plain(navOf.status()) : b === "needs" && c === undefined ? plain(navOf.statusNeeds()) : null;
       if (validDate(a) && b === "add") return c === undefined ? plain(navOf.weekAdd(a)) : null;
@@ -545,7 +543,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "planday": return { nav: navOf.addWork(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.weekAdd(), overlay: null };
-    case "team": return { nav: navOf.week("team"), overlay: null };
+    case "team": return { nav: navOf.week(), overlay: null };
     case "status": return { nav: navOf.status(), overlay: null };
     case "checkin": return { nav: navOf.today("checkin"), overlay: null };
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
@@ -579,10 +577,10 @@ export function viewName(loc: Loc): string {
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
     : n.tab === "status" ? TAB_NAMES.status
-    : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.tab === "code" ? TAB_NAMES.code
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "patterns" ? "DevOps patterns" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

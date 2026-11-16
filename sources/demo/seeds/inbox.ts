@@ -44,7 +44,8 @@ export const inboxSeed: DemoSeed = {
       { id: "ib-hc-2", from: member(hc, e.me.name), minutesAgo: 225, text: "Here's a shorter version: 'Reminder: your Harbor Health visit is tomorrow at 10:00. Reply C to confirm.'" },
       { id: "ib-hc-3", from: member(hc, "Lena Ortiz"), minutesAgo: 210, text: "Perfect, approved." },
     ]);
-    await e.run("conversations.resolve", { id: sms });
+    // RM-1: nothing resolves by hand any more; the demo's one is closed in the store, as Resolve left it.
+    await e.conversations.applyOwnership(sms, { kind: "close", by: { id: e.me.id, name: e.me.name }, status: "resolved", reason: null, changeNote: "Closed out" });
     const told = (await e.run("followup.add", { clientKey: "Harbor", who: "Lena Ortiz", what: "Send Lena the new reminder text", channel: "teams", due: e.today })) as { followUp: { id: number } };
     await e.run("followup.close", { id: told.followUp.id, how: "teams", note: "Sent it in the Harbor chat" });
 

@@ -29,12 +29,14 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   const pick = (await plan.addPick({ date: MON, half: "AM", clientKey: "cooptimize", kind: "intention", title: tag, size: "S" }));
   (await plan.makeUp(pick.id, { date: "2026-11-03", half: "AM" }, { minutes: 30, payback: "friday" }));
   (await plan.logAzureWrite({ op: "start", vmId: `/vm/${tag}`, vmName: tag, before: null, after: null, auto: false }));
-  (await plan.markBreakdown("cooptimize", 7001, true));
   // DM-1: not a demo client key (the demo sets its own identities; SQL Server compares keys without case).
   (await plan.setDevopsIdentity({ clientKey: "proseware", org: "org", id: tag, name: tag, email: `${tag}@example.com`, expires: null }));
   const draft = (await plan.addDraft({ clientKey: "cooptimize", parentItemId: null, title: tag, size: "S", level: "feature" }));
   (await plan.setWeekDraft(MON, draft.id, "must"));
-  (await plan.setWeekQuiet(MON, "proseware", true));
+  // RM-1: Mark as being broken down and Nothing this week have no store methods any more (nothing writes them); rows
+  // as WD-1's code left them (once, like the other legacy rows below).
+  if (!(await db.get("SELECT 1 AS x FROM breakdown_marks WHERE user_id = ?", [userId]))) await db.run("INSERT INTO breakdown_marks (user_id, client_key, item_id, marked_at) VALUES (?, 'cooptimize', 7001, ?)", [userId, NOW]);
+  if (!(await db.get("SELECT 1 AS x FROM week_quiet WHERE user_id = ?", [userId]))) await db.run("INSERT INTO week_quiet (user_id, week_start, client_key, marked_at) VALUES (?, ?, 'proseware', ?)", [userId, MON, NOW]);
   (await plan.logDevopsWrite({ clientKey: "cooptimize", org: "org", project: "p", op: "create", itemId: null, parentId: null, title: tag, identity: tag, before: {}, after: {}, ops: null, revBefore: null, revAfter: null, commentId: null, draftId: draft.id, followUpId: null, undoOf: null }));
   (await plan.addFlex({ date: MON, clientKey: "cooptimize", start: "18:00", end: "19:00", note: tag }));
   (await plan.addUnavailable({ date: MON, title: tag, start: "12:00", end: "13:00" }));

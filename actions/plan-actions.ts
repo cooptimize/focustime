@@ -7,7 +7,6 @@ import { SIZE_MINUTES } from "../plan/types.ts";
 import { isOpen, typeNeedsBreakdown } from "../plan/process.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { NOTHING_TO_CONFIRM_DAY } from "../plan/no-confirm.ts";
 import { carryTarget, dayLabel, dayRule, placeNote, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { SUGGEST_CLEARED, validClearKey } from "../plan/boardsuggest.ts";
@@ -23,9 +22,8 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "planday.carry_hint", "suggest.load", "suggest.clear", "suggest.unclear", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "suggest.load", "suggest.clear", "suggest.unclear", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
-export const CARRY_HINT = "carry_hint";
 
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 
@@ -337,13 +335,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const { cfg } = await clock(ctx);
         const carry = await carryDay(ctx, plan);
         const picks = carry.target ? await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming)) : [];
-        // UI-B: the one-time hint over the suggested cards, until it is dismissed (a per-person marker).
-        return { ok: true, data: { target: carry.target, picks, hint: !(await plan.marked(CARRY_HINT, "once")) } };
-      }
-      case "planday.carry_hint": {
-        fields(input, [], []);
-        await plan.markOnce(CARRY_HINT, "once");
-        return { ok: true, data: { hint: false } };
+        return { ok: true, data: { target: carry.target, picks } };
       }
       case "suggest.load": {
         // SG-1: what the board's suggestion rule reads from the store: the unfinished to-dos (planday.carry's read)
@@ -377,9 +369,6 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const pick = await plan.undrop(id(fields(input, ["id"]).id));
         return { ok: true, data: { pick } };
       }
-      case "planday.commit":
-        // CF-1 (F3): nothing confirms a day now. An old tab or card that still asks gets a plain answer; nothing changes.
-        return { ok: true, data: { unchanged: true, message: NOTHING_TO_CONFIRM_DAY } };
       case "pick.add": {
         const o = fields(input, ["date", "half", "clientKey"], ["size", "itemId", "intention", "draftId", "followUpId"]);
         // Step 13.5: a follow-up picked into a block is size S unless sized.

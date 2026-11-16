@@ -90,8 +90,6 @@ export function itemDone(i: Pick<ListItem, "clientKey" | "itemId" | "level" | "d
 /** A pin's label: "Tue PM". */
 export const pinLabel = (p: Pin) => `${Temporal.PlainDate.from(p.date).toLocaleString("en-US", { weekday: "short" })} ${p.half}`;
 
-/** The rule key of a week heads-up follow-up (step 7's slip kind). CF-1 makes none; old ones are still found by it. */
-export const headsUpKey = (weekStart: IsoDate, clientKey: string, itemId: number) => `slip:week:${weekStart}:${clientKey}:${itemId}`;
 type ListLike = Pick<ListItem, "clientKey" | "itemId" | "level" | "doneAt" | "estimate"> & Partial<Pick<ListItem, "size" | "parentId">>;
 export type Listed<F> = F & { done: DoneBy | null };
 /** Picks ticked done, by client and DevOps item (a story's pick done counts it done). */

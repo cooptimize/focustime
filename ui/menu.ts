@@ -166,8 +166,6 @@ export type MenuEnv = {
   showGuide: (section?: string) => void;
   /** DOC-1: the Technical docs (#/docs/<page>/<heading>); absent signed out. */
   showDocs?: (page?: string, heading?: string) => void;
-  /** WP-1: opens the DevOps patterns page; absent unless an admin turned it on for this person (then not in the menu). */
-  showPatterns?: () => void;
   /** RB-1: open Code (#/code), on a client when one is named. Absent: signed out. */
   showCode?: (clientKey: string | null) => void;
   /** RB-2: open Code on Search names across clients, the box focused. Absent: signed out, or Code isn't for this account. */
@@ -1203,7 +1201,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     }
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
-    case "planday.commit": return { disabled: "There's nothing to confirm now" };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
     case "pick.set_size": return { next: () => choosePick(env, "Set the size of which to-do?", (p) => sizeStep(env, p)) };
     case "pick.move": return { next: () => choosePick(env, "Move which to-do?", (p) => moveStep(env, p)) };
@@ -1217,7 +1214,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.set_kind": return { next: () => choosePick(env, "Change the kind of which to-do?", (p) => kindStep(env, p)) };
     case "pick.uncarry":
     case "pick.undrop": return { disabled: "Use Undo right after Keep, Move or Drop on a suggested to-do" };
-    case "planday.carry_hint": return { run: () => env.setView("week") };
     case "suggest.load": return { run: () => env.setView("today") };
     case "suggest.clear":
     case "suggest.unclear": return { disabled: "Use Clear, or its Undo, beside the suggestions on a block or a day" };
@@ -1231,9 +1227,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // NM-2: Code's Group by switch is in Code.
     case "ui.set_code_sql_group": return env.showCode ? { run: () => env.showCode!(null) } : { disabled: "Sign in to read clients' code" };
     case "ui.set_inbox":
-    case "inbox.hide":
-    case "inbox.snooze":
-    case "inbox.looked":
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
@@ -1247,7 +1240,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       ] }) };
     }
     case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
-    case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
@@ -1261,19 +1253,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "code.search":
     case "code.inside":
       return { disabled: "Open Code to read a client's code" };
-    case "patterns.status": return env.showPatterns ? { run: () => env.showPatterns!() } : { disabled: "Not available" };
-    case "patterns.access":
-    case "patterns.run_inventory":
-    case "patterns.estimate":
-    case "patterns.run_classification":
-    case "patterns.resume":
-    case "patterns.set_platform":
-    case "patterns.set_scope":
-    case "patterns.set_kind":
-    case "patterns.check":
-    case "patterns.download":
-    case "patterns.list_change":
-    case "patterns.suggestion": return { disabled: "Runs from the DevOps patterns page" };
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -1318,48 +1297,22 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":
-    case "requests.context":
-    case "requests.resolve":
-    case "requests.reopen":
-    case "requests.search":
-    case "requests.sort_again":
-    case "requests.show":
       return { run: () => env.setView("conversations") };
     case "inbox.list":
     case "inbox.count":
     case "inbox.today":
     case "inbox.seen":
     case "conversations.list":
-    case "conversations.count":
     case "conversations.messages":
-    case "conversations.seen":
-    case "conversations.resolve":
-    case "conversations.claim":
-    case "conversations.give":
-    case "conversations.add_helper":
-    case "conversations.release":
-    case "conversations.close_out":
     case "conversations.undo_ownership":
-    case "conversations.not_request":
     case "conversations.not_work":
     case "conversations.not_work_undo":
-    case "conversations.reopen":
-    case "conversations.hide":
-    case "conversations.move":
-    case "conversations.this_is_work":
     case "conversations.link":
-    case "conversations.take_over":
     case "conversations.search":
     case "conversations.draft":
     case "suggestions.skip":
-    case "conversations.merge":
-    case "conversations.merge_preview":
-    case "conversations.unmerge":
     case "conversations.search_items":
     case "conversations.unlink":
-    case "conversations.held":
-    case "conversations.held_not_work":
-    case "conversations.held_bulk":
     case "conversations.suggestions":
     case "conversations.dismiss":
     case "conversations.undismiss":
@@ -1386,7 +1339,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "promises.reopen":
     case "promises.link":
       return { run: () => env.setView("my_promises") };
-    case "requests.refresh": return { run: () => (env.setView("requests"), void env.runPlan("requests.refresh", {})) };
     case "requests.purge":
       return { run: () => env.openSettings("chats") };
     case "ai.status":
@@ -1499,7 +1451,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "followup.delete":
     case "followup.people":
     case "people.picker":
-    case "followups.review":
       return { run: env.openFollowUps };
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
@@ -1523,21 +1474,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("roadmap") };
     case "ahead.stage_bulk":
       return { run: () => env.setView("backlog") };
-    case "weekplan.commit": return { disabled: "There's nothing to confirm now" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
     case "weekplan.place":
     case "weekplan.add":
-    case "weekplan.set_tier":
     case "weekplan.set_estimate":
     case "weekplan.set_size":
-    case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":
-    case "weekplan.headsup":
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
-    case "weekplan.nothing":
     // SW-1: sends, priorities and asks start from a row's ⋯ (Send to…) or Commit; the command menu opens the place.
     case "send.people":
     case "send.create":
@@ -1551,11 +1497,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "send.withdraw":
     case "send.today":
     case "team.commit":
-    case "look.ask":
       return { run: () => env.setView("commit") };
-    case "team.view":
-    case "look.reply":
-      return { run: () => env.setView("team") };
     // SR-1: Status opens Week › Status; its drafts start from there.
     case "status.load":
     case "status.draft":
@@ -1595,8 +1537,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.watch_checkin":
     case "weekplan.watch_remove":
     case "feature.brief":
-    case "feature.mark_breakdown":
-    case "followup.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "auth.connect_outlook_write": return { run: env.connectWrite };
     // NM-2: a draft feature is added on Backlog's Gantt.
@@ -1800,10 +1740,6 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 }
 
 /** Every command: window commands, then one per registered action (built from the registry). */
-/** WD-1: Team is hidden for now (its address still opens it); its own commands aren't offered. */
-// CF-1: confirming and tiers are retired; their old actions stay (they answer plainly) but leave the command menu.
-export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply", "weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
-
 /**
  * NM-2: commands that name a place or a button the app no longer has, or that can't finish, each with the reason.
  * They leave the command menu, the assistant and the Teams bot; their actions, data and tests stay
@@ -1811,59 +1747,22 @@ export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.r
  */
 export const HOLLOW: Readonly<Record<string, string>> = {
   "conversations.list": "Names a Conversations list; the Inbox has none since IB-4 (From chats lists suggestions)",
-  "conversations.count": "A count of conversations that need you; that view went with IB-4",
-  "conversations.seen": "Marks a conversation seen; a suggestion has no New mark",
-  "conversations.resolve": "Resolve went with IB-4",
-  "conversations.reopen": "Reopen went with IB-4",
-  "conversations.not_request": "Not a request went with IB-4 (This isn't work replaces it)",
-  "conversations.hide": "Hide for me went with IB-4 (Dismiss replaces it)",
-  "conversations.move": "No list of a conversation's messages to move or split them in",
-  "conversations.this_is_work": "The Chatter list it answered went with IB-4",
-  "conversations.claim": "Ownership went with IB-4",
-  "conversations.give": "Ownership went with IB-4",
-  "conversations.add_helper": "Ownership went with IB-4",
-  "conversations.release": "Ownership went with IB-4",
-  "conversations.close_out": "Closing out a conversation went with IB-4",
   "conversations.undo_ownership": "Ownership went with IB-4",
-  "conversations.take_over": "Take it over went with IB-4",
-  "conversations.held": "The held-back list is out of view since IB-4",
-  "conversations.held_bulk": "The held-back list is out of view since IB-4",
-  "conversations.held_not_work": "The held-back list is out of view since IB-4",
-  "conversations.merge": "Merge went with IB-4",
-  "conversations.merge_preview": "Merge went with IB-4",
-  "conversations.unmerge": "Merge went with IB-4",
   "conversations.unlink": "A linked conversation leaves From chats, so nothing lists one to unlink",
   "suggestions.skip": "Follow-through suggestions are no longer made (IB-4)",
-  "requests.context": "The list of chat requests went with IB-1 and IB-4",
-  "requests.resolve": "The list of chat requests went with IB-4",
-  "requests.reopen": "The list of chat requests went with IB-4",
-  "requests.search": "The list of chat requests went with IB-4",
-  "requests.sort_again": "The list of chat requests went with IB-4",
-  "requests.show": "Hidden requests aren't listed anywhere",
-  "requests.refresh": "Refreshes a list of chat requests that is gone; Refresh From chats does the same read",
   "inbox.today": "A read for Day's lines, not a place",
   "inbox.count": "The tab's number, not a place",
-  "inbox.hide": "Hide for me went with IB-4",
-  "inbox.snooze": "Snooze went with IB-4",
-  "inbox.looked": "The Inbox timeline went",
   "inbox.seen": "New marks went with IB-4",
   "followup.snooze": "Promises has no Snooze",
-  "followups.review": "Nothing reviews heads-ups any more",
   "weekplan.add_draft": "The type box for a draft feature went with WD-2",
   "weekplan.draft_tier": "Draft features on the week's list went with WD-2",
-  "weekplan.nothing": "No screen offers Nothing this week since WD-1",
-  "feature.mark_breakdown": "No screen offers Mark as being broken down since WD-1",
-  "followup.ask_priorities": "No screen offers it since WD-1",
-  "planday.carry_hint": "The suggested to-dos hint is gone",
   "chats.social": "No screen marks a client chat as a Social chat",
-  "look.ask": "Can't finish while Team is hidden: the lead's notice opens Week, and a lead replies only in Team",
 };
 
 export function commandList(env: MenuEnv): MenuItem[] {
   // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
-  // WP-1: the DevOps patterns page is hidden: one entry, only for people it is on for; its own actions never show.
   // RB-1: Code's own reads never show; only "Code" (code.clients) and one "Code: <client>" per client.
-  const hidden = (n: string) => HIDDEN_FOR_NOW.has(n) || n in HOLLOW || (n.startsWith("patterns.") && (n !== "patterns.status" || !env.showPatterns)) || (n.startsWith("code.") && n !== "code.clients");
+  const hidden = (n: string) => n in HOLLOW || (n.startsWith("code.") && n !== "code.clients");
   const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !hidden(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   // RS-2 D7: only the window commands are grouped; the registry's keep their place after them, so a search's first
   // result (what Enter runs) is what it was.
@@ -1994,26 +1893,6 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScal
         : []),
       ...(f.drafts > 0 ? [{ id: "create", label: `Create ${f.drafts === 1 ? "the draft" : `${f.drafts} drafts`} in DevOps`, ...writes("create"), action: "devops.preview", ...closed, run: f.canWrite ? ops.createDrafts : ops.enableWrites } as MenuItem] : []),
       { id: "remove", label: "Remove from this week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
-    ],
-  };
-}
-
-/** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
-export type RoadmapRowFacts = { id?: number; clientName?: string | null; title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
-export type RoadmapRowOps = { copy: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
-
-/** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
-export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep {
-  const epic = f.tier === "epic";
-  return {
-    title: f.title,
-    head: rowHead({ id: f.id ?? null, title: f.title, client: f.clientName ?? null }),
-    items: [
-      { id: "copy", label: COPY_LINK, ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.copy },
-      { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
-      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
-      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : {}), run: ops.addToWeek },
-      { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };
 }

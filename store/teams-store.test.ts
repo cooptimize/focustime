@@ -146,7 +146,6 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await cy.message(CHAT, m.messageId)).toBeNull();
     expect(await cy.messagesBefore(CHAT, "2026-11-30T00:00:00Z", 5)).toEqual([]);
     await expect(cy.resolveRequest(CHAT, m.messageId, { status: "dismissed" })).rejects.toThrow("No such request");
-    await expect(cy.setShown(CHAT, m.messageId, true)).rejects.toThrow("No such request");
     await expect(cy.setSort(CHAT, m.messageId, "off", null)).rejects.toThrow("No such request");
     await expect(cy.setKind(CHAT, "delivery")).rejects.toThrow("isn't registered");
     await expect(cy.removeChat(CHAT)).rejects.toThrow("isn't registered");

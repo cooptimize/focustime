@@ -57,8 +57,6 @@ import { docsAccessAction } from "./docs-actions.ts";
 import { codeAction, type CodeAction, type CodeContext } from "./code-actions.ts";
 import type { CodeGit } from "./code-git.ts";
 import type { CodeViewsStore } from "../store/code-views-store.ts";
-import { NO_CLIENT } from "../ai/types.ts";
-import { patternsAction, type PatternsAction, type PatternsContext, type PatternsPort } from "./patterns.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, withHolidays, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -141,8 +139,6 @@ import { inviteDomains } from "../config/schema.ts";
 import type { LinkCalendars } from "../sources/ics/source.ts";
 import { calendarLinkAction } from "./calendar-link-actions.ts";
 
-/** The plan store marker for the first launch (step 17.5). */
-const FIRST_LAUNCH_MARK = "first_launch";
 /** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
 const TOUR_MARK = "tour_offer";
 
@@ -227,8 +223,6 @@ export type ActionContext = {
   team?: import("../store/team-store.ts").TeamStore;
   /** MC-1: the registered client calls (app tables) and the FocusTime users they name. Absent: no meeting capture here. */
   meetings?: MeetingsPort;
-  /** WP-1: the DevOps patterns page's run and store (app tables). Absent: the page doesn't exist here. */
-  patterns?: PatternsPort;
   /** SW-1: whether a person has signed in to FocusTime (can receive sends). Absent: their entry has a sign-in. */
   onFocusTime?: (personId: string) => boolean;
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
@@ -1962,13 +1956,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
-    case "ui.first_launch": {
-      // Step 17.5: the welcome moment shows once, ever: the first call marks it in the plan store. Not in demo mode
-      // (its store is in memory, so it would show on every start) and not without a plan store.
-      if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("ui.first_launch takes no input");
-      if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
-      return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
-    }
     case "calendar_link.list":
     case "calendar_link.preview":
     case "calendar_link.add":
@@ -2238,14 +2225,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);
     case "requests.list":
-    case "requests.refresh":
-    case "requests.context":
-    case "requests.resolve":
-    case "requests.reopen":
-    case "requests.search":
     case "requests.purge":
-    case "requests.sort_again":
-    case "requests.show":
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
@@ -2295,25 +2275,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input,
       );
     case "conversations.list":
-    case "conversations.count":
     case "conversations.refresh":
     case "conversations.messages":
-    case "conversations.seen":
-    case "conversations.resolve":
-    case "conversations.not_request":
     case "conversations.not_work":
     case "conversations.not_work_undo":
-    case "conversations.reopen":
-    case "conversations.hide":
-    case "conversations.move":
-    case "conversations.this_is_work":
     case "conversations.link":
-    case "conversations.take_over":
-    case "conversations.claim":
-    case "conversations.give":
-    case "conversations.add_helper":
-    case "conversations.release":
-    case "conversations.close_out":
     case "conversations.undo_ownership":
     case "conversations.sort_unsorted":
     case "conversations.search":
@@ -2329,15 +2295,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "my_promises.who":
     case "my_promises.close":
     case "suggestions.skip":
-    case "conversations.merge":
-    case "conversations.merge_preview":
-    case "conversations.unmerge":
     case "my_promises.start_draft":
     case "conversations.search_items":
     case "conversations.unlink":
-    case "conversations.held":
-    case "conversations.held_not_work":
-    case "conversations.held_bulk":
     case "my_promises.unlink":
     case "conversations.suggestions":
     case "conversations.dismiss":
@@ -2349,9 +2309,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "inbox.count":
     case "inbox.today":
     case "inbox.seen":
-    case "inbox.hide":
-    case "inbox.snooze":
-    case "inbox.looked":
       return inboxAction(
         {
           plan: ctx.plan,
@@ -2414,7 +2371,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "followup.snooze":
     case "followup.delete":
     case "followup.people":
-    case "followups.review":
       return followUpAction(
         {
           plan: ctx.plan,
@@ -2501,21 +2457,14 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "weekplan.load":
     case "weekplan.set_feature":
     case "weekplan.place":
-    case "weekplan.commit":
     case "weekplan.add":
-    case "weekplan.set_tier":
     case "weekplan.set_estimate":
     case "weekplan.set_size":
-    case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":
-    case "weekplan.headsup":
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
-    case "weekplan.nothing":
     case "feature.brief":
-    case "feature.mark_breakdown":
-    case "followup.ask_priorities":
       return weekPlanAction(weekCtx(ctx), action, req.input);
     case "weekplan.proposal":
     case "weekplan.carry_decide":
@@ -2551,12 +2500,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "send.withdraw":
     case "send.today":
     case "team.commit":
-    case "team.view":
     case "priority.flag":
     case "priority.unflag":
     case "priority.add_to_week":
-    case "look.ask":
-    case "look.reply":
       return teamAction(teamCtx(ctx), action satisfies TeamAction, req.input);
     case "deploy.items":
     case "deploy.config_save":
@@ -2574,7 +2520,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       );
     case "planday.start":
     case "planday.carry":
-    case "planday.commit":
     case "pick.add":
     case "pick.remove":
     case "pick.take_off":
@@ -2586,7 +2531,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.set_kind":
     case "pick.uncarry":
     case "pick.undrop":
-    case "planday.carry_hint":
     case "suggest.load":
     case "suggest.clear":
     case "suggest.unclear":
@@ -2635,89 +2579,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.rerun":
     case "meeting.check_now":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
-    case "patterns.access":
-    case "patterns.status":
-    case "patterns.run_inventory":
-    case "patterns.estimate":
-    case "patterns.run_classification":
-    case "patterns.resume":
-    case "patterns.set_platform":
-    case "patterns.set_scope":
-    case "patterns.set_kind":
-    case "patterns.check":
-    case "patterns.download":
-    case "patterns.list_change":
-    case "patterns.suggestion":
-      return patternsAction(patternsContext(ctx), action as PatternsAction, req.input);
     default: {
       const unhandled: never = action;
       return bad(`unknown action ${String(unhandled)}`);
     }
   }
-}
-
-/**
- * WP-1: what the DevOps patterns page needs per request: the person, their switch (an admin's, Admin › People), the
- * clients they are on (Account Workers and focus time, matched on their FocusTime and Dataverse ids), and their AI for a
- * classification. Admins get nothing extra.
- */
-export function patternsContext(ctx: ActionContext): PatternsContext {
-  const meId = async () => (await storedIdentity(ctx.plan))?.oid ?? null;
-  const rules = async () => (ctx.org ? await ctx.org.rules() : null);
-  const aiAllowed = async (k: string) => {
-    const r = await rules();
-    return !!r && r.ai.on && r.ai.allowedClients.includes(k);
-  };
-  // Every client the page covers, with its names, aliases and projects (the person's own from their directory), not only
-  // the person's own: the masking directory for a classification, and WP-3's check of a request type's words.
-  const patternsDirectory = async () => {
-    const port = ctx.patterns;
-    if (!port) return [];
-    const keys = await port.clients();
-    const cfg = await configured(ctx);
-    const mine = cfg ? await aiDirectory(ctx, cfg) : [];
-    const r = await rules();
-    const projectsOf = async (k: string) => (port.projects ? await port.projects(k).catch(() => []) : []);
-    const others = keys.filter((k) => !mine.some((m) => m.key.toLowerCase() === k.toLowerCase()));
-    return [...mine, ...(await Promise.all(others.map(async (k) => ({ key: k, names: [], projects: await projectsOf(k), itemIds: [], ...(r?.clients[k]?.aliases?.length ? { aliases: [...r.clients[k]!.aliases] } : {}) }))))];
-  };
-  return {
-    port: ctx.patterns ?? null,
-    me: meId,
-    allowed: async (id) => !!(await rules())?.devopsPatterns.includes(id.toLowerCase()),
-    async myClients() {
-      const id = await meId();
-      if (!id || !ctx.org) return [];
-      const entry = (await ctx.org.levels()).people.entry(id);
-      const ids = new Set([id.toLowerCase(), ...(entry ? [entry.id.toLowerCase()] : []), ...(entry?.dir?.personId ? [entry.dir.personId.toLowerCase()] : [])]);
-      return [...new Set((await ctx.org.store.peopleClients()).filter((p) => ids.has(p.personId.toLowerCase())).map((p) => p.clientKey))];
-    },
-    dataPlatform: async (k) => (await rules())?.clients[k]?.dataPlatform ?? null,
-    aiAllowed,
-    async ai() {
-      const service = await aiFor(ctx);
-      const NONE = "Classification needs an AI provider, and AI isn't set up here.";
-      if (!service || !ctx.patterns) return { why: NONE };
-      const a = await service.availability(NO_CLIENT);
-      if (a === "not_set_up") return { why: NONE };
-      if (a === "off") return { why: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI." };
-      const keys = await ctx.patterns.clients();
-      const directory = await patternsDirectory();
-      const internal = new Set<string>();
-      for (const k of keys) if (await isInternalKey(ctx.org, k)) internal.add(k);
-      return { deps: { ai: service, aiAllowed, directory, isInternal: (k: string) => internal.has(k) } };
-    },
-    // WP-3: client names for checking a request type's words, with AI on or off.
-    directory: () => patternsDirectory(),
-    now: () => ctx.now(),
-    // WP-3: who changed the request types list, by their directory name.
-    async nameOf(userId) {
-      if (!ctx.org) return null;
-      const entry = (await ctx.org.levels()).people.entry(userId);
-      const pid = entry?.dir?.personId;
-      return pid ? ((await ctx.org.store.directory()).find((d) => d.personId === pid)?.name ?? null) : null;
-    },
-  };
 }
 
 /** SW-1: sends, priorities, the Team view and Ask to look. */

@@ -5,7 +5,7 @@
 // following the client is checked on top, in actions. The unscoped methods are for the poll job, the backfill and
 // expiry only. Every write runs in a transaction. Nothing here logs; message text never comes through here.
 import type { AiLogEntry } from "../ai/types.ts";
-import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type ConversationMerge, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type ItemNeeded, checkItemNeeded, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
+import { COMMITMENT_STATES, CONVERSATION_STATUSES, MESSAGE_ROLES, type Commitment, type CommitmentState, type Conversation, type ConversationStatus, type ItemChange, type ItemNeeded, checkItemNeeded, type MessagePlace, type MessageRole, type Participant, type Suggestion } from "../plan/conversations.ts";
 import type { HeldMatch } from "../plan/boundary.ts";
 import { firstName, undoableEvent, type EventKind, type EventVia, type OwnershipBefore, type OwnershipEvent, type Person } from "../plan/ownership.ts";
 import { isMember } from "../plan/requests.ts";
@@ -129,18 +129,6 @@ const toEvent = (r: Row): OwnershipEvent => ({
   undoneAt: instant(r.undone_at),
 });
 
-const toMerge = (r: Row): ConversationMerge => ({
-  id: Number(r.id),
-  intoId: Number(r.into_id),
-  fromId: Number(r.from_id),
-  byUser: r.by_user as string,
-  at: instant(r.at)!,
-  moved: json<ConversationMerge["moved"]>(r.moved_json, { messageIds: [], commitmentIds: [], suggestionIds: [] }),
-  before: json<ConversationMerge["before"]>(r.before_json, null as never),
-  afterSummary: (r.after_summary as string | null) ?? null,
-  undoneAt: instant(r.undone_at),
-});
-
 const toSuggestion = (r: Row): Suggestion => ({
   id: Number(r.id),
   conversationId: Number(r.conversation_id),
@@ -181,10 +169,6 @@ export type NewConversation = {
  * `byName` then says who asked.
  */
 export type OwnershipChange =
-  | { kind: "claim"; by: Person; via?: EventVia | null }
-  | { kind: "give"; by: Person; to: Person }
-  | { kind: "helper"; by: Person; to: Person }
-  | { kind: "release"; by: Person }
   | { kind: "close"; by: Person; status: "resolved" | "closed"; reason: string | null; note?: string | null; changeNote: string }
   | { kind: "reopen"; by: Person | null; byName?: string; via?: EventVia | null; note?: string | null; changeNote: string };
 
@@ -309,48 +293,14 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (!cur || cur.mergedInto !== null) throw new PlanError("No such conversation");
         const sameId = (a: string | null, b: string | null) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
         const unchanged = { conversation: cur, event: null };
-        const hasThis = () => new PlanError(`${firstName(cur.claimedName)} has this`);
         const t = stamp();
         const sets: string[] = [];
         const params: Param[] = [];
         const set = (col: string, v: Param) => (sets.push(`${col} = ?`), params.push(v));
-        const setOwner = (p: Person | null) => (set("claimed_by", p?.id ?? null), set("claimed_name", p ? p.name.slice(0, 200) : null), set("claimed_at", p ? t : null));
-        const setHelpers = (hs: readonly Person[]) => set("helpers_json", hs.length ? JSON.stringify(hs) : null);
         let to: Person | null = null;
         let note: string | null = null;
         let via: EventVia | null = null;
-        if (x.kind !== "reopen" && x.kind !== "close" && x.kind !== "release" && cur.closedAt) throw new PlanError("It's closed. Reopen it first");
         switch (x.kind) {
-          case "claim":
-            if (sameId(cur.claimedBy, x.by.id)) return unchanged;
-            if (cur.claimedBy) throw hasThis();
-            setOwner(x.by);
-            setHelpers(cur.helpers.filter((h) => !sameId(h.id, x.by.id)));
-            set("change_note", `${firstName(x.by.name)} took it`);
-            via = x.via ?? null;
-            to = x.by;
-            break;
-          case "give":
-            if (sameId(cur.claimedBy, x.to.id)) throw new PlanError(`${firstName(x.to.name)} already has it`);
-            setOwner(x.to);
-            setHelpers(cur.helpers.filter((h) => !sameId(h.id, x.to.id)));
-            set("change_note", `${firstName(x.by.name)} gave it to ${firstName(x.to.name)}`);
-            to = x.to;
-            break;
-          case "helper":
-            if (!cur.claimedBy) throw new PlanError("Someone needs to take it first");
-            if (sameId(cur.claimedBy, x.to.id)) throw new PlanError(`${firstName(x.to.name)} already has it`);
-            if (cur.helpers.some((h) => sameId(h.id, x.to.id))) return unchanged;
-            setHelpers([...cur.helpers, { id: x.to.id, name: x.to.name.slice(0, 200) }]);
-            to = x.to;
-            break;
-          case "release":
-            if (!cur.claimedBy) return unchanged;
-            if (cur.closedAt) throw new PlanError("It's closed. Reopen it first");
-            setOwner(null);
-            setHelpers([]);
-            set("change_note", `${firstName(x.by.name)} released it`);
-            break;
           case "close":
             if (cur.closedAt) return unchanged;
             set("status", x.status);
@@ -429,94 +379,6 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     },
 
     // ---- CV-2: Merge into… and its Undo ----
-    /**
-     * Moves everything of `fromId` (its messages' places, commitments and suggestions) into `intoId`, in one
-     * transaction: people joined, first and last times widened, the item carried over when the target has none, and
-     * `fromId` marked merged (kept for Undo). `summary` is the new title and summary (AI or the two joined).
-     */
-    async merge(fromId: number, intoId: number, by: string, summary: { title: string; summary: string }): Promise<ConversationMerge> {
-      return db.tx(async () => {
-        const from = await conversationById(fromId);
-        const into = await conversationById(intoId);
-        if (!from || !into || from.mergedInto !== null || into.mergedInto !== null) throw new PlanError("No such conversation");
-        if (from.id === into.id) throw new PlanError("Pick another conversation to merge into");
-        if (from.chatId !== into.chatId) throw new PlanError("Merge only conversations of the same chat");
-        const t = stamp();
-        const messageIds = (await db.all("SELECT message_id FROM conversation_messages WHERE conversation_id = ? ORDER BY at, message_id", [fromId])).map((r) => r.message_id as string);
-        const commitmentIds = (await db.all("SELECT id FROM commitments WHERE conversation_id = ? ORDER BY id", [fromId])).map((r) => Number(r.id));
-        const suggestionIds = (await db.all("SELECT id FROM conversation_suggestions WHERE conversation_id = ? ORDER BY id", [fromId])).map((r) => Number(r.id));
-        await db.run("UPDATE conversation_messages SET conversation_id = ?, updated_at = ? WHERE conversation_id = ?", [intoId, t, fromId]);
-        await db.run("UPDATE commitments SET conversation_id = ?, updated_at = ? WHERE conversation_id = ?", [intoId, t, fromId]);
-        await db.run("UPDATE conversation_suggestions SET conversation_id = ?, updated_at = ? WHERE conversation_id = ?", [intoId, t, fromId]);
-        const people = [...into.participants];
-        for (const p of from.participants) if (!people.some((x) => x.id.toLowerCase() === p.id.toLowerCase())) people.push(p);
-        const minAt = (a: string, b: string) => (Date.parse(a) <= Date.parse(b) ? a : b);
-        const maxAt = (a: string, b: string) => (Date.parse(a) >= Date.parse(b) ? a : b);
-        const carry = !into.itemId && from.itemId;
-        await db.run(
-          `UPDATE conversations SET title = ?, summary = ?, participants_json = ?, first_at = ?, last_at = ?, last_work_at = ?, owner_id = ?, item_id = ?, item_url = ?, item_title = ?, likely_item = ?, change_note = ?, version = version + 1, updated_at = ? WHERE id = ?`,
-          [summary.title.slice(0, 200) || into.title, summary.summary.slice(0, 1000), JSON.stringify(people), minAt(into.firstAt, from.firstAt), maxAt(into.lastAt, from.lastAt), maxAt(into.lastWorkAt, from.lastWorkAt), into.ownerId ?? from.ownerId,
-            carry ? from.itemId : into.itemId, carry ? from.itemUrl : into.itemUrl, carry ? from.itemTitle : into.itemTitle, into.likelyItem ?? from.likelyItem, `Merged with "${from.title}"`.slice(0, 200), t, intoId],
-        );
-        await db.run("UPDATE conversations SET merged_into = ?, version = version + 1, updated_at = ? WHERE id = ?", [intoId, t, fromId]);
-        // Part 0: the target keeps its owner; with none, it takes the one it's merged with.
-        if (!into.claimedBy && from.claimedBy) await db.run("UPDATE conversations SET claimed_by = ?, claimed_name = ?, claimed_at = ?, helpers_json = ? WHERE id = ?", [from.claimedBy, from.claimedName, from.claimedAt, from.helpers.length ? JSON.stringify(from.helpers) : null, intoId]);
-        const before: ConversationMerge["before"] = {
-          into: { claimedBy: into.claimedBy, claimedName: into.claimedName, claimedAt: into.claimedAt, helpers: into.helpers, title: into.title, summary: into.summary, participants: into.participants, firstAt: into.firstAt, lastAt: into.lastAt, lastWorkAt: into.lastWorkAt, ownerId: into.ownerId, itemId: into.itemId, itemUrl: into.itemUrl, itemTitle: into.itemTitle, likelyItem: into.likelyItem },
-          from: { status: from.status, closedAt: from.closedAt, closedBy: from.closedBy, closeReason: from.closeReason },
-        };
-        const r = await db.run("INSERT INTO conversation_merges (into_id, from_id, by_user, at, moved_json, before_json, after_summary) VALUES (?, ?, ?, ?, ?, ?, ?)", [intoId, fromId, by, t, JSON.stringify({ messageIds, commitmentIds, suggestionIds }), JSON.stringify(before), summary.summary.slice(0, 1000)]);
-        return toMerge((await db.get("SELECT * FROM conversation_merges WHERE id = ?", [r.lastId!]))!);
-      });
-    },
-    /** IB-1 slice 4: what a merge would move out of this conversation (the same rows merge moves), as counts. */
-    async contents(id: number): Promise<{ messages: number; commitments: number; suggestions: number }> {
-      const count = async (table: string) => Number((await db.get(`SELECT COUNT(*) AS n FROM ${table} WHERE conversation_id = ?`, [id]))?.n ?? 0);
-      return { messages: await count("conversation_messages"), commitments: await count("commitments"), suggestions: await count("conversation_suggestions") };
-    },
-    async mergeRecord(id: number): Promise<ConversationMerge | null> {
-      const r = await db.get("SELECT * FROM conversation_merges WHERE id = ?", [id]);
-      return r ? toMerge(r) : null;
-    },
-    /**
-     * Undo of a merge: what moved goes back (only what is still in the target), the merged one is listed again, and
-     * the target's own fields return to what they were while nobody changed its summary since (new messages since the
-     * merge keep it as it is now). Refused once undone.
-     */
-    async unmerge(id: number): Promise<ConversationMerge> {
-      return db.tx(async () => {
-        const m = await store.mergeRecord(id);
-        if (!m) throw new PlanError("No such merge");
-        if (m.undoneAt) throw new PlanError("That merge was already undone");
-        const into = await conversationById(m.intoId);
-        const from = await conversationById(m.fromId);
-        if (!into || !from || from.mergedInto !== m.intoId) throw new PlanError("That merge can't be undone any more");
-        const t = stamp();
-        const [ml, mp] = inList(m.moved.messageIds);
-        if (m.moved.messageIds.length) await db.run(`UPDATE conversation_messages SET conversation_id = ?, updated_at = ? WHERE conversation_id = ? AND chat_id = ? AND message_id IN (${ml})`, [m.fromId, t, m.intoId, into.chatId, ...mp]);
-        const [cl, cp] = inList(m.moved.commitmentIds);
-        if (m.moved.commitmentIds.length) await db.run(`UPDATE commitments SET conversation_id = ?, updated_at = ? WHERE conversation_id = ? AND id IN (${cl})`, [m.fromId, t, m.intoId, ...cp]);
-        const [sl, sp] = inList(m.moved.suggestionIds);
-        if (m.moved.suggestionIds.length) await db.run(`UPDATE conversation_suggestions SET conversation_id = ?, updated_at = ? WHERE conversation_id = ? AND id IN (${sl})`, [m.fromId, t, m.intoId, ...sp]);
-        const b = m.before.into;
-        const untouched = into.summary === (m.afterSummary ?? into.summary);
-        const lastAt = untouched ? b.lastAt : into.lastAt;
-        const lastWorkAt = untouched ? b.lastWorkAt : into.lastWorkAt;
-        // The item the merge carried over (the target had none) goes back with its conversation.
-        const carried = !b.itemId && !!from.itemId && into.itemId === from.itemId;
-        const item = carried ? { id: null, url: null, title: null } : { id: into.itemId, url: into.itemUrl, title: into.itemTitle };
-        await db.run(
-          `UPDATE conversations SET ${untouched ? "title = ?, summary = ?, " : ""}participants_json = ?, first_at = ?, last_at = ?, last_work_at = ?, owner_id = ?, item_id = ?, item_url = ?, item_title = ?, likely_item = ?, change_note = ?, version = version + 1, updated_at = ? WHERE id = ?`,
-          [...(untouched ? [b.title, b.summary] : []), JSON.stringify(untouched ? b.participants : into.participants), b.firstAt, lastAt, lastWorkAt, b.ownerId, item.id, item.url, item.title, b.likelyItem, "Merge undone", t, m.intoId],
-        );
-        // Part 0: an owner the merge carried over goes back with its conversation.
-        if (b.claimedBy === null && into.claimedBy && from.claimedBy && into.claimedBy === from.claimedBy) await db.run("UPDATE conversations SET claimed_by = NULL, claimed_name = NULL, claimed_at = NULL, helpers_json = NULL WHERE id = ?", [m.intoId]);
-        await db.run("UPDATE conversations SET merged_into = NULL, version = version + 1, change_note = ?, updated_at = ? WHERE id = ?", ["Merge undone", t, m.fromId]);
-        await db.run("UPDATE conversation_merges SET undone_at = ? WHERE id = ?", [t, id]);
-        return (await store.mergeRecord(id))!;
-      });
-    },
-
     // ---- message places ----
     /** Each message's place, replaced as a whole (the pipeline, Move, Split, This is work). */
     async place(ps: readonly (Omit<MessagePlace, "placedBy"> & { placedBy: MessagePlace["placedBy"]; byUser?: string | null })[]): Promise<void> {
@@ -798,23 +660,6 @@ function viewerOf(store: BaseStore, teams: TeamsStore, userId: string, meetingMe
     async addConversation(c: NewConversation): Promise<Conversation> {
       if (!(await member(c.chatId))) throw noConversation();
       return store.addConversation(c);
-    },
-    /** CV-2: Merge into…, by me: both conversations must be ones I see (and of the same chat, checked by the store). */
-    async merge(fromId: number, intoId: number, summary: { title: string; summary: string }): Promise<ConversationMerge> {
-      await gate(fromId);
-      await gate(intoId);
-      return store.merge(fromId, intoId, userId, summary);
-    },
-    /** IB-1 slice 4: the counts the merge preview shows, only for a conversation I see. */
-    async contents(id: number): Promise<{ messages: number; commitments: number; suggestions: number }> {
-      await gate(id);
-      return store.contents(id);
-    },
-    async unmerge(id: number): Promise<ConversationMerge> {
-      const m = await store.mergeRecord(id);
-      if (!m) throw new PlanError("No such merge");
-      await gate(m.intoId);
-      return store.unmerge(id);
     },
     async commitmentsIn(ids: readonly number[]): Promise<Commitment[]> {
       const ok: number[] = [];
