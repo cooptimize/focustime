@@ -56,4 +56,35 @@ describe("ci.yml runs the same tests (CI-3)", () => {
       expect(webkitSetup, key).toBe(key === "webkit");
     }
   });
+
+  // C: a docs-only pull request skips the heavy jobs' steps; everything else runs as before.
+  const RUN_IF = "if: needs.changes.outputs.code != 'false'";
+  /** Each step of a job: its text from "      - " to the next. */
+  const steps = (job: string) => J[job]!.split(/\n(?= {6}- )/).filter((x) => /^ {6}- /.test(x));
+
+  it("decides once, in the changes job, from the event and the pull request's own changes", () => {
+    expect(J.changes).toMatch(/bash scripts\/ci-changes\.sh "\$\{\{ github\.event_name \}\}" >> "\$GITHUB_OUTPUT"/);
+    expect(J.changes).toMatch(/fetch-depth: 2/);
+    expect(J.changes).toMatch(/code: \$\{\{ steps\.changes\.outputs\.code \}\}/);
+  });
+
+  it("skips only the browser shards, the webkit job and the image, step by step, so each still reports by its name", () => {
+    for (const job of ["browser", "webkit", "image"]) {
+      expect(J[job], job).toMatch(/^ {4}needs: changes$/m);
+      expect(J[job], job).not.toMatch(/^ {4}if:/m);
+      for (const step of steps(job)) {
+        if (/name: Docs only, nothing to run here/.test(step)) expect(step).toMatch(/if: needs\.changes\.outputs\.code == 'false'\n/);
+        else expect(step.split("\n").find((l) => /^ {8}if: /.test(l)), step.split("\n")[0]).toMatch(new RegExp(`^ {8}${RUN_IF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( && .+)?$`));
+      }
+    }
+  });
+
+  it("never skips on an empty or missing answer: only an explicit code=false skips", () => {
+    expect(CI).not.toMatch(/needs\.changes\.outputs\.code == 'true'/);
+    expect(CI).not.toMatch(/needs\.changes\.outputs\.code != 'true'/);
+  });
+
+  it("always runs the unit job, infra and the gate", () => {
+    for (const job of ["unit", "infra", "test"]) expect(J[job], job).not.toMatch(/needs\.changes|^ {4}if:/m);
+  });
 });

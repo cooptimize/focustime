@@ -96,7 +96,7 @@ The Teams bot sends its own rhythm (brief, check-in, close out, nudges, client c
 
 ## Deploys
 
-- **Dev on merge.** `.github/workflows/deploy-dev.yml` runs on every push to `main`: the CI checks (only the typecheck when the pull request's CI run tested exactly the same tree), the image to dev's registry, `focustime migrate`, the app's database user, the Bicep (what-if, then create), a smoke test (`infra/scripts/smoke.sh`).
+- **Dev on merge.** `.github/workflows/deploy-dev.yml` runs on every push to `main`: the CI checks (only the typecheck when the pull request's CI run tested exactly the same tree), the image to dev's registry, `focustime migrate`, the app's database user, the Bicep (what-if, then create), a smoke test (`infra/scripts/smoke.sh`). After a docs-only merge the rule is the same: the pull request's run (unit tests and guards; the browser and image jobs skipped, see [Development](development.md#what-ci-runs-and-when)) tested that exact tree, so dev gets the typecheck and an image whose app is the one already there; if `main` moved since, all of CI runs first, and a push never skips anything.
 - **Prod by commit.** `.github/workflows/deploy-prod.yml`, manual only, by someone in the `PROD_DEPLOYERS` repository variable: `gh workflow run deploy-prod.yml -f ref=<sha>`. It promotes the image dev built and tested for that commit (by digest), checks dev and prod have the same app settings and secret names (`infra/scripts/parity.sh`), migrates, deploys the Bicep and checks that prod serves that commit. `dry_run` checks who is running it, that the image exists and parity, and changes nothing.
 - **Which commit is where.** More › About in each environment shows its pull request and commit; `gh run list --workflow deploy-dev.yml` and `deploy-prod.yml` show the runs.
 - **Migrations only add.** A rename or a drop ships in a later release than the code that stops using it (`store/migrations/additive.test.ts`), so the previous build always runs on the current database.
@@ -136,10 +136,10 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in shards (see [Development](development.md)) |
+| `ci.yml` | Every pull request, every push to `main`, and called by deploy-dev | The typecheck, the guards, the unit tests against SQL Server, the browser tests in six shards and WebKit's own job, the Bicep and the image; a pull request that changes only docs outside `docs/technical/` skips the browser and image jobs ([Development](development.md#what-ci-runs-and-when)) |
 | `deploy-dev.yml` | Every push to `main`, or by hand | Above |
 | `deploy-prod.yml` | By hand only | Above |
-| `ci-webkit-deps.yml` | A pull request that changes `scripts/ci-webkit-deps.sh` or the CI workflows, or by hand | Proves the browser jobs' WebKit packages install from the cache with the package servers unreachable; tests nothing of FocusTime's and isn't part of the gate |
+| `ci-webkit-deps.yml` | A pull request that changes `scripts/ci-webkit-deps.sh` or the CI workflows, or by hand | Proves the webkit job's packages install from the cache with the package servers unreachable; tests nothing of FocusTime's and isn't part of the gate |
 
 ## Diagnostics, logs and what is never logged
 
@@ -157,7 +157,7 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 | FocusTime doesn't show in Teams | Prod: the package isn't uploaded, isn't Allowed in Manage apps, or a permission policy blocks custom apps; it can take a few hours to reach people. Dev: the tester's setup policy hasn't applied yet (hours), or they haven't uploaded the package | Check Teams admin center › Manage apps and the policies ([teams-bot.md](../setup/teams-bot.md)) |
 | The bot doesn't answer the first message on dev | Dev wakes from zero in about 30 seconds; Teams gives a bot 10 to 15 | Send it again. Prod always runs |
 | A source shows as not live: Outlook, Google or DevOps writes say they aren't connected | That person hasn't connected it, their sign-in expired, or a consent is missing | The source's own message names the fix: Settings › Accounts and calendars (consents, Reconnect), Settings › DevOps (DevOps write access) |
-| Every browser shard fails at "Install WebKit's system packages" (or another step before "Browser tests") with `Temporary failure resolving` or `Failed to fetch` | The Ubuntu package servers, npm or the Playwright CDN couldn't be reached; nothing is wrong with the code. The packages install from the cache with no network on the same runner image, so this happens only on a new image or Playwright version | Re-run the failed jobs once it's back: `gh run rerun <run id> --failed`. A deploy-dev that ran CI itself waits on it: re-run its failed jobs too. Runbook, [When CI's browser jobs fail before testing](../azure/runbook.md#when-cis-browser-jobs-fail-before-testing-ci-2) |
+| The webkit job fails at "Install WebKit's system packages" (or a browser job at another step before "Browser tests") with `Temporary failure resolving` or `Failed to fetch` | The Ubuntu package servers, npm or the Playwright CDN couldn't be reached; nothing is wrong with the code. The packages install from the cache with no network on the same runner image, so this happens only on a new image or Playwright version | Re-run the failed jobs once it's back: `gh run rerun <run id> --failed`. A deploy-dev that ran CI itself waits on it: re-run its failed jobs too. Runbook, [When CI's browser jobs fail before testing](../azure/runbook.md#when-cis-browser-jobs-fail-before-testing-ci-2) |
 | Dev is slow on the first request | A cold start: dev scales to zero | Wait a few seconds |
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |
 | Push notifications aren't set up | No `ft-vapid-key` | `infra/scripts/vapid-key.sh` |
