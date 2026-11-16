@@ -9,7 +9,6 @@ import { oneLine, type ItemDraft } from "./conversations.ts";
 import { GENERATED_LAYER_NOTE, shapeItem, splitOverrides, type StandardsUsed } from "./standards.ts";
 
 export const DRAFT_TASK = "conversations.draft_item";
-export const COMMENT_TASK = "conversations.comment";
 
 export const DRAFT_INSTRUCTIONS = [
   "You draft one Azure DevOps work item from a Teams conversation between a consulting team and its client.",
@@ -117,20 +116,7 @@ export function descriptionHtml(path: string, originals: readonly OriginalMessag
   return `${pathHtml(path)}<hr><div><strong>From the Teams conversation in ${esc(o.chatName)}</strong></div>${msgs}<div><a href="${esc(o.chatLink)}">Open the chat in Teams</a></div>`;
 }
 
-// ---- conversations.comment ----
-
-export const COMMENT_INSTRUCTIONS = [
-  "You write one short update comment for an Azure DevOps work item from a Teams conversation about it.",
-  "Use only the input. Plain, short English, no greeting, no sign-off. Say only what changed since the last update: decisions, root cause, scope, dates, data.",
-  "lines: 1 to 4 short sentences, each a separate fact.",
-].join("\n");
-export const COMMENT_SCHEMA: JsonSchema = {
-  type: "object",
-  properties: { lines: { type: "array", items: { type: "string" } } },
-  required: ["lines"],
-  additionalProperties: false,
-};
-export type CommentAnswer = { lines: string[] };
+// ---- the follow-through comment as posted (RM-1: no new ones are drafted; stored ones can still be posted) ----
 
 /** The comment as posted: the chosen lines, then the link back to the conversation in Teams. */
 export function commentText(lines: readonly string[], link: string): string {

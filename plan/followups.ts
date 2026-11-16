@@ -2,7 +2,6 @@
 // can prove it, closes it again. Pure: plan picks, DevOps results already loaded and the follow-ups so far in; what to
 // open, update and close out. The server applies it to the plan store. Nothing is ever posted anywhere.
 import { isClosed, isOpen } from "./process.ts";
-import { mondayOf } from "../week/dates.ts";
 import type { IsoDate, WorkItem } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 
@@ -96,57 +95,6 @@ const after = (a: string, b: string) => !!a && !!b && Temporal.Instant.compare(i
 function find(w: WorkState | undefined, id: number): WorkItem | null {
   if (!w) return null;
   return w.items.find((i) => i.id === id) ?? w.children?.find((i) => i.id === id) ?? w.watched?.find((i) => i.id === id) ?? null;
-}
-
-/** One item's identity across picks: its DevOps id, else its title. */
-const itemKey = (p: Pick) => (p.itemId !== null ? `i:${p.itemId}` : `t:${p.title.trim().toLowerCase()}`);
-
-/** Where a slipped pick's work ended up: still in its week (and where), in a later week, or off the plan. */
-type Fate = { kind: "in_week" | "later_week"; to: Pick } | { kind: "off_plan" };
-function fateOf(p: Pick, movedTo: (id: number) => Pick | null, all: readonly Pick[]): Fate {
-  let f: Pick = p;
-  for (let n = 0; n < 20 && f.status === "moved"; n++) {
-    const next = movedTo(f.id);
-    if (!next) break;
-    f = next;
-  }
-  const week = mondayOf(p.date);
-  if (f !== p && f.status !== "dropped") return { kind: mondayOf(f.date) === week ? "in_week" : "later_week", to: f };
-  // Dropped (or moved with no trace): the work is still in the week if the same item is planned or done there.
-  const still = all
-    .filter((x) => x.clientKey === p.clientKey && itemKey(x) === itemKey(p) && (x.status === "planned" || x.status === "done") && mondayOf(x.date) === week && x.id !== p.id)
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
-  return still ? { kind: "in_week", to: still } : { kind: "off_plan" };
-}
-
-/**
- * Does a slip owe the client a heads-up (D235)? Only when it slipped on or after its own day, or the work left its
- * week (moved to another week, or dropped and not planned elsewhere that week). Moving a future pick between days of
- * the same week, reordering and resizing never do. Stamps are local, so their first ten characters are the local date.
- */
-export function slipTrigger(p: Pick, movedTo: (id: number) => Pick | null, all: readonly Pick[]): string | null {
-  const day = p.updatedAt.slice(0, 10);
-  if (day === p.date) return "Slipped on its day";
-  if (day > p.date) return "Slipped after its day";
-  const f = fateOf(p, movedTo, all);
-  if (f.kind === "later_week") return "Moved out of the week";
-  if (f.kind === "off_plan") return "Dropped from the week";
-  return null;
-}
-
-/**
- * Open heads-ups about slipped picks that wouldn't open under the step 13.5 rule (none of their picks qualify now).
- * Listed for me to decide; never closed automatically. CF-1: no new ones open; old ones stay until closed.
- */
-export function reviewHeadsUps(i: DetectInput): { id: number; reason: string }[] {
-  const out: { id: number; reason: string }[] = [];
-  for (const l of i.followUps) {
-    if (l.closedAt || l.kind !== "slip" || !l.detail?.date || !l.detail.picks?.length) continue;
-    const picks = l.detail.picks.map((id) => i.pick(id)).filter((p): p is Pick => !!p);
-    if (!picks.length || picks.some((p) => slipTrigger(p, i.movedTo, i.picks))) continue;
-    out.push({ id: l.id, reason: "Moved within the same week before its day; nothing left the week" });
-  }
-  return out;
 }
 
 export function detectFollowUps(i: DetectInput): Detected {

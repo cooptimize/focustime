@@ -397,10 +397,10 @@ describe("IB-4: no ownership or snooze from the assistant", () => {
   it("conversation_owner and snooze aren't tools: naming one makes no proposal and changes nothing", async () => {
     expect(TOOL_NAMES).not.toContain("conversation_owner");
     expect(TOOL_NAMES).not.toContain("snooze");
-    const s = setup({ handlers: { "conversations.claim": () => ({ ok: true as const, data: {} }), "inbox.snooze": () => ({ ok: true as const, data: {} }) } });
+    const s = setup();
     s.script(["conversation_owner"], call(["conversation_owner", { conversationId: 9, change: "claim", person: null }]), say("Done."));
     expect((await s.a.handle("I'll take the Fabrikam Invoices conversation")).proposals).toEqual([]);
-    expect(s.writes().filter((w) => w.action === "conversations.claim" || w.action === "inbox.snooze")).toEqual([]);
+    expect(s.writes()).toEqual([]);
   });
 });
 

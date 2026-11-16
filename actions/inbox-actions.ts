@@ -4,7 +4,7 @@
 // badge; inbox.list gives every item's key, kind, client and views with the per-view counts, so the badge, the rail
 // and every view header read the same number.
 import type { AppConfig } from "../config/schema.ts";
-import { forToday, isLate, itemKey, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type InboxTodayData, type Mark, type SnoozeChoice, type SnoozeDay } from "../plan/inbox-items.ts";
+import { forToday, isLate, itemKey, needsYouCount, parseKey, reasonOf, snoozeChoices, viewCounts, viewsOf, type InboxFacts, type InboxItemView, type InboxListData, type InboxTodayData, type Mark, type SnoozeDay } from "../plan/inbox-items.ts";
 export type { InboxItemView, InboxListData, InboxTodayData };
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
@@ -12,7 +12,7 @@ import type { IsoDate } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { ActionResponse, UrgentAsk } from "./types.ts";
 
-export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.today", "inbox.seen", "inbox.hide", "inbox.snooze", "inbox.looked"] as const;
+export const INBOX_ACTIONS = ["inbox.list", "inbox.count", "inbox.today", "inbox.seen"] as const;
 export type InboxAction = (typeof INBOX_ACTIONS)[number];
 
 export type InboxContext = {
@@ -40,7 +40,6 @@ const CLOSED_SHOWN_DAYS = 14;
 const closedShownMs = (cfg: AppConfig) => (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
 /** IB-2: when I last looked at Everything, in my kv row (the plan store), so it follows me across devices. */
 const LAST_LOOKED_KEY = "inbox_last_looked";
-const instant = (s: string) => Date.parse(s.replace(/\[.*\]$/, ""));
 
 /** My promises from follow_ups: open ones, and the ones closed in the last day (Done). */
 async function promiseFacts(plan: PlanStore, now: string, withDone: boolean, closedMs: number): Promise<{ facts: InboxFacts[]; snoozed: Map<string, IsoDate> }> {
@@ -140,17 +139,6 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       const data: InboxListData = { today: g.today, items, counts: viewCounts(g.items, g.today, g.now), needsYou: needsYouCount(g.items, g.today, g.now), now: g.now, lastLooked: await ctx.plan.getState<string>(LAST_LOOKED_KEY), snoozeChoices: day ? snoozeChoices(g.now, day) : ["tomorrow", "next_week"] };
       return { ok: true, data };
     }
-    case "inbox.looked": {
-      // IB-2: I've looked at Everything as of `at` (the list's own `now`, so what arrives after it stays new). Only moves forward.
-      const at = typeof o.at === "string" && Object.keys(o).length === 1 && o.at.length <= 60 ? o.at : null;
-      const t = at === null ? NaN : instant(at);
-      if (at === null || !Number.isFinite(t)) return bad("inbox.looked takes { at: an instant }");
-      if (t > instant(ctx.now()) + 60_000) return bad("That's in the future");
-      const had = await ctx.plan.getState<string>(LAST_LOOKED_KEY);
-      if (had && instant(had) >= t) return { ok: true, data: { lastLooked: had } };
-      await ctx.plan.setState(LAST_LOOKED_KEY, at);
-      return { ok: true, data: { lastLooked: at } };
-    }
     case "inbox.seen": {
       // Seen: a promise stops being New. Only keys of items I have (the list decides); others are refused.
       const keys = Array.isArray(o.keys) && Object.keys(o).length === 1 && o.keys.length <= 200 && o.keys.every((k) => typeof k === "string" && parseKey(k)) ? (o.keys as string[]) : null;
@@ -159,42 +147,6 @@ export async function inboxAction(ctx: InboxContext, action: InboxAction, input:
       const mine = new Set(g.items.map((i) => i.facts.key));
       const ok = [...new Set(keys)].filter((k) => mine.has(k));
       return { ok: true, data: { seen: await ctx.plan.markInbox(ok, { seen: true }) } };
-    }
-    case "inbox.hide": {
-      // H: hidden for me only (an inbox mark). A conversation keeps CV-1's Hide for me (conversations.hide).
-      const key = typeof o.key === "string" ? parseKey(o.key) : null;
-      if (!key || typeof o.hidden !== "boolean" || Object.keys(o).length !== 2) return bad("inbox.hide takes { key, hidden }");
-      if (key.source === "conversation") return bad("Hide a conversation with conversations.hide");
-      const g = await gather(ctx, cfg);
-      if (!g.items.some((i) => i.facts.key === o.key)) return bad("That isn't in your Inbox", 404);
-      await ctx.plan.markInbox([o.key as string], { hidden: o.hidden });
-      return { ok: true, data: { hidden: o.hidden } };
-    }
-    case "inbox.snooze": {
-      // Snooze: out of every view and count until then; never changes a due date. null wakes it now.
-      const key = typeof o.key === "string" ? parseKey(o.key) : null;
-      const u = o.until;
-      const choice = u === null || u === "later" || u === "tomorrow" || u === "next_week" || (typeof u === "string" && /^\d{4}-\d{2}-\d{2}$/.test(u) && Temporal.PlainDate.from(u, { overflow: "reject" }) !== null) ? (u as SnoozeChoice | IsoDate | null) : undefined;
-      if (!key || choice === undefined || Object.keys(o).length !== 2) return bad("inbox.snooze takes { key, until: \"later\" | \"tomorrow\" | \"next_week\" | a date | null }");
-      const g = await gather(ctx, cfg);
-      const item = g.items.find((i) => i.facts.key === o.key);
-      if (!item) return bad("That isn't in your Inbox", 404);
-      if (item.facts.done) return bad("It's done already", 409);
-      let until: string | null = null;
-      if (choice !== null) {
-        if (choice !== "later" && choice !== "tomorrow" && choice !== "next_week" && (choice <= g.today || choice > Temporal.PlainDate.from(g.today).add({ years: 1 }).toString())) return bad("Pick a day after today, within a year");
-        const day = await ctx.snoozeDay();
-        if (!day) return bad("Set your working hours first", 409);
-        until = snoozeUntil(choice, g.now, day);
-        if (!until) return bad("There's less than an hour left of your day. Snooze it until tomorrow", 409);
-      }
-      // A former follow-up's own date snooze goes too, so the Inbox's mark is the one snooze it has.
-      if (key.source === "followUp") {
-        const fu = (await ctx.plan.openFollowUps()).find((f) => f.id === key.id);
-        if (fu?.snoozedUntil) await ctx.plan.snoozeFollowUp(key.id, null);
-      }
-      await ctx.plan.markInbox([o.key as string], { snoozedUntil: until });
-      return { ok: true, data: { snoozedUntil: until } };
     }
   }
 }

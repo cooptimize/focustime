@@ -2225,14 +2225,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);
     case "requests.list":
-    case "requests.refresh":
-    case "requests.context":
-    case "requests.resolve":
-    case "requests.reopen":
-    case "requests.search":
     case "requests.purge":
-    case "requests.sort_again":
-    case "requests.show":
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
@@ -2282,25 +2275,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         req.input,
       );
     case "conversations.list":
-    case "conversations.count":
     case "conversations.refresh":
     case "conversations.messages":
-    case "conversations.seen":
-    case "conversations.resolve":
-    case "conversations.not_request":
     case "conversations.not_work":
     case "conversations.not_work_undo":
-    case "conversations.reopen":
-    case "conversations.hide":
-    case "conversations.move":
-    case "conversations.this_is_work":
     case "conversations.link":
-    case "conversations.take_over":
-    case "conversations.claim":
-    case "conversations.give":
-    case "conversations.add_helper":
-    case "conversations.release":
-    case "conversations.close_out":
     case "conversations.undo_ownership":
     case "conversations.sort_unsorted":
     case "conversations.search":
@@ -2316,15 +2295,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "my_promises.who":
     case "my_promises.close":
     case "suggestions.skip":
-    case "conversations.merge":
-    case "conversations.merge_preview":
-    case "conversations.unmerge":
     case "my_promises.start_draft":
     case "conversations.search_items":
     case "conversations.unlink":
-    case "conversations.held":
-    case "conversations.held_not_work":
-    case "conversations.held_bulk":
     case "my_promises.unlink":
     case "conversations.suggestions":
     case "conversations.dismiss":
@@ -2336,9 +2309,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "inbox.count":
     case "inbox.today":
     case "inbox.seen":
-    case "inbox.hide":
-    case "inbox.snooze":
-    case "inbox.looked":
       return inboxAction(
         {
           plan: ctx.plan,
@@ -2401,7 +2371,6 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "followup.snooze":
     case "followup.delete":
     case "followup.people":
-    case "followups.review":
       return followUpAction(
         {
           plan: ctx.plan,

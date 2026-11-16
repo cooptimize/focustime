@@ -3488,13 +3488,9 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .about-dialog { width: min(560px, calc(100vw - 32px)); }
 .about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
 .about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
-/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives); others' avatars overlap. */
+/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives). */
 .owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .owner .avatar { margin-right: 0; }
-.owner-stack { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; }
-.owner-stack .avatar { margin-right: 0; box-shadow: 0 0 0 1.5px var(--surface); }
-.owner-stack .avatar + .avatar { margin-left: -5px; }
-.owner-more { margin-left: 4px; font-size: var(--fs-1); color: var(--text-muted); }
 /* D461: a row's target date, only when it matters this week; amber when it may land too late, never red. */
 .pw-due { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
 .pw-due.late { color: var(--watch); }
@@ -4170,7 +4166,7 @@ button.ask-label { cursor: pointer; }
 .conv-msg-body .attached { color: var(--text-muted); font-style: italic; }
 .conv-msg-body table { border-collapse: collapse; margin: 4px 0; font-size: var(--fs-2); display: block; max-inline-size: 100%; overflow-x: auto; }
 .conv-msg-body td, .conv-msg-body th { border: 1px solid var(--border); padding: 2px 6px; text-align: start; vertical-align: top; }
-/* CV-2: Merge into…, Select, and a deep link's note. */
+/* CV-2: Select, and a deep link's note. */
 .conv-pick { margin: 0; inline-size: 16px; block-size: 16px; flex: none; }
 .conv-merge-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); font-size: var(--fs-2); }
 .conv-merge-bar .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -6051,7 +6047,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .ib-row-sub .mention-tag { margin: 0 6px 0 0; }
 .ib-mentions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
 .ib-mentions .mention-tag { margin-left: 0; }
-.held-back { margin: 12px 0; }
 .held-list { margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
 .held-list ul { list-style: none; margin: 0; padding: 0; }
 .held-why { margin: 0 0 8px; }

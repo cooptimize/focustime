@@ -123,9 +123,6 @@ describe("Link to item", () => {
     const card = (await p.as(EVAN).run("conversations.list")).inProgress[0]!;
     expect(card).toMatchObject({ item: { id: 4101, closed: true, state: "Closed" }, primary: "mark_done", closed: null });
     expect((await w.convs.conversation(c.id))!.closedAt).toBeNull();
-    // Mark done is Resolve.
-    const done = await p.as(EVAN).run("conversations.resolve", { id: c.id });
-    expect(done.closed.map((x) => x.id)).toEqual([c.id]);
   });
 });
 

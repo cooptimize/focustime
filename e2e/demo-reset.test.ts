@@ -38,13 +38,13 @@ describe.skipIf(!CHROMIUM)("Reset demo (DM-1)", () => {
     const start = await snapshot(page);
     expect(start.needsYou.length).toBeGreaterThan(0);
 
-    // Change things: a capture, a pick, a DevOps write, a conversation resolved.
+    // Change things: a capture, a pick, a DevOps write, a conversation marked not work-related.
     expect((await call(page, "capture.add", { text: "Ask Dana about the export columns", clientKey: "Northwind" })).ok).toBe(true);
     expect((await call(page, "pick.add", { date: "2026-11-02", half: "PM", clientKey: "Northwind", itemId: 1112, size: "M" })).ok).toBe(true);
     const p = await call(page, "devops.preview", { clientKey: "Northwind", change: { kind: "state", itemId: 1112, state: "Active" } });
     expect((await call(page, "devops.confirm", { previewId: p.data.preview.previewId })).ok).toBe(true);
     const conv = (await call(page, "conversations.list", {})).data.needsYou[0];
-    expect((await call(page, "conversations.resolve", { id: conv.id })).ok).toBe(true);
+    expect((await call(page, "conversations.not_work", { id: conv.id })).ok).toBe(true);
     expect(await snapshot(page)).not.toEqual(start);
 
     // Settings › Demo › Reset demo: the page reloads on Today.

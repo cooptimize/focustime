@@ -3317,15 +3317,6 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, seen_at, hidden) VALUES (?, ?, ?, 0)", id, version, now);
       });
     },
-    /** Hide for me (or show again): personal, never anyone else's view. */
-    async hideConversation(id: number, hidden: boolean): Promise<void> {
-      await tx(async () => {
-        const now = opts.now().toInstant().toString();
-        const had = (await db.get("SELECT 1 AS x FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
-        if (had) await db.run("UPDATE conversation_views SET hidden = ?, hidden_at = ? WHERE conversation_id = ?", hidden ? 1 : 0, hidden ? now : null, id);
-        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, hidden, hidden_at) VALUES (?, 0, ?, ?)", id, hidden ? 1 : 0, hidden ? now : null);
-      });
-    },
     // ---- IB-1: my marks on Inbox items (seen, snoozed until, hidden), by item key (plan/inbox-items.ts) ----
     // IB-4 adds: when a conversation first showed as a suggestion, what I did with it, when I last touched a promise,
     // how a promise cleared on its own and when I put it back.

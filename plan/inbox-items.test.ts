@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemKey, lifecycleOf, needsYou, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeDayOf, snoozeUntil, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
+import { itemKey, lifecycleOf, needsYou, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeDayOf, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 const today = "2026-11-05";
@@ -97,19 +97,10 @@ describe("snooze (slice 3)", () => {
   const nine = [{ start: "09:00", end: "17:00" }];
   const model: TimeModel = { timeZone: zone, weekdays: { mon: nine, tue: nine, wed: nine, thu: nine, fri: nine, sat: [], sun: [] }, lunch: null, overrides: [] } as TimeModel;
   const day = snoozeDayOf(model, new Set(["2026-11-06"]));
-  it("Later today is 3 hours, never past my end of day, and gone with under an hour left", () => {
-    expect(snoozeUntil("later", "2026-11-05T15:00:00Z", day)).toBe("2026-11-05T18:00:00.000Z");
-    expect(snoozeUntil("later", "2026-11-05T21:30:00Z", day)).toBe("2026-11-05T23:00:00.000Z");
+  it("Later today is offered only with an hour or more of my day left", () => {
     expect(snoozeChoices("2026-11-05T21:30:00Z", day)).toEqual(["later", "tomorrow", "next_week"]);
     expect(snoozeChoices("2026-11-05T22:30:00Z", day)).toEqual(["tomorrow", "next_week"]);
-    expect(snoozeUntil("later", "2026-11-05T22:30:00Z", day)).toBeNull();
     expect(snoozeChoices("2026-11-07T15:00:00Z", day)).toEqual(["tomorrow", "next_week"]);
-  });
-  it("Tomorrow is my next workday's start, skipping PTO and the weekend; Next week is Monday's start; a date is its start", () => {
-    expect(snoozeUntil("tomorrow", "2026-11-05T15:00:00Z", day)).toBe("2026-11-09T15:00:00Z");
-    expect(snoozeUntil("tomorrow", "2026-11-03T15:00:00Z", day)).toBe("2026-11-04T15:00:00Z");
-    expect(snoozeUntil("next_week", "2026-11-05T15:00:00Z", day)).toBe("2026-11-09T15:00:00Z");
-    expect(snoozeUntil("2026-11-12", "2026-11-05T15:00:00Z", day)).toBe("2026-11-12T15:00:00Z");
   });
   it("a snoozed item is in no view and doesn't count, and its due date stays", () => {
     const f = promise({ due: "2026-11-04" });

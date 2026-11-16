@@ -146,7 +146,7 @@ Three lists (`ui/inbox/InboxPage.tsx`), each with a count, client chips, rows gr
 - **Promises** is `inbox.list`'s promise rows, late first. Reading them first settles my open chat promises (`settlePromises`): one clears as done when its linked item is finished, or as expired when I never touched it, 7 days after its due day or after it was found. No job runs it and no AI is asked. Cleared ones show 14 days under Cleared on their own; Put back reopens one for good.
 - **Captures** is `capture.load`: captures with no kind (To sort) and drafts not in DevOps, by client.
 - **The count** (the tab and `inbox.today`) is suggestions plus late or due-today promises, so it agrees with the lists. `inbox.today` also carries Day's urgent strip and the From chats chip.
-- **Kept, not shown.** Conversation ownership, snooze, merges, held messages, Unsorted and Chatter stay in the database with their actions; no screen draws them.
+- **Kept, not shown.** Conversation ownership, snooze, merges, held messages, Unsorted and Chatter stay in the database; no screen draws them. Their actions were removed in RM-1, except an old assistant proposal's Undo (`conversations.undo_ownership`) and Not work-related and its Undo; old Hide for me and Snooze marks still keep an item out of the lists.
 
 ## The story card, Edit and Wrap it up
 

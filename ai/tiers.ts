@@ -15,11 +15,11 @@ export type FlexTask = (typeof FLEX_TASKS)[number];
 
 /**
  * The interactive tasks, named so a test can assert each stays standard (any task not in FLEX_TASKS is standard
- * anyway). conversations.comment (follow-through) runs on a tick but is a draft a person reviews: standard for now.
+ * anyway).
  */
 export const STANDARD_TASKS = [
   "test_ai", "assistant.intent", "assistant.answer", "assistant.question", "assistant.standards", "assistant_transcribe", "stories.draft", "status_draft", "status_suggest",
-  "conversations.draft_item", "conversations.merge_summary", "conversations.comment", "capture.prepare", "loop_draft", "wrapup_suggest",
+  "conversations.draft_item", "capture.prepare", "loop_draft", "wrapup_suggest",
 ] as const;
 
 /** Whether a task is declared background (an admin may still switch it back to standard). */

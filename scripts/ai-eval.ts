@@ -20,8 +20,7 @@ import { ANSWER_INSTRUCTIONS, ANSWER_SCHEMA, INTENT_INSTRUCTIONS, INTENT_SCHEMA 
 import { STATUS_DRAFT_INSTRUCTIONS, STATUS_DRAFT_TASK, draftInput as statusInput } from "../actions/status-actions.ts";
 import { buildContext, CLASSIFY_INSTRUCTIONS, CLASSIFY_SCHEMA, CLASSIFY_TASK, contextText, PROMISE_INSTRUCTIONS, PROMISE_SCHEMA, PROMISE_TASK } from "../plan/asks-ai.ts";
 import { PREPARE_INSTRUCTIONS, PREPARE_TASK, prepareInput, prepareSchema } from "../plan/capture-prepare.ts";
-import { COMMENT_INSTRUCTIONS, COMMENT_SCHEMA, COMMENT_TASK, DRAFT_INSTRUCTIONS as CONV_DRAFT_INSTRUCTIONS, DRAFT_SCHEMA as CONV_DRAFT_SCHEMA, DRAFT_TASK as CONV_DRAFT_TASK, draftInput as convDraftInput } from "../plan/conversation-draft.ts";
-import { MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeInput } from "../plan/conversation-merge.ts";
+import { DRAFT_INSTRUCTIONS as CONV_DRAFT_INSTRUCTIONS, DRAFT_SCHEMA as CONV_DRAFT_SCHEMA, DRAFT_TASK as CONV_DRAFT_TASK, draftInput as convDraftInput } from "../plan/conversation-draft.ts";
 import { buildUpdate, UPDATE_INSTRUCTIONS, UPDATE_SCHEMA, UPDATE_TASK, type BatchMessage, type UpdateAnswer } from "../plan/conversations.ts";
 import { DEFAULT_AI } from "../server/appconfig.ts";
 
@@ -75,16 +74,6 @@ export const CASES: readonly EvalCase[] = [
     task: CONV_DRAFT_TASK, id: "bug", instructions: CONV_DRAFT_INSTRUCTIONS, schema: CONV_DRAFT_SCHEMA,
     input: convDraftInput({ clientName: "Contoso", title: "November export fails", summary: "Dana reports the invoice export returns a 500 for November. Sam is looking.", messages: [{ ref: "m1", from: "Dana Reyes", side: "client", at: "2026-11-06T14:00:00Z", text: "The invoice export fails for November, error 500." }], features: [{ id: 501, title: "Monthly invoice export" }], items: [] }),
     check: ((a: { level: string; parent_feature: number | null }) => a.level === "bug" && (a.parent_feature === 501 || a.parent_feature === null)) as never,
-  },
-  {
-    task: MERGE_TASK, id: "two-halves", instructions: MERGE_INSTRUCTIONS, schema: MERGE_SCHEMA,
-    input: mergeInput({ clientName: "Contoso", into: { title: "Export fails", summary: "The November export returns a 500.", messages: [{ from: "Dana Reyes", at: "2026-11-06T14:00:00Z", text: "Export fails, 500." }] }, from: { title: "Credit notes missing", summary: "Credit notes don't show in the export.", messages: [{ from: "Dana Reyes", at: "2026-11-06T14:20:00Z", text: "Also, credit notes are missing from it." }] } }),
-    check: ((a: { summary: string }) => /credit/i.test(a.summary) && /500|fail/i.test(a.summary)) as never,
-  },
-  {
-    task: COMMENT_TASK, id: "update", instructions: COMMENT_INSTRUCTIONS, schema: COMMENT_SCHEMA,
-    input: JSON.stringify({ client: "Contoso", item: 501, conversation: { title: "Credit notes in the export", summary: "Dana asked for credit notes as a second sheet; Sam agreed." }, change: { kind: "scope", note: "Credit notes go on a second sheet" }, resolved: false }),
-    check: ((a: { lines: string[] }) => a.lines.length >= 1 && a.lines.join(" ").length < 600) as never,
   },
   {
     task: STATUS_DRAFT_TASK, id: "two-features", instructions: STATUS_DRAFT_INSTRUCTIONS,

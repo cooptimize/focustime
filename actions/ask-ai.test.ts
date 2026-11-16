@@ -113,7 +113,7 @@ async function setup(o: SetupOptions = {}) {
   };
   const later = (minutes: number) => void (now = Temporal.Instant.from(now).add({ minutes }).toString());
   const poll = async () => (later(5), pollCycle(deps));
-  return { plan, teams, ctx, run, say, calls, logs, poll, later, person, done, client, colleague };
+  return { plan, teams, ctx, run, say, calls, logs, poll, later, person, done, client, colleague, conn: db.conn };
 }
 
 describe("sorting a request (asks.classify)", () => {
@@ -147,23 +147,22 @@ describe("sorting a request (asks.classify)", () => {
     expect(a).toMatchObject({ sort: null, likely: null, notSorted: "the AI's answer wasn't usable" });
   });
 
-  it('"none" hides the card and keeps it under Hidden by AI; Show it anyway brings it back', async () => {
+  it('"none" hides the card and keeps it under Hidden by AI', async () => {
     const s = await setup({ answer: () => JSON.stringify(aClassifyAnswer({ kind: "none", item_type: null, urgency: "backlog", reason: "A status update with no request." })) });
-    const m = s.say({ chatId: FAB.chatId, text: "FYI the deploy went fine, can you believe it?" });
+    s.say({ chatId: FAB.chatId, text: "FYI the deploy went fine, can you believe it?" });
     await s.poll();
-    let d = await s.run("requests.list", {});
+    const d = await s.run("requests.list", {});
     expect([d.open, d.requests.length, d.hidden.length]).toEqual([0, 0, 1]);
     expect(d.hidden[0]!.sort?.reason).toBe("A status update with no request.");
-    d = await s.run("requests.show", { chatId: FAB.chatId, messageId: m.messageId, shown: true });
-    expect([d.open, d.hidden.length]).toEqual([1, 0]);
   });
 
-  it('a hidden "none" request goes under the 14-day rule with its message; one shown anyway is kept', async () => {
+  it('a hidden "none" request goes under the 14-day rule with its message; one shown anyway (before RM-1) is kept', async () => {
     const s = await setup({ answer: () => JSON.stringify(aClassifyAnswer({ kind: "none", item_type: null })) });
     const a = s.say({ chatId: FAB.chatId, createdAt: "2026-11-04T15:01:00Z", text: "Nice work, can you believe it?" });
     const b = s.say({ chatId: FAB.chatId, createdAt: "2026-11-04T15:02:00Z", text: "Great, can we keep this?" });
     await s.poll();
-    await s.run("requests.show", { chatId: FAB.chatId, messageId: b.messageId, shown: true });
+    // Show it anyway went in RM-1; a request shown before is kept, as requests.show left it.
+    await s.conn.run("UPDATE requests SET ai_shown = 1 WHERE chat_id = ? AND message_id = ?", [FAB.chatId, b.messageId]);
     await s.teams.expire("2026-11-30T00:00:00Z");
     expect((await s.teams.requests([FAB.chatId])).map((x) => x.messageId)).toEqual([b.messageId]);
     expect(await s.teams.message(FAB.chatId, a.messageId)).toBeNull();
@@ -195,18 +194,6 @@ describe("sorting a request (asks.classify)", () => {
     await s.poll();
     expect((await s.run("requests.list", {})).requests[0]!.notSorted).toBe("it mentions another client");
     expect(s.calls).toHaveLength(0);
-  });
-
-  it("Sort again: one more request, by hand", async () => {
-    let fail = true;
-    const s = await setup({ answer: (): string | ProviderReply => (fail ? { ok: false, kind: "provider", status: 500 } : JSON.stringify(aClassifyAnswer({ urgency: "now" }))) });
-    const m = s.say({ chatId: FAB.chatId, text: "Can you look?" });
-    await s.poll();
-    await s.poll();
-    expect(s.calls).toHaveLength(1); // one request, never again by itself
-    fail = false;
-    const d = await s.run("requests.sort_again", { chatId: FAB.chatId, messageId: m.messageId });
-    expect(d.requests[0]).toMatchObject({ notSorted: null, sort: { urgency: "now" } });
   });
 
   it("the context: that client's chat and items only, at most 5 earlier messages, authors as client or Cooptimize, no email addresses", async () => {

@@ -67,7 +67,7 @@ App secrets live only in Key Vault (RBAC mode, soft delete and purge protection 
 
 1. **The audience decides, from real membership.** A chat whose members are all Cooptimizers is internal. Any guest or outside member makes it client-facing. The Cooptimizer rule is the one every picker uses (home tenant, not a guest, not an automation account, inside the Cooptimize domains); a chat whose members aren't known yet is client-facing. Membership is read again at every poll from the cached member list (refreshed daily and on Refresh), so a guest added later changes the audience on the next poll (`chatAudience` in `plan/boundary.ts`).
 2. **Internal chats** are sorted normally, keeping cross-client mentions.
-3. **Client-facing chats:** a message that names another client is held back and never sent to AI. It stays held until someone sorts it by hand or marks it not work-related, or an admin changes a client's names, which checks it again, and it is deleted with the chat's other messages by the usual retention. The Inbox doesn't show the held list; the actions that list and sort held messages remain (`conversations.held`).
+3. **Client-facing chats:** a message that names another client is held back and never sent to AI. It stays held until an admin changes a client's names, which checks it again (`held_recheck`), and it is deleted with the chat's other messages by the usual retention. No screen lists held messages and, since RM-1, no action sorts one by hand; only the count reaches the members of its chat.
 4. **Only words travel.** Sorting or drafting for one client never pulls another client's records (items, conversations, promises, transcripts) into the prompt. A mention in a message's own text is allowed in an internal chat; in a client-facing chat, recent context naming another client is left out.
 5. **AI-written DevOps text never names another client:** the generation prompt says so, and one shared check after generation (the `scrub` rule in `ai/service.ts`) replaces any other client's name or alias with "another client" and marks the draft "Another client's name was removed". Internal work may name clients.
 6. **Every exit to client eyes is checked** by one shared check (`exitCheck` in `plan/boundary.ts`): Close the loop's posts and emails, every DevOps write into a client's org (create, comment, description, state with a note), and the status report's lines. The preview flags another client's name, alias, DevOps project or known item id (links included) with one click to replace it. Text the person typed can still go after they've seen the flag (Confirm carries `mentionsOk`); undos only put back what was there. Internal targets aren't checked.
@@ -83,7 +83,7 @@ flowchart LR
   A -->|all Cooptimizers| I[Sort with AI, names kept]
   A -->|anyone outside| M{Names another client?}
   M -->|no| S[Sort with AI, context without other clients]
-  M -->|yes| H[Held back: sort by hand]
+  M -->|yes| H[Held back, checked again when names change]
   S --> D[AI drafts for the client]
   D -->|check after| R[Names replaced, draft marked]
   R --> X{Exit to client eyes}

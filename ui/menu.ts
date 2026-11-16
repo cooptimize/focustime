@@ -1227,9 +1227,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // NM-2: Code's Group by switch is in Code.
     case "ui.set_code_sql_group": return env.showCode ? { run: () => env.showCode!(null) } : { disabled: "Sign in to read clients' code" };
     case "ui.set_inbox":
-    case "inbox.hide":
-    case "inbox.snooze":
-    case "inbox.looked":
       return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.set_show_timelines": return { run: () => env.saveShowTimelines(!env.showTimelines) };
@@ -1300,48 +1297,22 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":
-    case "requests.context":
-    case "requests.resolve":
-    case "requests.reopen":
-    case "requests.search":
-    case "requests.sort_again":
-    case "requests.show":
       return { run: () => env.setView("conversations") };
     case "inbox.list":
     case "inbox.count":
     case "inbox.today":
     case "inbox.seen":
     case "conversations.list":
-    case "conversations.count":
     case "conversations.messages":
-    case "conversations.seen":
-    case "conversations.resolve":
-    case "conversations.claim":
-    case "conversations.give":
-    case "conversations.add_helper":
-    case "conversations.release":
-    case "conversations.close_out":
     case "conversations.undo_ownership":
-    case "conversations.not_request":
     case "conversations.not_work":
     case "conversations.not_work_undo":
-    case "conversations.reopen":
-    case "conversations.hide":
-    case "conversations.move":
-    case "conversations.this_is_work":
     case "conversations.link":
-    case "conversations.take_over":
     case "conversations.search":
     case "conversations.draft":
     case "suggestions.skip":
-    case "conversations.merge":
-    case "conversations.merge_preview":
-    case "conversations.unmerge":
     case "conversations.search_items":
     case "conversations.unlink":
-    case "conversations.held":
-    case "conversations.held_not_work":
-    case "conversations.held_bulk":
     case "conversations.suggestions":
     case "conversations.dismiss":
     case "conversations.undismiss":
@@ -1368,7 +1339,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "promises.reopen":
     case "promises.link":
       return { run: () => env.setView("my_promises") };
-    case "requests.refresh": return { run: () => (env.setView("requests"), void env.runPlan("requests.refresh", {})) };
     case "requests.purge":
       return { run: () => env.openSettings("chats") };
     case "ai.status":
@@ -1481,7 +1451,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "followup.delete":
     case "followup.people":
     case "people.picker":
-    case "followups.review":
       return { run: env.openFollowUps };
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
@@ -1778,44 +1747,13 @@ function uiCommands(env: MenuEnv): MenuItem[] {
  */
 export const HOLLOW: Readonly<Record<string, string>> = {
   "conversations.list": "Names a Conversations list; the Inbox has none since IB-4 (From chats lists suggestions)",
-  "conversations.count": "A count of conversations that need you; that view went with IB-4",
-  "conversations.seen": "Marks a conversation seen; a suggestion has no New mark",
-  "conversations.resolve": "Resolve went with IB-4",
-  "conversations.reopen": "Reopen went with IB-4",
-  "conversations.not_request": "Not a request went with IB-4 (This isn't work replaces it)",
-  "conversations.hide": "Hide for me went with IB-4 (Dismiss replaces it)",
-  "conversations.move": "No list of a conversation's messages to move or split them in",
-  "conversations.this_is_work": "The Chatter list it answered went with IB-4",
-  "conversations.claim": "Ownership went with IB-4",
-  "conversations.give": "Ownership went with IB-4",
-  "conversations.add_helper": "Ownership went with IB-4",
-  "conversations.release": "Ownership went with IB-4",
-  "conversations.close_out": "Closing out a conversation went with IB-4",
   "conversations.undo_ownership": "Ownership went with IB-4",
-  "conversations.take_over": "Take it over went with IB-4",
-  "conversations.held": "The held-back list is out of view since IB-4",
-  "conversations.held_bulk": "The held-back list is out of view since IB-4",
-  "conversations.held_not_work": "The held-back list is out of view since IB-4",
-  "conversations.merge": "Merge went with IB-4",
-  "conversations.merge_preview": "Merge went with IB-4",
-  "conversations.unmerge": "Merge went with IB-4",
   "conversations.unlink": "A linked conversation leaves From chats, so nothing lists one to unlink",
   "suggestions.skip": "Follow-through suggestions are no longer made (IB-4)",
-  "requests.context": "The list of chat requests went with IB-1 and IB-4",
-  "requests.resolve": "The list of chat requests went with IB-4",
-  "requests.reopen": "The list of chat requests went with IB-4",
-  "requests.search": "The list of chat requests went with IB-4",
-  "requests.sort_again": "The list of chat requests went with IB-4",
-  "requests.show": "Hidden requests aren't listed anywhere",
-  "requests.refresh": "Refreshes a list of chat requests that is gone; Refresh From chats does the same read",
   "inbox.today": "A read for Day's lines, not a place",
   "inbox.count": "The tab's number, not a place",
-  "inbox.hide": "Hide for me went with IB-4",
-  "inbox.snooze": "Snooze went with IB-4",
-  "inbox.looked": "The Inbox timeline went",
   "inbox.seen": "New marks went with IB-4",
   "followup.snooze": "Promises has no Snooze",
-  "followups.review": "Nothing reviews heads-ups any more",
   "weekplan.add_draft": "The type box for a draft feature went with WD-2",
   "weekplan.draft_tier": "Draft features on the week's list went with WD-2",
   "chats.social": "No screen marks a client chat as a Social chat",
