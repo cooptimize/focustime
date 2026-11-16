@@ -141,6 +141,13 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 | `deploy-prod.yml` | By hand only | Above |
 | `ci-webkit-deps.yml` | A pull request that changes `scripts/ci-webkit-deps.sh` or the CI workflows, or by hand | Proves the webkit job's packages install from the cache with the package servers unreachable; tests nothing of FocusTime's and isn't part of the gate |
 
+## What the server sends
+
+- **Compressed by the app.** Container Apps' ingress passes answers through as they are; the app compresses its own files once at start (about 0.2 s before it listens) and a named list of large reads per answer ([Architecture](architecture.md#what-the-server-sends-compressed)). No Azure setting is involved, and a rollback to a build before PF-2 simply sends everything plain again.
+- **Check it** without signing in or any secret: `curl -s -D - -o /dev/null -H 'Accept-Encoding: gzip, br' <url>/` and the same for a script named in the page (`curl -s <url>/ | grep -o '/assets/[^"]*\.js' | head -1`). Expect `content-encoding: br`, a `content-length` and `vary: Accept-Encoding`; a made-up file under `/assets/` answers 404.
+- **A missing file** under `/assets/` is 404 and never cached; the installed app keeps only files that came back as themselves, so a release can't leave a screen broken until the next one.
+- **Memory.** The built files are held in memory with their compressed forms: about 3 MB plain and 1.5 MB compressed for this build.
+
 ## Diagnostics, logs and what is never logged
 
 - **For people:** Settings › Your data › Diagnostics (counts only, for their own chats), Settings › Activity (every outside write, with Undo and Retry) and Settings › DevOps › Find an item (why an item isn't showing).
