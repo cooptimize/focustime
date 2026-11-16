@@ -49,13 +49,6 @@ describe.skipIf(!CHROMIUM)("NM-1: no now mark on a cell that isn't a block", () 
     }, T);
   }
 
-  it("a block under way still has its mark, and only that block", async () => {
-    const h = await startDemo("chromium", {}, "2026-11-04T10:03:00-05:00");
-    hs.push(h);
-    const { page } = await freshPage(h);
-    await go(page, "#/week", "[data-drop]");
-    const marked = await page.evaluate((sel) => [...document.querySelectorAll<HTMLElement>("[data-drop]")].filter((el) => el.querySelector(sel)).map((el) => el.dataset.drop), MARK);
-    expect(marked).toEqual(["2026-11-04:AM"]);
-    await page.close();
-  }, T);
+  // BT-1: "a block under way still has its mark, and only that block" (Wednesday 10:03, Week's cards) was removed:
+  // e2e/day/now-mark.test.ts "at 10:03 AM" makes the same check on the same screen and clock (docs/ux/bt1/removed.md).
 });
