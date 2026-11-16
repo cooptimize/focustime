@@ -511,6 +511,12 @@ async function serveStatic(root: string, pathname: string, res: ServerResponse):
     return res.end();
   }
   const isFile = await stat(file).then((s) => s.isFile()).catch(() => false);
+  // PF-2 (B): a built file this build doesn't have (a page from an earlier release asking for its old screen) is "not
+  // found", never the page under a script's name. Every other unknown address still gets the page (the app's routes).
+  if (!isFile && (rel.startsWith(`assets${sep}`) || rel.startsWith("assets/") || rel === "assets")) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8", "content-length": 0, "cache-control": "no-store" });
+    return res.end();
+  }
   if (!isFile) file = join(root, "index.html");
   const type = TYPES[extname(file)] ?? "application/octet-stream";
   const body = await readFile(file);

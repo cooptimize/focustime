@@ -74,6 +74,16 @@ describe("server", () => {
     expect((await app.browser().send("/assets/app.js")).status).toBe(200);
   });
 
+  it("PF-2: a missing built file is not found and kept nowhere; any other unknown address is the page", async () => {
+    const gone = await app.browser().send("/assets/Ahead-gone.js");
+    expect([gone.status, gone.headers["cache-control"], gone.headers["content-length"], gone.body]).toEqual([404, "no-store", "0", ""]);
+    expect((await app.browser().send("/assets/")).status).toBe(404);
+    const page = await app.browser().send("/some/view");
+    expect([page.status, page.headers["content-type"], page.headers["cache-control"]]).toEqual([200, "text/html; charset=utf-8", "no-store"]);
+    expect(page.body).toContain("<title>FocusTime</title>");
+    expect((await app.browser().send("/missing.js")).status).toBe(200);
+  });
+
   it("refuses an API call without a session, as JSON with code signed_out", async () => {
     const r = await app.browser().action("week.load", {});
     expect(r.status).toBe(401);

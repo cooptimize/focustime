@@ -13,42 +13,45 @@ const ORIGIN = "https://focustime.example";
 const SHELL = ["/", "/assets/main-abc.js", "/assets/main-abc.css", "/icons/focustime-192.png", "/manifest.webmanifest"];
 
 /** The worker in a sandbox: its listeners, a fake Cache Storage (with every put recorded) and a fake network. */
-function worker(sha = "abc1234def", online: boolean | "hang" = true, /** PF-1: another build's files, and the browser's Cache Storage shared with an earlier worker. */ shell: readonly string[] = SHELL, shared?: Map<string, Map<string, string>>, /** A file the install can't fetch. */ missing: string | null = null) {
+function worker(sha = "abc1234def", online: boolean | "hang" = true, /** PF-1: another build's files, and the browser's Cache Storage shared with an earlier worker. */ shell: readonly string[] = SHELL, shared?: Map<string, Map<string, string>>, /** A file the install can't fetch (the server answers 404). */ missing: string | null = null, /** PF-2: a file the server answers with something else (the page, a redirect). */ wrong: Record<string, { status?: number; type?: string; redirected?: boolean }> = {}) {
   const timers: (() => void)[] = [];
   const listeners: Record<string, (e: unknown) => void> = {};
   const stores = shared ?? new Map<string, Map<string, string>>([["focustime-shell-0000000", new Map()], ["someone-elses", new Map()]]);
   const puts: string[] = [];
   const network: string[] = [];
-  const respond = (body: string) => ({ body, ok: true });
+  /** PF-2: a response as the browser hands it over: status, type and headers (the type from the file's name). */
+  const TYPE_OF: Record<string, string> = { js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", png: "image/png", webmanifest: "application/manifest+json", html: "text/html; charset=utf-8" };
+  const respond = (body: string, path = "/", o: { status?: number; type?: string; redirected?: boolean } = {}) => {
+    const status = o.status ?? 200;
+    const type = o.type ?? (path === "/" ? TYPE_OF.html! : (TYPE_OF[path.slice(path.lastIndexOf(".") + 1)] ?? "application/octet-stream"));
+    return { body, ok: status >= 200 && status < 300, status, type: "basic", redirected: !!o.redirected, headers: { get: (n: string) => (n.toLowerCase() === "content-type" ? type : null) } };
+  };
   const fetch = async (r: { url: string } | string) => {
     const url = typeof r === "string" ? r : r.url;
     network.push(url);
     if (online === "hang") return new Promise<never>(() => {});
     if (!online) throw new TypeError("offline");
-    return respond(`network:${new URL(url, ORIGIN).pathname}`);
+    const path = new URL(url, ORIGIN).pathname;
+    if (path === missing) return respond("", path, { status: 404, type: "text/plain; charset=utf-8" });
+    return respond(`network:${path}`, path, wrong[path] ?? {});
   };
   const caches = {
     open: async (name: string) => {
       if (!stores.has(name)) stores.set(name, new Map());
       const c = stores.get(name)!;
       return {
-        addAll: async (reqs: { url: string }[]) => {
-          // All or nothing, as the browser's addAll is.
-          if (missing && reqs.some((r) => new URL(r.url, ORIGIN).pathname === missing)) throw new TypeError("Request failed");
-          for (const r of reqs) {
-            const path = new URL(r.url, ORIGIN).pathname;
-            puts.push(path);
-            c.set(path, `cached:${path}`);
-          }
+        put: async (r: { url: string }) => {
+          const path = new URL(r.url, ORIGIN).pathname;
+          puts.push(path);
+          c.set(path, `cached:${path}`);
         },
-        put: async (r: { url: string }) => void puts.push(new URL(r.url, ORIGIN).pathname),
       };
     },
     keys: async () => [...stores.keys()],
     delete: async (name: string) => stores.delete(name),
     match: async (url: string, o?: { cacheName?: string }) => {
       const hit = stores.get(o?.cacheName ?? "")?.get(new URL(url, ORIGIN).pathname);
-      return hit === undefined ? undefined : respond(hit);
+      return hit === undefined ? undefined : respond(hit, new URL(url, ORIGIN).pathname);
     },
   };
   const self = {
@@ -178,6 +181,33 @@ describe("the service worker across a release, with the app split by screen (PF-
     expect([...(stores.get("focustime-shell-2222222")?.keys() ?? [])]).toEqual([]);
     expect([...stores.get("focustime-shell-1111111")!.keys()].sort()).toEqual([...OLD].sort());
     expect(await old.get("/assets/Ahead-old.js")).toBe("cached:/assets/Ahead-old.js");
+  });
+});
+
+describe("the service worker keeps only the file it asked for (PF-2)", () => {
+  for (const [what, wrong] of [
+    ["the page answered under a script's name", { "/assets/main-abc.js": { type: "text/html; charset=utf-8" } }],
+    ["a redirect", { "/assets/main-abc.css": { redirected: true } }],
+    ["a server error", { "/manifest.webmanifest": { status: 500, type: "text/plain" } }],
+  ] as const) {
+    it(`${what} fails the install and nothing is kept`, async () => {
+      const w = worker("abc1234def", true, SHELL, undefined, null, wrong);
+      await expect(w.fire("install")).rejects.toThrow(/Not the file asked for/);
+      expect(w.puts).toEqual([]);
+    });
+  }
+
+  it("a missing file (404) fails the install and nothing is kept", async () => {
+    const w = worker("abc1234def", true, SHELL, undefined, "/assets/main-abc.js");
+    await expect(w.fire("install")).rejects.toThrow();
+    expect(w.puts).toEqual([]);
+    expect([...(w.stores.get("focustime-shell-abc1234")?.keys() ?? [])]).toEqual([]);
+  });
+
+  it("each shell file comes back as its own type, and every one is kept", async () => {
+    const w = worker();
+    await w.fire("install");
+    expect(w.puts.sort()).toEqual([...SHELL].sort());
   });
 });
 

@@ -12,7 +12,7 @@ import { onFreePort } from "../test/ports.ts";
 import { createApp, type AppOptions, type SignInHooks } from "./app.ts";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./auth/cookies.ts";
 
-export type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
+export type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string; /** PF-2: the bytes as they came, before any decoding (a compressed answer stays compressed). */ raw: Buffer };
 
 /** A database with the app tables (users, sessions, auth_requests), for an account store. */
 export function accountsDb(): Conn {
@@ -63,8 +63,8 @@ export async function startTestApp(o: {
         const h: Record<string, string> = { host: `localhost:${port}`, ...(jar.size ? { cookie: cookieHeader() } : {}), ...headers };
         if (body) h["content-length"] = String(Buffer.byteLength(body));
         const req = request({ host: "127.0.0.1", port, path, method, headers: h }, (res) => {
-          let data = "";
-          res.on("data", (c) => (data += c));
+          const chunks: Buffer[] = [];
+          res.on("data", (c: Buffer) => chunks.push(c));
           res.on("end", () => {
             const set = res.headers["set-cookie"] ?? [];
             for (const c of set) {
@@ -75,7 +75,8 @@ export async function startTestApp(o: {
               if (attrs.some((a) => a.trim().toLowerCase() === "max-age=0")) jar.delete(name);
               else jar.set(name, value);
             }
-            resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data });
+            const raw = Buffer.concat(chunks);
+            resolve({ status: res.statusCode ?? 0, headers: res.headers, body: raw.toString("utf8"), raw });
           });
         });
         req.on("error", reject);
