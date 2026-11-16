@@ -2,7 +2,7 @@
 // never DevOps; the card's parent opens its own card; Esc closes and focus goes back; the ⋯ menu copies the DevOps
 // link. Ticking a story opens Wrap it up: Finished and Made progress each write only after one preview and Confirm;
 // closing the sheet keeps the tick and writes nothing. A client with DevOps writes off says so once a session. The phone shows both as full-height sheets with no sideways
-// scroll at 360 (iOS conditions: a larger root font, bypassCSP). Screenshots to docs/ux/fn1 when FOCUSTIME_SHOTS is set.
+// scroll at 360 (iOS conditions: a larger root font, bypassCSP). Screenshots to screenshots/fn1 when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

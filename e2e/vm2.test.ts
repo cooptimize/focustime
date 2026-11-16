@@ -3,7 +3,7 @@
 // demo's clock is moved by demo.vm_tick (verification runs only). As production: on with 5 minutes, the line says the
 // next time, the VM starts at it, the chip follows, the log says automatic, Skip this one prevents the next start, and
 // Stop has its preview. As dev: the same person opted in, the clock past the time, nothing starts and the form says
-// production only. Screenshots at 1440x900, light and dark, when VM2_SHOTS names a folder (docs/ux/vm2).
+// production only. Screenshots at 1440x900, light and dark, when VM2_SHOTS names a folder (screenshots/vm2).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";

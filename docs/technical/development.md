@@ -38,6 +38,16 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 - **Claude Code never merges** a pull request, never deploys prod and never pushes to `main`. A person reviews and merges.
 - Never commit secrets or real personal or client data. Tests use fakes (`@example` addresses, `contoso` and `fabrikam` orgs); screenshots come from the demo only. `npm run guards` checks for real names and desktop words.
 
+## Screenshots
+
+A step's screenshots never go on `main` or on the step's branch (CI-3). Kept true by `npm run guards`, which fails on an image or video under `docs/ux` and on any file over 300 KB outside the few named in `scripts/guards.ts` (`LARGE_OK`, each with its reason).
+
+1. **Take them** from the demo only, into `screenshots/<step>/` (ignored by git): a behavior test with `FOCUSTIME_SHOTS=screenshots/<step>` set, a screenshot script in `e2e/shot-scripts/` (`<STEP>_SHOTS=screenshots/<step> npm run shots -- e2e/shot-scripts/<step>-shots.ts`; each file's header names its variable), or a script in `scripts/` whose first argument is the folder. The screenshot scripts are not tests: `npm test` and CI never run them (`vitest.shots.config.ts` is their only config).
+2. **Put them on their branch**: `node scripts/shots-branch.ts screenshots/<step> <step>` makes or updates `shots/<step>` with exactly those images (no other file, and nothing on the working branch or `main` changes), pushes it and prints one line per image.
+3. **Show them in the pull request** by pasting those lines into its body. Each is the image's raw address pinned to the branch's commit (`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<file>`), so the pictures stay as they were whatever is pushed later.
+
+The images from before CI-3 are on `shots/archive`, in their old `docs/ux/<step>/` folders; [docs/ux/README.md](../ux/README.md) gives its commit. A step's notes, tables and audits stay in `docs/ux/<step>/` as text.
+
 ## Tests and CI
 
 - **The inner loop:** `npx vitest related <files>` or `npx vitest --changed`, plus `npm run typecheck`. Run the full suite once before the pull request; CI runs it again.
@@ -45,7 +55,7 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 - **A full local browser run:** `npx vitest run e2e/`. Each file gets its own demo server, free port and temp folder, the UI is built once per run, and the run's temp folder is removed at the end. `test/workers.ts` picks the worker count from free CPU and memory; `FOCUSTIME_TEST_WORKERS=<n>` overrides it, and `FOCUSTIME_TEST_WORKERS=2` with `taskset -c 0-3` is close to a CI shard. Runs in different worktrees can overlap.
 - **Stopping servers by hand:** stop your own server by its process id, never by a pattern such as `pkill -f server/main.ts`: on a shared machine it also stops other sessions' test servers and the local service. If a run fails with `ERR_CONNECTION_REFUSED` or "The demo server on port N stopped during the test", look for that first.
 - **Test data** comes from the builders in `test/builders`, never hand-written fixtures. A test that starts a server takes its port from `test/ports.ts`.
-- **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`: the typecheck, the guards, the unit and store tests with a SQL Server container, a UI build, the browser tests in six shards, the Bicep build and the image build with a demo start. There are no retries.
+- **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`; what it runs is under [What CI runs and when](#what-ci-runs-and-when). There are no retries.
 - **A flaky test** is a cause to find, never a retry: rerun it once, and if it fails again, run that file several times at once on fewer cores to reproduce it ([How tests stay apart](#how-tests-stay-apart)).
 
 ### How tests stay apart
@@ -56,7 +66,23 @@ Any order and any number at once gives the same result:
 - **Browser tests.** Each file's demo server has its own temp folder for config, data, cache and the launch file, its own port, and the clock pinned with `--clock` (Monday Nov 2, 2026 9:30 AM unless a file pins another). Each `freshPage` is a new browser context and a new demo session with its own in-memory store, so tests in a file never see each other's changes. `e2e/live.ts` does the same for a real session on fake sources, and a fake a test builds beside it takes the harness's clock too.
 - **Waiting.** A test waits for the condition it means (a locator, `expect.poll` on what the screen shows), never a fixed sleep. A count or text read once is only for what is already settled, after a wait on that same thing. There are no retries in the config or on CI.
 - **Workers.** `test/workers.ts` (read by `vite.config.ts`, and said at the start of a run as "test workers: N") takes 60% of the CPUs that aren't already busy (by the 1-minute load average, so a second session's suite takes what is left; not on CI, where the runner is the job's alone), at most one per GB of free memory beyond 2 GB, between 1 and CPUs − 1. That is 12 on a 20-core laptop and 2 on CI's 4-core runners, which is why the browser tests run in six shards there. `FOCUSTIME_TEST_WORKERS=1` runs one file at a time, to bisect a failure.
-- **As CI runs it.** One browser shard: `npx vitest run e2e/ --shard=2/6` (the same six shards as `ci.yml`; the UI is built first, in about a second). The unit and store half: `npx vitest run --exclude 'e2e/**'`, with `npm run db:up` and `FOCUSTIME_TEST_SQL=required`. One test: `npx vitest run e2e/<file>.test.ts -t "<name>"`. To check a fix for a flake, run that file several times at once on fewer cores, for example eight copies under `taskset -c 0-3`.
+- **As CI runs it.** One browser shard: `npx vitest run e2e/ --shard=2/6 --exclude e2e/safari.test.ts` (the same six shards as `ci.yml`; the UI is built first, in about a second); WebKit's file: `FOCUSTIME_TEST_WEBKIT=required npx vitest run e2e/safari.test.ts`. The unit and store half: `npx vitest run --exclude 'e2e/**'`, with `npm run db:up` and `FOCUSTIME_TEST_SQL=required`. One test: `npx vitest run e2e/<file>.test.ts -t "<name>"`. To check a fix for a flake, run that file several times at once on fewer cores, for example eight copies under `taskset -c 0-3`.
+
+### What CI runs and when
+
+`.github/workflows/ci.yml`, kept true by `scripts/ci-workflow.test.ts` (it reads the workflow) and `scripts/ci-changes.test.ts`:
+
+| Job | What it runs | When |
+|---|---|---|
+| What changed | `scripts/ci-changes.sh`: is this a pull request that changes only files under `docs/` outside `docs/technical/`? | Always |
+| Unit and store tests (SQLite and SQL Server) | The typecheck, the guards, every test outside `e2e/` (the docs checks among them) with a SQL Server container, the UI build | Always |
+| Browser tests N/6 (Chromium and WebKit) | A sixth each of the browser files except `e2e/safari.test.ts`, in the system's Chromium, with no WebKit set up (the name is kept from before) | Skipped for a docs-only pull request |
+| Browser tests WebKit (Safari) | `e2e/safari.test.ts`, with WebKit and its system packages from their caches | Skipped for a docs-only pull request |
+| image | The image build and a demo start | Skipped for a docs-only pull request |
+| infra | The Bicep build | Always |
+| test | The gate: passes when all of the above passed, and records the tree it tested for deploy-dev, except on a docs-only run (deploy-dev then runs all of CI after the merge) | Always |
+
+A skipped job still starts and passes under its own name, with one step saying it was docs only, so a required check is never left waiting. Anything else is code: a push to `main`, deploy-dev's call, `docs/technical/` (the app shows it), any file at the top of the repo (the image copies them), and any change the script can't read. The rule for what counts as docs is in the script's header; a file under `docs/` that a browser test or the image starts to read must make it code there first.
 
 ## Dependencies
 

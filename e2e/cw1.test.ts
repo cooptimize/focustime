@@ -2,7 +2,7 @@
 // the pinned clock (Wednesday Nov 4, 2026 10:00 AM ET, a Northwind day) by Jordan Lee, and an ended one in Atlas's.
 // Week's Wednesday AM card and Today's Now card show "Call live in … · started 9:20 · Join"; the card's ⋯ offers Join and
 // Start a call for each Northwind chat; on the phone at 360 the line and Join fit (44 px, no sideways scroll). With
-// FOCUSTIME_SHOTS set it also saves the screenshots for docs/ux/cw1/.
+// FOCUSTIME_SHOTS set it also saves the screenshots for screenshots/cw1/.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

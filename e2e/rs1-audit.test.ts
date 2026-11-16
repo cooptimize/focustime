@@ -1,6 +1,6 @@
 // RS-1: the PS-1 and PS-2 measurements (e2e/ps1-audit.ts) and the U5 text style count, taken on every screen the
 // restyle touches and written as JSON, so the numbers before and after can be put side by side. Only when RS1_AUDIT
-// names a file (docs/ux/rs1/audit-before.json or audit-after.json); nothing runs otherwise. Demo data only.
+// names a file (screenshots/rs1/audit-before.json or audit-after.json); nothing runs otherwise. Demo data only.
 import { writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";

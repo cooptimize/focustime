@@ -4,7 +4,7 @@
 // the created feature on the block; Capture → Draft feature → Ctrl+Enter → Create without opening the Inbox; a draft
 // story's Create in DevOps from its row, staying on its block; no write PAT → the one line and Save as draft.
 // Edge cases are unit tests (plan/quick-create.test.ts, actions/new-item-actions.test.ts, actions/devops-write.test.ts).
-// FOCUSTIME_SHOTS: screenshots at 1440 × 900, light and dark (docs/ux/qc1/ for the PR).
+// FOCUSTIME_SHOTS: screenshots at 1440 × 900, light and dark (screenshots/qc1/ for the PR).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { oldTree } from "./backlog-helpers.ts";

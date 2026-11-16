@@ -8,7 +8,7 @@ import type { Page } from "playwright-core";
 import { startDemo } from "../e2e/harness.ts";
 
 const mode = process.argv[2] === "after" ? "after" : "before";
-const out = process.argv[3] ?? `docs/ux/ib4/${mode}`;
+const out = process.argv[3] ?? `screenshots/ib4/${mode}`;
 mkdirSync(out, { recursive: true });
 const harness = await startDemo("chromium", {}, "2026-11-05T15:30:00-05:00");
 const errors: string[] = [];

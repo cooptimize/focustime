@@ -8,7 +8,7 @@
 // Taken out with TP-1's screens: the request type's hints and examples on focus, the full example, the tag refusal and
 // its retry, an admin's edit in Admin › Work templates, and Settings' read-only view of the templates.
 // Edge cases are unit tests (plan/three-questions.test.ts, actions/devops-write.test.ts, actions/plan-actions.test.ts).
-// FOCUSTIME_SHOTS: screenshots at 1440 × 900 and the phone, light and dark (docs/ux/tp1b/ for the PR).
+// FOCUSTIME_SHOTS: screenshots at 1440 × 900 and the phone, light and dark (screenshots/tp1b/ for the PR).
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import type { Page } from "playwright-core";
 import { startDemo } from "../e2e/harness.ts";
 
-const out = process.argv[2] ?? "docs/ux/bl1/before";
+const out = process.argv[2] ?? "screenshots/bl1/before";
 const phase = (process.argv[3] ?? "after") as "before" | "after";
 mkdirSync(out, { recursive: true });
 const h = await startDemo("chromium", {}, "2026-11-06T10:00:00-05:00");

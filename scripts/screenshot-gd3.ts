@@ -5,7 +5,7 @@
 import { mkdirSync } from "node:fs";
 import { startDemo } from "../e2e/harness.ts";
 
-const out = process.argv[2] ?? "docs/ux/gd3";
+const out = process.argv[2] ?? "screenshots/gd3";
 mkdirSync(out, { recursive: true });
 const harness = await startDemo("chromium", {}, "2026-11-05T10:00:00-05:00");
 const errors: string[] = [];

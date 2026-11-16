@@ -3,7 +3,7 @@
 // acceptance criteria added; a table description keeps a line and Add to the end; the item changed in DevOps under
 // an open edit keeps my words and saves again against the new version; Move… puts a story under another feature and
 // the Backlog shows it there; each undone from the DevOps write log; someone who may not edit sees why; the phone.
-// Screenshots to docs/ux/ed1 when FOCUSTIME_SHOTS is set (dark and light, 1440×900 and the phone).
+// Screenshots to screenshots/ed1 when FOCUSTIME_SHOTS is set (dark and light, 1440×900 and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "./harness.ts";

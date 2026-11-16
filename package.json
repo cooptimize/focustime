@@ -19,6 +19,7 @@
     "test:zones": "for z in America/New_York America/Chicago America/Denver America/Los_Angeles; do echo \"TZ=$z\"; TZ=$z vitest run --silent || exit 1; done",
     "test:watch": "vitest",
     "screenshot": "node scripts/screenshot.mjs",
+    "shots": "vitest run --config vitest.shots.config.ts",
     "start": "vite build && node server/main.ts",
     "serve": "node server/main.ts",
     "db:up": "node scripts/db.ts up",

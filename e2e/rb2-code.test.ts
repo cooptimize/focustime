@@ -2,7 +2,7 @@
 // client's repos, a model opens to its tables, a row opens its file and Show in files lands on its folder; a search
 // across clients fills in by client, says which client was left out and which failed, the keyboard reaches a result
 // and opens it, Back returns to the results; the words typed are in no request, no address and no browser storage; an
-// admin sees the two new rows in Code views; the phone. With FOCUSTIME_SHOTS set, screenshots for docs/ux/rb2 (dark
+// admin sees the two new rows in Code views; the phone. With FOCUSTIME_SHOTS set, screenshots for screenshots/rb2 (dark
 // and light at 1440×900, and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";

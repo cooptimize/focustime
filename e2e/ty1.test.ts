@@ -1,7 +1,7 @@
 // TY-1: Today's timeline. The switch (shown, hidden, remembered; the list unchanged when off), Week's parts (overlapping
 // meetings side by side, blocks, now line, Evening band, PTO), dragging (tray to timeline, move, resize, back to the
 // tray, each with Undo), the keyboard, Timebox my day's placeholders on the timeline with no popup, nothing written
-// outside FocusTime, and the phone by tap at 360. With FOCUSTIME_SHOTS: the screens for docs/ux/ty1.
+// outside FocusTime, and the phone by tap at 360. With FOCUSTIME_SHOTS: the screens for screenshots/ty1.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";

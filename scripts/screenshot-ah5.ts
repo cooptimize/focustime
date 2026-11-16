@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import type { Locator, Page } from "playwright-core";
 import { freshPage, startDemo } from "../e2e/harness.ts";
 
-const out = process.argv[2] ?? "docs/ux/ah5";
+const out = process.argv[2] ?? "screenshots/ah5";
 const phase = (process.argv[3] ?? "after") as "before" | "after";
 mkdirSync(out, { recursive: true });
 const h = await startDemo("chromium", {}, "2026-11-06T10:00:00-05:00");

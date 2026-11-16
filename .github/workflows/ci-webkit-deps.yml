@@ -1,9 +1,9 @@
-# CI-2: proof that the browser jobs' WebKit packages install with the package servers unreachable
+# CI-2: proof that ci.yml's webkit job's packages install with the package servers unreachable
 # (scripts/ci-webkit-deps.sh). Runs only when the script or the CI workflows change, and on manual dispatch. Tests
 # nothing of FocusTime's and isn't part of ci's gate or deploy-dev.
 #
 # Two legs, in order: "empty cache, network open" installs the usual way and saves the cache; then "cache, package
-# servers blocked" restores it the way the browser jobs do, points every apt server's name at 127.0.0.1, and requires
+# servers blocked" restores it the way ci.yml's webkit job does, points every apt server's name at 127.0.0.1, and requires
 # the offline path and a WebKit that starts.
 name: ci-webkit-deps
 on:

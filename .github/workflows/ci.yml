@@ -16,10 +16,32 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # CI-3: what this run must test. code=false only for a pull request whose every changed file is under docs/ outside
+  # docs/technical/ (scripts/ci-changes.sh, with its reasons); then the browser shards, the webkit job and the image
+  # skip their steps and pass, so each still reports under its own name; the test gate passes but records no tested
+  # tree, so deploy-dev never reuses a docs-only run.
+  # Pushes to main and deploy-dev's call always run everything. The unit job (the typecheck, the guards, the docs
+  # checks and every unit and store test) and infra always run.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+    steps:
+      # The merge commit and its parents (GitHub's merge of the PR into main), with only the script on disk.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          sparse-checkout: scripts/ci-changes.sh
+          sparse-checkout-cone-mode: false
+      - name: Only docs outside docs/technical?
+        id: changes
+        run: bash scripts/ci-changes.sh "${{ github.event_name }}" >> "$GITHUB_OUTPUT"
   # Runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on four
-  # others. On one four-core runner they ran together with SQL Server and about 30 demo servers and browsers, which took
-  # 16 to 18 minutes and pushed browser pages past their timeouts. The test job below is the gate: it runs only when
-  # both passed and records the tested tree for deploy-dev.
+  # others (six since HK-5, plus WebKit's own since CI-3). On one four-core runner they ran together with SQL Server and
+  # about 30 demo servers and browsers, which took 16 to 18 minutes and pushed browser pages past their timeouts. The
+  # test job below is the gate: it runs only when all of them passed and records the tested tree for deploy-dev.
   unit:
     name: Unit and store tests (SQLite and SQL Server)
     runs-on: ubuntu-latest
@@ -71,7 +93,11 @@ jobs:
             [ "$attempt" -lt 3 ] && start
           done
           exit 1
+      # CI-3: no browser test runs here, so the test setup's UI build for them (test/e2e-build.ts) is skipped; the step
+      # after this one builds the UI, as before.
       - name: Unit and store tests
+        env:
+          FOCUSTIME_E2E_DIST: dev
         run: |
           echo "cores: $(nproc)"
           npx vitest run --exclude 'e2e/**' --reporter=default
@@ -80,41 +106,80 @@ jobs:
   # Six shards (HK-5; four before): the runners have four cores, where test/workers.ts runs two files at once (each a
   # demo server and a browser; vitest's default of three overloaded them). Two at a time took the slowest of four
   # shards from 180 to 231 s; six shards keep it near where it was. Each shard takes a sixth of the files.
+  # CI-3: every browser test file but e2e/safari.test.ts, in the system's Chromium, with no WebKit set up (the webkit
+  # job below runs that one file). The job keeps its name, which still says WebKit: nothing may depend on a new one.
   browser:
     name: Browser tests ${{ matrix.shard }}/6 (Chromium and WebKit)
     runs-on: ubuntu-latest
+    needs: changes
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     env:
-      FOCUSTIME_TEST_WEBKIT: required
       TZ: America/Chicago
     steps:
+      - name: Docs only, nothing to run here
+        if: needs.changes.outputs.code == 'false'
+        run: echo "Only docs outside docs/technical changed (the What changed job says which); this job's steps are skipped."
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code != 'false'
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code != 'false'
         with:
           node-version: 26
           cache: npm
       - run: npm ci --no-audit --no-fund
+        if: needs.changes.outputs.code != 'false'
+      # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
+      - name: Browser tests
+        if: needs.changes.outputs.code != 'false'
+        run: |
+          echo "cores: $(nproc)"
+          npx vitest run e2e/ --shard=${{ matrix.shard }}/6 --exclude e2e/safari.test.ts --reporter=default
+  # CI-3: the one browser test file that uses WebKit (Safari's engine), in its own job with WebKit's setup and caches as
+  # the shards had them before. Every other browser file runs in the shards above.
+  webkit:
+    name: Browser tests WebKit (Safari)
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 20
+    env:
+      FOCUSTIME_TEST_WEBKIT: required
+      TZ: America/Chicago
+    steps:
+      - name: Docs only, nothing to run here
+        if: needs.changes.outputs.code == 'false'
+        run: echo "Only docs outside docs/technical changed (the What changed job says which); this job's steps are skipped."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.code != 'false'
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code != 'false'
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+        if: needs.changes.outputs.code != 'false'
       # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts. Both are cached between
       # runs (AP-2): the browser keyed on the Playwright version, the system packages (.deb files) on the runner image and
       # the Playwright version. A slow Ubuntu mirror once took 8 to 17 minutes for the packages alone and cancelled a shard.
       # The browser comes first: the packages step launches WebKit to check them.
       - name: Versions for the browser caches
+        if: needs.changes.outputs.code != 'false'
         id: pw
         run: |
           echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
           echo "image=${ImageOS:-ubuntu}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
       - name: Cache the Playwright browser
+        if: needs.changes.outputs.code != 'false'
         id: browser-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install WebKit
-        if: steps.browser-cache.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.code != 'false' && steps.browser-cache.outputs.cache-hit != 'true'
         run: npx playwright-core install webkit
       # CI-2: the packages are installed from the cache with no network when it was written on this image and
       # Playwright version, else the usual way with retries (scripts/ci-webkit-deps.sh says which). On Nov 11 an exact
@@ -122,6 +187,7 @@ jobs:
       # the Ubuntu mirrors couldn't be reached. Each cache's key ends in a hash of its contents, so a rewritten cache is a
       # new entry and the newest wins; the exact key below never exists, only the prefixes match.
       - name: Restore WebKit's system packages
+        if: needs.changes.outputs.code != 'false'
         uses: actions/cache/restore@v4
         with:
           path: ~/apt-webkit
@@ -131,6 +197,7 @@ jobs:
             apt-webkit2-${{ steps.pw.outputs.image }}-
             apt-webkit2-
       - name: Install WebKit's system packages
+        if: needs.changes.outputs.code != 'false'
         id: deps
         env:
           CI2_IMAGE: ${{ steps.pw.outputs.image }}
@@ -138,30 +205,37 @@ jobs:
       # Only after the usual way rewrote the cache, and only from main (a push, or deploy-dev calling this): a pull
       # request's cache would be scoped to its own ref, unused by anyone else, and evict the npm and browser caches. The
       # packages are then pinned to what the first run on a runner image installed, so a security update arrives with
-      # the next image (about weekly). Shards that rewrote the same packages share one key; the loser only warns.
+      # the next image (about weekly). Before CI-3 six shards each did this and shared one key; the loser only warned.
       - name: Save WebKit's system packages
-        if: steps.deps.outputs.save == 'true' && github.event_name != 'pull_request'
+        if: needs.changes.outputs.code != 'false' && steps.deps.outputs.save == 'true' && github.event_name != 'pull_request'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: ~/apt-webkit
           key: apt-webkit2-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-${{ steps.deps.outputs.hash }}
-      # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
+      # The UI is built once for the run (test/e2e-build.ts) and the demo server serves it.
       - name: Browser tests
+        if: needs.changes.outputs.code != 'false'
         run: |
           echo "cores: $(nproc)"
-          npx vitest run e2e/ --shard=${{ matrix.shard }}/6 --reporter=default
+          npx vitest run e2e/safari.test.ts --reporter=default
   test:
-    needs: [unit, browser]
+    needs: [changes, unit, browser, webkit]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code != 'false'
       # The tree this run tested (for a PR, GitHub's merge of it into main). deploy-dev compares it with the merged
       # commit's tree to skip running all of this again (docs/azure/runbook.md, "How deploy-dev reuses the PR's CI").
+      # CI-3: only a run that ran everything records it. A docs-only run skipped the browser tests and the image, so the
+      # code under its docs was not tested by it (main's own run may even have failed): with no tree recorded,
+      # deploy-dev runs all of ci.yml after a docs-only merge, as before CI-3.
       - name: Record the tested tree
+        if: needs.changes.outputs.code != 'false'
         run: git rev-parse 'HEAD^{tree}' > tested-tree.txt
       - uses: actions/upload-artifact@v4
+        if: needs.changes.outputs.code != 'false'
         with:
           name: tested-tree
           path: tested-tree.txt
@@ -179,10 +253,16 @@ jobs:
           az bicep build-params --file infra/prod.bicepparam --stdout > /dev/null
   image:
     runs-on: ubuntu-latest
+    needs: changes
     timeout-minutes: 20
     steps:
+      - name: Docs only, nothing to run here
+        if: needs.changes.outputs.code == 'false'
+        run: echo "Only docs outside docs/technical changed (the What changed job says which); this job's steps are skipped."
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code != 'false'
       - name: Build the image and smoke test it
+        if: needs.changes.outputs.code != 'false'
         run: |
           # S1 (D452): build info as deploy-dev bakes it (scripts/build-info.ts there; plain shell here, no Node set up).
           BUILD_SHA=${GITHUB_SHA::7} BUILD_PR="${{ github.event.pull_request.number || 'none' }}" BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)

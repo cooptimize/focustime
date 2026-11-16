@@ -3,7 +3,7 @@
 // sends stay in memory (sources/demo/send.ts). Invite on Taylor Kim, who hasn't signed in: Send in Teams opens the
 // preview (who, how, the final text), Send sends, the result says so, and the row reads "Invited by Alex Rivera via
 // Teams, <day>". Without the permission (the probe answered as consent) the sheet shows only IN-1's buttons with
-// LP-1's note. At 390 px nothing scrolls sideways. Screenshots in docs/ux/in2 when FOCUSTIME_SHOTS is set.
+// LP-1's note. At 390 px nothing scrolls sideways. Screenshots in screenshots/in2 when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
