@@ -542,7 +542,15 @@ export function aCallEvent(o: Partial<import("../../plan/cowork.ts").CallEvent> 
   return { chatId: "19:fabrikam@thread.v2", callId: "call-1", kind: "started", at, startedAt: o.kind === "ended" ? null : at, initiatorId: "00000000-0000-4000-8000-000000000001", initiatorTenant: HOME_TENANT, ...o };
 }
 
+/** A person TP-1's New form chose (their email kept to check them), or a role typed in. */
+export type Tp1Who = { name: string; email: string | null };
+/**
+ * The four lines as TP-1's New form and its drafts kept them (draft_stories.brief). Only old drafts carry it: TP-1b
+ * only reads that column (plan/three-questions.ts keptOf); RM-1 moved the shape here from plan/work-templates.ts.
+ */
+export type Tp1Brief = { type: string | null; where: string; env: string | null; touches: string[]; change: string; check: string; checkedBy: Tp1Who | null; done: string; doneWhen: string | null; signedOffBy: Tp1Who | null; notWithout: string[] };
+
 /** TP-1b: a draft's brief column as TP-1 saved it, filled in (made-up words); TP-1b reads it, never writes it. */
-export function aTp1Brief(o: Partial<import("../../plan/work-templates.ts").Brief> = {}): import("../../plan/work-templates.ts").Brief {
+export function aTp1Brief(o: Partial<Tp1Brief> = {}): Tp1Brief {
   return { type: "new-measure", where: "The Sales model", env: "Test", touches: ["Data", "Model"], change: "Gross margin percent", check: "October, East: 31.2%", checkedBy: { name: "the finance lead", email: null }, done: "Only the margin page", doneWhen: "In test", signedOffBy: { name: "Sam Lee", email: null }, notWithout: ["Deploy to production"], ...o };
 }

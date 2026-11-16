@@ -189,10 +189,9 @@ export function wordsHits(f: string, text: string): number[] {
 /**
  * Not scanned for names, each with its reason:
  * - ui/guide/: the Guide is held to the same list by ui/guide/app-names.test.ts, which knows its markup, and holds the Renamed list itself.
- * - plan/work-templates.ts: nothing draws it any more (docs/open-questions.md, NM-1). (ui/Roadmap.tsx was removed in NM-2.)
  * - scripts/demo-walkthrough.mjs and docs/demo/: a walkthrough and a script written for the app on a past date.
  */
-const NAMES_SKIPPED = (f: string) => f.startsWith("ui/guide/") || f === "plan/work-templates.ts" || f === "scripts/demo-walkthrough.mjs" || f.startsWith("docs/demo/");
+const NAMES_SKIPPED = (f: string) => f.startsWith("ui/guide/") || f === "scripts/demo-walkthrough.mjs" || f.startsWith("docs/demo/");
 
 /** "Pick" is left to `saysPick` above, which knows pick the code name from pick as choose. */
 const NAMES = RETIRED.filter((r) => r.match && !r.was.startsWith("Pick"));
