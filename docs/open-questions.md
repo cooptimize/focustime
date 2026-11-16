@@ -1235,7 +1235,7 @@ From the IT review (TD-1):
 
 ## CI-3
 
-- `docs/ux/U1/designer-handoff.zip` (16 MB) is still on main, kept because the step moves only image files. It holds U1's screenshots, among them the 32 of the owner's real FocusTime (real client names, a person's name, meeting titles) that left main from `docs/ux/U1/screens/live/`. The repo is public. Remove it from main too?
+- `docs/ux/U1/designer-handoff.zip` (16 MB) is still on main, kept because the step moves only image files. It holds U1's screenshots, among them the 32 of the owner's real FocusTime (real client names, a person's name, meeting titles) that left main from `docs/ux/U1/screens/live/`. The repo is public. Remove it from main too? Answered in PV-1: removed from main; it remains in history (see PV-1).
 - Should the old images ever be dropped from history? They are about 380 MB of every full clone's `.git` (a fresh clone was 900 MB, of which `.git` 470 MB). Dropping them means rewriting history and a force push, which this step doesn't do; the archive branch would keep the demo ones.
 - `ci` runs in full on every push to main, beside deploy-dev, which reuses the pull request's run (all ten deploys measured did). That is about 45 runner minutes per merge for a tree already tested. It also saves the WebKit package cache from main, which pull requests restore. Keep it, or run only the cache-saving part on main?
 - The test gate and infra check out the whole tree to read one commit's tree id or `infra/`. After CI-3 a checkout is about 57 MB rather than 430 MB; a sparse checkout would make it smaller still. Worth it?

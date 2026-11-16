@@ -1,5 +1,7 @@
 # UX review U1: audit, screen jobs and pruning plan
 
+> PV-1 (Nov 16): `designer-handoff.zip` was removed from main because it held screenshots of a real FocusTime session; `screens/live/` left main in CI-3 for the same reason. Neither is on any branch.
+
 Nov 2, 2026. Read-only on the app: no code, config or data changed. Six screens: Today › Now, Today › Plan (Plan the day), Today › Check-in, Today › Close out, Week › Week and Week › Plan the week. Evidence first, then proposals for you to confirm.
 
 ## How this was measured
@@ -16,7 +18,7 @@ Nov 2, 2026. Read-only on the app: no code, config or data changed. Six screens:
 - **Click counts:** from opening the screen, in the demo, checked against the code (ui/*.tsx).
 - **"How often it matters":** marked *(j)* where it is my judgment.
 
-Screenshots are in `screens/demo/` and `screens/live/`, named `<width>-<theme>-<screen>[-p2|-failed].png`. Menus and panels are in `screens/demo/1920-dark-detail-*.png`.
+Screenshots are in `screens/demo/` (on the `shots/archive` branch since CI-3) and were in `screens/live/` (removed), named `<width>-<theme>-<screen>[-p2|-failed].png`. Menus and panels are in `screens/demo/1920-dark-detail-*.png`.
 
 ## Your answers (verbatim)
 
@@ -485,6 +487,6 @@ Questions to start with:
 
 ## Screenshots in the repo
 
-- At your request (answer 5, "live"), live screenshots are committed under `screens/live/`.
+- At your request (answer 5, "live"), live screenshots were committed under `screens/live/` (removed from main in CI-3).
 - This is an exception to the CLAUDE.md rule that repo screenshots come from demo mode only. It's recorded here; `docs/decisions.md` wasn't changed because this step writes only under `docs/ux/`.
 - Personal events (titles and rail labels), the PTO title and the profile photo are blurred. No email addresses, tenant or app IDs, tokens or DevOps URLs are visible in any screenshot. The browser shows no URL bar, and no menu that shows the account was opened.
