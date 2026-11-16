@@ -12,6 +12,12 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      # BT-1: set on every call of this file (its default), so a called run always tests everything, whatever
+      # github.workflow is inside it. Empty on ci's own pull request and push runs.
+      called:
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -42,7 +48,7 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Only docs outside docs/technical?
         id: changes
-        run: bash scripts/ci-changes.sh "${{ github.event_name }}" "${{ github.workflow }}" >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci-changes.sh "${{ github.event_name }}" "${{ inputs.called && 'called' || github.workflow }}" >> "$GITHUB_OUTPUT"
   # Runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on four
   # others (six since HK-5, plus WebKit's own since CI-3). On one four-core runner they ran together with SQL Server and
   # about 30 demo servers and browsers, which took 16 to 18 minutes and pushed browser pages past their timeouts. The

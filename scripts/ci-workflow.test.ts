@@ -66,7 +66,7 @@ describe("ci.yml runs the same tests (CI-3)", () => {
   const steps = (job: string) => J[job]!.split(/\n(?= {6}- )/).filter((x) => /^ {6}- /.test(x));
 
   it("decides once, in the changes job, from the event and the pull request's own changes", () => {
-    expect(J.changes).toMatch(/bash scripts\/ci-changes\.sh "\$\{\{ github\.event_name \}\}" "\$\{\{ github\.workflow \}\}" >> "\$GITHUB_OUTPUT"/);
+    expect(J.changes).toMatch(/bash scripts\/ci-changes\.sh "\$\{\{ github\.event_name \}\}" "\$\{\{ inputs\.called && 'called' \|\| github\.workflow \}\}" >> "\$GITHUB_OUTPUT"/);
     expect(J.changes).toMatch(/fetch-depth: 2/);
     expect(J.changes).toMatch(/code: \$\{\{ steps\.changes\.outputs\.code \}\}/);
   });
@@ -122,6 +122,14 @@ describe("ci.yml runs the same tests (CI-3)", () => {
     expect(D.deploy).toMatch(/needs\.ci\.result == 'success' \|\| needs\.typecheck\.result == 'success'/);
     // ci-tree-match only reuses a pull_request run: ci's own push run (which tests nothing) can never be reused.
     expect(readFileSync(join(ROOT, "scripts/ci-tree-match.sh"), "utf8")).toMatch(/event=pull_request/);
+  });
+
+  // BT-1 review: a called run never answers main, whatever github.workflow is inside it (GitHub gives the caller's
+  // context there, but the guarantee doesn't lean on it): every call carries the input called (default true).
+  it("tells What changed that a run was called, so deploy-dev's call always tests everything", () => {
+    expect(CI).toMatch(/^ {2}workflow_call:\n {4}inputs:\n(?: {6}#[^\n]*\n)* {6}called:\n {8}type: boolean\n {8}default: true$/m);
+    expect(J.changes).toMatch(/bash scripts\/ci-changes\.sh "\$\{\{ github\.event_name \}\}" "\$\{\{ inputs\.called && 'called' \|\| github\.workflow \}\}"/);
+    expect(D.ci).not.toMatch(/called: false/);
   });
 
   // The review's finding: a docs-only run must never hand deploy-dev a tree to reuse, or code that failed main's own

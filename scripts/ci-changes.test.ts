@@ -52,6 +52,8 @@ describe("which changes skip the heavy jobs (CI-3)", () => {
     expect(run("push", "ci")).toBe("code=main");
     for (const [event, workflow] of [["push", "deploy-dev"], ["push", ""], ["push", "CI"], ["workflow_dispatch", "ci"], ["pull_request", "ci"]]) expect(run(event!, workflow!), `${event} ${workflow}`).not.toBe("code=main");
     expect(run("push", "deploy-dev")).toBe("code=true");
+    // ci.yml passes "called" for any call of it (its workflow_call input), so this holds even if GitHub named it ci.
+    expect(run("push", "called")).toBe("code=true");
   });
 
   /** A repo whose HEAD is a merge of a branch changing `paths` into main, as GitHub's refs/pull/N/merge is. */
