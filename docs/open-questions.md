@@ -1232,3 +1232,15 @@ From the IT review (TD-1):
 - Should `docs/decisions.md` be split by month? It is over 1 MB, which some editors and the GitHub viewer open slowly.
 - The runners apply timestamped migrations in name order, and some existing files carry stamps later than today (up to `20261205T0900`). A migration named for the real UTC time now would sort before them. Should the rule say "later than the newest file" (a CLAUDE.md working style change, not made here)? Found by the TD-2 review.
 - `docs/technical/architecture.md` says 396 actions; the registry has about 400 now. Left for the page's next re-check.
+
+## CI-3
+
+- `docs/ux/U1/designer-handoff.zip` (16 MB) is still on main, kept because the step moves only image files. It holds U1's screenshots, among them the 32 of the owner's real FocusTime (real client names, a person's name, meeting titles) that left main from `docs/ux/U1/screens/live/`. The repo is public. Remove it from main too?
+- Should the old images ever be dropped from history? They are about 380 MB of every full clone's `.git` (a fresh clone was 900 MB, of which `.git` 470 MB). Dropping them means rewriting history and a force push, which this step doesn't do; the archive branch would keep the demo ones.
+- `ci` runs in full on every push to main, beside deploy-dev, which reuses the pull request's run (all ten deploys measured did). That is about 45 runner minutes per merge for a tree already tested. It also saves the WebKit package cache from main, which pull requests restore. Keep it, or run only the cache-saving part on main?
+- The test gate and infra check out the whole tree to read one commit's tree id or `infra/`. After CI-3 a checkout is about 57 MB rather than 430 MB; a sparse checkout would make it smaller still. Worth it?
+- The shards keep the name "Browser tests N/6 (Chromium and WebKit)" though they no longer run WebKit, because a branch rule that can't be seen may name them. If no rule does, rename them "(Chromium)"?
+- `e2e/rs1-audit.test.ts` and `e2e/rs1-scan.test.ts` have no assertion either: they write RS-1's layout audits as JSON when a variable names a file. Move them to `e2e/shot-scripts/` as well?
+- What each browser test file costs, for the next step: `docs/ux/ci3/browser-cost.md` (run 43777256271). The 155 files added up to about 3,679 s, and the 20 slowest to about 1,918 s (52%); `guide-tour`, `ps1`, `ahead` and `rs1` alone are 731 s.
+- A docs-only pull request still waits for the unit job (about 6 minutes), which holds the docs checks and the guards. A lighter job with only those for docs-only changes would answer in about a minute, but it would be a second definition of the unit job's checks.
+- `docs/azure/runbook.md` ("How deploy-dev reuses the PR's CI") doesn't mention docs-only pull requests; `docs/azure/` is outside this step. Add a line at its next change?
