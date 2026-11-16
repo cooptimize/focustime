@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { sqlTestFiles } from "./test/projects.ts";
+import { TimedSequencer } from "./test/sequencer.ts";
 import { sqlWorkers, testWorkers, thisMachine, unitWorkers } from "./test/workers.ts";
 import { techDocsPlugin } from "./scripts/tech-docs.ts";
 import { firstDownload } from "./scripts/split-chunks.ts";
@@ -32,6 +33,9 @@ export default defineConfig({
     maxWorkers: Math.max(workers.unit, workers.sql, workers.browser),
     setupFiles: ["test/no-promise-expect.ts"],
     globalSetup: ["test/tmp-dir.ts", "test/e2e-build.ts"],
+    // BT-1: --shard fills each shard by measured time (test/shard-times.json, test/shards.ts), and browser files
+    // start longest first.
+    sequence: { sequencer: TimedSequencer },
     // BT-1: one project per kind of file, each with its own limit. Projects with different limits run one after the
     // other (vitest's groupOrder): the SQL Server files first, then the other unit files, then the browser files. When
     // the SQL Server and unit limits are equal (CI's runner) they run as one group, mixed, which packs best.
