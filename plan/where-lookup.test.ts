@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { sortRepo, type RepoThings } from "./code-kinds.ts";
 import { ANSWER_MAX } from "./three-questions.ts";
-import { browseLevel, fieldsOf, innerMatches, pagesOf, reportPages, suggest, tmdlFields, whereEntries, withPick, wordAt, writtenOf, WHERE_SHOWN } from "./where-lookup.ts";
+import { afterPick, browseLevel, fieldsOf, innerMatches, pagesOf, reportPages, suggest, suggestAt, tmdlFields, whereEntries, withPick, wordAt, writtenOf, WHERE_SHOWN } from "./where-lookup.ts";
 
 const repo = (id: string, name: string, paths: string[]): RepoThings => ({ repo: { id, name, defaultBranch: "main", state: "ok" }, ...sortRepo(paths), cut: false, problem: null });
 const A = "00000000-0000-4000-8000-00000000000a";
@@ -80,6 +80,30 @@ describe("RB-3: matching the word at the cursor", () => {
     expect(suggest(ENTRIES, "sal")!.shown.map(writtenOf)).toEqual(["Sales (report)", "Sales (semantic model)"]);
   });
 
+  it("reads the last two or three words as one name, a kind's word last or where it is first, and replaces them all", () => {
+    const at = (t: string) => suggestAt(ENTRIES, t, t.length)!;
+    // A name of two words.
+    const load = at("the load ord");
+    expect(load.shown.map(writtenOf)).toEqual(["Load orders (pipeline)"]);
+    expect(withPick("the load ord", 12, writtenOf(load.shown[0]!), true, load.start)!.text).toBe("the Load orders (pipeline)");
+    // A kind's word after the name: the report, not everything that holds "report".
+    expect(at("on the Sales report").shown.map(writtenOf)).toEqual(["Sales (report)"]);
+    expect(at("cust table").shown.map(writtenOf)).toEqual(["Customer (table, Sales semantic model)", "dim.Customer (table, Gold warehouse)"]);
+    // Where it is, then its name; and a schema typed with a space.
+    expect(at("gold cust").shown.map(writtenOf)).toEqual(["dim.Customer (table, Gold warehouse)", "dim.CustomerCurrent (view, Gold warehouse)"]);
+    expect(at("dim cust").shown.map(writtenOf)).toEqual(["dim.Customer (table, Gold warehouse)", "dim.CustomerCurrent (view, Gold warehouse)"]);
+    // Nothing for the phrase: the last word alone, as before.
+    const one = at("the numbers on cust");
+    expect(one.typed).toBe("cust");
+    expect(one.shown[0]!.name).toBe("Customer");
+  });
+
+  it("leaves ordinary words alone: inside a name only from four letters", () => {
+    // "old" is inside Gold, "ear" inside nothing offered, "load" starts a name.
+    expect(suggestAt(ENTRIES, "the old", 7)!.total).toBe(0);
+    expect(suggest(ENTRIES, "ustom")!.total).toBeGreaterThan(0);
+  });
+
   it("shows at most eight and counts the rest", () => {
     const many = whereEntries([repo(A, "a", Array.from({ length: 20 }, (_, i) => `/sql/Tables/Order${String(i).padStart(2, "0")}.sql`))]);
     const r = suggest(many, "order")!;
@@ -101,6 +125,9 @@ describe("RB-3: matching the word at the cursor", () => {
     // From browsing (no word): at the cursor, kept apart from the word before it.
     expect(withPick("See", 3, "Sales (report)", false)!.text).toBe("See Sales (report)");
     expect(withPick("", 0, "Sales (report)", false)!.text).toBe("Sales (report)");
+    // A letter typed right after a pick gets a space before it; a comma doesn't.
+    expect(afterPick("Load orders (pipeline)", "Load orders (pipeline)f", 23)).toEqual({ text: "Load orders (pipeline) f", cursor: 24 });
+    expect(afterPick("Load orders (pipeline)", "Load orders (pipeline),", 23)).toBeNull();
     // Never longer than an answer may be.
     expect(withPick(`${"x".repeat(ANSWER_MAX - 4)} sa`, ANSWER_MAX - 1, "Sales (report)")).toBeNull();
   });
@@ -141,7 +168,7 @@ describe("RB-3: pages and measures, from one file", () => {
     expect(reportPages("{ not json")).toBeNull();
     expect(reportPages(JSON.stringify({ config: "{}" }))).toBeNull();
     const sales = ENTRIES.find((e) => e.name === "Sales" && e.kind === "report")!;
-    expect(pagesOf(sales, ["Margin by region"])[0]!.written).toBe("Margin by region, page of Sales report");
+    expect(pagesOf(sales, ["Margin by region"])[0]!.written).toBe("Margin by region (page, Sales report)");
   });
 
   it("reads a TMDL table's measures and columns, and writes them with the table and model", () => {

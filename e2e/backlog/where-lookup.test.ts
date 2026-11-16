@@ -148,7 +148,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await option(page, /^Stores, Page of Sales/).waitFor({ timeout: 30_000 });
     await shot(page, "rb3-pages");
     await downTo(page, "Stores, Page of Sales");
-    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores, page of Sales report");
+    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores (page, Sales report)");
     expect(fileReads(seen).map((s) => s.input.path)).toEqual(["/report/Sales.Report/report.json"]);
     await shot(page, "rb3-two-picks");
 
@@ -163,7 +163,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await page.keyboard.type("sa");
     await list(page).waitFor();
     await page.keyboard.press("Enter");
-    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores, page of Sales report sa\n");
+    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores (page, Sales report) sa\n");
     await page.keyboard.press("Backspace");
     await page.keyboard.press("Backspace");
     await page.keyboard.press("Backspace");
@@ -181,7 +181,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await shot(page, "rb3-schema");
     await downTo(page, "Tables,", "Enter");
     await downTo(page, "dim.Date, Table");
-    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores, page of Sales report dim.Date (table, Gold warehouse)");
+    await expect(box.inputValue()).resolves.toBe("On fact.SalesLine (table, Gold warehouse), the Stores (page, Sales report) dim.Date (table, Gold warehouse)");
 
     // A table's measures and columns, read from the table's one file.
     await f.getByRole("button", { name: "Browse Northwind's code" }).click();
@@ -189,7 +189,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await downTo(page, "Sales, Table", "ArrowRight");
     await option(page, /^Total Sales, Measure/).waitFor({ timeout: 30_000 });
     await downTo(page, "Total Sales, Measure");
-    const text = "On fact.SalesLine (table, Gold warehouse), the Stores, page of Sales report dim.Date (table, Gold warehouse) Total Sales (measure, Sales table, Sales semantic model)";
+    const text = "On fact.SalesLine (table, Gold warehouse), the Stores (page, Sales report) dim.Date (table, Gold warehouse) Total Sales (measure, Sales table, Sales semantic model)";
     await expect(box.inputValue()).resolves.toBe(text);
     expect(fileReads(seen).map((s) => s.input.path)).toEqual(["/report/Sales.Report/report.json", "/model/Sales.SemanticModel/definition/tables/Sales.tmdl"]);
     // Still one names read for the whole time the form was open.
@@ -304,6 +304,17 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await shot(page, "rb3-draft-editor");
     await downTo(page, "rpt.vTopStores");
     await expect(box.inputValue()).resolves.toBe("dim.vStoreRegion (view, Gold warehouse) and rpt.vTopStores (view, Gold warehouse)");
+    // A letter typed right after a pick doesn't run into it.
+    await page.keyboard.type("is");
+    await expect(box.inputValue()).resolves.toBe("dim.vStoreRegion (view, Gold warehouse) and rpt.vTopStores (view, Gold warehouse) is");
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Backspace");
+    // Two words as one name: "load sa" is the Load sales pipeline, replaced whole.
+    await page.keyboard.type(" then load sa");
+    await list(page).waitFor();
+    await expect(list(page).getByRole("option").first().getAttribute("aria-label")).resolves.toMatch(/^Load sales, Pipeline/);
+    await downTo(page, "Load sales, Pipeline");
+    await expect(box.inputValue()).resolves.toBe("dim.vStoreRegion (view, Gold warehouse) and rpt.vTopStores (view, Gold warehouse) then Load sales (pipeline)");
+    for (let i = 0; i < " then Load sales (pipeline)".length; i++) await page.keyboard.press("Backspace");
     // Esc with the list open closes the list only; the editor stays.
     await page.keyboard.type(" st");
     await list(page).waitFor();

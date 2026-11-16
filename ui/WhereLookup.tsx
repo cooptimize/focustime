@@ -15,7 +15,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import type { RepoThings } from "../plan/code-kinds.ts";
 import { markMatches } from "../plan/code-kinds.ts";
 import type { CodeFileView } from "../plan/code.ts";
-import { browseLevel, fieldsOf, lineOf, pagesOf, reportPages, suggest, tmdlFields, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner } from "../plan/where-lookup.ts";
+import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, reportPages, suggestAt, tmdlFields, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner } from "../plan/where-lookup.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { TextBox } from "./TextBox.tsx";
@@ -111,8 +111,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
 
   // Only names read for the client chosen now are ever drawn (an answer for the one before can't show, even for a frame).
   const entries = names.state === "ready" && names.client === clientKey ? names.entries : null;
-  const word = useMemo(() => wordAt(value, cursor), [value, cursor]);
-  const matches = useMemo(() => (entries && mode.type === "typing" ? suggest(entries, word.word) : null), [entries, mode.type, word.word]);
+  const matches = useMemo(() => (entries && mode.type === "typing" ? suggestAt(entries, value, cursor) : null), [entries, mode.type, value, cursor]);
   const manyRepos = names.state === "ready" && names.repos > 1;
 
   /** Reads a report's pages or a table's measures and columns from its one file (logged as a file opened). */
@@ -179,7 +178,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
 
   // What a screen reader hears as the list changes: how many there are, and whether Down chooses one.
   useEffect(() => {
-    if (!shownList) return;
+    // A closed list leaves nothing stale to be read again ("Added <name>." after a pick stays).
+    if (!shownList) return void setSaid((s) => (s.startsWith("Added ") ? s : ""));
     if (mode.type === "typing" && matches) setSaid(WHERE_TEXT.count(matches.total));
     else if (mode.type === "browse") setSaid(WHERE_TEXT.browsing(rows.filter((r) => r.type !== "back").length));
   }, [shownList, mode.type, matches?.total, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -190,17 +190,22 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   /** Writes a pick at the cursor (replacing the word being typed when there is one), and says it was added. */
   const pick = (text: string, name: string, replace: boolean) => {
     const at = caret();
-    const next = withPick(value, at, text, replace);
+    // A phrase being typed ("load sa") is replaced whole when the pick came from its matches.
+    const from = replace && matches && at === cursor ? matches.start : undefined;
+    const next = withPick(value, at, text, replace, from);
     if (!next) return void (setSaid(WHERE_TEXT.noRoom), setNote(WHERE_TEXT.noRoom));
     onChange(next.text);
     setCursor(next.cursor);
     setNote(null);
+    picked.current = { text: next.text, at: next.cursor };
     close();
     setSaid(WHERE_TEXT.added(name));
     caretAfter.current = next.cursor;
   };
   // The caret goes right after a pick in the same paint as its words, so a key pressed next lands there.
   const caretAfter = useRef<number | null>(null);
+  /** The text and caret right after a pick, until the next keystroke. */
+  const picked = useRef<{ text: string; at: number } | null>(null);
   useLayoutEffect(() => {
     const t = box.current;
     const at = caretAfter.current;
@@ -213,7 +218,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   const goTo = (to: { at: string | null; inner: string | null }) => {
     const m = mode.type === "browse" ? mode : { type: "browse" as const, at: null, inner: null, replace: true, trail: [] };
     setMode({ ...m, type: "browse", at: to.at, inner: to.inner, trail: [...m.trail, { at: m.at, inner: m.inner }] });
-    setActive(0);
+    setActive(1);
   };
   const back = () => {
     if (mode.type !== "browse" || !mode.trail.length) return close();
@@ -245,7 +250,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (names.state === "idle") read();
     box.current?.focus();
     setMode({ type: "browse", at: null, inner: null, replace: false, trail: [] });
-    setActive(0);
+    setActive(-1);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -297,7 +302,12 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   };
 
   /** Typing: the list follows the word at the cursor. */
-  const onInput = (v: string, at: number) => {
+  const onInput = (v0: string, at0: number) => {
+    const p = picked.current;
+    picked.current = null;
+    const spaced = p && p.text === value && at0 === p.at + 1 ? afterPick(value, v0, at0) : null;
+    const [v, at] = spaced ? [spaced.text, spaced.cursor] : [v0, at0];
+    if (spaced) caretAfter.current = at;
     onChange(v);
     setCursor(at);
     setNote(null);
@@ -333,7 +343,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     const common = { id: rid, role: "option", "aria-selected": on, className: `wl-row${on ? " on" : ""}`, onMouseDown: (e: ReactMouseEvent) => e.preventDefault(), onMouseMove: () => active !== n && setActive(n) } as const;
     if (r.type === "back")
       return (
-        <li key={r.key} {...common} className={`${common.className} wl-back`} onClick={back}>
+        <li key={r.key} {...common} aria-label={r.label} className={`${common.className} wl-back`} onClick={back}>
           <Icon name="arrow-left" /> <span>{r.label}</span>
         </li>
       );
@@ -355,7 +365,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
         </li>
       );
     const e = r.entry;
-    const marked = mode.type === "typing" ? markMatches(e.name, word.word) : [{ text: e.name, hit: false }];
+    const marked = mode.type === "typing" ? markMatches(e.name, matches?.typed.split(/\s+/).pop() ?? "") : [{ text: e.name, hit: false }];
     const what = `${lineOf(e)}${manyRepos ? ` · ${e.repoName}` : ""}`;
     const opener = e.more ? WHERE_TEXT.open[e.more] : WHERE_TEXT.open.list;
     return (

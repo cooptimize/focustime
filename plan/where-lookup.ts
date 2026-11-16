@@ -23,7 +23,7 @@ export const WHERE_SHOWN = 8;
 /** A word is matched from this many characters (names that start with it). */
 export const WHERE_MIN = 2;
 /** From this many, a name that holds the word anywhere matches too (two letters inside names match nearly everything). */
-export const WHERE_HOLDS = 3;
+export const WHERE_HOLDS = 4;
 
 /** What a second level is: a report's pages, or a model table's measures and columns. */
 export type WhereMore = "pages" | "fields";
@@ -146,16 +146,17 @@ export function wordAt(text: string, cursor: number): { start: number; end: numb
  * where the cursor goes: right after the pick. A space keeps it apart from a word right before or after it. Null when
  * the answer would be longer than an answer may be.
  */
-export function withPick(text: string, cursor: number, pick: string, replace = true): { text: string; cursor: number } | null {
+export function withPick(text: string, cursor: number, pick: string, replace = true, from?: number): { text: string; cursor: number } | null {
   const w = replace ? wordAt(text, cursor) : { start: cursor, end: cursor, word: "" };
-  const [start, end] = w.word ? [w.start, w.end] : [cursor, cursor];
+  // `from`: where a phrase being typed starts ("load sa" is replaced whole by "Load sales (pipeline)").
+  const [start, end] = w.word ? [from !== undefined && from < w.start ? from : w.start, w.end] : [cursor, cursor];
   const before = text.slice(0, start);
   const after = text.slice(end);
   const lead = before && !/\s$/.test(before) && !w.word ? " " : "";
   const tail = after && !/^[\s,;.)]/.test(after) ? " " : "";
   const next = `${before}${lead}${pick}${tail}${after}`;
   if (next.length > ANSWER_MAX) return null;
-  return { text: next, cursor: before.length + lead.length + pick.length };
+  return { text: next, cursor: before.length + lead.length + pick.length + tail.length };
 }
 
 // ---------- matching ----------
@@ -165,6 +166,59 @@ export function withPick(text: string, cursor: number, pick: string, replace = t
  * the things themselves before the things inside them; then by name, then in By kind's order. Null when the word is
  * too short to match.
  */
+/**
+ * What typing one character right after a pick writes: a letter or digit gets a space before it, so the next word
+ * doesn't run into the pick ("(pipeline) fails", not "(pipeline)fails"); a comma, a full stop or a space goes in as typed.
+ */
+export function afterPick(before: string, typed: string, at: number): { text: string; cursor: number } | null {
+  if (typed.length !== before.length + 1 || at < 1) return null;
+  const ch = typed[at - 1]!;
+  if (typed.slice(0, at - 1) + typed.slice(at) !== before || !/[\p{L}\p{N}]/u.test(ch)) return null;
+  return { text: `${typed.slice(0, at - 1)} ${typed.slice(at - 1)}`, cursor: at + 1 };
+}
+
+/** Names written the way people type them: "dim.Store" and "pl_customer_load" as "dim store" and "pl customer load". */
+const spaced = (s: string) => s.toLowerCase().replace(/[._\-]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * The matches for what is typed before the cursor, trying the last three words and then the last two as one phrase
+ * before the last word alone: "load sales" is the Load sales pipeline, "Sales report" the Sales report (a kind's word
+ * last), "gold store" a Store in the Gold warehouse (where it is first), "dim store" dim.Store. A phrase is used only
+ * when something matches it; `start` is where the words a pick replaces begin.
+ */
+export function suggestAt(entries: readonly WhereEntry[], text: string, cursor: number, max = WHERE_SHOWN): { shown: WhereEntry[]; total: number; start: number; typed: string } | null {
+  const w = wordAt(text, cursor);
+  if (w.word.trim().length < 1) return null;
+  for (const k of [3, 2]) {
+    // Words joined by single spaces only: a comma, a bracket or a new line ends a phrase.
+    const m = new RegExp(`(?:^|[\\s,;()"])((?:[^\\s,;()"]+ ){${k - 1}}[^\\s,;()"]+)$`).exec(text.slice(0, w.start + w.word.length));
+    if (!m) continue;
+    const phrase = m[1]!;
+    const words = spaced(phrase).split(" ");
+    if (words.length !== k) continue;
+    const last = words[k - 1]!;
+    const rest = words.slice(0, -1).join(" ");
+    const all = words.join(" ");
+    const hits: { e: WhereEntry; rank: number }[] = [];
+    for (const e of entries) {
+      const n = spaced(e.name);
+      const b = spaced(e.bare);
+      const within = e.within ? spaced(e.within) : "";
+      const kindWord = last.length >= 3 && spaced(e.what).split(" ").some((x) => x.startsWith(last));
+      if (n.startsWith(all) || b.startsWith(all)) hits.push({ e, rank: 0 });
+      else if (kindWord && (n === rest || b === rest)) hits.push({ e, rank: 1 });
+      else if (kindWord && (n.startsWith(rest) || b.startsWith(rest))) hits.push({ e, rank: 2 });
+      else if (within && within.startsWith(rest) && b.startsWith(last)) hits.push({ e, rank: 3 });
+    }
+    if (!hits.length) continue;
+    const kind = (e: WhereEntry) => WHERE_KINDS.indexOf(e.kind);
+    hits.sort((a, b) => a.rank - b.rank || Number(a.e.inside) - Number(b.e.inside) || a.e.name.localeCompare(b.e.name, "en", { sensitivity: "base" }) || kind(a.e) - kind(b.e) || (a.e.id < b.e.id ? -1 : 1));
+    return { shown: hits.slice(0, max).map((h) => h.e), total: hits.length, start: w.start + w.word.length - phrase.length, typed: phrase };
+  }
+  const one = suggest(entries, w.word, max);
+  return one && { ...one, start: w.start, typed: w.word };
+}
+
 export function suggest(entries: readonly WhereEntry[], word: string, max = WHERE_SHOWN): { shown: WhereEntry[]; total: number } | null {
   const w = word.trim().toLowerCase();
   if (w.length < WHERE_MIN) return null;
@@ -267,9 +321,9 @@ export function tmdlFields(text: string): { name: string; what: "measure" | "col
   return out;
 }
 
-/** A report's pages as picks: "Margin by region, page of Sales report". */
+/** A report's pages as picks: "Margin by region (page, Sales report)". */
 export const pagesOf = (report: WhereEntry, pages: readonly string[]): WhereInner[] =>
-  pages.map((p, i) => ({ id: `${report.id}#page${i}`, name: p, what: "page", written: `${p}, page of ${report.name} ${report.what}`, line: `Page of ${report.name}` }));
+  pages.map((p, i) => ({ id: `${report.id}#page${i}`, name: p, what: "page", written: `${p} (page, ${report.name} ${report.what})`, line: `Page of ${report.name}` }));
 
 /** A table's measures and columns as picks: "Total Sales (measure, Sales table, Sales semantic model)". Measures first. */
 export const fieldsOf = (table: WhereEntry, fields: readonly { name: string; what: "measure" | "column" }[]): WhereInner[] =>
