@@ -92,7 +92,11 @@ jobs:
             [ "$attempt" -lt 3 ] && start
           done
           exit 1
+      # CI-3: no browser test runs here, so the test setup's UI build for them (test/e2e-build.ts) is skipped; the step
+      # after this one builds the UI, as before.
       - name: Unit and store tests
+        env:
+          FOCUSTIME_E2E_DIST: dev
         run: |
           echo "cores: $(nproc)"
           npx vitest run --exclude 'e2e/**' --reporter=default
