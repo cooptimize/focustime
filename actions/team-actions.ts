@@ -19,10 +19,10 @@ import type { Levels } from "../plan/levels.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import type { PersonClient } from "../store/admin-store.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
-import type { LookAsk, Person, Priority, Send, TeamStore } from "../store/team-store.ts";
-import type { CommitClient, CommitData, PickerPersonView, SendView, TeamClient, TeamData, TeamPerson } from "../plan/team-types.ts";
+import type { Person, Priority, Send, TeamStore } from "../store/team-store.ts";
+import type { CommitClient, CommitData, PickerPersonView, SendView } from "../plan/team-types.ts";
 
-export type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView, TeamClient, TeamData, TeamPerson } from "../plan/team-types.ts";
+export type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView } from "../plan/team-types.ts";
 import { mondayOf } from "../week/dates.ts";
 import type { IsoDate, Week } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
@@ -31,7 +31,7 @@ import type { ActionResponse } from "./types.ts";
 
 export const TEAM_ACTIONS = [
   "send.people", "send.create", "send.cancel", "send.accept", "send.pass", "send.cant", "send.withdraw", "send.today",
-  "team.commit", "team.view", "priority.flag", "priority.unflag", "priority.add_to_week", "look.ask", "look.reply",
+  "team.commit", "priority.flag", "priority.unflag", "priority.add_to_week",
 ] as const;
 export type TeamAction = (typeof TEAM_ACTIONS)[number];
 
@@ -381,51 +381,6 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         });
         return { ok: true, data: { weekStart, clients } satisfies CommitData };
       }
-      case "team.view": {
-        const o = fields(input ?? {}, [], ["weekStart"]);
-        const weekStart = o.weekStart === undefined ? thisWeek : monday(o.weekStart);
-        const keys = r.myClients();
-        const [commits, raw, pri0] = await Promise.all([team.commitments(keys, weekStart), team.sendsOn(keys, weekStart), team.priorities(keys)]);
-        // keys are clients only (myClients()); looks below are filtered the same way.
-        const resolved = await resolvedOf(ctx, cfg, [...raw, ...pri0, ...commits.filter((c) => c.watching)]);
-        const sends = await settle(team, raw, resolved);
-        const pri = await livePriorities(team, pri0, resolved);
-        const onWeek = new Set((await plan.weekPlan(weekStart)).features.map((f) => keyOf(f.clientKey, f.itemId)));
-        const since = Temporal.PlainDate.from(weekStart).toZonedDateTime({ timeZone: tz }).toInstant().toString();
-        const looks = (await team.looksOf(me, since)).filter((l) => l.weekStart === weekStart && r.isClient(l.clientKey));
-        const clients: TeamClient[] = [];
-        for (const k of keys.sort((a, b) => clientName(a).localeCompare(clientName(b)))) {
-          const watched = commits.filter((c) => c.clientKey === k && c.watching);
-          const moved = watched.length ? await ctx.devops(cfg).stateChanges?.(k, since).catch(() => null) : null;
-          const movedIds = moved?.known ? new Set(moved.itemIds) : null;
-          const people: TeamPerson[] = r.members(k).map((id) => {
-            const mineRows = commits.filter((c) => c.personId === id && c.clientKey === k);
-            // CF-1 (D2): a person's week shows when they're on FocusTime and have anything on it; nobody confirms.
-            const state = mineRows.length ? "shared" : r.onFocusTime(id) ? "empty" : "not_on_focustime";
-            return {
-              id,
-              name: r.name(id),
-              email: r.email(id),
-              lead: r.isLead(id, k),
-              you: id === me,
-              state,
-              // CF-1 (D3): only the feature, its type and title (and its link). Nothing else of their week.
-              features: mineRows.filter((c) => !c.watching).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url })),
-              watching: state === "shared" ? mineRows.filter((c) => c.watching && !resolved.has(keyOf(k, c.itemId))).map((c) => ({ itemId: c.itemId, title: c.title, itemType: c.itemType, url: c.url, moved: movedIds ? movedIds.has(c.itemId) : null })) : [],
-            };
-          });
-          people.sort((a, b) => Number(b.you) - Number(a.you) || Number(b.lead) - Number(a.lead) || a.name.localeCompare(b.name));
-          clients.push({
-            clientKey: k,
-            clientName: clientName(k),
-            people,
-            sends: sends.filter((s) => s.clientKey === k && s.state !== "cancelled").map((s) => viewOf(s, me, resolved, thisWeek)),
-            priorities: pri.filter((p) => p.clientKey === k).map((p) => ({ ...p, onMyWeek: onWeek.has(keyOf(k, p.itemId)), canUnflag: r.isLead(me, k) })),
-            looks: looks.filter((l) => l.clientKey === k).map((l) => ({ ...l, role: l.to.id === me ? ("lead" as const) : ("asker" as const) })),
-          });
-        }
-        return { ok: true, data: { weekStart, thisWeek, clients } satisfies TeamData };
-      }
       case "priority.flag": {
         const o = fields(input, ["clientKey", "itemId", "title"], ["itemType", "url", "note"]);
         const k = key(o.clientKey);
@@ -451,25 +406,6 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
         const f = await plan.addWeekItem({ weekStart, clientKey: k, itemId: p.itemId, title: p.title, itemType: p.itemType, url: p.url, level: "feature" });
         return { ok: true, data: { feature: f } };
       }
-      case "look.ask": {
-        const o = fields(input, ["clientKey", "weekStart", "toId"], ["note"]);
-        const k = key(o.clientKey);
-        const weekStart = monday(o.weekStart);
-        if (!r.onClient(me, k)) return bad("Only people on this client", 403);
-        const toId = personId(o.toId);
-        if (!r.isLead(toId, k)) return bad("Ask one of this client's leads", 403);
-        if (r.canonical(toId) === me) return bad("That's you", 400);
-        if (!r.onFocusTime(toId)) return bad("They aren't on FocusTime yet", 409);
-        const a = await team.addLook({ clientKey: k, weekStart, from: { id: me, name: r.meName }, to: person(toId), note: optText(o.note, "note", 500) }, ctx.now());
-        return { ok: true, data: { look: a } };
-      }
-      case "look.reply": {
-        const o = fields(input, ["id", "reply"]);
-        const a = await team.look(posId(o.id, "id"));
-        if (!a || a.to.id !== me) return bad("Only the lead it was asked of replies", 403);
-        const n = await team.reply(a.id, text(o.reply, "reply", 500), ctx.now());
-        return { ok: true, data: { look: n } };
-      }
     }
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
@@ -482,11 +418,9 @@ export async function teamAction(ctx: TeamContext, action: TeamAction, input: un
 export type TeamNotice =
   | { kind: "sent_to_you"; send: Send }
   | { kind: "send_answered"; send: Send; words: string }
-  | { kind: "send_cant_lead"; send: Send }
-  | { kind: "look_ask"; look: LookAsk }
-  | { kind: "look_reply"; look: LookAsk };
+  | { kind: "send_cant_lead"; send: Send };
 
-/** The notices due for a person now: sends to them, answers on sends of theirs, a Must's Can't on a client they lead, asks and replies. */
+/** The notices due for a person now: sends to them, answers on sends of theirs, a Must's Can't on a client they lead. */
 export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">, thisWeek: IsoDate, since: string): Promise<TeamNotice[]> {
   const team = ctx.team;
   const me0 = await ctx.me();
@@ -517,11 +451,6 @@ export async function teamNotices(ctx: Pick<TeamContext, "team" | "org" | "me">,
         }
       }
     }
-  }
-  for (const a of await team.looksOf(me, since)) {
-    if (!isClient(a.clientKey)) continue;
-    if (a.to.id === me && !a.reply) out.push({ kind: "look_ask", look: a });
-    if (a.from.id === me && a.reply && a.repliedAt && a.repliedAt >= since) out.push({ kind: "look_reply", look: a });
   }
   return out;
 }

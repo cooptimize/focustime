@@ -24,7 +24,7 @@ import { StoryCard } from "./StoryCard.tsx";
 import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
-import { SendHost, TeamView } from "./Team.tsx";
+import { SendHost } from "./Team.tsx";
 import { StatusView, useStatusNeeds } from "./Status.tsx";
 import { StatusMark } from "./StatusMark.tsx";
 import { dotText, dotTone } from "../plan/status-dot.ts";
@@ -1483,7 +1483,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       // WD-2: the block keys work on Week and on Day (the day's own blocks; [ and ] step Day's days in its own handler).
       const onDay = nav.tab === "today" && !nav.flow;
-      if (!(onDay || (nav.tab === "week" && nav.mode !== "team")) || focusOpen || guideAt || docsAt || codeAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (!(onDay || nav.tab === "week") || focusOpen || guideAt || docsAt || codeAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
@@ -2185,9 +2185,6 @@ export function App() {
             }}
           />
         </Suspense>
-      ) : nav.tab === "week" && nav.mode === "team" ? (
-        // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
-        <TeamView weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
           {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}

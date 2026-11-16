@@ -112,7 +112,7 @@ The week, risks, free time and estimates are pure code in `week/` and `plan/`: n
 
 - **One status.** A card shows At risk with its short reason only when the calendar cuts into the block; how much is planned never makes a status (`plan/blockstatus.ts`). Watch shows only on hover. The block panel says the free time left ("1h free", "No free time").
 - **Hours, never blocks.** Sizes and estimates are hours (`plan/estimate.ts`, `plan/weekplan.ts`): XS 30 minutes, S 1h, M 2h, L 4h, and unsized work counts as the person's own Count unsized work as. A to-do's time left starts at its size and moves only with a check-in answer or a new size (`pickNeed` in `plan/types.ts`).
-- **No confirm.** Nothing confirms a day or a week, and every feature on a week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for the team view and the status report, never for a past week. The old confirm and tier actions answer plainly and change nothing (`plan/no-confirm.ts`).
+- **No confirm.** Nothing confirms a day or a week, and every feature on a week counts the same. A day has work when its blocks have a to-do (`hasWorkOn` in `plan/modes.ts`), and a week when anything is placed. After any action that changes which features are on a week (`WEEK_CHANGES` in `actions/dispatch.ts`), `publishWeek` writes that week's features (type, title, link) for the status report, never for a past week. The old confirm and tier actions answer plainly and change nothing (`plan/no-confirm.ts`).
 
 ## Week and Day
 

@@ -778,7 +778,7 @@ function ToPlace({ data, at, ctx, loose, nameOf, onChanged, onSelect, startOpen 
   );
 }
 
-/** What I sent, one collapsed group at the bottom of the panel (NM-2: Ask a lead to look stays in Team, hidden for now). */
+/** What I sent, one collapsed group at the bottom of the panel. */
 function YourSends({ weekStart, thisWeek, version, colors, onChanged }: { weekStart: IsoDate; thisWeek: IsoDate; version: unknown; colors: Record<string, string>; onChanged: () => void }) {
   const team = useTeamCommit(weekStart, version);
   const [open, setOpen] = useState(false);

@@ -262,7 +262,6 @@ const Q_WEEK: QA[] = [
   { q: "Does Accept change DevOps?", a: "Only if you leave Also assign to me in DevOps ticked. It's ticked when the sender asked you to take it, and unticked otherwise. Then the usual DevOps write runs: a preview, the item assigned to you, checked afterwards, with Undo in Settings › Activity and a quiet note to whoever had it." },
   { q: "How do I see what I sent?", a: "You sent, folded at the bottom of a block's panel: Waiting (Cancel while it waits), Accepted, Scheduled, Passed to <name>, Can't: <reason>, Done once DevOps resolves the item, or Not answered when its week ended with no answer." },
   { q: "What is a client priority?", a: "A feature a client's lead flags as the client's top ask, with an optional note. Everyone on the client sees it under To place in a block's panel, with Add to my week. A lead can unflag it any time, and it drops off once DevOps resolves it." },
-  { q: "How do I ask a lead to look at my week?", a: "In a block's panel, open You sent at the bottom: Ask <lead> to look on the client, with an optional note. The lead gets a notification and can reply. The reply shows there under the client." },
 ];
 
 const Q_BACKLOG: QA[] = [

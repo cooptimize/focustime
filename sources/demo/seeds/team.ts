@@ -32,7 +32,5 @@ export const teamSeed: DemoSeed = {
       { clientKey: "Atlas", itemId: 3340, title: "Delivery time estimates", itemType: "Feature", url: url("atlas-demo", 3340), tier: "nice", watching: true },
     ], at);
     await team.flag({ clientKey: "Northwind", itemId: 1110, title: "Order history export", itemType: "Feature", url: url("northwind-demo", 1110), note: "The client's top ask for November", flaggedBy: p(priya!) }, at);
-    const look = await team.addLook({ clientKey: "Harbor", weekStart, from: me, to: p(priya!), note: "Is the intake form enough for this week?" }, at);
-    await team.reply(look.id, "Yes. Leave reminders for next week if it gets tight.", at);
   },
 };

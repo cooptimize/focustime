@@ -19,11 +19,10 @@ describe("tabs and modes", () => {
     expect(MODES.status).toEqual([]);
   });
 
-  it("WD-1: Team is hidden but its address still opens it; its notification opens the week", () => {
-    expect(hashOf(loc(navOf.week("team")))).toBe("#/week/team");
-    expect(hashOf(loc(navOf.week("team", "2026-11-09")))).toBe("#/week/team/2026-11-09");
-    expect(parseHash("#/week/team/2026-11-09")?.nav).toEqual(navOf.week("team", "2026-11-09"));
-    expect(parseHash("#/week/team")?.nav).toEqual(navOf.week("team"));
+  it("RM-1: Team is gone; its old address and its notification open the week", () => {
+    expect(parseHash("#/week/team/2026-11-09")?.nav).toEqual(navOf.week("board", "2026-11-09"));
+    expect(parseHash("#/week/team")?.nav).toEqual(navOf.week());
+    expect(hashOf(parseHash("#/week/team")!)).toBe("#/week");
     expect(routeLoc({ view: "team" }).loc.nav).toEqual(navOf.week());
   });
 
@@ -71,7 +70,6 @@ describe("tabs and modes", () => {
     expect(addOf(navOf.addWork("2026-11-03"))).toEqual({ date: "2026-11-03", half: null });
     expect(addOf(navOf.weekAdd())).toEqual({ date: null, half: null });
     expect(addOf(navOf.week())).toBeNull();
-    expect(addOf(navOf.week("team"))).toBeNull();
     expect(addOf(navOf.today())).toBeNull();
     // A half with no date means nothing.
     expect(navOf.addWork(null, "PM")).toEqual(navOf.addWork());
@@ -250,7 +248,7 @@ describe("notification routes (all kinds of step 15.5)", () => {
 describe("command menu views", () => {
   it("every view a command opens is a tab and mode, a flow, or an overlay", () => {
     const want: Partial<Record<ViewName, string>> = {
-      today: "#/day", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/backlog", ahead: "#/backlog/gantt", gaps: "#/backlog", backlog: "#/backlog", status: "#/status", team: "#/week/team",
+      today: "#/day", week: "#/week", inbox: "#/inbox", follow_ups: "#/inbox/promises", capture: "#/inbox/captures", roadmap: "#/backlog", ahead: "#/backlog/gantt", gaps: "#/backlog", backlog: "#/backlog", status: "#/status", team: "#/week",
       planday: "#/week/add", planweek: "#/week/add", commit: "#/week/add", checkin: "#/day/checkin", closeout: "#/day/closeout", focus: "#/focus", settings: "#/settings/you",
       conversations: "#/inbox/chats", requests: "#/inbox/chats", my_promises: "#/inbox/promises",
     };

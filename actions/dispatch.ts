@@ -2538,12 +2538,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "send.withdraw":
     case "send.today":
     case "team.commit":
-    case "team.view":
     case "priority.flag":
     case "priority.unflag":
     case "priority.add_to_week":
-    case "look.ask":
-    case "look.reply":
       return teamAction(teamCtx(ctx), action satisfies TeamAction, req.input);
     case "deploy.items":
     case "deploy.config_save":

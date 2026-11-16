@@ -1535,11 +1535,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "send.withdraw":
     case "send.today":
     case "team.commit":
-    case "look.ask":
       return { run: () => env.setView("commit") };
-    case "team.view":
-    case "look.reply":
-      return { run: () => env.setView("team") };
     // SR-1: Status opens Week › Status; its drafts start from there.
     case "status.load":
     case "status.draft":
@@ -1784,9 +1780,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 }
 
 /** Every command: window commands, then one per registered action (built from the registry). */
-/** WD-1: Team is hidden for now (its address still opens it); its own commands aren't offered. */
 // CF-1: confirming and tiers are retired; their old actions stay (they answer plainly) but leave the command menu.
-export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["team.view", "look.reply", "weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
+export const HIDDEN_FOR_NOW: ReadonlySet<string> = new Set(["weekplan.commit", "planday.commit", "weekplan.set_tier", "weekplan.reorder", "weekplan.headsup"]);
 
 /**
  * NM-2: commands that name a place or a button the app no longer has, or that can't finish, each with the reason.
@@ -1840,7 +1835,6 @@ export const HOLLOW: Readonly<Record<string, string>> = {
   "followup.ask_priorities": "No screen offers it since WD-1",
   "planday.carry_hint": "The suggested to-dos hint is gone",
   "chats.social": "No screen marks a client chat as a Social chat",
-  "look.ask": "Can't finish while Team is hidden: the lead's notice opens Week, and a lead replies only in Team",
 };
 
 export function commandList(env: MenuEnv): MenuItem[] {

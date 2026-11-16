@@ -73,7 +73,7 @@ Where the code keeps a name people don't see, these pages use the screen's name 
 | `roadmap.*` actions, `roadmap_dates`, `delivery_snapshots` | Backlog's dates and its trends | `actions/roadmap-actions.ts` |
 | `fix`, `readiness`, `attention` (`#/ahead/fix`) | Backlog's Grid with Needs attention on | `ui/nav.ts`, `plan/ahead-view.ts` |
 | `board` (Week's mode) | Week | `ui/nav.ts` |
-| `team` (`#/week/team`) | Team: hidden, the address still opens it | `ui/nav.ts` |
+| `team` (`#/week/team`) | Team: removed in RM-1; the address opens the week | `ui/nav.ts` |
 | `pick`, `picks`, `pick.*` actions | To-do | `actions/plan-actions.ts`, `store/plan-store.ts` |
 | `planday.*`, `day_plans` | A day's plan on Day | `actions/plan-actions.ts` |
 | `weekplan.*`, `week_plans`, `week_features` | A week's features per client, shown on Week and Backlog | `actions/weekplan-actions.ts` |

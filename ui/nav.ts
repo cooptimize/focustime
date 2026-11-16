@@ -20,10 +20,10 @@ export const TODAY_FLOWS = ["checkin", "closeout"] as const;
 export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /**
- * WD-1: Week is one screen with no mode switch; Team (SW-1) is hidden but keeps its address (#/week/team). Plan mode
+ * WD-1: Week is one screen with no mode switch; Team (SW-1) went in RM-1 (#/week/team opens the week). Plan mode
  * and Plan the day are gone: adding work is the block panel beside the week.
  */
-export type WeekMode = "board" | "team";
+export type WeekMode = "board";
 /**
  * AH-1 (D653): Ahead is one model in views. BL-1: two, Grid and Gantt; Readiness is the Grid's Needs attention filter
  * and the old Backlog mode is the Grid listing Stories (BL-2: every level is a list in its own rank order).
@@ -32,7 +32,7 @@ export type AheadMode = "grid" | "gantt";
 /** BL-1: what an old address (#/ahead/fix, #/ahead/backlog) turns on in the Grid when it lands. */
 export type AheadPreset = "attention" | "stories";
 
-export const MODE_NAMES = { board: "Week", team: "Team", grid: "Grid", gantt: "Gantt" } as const;
+export const MODE_NAMES = { board: "Week", grid: "Grid", gantt: "Gantt" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
 export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [], code: [] };
@@ -229,8 +229,6 @@ export function hashOf(l: Loc): string {
   // SR-1, WD-1: always this week's report (the one Kat sends next Monday).
   if (n.tab === "status") return n.group === "needs" ? "#/status/needs" : "#/status";
   if (n.tab === "week") {
-    // SW-1: the client team view (hidden in WD-1; its address still opens it).
-    if (n.mode === "team") return ["#/week/team", n.week].filter(Boolean).join("/");
     if (n.add?.date) return ["#/week/day", n.add.date, n.add.half].filter(Boolean).join("/");
     if (n.add) return n.week ? `#/week/${n.week}/add` : "#/week/add";
     return ["#/week", n.week].filter(Boolean).join("/");
@@ -422,7 +420,8 @@ export function parseHash(full: string): Loc | null {
       // WD-1: #/week/add and #/week/<monday>/add; Plan (#/week/commit, #/week/plan) lands on the week with the panel.
       if (a === "add") return weekAdd(b, c);
       if (a === "commit" || a === "plan") return weekAdd(b, c);
-      if (a === "team") return week("team", b, c);
+      // SW-1's Team (#/week/team, #/week/team/<monday>), removed in RM-1: that week.
+      if (a === "team") return week("board", b, c);
       // SR-1: Week › Status before WD-1.
       if (a === "status") return b === undefined ? plain(navOf.status()) : b === "needs" && c === undefined ? plain(navOf.statusNeeds()) : null;
       if (validDate(a) && b === "add") return c === undefined ? plain(navOf.weekAdd(a)) : null;
@@ -544,7 +543,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "planday": return { nav: navOf.addWork(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.weekAdd(), overlay: null };
-    case "team": return { nav: navOf.week("team"), overlay: null };
+    case "team": return { nav: navOf.week(), overlay: null };
     case "status": return { nav: navOf.status(), overlay: null };
     case "checkin": return { nav: navOf.today("checkin"), overlay: null };
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
@@ -578,7 +577,7 @@ export function viewName(loc: Loc): string {
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
     : n.tab === "status" ? TAB_NAMES.status
-    : n.tab === "week" ? (n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
+    : n.tab === "week" ? (n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.tab === "code" ? TAB_NAMES.code
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;

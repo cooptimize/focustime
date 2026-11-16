@@ -167,7 +167,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
       ["#/week/plan/2026-11-09", "#/week/2026-11-09/add", true],
       ["#/today/plan/2026-11-03/PM", "#/week/day/2026-11-03/PM", true],
       ["#/week/day/2026-11-04/AM", "#/week/day/2026-11-04/AM", true],
-      ["#/week/team", "#/week/team", false],
+      ["#/week/team", "#/week", false],
       ["#/roadmap", "#/backlog", false],
       ["#/ahead/fix", "#/backlog", false],
       ["#/ahead/backlog", "#/backlog", false],
@@ -178,12 +178,10 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
       await expect.poll(async () => (await hash(page)).split("?")[0], { message: old }).toBe(now);
       await expect.poll(() => panel(page).count(), { message: `${old}: the panel` }).toBe(withPanel ? 1 : 0);
     }
-    // The panel on a block opens that week and selects the block; the team address opens Team.
+    // The panel on a block opens that week and selects the block.
     await page.evaluate(() => (location.hash = "#/week/day/2026-11-10/AM"));
     await expect.poll(() => panel(page).getAttribute("data-block-panel")).toBe("2026-11-10|AM");
     await page.getByRole("heading", { name: /^Week of Nov 9/ }).waitFor();
-    await page.evaluate(() => (location.hash = "#/week/team"));
-    await page.locator(".team-view, [aria-label^='Team']").first().waitFor({ timeout: 30_000 });
     await page.close();
   }, T);
 
