@@ -1235,7 +1235,7 @@ From the IT review (TD-1):
 
 ## CI-3
 
-- `docs/ux/U1/designer-handoff.zip` (16 MB) is still on main, kept because the step moves only image files. It holds U1's screenshots, among them the 32 of the owner's real FocusTime (real client names, a person's name, meeting titles) that left main from `docs/ux/U1/screens/live/`. The repo is public. Remove it from main too?
+- `docs/ux/U1/designer-handoff.zip` (16 MB) is still on main, kept because the step moves only image files. It holds U1's screenshots, among them the 32 of the owner's real FocusTime (real client names, a person's name, meeting titles) that left main from `docs/ux/U1/screens/live/`. The repo is public. Remove it from main too? Answered in PV-1: removed from main; it remains in history (see PV-1).
 - Should the old images ever be dropped from history? They are about 380 MB of every full clone's `.git` (a fresh clone was 900 MB, of which `.git` 470 MB). Dropping them means rewriting history and a force push, which this step doesn't do; the archive branch would keep the demo ones.
 - `ci` runs in full on every push to main, beside deploy-dev, which reuses the pull request's run (all ten deploys measured did). That is about 45 runner minutes per merge for a tree already tested. It also saves the WebKit package cache from main, which pull requests restore. Keep it, or run only the cache-saving part on main?
 - The test gate and infra check out the whole tree to read one commit's tree id or `infra/`. After CI-3 a checkout is about 57 MB rather than 430 MB; a sparse checkout would make it smaller still. Worth it?
@@ -1261,3 +1261,39 @@ From the IT review (TD-1):
 - `docs/analysis/wp1-*.md` describe the removed patterns page; they are kept as a record with a note at the top. Delete them?
 - Old Ask to look requests: my unanswered ones still show in Inbox › Waiting on for 14 days, but nobody can reply any more, and a lead's earlier reply no longer shows anywhere (it was drawn only in the removed views). Leave them to age out, or stop listing them in Waiting on?
 - Found in RM-1's demo review, not caused by it (also on main): the Send to… dialog's success line says "You'll see their answer in Plan" (`ui/Team.tsx`), but Week has no Plan mode; the answer shows in the block panel's You sent. An Inbox address for a conversation that doesn't exist (`#/inbox/conversation/<id>`) lands on the Inbox with no error text but logs a 404 in the console. After Accept and schedule the address goes from the day's block to `#/week` while the panel stays on that block. Fix in a later step?
+
+## PV-1
+
+- The zip and its 32 pictures of a real session, and the 32 that were in `docs/ux/U1/screens/live/`, remain in the repository's history and in the refs GitHub keeps for every pull request (`refs/pull/<n>/head`). Anyone can still fetch them from a commit before CI-3 or PV-1. There are two ways to close that, both the product owner's decision: make the repository private, or rewrite history to drop them (a force push to `main` and every branch that has them), then ask GitHub Support to remove the cached views and pull request refs that still hold them. A rewrite changes every later commit id, so open pull requests and worktrees would need rebuilding.
+- These 29 files under `docs/demo/` may hold real screens: the scripts for steps 15.4 to 16.3 use demo mode only when given `--demo` and nothing records that they were, and step 17.6's four have no script on main and no record that they came from the demo. They are not opened, described or removed here (`docs/ux/pv1/step0.md`). Check them, and remove any that aren't demo?
+  - `docs/demo/154-inbox-sort-chips.png`
+  - `docs/demo/154-settings-you.png`
+  - `docs/demo/154-today-vm-prompt-light.png`
+  - `docs/demo/154-today-vm-prompt.png`
+  - `docs/demo/154-vm-delay-preview.png`
+  - `docs/demo/154-vm-menu.png`
+  - `docs/demo/154-vm-stop-preview.png`
+  - `docs/demo/155-settings-notifications-light.png`
+  - `docs/demo/155-settings-notifications.png`
+  - `docs/demo/155-settings-you.png`
+  - `docs/demo/162-menu-person-light.png`
+  - `docs/demo/162-roadmap-ahead.png`
+  - `docs/demo/162-today-checkin-light.png`
+  - `docs/demo/162-today-now.png`
+  - `docs/demo/162-today-plan.png`
+  - `docs/demo/162-week-plan.png`
+  - `docs/demo/162-week.png`
+  - `docs/demo/163-focus-deep.png`
+  - `docs/demo/163-help-presence-light.png`
+  - `docs/demo/163-help-presence-word.png`
+  - `docs/demo/163-roadmap-presence.png`
+  - `docs/demo/163-settings-focus.png`
+  - `docs/demo/163-today-vm-prompt.png`
+  - `docs/demo/163-vm-menu.png`
+  - `docs/demo/163-week-vm-running.png`
+  - `docs/demo/176-1920-dark-planday.png`
+  - `docs/demo/176-1920-dark-today.png`
+  - `docs/demo/176-1920-light-planday.png`
+  - `docs/demo/176-1920-light-today.png`
+- The archive rule names the common archive types (zip, 7z, rar, tar, tgz, gz, bz2, xz, zst, jar). Office files (docx, pptx, xlsx) are zip files inside and can hold pictures too; they aren't refused because none is on main and the step names archives. Add them?
+- The rule covers `docs/` only, as the step says. An archive elsewhere (for example under `assets/`) is still allowed below 300 KB. Widen it to the whole repository?

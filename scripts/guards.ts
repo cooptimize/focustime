@@ -17,7 +17,8 @@
 //   Guide and the Technical docs) names a place the screens draw (ui/places.ts).
 // - files (CI-3): no image or video under docs/ux (a step's screenshots live on its shots/<step> branch, never on
 //   main), and no file over 300 KB outside the few that need the size (LARGE_OK, each with its reason). Every file is
-//   checked, not only text files, from the same list.
+//   checked, not only text files, from the same list. PV-1: no archive anywhere under docs/ either (a zip held
+//   pictures of a real session that the image check couldn't see inside).
 //
 // Usage: node scripts/guards.ts [--root <dir>]; exits 1 and lists file:line for each hit.
 import { execFileSync } from "node:child_process";
@@ -83,17 +84,18 @@ export function guardFiles(root: string): string[] {
 
 // CI-3's files guard.
 export const IMAGE_OR_VIDEO = /\.(png|jpe?g|gif|webp|avif|bmp|tiff?|ico|svg|heic|mp4|webm|mov|mkv|avi|m4v)$/i;
+/** PV-1: archives, refused anywhere under docs/: what is inside one can't be checked. */
+export const ARCHIVE = /\.(zip|7z|rar|tar|tgz|gz|bz2|xz|zst|jar)$/i;
 export const LARGE_BYTES = 300 * 1024;
 /** Files (or folders, ending in "/") that may be over 300 KB, and why. */
 export const LARGE_OK: Record<string, string> = {
   "docs/decisions.md": "the decision log, read by scripts/decisions.test.ts and scripts/tech-docs.test.ts; it grows with every step",
   "ui/styles.css": "the app's one stylesheet",
   "docs/demo/": "the demo walkthrough's pictures (scripts/demo-walkthrough.mjs writes them, docs/demo.md shows them)",
-  "docs/ux/U1/designer-handoff.zip": "U1's designer handoff, kept as it was (an open question asks whether it should go)",
 };
 const largeOk = (f: string) => Object.keys(LARGE_OK).some((k) => (k.endsWith("/") ? f.startsWith(k) : f === k));
-export type FileHit = { file: string; why: "image" | "large"; bytes: number };
-/** Images or videos under docs/ux, and files over 300 KB outside LARGE_OK. Files listed but not on disk are skipped. */
+export type FileHit = { file: string; why: "image" | "archive" | "large"; bytes: number };
+/** Images or videos under docs/ux, archives under docs/, and files over 300 KB outside LARGE_OK. Files listed but not on disk are skipped. */
 export function fileHits(root: string, files: string[] = allFiles(root)): FileHit[] {
   const hits: FileHit[] = [];
   for (const f of files) {
@@ -104,6 +106,7 @@ export function fileHits(root: string, files: string[] = allFiles(root)): FileHi
       continue;
     }
     if (f.startsWith("docs/ux/") && IMAGE_OR_VIDEO.test(f)) hits.push({ file: f, why: "image", bytes });
+    else if (f.startsWith("docs/") && ARCHIVE.test(f)) hits.push({ file: f, why: "archive", bytes });
     else if (bytes > LARGE_BYTES && !largeOk(f)) hits.push({ file: f, why: "large", bytes });
   }
   return hits;
@@ -114,7 +117,7 @@ export type Hit = { guard: "names" | "desktop" | "process" | "words" | "old name
 export function runGuards(root: string): { files: number; hits: Hit[] } {
   const every = allFiles(root);
   const files = every.filter((f) => TEXT.test(f) && f !== "package-lock.json");
-  const hits: Hit[] = fileHits(root, every).map((h) => ({ guard: "files", at: `${h.file}: ${h.why === "image" ? "an image or video under docs/ux" : `${Math.round(h.bytes / 1024)} KB`}` }));
+  const hits: Hit[] = fileHits(root, every).map((h) => ({ guard: "files", at: `${h.file}: ${h.why === "image" ? "an image or video under docs/ux" : h.why === "archive" ? "an archive under docs/" : `${Math.round(h.bytes / 1024)} KB`}` }));
   for (const f of files) {
     let text: string;
     try {
@@ -146,7 +149,7 @@ const WHY: Record<Hit["guard"], string> = {
   words: 'text people read says "pick" for a planned piece of work: say "to-do" (TD-1; code names keep pick)',
   "old names": "text people read uses a name FocusTime no longer has, or writes a control as a character: use the screen's name today and the control's name (NM-1; ui/guide/retired.ts says where each old name lives now)",
   pointers: "a pointer names a place that isn't there: use the name the screen draws (NM-2; ui/places.ts lists them)",
-  files: "an image or video under docs/ux, or a file over 300 KB: a step's screenshots go on its shots/<step> branch (scripts/shots-branch.ts), never on main; a file that must be large is added to LARGE_OK in scripts/guards.ts with its reason (CI-3)",
+  files: "an image or video under docs/ux, an archive under docs/, or a file over 300 KB: a step's screenshots go on its shots/<step> branch (scripts/shots-branch.ts), never on main, and never in an archive (PV-1); a file that must be large is added to LARGE_OK in scripts/guards.ts with its reason (CI-3)",
 };
 
 if (import.meta.main) {
