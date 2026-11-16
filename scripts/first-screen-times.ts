@@ -5,7 +5,10 @@
 // times slower; 1.6 Mbit/s down, 750 kbit/s up, 150 ms each way: Lighthouse's "slow 4G" profile). The middle value of
 // the runs is reported. The demo server sends files uncompressed, so the slowed numbers follow the raw sizes.
 //
-//   FOCUSTIME_E2E_DIST=<a built dist> node scripts/first-screen-times.ts [--runs 10] [--json out.json]
+// With --settled each tab is pressed only after the network has been quiet for two seconds, which is a person who
+// looks at Day first: by then the other screens' files have been fetched in the background.
+//
+//   FOCUSTIME_E2E_DIST=<a built dist> node scripts/first-screen-times.ts [--runs 10] [--settled] [--json out.json]
 import { writeFileSync } from "node:fs";
 import type { Page } from "playwright-core";
 import { startDemo } from "../e2e/harness.ts";
@@ -23,6 +26,24 @@ const arg = (name: string) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const RUNS = Number(arg("--runs") ?? 10);
+const SETTLED = process.argv.includes("--settled");
+
+/** Resolves once no built file (/assets/) has been in flight for `quiet` ms (or after `most`); the app's own long-lived requests don't count. */
+async function networkQuiet(page: Page, quiet = 2000, most = 90_000): Promise<void> {
+  let open = 0;
+  let last = Date.now();
+  const file = (r: { url: () => string }) => r.url().includes("/assets/");
+  const up = (r: { url: () => string }) => file(r) && (open++, (last = Date.now()));
+  const down = (r: { url: () => string }) => file(r) && ((open = Math.max(0, open - 1)), (last = Date.now()));
+  page.on("request", up);
+  page.on("requestfinished", down);
+  page.on("requestfailed", down);
+  const start = Date.now();
+  while (Date.now() - start < most && !(open === 0 && Date.now() - last >= quiet)) await new Promise((r) => setTimeout(r, 100));
+  page.off("request", up);
+  page.off("requestfinished", down);
+  page.off("requestfailed", down);
+}
 const middle = (a: number[]) => {
   const s = [...a].sort((x, y) => x - y);
   return s.length % 2 ? s[(s.length - 1) / 2]! : Math.round((s[s.length / 2 - 1]! + s[s.length / 2]!) / 2);
@@ -58,6 +79,7 @@ try {
       await page.goto(`${h.url}#/today`, { waitUntil: "commit" });
       await usable(page);
       add("First screen usable", performance.now() - t);
+      if (SETTLED) await networkQuiet(page);
       for (const [name, key, sel] of TABS) {
         t = performance.now();
         await page.keyboard.press(key);

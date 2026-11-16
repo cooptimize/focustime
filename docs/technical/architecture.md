@@ -90,6 +90,27 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 
 Where the window is (tab, date, open panel, filters) is one pure model in `ui/nav.ts`, mirrored in the address (`#/day/<date>/<half>`, `#/week/day/<date>/<half>`, `#/backlog?…`, `#/inbox/<list>`, `#/item/<client>/<id>`, `#/code/<client>/<repo>/<path>`), so Back and a copied link land in the same place. Older addresses still land on the nearest screen.
 
+### How the app is split into files
+
+The first screen downloads only what Day, Week, the top bar and the loader need. Every other screen is its own file, fetched when it is first opened.
+
+| File the build writes | What it holds | When it is fetched |
+|---|---|---|
+| `index`, `boot`, `rolldown-runtime` | The page's entry (`ui/boot.ts`), Vite's import helper, the bundler's runtime: about 3 kB together | With the page |
+| `main` (script and styles) | Everything `ui/main.tsx` imports statically: Day, Week, the block panel, the top bar, menus and keys, and all of `ui/styles.css` | With the page (the page names them as preloads) |
+| One file per screen | Backlog, Status, the Inbox, Code, Settings with Admin, the story card with its editor, the New form, the draft editor, Capture, the assistant, the Focus screen, the Midday check-in, Close out, the Guide, a tour, these docs | When the screen is first asked for, or in the background |
+| `shared` | What two or more of those screens use and `main` doesn't hold (date and time fields, the cell popover, the people field) | With the first screen that needs it |
+| `guide-text` | The Guide's words and frame, shared by the Guide, its tours and these docs | With the first of those |
+| The Temporal polyfill | `temporal-polyfill` | Only in a browser without Temporal, before anything else runs |
+
+- **The one list** of screens that load on demand is `LOADERS` in `ui/screens.ts` (their names alone are in `ui/screen-names.ts`). `locScreens` in `ui/nav.ts` says which of them a place needs.
+- **How the files are cut** is `scripts/split-chunks.ts`, used by `vite.config.ts`: `main` is read from the module graph (everything reachable from `ui/main.tsx` without an `import()`), so no list is kept by hand. Styles a screen imports in its own file travel with that screen.
+- **Asked for and drawn.** `ui/App.tsx` keeps the place asked for and the place drawn. A place is drawn once its screens' files are in; until then the screen the person was on stays, with no blank page and no spinner. Past 300 ms the top bar says "Loading…" (`ui/ScreenLine.tsx`). A dialog (Capture, the assistant, the New form, the draft editor) appears once its file is in, and Esc takes a waiting ask back.
+- **In the background.** Once the first screen is usable, the other tabs' files and then the screens a key opens are fetched one at a time while the page is idle (`BACKGROUND` in `ui/screens.ts`), so a tab shows at once. Not when the browser reports a slow or data-saving connection: then a tab's file is fetched on hover, focus or its key. The Guide and these docs are fetched only when opened.
+- **A file that doesn't arrive.** Offline: one line says the screen needs a connection, with Retry. Online: a release may have replaced the file (the server answers a file it doesn't have with the page), so the app reloads once at the place asked for; if the file still can't be had, the line says so with Retry (which reloads once per press). The one reload is noted in the browser's session storage until a screen loads again, so it can't loop. An error thrown by a screen's own code is not treated as a missing file: it is thrown on with no reload and no line.
+- **The installed app** keeps every file the build wrote, the split files among them, in one cache per build ([Operations](operations.md)), so a screen opens offline whether or not it was opened before. After a release the new worker drops the old cache whole and answers only the new build's files.
+- **The limit.** `scripts/first-download.test.ts` fails when the first download grows past its recorded limit or holds a screen from `ui/screens.ts` again ([Development](development.md#the-first-downloads-size)).
+
 ## The planning rules
 
 The week, risks, free time and estimates are pure code in `week/` and `plan/`: no I/O, deterministic, unit tested. The words for each idea are in the [glossary](../../CLAUDE.md#glossary-use-these-words-in-code-ui-and-chat).
