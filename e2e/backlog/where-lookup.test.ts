@@ -307,6 +307,12 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await list(page).waitFor();
     await page.keyboard.press("Escape");
     await expect(ed.count()).resolves.toBe(1);
+    // With the list closed: Alt+Down opens it by kind; Tab goes on to the next question, as before (the button is out of the Tab order).
+    await page.keyboard.press("Alt+ArrowDown");
+    await list(page).getByRole("group", { name: "Reports" }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Tab");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-question"))).toBe("change");
     expect((await views(page)).filter((v) => v.event === "where_draft_editor").length).toBeGreaterThanOrEqual(1);
     expect(errors).toEqual([]);
     await page.close();
