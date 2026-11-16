@@ -4,7 +4,7 @@
   "styles": 87000
  },
  "measured": {
-  "script": 326825,
+  "script": 326839,
   "styles": 83814
  },
  "modules": {
@@ -288,7 +288,7 @@
   "ui/TodoSheet.tsx": 5826,
   "ui/TypeIcon.tsx": 4898,
   "ui/Watching.tsx": 14546,
-  "ui/WeekGrid.tsx": 31483,
+  "ui/WeekGrid.tsx": 31473,
   "ui/WeekStories.tsx": 12503,
   "ui/WorkLink.tsx": 2964,
   "ui/WrapUp.tsx": 25194,

@@ -1,5 +1,7 @@
 # Design brief: FocusTime UX overhaul (U1)
 
+> PV-1 (Nov 16): `designer-handoff.zip` was removed from main because it held screenshots of a real FocusTime session; `screens/live/` left main in CI-3 for the same reason. Neither is on any branch.
+
 You are a principal UI/UX designer with deep experience in dense productivity tools for experts (calendars, planning, issue trackers). You cut ruthlessly, design for an economy of clicks, and defend every pixel.
 
 You can't see the code. Everything you need is in this brief and the attached files (listed at the end). Read `report.md` alongside this brief: it holds the full element inventories, counts and confusion logs.
@@ -54,7 +56,7 @@ FocusTime is a local desktop app for one consultant at Cooptimize, a consulting 
 
 ## 3. The screens in scope
 
-Six screens. The first four are the core; Check-in and Close out were added because the user named them as the busiest. Screenshots are in `screens/demo/` (fictional data) and `screens/live/` (the user's real data; personal events blurred). Names are `<width>-<theme>-<screen>[-p2|-failed].png`, and `-detail-` files show menus and panels.
+Six screens. The first four are the core; Check-in and Close out were added because the user named them as the busiest. Screenshots were in `screens/demo/` (fictional data; now on `shots/archive`) and `screens/live/` (removed from main). Names are `<width>-<theme>-<screen>[-p2|-failed].png`, and `-detail-` files show menus and panels.
 
 ### Today › Now (`1920-dark-now.png`, `1920-dark-now-failed.png`, `3840-dark-now.png`)
 
@@ -281,7 +283,7 @@ Challenge anything that doesn't serve the screen's one job. If the jobs are uncl
 - whether a typed intention becomes a draft story;
 - whether Check-in and Close out stay as pages or become a state of Today.
 
-## 7. Attached (designer-handoff.zip)
+## 7. Attached (designer-handoff.zip, removed from main in PV-1)
 
 - `designer-prompt.md`: this brief.
 - `report.md`: the full audit (inventories, classifications, counts, click tables, confusion logs, cross-screen issues, the planning chain, open questions).
@@ -290,7 +292,7 @@ Challenge anything that doesn't serve the screen's one job. If the jobs are uncl
 - `design/style-guide.md`: tokens (primitives, semantic, domain), client colors, type, spacing, components, interaction rules, contrast.
 - `design/wording.md`: the wording guide.
 - `screens/demo/`: fictional demo data, 1920 dark (with `-p2`/`-p3` scroll pages and `-failed` versions), 1920 light, 3840 dark and light, and `1920-dark-detail-*` menus and panels.
-- `screens/live/`: the user's live data (personal events, PTO title and photo blurred), 1920 dark (with scroll pages), 1920 light, 3840 dark and light.
+- `screens/live/`: removed from main (screenshots of a real session).
 
 Screen keys in file names:
 - `now`: Today › Now

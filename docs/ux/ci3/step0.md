@@ -53,6 +53,8 @@ These stay in the suite: the screenshots are a side path that runs only when `FO
 
 ### Real data among the images
 
+> PV-1 (Nov 16): both are off main now; `screens/live/` went in CI-3 and the zip in PV-1. They remain in history.
+
 `docs/ux/U1/screens/live/` (32 PNG files) holds U1's screenshots of the owner's real FocusTime, taken on request (`docs/ux/U1/report.md`, answer 5), with real client names, a real person's name and real meeting titles. `docs/ux/U1/designer-handoff.zip` (16 MB) holds the same 32 among its 87 screenshots. Both are on main today, in a public repository. The repo's own rule is that screenshots in the repo come from demo mode only.
 
 ## 0.7 Files under docs/ that something running needs

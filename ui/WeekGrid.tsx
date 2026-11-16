@@ -78,6 +78,12 @@ type Props = {
   onFoldOpen?: ((dayIndex: number) => void) | undefined;
 };
 
+/**
+ * P1: where a touch began, for the phone's sideways swipe. Outside the component (PF-1): kept in a render it was
+ * lost whenever the app drew again between the touch's start and its end, and the swipe then went the wrong way.
+ */
+const swipe = { x: 0, y: 0 };
+
 export function WeekGrid(props: Props) {
   // CV-3: today's rails, for promises overdue from an earlier day (or with no time): drawn at "now" on today's block.
   const day = props.week.days.find((d) => d.date === props.today);
@@ -203,7 +209,6 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
     );
   if (layout === "narrow") {
     const i = selection.dayIndex;
-    const swipe = { x: 0, y: 0 };
     // WK-5: hidden days have no tab and the arrows and swipes pass over them.
     const go = (d: number) => {
       // A tab goes straight to its day; a swipe onto a hidden day goes on to the next shown one that way.

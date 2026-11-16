@@ -1,6 +1,6 @@
 # U4: Plan the week and Plan the day
 
-U4 builds the planning half of the U1 plan (`docs/ux/U1/report.md`, the mockups in `docs/ux/U1/designer-handoff.zip`), on top of U3's type scale and its shared detail panel. Where the step prompt and the mockups differ, the prompt wins.
+U4 builds the planning half of the U1 plan (`docs/ux/U1/report.md`, the mockups that were in `docs/ux/U1/designer-handoff.zip`, removed from main in PV-1 because it held screenshots of a real session), on top of U3's type scale and its shared detail panel. Where the step prompt and the mockups differ, the prompt wins.
 
 Screenshots come from demo mode only:
 

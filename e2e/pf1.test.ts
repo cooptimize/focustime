@@ -140,13 +140,14 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     // An ordinary connection: nothing before the first screen is usable, then the tabs' files without being asked.
     const a = await session(h);
     const asked: string[] = [];
-    a.page.on("request", (r) => lazy.test(r.url()) && asked.push(r.url().replace(/.*\/assets\//, "").replace(/-.*/, "")));
     // The moment Day is drawn, on the page's own clock.
     await a.ctx.addInitScript(() => {
       const seen = () => document.querySelector("main.today-view") && ((window as unknown as { pf1Day?: number }).pf1Day ??= performance.now());
       new MutationObserver(seen).observe(document, { childList: true, subtree: true });
     });
     await a.page.goto("about:blank");
+    // Listening from here: the session's first page may still have been fetching in the background.
+    a.page.on("request", (r) => lazy.test(r.url()) && asked.push(r.url().replace(/.*\/assets\//, "").replace(/-.*/, "")));
     await a.page.goto(h.url + "#/day");
     await usable(a.page);
     await expect.poll(() => ["Ahead", "Status", "InboxPage", "Code", "Capture", "Settings"].every((n) => asked.includes(n)), { timeout: 30_000 }).toBe(true);
@@ -160,12 +161,13 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect(asked.filter((n) => ["Ahead", "Status", "InboxPage", "Code"].includes(n))).toEqual(["Ahead", "Status", "InboxPage", "Code"]);
     expect(asked, "the Guide and the Technical docs wait to be opened").not.toContain("TechDocs");
     // Each file once.
-    expect(new Set(asked).size).toBe(asked.length);
+    expect(asked.filter((n, i) => asked.indexOf(n) !== i), "asked for twice").toEqual([]);
     await a.ctx.close();
 
     // A data-saving connection: nothing until a tab is pointed at.
     const b = await session(h, { metered: true });
     const asked2: string[] = [];
+    await b.page.goto("about:blank");
     b.page.on("request", (r) => lazy.test(r.url()) && asked2.push(r.url().replace(/.*\/assets\//, "").replace(/-.*/, "")));
     await cold(b.page, h, "#/day");
     await b.page.waitForTimeout(2500);

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LARGE_OK, runGuards } from "./guards.ts";
+import { ARCHIVE, LARGE_OK, runGuards } from "./guards.ts";
 
 const SCRIPT = join(import.meta.dirname, "guards.ts");
 const client = Buffer.from("VyZD", "base64").toString("utf8");
@@ -87,6 +87,26 @@ describe("one guard script (HK-1)", () => {
     expect(r.stderr).not.toContain("notes.md");
   });
 
+  // PV-1: an archive anywhere under docs/ fails, whatever its size, tracked or not; the same name elsewhere doesn't.
+  it("fails on an archive added under docs/, small or large, and not on one outside docs/", () => {
+    const d = repo();
+    mkdirSync(join(d, "docs/ux/zz2"), { recursive: true });
+    mkdirSync(join(d, "docs/demo"), { recursive: true });
+    writeFileSync(join(d, "docs/ux/zz2/handoff.zip"), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    execFileSync("git", ["add", "-A"], { cwd: d });
+    writeFileSync(join(d, "docs/demo/shots.tar.gz"), Buffer.alloc(301 * 1024, 1));
+    mkdirSync(join(d, "assets"), { recursive: true });
+    writeFileSync(join(d, "assets/kit.zip"), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    expect(runGuards(d).hits.filter((h) => h.guard === "files").map((h) => h.at)).toEqual(["docs/demo/shots.tar.gz: an archive under docs/", "docs/ux/zz2/handoff.zip: an archive under docs/"]);
+    const r = cli(d);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/2 files hit.*never in an archive/);
+  });
+
+  it("allows no archive as a large file", () => {
+    expect(Object.keys(LARGE_OK).filter((k) => ARCHIVE.test(k))).toEqual([]);
+  });
+
   it("fails on a file over 300 KB outside the folders that need large files, and passes one inside them", () => {
     const d = repo();
     const big = Buffer.alloc(301 * 1024, 1);
@@ -103,7 +123,7 @@ describe("one guard script (HK-1)", () => {
     for (const [path, why] of Object.entries(LARGE_OK)) expect(why.length, path).toBeGreaterThan(20);
   });
 
-  it("passes this repo: no image under docs/ux and no unexpected large file", () => {
+  it("passes this repo: no image under docs/ux, no archive under docs/ and no unexpected large file", () => {
     expect(runGuards(join(import.meta.dirname, "..")).hits.filter((h) => h.guard === "files")).toEqual([]);
   });
 });
