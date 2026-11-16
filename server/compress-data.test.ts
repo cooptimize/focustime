@@ -143,7 +143,9 @@ describe("a client's code is compressed for its one answer and nothing of it is 
   function fakeRes() {
     const sink = new PassThrough().resume();
     const got: { head?: Record<string, unknown>; status?: number; body?: Buffer; written?: Buffer } = {};
+    const closers: (() => void)[] = [];
     const res = {
+      once: (ev: string, fn: () => void) => (ev === "close" && closers.push(fn), res),
       writeHead: (status: number, head: Record<string, unknown>) => ((got.status = status), (got.head = head), res),
       end: (chunk: Buffer, cb?: () => void) => {
         got.body = chunk;
@@ -152,7 +154,7 @@ describe("a client's code is compressed for its one answer and nothing of it is 
         return res;
       },
     };
-    return { res: res as unknown as ServerResponse, got, done: new Promise<void>((r) => sink.on("finish", () => setImmediate(r))) };
+    return { res: res as unknown as ServerResponse, got, close: () => closers.forEach((f) => f()), done: new Promise<void>((r) => sink.on("finish", () => setImmediate(r))) };
   }
   const req = (accept: string) => ({ headers: { "accept-encoding": accept } }) as unknown as IncomingMessage;
   const FILE = { ok: true, data: { path: "/src/Orders.sql", text: Array.from({ length: 200 }, (_, i) => `SELECT ${i} AS line_${i} FROM dbo.Orders;`).join("\n") } };
@@ -182,6 +184,26 @@ describe("a client's code is compressed for its one answer and nothing of it is 
     expect(dataWork.compressed).toBe(before + 2);
   });
 
+  it("a Code answer sent plain (no encoding accepted) is zeroed once written too", async () => {
+    const { res, got, done } = fakeRes();
+    await writeJson(req("identity"), res, 200, FILE, [], "code.file");
+    await done;
+    expect(got.head!["content-encoding"]).toBeUndefined();
+    expect(JSON.parse(got.written!.toString())).toEqual(FILE);
+    expect(got.body!.every((x) => x === 0)).toBe(true);
+  });
+
+  it("a Code answer whose connection closes before it is written is zeroed then", async () => {
+    const { res, got, close } = fakeRes();
+    const ended: Buffer[] = [];
+    (res as unknown as { end: (b: Buffer) => unknown }).end = (b: Buffer) => void ended.push(b); // never written
+    await writeJson(req("br"), res, 200, FILE, [], "code.file");
+    expect(ended[0]!.some((x) => x !== 0)).toBe(true);
+    close();
+    expect(ended[0]!.every((x) => x === 0)).toBe(true);
+    expect(got.head!["content-encoding"]).toBe("br");
+  });
+
   it("another read's compressed answer is left as it is", async () => {
     const { res, got, done } = fakeRes();
     await writeJson(req("gzip"), res, 200, { ok: true, data: { rows: Array.from({ length: 100 }, (_, i) => ({ i, title: `Story ${i}` })) } }, [], "week.load");
@@ -196,7 +218,7 @@ describe("the time compression adds", () => {
     const text = Array.from({ length: 25_000 }, (_, i) => `    var value${i} = compute(${i}, "row ${i % 97}");`).join("\n").slice(0, 1_000_000);
     const { res, done } = (() => {
       const sink = new PassThrough().resume();
-      const r = { writeHead: () => r, end: (c: Buffer, cb?: () => void) => (sink.end(c, cb), r) };
+      const r = { once: () => r, writeHead: () => r, end: (c: Buffer, cb?: () => void) => (sink.end(c, cb), r) };
       return { res: r as unknown as ServerResponse, done: new Promise<void>((ok) => sink.on("finish", () => ok())) };
     })();
     await writeJson({ headers: { "accept-encoding": "br" } } as unknown as IncomingMessage, res, 200, { ok: true, data: { text } }, [], "code.file");

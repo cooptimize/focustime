@@ -24,14 +24,18 @@ function routeOf(url, mode, origin) {
   return SHELL_SET.has(url.pathname) ? "shell" : "pass";
 }
 
-/** PF-2: the type each shell file must come back as. A page is never kept under a script's name, nor anything else. */
+/**
+ * PF-2: the type each shell file must come back as. A page is never kept under any other file's name; a file of a kind
+ * not named here only has to be something other than a page (so a new kind of file never stops every install).
+ */
 const KINDS = { js: "javascript", css: "text/css", html: "text/html", svg: "image/svg+xml", png: "image/png", woff2: "font/woff2", webmanifest: "manifest+json", json: "json" };
 function keepable(path, res) {
   if (!res || res.status !== 200 || res.redirected || res.type === "opaque") return false;
   const ext = path === "/" ? "html" : path.slice(path.lastIndexOf(".") + 1);
-  const want = KINDS[ext];
   const got = ((res.headers && res.headers.get("content-type")) || "").toLowerCase();
-  return !!want && got.includes(want);
+  const want = KINDS[ext];
+  if (want) return got.includes(want);
+  return got !== "" && !got.includes("text/html");
 }
 
 // Every shell file or none (as addAll), and only the file asked for: a 404, a redirect or the page answered under a

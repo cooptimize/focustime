@@ -127,7 +127,9 @@ describe("a file checked each time is answered \"not changed\" when it hasn't ch
     // The same content in another form (a browser that changed what it accepts) is still not changed.
     const plainTag = (await get("/manifest.webmanifest")).headers.etag as string;
     expect(plainTag).not.toBe(tag);
-    expect((await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": plainTag })).status).toBe(304);
+    const other = await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": plainTag });
+    // Review 2: the 304 echoes the tag the cache sent, so it can match what it holds.
+    expect([other.status, other.headers.etag]).toEqual([304, plainTag]);
     expect((await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": `W/${plainTag}` })).status).toBe(304);
     // A tag from an earlier release: sent whole.
     const changed = await get("/manifest.webmanifest", "gzip", "GET", { "if-none-match": '"an-earlier-release"' });
@@ -172,5 +174,8 @@ describe("pickEncoding", () => {
     expect(pickEncoding("*;q=0", { br: 1, gzip: 1 })).toBeNull();
     expect(pickEncoding("BR;Q=1", { br: 1 })).toBe("br");
     expect(pickEncoding("br;q=nonsense, gzip", { br: 1, gzip: 1 })).toBe("gzip");
+    // Review 2: spaces around the name.
+    expect(pickEncoding("br ; q=0, *", { br: 1, gzip: 1 })).toBe("gzip");
+    expect(pickEncoding(" gzip ;q=1 ", { br: 1, gzip: 1 })).toBe("gzip");
   });
 });

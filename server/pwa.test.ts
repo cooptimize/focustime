@@ -197,6 +197,15 @@ describe("the service worker keeps only the file it asked for (PF-2)", () => {
     });
   }
 
+  it("a kind of file the worker doesn't name is kept unless it is the page", async () => {
+    const shell = [...SHELL, "/favicon.ico"];
+    const ok = worker("abc1234def", true, shell, undefined, null, { "/favicon.ico": { type: "image/x-icon" } });
+    await ok.fire("install");
+    expect(ok.puts).toContain("/favicon.ico");
+    const page = worker("abc1234def", true, shell, undefined, null, { "/favicon.ico": { type: "text/html; charset=utf-8" } });
+    await expect(page.fire("install")).rejects.toThrow(/Not the file asked for/);
+  });
+
   it("a missing file (404) fails the install and nothing is kept", async () => {
     const w = worker("abc1234def", true, SHELL, undefined, "/assets/main-abc.js");
     await expect(w.fire("install")).rejects.toThrow();

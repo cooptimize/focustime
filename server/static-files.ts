@@ -41,8 +41,8 @@ export type StaticFile = {
   plain: Buffer;
   br?: Buffer;
   gzip?: Buffer;
-  /** The plain form's tag; the encoded forms add "-br" or "-gz". Null for the page (never kept, never checked). */
-  etag: string | null;
+  /** Each form's tag, from that form's own bytes (so a change of level or zlib gives a new tag). Null for the page. */
+  etag: { plain: string; br?: string; gzip?: string } | null;
 };
 
 /** PF-2 tests: how many times a file has been compressed in this process (the hashed files once each, at start). */
@@ -52,10 +52,12 @@ const NO_STORE = "no-store";
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const CHECK_EACH_TIME = "no-cache";
 
+const tagOf = (b: Buffer, suffix: string) => `"${createHash("sha256").update(b).digest("base64url").slice(0, 22)}${suffix}"`;
+
 /** One file's forms, made once. */
 export function makeStaticFile(path: string, plain: Buffer, cache: string, page = false): StaticFile {
   const ext = extname(path);
-  const f: StaticFile = { type: TYPES[ext] ?? "application/octet-stream", cache, plain, etag: page ? null : `"${createHash("sha256").update(plain).digest("base64url").slice(0, 22)}"` };
+  const f: StaticFile = { type: TYPES[ext] ?? "application/octet-stream", cache, plain, etag: null };
   if (TEXT.has(ext) && plain.length >= MIN_COMPRESS_BYTES) {
     staticWork.compressed++;
     const br = brotliCompressSync(plain, { params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY, [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT, [constants.BROTLI_PARAM_SIZE_HINT]: plain.length } });
@@ -64,6 +66,7 @@ export function makeStaticFile(path: string, plain: Buffer, cache: string, page 
     if (br.length < plain.length * 0.9) f.br = br;
     if (gz.length < plain.length * 0.9) f.gzip = gz;
   }
+  if (!page) f.etag = { plain: tagOf(plain, ""), ...(f.br ? { br: tagOf(f.br, "-br") } : {}), ...(f.gzip ? { gzip: tagOf(f.gzip, "-gz") } : {}) };
   return f;
 }
 
@@ -92,7 +95,8 @@ export function pickEncoding(accept: string | undefined, has: { br?: unknown; gz
   if (!accept) return null;
   const q: Record<string, number> = {};
   for (const part of accept.split(",")) {
-    const [name, ...params] = part.trim().toLowerCase().split(";");
+    const [raw, ...params] = part.trim().toLowerCase().split(";");
+    const name = raw?.trim();
     if (!name) continue;
     const qp = params.map((p) => p.trim()).find((p) => p.startsWith("q="));
     const v = qp ? Number(qp.slice(2)) : 1;
@@ -105,14 +109,19 @@ export function pickEncoding(accept: string | undefined, has: { br?: unknown; gz
   return br >= gz ? "br" : "gzip";
 }
 
-/** True when If-None-Match names any form of this file (the content is the same in each), or "*". */
-function notModified(f: StaticFile, ifNoneMatch: string | undefined): boolean {
-  if (!f.etag || !ifNoneMatch) return false;
-  const base = f.etag.slice(1, -1);
-  return ifNoneMatch.split(",").some((t) => {
+/**
+ * The tag If-None-Match names among this file's forms (the content is the same in each), or this form's for "*"; null
+ * when none matches. A 304 echoes the tag the cache sent, so the cache can match it to what it holds.
+ */
+function matchedTag(f: StaticFile, ifNoneMatch: string | undefined, current: string): string | null {
+  if (!f.etag || !ifNoneMatch) return null;
+  const tags = Object.values(f.etag);
+  for (const t of ifNoneMatch.split(",")) {
     const tag = t.trim().replace(/^W\//, "");
-    return tag === "*" || tag === f.etag || tag === `"${base}-br"` || tag === `"${base}-gz"`;
-  });
+    if (tag === "*") return current;
+    if (tags.includes(tag)) return tag;
+  }
+  return null;
 }
 
 /** One file's answer: the chosen form with its length, type, cache line, tag and Vary; 304 when the tag matches. */
@@ -120,13 +129,14 @@ export function sendStatic(req: IncomingMessage, res: ServerResponse, f: StaticF
   const varies = !!(f.br || f.gzip);
   const enc = pickEncoding(header(req, "accept-encoding"), f);
   const body = enc === "br" ? f.br! : enc === "gzip" ? f.gzip! : f.plain;
-  const etag = f.etag && (enc === "br" ? `${f.etag.slice(0, -1)}-br"` : enc === "gzip" ? `${f.etag.slice(0, -1)}-gz"` : f.etag);
+  const etag = f.etag && (enc === "br" ? f.etag.br! : enc === "gzip" ? f.etag.gzip! : f.etag.plain);
   const head: Record<string, string | number> = { "content-type": f.type, "cache-control": f.cache };
   if (etag) head.etag = etag;
   if (varies) head.vary = "Accept-Encoding";
   const method = req.method ?? "GET";
-  if ((method === "GET" || method === "HEAD") && notModified(f, header(req, "if-none-match"))) {
-    res.writeHead(304, head);
+  const matched = etag && (method === "GET" || method === "HEAD") ? matchedTag(f, header(req, "if-none-match"), etag) : null;
+  if (matched) {
+    res.writeHead(304, { ...head, etag: matched });
     res.end();
     return;
   }

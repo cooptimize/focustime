@@ -83,7 +83,7 @@ export async function dataBody(req: IncomingMessage, json: string, o: { read?: u
     const body = enc === "br" ? await br(plain, { params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY, [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT, [constants.BROTLI_PARAM_SIZE_HINT]: plain.length } }) : await gz(plain, { level: GZIP_LEVEL });
     dataWork.compressed++;
     dataWork.lastMs = performance.now() - started;
-    // A client's code: the plain copy goes now; the compressed one once written (app.ts zeroes it on finish).
+    // A client's code: the plain copy goes now; the compressed one once written (writeJson zeroes it).
     if (o.read.startsWith("code.")) plain.fill(0);
     return { body, encoding: enc, varies: true };
   } catch {
@@ -94,7 +94,7 @@ export async function dataBody(req: IncomingMessage, json: string, o: { read?: u
 /**
  * Every JSON answer the server gives is written here (server/app.ts's `json`). Compressed only when `read` names an
  * action on the list and no cookie is set (never a session or sign-in step); every route that doesn't pass `read` goes
- * plain. Always with its length. A compressed copy of a client's code is zeroed once it has been written.
+ * plain. Always with its length. What is sent of a client's code is zeroed once written (or the connection closes).
  */
 export async function writeJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown, cookies: string[] = [], read?: unknown): Promise<void> {
   const out = await dataBody(req, JSON.stringify(body), { read, cookies: cookies.length > 0 });
@@ -106,6 +106,8 @@ export async function writeJson(req: IncomingMessage, res: ServerResponse, statu
     ...(out.encoding ? { "content-encoding": out.encoding } : {}),
     ...(cookies.length ? { "set-cookie": cookies } : {}),
   });
-  const code = out.encoding !== null && typeof read === "string" && read.startsWith("code.");
+  // A client's code, compressed or not: the bytes sent are zeroed once written, or when the connection closes first.
+  const code = typeof read === "string" && read.startsWith("code.");
+  if (code) res.once("close", () => void out.body.fill(0));
   res.end(out.body, code ? () => void out.body.fill(0) : undefined);
 }
