@@ -380,7 +380,6 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await page.waitForTimeout(2000);
     expect((await seen(page)).overlays).toEqual([]);
     expect(await page.getByText(/Welcome to FocusTime/).count()).toBe(0);
-    await expect.poll(async () => (await call(page, "ui.first_launch", {})).data?.first).toBe(false);
     await ctx.close();
   }, T);
 

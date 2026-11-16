@@ -221,8 +221,6 @@ export function App() {
     [],
   );
   const afterOpening = useCallback(() => {
-    // BR-1: the first launch is still recorded in the plan store, with no welcome overlay: the app just opens.
-    call("ui.first_launch", {}).catch(() => {});
     void loadSetup(true);
     // G1: a person's first Today offers the tour once (per person, in the plan store).
     call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});

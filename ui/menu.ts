@@ -1247,7 +1247,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       ] }) };
     }
     case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
-    case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
@@ -1994,26 +1993,6 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps, sizes: SizeScal
         : []),
       ...(f.drafts > 0 ? [{ id: "create", label: `Create ${f.drafts === 1 ? "the draft" : `${f.drafts} drafts`} in DevOps`, ...writes("create"), action: "devops.preview", ...closed, run: f.canWrite ? ops.createDrafts : ops.enableWrites } as MenuItem] : []),
       { id: "remove", label: "Remove from this week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
-    ],
-  };
-}
-
-/** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
-export type RoadmapRowFacts = { id?: number; clientName?: string | null; title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
-export type RoadmapRowOps = { copy: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
-
-/** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
-export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep {
-  const epic = f.tier === "epic";
-  return {
-    title: f.title,
-    head: rowHead({ id: f.id ?? null, title: f.title, client: f.clientName ?? null }),
-    items: [
-      { id: "copy", label: COPY_LINK, ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.copy },
-      { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
-      { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: ops.help },
-      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : {}), run: ops.addToWeek },
-      { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };
 }

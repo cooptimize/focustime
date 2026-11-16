@@ -146,8 +146,6 @@
   --p-brand-am-l: #7fa6c9;
   --p-brand-pm-d: #4fa3dd;
   --p-brand-accent-d: #9cc24f;
-  --p-brand-ghost-d: #2b3a4d;
-  --p-brand-ghost-l: #b9c6d3;
 
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -230,7 +228,6 @@
   --brand-am: var(--p-brand-am-d);
   --brand-pm: var(--p-brand-pm-d);
   --brand-accent: var(--p-brand-accent-d);
-  --brand-ghost: var(--p-brand-ghost-d);
   color-scheme: dark;
 }
 
@@ -307,7 +304,6 @@
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
-  --brand-ghost: var(--p-brand-ghost-l);
   color-scheme: light;
 }
 
@@ -380,7 +376,6 @@
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
-  --brand-ghost: var(--p-brand-ghost-l);
   color-scheme: light;
 }
 
@@ -431,7 +426,6 @@
     --brand-am: var(--p-brand-am-d);
     --brand-pm: var(--p-brand-pm-d);
     --brand-accent: var(--p-brand-accent-d);
-    --brand-ghost: var(--p-brand-ghost-d);
     color-scheme: dark;
   }
 }

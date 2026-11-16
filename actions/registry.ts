@@ -186,7 +186,6 @@ export const ACTIONS = [
   { name: "demo.vm_tick", title: "Run the VM auto-start (demo check)", group: "Display", target: "none", summary: "In a demo verification run only: moves the demo's clock on and runs the VM auto-start's pass once, with the environment the demo was given" },
   { name: "demo.reset", title: "Reset demo", group: "Display", target: "none", summary: "In the demo: puts every demo change back as it started (writes, to-dos, captures, sends), so each run starts the same" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves FocusTime and your plan isn't touched" },
-  { name: "ui.first_launch", title: "First launch", group: "Display", target: "none", summary: "True only the first time FocusTime opens on this device; kept in the plan store" },
   { name: "setup.load", title: "Setup status", group: "Settings", target: "none", summary: "First-run setup: which steps are done, skipped or closed, and the clients screen's list (S1)" },
   { name: "setup.prefill", title: "Setup: your day", group: "Settings", target: "none", summary: "Your time zone and working hours from Outlook, or your current settings when Outlook can't say" },
   { name: "setup.mark", title: "Setup: record a step", group: "Settings", target: "none", summary: "Records a setup step as done or skipped, or closes the flow (the rest is skipped)" },

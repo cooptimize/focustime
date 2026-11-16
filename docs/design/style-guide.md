@@ -189,7 +189,6 @@ Tokens, in every theme (`ui/styles.css`, domain layer):
 | `--brand-am` | #1E3A55 | #7FA6C9 | the marks' AM bars |
 | `--brand-pm` | #4FA3DD | #00416B | the marks' PM bars |
 | `--brand-accent` | #9CC24F | #42783C | the hollow Mon AM |
-| `--brand-ghost` | #2B3A4D | #B9C6D3 | not used since BR-1 (it drew the bent mark's dashed band; Q in open-questions) |
 
 Neutral uses the dark values in dark mode and the light values in light mode. The brief's full surface and text palette is not applied (Q93).
 
