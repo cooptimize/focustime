@@ -1,7 +1,8 @@
 // CI-3: deploy-dev's reuse check (scripts/ci-tree-match.sh, D456) after a docs-only merge. A docs-only pull request's ci
-// run passes with the browser shards, the webkit job and the image skipped, and its test job records the tree it
-// checked. deploy-dev then reuses that run by the same rule as for any merge: only when the merged commit's tree is
-// exactly that tree; anything else answers tested=false and deploy-dev runs all of ci.yml, where a push never skips.
+// run passes with the browser shards, the webkit job and the image skipped, and its test job records no tested tree
+// (ci.yml): it didn't test the code under the docs. So the reuse check finds no artifact and answers tested=false, and
+// deploy-dev runs all of ci.yml, where a push never skips. A run that ran everything is reused by the same rule as
+// before: only when the merged commit's tree is exactly the tree it tested.
 // A throwaway repo and a fake `gh` on PATH stand in for GitHub; nothing leaves this machine.
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -77,7 +78,12 @@ describe("deploy-dev's reuse after a docs-only merge (CI-3)", () => {
     return { ...r, head, testedTree, merged: r.git("rev-parse", "HEAD") };
   }
 
-  it("reuses the pull request's run when it tested exactly the merged tree", () => {
+  it("runs everything after a docs-only merge: its passing run recorded no tested tree", () => {
+    const m = docsOnlyMerge();
+    expect(match(m.bin, m.work, m.merged, { FAKE_PR: "7", FAKE_HEAD: m.head, FAKE_RUN: "101", FAKE_TREE: "" })).toBe("tested=false pr=7");
+  });
+
+  it("still reuses a run that ran everything when it tested exactly the merged tree", () => {
     const m = docsOnlyMerge();
     expect(match(m.bin, m.work, m.merged, { FAKE_PR: "7", FAKE_HEAD: m.head, FAKE_RUN: "101", FAKE_TREE: m.testedTree })).toBe("tested=true pr=7");
   });
@@ -94,7 +100,7 @@ describe("deploy-dev's reuse after a docs-only merge (CI-3)", () => {
     expect(match(m.bin, m.work, m.merged, { FAKE_PR: "", FAKE_HEAD: "", FAKE_RUN: "", FAKE_TREE: "" })).toBe("tested=false pr=none");
   });
 
-  it("a docs-only merge's image carries the same app: the image leaves out docs/ except docs/technical", () => {
+  it("the image leaves out docs/ except docs/technical, so docs-only changes can't change it", () => {
     const ignore = readFileSync(join(import.meta.dirname, "../.dockerignore"), "utf8").split("\n");
     expect(ignore).toContain("docs");
     expect(ignore.filter((l) => l.startsWith("!docs"))).toEqual(["!docs/technical"]);

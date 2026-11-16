@@ -18,7 +18,8 @@ concurrency:
 jobs:
   # CI-3: what this run must test. code=false only for a pull request whose every changed file is under docs/ outside
   # docs/technical/ (scripts/ci-changes.sh, with its reasons); then the browser shards, the webkit job and the image
-  # skip their steps and pass, so each still reports under its own name, and the test gate still records the tree.
+  # skip their steps and pass, so each still reports under its own name; the test gate passes but records no tested
+  # tree, so deploy-dev never reuses a docs-only run.
   # Pushes to main and deploy-dev's call always run everything. The unit job (the typecheck, the guards, the docs
   # checks and every unit and store test) and infra always run.
   changes:
@@ -219,16 +220,22 @@ jobs:
           echo "cores: $(nproc)"
           npx vitest run e2e/safari.test.ts --reporter=default
   test:
-    needs: [unit, browser, webkit]
+    needs: [changes, unit, browser, webkit]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code != 'false'
       # The tree this run tested (for a PR, GitHub's merge of it into main). deploy-dev compares it with the merged
       # commit's tree to skip running all of this again (docs/azure/runbook.md, "How deploy-dev reuses the PR's CI").
+      # CI-3: only a run that ran everything records it. A docs-only run skipped the browser tests and the image, so the
+      # code under its docs was not tested by it (main's own run may even have failed): with no tree recorded,
+      # deploy-dev runs all of ci.yml after a docs-only merge, as before CI-3.
       - name: Record the tested tree
+        if: needs.changes.outputs.code != 'false'
         run: git rev-parse 'HEAD^{tree}' > tested-tree.txt
       - uses: actions/upload-artifact@v4
+        if: needs.changes.outputs.code != 'false'
         with:
           name: tested-tree
           path: tested-tree.txt

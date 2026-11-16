@@ -36,7 +36,7 @@ describe("ci.yml runs the same tests (CI-3)", () => {
     expect(J.browser).toMatch(/shard: \[1, 2, 3, 4, 5, 6\]/);
     expect(J.test).not.toMatch(/^ {4}name:/m);
     expect(J.test).toMatch(/name: tested-tree/);
-    expect(J.test).toMatch(/needs: \[unit, browser, webkit\]/);
+    expect(J.test).toMatch(/needs: \[changes, unit, browser, webkit\]/);
   });
 
   it("runs the unit and store half on every file outside e2e/", () => expect(runs("unit")).toEqual(["--exclude 'e2e/**' --reporter=default"]));
@@ -85,7 +85,14 @@ describe("ci.yml runs the same tests (CI-3)", () => {
   });
 
   it("always runs the unit job, infra and the gate", () => {
-    for (const job of ["unit", "infra", "test"]) expect(J[job], job).not.toMatch(/needs\.changes|^ {4}if:/m);
+    for (const job of ["unit", "infra"]) expect(J[job], job).not.toMatch(/needs\.changes|^ {4}if:/m);
+    expect(J.test).not.toMatch(/^ {4}if:/m);
+  });
+
+  // The review's finding: a docs-only run must never hand deploy-dev a tree to reuse, or code that failed main's own
+  // run could be deployed under a docs-only merge.
+  it("records the tested tree only on a run that ran everything", () => {
+    for (const step of steps("test")) expect(step.split("\n").find((l) => /^ {8}if: /.test(l)), step.split("\n")[0]).toBe(`        ${RUN_IF}`);
   });
 
   // D: the screenshot scripts run only on purpose (npm run shots), never in the suite.

@@ -80,7 +80,7 @@ Any order and any number at once gives the same result:
 | Browser tests WebKit (Safari) | `e2e/safari.test.ts`, with WebKit and its system packages from their caches | Skipped for a docs-only pull request |
 | image | The image build and a demo start | Skipped for a docs-only pull request |
 | infra | The Bicep build | Always |
-| test | The gate: passes when all of the above passed, and records the tree it tested for deploy-dev | Always |
+| test | The gate: passes when all of the above passed, and records the tree it tested for deploy-dev, except on a docs-only run (deploy-dev then runs all of CI after the merge) | Always |
 
 A skipped job still starts and passes under its own name, with one step saying it was docs only, so a required check is never left waiting. Anything else is code: a push to `main`, deploy-dev's call, `docs/technical/` (the app shows it), any file at the top of the repo (the image copies them), and any change the script can't read. The rule for what counts as docs is in the script's header; a file under `docs/` that a browser test or the image starts to read must make it code there first.
 
