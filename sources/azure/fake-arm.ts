@@ -15,6 +15,11 @@ export type FakeArmOptions = {
   failOps?: Set<"start" | "deallocate">;
   /** Every call fails as a network error while true. */
   offline?: { on: boolean };
+  /**
+   * VM-4: how reads of the power state (instanceView) fail while set: no network, Azure busy (429), the sign-in not
+   * accepted (401), Azure refused (403), or Azure answering with no power state. Null: they work.
+   */
+  readFails?: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null };
 };
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -79,7 +84,15 @@ export function fakeArm(o: FakeArmOptions) {
       const sub = vmMatch[3];
       if (!vm) return notFound();
       if (!sub && method === "GET") return o.forbid?.has("read") ? denied() : json(200, { id: vm.id, name: vm.name, location: vm.location, tags: vm.tags });
-      if (sub === "instanceView" && method === "GET") return o.forbid?.has("instanceView") ? denied() : json(200, { statuses: [{ code: "ProvisioningState/succeeded" }, { code: `PowerState/${vm.power}`, displayStatus: `VM ${vm.power}` }] });
+      if (sub === "instanceView" && method === "GET") {
+        const f = o.readFails?.kind ?? null;
+        if (f === "network") throw new TypeError("fetch failed");
+        if (f === "busy") return json(429, { error: { code: "TooManyRequests", message: "x" } }, { "retry-after": "17" });
+        if (f === "sign_in") return json(401, { error: { code: "ExpiredAuthenticationToken", message: "x" } });
+        if (f === "refused" || o.forbid?.has("instanceView")) return denied();
+        if (f === "no_state") return json(200, { statuses: [{ code: "ProvisioningState/succeeded" }] });
+        return json(200, { statuses: [{ code: "ProvisioningState/succeeded" }, { code: `PowerState/${vm.power}`, displayStatus: `VM ${vm.power}` }] });
+      }
       if ((sub === "start" || sub === "deallocate") && method === "POST") {
         if (o.forbid?.has(sub)) return denied();
         const id = `op-${++seq}`;

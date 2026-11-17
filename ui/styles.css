@@ -2389,6 +2389,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .vm-busy .vm-dot { background: var(--accent); animation: vm-pulse 1.2s ease-in-out infinite; }
 @keyframes vm-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .vm-busy .vm-dot { animation: none; } }
+/* VM-4: a state that couldn't just be read: the dot hollow and the words quieter until a read works. */
+.vm-checking .vm-dot { background: transparent; box-shadow: inset 0 0 0 2px var(--text-muted); }
+.vm-checking .vm-label, .vm-checking .vm-short { color: var(--text-muted); }
 .vm-attn { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--watch); color: var(--on-action); font-size: var(--fs-1); font-weight: 600; }
 .narrow .topbar .vm-word { display: none; }
 .vm-banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; margin: 0 0 12px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); border-radius: 8px; background: color-mix(in oklab, var(--accent) 7%, var(--surface)); }

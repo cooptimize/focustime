@@ -60,12 +60,15 @@ describe.skipIf(!CHROMIUM)("VM-4: the VM chip while reads fail (browser, demo mo
       await page.waitForTimeout(9_000);
       await nudge(page);
       await expect.poll(() => chip(page).textContent(), { timeout: 15_000 }).toContain(short);
-      expect(await chip(page).textContent()).toContain("Stopped (deallocated)");
+      // The state's one word stays beside the reason.
+      expect(await chip(page).textContent()).toContain("Stopped ·");
       await chip(page).click();
       await menu(page).waitFor();
       const first = menu(page).getByRole("menuitem").first();
       expect(await first.textContent()).toContain(short);
-      if (kind === "sign_in") expect(await menu(page).getByRole("menuitem", { name: /Allow Azure access/ }).count()).toBe(1);
+      // What to do, under the reason; a sign-in is one item that signs in (not a second Allow Azure access).
+      if (kind === "sign_in") expect(await menu(page).getByRole("menuitem", { name: /Allow Azure access/ }).count()).toBe(0);
+      else expect(await menu(page).getByRole("menuitem").nth(1).textContent()).toMatch(/keeps trying|ask an admin/);
       await shot(page, `menu-${kind}`);
       await page.keyboard.press("Escape");
       await shot(page, `chip-${kind}`);
