@@ -16,9 +16,17 @@ import { NOTICE_EVENT } from "./WorkLink.tsx";
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
-export type DevOpsChange =
+/** A change the one preview shows and confirms. `key` (any kind) is the caller's own name for it, echoed back on its preview and result. */
+export type DevOpsChange = (
   | { kind: "state"; itemId: number; state: string; comment?: string; followUpId?: number }
   | { kind: "comment"; itemId: number; text: string }
+  /** SR-1: Week › Status: my own comment's new text, or my own comment deleted (OP-1: through the one preview). */
+  | { kind: "comment_edit"; itemId: number; commentId: number; text: string }
+  | { kind: "comment_delete"; itemId: number; commentId: number }
+  /** TX-1: the check-in's time left, as Remaining Work on the to-do's story (OP-1: through the one preview). */
+  | { kind: "remaining_work"; itemId: number; hours: number; pickId: number }
+  /** BD-1: one kept card of a Break down, created under its feature (OP-1: through the one preview). */
+  | { kind: "proposal_create"; storyDraftId: string; proposalId: string }
   | { kind: "create"; draftId: number; /** PV-1: the story's type (the parent type's default child), when the parent takes it. */ type?: string }
   /** QC-1: the New form's create, at any level: everything optional but the title (a draft's values fill the rest). */
   | { kind: "new_item"; title?: string; type?: string; parentId?: number | null; assignTo?: string | null; date?: string | null; description?: string | null; size?: number | null; draftId?: number; /** TP-1b: the three answers. */ answers?: import("../plan/three-questions.ts").Answers | null }
@@ -44,9 +52,10 @@ export type DevOpsChange =
   /** ED-1: Move…: the parent link only (null: No parent). */
   | { kind: "reparent"; itemId: number; rev: number; parentId: number | null }
   /** MC-1e: a call's proposal (a new item with the New form's fields, or a comment on a story), by its id; `key` brings a refusal back to its row. */
-  | { kind: "meeting_create" | "meeting_comment"; proposalId: number; key?: string };
+  | { kind: "meeting_create" | "meeting_comment"; proposalId: number }
+) & { key?: string };
 /** GD-2: a change sent again with another client's names written as "another client" (the flag's one click). */
-const replaced = (changes: readonly DevOpsChange[]) => changes.map((c) => ({ ...c, mentions: "replace" as const }));
+const replaced = (changes: readonly DevOpsChange[]) => changes.map((c) => (c.kind === "comment_delete" ? c : { ...c, mentions: "replace" as const }));
 
 export type DevOpsWriteEnv = {
   /** Clients with a checked write PAT. */
@@ -55,7 +64,14 @@ export type DevOpsWriteEnv = {
    * Preview one change or several (at most 10), then the dialog. PV-1: `settled` hears how it ended once: confirmed
    * (every change confirmed), or not, and whether anything was sent to DevOps (a cancel before Confirm sends nothing).
    */
-  begin: (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: { /** QC-1: a refused preview goes to `settled` (the caller shows it) instead of a toast. */ inline?: boolean }) => Promise<void>;
+  begin: (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: BeginOpts) => Promise<void>;
+  /**
+   * OP-1: a screen's changes in parts, one preview after another: each part is one client's, at most 10 changes, in
+   * the screen's own order. The dialog says "Preview 2 of 3". Not now on a part before its Confirm stops the rest
+   * (nothing more is sent); a part whose Confirm ran goes on to the next even when some of its rows didn't land.
+   * `settled` hears once, at the end, every row's result and every change that wasn't previewed, by key.
+   */
+  series: (parts: readonly { clientKey: string; changes: DevOpsChange[] }[], settled: (r: SeriesEnd) => void, opts?: Pick<BeginOpts, "where">) => void;
   /** The state picker for "Mark done in DevOps". */
   markDone: (t: { clientKey: string; itemId: number; title: string; followUpId?: number }) => void;
   /** The create preview, with the draft's saved values (step 15.3: edited in the draft editor). */
@@ -64,15 +80,35 @@ export type DevOpsWriteEnv = {
   enable: (clientKey: string) => void;
   /** Bumps after every DevOps write, so the write log reloads. */
   version: number;
-  /** Retry a logged write that didn't confirm (it checks DevOps first). */
-  retry: (id: number) => Promise<void>;
+  /** Retry a logged write that didn't confirm (it checks DevOps first). OP-1: the result, for the screen that offered it (null when it couldn't run). */
+  retry: (id: number) => Promise<DevOpsResult | null>;
 };
 export const DevOpsWriteCtx = createContext<DevOpsWriteEnv | null>(null);
 export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
-export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** MC-1e: changes with a key that weren't previewed, and why (inline begins only: the caller says it on each row). */ refused?: { key: string; error: string; code: string | null }[]; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
-type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
+/** OP-1: how one previewed change ended, by the caller's key. */
+export type RowResult = { key: string | null; op: string; itemId: number | null; confirmed: boolean; message: string; /** The write log entry, for Undo or Retry; null when nothing was logged. */ writeId: number | null };
+/** OP-1: a series' end: every row's result, the changes that weren't previewed (by key), and whether Not now stopped it. */
+export type SeriesEnd = { results: RowResult[]; refused: { key: string; error: string; code: string | null }[]; stopped: boolean; errors: string[] };
+export type BeginOpts = {
+  /** QC-1: a refused preview goes to `settled` (the caller shows it) instead of a toast. */
+  inline?: boolean;
+  /** OP-1: where the text goes, in GD-2's flag ("Northwind's DevOps and Monday's report"); the client's DevOps by default. */
+  where?: string;
+  /** OP-1: this preview's place in a series. */
+  step?: { n: number; of: number };
+};
+export type Settled = (r: { confirmed: boolean; sent: boolean; /** OP-1: each previewed row's result, once Confirm ran. */ results?: RowResult[]; /** OP-1: closed with Not now (or ×, Esc) before Confirm: nothing was sent. */ cancelled?: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** MC-1e: changes with a key that weren't previewed, and why (inline begins only: the caller says it on each row). */ refused?: { key: string; error: string; code: string | null }[]; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
+type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined; opts?: BeginOpts | undefined };
+/** OP-1: one row's result in the caller's words. */
+const rowResult = (r: Row): RowResult | null => {
+  const res = r.result;
+  if (!res) return null;
+  const base = { key: r.preview.key ?? null, op: r.preview.op };
+  return "error" in res ? { ...base, itemId: null, confirmed: false, message: res.error, writeId: null } : { ...base, itemId: res.entry.itemId ?? res.itemId ?? null, confirmed: res.confirmed, message: res.message, writeId: res.entry.id };
+};
+const resultsOf = (rows: readonly Row[]) => rows.flatMap((r) => rowResult(r) ?? []);
 /** CP-1: how the preview names and colors a client. */
 type ClientLook = { name: (clientKey: string) => string; color: (clientKey: string) => string | undefined };
 type Ask =
@@ -87,7 +123,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
   const { onDone: reload, openSettings } = o;
   const onDone = useCallback(() => (setVersion((v) => v + 1), reload()), [reload]);
   const begin = useCallback(
-    async (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: { inline?: boolean }) => {
+    async (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: BeginOpts) => {
       try {
         const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string; code?: string | null; key?: string }[] }>("devops.preview", { clientKey, changes });
         // MC-1e: an inline begin's keyed refusals go back to the caller, who says each on its own row.
@@ -100,7 +136,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
           if (opts?.inline && !r.refused?.length) return void settled?.({ confirmed: false, sent: false, error: r.nothing[0] ?? "Nothing to change in DevOps" });
           return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), told?.({ confirmed: false, sent: false }));
         }
-        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled: told });
+        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled: told, opts });
       } catch (e) {
         if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e), ...(e instanceof ActionRefusal && e.code ? { code: e.code } : {}) });
         settled?.({ confirmed: false, sent: false });
@@ -134,7 +170,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
         if (ok.length === rows.length) {
           setFlow(null);
           const created = rows.flatMap((r) => (r.preview.op === "create" && r.result && "confirmed" in r.result && r.result.itemId ? [{ itemId: r.result.itemId, url: r.result.url ?? null }] : []));
-          f.settled?.({ confirmed: true, sent: true, ...(created.length ? { created } : {}) });
+          f.settled?.({ confirmed: true, sent: true, results: resultsOf(rows), ...(created.length ? { created } : {}) });
           notify(ok.length === 1 ? (ok[0]!.result as DevOpsResult).message : `${ok.length} changes made in DevOps`);
         } else setFlow({ ...f, rows, busy: false, error: null });
       } catch (e) {
@@ -153,17 +189,41 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     enable: () => openSettings(),
     version,
     retry: async (id) => {
+      let r: DevOpsResult | null = null;
       try {
-        const r = await call<DevOpsResult>("devops.retry", { id });
+        r = await call<DevOpsResult>("devops.retry", { id });
         notify(r.message);
       } catch (e) {
         notify(errText(e));
       }
       onDone();
+      return r;
+    },
+    series: (parts, settled, opts) => {
+      const end: SeriesEnd = { results: [], refused: [], stopped: false, errors: [] };
+      const list = parts.filter((p) => p.changes.length);
+      const next = (i: number) => {
+        if (i >= list.length) return settled(end);
+        const p = list[i]!;
+        void begin(
+          p.clientKey,
+          p.changes,
+          (r) => {
+            end.results.push(...(r.results ?? []));
+            end.refused.push(...(r.refused ?? []));
+            if (r.error) end.errors.push(r.error);
+            // Not now before Confirm: nothing of this part was sent, and the parts after it aren't shown.
+            if (r.cancelled) return settled({ ...end, stopped: true });
+            next(i + 1);
+          },
+          { inline: true, ...(opts?.where ? { where: opts.where } : {}), ...(list.length > 1 ? { step: { n: i + 1, of: list.length } } : {}) },
+        );
+      };
+      next(0);
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled, flow.opts)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled, flow.opts)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled, flow.opts)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result), ...(flow.rows.some((r) => r.result) ? { results: resultsOf(flow.rows) } : { cancelled: true }) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -216,7 +276,10 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
   return (
     <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
       <div className="cap-dialog-head">
-        <h2>{label}</h2>
+        <h2>
+          {label}
+          {flow.opts?.step && <span className="muted dw-step"> · Preview {flow.opts.step.n} of {flow.opts.step.of}</span>}
+        </h2>
         <CloseButton onClose={onClose} disabled={busy} />
       </div>
       {p0.op === "create" && (
@@ -272,7 +335,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
               </div>
             ))}
             {r.preview.attachments && r.preview.attachments.length > 0 && <AttachPicker list={r.preview.attachments} disabled={busy || tried} onChange={onImages} />}
-            {r.preview.mentions?.length ? <MentionFlag names={r.preview.mentions} where={`${clientWord}'s DevOps`} disabled={busy || tried} onReplace={onReplace} /> : null}
+            {r.preview.mentions?.length ? <MentionFlag names={r.preview.mentions} where={flow.opts?.where ?? `${clientWord}'s DevOps`} disabled={busy || tried} onReplace={onReplace} /> : null}
             {[...r.preview.links, ...r.preview.notes.filter((n) => !(r.preview.mentions?.length && n.startsWith("This mentions ")))].map((n) => (
               <p key={n} className="muted dw-note">
                 {n}
@@ -347,7 +410,7 @@ function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPr
   );
 }
 const confirmLabel = (p: DevOpsPreview) =>
-  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" || p.op === "fields" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
+  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "comment_edit" ? "Save comment in DevOps" : p.op === "comment_delete" ? "Delete comment in DevOps" : p.op === "remaining_work" ? "Set Remaining Work in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" || p.op === "fields" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
 
 /** The small form before a preview: a state and comment, or a date. */
 function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void; onPreview: (c: DevOpsChange[]) => void }) {
@@ -457,7 +520,7 @@ export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?
   return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
 }
 
-const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", item_edit: "Edited", undo_item_edit: "Undo: edit put back", reparent: "Moved", undo_reparent: "Undo: moved back", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };
+const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", item_edit: "Edited", undo_item_edit: "Undo: edit put back", reparent: "Moved", undo_reparent: "Undo: moved back", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent", comment_edit: "Comment edited", undo_comment_edit: "Undo: comment put back", comment_delete: "Comment deleted", undo_comment_delete: "Undo: comment put back", remaining_work: "Remaining Work set", undo_remaining_work: "Undo: Remaining Work put back", assign: "Assigned to me", undo_assign: "Undo: assignee put back" };
 const DW_STATUS: Record<string, string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
 /** ED-1: a description's HTML reads as its words in the log, cut to a line (the full text stays in the entry for Undo). */
 const plainLine = (x: string) => {

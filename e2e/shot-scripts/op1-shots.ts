@@ -147,6 +147,7 @@ describe.skipIf(!CHROMIUM || !DIR)(`OP-1 screenshots (${BEFORE ? "before" : "aft
           return page.locator(".tc-preview");
         }
         await anyDialog(page).waitFor({ timeout: 20_000 });
+        return undefined;
       });
       await page.close();
     }
