@@ -198,6 +198,10 @@ export const SQL_TYPES: readonly SqlType[] = [
   "script",
 ];
 export const sqlTypeLabel = (t: SqlType): string => SQL_TYPE_LABEL.get(t)!;
+/** UC-2: the object types a person can narrow Databases to, in By kind and in the search (one type, or all). */
+export const SQL_PICK_TYPES: readonly SqlType[] = SQL_FIRST;
+/** UC-2: whether a SQL object passes the type chosen under Databases (none chosen: every object does). */
+export const sqlTypePasses = (t: { sqlType?: SqlType }, chosen: SqlType | null): boolean => !chosen || t.sqlType === chosen;
 
 /**
  * The object folders of a database kept as a SQL project (a warehouse item, a SQL database item, a .sqlproj). The
@@ -674,7 +678,9 @@ export type NameHit = { kind: Kind; name: string; detail: string; file: string; 
  * (`files`, the files inside items), so nothing the tree shows is missed. Names only: nothing here ever sees a
  * file's content.
  */
-export function searchThings(things: readonly Thing[], q: string, kind: Kind | null = null, files: readonly RepoFile[] = []): NameHit[] {
+export function searchThings(things: readonly Thing[], q: string, kind: Kind | null = null, files: readonly RepoFile[] = [], /** UC-2: with Databases as the kind, one object type only. */ sqlType: SqlType | null = null): NameHit[] {
+  // UC-2: a type under Databases narrows to that type's objects: no model tables, no other files.
+  const typed = kind === "database" && sqlType ? sqlType : null;
   const words = searchWords(q);
   if (!words.length) return [];
   const has = (text: string) => {
@@ -690,17 +696,18 @@ export function searchThings(things: readonly Thing[], q: string, kind: Kind | n
     // A thing inside an item passes its own kind's filter and its item's (RB-6: a warehouse's table is found under
     // Databases, its item's group and its own).
     if (kind && t.kind !== kind && t.itemKind !== kind) continue;
+    if (typed && t.sqlType !== typed) continue;
     // A SQL object is found as schema.name too ("dim.Store", "[dim].[Store]").
     const alias = t.schema ? ` ${t.schema}.${t.name} [${t.schema}].[${t.name}]` : "";
     if (has(`${t.name} ${t.file}${alias}`)) (has(`${t.name} ${baseOf(t.file)}${alias}`) ? byName : byFolder).push({ kind: t.kind, name: t.name, detail: t.item ? t.detail : t.detail.split(" · ")[0]!, file: t.file, table: false, asFile: false });
-    for (const tb of t.tables ?? []) {
+    for (const tb of typed ? [] : (t.tables ?? [])) {
       const hit = has(`${tb.name} ${baseOf(tb.file)}`) ? byName : has(`${tb.name} ${slashy ? tb.file : tb.file.slice(t.folder.length)}`) ? byFolder : null;
       hit?.push({ kind: t.kind, name: tb.name, detail: `Table in ${t.name}`, file: tb.file, table: true, asFile: false });
     }
   }
   const byFile: NameHit[] = [];
   const byFileFolder: NameHit[] = [];
-  for (const f of files) {
+  for (const f of typed ? [] : files) {
     if (kind && f.kind !== kind) continue;
     const hit = has(baseOf(f.file)) ? byFile : has(slashy ? f.file : f.file.slice(f.item.length)) ? byFileFolder : null;
     hit?.push({ kind: f.kind, name: baseOf(f.file), detail: f.detail, file: f.file, table: false, asFile: true });

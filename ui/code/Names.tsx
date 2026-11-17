@@ -9,9 +9,9 @@
 // DevOps. Its results are files, never lines: no text of a file shows until a person opens it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
+import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, sqlTypePasses, type SqlGrouping, type SqlType, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
 import { INSIDE_MAX, SEARCH_MAX } from "../../plan/code.ts";
-import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, sqlPlace, sqlRestore, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, sqlPlace, sqlRestore, SqlTree, SQL_TEXT, SqlTypeSelect, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
 export type NamesClient = { clientKey: string; name: string; color: string | null; locked: boolean };
@@ -91,7 +91,7 @@ export const newKindsMemo = (): KindsMemo => ({ folded: new Set(), whole: new Se
  * what sits inside another (a database's objects, a model's tables) shows only when that one is opened, and the
  * Databases group has the one Group by switch for every database in it.
  */
-export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup, memo, onMemo, narrow = false }: { /** UC-2: the phone's list (unchanged: the switch stays at the top of the group). */ narrow?: boolean; /** The client's key: this list's own name for what it remembers. */ id: string; repos: RepoThings[]; max: number; selected: { repoId: string | null; path: string | null }; onOpen: (repoId: string, file: string) => void; /** RB-5: SQL objects by schema then type, or by type then schema (the person's own choice). */ sqlGroup: SqlGrouping; onSqlGroup: (g: SqlGrouping) => void; memo: KindsMemo; onMemo: (change: (m: KindsMemo) => KindsMemo) => void }) {
+export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup, memo, onMemo, narrow = false, sqlType = null, onSqlType }: { /** UC-2: the phone's list (unchanged: the switch stays at the top of the group). */ narrow?: boolean; /** UC-2: one object type under Databases, or all (null); the search's choice too. */ sqlType?: SqlType | null; onSqlType?: (t: SqlType | null) => void; /** The client's key: this list's own name for what it remembers. */ id: string; repos: RepoThings[]; max: number; selected: { repoId: string | null; path: string | null }; onOpen: (repoId: string, file: string) => void; /** RB-5: SQL objects by schema then type, or by type then schema (the person's own choice). */ sqlGroup: SqlGrouping; onSqlGroup: (g: SqlGrouping) => void; memo: KindsMemo; onMemo: (change: (m: KindsMemo) => KindsMemo) => void }) {
   const [filter, setFilter] = useState("");
   const { folded, whole, openModels } = memo;
   const setFolded = (f: (s: ReadonlySet<Kind>) => ReadonlySet<Kind>) => onMemo((m) => ({ ...m, folded: f(m.folded) }));
@@ -112,7 +112,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
   const groups = groupThings(shown);
   const keyOf = (t: Row) => `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
   const treeId = (t: Row) => `${id}-${t.repoId}-${t.folder}`;
-  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
+  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.sqlType && sqlTypePasses(tb, sqlType)).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
   // Changing the switch keeps the file on the right and opens the new tree to it.
   // UC-2: and keeps the place as well as it can: the object at the top of the list (under the sticky row) is opened to
   // in the new tree and put back where it was on screen; failing that, the database's own row stays where it was.
@@ -174,8 +174,8 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
    * and sticks there with it; with none or several open it is at the top of the Databases group and sticks there. The
    * phone's list is unchanged.
    */
-  const bar = (sticky: boolean) => <SqlBar grouping={sqlGroup} onGrouping={changeGroup} onAll={allDatabases} disabled={words.length > 0} sticky={sticky} />;
-  const dbOpen = (t: Row) => (openModels.has(keyOf(t)) || (words.length > 0 && kidsOf(t).some((tb) => tableHit(tb)))) && kidsOf(t).some((tb) => tb.sqlType);
+  const bar = (sticky: boolean) => <SqlBar grouping={sqlGroup} onGrouping={changeGroup} onAll={allDatabases} disabled={words.length > 0} sticky={sticky} sqlType={sqlType} {...(onSqlType ? { onSqlType } : {})} />;
+  const dbOpen = (t: Row) => (openModels.has(keyOf(t)) || (words.length > 0 && kidsOf(t).some((tb) => tableHit(tb)))) && kidsOf(t).some((tb) => tb.sqlType && sqlTypePasses(tb, sqlType));
   return (
     <div className="cv-kinds" data-code-kinds="" ref={listRef}>
       <input type="search" className="cv-find-input" placeholder={NAMES_TEXT.filter} aria-label={NAMES_TEXT.filter} value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => e.key === "Escape" && filter && (e.preventDefault(), e.stopPropagation(), setFilter(""))} />
@@ -292,7 +292,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
  * This client or All clients (only inside a client), the kind, Search, and one line saying what the search does. The
  * box itself sits in the row above and belongs to this form, so Enter runs it. Nothing is read until Enter or Search.
  */
-export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
+export function SearchChoices({ floating = false, open, q, kind, onKind, sqlType = null, onSqlType, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; /** UC-2: with Databases chosen, one object type or all. */ sqlType?: SqlType | null; onSqlType?: (t: SqlType | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
   const ready = inside ? q.trim().length > 0 : searchWords(q).length > 0;
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -335,6 +335,13 @@ export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAl
             </option>
           ))}
         </select>
+        {/* UC-2: with Databases chosen, a second choice narrows the names to one object type. */}
+        {kind === "database" && !inside && onSqlType && (
+          <label className="cv-sql-type cv-search-sqltype-label">
+            <span>{SQL_TEXT.showType}</span>
+            <SqlTypeSelect value={sqlType} onChange={onSqlType} className="cv-search-kind cv-search-sqltype" />
+          </label>
+        )}
         <button type="submit" className="mini primary cv-search-go" disabled={disabled || !ready}>
           Search
         </button>
@@ -360,12 +367,12 @@ export type SearchRun = {
 type Hit = NameHit & { repoId: string; repoName: string };
 
 /** Results by client, then by kind. Up, Down and Enter move through them; at most SEARCH_MAX show. */
-export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kind | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
+export function SearchResults({ run, kind, sqlType = null, onOpen }: { run: SearchRun; kind: Kind | null; /** UC-2: with Databases as the kind, one object type only. */ sqlType?: SqlType | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
   const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
   const byClient = useMemo(() => {
     const found = run.targets.map((c) => {
       const r = run.results.get(c.clientKey);
-      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? []).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
+      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? [], sqlType).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
     });
     // Over the limit, clients take what is left in order; each still says how many it has.
     const shown = shareCap(found.map((f) => f.length), SEARCH_MAX);
@@ -376,7 +383,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
       return { client: c, state: "ok" as const, hits: found[i]!.slice(0, shown[i]), count: found[i]!.length, many: r.length > 1, problems };
     });
     return { out, total: found.reduce((n, f) => n + f.length, 0) };
-  }, [run, kind]);
+  }, [run, kind, sqlType]);
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const all = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-code-hit]")];

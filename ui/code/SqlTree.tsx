@@ -7,7 +7,7 @@
 // Expand all and Collapse all) is drawn once, at the top of the group (SqlBar), and applies to every tree under it.
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon } from "../icons.tsx";
-import { sqlTree, type SqlGrouping, type SqlObject } from "../../plan/code-kinds.ts";
+import { SQL_PICK_TYPES, sqlTree, sqlTypeLabel, type SqlGrouping, type SqlObject, type SqlType } from "../../plan/code-kinds.ts";
 
 export const SQL_TEXT = {
   groupBy: "Group by",
@@ -17,7 +17,24 @@ export const SQL_TEXT = {
   collapseAll: "Collapse all",
   showAll: (n: number) => `Show all ${n.toLocaleString()}`,
   folder: (label: string, count: number) => `${label}, ${count.toLocaleString()}`,
+  /** UC-2: the second choice under Databases. */
+  showType: "Show",
+  allTypes: "All types",
 } as const;
+
+/** UC-2: one object type, or all: under Databases in By kind, and beside the kind in the search. */
+export function SqlTypeSelect({ value, onChange, className }: { value: SqlType | null; onChange: (t: SqlType | null) => void; className: string }) {
+  return (
+    <select className={className} aria-label="Object type" value={value ?? ""} onChange={(e) => onChange((e.target.value || null) as SqlType | null)}>
+      <option value="">{SQL_TEXT.allTypes}</option>
+      {SQL_PICK_TYPES.map((t) => (
+        <option key={t} value={t}>
+          {sqlTypeLabel(t)}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 /** A folder shows this many objects until Show all. */
 export const SQL_FOLDER_SHOWN = 100;
@@ -109,7 +126,7 @@ export function sqlRestore(root: HTMLElement | null, p: SqlPlace): void {
 }
 
 /** RB-6: the one Group by switch, with Expand all and Collapse all, at the top of By kind's Databases group. */
-export function SqlBar({ grouping, onGrouping, onAll, disabled, sticky = false }: { /** UC-2: sticks at the top of the list while the databases under it scroll. */ sticky?: boolean; grouping: SqlGrouping; onGrouping: (g: SqlGrouping) => void; /** Expand all (true) or Collapse all (false), for every database. */ onAll: (open: boolean) => void; /** The filter has words: every folder with a match is open. */ disabled: boolean }) {
+export function SqlBar({ grouping, onGrouping, onAll, disabled, sticky = false, sqlType = null, onSqlType }: { /** UC-2: sticks at the top of the list while the databases under it scroll. */ sticky?: boolean; /** UC-2: one object type, or all (null). */ sqlType?: SqlType | null; onSqlType?: (t: SqlType | null) => void; grouping: SqlGrouping; onGrouping: (g: SqlGrouping) => void; /** Expand all (true) or Collapse all (false), for every database. */ onAll: (open: boolean) => void; /** The filter has words: every folder with a match is open. */ disabled: boolean }) {
   const byId = useId();
   return (
     <div className={`cv-sql-bar${sticky ? " sticky" : ""}`} data-sql-bar="">
@@ -122,6 +139,12 @@ export function SqlBar({ grouping, onGrouping, onAll, disabled, sticky = false }
           {SQL_TEXT.type}
         </button>
       </span>
+      {onSqlType && (
+        <label className="cv-sql-type">
+          <span>{SQL_TEXT.showType}</span>
+          <SqlTypeSelect value={sqlType} onChange={onSqlType} className="cv-sql-type-select" />
+        </label>
+      )}
       <span className="cv-sql-all">
         <button type="button" className="cv-sql-all-btn" data-sql-expand="" disabled={disabled} onClick={() => onAll(true)}>
           {SQL_TEXT.expandAll}

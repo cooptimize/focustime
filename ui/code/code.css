@@ -225,6 +225,11 @@
 .cv-sql { min-width: 0; }
 .cv-sql-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 6px 4px 28px; color: var(--text-muted); font-size: var(--fs-2); }
 .cv-sql-all { display: inline-flex; gap: 2px; margin-left: auto; }
+/* UC-2: Show: All types, Tables, Views, Stored procedures or Functions. */
+.cv-sql-type { display: inline-flex; align-items: center; gap: 4px; }
+.cv-sql-type-select { min-height: var(--h-small); padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); }
+.cv-sql-type-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.code-page.narrow .cv-sql-type-select { min-height: 44px; }
 .cv-sql-all-btn { padding: 2px 6px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-1); white-space: nowrap; cursor: pointer; }
 .cv-sql-all-btn:hover:not(:disabled) { background: var(--wash-1); color: var(--text); }
 .cv-sql-all-btn:disabled { color: var(--text-faint); cursor: default; }
