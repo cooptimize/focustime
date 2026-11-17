@@ -320,3 +320,14 @@ All in one place in code: `WHERE_TEXT` in `plan/where-lookup.ts`. The three ques
 - The capture box with Deployment chosen and nothing typed: the hint is that title; under the kinds: "Enter saves it as "Deployment - Northwind - Sat, Nov 7" · ↓ to its details". With no client: "A deployment needs a client · ↓ to its details".
 - The Inbox's client chips: the name, then its number when something needs me there ("Northwind 3"); read aloud as "Northwind, 3 need you", "Harbor, 1 needs you", "All clients, 5 need you". No number when nothing does.
 - A chip's hover line: "3 need you in Northwind: suggestions from chats, and promises late or due today. The same count as the Inbox tab's".
+
+## UC-2 words (Nov 16)
+
+- A deployment left untitled, wherever it is made (capture, Plan a deployment…, the assistant): **"Deployment - <client's name> - <date>"**, as UC-1.
+- A sentence never quotes that made title; it names the day: **"The Sat, Nov 21 deployment is done."**, **"Tell Northwind the Sat, Nov 21 deployment is done"**, the assistant's **"Plan the Sat, Nov 21 deployment, 9:00–11:00"**. A typed title is used as typed: **"Release 4.2 is deployed."**, **"Tell Northwind it's deployed: Release 4.2"**.
+- A deployment too narrow for its title (Week's weekend column, a narrow card): the client's short name and the window, the full title (and the window) on hover and for a screen reader.
+- The Inbox's chip for things with no client: **"No client"** with its number, read aloud **"No client, 1 needs you"**; hover **"1 needs you with no client: …"**.
+- Code: the second choice under Databases: **"Show"** (labelled so in By kind and in Search code) with **"All types"**, **"Tables"**, **"Views"**, **"Stored procedures"**, **"Functions"**; named **"Object type"** for a screen reader, in By kind and beside Kind in Search code.
+- Backlog's bulk State… on mixed types: see ED-2 words (rewritten for UC-2).
+- The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
+- Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
