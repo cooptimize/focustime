@@ -40,6 +40,8 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await page.getByRole("tab", { name: /Transcript/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/transcript`);
     const lines = page.locator(".mtg-lines li");
+    // The transcript loads when the view opens.
+    await lines.first().waitFor({ timeout: 30_000 });
     await expect.poll(() => lines.count()).toBe(8);
     await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d (AM|PM)\s*Alex Rivera\s*Morning everyone/);
     await expect.poll(() => page.locator(".mtg-lines li.marked").count()).toBeGreaterThan(0);
@@ -58,10 +60,12 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await jump.click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/meetings/${id}/transcript/\\d+$`));
     const n = Number((await page.evaluate(() => location.hash)).split("/").pop());
+    await page.locator(`#mtg-line-${n}`).waitFor({ timeout: 30_000 });
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe(`mtg-line-${n}`);
     await expect(page.locator(`#mtg-line-${n}`).getAttribute("class")).resolves.toMatch(/marked/);
     // The address opens there directly too.
     await open(page, `#/meetings/${id}/transcript/${n}`);
+    await page.locator(`#mtg-line-${n}`).waitFor({ timeout: 30_000 });
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe(`mtg-line-${n}`);
     // Close it: nothing of the transcript is kept by the browser.
     await page.keyboard.press("Escape");
@@ -81,6 +85,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     expect((await call(page, "meeting.update", { seriesId: s.id, reviewers: [priya] })).ok).toBe(true);
     const id = mine.occurrences[0].id as number;
     await open(page, `#/meetings/${id}/transcript`);
+    await page.locator(".mtg-lines li").first().waitFor({ timeout: 30_000 });
     await expect.poll(() => page.locator(".mtg-lines li").count()).toBe(8);
     await page.getByRole("tab", { name: /Proposals/ }).click();
     await page.locator(".mtg-prop").first().waitFor();
