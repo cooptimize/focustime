@@ -29,11 +29,19 @@ describe("a pick stays a pick only as written", () => {
     const short = text.slice(0, -1);
     expect(picksAfterEdit(picks, text, short).map((p) => p.text)).toEqual([T1]);
   });
-  it("a repeated letter next to a pick doesn't break it", () => {
-    const p = [N(1, "Sales (report)")];
-    // "SSales (report)" with the first S deleted: the pick's words are still whole.
-    expect(picksAfterEdit(p, "SSales (report)", "Sales (report)")).toEqual([N(0, "Sales (report)")]);
+  it("a repeated letter typed next to a pick doesn't break it", () => {
+    // "S" typed right before "Sales (report)": read as beside the pick, not inside it.
+    expect(picksAfterEdit([N(1, "Sales (report)")], " Sales (report)", " SSales (report)")).toEqual([N(2, "Sales (report)")]);
     expect(picksAfterEdit([N(0, "Sales (report)")], "Sales (report)", "Sales (report))")).toEqual([N(0, "Sales (report)")]);
+  });
+  it("review 1: a deletion that could be read either way never re-points a pick at typed words", () => {
+    const w = "fact.SalesLine";
+    // Typed "fact.SalesLine", then the same picked: deleting the picked one leaves only typed words.
+    const now = picksAfterEdit([N(w.length + 1, w)], `${w} ${w}`, w);
+    expect(now).toEqual([]);
+    expect(takeOut(w, now, "Atlas")).toBeNull();
+    // A typed S deleted before a pick that starts with S: the pick is read as edited, and its words stay as typed.
+    expect(picksAfterEdit([N(1, "Sales (report)")], "SSales (report)", "Sales (report)")).toEqual([]);
   });
   it("a paste over a pick replaces it", () => {
     const { text, picks } = two();
@@ -92,7 +100,19 @@ describe("a client change", () => {
     const again = takeOut(back.text, back.picks, "Fabrikam")!;
     expect(again.text).toBe("The totals and");
   });
-  it("no client at all takes out every pick", () => {
+  it("review 1: picks side by side go back in their order", () => {
+    const P1 = "Sales (report)";
+    const P2 = "dim.Store (table, Gold warehouse)";
+    for (const [text, picks] of [
+      [`${P1} ${P2}`, [N(0, P1), N(P1.length + 1, P2)]],
+      [`${P1} ${P2} rest`, [N(0, P1), N(P1.length + 1, P2)]],
+      [`x ${P1} ${P2}`, [N(2, P1), N(P1.length + 3, P2)]],
+    ] as const) {
+      const r = takeOut(text, picks, "Atlas")!;
+      expect(putBack(r.text, r.kept, r.taken).text).toBe(text);
+    }
+  });
+    it("no client at all takes out every pick", () => {
     expect(takeOut(T1, [N(0, T1)], null)!.text).toBe("");
   });
 });

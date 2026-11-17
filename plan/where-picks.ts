@@ -24,20 +24,28 @@ const at = (text: string, p: WherePick, start = p.start) => text.slice(start, st
 
 /**
  * The picks after the box's text changed from `before` to `after` (typing, a paste, a pick, Backspace). A pick before
- * or after the change moves with it; one the change reaches into has been edited and is no longer a pick. Where the
- * change could be read either side of a pick (the same letter repeated), the pick stays only if its words are still
- * there, whole.
+ * or after the change moves with it; one the change reaches into has been edited and is no longer a pick. Where text
+ * typed next to a pick repeats its letters, the same insertion could be read inside the pick or beside it: it is read
+ * beside it. A deletion or replacement that could be read either way is read as reaching the pick (review 1: never
+ * re-pointing a pick at typed words that look the same, which a client change would then take out).
  */
 export function picksAfterEdit(picks: readonly WherePick[], before: string, after: string): WherePick[] {
   const c = changeOf(before, after);
   if (!c) return [...picks];
+  let start = c.start;
+  if (c.end === c.start) {
+    // An insertion: any spot from here leftwards over equal letters gives the same text. Take one on a pick's edge.
+    const inside = (q: number) => picks.some((p) => p.start < q && q < p.start + p.text.length);
+    let q = start;
+    while (inside(q) && q > 0 && before[q - 1] === after[q - 1 + c.delta]) q--;
+    if (!inside(q)) start = q;
+  }
+  const end = c.end === c.start ? start : c.end;
   const out: WherePick[] = [];
   for (const p of picks) {
-    const end = p.start + p.text.length;
-    if (end <= c.start) out.push(p);
-    else if (p.start >= c.end) out.push({ ...p, start: p.start + c.delta });
-    else if (at(after, p)) out.push(p);
-    else if (at(after, p, p.start + c.delta)) out.push({ ...p, start: p.start + c.delta });
+    const pEnd = p.start + p.text.length;
+    if (pEnd <= start) out.push(p);
+    else if (p.start >= end) out.push({ ...p, start: p.start + c.delta });
   }
   return out.filter((p) => at(after, p));
 }
@@ -77,7 +85,8 @@ export function takeOut(text: string, picks: readonly WherePick[], client: strin
     for (const x of taken) x.at -= removed.length;
     taken.push({ at: a, removed, offset: p.start - a, pick: p });
   }
-  return { text: t, kept, taken: taken.sort((x, y) => x.at - y.at) };
+  // Picks taken out side by side share a place: they go back in the order they were in.
+  return { text: t, kept, taken: taken.sort((x, y) => x.at - y.at || x.pick.start - y.pick.start) };
 }
 
 /** Undo: puts back what was taken out, at the places it was (moved as the text was edited since), with its picks. */
@@ -86,7 +95,7 @@ export function putBack(text: string, picks: readonly WherePick[], taken: readon
   let offset = 0;
   let now = [...picks];
   const back: WherePick[] = [];
-  for (const x of [...taken].sort((a, b) => a.at - b.at)) {
+  for (const x of [...taken].sort((a, b) => a.at - b.at || a.pick.start - b.pick.start)) {
     const pos = Math.min(Math.max(0, x.at + offset), t.length);
     t = t.slice(0, pos) + x.removed + t.slice(pos);
     now = now.map((k) => (k.start >= pos ? { ...k, start: k.start + x.removed.length } : k));
