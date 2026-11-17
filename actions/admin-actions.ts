@@ -5,6 +5,7 @@
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
 import type { CodeStatus } from "./code-actions.ts";
+import type { PassView } from "../server/scheduler.ts";
 import { CODE_VIEWS_SHOWN, type CodeViewsStore } from "../store/code-views-store.ts";
 import { articleUrl, DEFAULT_STANDARDS_REPO, STANDARDS_EVERY_MS, STANDARDS_TOKEN_BUDGET } from "../plan/standards.ts";
 import type { StandardsPort } from "./standards.ts";
@@ -74,6 +75,8 @@ export type AdminStatus = {
   jobs?: StatusJob[];
   /** DV-1: the status rows registry's groups (DevOps polling, and whatever registers later). */
   groups?: StatusGroup[];
+  /** VM-3: the scheduler's fast and slow passes: when each last finished, how long it took, and a warning if stuck. */
+  passes?: PassView[];
 };
 
 export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };
@@ -501,7 +504,9 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       return setupSection(ops, { id: meId, name: me?.name ?? "" }, zone ? await zone().catch(() => "UTC") : "UTC");
     case "status": {
       const [st, warnings, rules, groups] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules(), ops.statusRows ? ops.statusRows.groups() : Promise.resolve([])]);
-      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st), groups };
+      // VM-3: a pass running past its limit, or not finishing while someone works, is something to look at too.
+      const passWarnings = (st.passes ?? []).flatMap((x) => (x.warning ? [{ area: "jobs" as const, text: x.warning }] : []));
+      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings, ...passWarnings], jobs: statusJobs(rules, st), groups };
     }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;

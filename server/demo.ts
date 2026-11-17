@@ -6,6 +6,9 @@
 // nothing leaves FocusTime. Its AI is the app's real provider on this fictional data when the app has one, with stored
 // sample answers when it hasn't or is slow (sources/demo/ai.ts). Its starting data comes from sources/demo/seeds/.
 import { demoStandards } from "../sources/demo/standards.ts";
+import { createScheduler } from "./scheduler.ts";
+import { backgroundPolicy } from "../config/background-policy.ts";
+import type { PersonTicks } from "./ticks.ts";
 import { demoCodeGit } from "../sources/demo/code.ts";
 import { codeStatus } from "../actions/code-actions.ts";
 import { codeViewsStoreOn } from "../store/code-views-store.ts";
@@ -64,7 +67,15 @@ function followTeamColors(t: string): string {
 }
 
 /** `reset` (DM-1): Reset demo, where the host can rebuild this session's demo (absent: not offered). */
-export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void>; reset?: () => Promise<void>; /** VM-2: verification runs only. */ vmTick?: (advanceMinutes: number) => Promise<string> };
+export type DemoControl = {
+  on: boolean;
+  set: (on: boolean) => Promise<void>;
+  reset?: () => Promise<void>;
+  /** VM-2: verification runs only. */
+  vmTick?: (advanceMinutes: number) => Promise<string>;
+  /** VM-3: verification runs only (set where vmTick is): Admin › Status's pretend slow pass holds (true) or lets go. */
+  passStall?: (on: boolean) => void;
+};
 
 /** DM-1: what the app's real AI lends the demo: its provider, settings and spend, and whether a real call may run now (the team's switch on, the app's cap not reached). */
 export type DemoRealAi = { runtime: AiRuntime; allowed: () => Promise<boolean> };
@@ -152,6 +163,27 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       }),
     checkNow: async (k: string) => void checked.set(k, opts.now()),
   };
+  // VM-3: Admin › Status's passes, from the real scheduler over one pretend person who does nothing (never started on a
+  // timer: a pass runs only when Status is opened). A verification run (--clock) can make its slow pass hold, so the
+  // warning shows once the demo's clock moves past the limit.
+  let release: (() => void) | null = null;
+  let stalled = false;
+  const passPerson: PersonTicks = { fast: async () => {}, slow: () => (release ? new Promise<void>((r) => void (release = r)) : Promise.resolve()) };
+  const passes = createScheduler({ policy: backgroundPolicy({}), people: () => [passPerson], log: () => {}, now: () => Temporal.Instant.from(opts.now()) });
+  const demoPasses = async () => {
+    const stall = stalled;
+    if (!stall && release) {
+      const r = release;
+      release = null;
+      r();
+    }
+    if (stall && !release) release = () => {};
+    const view = passes.passes();
+    // Not stalled: a pass now, as the hosted app's would have run a moment ago. Stalled: one that never ends, started once.
+    if (!stall) await Promise.all([passes.pass("fast"), passes.pass("slow")]);
+    else if (!view.find((x) => x.kind === "slow")?.since) void passes.pass("slow");
+    return passes.passes();
+  };
   const statusRows = createStatusRegistry();
   statusRows.register(devopsStatusSource(demoPoll));
   const standards = demoStandards(opts.now);
@@ -191,6 +223,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       chats: (await teams.chats()).map((c) => ({ chatId: c.chatId, clientKey: c.clientKey, name: c.displayName, reading: c.readOn, polledAt: c.polledAt, state: c.pollState, note: c.pollNote, via: null })),
       lastPoll: null,
       conversations: null,
+      passes: await demoPasses(),
     }),
     refreshPeople: async () => {
       await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts, dir.identities);
@@ -272,6 +305,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     code,
     demo: {
       ...opts.demo,
+      ...(opts.demo.vmTick ? { passStall: (on: boolean) => void (stalled = on) } : {}),
       status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),
       devopsChange: (clientKey, change) => (isDemoClient(clientKey) ? devops.teammate(clientKey, parseTeammate(change)) : { ok: false, error: "That isn't a demo client" }),
     },

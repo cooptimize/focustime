@@ -2,6 +2,7 @@
 // its own in server/demo.ts). Names, dates, counts and yes or no only: never anyone's plan, picks, follow-ups,
 // captures, focus sessions, tokens, PATs, AI request text, or chat messages. Each read below is a count or a flag.
 import type { StandardsPort } from "../actions/standards.ts";
+import type { PassView } from "./scheduler.ts";
 import type { StatusRegistry } from "../actions/status-rows.ts";
 import type { AdminCheck } from "../actions/admin.ts";
 import type { AdminOps, PersonHealth } from "../actions/admin-actions.ts";
@@ -51,6 +52,8 @@ export type AdminOpsDeps = {
   removePerson: (userId: string) => Promise<void>;
   /** ADM-2: when the scheduler last ran each job (by name), for Admin › Status; absent: unknown. */
   lastRuns?: () => Record<string, string>;
+  /** VM-3: the scheduler's passes for Admin › Status; absent: none here. */
+  passes?: () => PassView[];
   /** AH-2: Admin › Clients' scope facts per client (the poller's store). */
   scope?: AdminOps["scope"];
   /** AH-3: each client's DevOps assignees from the poller's store (emails stay on the server). */
@@ -125,6 +128,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         lastPoll: polled.at(-1) ?? null,
         conversations,
         lastRuns: d.lastRuns?.() ?? {},
+        ...(d.passes ? { passes: d.passes() } : {}),
       };
     },
     async refreshPeople() {
