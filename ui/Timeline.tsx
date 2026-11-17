@@ -1,6 +1,8 @@
 // The hour timeline of one half-day, shared by Week (the wide layout's cards) and Today's Timeline (TY-1): hour marks, the
 // off hours, free gaps, meetings side by side, timeboxes and the now line. One copy: ui/WeekGrid.tsx and
 // ui/DayTimeline.tsx both draw this.
+import { useCallFor } from "./meetings/calls.ts";
+import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -93,7 +95,9 @@ export function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now, chi
 
 /** Step 13: any calendar event opens its menu (click, right-click, Enter): only what its tier allows is enabled. */
 export function useEventMenu(e: CalEvent) {
-  const menu = useMenu((env) => eventMenu(env, e));
+  // MC-1d: a registered call's meeting (one I review or attend) leads its menu with the call.
+  const call = useCallFor(e);
+  const menu = useMenu((env) => eventMenu(env, e, call));
   const live = !e.unavailable && e.source !== "focustime";
   const open = (ev: ReactMouseEvent | KeyboardEvent) => {
     ev.stopPropagation();
@@ -112,16 +116,18 @@ export function EventCard({ placed, tz, style, label = true, overlaps = false }:
   const kind = e.isPersonal ? "personal" : "meeting";
   const show = e.showAs ?? "busy";
   const menu = useEventMenu(e);
+  const call = useCallFor(e);
   return (
     <div
-      className={`event ${e.unavailable ? "unavailable" : kind}${e.calendar ? " linked" : ""} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
+      className={`event ${e.unavailable ? "unavailable" : kind}${call ? " is-call" : ""}${e.calendar ? " linked" : ""} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style}
       title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
       {...menu}
     >
       {label && <><span className="ev-line">
         <span className="ev-time">{e.allDay ? "All day" : shortRange(e, tz)}</span>
-        <span className="ev-title">{e.title}</span>
+        <span className="ev-title" {...titleOpensCall(call)}>{e.title}</span>
+        {call && <CallMarkButton call={call} />}
         {overlaps && <span className="ev-overlap" title="Another event is booked at the same time">Overlaps</span>}
       </span>
       <span className="ev-meta">

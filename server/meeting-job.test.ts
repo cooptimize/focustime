@@ -75,7 +75,7 @@ describe("meeting capture job (MC-1)", () => {
     t.setTranscripts([{ id: "tr-1", createdAt: "2026-11-10T16:02:00Z", endAt: null }]);
     t.setNow("2026-11-10T16:22:00Z");
     await t.job.run();
-    expect(await t.store.occurrence(occ!.id)).toMatchObject({ state: "ready", transcriptFrom: "automatic", aiOutcome: "not_set_up" });
+    expect(await t.store.occurrence(occ!.id)).toMatchObject({ state: "failed", transcriptFrom: "automatic", aiOutcome: "not_set_up" });
     expect((await t.store.transcript(occ!.id))?.[0]?.speaker).toBe("Lee Mate");
   });
 
@@ -200,7 +200,7 @@ describe("Check now (ENV-1)", () => {
     expect(await t.job.checkNow(s.id, REV)).toBe("found");
     expect(new Set(t.calls.map((c) => c.who))).toEqual(new Set([REV]));
     const [occ] = await t.store.occurrencesOf(s.id);
-    expect(occ).toMatchObject({ state: "ready", lastRead: { kind: "found", by: REV } });
+    expect(occ).toMatchObject({ state: "failed", lastRead: { kind: "found", by: REV } });
     // The job's own wake and run were never asked for.
     expect(await t.job.wake()).toBeNull();
   });

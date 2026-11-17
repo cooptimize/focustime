@@ -383,6 +383,7 @@ export const ACTIONS = [
   { name: "meeting.remove", title: "Stop reading a meeting", group: "Meetings", target: "meeting", summary: "FocusTime stops reading it; its stored transcripts go at 30 days as usual (admins only)" },
   { name: "meeting.mine", title: "My client calls", group: "Meetings", target: "none", summary: "The registered calls you review or attend, with their recent occurrences" },
   { name: "meeting.review", title: "Review a call", aka: ["update the plan", "meeting capture"], group: "Meetings", target: "meeting", summary: "Update <client>'s plan from one call: each proposal with the words it came from; reviewers tick, edit or skip, then Confirm" },
+  { name: "meeting.transcript", title: "Read a call's transcript", aka: ["transcript"], group: "Meetings", target: "meeting", summary: "The call's transcript, read only, with the lines its proposals rest on; for the call's reviewers and attendees, kept 30 days" },
   { name: "meeting.edit", title: "Change a proposal", group: "Meetings", target: "meeting", summary: "Tick, untick, skip or edit one proposal before Confirm (reviewers only); nothing is written" },
   { name: "meeting.no_transcript", title: "No transcript this week", group: "Meetings", target: "meeting", summary: "Dismisses the upload nudge for that occurrence (reviewers only)" },
   { name: "meeting.prepare", title: "Preview a call's changes", group: "Meetings", target: "meeting", summary: "The DevOps creates and comments for the ticked proposals, in the usual preview, before anything is written" },

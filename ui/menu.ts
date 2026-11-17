@@ -1,6 +1,8 @@
 // Menus for everything (step 6, D102): the command menu (Ctrl+K), the "⋯" and right-click menus on block cards,
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
+import { CALL_ACTIONS } from "../plan/call-words.ts";
+import { openCall, requestRerun, type CallMark } from "./meetings/calls.ts";
 import { takeOffRule } from "../plan/blockpanel.ts";
 import type { CheckinGhost } from "../plan/carry.ts";
 import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
@@ -746,7 +748,21 @@ const outlookDay = (date: IsoDate) => {
  * ("FocusTime only edits what it created or what only I can see"). My own events: move, change end and show as,
  * each previewed. Meetings with others: Open in Outlook only.
  */
-export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
+/**
+ * MC-1d: a registered call's meeting leads with the call: Review proposals (or Open the call), Read the transcript, and
+ * for a reviewer Propose again and Upload a transcript; then the meeting's own items (Open in Outlook last).
+ */
+function registeredCallItems(c: CallMark): MenuItem[] {
+  const review = c.state === "ready" && c.open > 0 && c.review;
+  return [
+    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group: "Client call", run: () => openCall(c.occurrenceId) },
+    ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group: "Client call", run: () => openCall(c.occurrenceId, "transcript") }] : []),
+    ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group: "Client call", run: () => requestRerun(c.occurrenceId) }] : []),
+    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group: "Client call", ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
+  ];
+}
+
+export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = null): MenuStep {
   const facts = env.eventEdit[e.id] ?? null;
   const x = eventEdit(e, facts, env.canWrite);
   const id = e.id.replace(/^outlook:/, "");
@@ -762,6 +778,7 @@ export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
     ? [...rsvpItems(env, e, facts, rsvp.allowed ? undefined : rsvp.reason ?? "Not for this event"), ...x.actions.filter((a) => a.id === "open").map(item)]
     : x.actions.filter((a) => a.id !== "rsvp").map(item);
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
+  if (call) return { title: `${e.title} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
 
   function item(a: (typeof x.actions)[number]): MenuItem {
@@ -1529,6 +1546,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.openSettings("admin-clients") };
     case "meeting.mine":
     case "meeting.review":
+    case "meeting.transcript":
     case "meeting.edit":
     case "meeting.no_transcript":
     case "meeting.prepare":

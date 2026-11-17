@@ -2,6 +2,8 @@
 // the meeting under way highlighted and the next one marked; all-day events in one slim row; meetings outside the
 // blocks in a slim line before or after them. Each row opens the same event menu as on Week. Never "no meetings":
 // with nothing to show it renders nothing, and a source that failed is reported by the status line, not here.
+import { useCallFor } from "./meetings/calls.ts";
+import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { wasDueNow } from "../plan/due.ts";
 import type { CalEvent } from "../week/types.ts";
@@ -14,11 +16,13 @@ import { useEventMenu } from "./Timeline.tsx";
 export function DayEventRow({ e, tz }: { e: DayEvent; tz: string }) {
   const show = e.event.showAs ?? "busy";
   const menu = useEventMenu(e.event);
+  const call = useCallFor(e.event);
   const word = show !== "busy" && show !== "unknown" ? showAsLabel(e.event) : e.kind === "unavailable" ? "unavailable" : null;
   return (
     <li className={`show-${show} ${e.kind} when-${e.when}`} title={`${e.event.title}\n${spanText(e.start, e.end, tz)}${word ? ` · ${word}` : ""}`} {...menu}>
       <span className="ev-time">{spanText(e.start, e.end, tz)}</span>
-      <span className="ev-title">{e.event.title}</span>
+      <span className="ev-title" {...titleOpensCall(call)}>{e.event.title}</span>
+      {call && <CallMarkButton call={call} />}
       {e.when === "now" && <span className="cal-tag now">Now</span>}
       {e.when === "next" && <span className="cal-tag next">Next</span>}
       {word && <span className="cal-word">{word}</span>}

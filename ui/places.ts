@@ -9,7 +9,7 @@ import { INBOX_LIST_NAMES, MODES, MODE_NAMES } from "./nav.ts";
  * The ⋯ menu's rows (More on the phone), both menus together (ui/App.tsx; ui/places.test.ts checks every label here is
  * drawn there). Install app shows only where the browser can install; Focus screen and Start focus are the phone's.
  */
-export const MORE_ITEMS = ["About", "Admin", "Code", "Commands", "Focus screen", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Settings", "Start focus", "Status", "Technical docs"] as const;
+export const MORE_ITEMS = ["About", "Admin", "Client calls", "Code", "Commands", "Focus screen", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Settings", "Start focus", "Status", "Technical docs"] as const;
 
 /** Backlog's toolbar: Needs attention (a chip) and Filter, beside the Grid and Gantt views (ui/ahead/Toolbar.tsx). */
 export const BACKLOG_TOOLBAR = ["Needs attention", "Filter", "Search"] as const;

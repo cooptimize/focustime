@@ -3,6 +3,7 @@
 // in place. Every card says what it is on its first line, links to the same thing in the app, and says where it was
 // turned on. Taps are Action.Execute (an Action.Submit fallback) with the occasion and an op; nothing else in the
 // data is trusted, and every id is checked against the person's own store when it runs.
+import { CALL_NOTICE } from "../../plan/call-words.ts";
 import type { Nudge } from "../../plan/teams-rhythm.ts";
 import { card, muted, openUrl, shown, text, type Card } from "./cards.ts";
 import { durationText, progressAsk } from "../../plan/progress.ts";
@@ -36,7 +37,7 @@ export type NudgeModel = { kind: "nudges"; occasion: string; items: Nudge[]; tes
 /** SR-1: Monday's status report, the features with no update yet (titles of my own clients' features, to me only). */
 export type StatusModel = { kind: "status"; occasion: string; line: string; reportLabel: string; clients: { name: string; features: { title: string; url: string | null; needsYou?: boolean }[] }[]; more: number; test?: boolean; /** SR-3: features I worked on need my update: the card opens Status on that group. */ needsYou?: number };
 /** MC-1: client calls I review: Update the plan (proposals ready) or Upload the transcript, each with its review link. */
-export type MeetingsModel = { kind: "meetings"; occasion: string; items: { clientName: string; meeting: string; dateLabel: string; upload: boolean; route: string }[]; test?: boolean };
+export type MeetingsModel = { kind: "meetings"; occasion: string; items: { clientName: string; meeting: string; dateLabel: string; upload: boolean; /** MC-1d: the AI step failed and FocusTime stopped trying. */ failed?: boolean; route: string }[]; test?: boolean };
 export type RhythmModel = BriefModel | CheckinModel | CloseoutModel | NudgeModel | StatusModel | MeetingsModel;
 
 export type RhythmOp = "done" | "undone" | "not_yet" | "confirm_today" | "move" | "move_rest" | "close_out" | "closeout_text" | "confirm" | "cancel" | "session_done" | "session_partly" | "session_left" | "session_none" | "session_all" | "session_undo" | "session_back";
@@ -253,13 +254,13 @@ export const STATUS_NEEDS_ROUTE = "#/status/needs";
 export function meetingsCard(m: MeetingsModel, publicUrl: string): Card {
   const body: unknown[] = [header("meetings", null, m.test)];
   for (const i of m.items) {
-    body.push(text(`[${i.upload ? `Upload ${i.clientName}'s transcript` : `Update ${i.clientName}'s plan`}](${abs(publicUrl, i.route)})`, { spacing: "Medium" }));
-    body.push(muted(`${i.meeting} · ${i.dateLabel} · ${i.upload ? "no transcript came through; upload it, or say there isn't one this week" : "proposals from the call are ready"}`));
+    body.push(text(`[${i.upload ? `Upload ${i.clientName}'s transcript` : i.failed ? CALL_NOTICE.failedTitle(i.clientName) : `Update ${i.clientName}'s plan`}](${abs(publicUrl, i.route)})`, { spacing: "Medium" }));
+    body.push(muted(`${i.meeting} · ${i.dateLabel} · ${i.upload ? "no transcript came through; upload it, or say there isn't one this week" : i.failed ? CALL_NOTICE.failedBody : "proposals from the call are ready"}`));
   }
   body.push(muted("Nothing changes until a reviewer confirms in FocusTime."));
   body.push(footer(publicUrl));
   const first = m.items.length === 1 ? m.items[0]! : null;
-  return card(body, [openUrl({ label: first ? (first.upload ? "Upload" : "Review") : ROUTE.meetings[1], url: abs(publicUrl, first ? first.route : ROUTE.meetings[0]) })]);
+  return card(body, [openUrl({ label: first ? (first.upload ? "Upload" : first.failed ? CALL_NOTICE.failedButton : "Review") : ROUTE.meetings[1], url: abs(publicUrl, first ? first.route : ROUTE.meetings[0]) })]);
 }
 
 export function rhythmCard(m: RhythmModel, publicUrl: string): Card {

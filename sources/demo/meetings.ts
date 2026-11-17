@@ -4,7 +4,7 @@
 // here is fictional; nothing is read from Teams or Graph in the demo.
 
 /** The call's speakers: me and Priya from Cooptimize, Dana from the (fictional) client. */
-export const DEMO_MEETING = { clientKey: "Northwind", name: "Northwind weekly status call", start: "10:00", minutes: 30, joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ademo-northwind-weekly%40thread.v2/0" } as const;
+export const DEMO_MEETING = { clientKey: "Northwind", name: "Northwind weekly status call", start: "13:00", minutes: 30, weekday: 1, joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3ademo-northwind-weekly%40thread.v2/0" } as const;
 
 const CUES: [string, string][] = [
   ["Alex Rivera", "Morning everyone. Quick round on the order history export first."],

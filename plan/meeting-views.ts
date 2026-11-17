@@ -25,7 +25,19 @@ export type SeriesView = {
   lastRead?: string;
 };
 
-export type OccurrenceView = { id: number; seriesId: number; date: string; startAt: string; endAt: string; state: Occurrence["state"]; transcriptFrom: TranscriptSource | null; proposals: number; open: number; aiOutcome: string | null; aiMessage: string | null };
+export type OccurrenceView = {
+  id: number; seriesId: number; date: string; startAt: string; endAt: string; state: Occurrence["state"]; transcriptFrom: TranscriptSource | null; proposals: number; open: number; aiOutcome: string | null;
+  /** MC-1d: "The AI step failed: <why>" (call-words' aiFailedLine), or null for a pass that ran or none yet. */
+  aiMessage: string | null;
+  /** MC-1d: after a failed pass, what happens next (FocusTime trying again, stopped, or a person to fix it first). */
+  aiNext: string | null;
+  /** MC-1d: when FocusTime tries the failed pass again by itself (only where the job runs: production), else null. */
+  retryAt: string | null;
+  /** MC-1d: a stored transcript to read (kept 30 days): the Transcript view and Propose again need one. */
+  hasTranscript: boolean;
+  /** MC-1d: the transcript was found but couldn't be read (needs_upload, "Couldn't read the transcript"). */
+  readFailed: boolean;
+};
 
 /** meeting.mine's nudges, with the client's name and the date in words. */
 export type MeetingNudgeView = MeetingNudge & { clientName: string; dateLabel: string };

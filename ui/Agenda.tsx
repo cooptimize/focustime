@@ -1,5 +1,7 @@
 // The block agenda (step 13.6, D244): a block's meetings, personal events, unavailable time and timeboxes in time order,
 // with the free gaps between. Moved out of Plan the day (WD-1) for the detail panel.
+import { callForEvent, useCallMarks } from "./meetings/calls.ts";
+import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { agendaOf } from "../plan/agenda.ts";
 import type { DayEventWhen } from "../plan/todaycal.ts";
@@ -21,6 +23,7 @@ const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.fr
 export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: ReadonlyMap<string, DayEventWhen>; slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
   const env = useTimeboxes();
   const [open, setOpen] = useState<number | null>(null);
+  const calls = useCallMarks();
   if (!env) return null;
   // With timeboxing off (D261), timeboxes stay but the agenda shows only the calendar and free time.
   const rows = agendaOf(slot, env.settings.enabled ? env.timeboxes : [], isTodayIn(slot.date, now, tz) ? now : undefined);
@@ -54,12 +57,16 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
         </li>
       );
     const w = r.eventId ? whens?.get(r.eventId) : undefined;
+    // MC-1d: a registered call's meeting carries its mark here too (matched on the meeting's own start, not the clipped one).
+    const ev = r.kind === "meeting" && r.eventId ? slot.events.find((p) => p.event.id === r.eventId)?.event : undefined;
+    const call = ev ? callForEvent(calls, ev) : null;
     return (
       <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
         <span className="ag-time">{when}</span>
-        <span className="ag-title" title={r.title}>
+        <span className="ag-title" title={r.title} {...titleOpensCall(call)}>
           {r.title}
         </span>
+        {call && <CallMarkButton call={call} />}
         {w === "now" && <span className="cal-tag now">Now</span>}
         {w === "next" && <span className="cal-tag next">Next</span>}
         {r.free && <span className="muted">shown as free</span>}
