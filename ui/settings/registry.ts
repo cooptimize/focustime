@@ -41,7 +41,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "clients", label: "Clients", group: "clients", description: "The clients FocusTime follows for you, and how each one shows." },
   { id: "client", label: "Client", group: "clients", description: "How this client shows for you, and what comes from Dataverse and your admin.", parent: "clients" },
   { id: "chats", label: "Client chats", group: "clients", description: "Your phrases for what clients ask and what you promise, and how each client chat is read.", old: ["Requests", "Asks"] },
-  { id: "connections", label: "Accounts and calendars", group: "connections", description: "Your sources, Microsoft permissions, your VM, Teams and Send feedback.", old: ["Connections", "My VM"] },
+  { id: "connections", label: "Accounts and calendars", group: "connections", description: "Your sources, your Pocket recorder, Microsoft permissions, your VM, Teams and Send feedback.", old: ["Connections", "My VM"] },
   { id: "devops", label: "DevOps", group: "connections", description: "Each client's DevOps read status and your write access.", old: ["DevOps write access", "Enable DevOps writes"], phoneReadOnly: true },
   { id: "ai", label: "AI and assistant", group: "connections", description: "AI for FocusTime, your spend, Break down, and the assistant's history.", old: ["AI"] },
   { id: "activity", label: "Activity", group: "data", description: "Every change FocusTime made in other apps, with Undo and Retry.", old: ["Write log", "Audit log"], phoneReadOnly: true },
@@ -145,6 +145,7 @@ export const SETTINGS: readonly SettingDef[] = [
   // Accounts and calendars
   { id: "sources", section: "connections", label: "Sources", keywords: ["dataverse", "outlook", "google", "calendar", "connect", "reconnect", "disconnect", "retry"] },
   { id: "calendar-links", section: "connections", label: "Calendars added by link", old: ["Add a calendar by link"], keywords: ["ics", "ical", "webcal", "subscribe", "icloud", "apple", "school", "busy only", "replace link"] },
+  { id: "pocket", section: "connections", label: "Pocket recorder", keywords: ["pocket", "recorder", "recording", "api key", "transcript"] },
   { id: "outlook-changes", section: "connections", label: "Outlook calendar changes", keywords: ["calendars.readwrite", "write"] },
   { id: "permissions", section: "connections", label: "Microsoft permissions", keywords: ["consent", "scopes", "chat.read"] },
   { id: "vm", section: "connections", label: "My VM", keywords: ["azure", "find my vm", "resource id"] },

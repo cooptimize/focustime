@@ -22,8 +22,8 @@ export type PocketPort = {
   now: () => number;
 };
 
-/** What the browser gets: connected or not, and the last check. Never the key. */
-export type PocketView = { connected: boolean; checkedAt: string | null; recordings: number | null };
+import type { PocketView } from "./pocket-types.ts";
+export type { PocketView };
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
