@@ -109,7 +109,15 @@ export type DemoDevOps = ReturnType<typeof createDemoDevOps>;
  * `people`: the names the demo knows for DevOps emails (an assignee written by email reads back as a person).
  * `now`: the demo's clock, for changed dates and comments.
  */
-export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, string>; now: () => string }) {
+/**
+ * MC-1e: fields a client's process always requires on a new item of a type, with no default (DevOps refuses the create
+ * without them, TF401320). The demo's Northwind requires a target date on a new Epic, as a real client's process can.
+ */
+export const DEMO_REQUIRED: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> = { Northwind: { Epic: [T] } };
+
+export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, string>; now: () => string; /** MC-1e: required fields per client and type (DEMO_REQUIRED by default). */ required?: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> }) {
+  const required = o.required ?? DEMO_REQUIRED;
+  const requiredOf = (k: DemoClientKey, type: string): readonly string[] => required[k]?.[type] ?? [];
   const items = new Map<number, DemoItem>(o.items.map((i) => [i.id, { ...i, relations: [...i.relations] }]));
   const comments = new Map<number, DemoComment[]>();
   /** SR-1: the demo's change log of story states and comments (seeded), mine or a teammate's; never who beyond that. */
@@ -203,7 +211,10 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     let m = /^_apis\/wit\/workitemtypes\/(.+)\/states$/.exec(rest);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = /^_apis\/wit\/workitemtypes\/(.+)\/fields$/.exec(rest);
-    if (m) return json({ value: typeFields(clientKey, m[1]!).map((referenceName) => ({ referenceName })) });
+    if (m) {
+      const must = requiredOf(clientKey, m[1]!);
+      return json({ value: typeFields(clientKey, m[1]!).map((referenceName) => ({ referenceName, ...(referenceName === "System.Title" || must.includes(referenceName) ? { alwaysRequired: true, name: FIELDS.find((f) => f.referenceName === referenceName)?.name ?? referenceName.split(".").pop() } : {}) })) });
+    }
     if (rest === "_apis/wit/wiql") {
       // The create's "did it land already?" check: by parent, type and title, among the items I created.
       const q = String((body as { query?: unknown } | null)?.query ?? "");
@@ -233,6 +244,10 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
         }
       }
       if (!it.title.trim()) return json({ message: "TF401320: Rule Error for field Title. Error code: Required" }, 400);
+      // MC-1e: a field the client's process requires on this type, left empty: refused as DevOps refuses it.
+      const sent = new Set((body as { path: string }[]).filter((op) => op.path.startsWith("/fields/")).map((op) => op.path.slice(8)));
+      const missing = requiredOf(clientKey, it.type).find((r) => !sent.has(r));
+      if (missing) return json({ message: `TF401320: Rule Error for field ${FIELDS.find((f) => f.referenceName === missing)?.name ?? missing.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.` }, 400);
       items.set(it.id, it);
       mark(clientKey, it.id);
       return json(view(it));
