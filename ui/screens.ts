@@ -36,6 +36,8 @@ const LOADERS = {
   guide: () => import("./guide/Guide.tsx"),
   tour: () => import("./guide/tour/Tour.tsx"),
   docs: () => import("./docs/TechDocs.tsx"),
+  // PH-1: the phone's own screens; asked for at start only on a phone (ui/main.tsx), never in the background.
+  phone: () => import("./phone/PhoneScreens.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;
 
 export type { ScreenName };
@@ -217,6 +219,8 @@ export function screen<K extends ScreenName>(name: K): ScreenModule<K> | null {
   return en.status === "ready" ? (en.mod as ScreenModule<K>) : null;
 }
 export const screenReady = (name: ScreenName) => entries.get(name)!.status === "ready";
+/** PH-1: its file couldn't be had (offline, or missing after the one reload); the line under the top bar says so with Retry. */
+export const screenFailed = (name: ScreenName) => entries.get(name)!.status === "failed";
 export const screensReady = (names: readonly ScreenName[]) => names.every(screenReady);
 
 /** Marks screens as asked for on screen now (so the line can say Loading or failed for them) and fetches them. Returns the undo. */

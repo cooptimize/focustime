@@ -31,8 +31,10 @@ describe.skipIf(!CHROMIUM)("ADM-2: Admin on the phone is no wider than the scree
     await page.waitForSelector(".demo-tag", { timeout: 30_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await page.addStyleTag({ content: "html { font-size: 17px; }" });
-    await page.getByRole("button", { name: /^More: notifications/ }).click();
-    await page.getByRole("menuitem", { name: "Admin" }).click();
+    // PH-1: More › Everything else › Admin.
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    await page.locator('.mr-row[data-row="admin"]').click();
     await page.locator(".ps-head h2", { hasText: "Admin › Clients" }).waitFor();
     for (const [id, ready] of SECTIONS) {
       await page.evaluate((x) => (location.hash = `#/settings/${x}`), id);

@@ -27,7 +27,7 @@ It runs in Azure (Container Apps, Azure SQL, Key Vault) in two environments, dev
 | Settings and Admin | More › Settings, More › Admin | A person's preferences; the team's values (admins only) |
 | The Guide and these docs | More › Guide, More › Technical docs | How to use FocusTime; how it works |
 
-On the phone the bottom bar holds Day, Week, Capture, Inbox and Ask; Backlog, Status and the rest are under More.
+On the phone the bottom bar holds Day, Week, Capture, Inbox and More, with Ask at the top right (PH-1). Today's Day is made for a glance: the Now card, what's next, the one thing that needs you and today's to-dos. More is a screen with Backlog, Status, Client calls, Code, My VM, Settings, the Guide, Everything else and the Desktop version (the app laid out as on a computer, kept in the browser).
 
 ## The pages
 

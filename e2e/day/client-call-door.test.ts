@@ -100,9 +100,10 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     await open(page, "#/today");
-    await page.getByRole("button", { name: "More" }).click();
-    const item = page.locator(".popup-menu [role=menuitem]", { hasText: "Client calls" });
-    await expect(item.textContent()).resolves.toContain("1 need you");
+    // PH-1: More is a screen; Client calls is a row with how many calls are there to review.
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    const item = page.locator('.mr-row[data-row="calls"]');
+    await expect(item.textContent()).resolves.toContain("1 call to review");
     await item.click();
     await page.getByRole("heading", { name: "Client calls" }).waitFor();
     expect(errors).toEqual([]);

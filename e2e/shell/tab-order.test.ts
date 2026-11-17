@@ -68,13 +68,12 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
       await page.keyboard.press("Escape");
       expect(errors).toEqual([]);
       await page.close();
-      // The phone: ⋯ › Status with its dot and "N to update".
+      // The phone (PH-1): More › Status with "N features need your update".
       const phone = await freshPage(h, { width: 390, height: 844 });
-      await phone.page.locator("button.top-more").click();
-      const item = phone.page.getByRole("menuitem", { name: /^Status/ });
+      await phone.page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+      const item = phone.page.locator('.mr-row[data-row="status"]');
       await item.waitFor();
-      await item.locator(".status-mark.amber").waitFor({ timeout: 30_000 });
-      await expect(item.innerText()).resolves.toMatch(/\d+ to update/);
+      await expect.poll(() => item.locator(".mr-line").textContent(), { timeout: 30_000 }).toMatch(/^\d+ features? needs? your update$/);
       await phone.page.close();
     }, T);
 

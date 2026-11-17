@@ -1,7 +1,8 @@
 // Was e2e/mb1.test.ts (MB-1) until BT-1.
 // MB-1: the phone overhaul in the browser, demo mode (Mon Nov 2, 9:30 AM), at 360 and 390 px with the iPhone's 17 px
-// root font: the bottom bar (Today, Week, Capture, Inbox, Ask; no Backlog) and the computer's tabs unchanged; Ahead's
-// notice and Open anyway; the Now card; the urgent strip capped at 3; the to-do sheet (Done,
+// root font. PH-1 replaced the bar (Day, Week, Capture, Inbox, More; Ask in the top bar), the Now card and the
+// status dot (More › Everything else › Sources); e2e/phone/now-and-more.test.ts tests those. Here: the computer's tabs
+// unchanged; Ahead's notice and Open anyway; today's to-dos by block; the to-do sheet (Done,
 // Move to tomorrow, Snooze, Add time, each with Undo where it changes my plan; focus kept inside, Esc, focus back);
 // Week rows at 360 with the title on its own line; the status sheet and no source footer on the phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -32,13 +33,13 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
   }, T);
   afterAll(() => h?.stop());
 
-  it("the bar is Day, Week, Capture, Inbox, Ask; Capture and Ask open; the computer keeps its five tabs", async () => {
+  it("the bar is Day, Week, Capture, Inbox, More (PH-1); Capture and Ask open; the computer keeps its tabs", async () => {
     const page = await phonePage(h, 390);
     await at(page, "#/today");
     const bar = page.locator(".bottom-bar");
-    expect(await bar.locator(".bb-tab").allTextContents()).toEqual(["Day", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
+    expect(await bar.locator(".pb-tab .pb-label").allTextContents()).toEqual(["Day", "Week", "Inbox", "More"]);
     expect(await bar.getByText("Backlog").count()).toBe(0);
-    expect(await bar.locator(".bb-count").count()).toBe(1);
+    expect(await bar.locator(".pb-count").count()).toBe(1);
     // The raised Capture: at least 56 px, labelled, opens the capture sheet.
     const cap = bar.getByRole("button", { name: "Capture" });
     const box = (await cap.boundingBox())!;
@@ -47,15 +48,15 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.locator(".cap-dialog").waitFor();
     await page.keyboard.press("Escape");
     await page.locator(".cap-dialog").waitFor({ state: "detached" });
-    // Ask: the assistant over the whole screen, down to the bar.
-    await bar.getByRole("button", { name: "Ask the assistant" }).click();
+    // Ask (PH-1: in the top bar): the assistant over the whole screen, down to the bar.
+    await page.locator(".topbar").getByRole("button", { name: "Ask the assistant" }).click();
     const panel = page.getByTestId("assistant-panel");
     await panel.waitFor();
     const pb = (await panel.boundingBox())!;
     expect(pb.y).toBeLessThanOrEqual(1);
     expect(Math.round(pb.width)).toBe(390);
-    // The header: the logo, the status dot and ⋯ (no + or Ask there now).
-    expect(await page.locator(".topbar .phone-capture, .topbar .assistant-btn").count()).toBe(0);
+    // The header (PH-1): the date, the VM and Ask; no +, no status dot, no ⋯.
+    expect(await page.locator(".topbar .phone-capture, .topbar .assistant-btn, .topbar .status-dot-btn, .topbar .top-more").count()).toBe(0);
     await page.close();
 
     const { page: desk } = await freshPage(h);
@@ -76,27 +77,18 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.close();
   }, T);
 
-  it("Today: the Now card, one heading over the urgent strip (3 lines at most), to-dos by block, Next up", async () => {
+  it("Day (PH-1): to-dos by block under Today; no urgent strip or Promises due list (the Inbox has them)", async () => {
     const page = await phonePage(h, 390);
     await planMonday(page);
     await at(page, "#/today");
-    const now = page.locator(".ph-now.ph-now-block");
-    await now.waitFor();
-    expect(await now.locator(".ph-now-title").textContent()).toBe("Cooptimize");
-    expect(await now.locator(".ph-now-line").textContent()).toMatch(/^until 12:30 · 3h left$/);
-    expect(await now.locator(".ph-now-meet").textContent()).toMatch(/Next meeting.*11:00 · in 1h 30m/);
-    expect(await now.getByRole("button", { name: "Start", exact: true }).count()).toBe(1);
-    // The urgent strip: one heading, at most 3 lines, then the rest in the Inbox; no second "Promises due" list.
-    expect(await page.locator(".ph-urgent-head").textContent()).toBe("Needs you");
-    expect(await page.locator(".urgent-strip .us-item").count()).toBeLessThanOrEqual(3);
-    // IB-4: no "N more in Inbox" line; the Inbox's own count is on its tab.
-    expect(await page.locator(".urgent-strip .us-all").count()).toBe(0);
+    await page.locator(".pn-card").waitFor();
+    expect(await page.locator(".urgent-strip, .ph-urgent-head").count()).toBe(0);
     expect(await page.getByRole("heading", { name: /Promises due/i }).count()).toBe(0);
     // To-dos by block: the long title keeps two lines, the second line says time, size and client.
     expect(await page.locator(".ph-block-head").allTextContents()).toEqual([expect.stringMatching(/^Cooptimize/), expect.stringMatching(/^Northwind/)]);
     const line = page.locator(".ph-todo-line").first();
     expect(await line.textContent()).toMatch(/M 2h · Cooptimize/);
-    expect(await page.locator(".ph-next-row").count()).toBeGreaterThan(0);
+    expect(await page.locator(".pn-next-row").count()).toBeGreaterThan(0);
     expect(await noSideways(page)).toBe(0);
     await page.close();
   }, T);
@@ -177,12 +169,14 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.close();
   }, T);
 
-  it("the status dot opens the sources sheet; no source footer on the phone", async () => {
+  it("More › Everything else › Sources opens the sources sheet (PH-1: was the status dot); no source footer on the phone", async () => {
     const page = await phonePage(h, 390);
     await at(page, "#/today");
     expect(await page.locator("footer.statusbar").count()).toBe(0);
-    const dot = page.locator(".topbar .status-dot-btn");
-    expect(await dot.getAttribute("aria-label")).toMatch(/Show sources$/);
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    const dot = page.locator('.mr-row[data-row="sources"]');
+    expect(await dot.locator(".mr-line").textContent()).toBe("All sources live");
     await dot.click();
     const sheet = page.getByRole("dialog", { name: "Sources" });
     await sheet.waitFor();
@@ -191,7 +185,6 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await sheet.getByRole("button", { name: "Connect or disconnect in Settings" }).waitFor();
     await sheet.getByRole("button", { name: "Close" }).click();
     await sheet.waitFor({ state: "detached" });
-    expect(await dot.evaluate((b) => b === document.activeElement)).toBe(true);
     await page.close();
   }, T);
 

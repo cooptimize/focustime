@@ -165,7 +165,8 @@ describe.skipIf(!CHROMIUM)("LP-1: Close the loop by Teams, Email, Comment or Cal
       await page.goto(h.url);
       await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
       await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-      await page.locator(".urgent-strip").waitFor({ timeout: 20_000 });
+      // PH-1: the phone's Day shows the one thing that needs you, not the urgent strip.
+      await page.locator(".pn-one-row").waitFor({ timeout: 20_000 });
       await go(page, "#/inbox/promises");
       await page.locator("li.ib4-row", { hasText: "Send Marcus the updated export spec" }).first().click();
       const sheet = page.locator("li.ib4-row.open");

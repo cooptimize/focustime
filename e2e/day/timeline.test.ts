@@ -417,10 +417,12 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     await addPick(page, "Close out the mapping", "M");
     await open(page);
     await page.locator(".ph-todos").waitFor();
-    // MB-1's layout by default; the switch is in ⋯.
+    // MB-1's layout by default; the switch is in another day's ⋯ (PH-1: today's Day has no header), and today follows.
     expect(await page.locator(".today-tl").count()).toBe(0);
+    await open(page, "#/day/2026-11-03");
     await page.getByRole("button", { name: "View options for Day" }).click();
     await page.getByRole("menuitem", { name: /Timeline/ }).click();
+    await open(page);
     await page.locator(".today-tl").waitFor();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(true);
     expect((await call(page, "week.load", {})).data.ui.todayTimeline).toBe(false);

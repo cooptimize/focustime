@@ -82,12 +82,12 @@ export function headTops(page: Page, scope: string): Promise<number[][]> {
 /** Clickable things under the phone's round capture button, with the page scrolled to its end. */
 export function underCapture(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const cap = document.querySelector(".bb-capture");
+    const cap = document.querySelector(".bb-capture, .pb-capture");
     if (!cap) return [];
     const c = cap.getBoundingClientRect();
     const hit: string[] = [];
     for (const el of document.querySelectorAll<HTMLElement>("main button, main a[href], main input, main [role='button']")) {
-      if (el.closest(".bottom-bar, .bb-capture")) continue;
+      if (el.closest(".bottom-bar, .bb-capture, .pb-capture")) continue;
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;
       if (r.right > c.left && r.left < c.right && r.bottom > c.top && r.top < c.bottom) hit.push((el.getAttribute("aria-label") || el.textContent || el.className).trim().slice(0, 40));

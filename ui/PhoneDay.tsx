@@ -1,7 +1,6 @@
-// MB-1: Today on the phone. The Now card (the block under way, until when and what's left; the meeting under way or
-// the next one; the to-do in progress or next, with big Start and Done), today's to-dos grouped by block (a tap opens
-// the to-do's sheet), and Next up (the rest of today's meetings and blocks). Between blocks or after the day it says
-// so plainly. Every change is an existing action; ticking my own to-do runs at once (Undo in the toast).
+// MB-1: Today on the phone: today's to-dos grouped by block (a tap opens the to-do's sheet), the Now card's state, and
+// a block's name. PH-1 moved the Now card and Next into the phone's own screen file (ui/phone/PhoneScreens.tsx), which
+// a computer never downloads. Every change is an existing action; ticking my own to-do runs at once (Undo in the toast).
 import { BlockSuggestions } from "./Suggest.tsx";
 import type { CSSProperties, ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
@@ -10,11 +9,8 @@ import type { Pick } from "../plan/types.ts";
 import type { DayEvent } from "../plan/todaycal.ts";
 import { nowCard, type NowCard } from "../plan/phonenow.ts";
 import { clientColor, startClock } from "./labels.ts";
-import { formatDuration } from "../week/format.ts";
-import { countdown, timerLeft } from "./NowStrip.tsx";
 import { todoLine, useTodoSheet } from "./TodoSheet.tsx";
 import { userZone } from "../week/zone.ts";
-import { LiveCalls, liveOf, useCoworkData } from "./cowork.tsx";
 import { Icon } from "./icons.tsx";
 import { isCatchUp, slotOf } from "../plan/dayblocks.ts";
 
@@ -35,93 +31,20 @@ export function phoneNowOf(blocks: readonly Slot[], events: readonly DayEvent[],
   );
 }
 
-export function PhoneNowCard({ card, data, pick, nowMs, nameOf, tickable, onStart, onDone, onTimer, onFocusScreen }: {
-  card: NowCard;
-  data: WeekLoadData;
-  pick: Pick | null;
-  nowMs: number;
-  nameOf: (k: string) => string;
-  tickable: boolean;
-  onStart: (p: Pick) => void;
-  onDone: (p: Pick) => void;
-  onTimer: (a: "timer.done" | "timer.extend") => void;
-  onFocusScreen: () => void;
-}): ReactNode {
-  const cowork = useCoworkData();
-  if (card.kind === "none") return null;
-  const tz = userZone(data);
-  const t = data.timer;
-  const block = card.kind === "after" ? null : card.block;
-  const client = block?.clientKey ?? null;
-  const name = client ? nameOf(client) : block ? noClient(data, data.planDay.date, block.half as Slot["half"]) : "Open";
-  const when = (iso: string) => startClock(iso, tz);
-  const running = !!t && (!pick || t.pickId === pick.id);
-  const head =
-    card.kind === "block" ? { tag: running ? "Focusing" : "Now", title: name, line: `until ${when(card.block.end)} · ${formatDuration(card.leftMinutes)} left` }
-    : card.kind === "before" ? { tag: "Your day starts", title: `${when(card.block.start)} · ${name}`, line: `in ${formatDuration(Math.max(0, Math.ceil((ms(card.block.start) - nowMs) / 60_000)))}` }
-    : card.kind === "between" ? { tag: "Between blocks", title: `Free until ${when(card.block.start)}`, line: `Then ${client ? name : "an open block"}, ${when(card.block.start)}–${when(card.block.end)}` }
-    : { tag: "Today", title: "Day done", line: "Nothing else is scheduled today." };
-  const meeting = card.kind === "after" ? null : card.meeting;
-  return (
-    <section className={`ph-now ph-now-${card.kind}`} data-tour="today-next" aria-label="Now" style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
-      <p className="ph-now-tag">{head.tag}</p>
-      <h2 className="ph-now-title">{head.title}</h2>
-      <p className="ph-now-line">{head.line}</p>
-      {/* CW-1: a call live in this client's delivery chat, with Join. */}
-      <LiveCalls chats={liveOf(cowork, client)} zone={tz} className="now-live" />
-      {meeting && (
-        <p className={`ph-now-meet${meeting.underWay ? " on" : ""}`}>
-          <span className="pnm-tag">{meeting.underWay ? "In a meeting" : "Next meeting"}</span>
-          <span className="pnm-title">{meeting.title}</span>
-          <span className="pnm-when">{meeting.underWay ? `until ${when(meeting.end)} · ${formatDuration(meeting.minutes)} left` : `${when(meeting.start)} · in ${formatDuration(meeting.minutes)}`}</span>
-        </p>
-      )}
-      {card.kind !== "after" && (running && t ? (
-        <div className="ph-now-todo">
-          {pick && <p className="pnt-title">{pick.title}</p>}
-          <div className="pnt-acts">
-            <button type="button" className="pnt-count" onClick={onFocusScreen} aria-label="Open the focus screen">
-              {t.ended ? "Time's up" : countdown(timerLeft(t, nowMs))}
-            </button>
-            <button type="button" className="primary big" onClick={() => onTimer("timer.done")}>
-              Done
-            </button>
-            <button type="button" className="big" onClick={() => onTimer("timer.extend")} aria-label="Add 15 minutes">
-              +15
-            </button>
-          </div>
-        </div>
-      ) : pick ? (
-        <div className="ph-now-todo">
-          <p className="pnt-label">{card.kind === "block" ? "Up next in this block" : "First to-do"}</p>
-          <p className="pnt-title">{pick.title}</p>
-          <div className="pnt-acts">
-            <button type="button" className="primary big" onClick={() => onStart(pick)}>
-              Start
-            </button>
-            {tickable && (
-              <button type="button" className="big" onClick={() => onDone(pick)}>
-                Done
-              </button>
-            )}
-          </div>
-        </div>
-      ) : card.kind === "block" ? (
-        <p className="ph-now-none muted">Nothing planned for this block.</p>
-      ) : null)}
-    </section>
-  );
+/** PH-1: a block's name on the phone: its client, or "Catch-up" or "Open" (RS-2). */
+export function phoneNameOf(data: WeekLoadData, nameOf: (k: string) => string, b: { half: string; clientKey: string | null }): string {
+  return b.clientKey ? nameOf(b.clientKey) : noClient(data, data.planDay.date, b.half as Slot["half"]);
 }
 
 /** Today's to-dos, grouped by block: a checkbox, the title on its own line (two at most), then time, size and client. */
-export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: Add on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
+export function PhoneTodos({ heading = "To-dos", blocks, picks, data, nameOf, tickable, now, onTick, onAdd }: { /** WD-2: Add on a block that can take work: the block panel's sheet. */ onAdd?: ((half: Slot["half"]) => void) | undefined; /** PH-1: Now calls it "Today". */ heading?: string; blocks: readonly Slot[]; picks: readonly Pick[]; data: WeekLoadData; nameOf: (k: string) => string; tickable: boolean; now: string; onTick: (p: Pick, done: boolean) => void }): ReactNode {
   const sheet = useTodoSheet();
   const tz = userZone(data);
   const start = (p: Pick) => data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt)?.start ?? null;
   if (!blocks.length) return null;
   return (
     <section className="ph-todos" aria-label="Today's to-dos">
-      <h2 className="section-label">To-dos</h2>
+      <h2 className="section-label">{heading}</h2>
       {blocks.map((s) => {
         const client = s.focus[0]?.clientKey ?? null;
         const mine = picks
@@ -164,26 +87,3 @@ export function PhoneTodos({ blocks, picks, data, nameOf, tickable, now, onTick,
   );
 }
 
-/** The rest of today: meetings and events still to start and the blocks after this one, compact, titles on two lines at most. */
-export function PhoneNextUp({ blocks, events, data, nameOf, now }: { blocks: readonly Slot[]; events: readonly DayEvent[]; data: WeekLoadData; nameOf: (k: string) => string; now: string }): ReactNode {
-  const tz = userZone(data);
-  const t = ms(now);
-  const rows = [
-    ...events.filter((e) => ms(e.start) > t).map((e) => ({ key: `e-${e.event.id}`, at: e.start, end: e.end, title: e.event.title, kind: e.kind as string })),
-    ...blocks.filter((s) => ms(s.start) > t).map((s) => ({ key: `b-${s.half}`, at: s.start, end: s.end, title: `${s.focus[0] ? nameOf(s.focus[0].clientKey) : noClient(data, s.date, s.half)} block`, kind: "block" })),
-  ].sort((a, b) => ms(a.at) - ms(b.at));
-  if (!rows.length) return null;
-  return (
-    <section className="ph-next" aria-label="Next up">
-      <h2 className="section-label">Next up</h2>
-      <ul>
-        {rows.map((r) => (
-          <li key={r.key} className={`ph-next-row ${r.kind}`}>
-            <span className="pn-time">{startClock(r.at, tz)}–{startClock(r.end, tz)}</span>
-            <span className="pn-title">{r.title}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
