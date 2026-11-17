@@ -123,9 +123,9 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
     await page.goto(h.url);
     await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-    // MB-1: Today on the phone shows promises only in its urgent strip (which opens them in the Inbox); Close the loop
-    // is the Inbox item's main button there.
-    await page.locator(".urgent-strip").waitFor({ timeout: 20_000 });
+    // PH-1: Day on the phone shows the one thing that needs you (which opens it in the Inbox); Close the loop is the
+    // Inbox item's main button there.
+    await page.locator(".pn-one-row").waitFor({ timeout: 20_000 });
     await go(page, "#/inbox/promises");
     await page.locator("li.ib4-row", { hasText: "Send the export spec" }).first().click();
     const sheet = page.locator("li.ib4-row.open");

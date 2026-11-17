@@ -173,7 +173,8 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
   it("the phone: Keep all on a block", async () => {
     const page = await phonePage(h, 390);
     await emptyFrom(page, TUE);
-    await day(page);
+    // PH-1: today on the phone has no day bar; its to-dos are under the Now card.
+    await goTo(page, "#/day", page.locator(".ph-todos").first());
     const sug = page.locator(".ph-todos .sug-block").first();
     await sug.waitFor({ timeout: 30_000 });
     const offered = await sug.locator(".sug-title").allInnerTexts();

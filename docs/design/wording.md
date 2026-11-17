@@ -364,6 +364,16 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - The Transcript view: tabs (MC-1e: the segmented switch) **"Proposals"** and **"Transcript"** with their counts; **"Filter the transcript"** (placeholder **"Words or a name"**); **"2 of 8 lines"**, **"No line has "<words>""**; a marked line **"Proposal"** (read as **"A proposal rests on this line: <proposal>"**); **"Kept 30 days, for this call's reviewers and attendees only. Read only."**; **"The transcript is kept 30 days after the call. This one is gone; the proposals and what was done stay."**
 - Last 20 requests: **"Failed · HTTP 400"**; the meeting task is **"Read a client call"**.
 
+## PH-1 words (Nov 17)
+
+- The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** or **"More: new notifications"** with its dot). The VM: **"VM Stopped"**, **"VM Running"**. The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
+- The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**). After the day: **"Close out"**.
+- Next: **"Next"**, then **"11:00 AM Proposal review with Jordan · 45 min"**, **"12:30 PM Northwind · At risk · Dentist 12:00"**.
+- The one thing: **"Needs you"**, then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
+- More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Client calls"** with **"1 call to review"**, **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.
+- Everything else: **"Notifications"** (**"2 new"**), **"Sources"** (**"All sources live"**, **"Some data is older"**, **"A source needs attention"**), **"Focus"** (**"Start a session or a break"**), **"Midday check-in"**, **"Close out"**, the person's name, **"Install app"**, **"Technical docs"**, **"About"**, **"Admin"**, and **"Back to More"**.
+- The way back: **"Phone version"** (**"Back to the phone version"**).
+
 ## MC-1e words (Nov 17)
 
 Every word below is in `plan/call-words.ts`.
@@ -380,4 +390,3 @@ Every word below is in `plan/call-words.ts`.
 - From a transcript line: **"Proposal"** or **"2 proposals"** (opening a short list), named for a screen reader **"Go to the proposal: <words>"**.
 - Propose again: **"7 new proposals to review. 3 left out: the same as ones already done, skipped or failed here."**, or **"Nothing new to propose."**.
 - Back: **"Week"**, **"Day"**, **"Calls"** and the rest, named **"Back to Week"** or **"Back to client calls"**.
-

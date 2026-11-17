@@ -128,7 +128,11 @@ describe.skipIf(!CHROMIUM)("PS-1: polish sweep on Day and Week", () => {
           expect(await chipTouchesMore(page), where).toEqual([]);
           for (const row of await headTops(page, "main")) expect(new Set(row).size, `${where}: first lines ${row}`).toBe(1);
           const add = await addIsTheOneFill(page);
-          expect(add, where).toEqual({ shown: true, filled: 1 });
+          // PH-1: the phone's Day has no header; Add is on each of today's blocks (docs/ux/ph1/reach.md).
+          if (phone && hash === "#/day") {
+            expect(add, where).toEqual({ shown: false, filled: 0 });
+            expect(await page.locator(".ph-todos").getByRole("button", { name: /Add/ }).count(), where).toBeGreaterThan(0);
+          } else expect(add, where).toEqual({ shown: true, filled: 1 });
           if (phone) {
             await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
             await page.waitForTimeout(300);

@@ -17,7 +17,7 @@ describe.skipIf(!CHROMIUM)("HK-7: the Assistant sheet's close button on the phon
   for (const width of [390, 360]) {
     it(`at ${width} px the × is inside the sheet`, async () => {
       const page = await phonePage(h, width);
-      await page.locator(".bottom-bar").getByRole("button", { name: "Ask the assistant" }).click();
+      await page.locator(".topbar").getByRole("button", { name: "Ask the assistant" }).click();
       const panel = page.getByTestId("assistant-panel");
       await panel.waitFor();
       await page.waitForTimeout(400);

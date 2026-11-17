@@ -113,7 +113,7 @@ const TODAY: Tour = {
   start: { tab: "today", flow: null, date: null },
   section: "day",
   steps: [
-    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: promises late or due within 2 hours, and work sent to you that waits for your answer. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent" },
+    { target: "today-urgent", title: "The urgent strip", text: "What needs you now: promises late or due within 2 hours, and work sent to you that waits for your answer. The 3 most urgent. From chats · N beside it opens the conversations that need a DevOps item.", example: "urgent", phone: { text: "The one thing that needs you most, with how many are waiting. Tap it to open it in the Inbox." } },
     { target: "today-moment", title: "The moment card", text: "One card for the moment of the day: Nothing on today yet (with {icon:add} Add), then Midday check-in after lunch, then Close out. Each opens its flow; nothing is forced." },
     { target: "today-blocks", title: "The day's blocks", text: "The same block cards as Week. The next to-do has the one Start focus button; focus sets your Teams status to Busy and counts the time. Add on a block, or a click on it, opens its panel. Tick a to-do when it's done.", phone: { text: "Your to-dos by block. Add under a block opens its panel as a sheet. Tick a to-do when it's done." } },
     { title: "Close out", text: "At the end of the day: one line per client on where you left off, the DevOps updates you owe and the promises due. Then Done.", example: "closeout" },
@@ -160,7 +160,7 @@ const ASSISTANT: Tour = {
   start: { tab: "today", flow: null, date: null },
   section: "assistant",
   steps: [
-    { target: "ask", title: "Ask", text: "Ask in the top bar, Ctrl J or /. A panel opens beside the screen; on a phone, a sheet from the bottom.", phone: { text: "Ask in the bar at the bottom opens the assistant over the screen." } },
+    { target: "ask", title: "Ask", text: "Ask in the top bar, Ctrl J or /. A panel opens beside the screen; on a phone, a sheet from the bottom.", phone: { text: "Ask at the top right opens the assistant over the screen." } },
     { title: "It answers from your plan", text: "What's next, what's due tonight, where an item stands, what people promised. Answers are cards with links.", example: "ask-answer" },
     { title: "Change several at once", text: "\"Move the export stories to Friday\": one card lists every move, across clients. One Confirm, one Undo.", example: "ask-move" },
     { title: "Update an item", text: "Mark an item done and comment on it in one card, with the same preview as the buttons. Nothing happens until you Confirm.", example: "ask-update" },

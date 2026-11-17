@@ -108,8 +108,10 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
   it("on the phone the × fits in About's header and Capture's sheet, with no sideways scroll", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await page.evaluate(() => (location.hash = "#/today"));
-    await page.locator(".topbar .top-more").first().click();
-    await page.getByRole("menuitem", { name: "About" }).click();
+    // PH-1: About is in More › Everything else.
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    await page.locator('.mr-row[data-row="about"]').click();
     const about = page.getByRole("dialog", { name: "About FocusTime" });
     const x = about.getByRole("button", { name: "Close", exact: true });
     const inside = async (l: Locator) => {
@@ -127,7 +129,7 @@ describe.skipIf(!CHROMIUM)("UI-3: one close button", () => {
     await x.click();
     await about.waitFor({ state: "detached" });
 
-    await page.locator(".bottom-bar .bb-capture").click();
+    await page.locator(".bottom-bar .pb-capture").click();
     const cap = page.getByRole("dialog", { name: /capture/i });
     const cx = cap.getByRole("button", { name: "Close", exact: true });
     await expect(inside(cx)).resolves.toBe(true);

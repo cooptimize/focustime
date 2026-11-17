@@ -271,8 +271,9 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
   it("the phone: Code from More, the same search row and groups", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await page.locator(".bottom-bar, nav[aria-label]").first().waitFor();
-    await page.locator('button[aria-label^="More"]').first().click();
-    await page.getByRole("menuitem", { name: /^Code$/ }).click();
+    // PH-1: More is a screen; Code is one of its rows.
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.locator('.mr-row[data-row="code"]').click();
     await page$(page).waitFor();
     expect(await hash(page)).toBe("#/code");
     await page.locator(".cv-client-opt", { hasText: "Northwind" }).first().click();

@@ -222,7 +222,7 @@ describe.skipIf(!CHROMIUM)("DP-2: Deployment items by data platform", () => {
     expect(b.y + b.height).toBeLessThanOrEqual(page.viewportSize()!.height);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(150);
-    await page.locator(".bb-capture").tap();
+    await page.locator(".pb-capture").tap();
     const box = page.locator(".cap-dialog .cap-box");
     await box.locator("textarea[aria-label='Quick capture']").fill("Deploy the release");
     await expect.poll(() => box.locator("[role=radio][aria-checked=true]").textContent()).toMatch(/^Deployment/);

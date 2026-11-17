@@ -255,11 +255,11 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("review fix: phone: ⋯ › Status opens Status (the bottom bar has no room for it)", async () => {
+  it("review fix: phone: More › Status opens Status (PH-1: was ⋯ › Status)", async () => {
     const { page } = await freshPage(h, { width: 390, height: 844 });
     await page.evaluate(() => (location.hash = "#/week"));
-    await page.locator(".top-more").click();
-    await page.getByRole("menuitem", { name: /^Status/ }).click();
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.locator('.mr-row[data-row="status"]').click();
     await expect.poll(() => hash(page)).toMatch(/^#\/status/);
     await page.close();
   }, T);

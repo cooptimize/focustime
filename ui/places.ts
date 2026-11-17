@@ -4,12 +4,18 @@
 import { SECTIONS } from "./settings/registry.ts";
 import { ADMIN_UI_SECTIONS } from "./settings/admin-sections.ts";
 import { INBOX_LIST_NAMES, MODES, MODE_NAMES } from "./nav.ts";
+import { PHONE_TEXT } from "../plan/phone-now.ts";
 
 /**
- * The ⋯ menu's rows (More on the phone), both menus together (ui/App.tsx; ui/places.test.ts checks every label here is
- * drawn there). Install app shows only where the browser can install; Focus screen and Start focus are the phone's.
+ * The computer's ⋯ menu's rows (ui/App.tsx; ui/places.test.ts checks every label here is drawn there). Install app
+ * shows only where the browser can install.
  */
-export const MORE_ITEMS = ["About", "Admin", "Client calls", "Code", "Commands", "Focus screen", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Settings", "Start focus", "Status", "Technical docs"] as const;
+export const MORE_ITEMS = ["About", "Admin", "Client calls", "Commands", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Technical docs"] as const;
+
+/** PH-1: the phone's More screen's rows and Everything else's, by their words (plan/phone-now.ts). */
+const R = PHONE_TEXT.rows;
+const E = PHONE_TEXT.else;
+export const PHONE_MORE_ITEMS: readonly string[] = [R.backlog, R.status, R.calls, R.code, R.vm, R.settings, R.guide, R.everything, R.desktop, E.notifications, E.sources, E.focus, E.checkin, E.closeout, E.install, E.docs, E.about, E.admin];
 
 /** Backlog's toolbar: Needs attention (a chip) and Filter, beside the Grid and Gantt views (ui/ahead/Toolbar.tsx). */
 export const BACKLOG_TOOLBAR = ["Needs attention", "Filter", "Search"] as const;
@@ -18,7 +24,7 @@ export const PLACES: Readonly<Record<"Settings" | "Admin" | "More" | "Inbox" | "
   // A client's own page (Settings › Clients › <client>) is under Clients.
   Settings: SECTIONS.filter((s) => !s.parent).map((s) => s.label),
   Admin: ADMIN_UI_SECTIONS.map(([, label]) => label),
-  More: MORE_ITEMS,
+  More: [...new Set([...MORE_ITEMS, ...PHONE_MORE_ITEMS])],
   Inbox: Object.values(INBOX_LIST_NAMES),
   Backlog: [...MODES.ahead.map((m) => MODE_NAMES[m]), ...BACKLOG_TOOLBAR],
 };

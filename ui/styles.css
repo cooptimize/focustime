@@ -7574,3 +7574,10 @@ body.ah-dragging * { cursor: grabbing !important; }
 @media (max-width: 1800px) {
   :root[data-text-size="larger"] .topbar.six-tabs .top-btn .top-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+
+/* PH-1: the Desktop version's way back, the one piece of the phone it shows (ui/PhoneVersion.tsx keeps it at the same
+   size on screen however far the page is zoomed out). */
+.phone-version {
+  position: absolute; z-index: 2147483000; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); font: 600 15px/1 var(--font-ui); box-shadow: var(--shadow-pop); white-space: nowrap;
+}

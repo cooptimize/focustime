@@ -18,7 +18,7 @@ async function go(page: Page, hash: string): Promise<void> {
   await page.reload();
   await page.waitForSelector(".topbar");
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-  await page.locator("[data-drop], .tt-block, .ph-now, .ph-block").first().waitFor({ timeout: 30_000 });
+  await page.locator("[data-drop], .tt-block, .pn-card, .ph-block").first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(400);
 }
 
@@ -76,7 +76,7 @@ describe.skipIf(!CHROMIUM)("NL-1: the now mark only on a block under way", () =>
       const phone = await phonePage(h, 390);
       await go(phone, "#/today");
       // The Now card keeps its own words before and after the day; a block reads as under way only inside its hours.
-      await expect(phone.locator(".ph-now").first().getAttribute("class")).resolves.toContain(`ph-now-${c.phone}`);
+      await expect(phone.locator(".pn-card").first().getAttribute("class")).resolves.toContain(`pn-${c.phone}`);
       expect(await phone.locator(MARK).count()).toBe(0);
       await go(phone, "#/week");
       const wk = await marked(phone);

@@ -356,9 +356,10 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await buildState(page, "ordinary");
     await go(page, "#/day");
-    const bar = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".bottom-bar .bb-tab")].map((t) => {
+    // PH-1: the bar's four tabs (Capture, raised and round, is the fifth).
+    const bar = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".bottom-bar .pb-tab")].map((t) => {
       const icon = t.querySelector("svg.ft-icon")?.getBoundingClientRect();
-      const label = t.querySelector(".bb-label")?.getBoundingClientRect();
+      const label = t.querySelector(".pb-label")?.getBoundingClientRect();
       return { icon: !!icon, over: !!icon && !!label && icon.bottom <= label.top + 2 };
     }));
     expect(bar.length).toBe(4);

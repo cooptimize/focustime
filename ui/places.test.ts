@@ -13,7 +13,7 @@ function moreLabels(): string[] {
 }
 
 describe("places", () => {
-  it("More is the ⋯ menu's rows, both menus", () => {
+  it("More is the computer's ⋯ rows and the phone's More screen's (PH-1)", () => {
     expect([...MORE_ITEMS].sort()).toEqual(moreLabels());
   });
   it("Backlog's toolbar draws Needs attention, Filter and Search", () => {
