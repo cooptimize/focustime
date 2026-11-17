@@ -1142,6 +1142,8 @@ const adminOps = createAdminOps({
   },
   // The scheduler starts below; Status asks only once a person opens it.
   lastRuns: () => scheduler.lastRuns(),
+  // VM-3: when the fast and slow passes last finished, how long they took, and a warning when one is stuck.
+  passes: () => scheduler.passes(),
   // AH-2: counts per area path and team from the central store (the poller and its app source are set up below).
   scope: async (keys) => {
     if (!devopsPoller || !devopsApp) return {};

@@ -11,7 +11,7 @@ import { withoutUpdate } from "../actions/status-actions.ts";
 import { nextStatusNudge, nudgeLineFor, statusNudgeDue } from "../plan/status-report.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
-import { requestContext, teamCtx } from "../actions/dispatch.ts";
+import { requestContext, teamCtx, withSignedIn } from "../actions/dispatch.ts";
 import { teamNotices } from "../actions/team-actions.ts";
 import type { MeetingNudgeView } from "../actions/meeting-actions.ts";
 import { myLinkedLogins } from "../actions/identities.ts";
@@ -45,6 +45,7 @@ import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, c
 import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
 import type { PassFacts } from "./teams/rhythm.ts";
 import type { BackgroundName, BackgroundPolicy } from "../config/background-policy.ts";
+import { within } from "./scheduler.ts";
 
 /**
  * ENV-1: the parts of a person's passes, in the order they run, each under its name in the background policy
@@ -52,10 +53,11 @@ import type { BackgroundName, BackgroundPolicy } from "../config/background-poli
  * the policy allows it (opt_in parts only for a person who switched "from this test site" on).
  */
 export const SLOW_PARTS = [
+  // VM-3: the start first, before anything that can be slow (the scheduler runs it even before the app jobs).
+  ["vm_autostart", "vm_autostart"],
   ["teams_rhythm", "teams_rhythm"],
   ["day_reminders", "notices"],
   ["workday_notices", "notices"],
-  ["vm_autostart", "vm_autostart"],
   ["vm_notice", "notices"],
   ["urgent_asks", "notices"],
   ["chat_text_cleanup", "chat_text_cleanup"],
@@ -73,6 +75,33 @@ export const FAST_PARTS = [
 ] as const satisfies readonly (readonly [string, BackgroundName])[];
 export type SlowPart = (typeof SLOW_PARTS)[number][0];
 export type FastPart = (typeof FAST_PARTS)[number][0];
+
+/**
+ * VM-3: how long each part may hold its pass. Past it the part is logged by name (`tick_part`, `<part>_over_limit`)
+ * and the pass moves on; the part keeps running and is skipped by later passes until it ends, so it never runs twice at
+ * once. Outside calls have their own shorter limits (Dataverse 30 s, Graph 15 to 30 s, Azure and DevOps their own), so
+ * these are for the part as a whole: generous enough that slow but healthy work (the status report's read, a Teams
+ * message) is never left behind. "gate": the notifier's facts (settings, hours, today's PTO), read once per slow pass.
+ */
+export const PART_LIMIT_MS: Record<SlowPart | FastPart | "gate", number> = {
+  vm_autostart: 2 * 60_000,
+  gate: 60_000,
+  teams_rhythm: 2 * 60_000,
+  day_reminders: 3 * 60_000,
+  workday_notices: 60_000,
+  vm_notice: 60_000,
+  urgent_asks: 60_000,
+  chat_text_cleanup: 2 * 60_000,
+  takes: 60_000,
+  notes: 60_000,
+  team: 60_000,
+  meetings: 2 * 60_000,
+  timer: 30_000,
+  warnings: 30_000,
+  held: 30_000,
+  sweep: 30_000,
+  teams_status: 30_000,
+};
 
 /** The parts a person's passes run under a policy (their opt-in read from their settings). */
 export function partsFor(policy: BackgroundPolicy, optIn: boolean): { slow: SlowPart[]; fast: FastPart[] } {
@@ -95,12 +124,17 @@ export type TickDeps = {
   push?: PushControl;
   /** TB-2: this person's rhythm in Teams (the brief, check-in, close out and nudges); absent without the bot. */
   teams?: { tick: (f: PassFacts) => Promise<void>; wake: (c: AppConfig | null) => Promise<Temporal.Instant | null> };
+  /** VM-3: the parts' time limits (tests shorten them); absent: PART_LIMIT_MS. */
+  partLimits?: Partial<typeof PART_LIMIT_MS>;
 };
 
 /** One person's passes; the scheduler runs them for everyone, never two of the same kind at once. */
 export type PersonTicks = {
   fast: () => Promise<void>;
-  slow: () => Promise<void>;
+  /** The slow parts; `early: false` when the scheduler already gave the VM start its turn in this pass. */
+  slow: (o?: { early?: boolean }) => Promise<void>;
+  /** VM-3: the VM start alone, which the scheduler runs for everyone at the head of each slow pass. */
+  early?: () => Promise<void>;
   wake?: () => Promise<Temporal.Instant>;
   /** HK-1: resolves once every notice a pass handed to the notifier (which doesn't wait for them) has been offered. */
   settled?: () => Promise<void>;
@@ -109,6 +143,27 @@ export type PersonTicks = {
 export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContext, who: { zone: string }): PersonTicks {
   const log = d.log;
   const instantNow = d.now;
+  // VM-3: each part runs guarded: a throw is logged by the part's name and the next part runs; a part over its limit is
+  // logged by name and left behind (still running), and later passes skip it until it ends.
+  const limits = { ...PART_LIMIT_MS, ...d.partLimits };
+  const partBusy = new Map<string, Promise<void>>();
+  /** "done" (settled in time, thrown or not), "busy" (still running from an earlier pass) or "over" (past its limit). */
+  const runPart = async (name: keyof typeof PART_LIMIT_MS, run: () => Promise<unknown>): Promise<"done" | "busy" | "over"> => {
+    if (partBusy.has(name)) return "busy";
+    const p = Promise.resolve()
+      .then(run)
+      .then(
+        () => undefined,
+        () => log({ source: "plan", op: "tick_part", kind: `${name}_failed` }),
+      );
+    const tracked = p.finally(() => {
+      if (partBusy.get(name) === tracked) partBusy.delete(name);
+    });
+    partBusy.set(name, tracked);
+    if (await within(tracked, limits[name])) return "done";
+    log({ source: "plan", op: "tick_part", kind: `${name}_over_limit` });
+    return "over";
+  };
   const zonedNow = (tz: string) => d.now().toZonedDateTimeISO(tz);
   const host = { notifications: d.notifications, media: d.media };
   const media = d.media;
@@ -404,9 +459,19 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   // VM-2: start my VM before my day, when I opted in. Production only: autoStartTick asks the gate before anything
   // else (no settings, no store, no token read outside production).
+  // VM-3: with the sign-in's "me", as every request has it. A hosted person's Dataverse user is kept with the sign-in, not
+  // in their settings, so without it PTO was "unknown" and the start left the VM off without a word (Nov 17).
+  // Built on first use, after the start's gate: nothing is read for it outside production.
+  let signed: ActionContext | null = null;
+  const signedCtx = () => (signed ??= withSignedIn(liveCtx));
+  const signedConfig = async () => {
+    const r = await signedCtx().loadConfig();
+    return r.parsed.ok ? r.parsed.config : null;
+  };
   const autoTick = async () => {
-    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: configOrNull, vm: vmCtx, now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
-    if (r !== "env" && r !== "off" && r !== "not_due") log({ source: "azure", op: "vm_autostart", kind: r });
+    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: signedConfig, vm: () => vmContext(signedCtx()), now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
+    // VM-3: the runner logs each reason itself, once a day; only these two are said here.
+    if (r === "no_config" || r === "claimed_elsewhere") log({ source: "azure", op: "vm_autostart", kind: r });
   };
   // Shared polling (D517): the job reads the chats for everyone; here, one notification per request the AI sorted as
   // needing someone now in a chat I see, within URGENT_NOTICE_HOURS of its sort (each key goes out once; held during
@@ -512,10 +577,20 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   const parts = async () => partsFor(d.policy, d.policy.production ? false : !!(await configOrNull().catch(() => null))?.notify.fromTestSite);
   /** ENV-1: whether this person may get notices here (the focus timer's meeting warnings ask it too). */
   const noticesHere = async () => (await parts()).fast.includes("held");
-  const tick = async () => {
+  /** VM-3: the VM start's turn, first in every slow pass; nothing before it can hold it. */
+  const early = async () => {
+    if ((await parts().catch(() => null))?.slow.includes("vm_autostart")) await runPart("vm_autostart", autoTick);
+  };
+  const tick = async (o: { early?: boolean } = {}) => {
+    if (o.early !== false) await early();
     const allowed = new Set<string>((await parts()).slow);
     // The gate's facts (settings, hours, PTO from Dataverse) only when a part that uses them may run.
-    const facts = SLOW_PARTS.some(([p, n]) => allowed.has(p) && (n === "notices" || n === "teams_rhythm")) ? await notifier.refresh().catch(() => null) : null;
+    let facts: Awaited<ReturnType<typeof notifier.refresh>> | null = null;
+    let gate: "done" | "busy" | "over" | "none" = "none";
+    if (SLOW_PARTS.some(([p, n]) => allowed.has(p) && (n === "notices" || n === "teams_rhythm"))) gate = await runPart("gate", async () => void (facts = await notifier.refresh().catch(() => null)));
+    // VM-3 review: a gate still running (stuck or slow) leaves the notifier's facts old (working hours, PTO, focus), so
+    // this pass sends no notices rather than send them on old facts; the next pass whose gate finishes sends them.
+    if (gate === "busy" || gate === "over") for (const [p, n] of SLOW_PARTS) if (n === "notices") allowed.delete(p);
     const slow: Record<SlowPart, () => Promise<unknown>> = {
       teams_rhythm: () => teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" })),
       day_reminders: () => dayReminders(),
@@ -529,7 +604,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       team: () => teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" })),
       meetings: () => meetingsTick().catch(() => log({ source: "plan", op: "meetings_tick", kind: "failed" })),
     };
-    for (const [part] of SLOW_PARTS) if (allowed.has(part)) await slow[part]();
+    for (const [part] of SLOW_PARTS) if (part !== "vm_autostart" && allowed.has(part)) await runPart(part, slow[part]);
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
@@ -591,7 +666,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
           await presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
       },
     };
-    for (const [part] of FAST_PARTS) if (allowed.has(part)) await parts2[part]();
+    for (const [part] of FAST_PARTS) if (allowed.has(part)) await runPart(part, parts2[part]);
   };
   /** A3, the idle rule: the next moment this person's passes could do something (plan/wake.ts). */
   const wake = async (): Promise<Temporal.Instant> => {
@@ -627,5 +702,5 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const autoAt = !may.has("vm_autostart") ? null : await autoStartWake({ env: liveCtx.autoStartEnv, now: instantNow, config: c }).catch(() => null);
     return [teamsAt, statusAt, autoAt].filter((x): x is Temporal.Instant => !!x).reduce((a, b) => (Temporal.Instant.compare(a, b) <= 0 ? a : b), base);
   };
-  return { fast, slow: tick, wake, settled };
+  return { fast, slow: tick, early, wake, settled };
 }

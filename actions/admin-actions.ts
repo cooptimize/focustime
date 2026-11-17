@@ -74,6 +74,21 @@ export type AdminStatus = {
   jobs?: StatusJob[];
   /** DV-1: the status rows registry's groups (DevOps polling, and whatever registers later). */
   groups?: StatusGroup[];
+  /** VM-3: the scheduler's fast and slow passes: when each last finished, how long it took, and a warning if stuck. */
+  passes?: PassView[];
+};
+
+/** VM-3: one of the scheduler's passes for Admin › Status (server/scheduler.ts builds it). */
+export type PassView = {
+  kind: "fast" | "slow";
+  /** When the last pass of this kind finished, and how long it took. */
+  finishedAt: string | null;
+  ms: number | null;
+  /** Running now since (null: not running). */
+  since: string | null;
+  limitMs: number;
+  /** A plain warning when it runs past its limit, or hasn't finished for longer than it should while someone works. */
+  warning: string | null;
 };
 
 export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };
@@ -501,7 +516,9 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       return setupSection(ops, { id: meId, name: me?.name ?? "" }, zone ? await zone().catch(() => "UTC") : "UTC");
     case "status": {
       const [st, warnings, rules, groups] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules(), ops.statusRows ? ops.statusRows.groups() : Promise.resolve([])]);
-      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st), groups };
+      // VM-3: a pass running past its limit, or not finishing while someone works, is something to look at too.
+      const passWarnings = (st.passes ?? []).flatMap((x) => (x.warning ? [{ area: "jobs" as const, text: x.warning }] : []));
+      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings, ...passWarnings], jobs: statusJobs(rules, st), groups };
     }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;
