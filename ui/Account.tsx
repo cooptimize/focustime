@@ -278,6 +278,8 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       // VM-2: today's automatic start couldn't sign in (said once; the chip's ! until this menu was opened).
       if (s.autoStart?.signInProblem) items.push({ id: "auto-signin", label: "Auto-start couldn't sign in to Azure", hint: "Allow Azure access", run: consent });
       else if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: consent });
+      // VM-3: today's start left the VM off: the reason and what to do (Settings has the same line).
+      if (s.autoStart?.leftOff && s.autoStart.leftOff.reason !== "sign_in") items.push({ id: "auto-left", label: s.autoStart.leftOff.short, hint: "Why", run: () => void notify(s.autoStart!.leftOff!.text) });
       // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
       if (s.autoStart?.next) {
         items.push({ id: "auto-next", label: `Auto-start: ${s.autoStart.next.short}`, run: onSettings });
@@ -285,6 +287,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       }
       items.push({ id: "refresh", label: "Refresh", run: () => void refresh(true) });
       if (s.autoStart?.signInProblem && !s.autoStart.signInProblem.seen) void call("vm.autostart_seen", { what: "sign_in" }).then(() => refresh(), () => undefined);
+      if (s.autoStart?.leftOff && !s.autoStart.leftOff.seen) void call("vm.autostart_seen", { what: "left_off" }).then(() => refresh(), () => undefined);
     }
     items.push({ id: "choose", label: s?.vm ? "Choose another VM…" : "Find my VM…", action: "vm.choose", run: onSettings });
     open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? "Unknown"}` : "My VM", items });
@@ -409,13 +412,16 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
   const chip = status.chip ?? "unknown";
   const text = status.text ?? status.label ?? "Unknown";
   const signInNote = status.autoStart?.signInProblem && !status.autoStart.signInProblem.seen;
-  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
+  // VM-3: today's start left it off: the reason in the title and a mark until the menu is opened.
+  const leftOff = status.autoStart?.leftOff ?? null;
+  const leftNote = !!leftOff && !leftOff.seen;
+  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message, leftOff && leftOff.reason !== "sign_in" ? leftOff.text.replace(/\.$/, "") : null].filter(Boolean).join(". ");
   return (
     <button
       type="button"
       className={`vm-chip vm-${TONE[chip]}${dot ? " vm-dot-only" : ""}`}
       aria-haspopup="menu"
-      aria-label={dot ? `VM ${text}. Menu` : undefined}
+      aria-label={dot ? `VM ${text}${leftNote ? ". Auto-start left it off today" : ""}. Menu` : leftNote ? `VM ${text}. Auto-start left it off today. Menu` : undefined}
       title={`${status.vm.name} (${status.vm.resourceGroup}): ${text}${extra ? `. ${extra}` : ""}`}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
@@ -431,7 +437,7 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
           <span className="vm-short">{SHORT[chip] ?? "Unknown"}</span>
         </>
       )}
-      {(status.needsConsent || signInNote) && <span className="vm-attn" aria-hidden="true">!</span>}
+      {(status.needsConsent || signInNote || leftNote) && <span className="vm-attn" aria-hidden="true">!</span>}
     </button>
   );
 }

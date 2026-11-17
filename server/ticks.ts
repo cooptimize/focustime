@@ -467,7 +467,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   const autoTick = async () => {
     const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: signedConfig, vm: () => vmContext(signedCtx()), now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
-    if (r !== "env" && r !== "off" && r !== "not_due") log({ source: "azure", op: "vm_autostart", kind: r });
+    // VM-3: the runner logs each reason itself, once a day; only these two are said here.
+    if (r === "no_config" || r === "claimed_elsewhere") log({ source: "azure", op: "vm_autostart", kind: r });
   };
   // Shared polling (D517): the job reads the chats for everyone; here, one notification per request the AI sorted as
   // needing someone now in a chat I see, within URGENT_NOTICE_HOURS of its sort (each key goes out once; held during

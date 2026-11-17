@@ -13,7 +13,7 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, chipOf, CHIP_LABEL, chipText, morningPrompt, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
@@ -41,7 +41,8 @@ export type VmContext = {
    */
   autoStartEnv?: string;
   /** VM-2: my whole-day PTO and the observed holidays in a range, for the "Next:" line and the tick. Absent: none known. */
-  daysOff?: (cfg: AppConfig, from: IsoDate, to: IsoDate) => Promise<{ pto: ReadonlySet<IsoDate>; holidays: ReadonlySet<IsoDate> }>;
+  /** VM-3: each null when it can't be read (a read that throws counts as both). */
+  daysOff?: (cfg: AppConfig, from: IsoDate, to: IsoDate) => Promise<{ pto: ReadonlySet<IsoDate> | null; holidays: ReadonlySet<IsoDate> | null }>;
 };
 
 export const vmKey = (oid: string) => `vm:${oid}`;
@@ -244,9 +245,10 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
     }
     case "vm.autostart_seen": {
       // VM-2: the once-only notices (paused, couldn't sign in) were shown.
-      if (!isObj(input) || Object.keys(input).some((k) => k !== "what") || (input.what !== "paused" && input.what !== "sign_in")) return bad("vm.autostart_seen takes { what: paused | sign_in }");
+      if (!isObj(input) || Object.keys(input).some((k) => k !== "what") || (input.what !== "paused" && input.what !== "sign_in" && input.what !== "left_off")) return bad("vm.autostart_seen takes { what: paused | sign_in | left_off }");
       if (!ctx.plan) return refuse("Settings aren't available", 503);
-      await writeAutoStart(ctx.plan, (s) => (input.what === "paused" ? { ...s, pauseSeen: true } : { ...s, signInSeen: true }));
+      // VM-3: left_off: today's reason was shown (the chip's mark goes; the reason stays in the menu and Settings).
+      await writeAutoStart(ctx.plan, (s) => (input.what === "paused" ? { ...s, pauseSeen: true } : input.what === "sign_in" ? { ...s, signInSeen: true } : s.outcome ? { ...s, outcome: { ...s.outcome, seen: true } } : s));
       return { ok: true, data: { seen: input.what } };
     }
     case "vm.log": {
@@ -314,9 +316,16 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
   const state = await readAutoStart(ctx.plan);
   const settings = cfg.azure.autoStart;
   const to = Temporal.PlainDate.from(today).add({ days: 13 }).toString();
-  const off = settings.on && autoStartEnvAllowed(ctx.autoStartEnv) && ctx.daysOff ? await ctx.daysOff(cfg, today, to).catch(() => null) : null;
-  const n = nextAutoStart({ env: ctx.autoStartEnv, now, zone: tz, hours: cfg.week.hours, settings, state, pto: (d) => !!off?.pto.has(d), holiday: (d) => !!off?.holidays.has(d), on: chip === "running" || chip === "starting" });
   const prod = autoStartEnvAllowed(ctx.autoStartEnv);
+  const reads = settings.on && prod && ctx.daysOff;
+  const off = reads ? await ctx.daysOff!(cfg, today, to).catch(() => ({ pto: null, holidays: null })) : null;
+  // VM-3: a fresh PTO read is kept (at most every 30 minutes) for the start to fall back on when Dataverse can't answer.
+  if (off?.pto && ctx.plan && (!state.ptoRead || now.since(Temporal.Instant.from(state.ptoRead.at)).total("minutes") >= 30 || state.ptoRead.from !== today)) {
+    const days = [...off.pto].filter((d) => d >= today && d <= to).sort();
+    await writeAutoStart(ctx.plan, (s) => ({ ...s, ptoRead: { at: now.toString(), from: today, to, days } })).catch(() => undefined);
+  }
+  const n = nextAutoStart({ env: ctx.autoStartEnv, now, zone: tz, hours: cfg.week.hours, settings, state, pto: (d) => !!off?.pto?.has(d), holiday: (d) => !!off?.holidays?.has(d), on: chip === "running" || chip === "starting", ...(off ? { ptoRead: !!off.pto, holidaysRead: !!off.holidays } : {}) });
+  const told = prod && settings.on ? outcomeToday(state, today) : null;
   return {
     on: settings.on,
     minutes: settings.minutes,
@@ -327,6 +336,7 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
     paused: n.kind === "paused",
     pauseNotice: prod && n.kind === "paused" && !state.pauseSeen,
     signInProblem: prod && settings.on && state.signInFailedOn === today ? { seen: state.signInSeen } : null,
+    leftOff: told && OUTCOMES[told.reason].tell ? { reason: told.reason, short: OUTCOMES[told.reason].text, text: outcomeText(told), seen: told.seen } : null,
     days: workingWeekdays(cfg.week.hours),
   };
 }
