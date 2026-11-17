@@ -70,7 +70,7 @@ hidden" switch, Refresh and Settings for Disconnect.
 | The VM's morning prompt (Start, Not today) | The top of Day, unchanged |
 | The moment card: Plan today | Add on each block under Today; Week's Plan today |
 | The moment card: Midday check-in | More › Everything else › Midday check-in |
-| The moment card: Wrap up the day (Close out) | More › Everything else › Close out |
+| The moment card: Wrap up the day (Close out) | The Now card after the day; More › Everything else › Close out |
 | The setup line ("Finish setting up") | More › Settings › Setup |
 | To-dos by block: tick, the to-do's sheet, Add, suggestions | Today, under the Now card, unchanged |
 | Next up (the rest of today's meetings and blocks) | Next: the next meeting and the next block; the rest on Week |
@@ -87,4 +87,4 @@ changed, as above.
 
 - **Open pull requests (0.2):** none was open when PH-1 began its tests; VM-3's and MC-1d's had merged (MC-1d as #175). More's Client calls opens the client calls screen MC-1d left (`#/meetings`).
 - **Changing the viewport after load (0.4).** Read: MDN's viewport meta (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport), Apple's Using the Viewport (https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/UsingtheViewport/UsingtheViewport.html), WebKit's Designing websites for iPhone X (https://webkit.org/blog/7929/designing-websites-for-iphone-x/), MDN `env()` (https://developer.mozilla.org/en-US/docs/Web/CSS/env), MDN VisualViewport (https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport) and Chrome's viewport resize note (https://developer.chrome.com/blog/viewport-resize-behavior/). Each describes the viewport meta as the page loads (`width`, `initial-scale`, `viewport-fit=cover`) and the bottom safe area as `env(safe-area-inset-bottom)` with `viewport-fit=cover`; none describes changing the meta after load, or what an installed app does with it. So the reliable way is the one each documents: decide the viewport before the first paint. `public/prefs.js` reads the stored choice and writes the meta before anything draws, and switching saves and reloads. Only where storage is refused is the meta changed in place (it works in Chromium; untested on devices, `docs/open-questions.md`).
-- **The first download (0.5).** Before PH-1 the first screen's script was 326.8 kB and its styles 83.8 kB gzipped, under PF-1's limit of 337 kB and 87 kB. After: 329.2 kB and 83.9 kB for every device, plus the phone's own file on a phone only (3.2 kB of script, 2.3 kB of styles). The limit isn't raised.
+- **The first download (0.5).** Before PH-1 the first screen's script was 326.8 kB and its styles 83.8 kB gzipped, under PF-1's limit of 337 kB and 87 kB. After, with main's MC-1d merged: 332.0 kB and 84.5 kB for every device, plus the phone's own file on a phone only (4.4 kB of script, 2.4 kB of styles). The limit isn't raised.
