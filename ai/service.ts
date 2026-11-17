@@ -109,13 +109,20 @@ export function createAi(d: AiDeps) {
   const flexCfg = d.app.flex ?? DEFAULT_FLEX;
   const flexPrices = d.app.flexPrices ?? halfPrices(d.app.prices);
 
-  async function record(task: AiTaskSpec, outcome: AiOutcome, detail: AiErrorKind | null, usage: Usage, latencyMs: number, model: string, tier: AiTier = "standard"): Promise<number> {
+  /**
+   * MC-1d: `httpStatus` is the provider's HTTP status for a failed request (a number, when it answered at all), kept
+   * with the kind ("provider:400") in the request log, the one thing Last 20 requests and the log line add; never a
+   * body, a message or a header.
+   */
+  async function record(task: AiTaskSpec, outcome: AiOutcome, detail: AiErrorKind | null, usage: Usage, latencyMs: number, model: string, tier: AiTier = "standard", httpStatus?: number): Promise<number> {
     const cost = costMicros(usage, tier === "flex" ? flexPrices : d.app.prices);
     const at = d.now();
-    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail, cap: scope, tier });
+    const status = detail && httpStatus !== undefined && Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? httpStatus : null;
+    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail: detail && status !== null ? `${detail}:${status}` : detail, cap: scope, tier });
     if (cost > 0) await d.appSpend.add(monthOf(at), cost);
-    // App Insights: counts and outcomes only, and whose cap it counted against.
-    logger({ source: "ai", op: "request", kind: scope === "app" ? `${task.name}:${outcome}:app` : `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
+    // App Insights: counts and outcomes only, whose cap it counted against and (MC-1d) the tier that answered; a failed
+    // request's status is the provider's HTTP status as a number when it gave one, else the kind.
+    logger({ source: "ai", op: "request", kind: `${task.name}:${detail ?? outcome}:${tier}${scope === "app" ? ":app" : ""}`, ...(status !== null ? { status } : detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
     return cost;
   }
 
@@ -265,7 +272,7 @@ export function createAi(d: AiDeps) {
     const latency = Date.now() - started;
     if (!reply.ok) {
       const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
-      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model, used);
+      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model, used, reply.status);
       return fail(kind);
     }
     let value: unknown;
@@ -372,7 +379,7 @@ export function createAi(d: AiDeps) {
       spent = add(spent, used);
       if (!reply.ok) {
         const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
-        cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model, t);
+        cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model, t, reply.status);
         return { ...fail(kind), refused, calls: ran };
       }
       if (reply.calls?.length) {
