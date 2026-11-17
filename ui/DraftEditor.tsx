@@ -5,7 +5,7 @@
 // DevOps writes these values after its preview. Plan it adds it to a block (the 15.2 target order); Delete is local.
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { SIZES, type DraftStory, type Size } from "../plan/types.ts";
 import { call } from "./api.ts";
@@ -17,6 +17,7 @@ import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { descriptionMax, NO_ANSWERS, storedOf, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
+import { useWherePicks, WherePicksLine } from "./WherePicks.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -61,6 +62,9 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
     return () => b?.focus?.();
   }, []);
   const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
+  // RB-3b: names picked from one client's code are taken out of Where is it? when the client changes (Undo puts them back).
+  const setWhere = useCallback((v: string) => setAnswers((a) => ({ ...a, where: v })), []);
+  const picks = useWherePicks(answers.where, setWhere, client, clientName(client));
   // TP-1b: the third question is the acceptance; a separate box only when the draft already holds acceptance text (CP-1's AI version, an older draft).
   const showAc = !feature && !!draft.acceptance?.trim() && (features?.acceptanceField ?? features?.status !== "ok");
   const startAfter = feature && start && target && start > target;
@@ -130,7 +134,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             <span className="set-label">Title</span>
             <input ref={first} value={title} required maxLength={200} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" lookup={{ clientKey: client, clientName: clientName(client), from: "draft_editor" }} />
+          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" lookup={{ clientKey: client, clientName: clientName(client), from: "draft_editor", onPicked: picks.onPicked }} />
           <label className="set-field">
             <span className="set-label">Description</span>
             <TextBox value={description} minRows={4} maxRows={14} maxLength={descriptionMax(draft.carried)} onChange={(e) => setDescription(e.target.value)} />
@@ -177,6 +181,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
               </>
             )}
           </div>
+          <WherePicksLine state={picks} className="de-picks" />
           <label className="set-field">
             <span className="set-label">Parent {parentWord}</span>
             <ItemLookup

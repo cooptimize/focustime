@@ -50,3 +50,9 @@
 .app.phone .wl-what { grid-column: 2; grid-row: 2; }
 .app.phone .wl-open { grid-column: 3; grid-row: 1 / span 2; }
 .app.phone .wl-pop { max-height: min(260px, 40dvh); }
+
+/* RB-3b: the line after a client change took out picked names, with Undo (under the Client field). */
+.nf-client { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.wp-line { font-size: var(--fs-2); }
+.de-picks { display: contents; }
+.de-picks:has(> .muted) { display: block; }

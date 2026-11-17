@@ -314,6 +314,18 @@ All in one place in code: `WHERE_TEXT` in `plan/where-lookup.ts`. The three ques
 - Inside a second level: **"Reading the file…"**, **"This file is too large to list. Type the name."**, **"This report has no pages to list."**, **"This table has no measures or columns to list."**, **"This file couldn't be read. Type the name."**, **"This file wasn't read because FocusTime couldn't record that you opened it."**
 - Admin › Audit › Code views: **"Listed names for Where is it? (New form)"** and **"Listed names for Where is it? (draft editor)"**.
 
+## RB-3b words (Nov 16)
+
+All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change) and `WHERE_TEXT` in `plan/where-lookup.ts` (the lookup).
+
+- After a client change took out picked names, one line under the Client field: **"Took out 2 names picked from Northwind's code."** (**"1 name"** for one; **"Northwind's and Atlas's code"** when they came from two) with **Undo** (its name for a screen reader: **"Undo: put back the 2 names"**). After Undo: **"Put back 2 names. They're from Northwind's code, not Atlas's."** (**"It's"** for one). Screen readers hear each line once.
+- A row that opens: **Pages** for a report in either format, **Tables** for any semantic model (review 3: TMDL models said **Open** before), **Measures and columns** for a table (a one-file model's table too).
+- The browse button's tooltip: **"Browse Northwind's code (Alt+Down)"** (its name for a screen reader stays **"Browse Northwind's code"**, with Alt+Down as its key shortcut).
+- A hidden page's row: **"Page of Region review · Hidden"**; what its pick writes: **"Store drill-through (hidden page, Region review report)"**. A one-file model's table writes **"Returns (table, Returns semantic model)"**, like any model table.
+- While a second level is read: **"Reading the report's pages…"**, **"Reading the table…"**, **"Reading the model…"** (replacing "Reading the file…").
+- Inside a second level, one line: **"1 page couldn't be read."** (**"2 pages couldn't be read."**), **"Some of this table's measures are kept in files that couldn't be read."**, **"This model keeps measures in more files than FocusTime opens here, so some may be missing."**, **"This report has more than 60 pages to list. Type the page's name."**, **"This model is too large to list. Type the table's name."**, **"This model has no tables to list."**, and, when the row can't be written, **"These names weren't listed because FocusTime couldn't record that you listed them."** (replacing the file line).
+- Admin › Audit › Code views, What: **"Pages listed"**, **"Measures and columns listed"**, **"Tables listed"**, with the repo and the report's, table's or model's file under File. Its line: **"Who opened which client's code in Code, and when: the repo, the file, Find, or a report's pages and a model's tables or measures listed for Where is it? Never any of the code."**
+
 ## UC-1 words (Nov 15)
 
 - A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.

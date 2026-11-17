@@ -3,7 +3,7 @@
 // chosen, then one names read logged with where it was used; typing a word lists matches (best first), Down and Enter
 // pick, a pick writes plain words at the cursor and replaces only the word typed, a second pick adds to the answer,
 // Enter with no row chosen and Esc behave as before; the list by kind from the button, a database to a schema and a
-// type, a report's pages and a table's measures (each file read logged); the create writes exactly the box's text; a
+// type, a report's pages and a table's measures (each listing logged once, RB-3b); the create writes exactly the box's text; a
 // draft keeps only the text; nothing of the names in the browser's storage after; Code's rule (a team-only client and
 // one FocusTime can't read) gives the plain box and one quiet line with no read. The phone: the list on screen, a tap
 // picks. Edge cases are unit tests (plan/where-lookup.test.ts, actions/code-names.test.ts).
@@ -92,7 +92,8 @@ async function downTo(page: Page, name: string, key = "Enter") {
   throw new Error(`no row ${name}`);
 }
 const kindsReads = (seen: ReturnType<typeof actions>) => seen.filter((s) => s.action === "code.kinds");
-const fileReads = (seen: ReturnType<typeof actions>) => seen.filter((s) => s.action === "code.file");
+// RB-3b: a report's pages and a table's measures are listed by code.inner (one Code log row per listing), not code.file.
+const fileReads = (seen: ReturnType<typeof actions>) => seen.filter((s) => s.action === "code.inner");
 type View = { event: string; clientKey: string; repoName: string; path: string };
 const views = async (page: Page) => (await call<{ views: View[] }>(page, "admin.code_views", {})).data.views;
 
@@ -209,7 +210,8 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     // The log: one names row naming the New form, never the words; a file row per file read.
     const log = (await views(page)).slice(0, (await views(page)).length - logBefore);
     expect(log.filter((v) => v.event === "where_new_form")).toEqual([expect.objectContaining({ clientKey: "Northwind", repoName: "", path: "" })]);
-    expect(log.filter((v) => v.event === "file_opened").map((v) => v.path).sort()).toEqual(["/model/Sales.SemanticModel/definition/tables/Sales.tmdl", "/report/Sales.Report/report.json"]);
+    expect(log.filter((v) => v.event === "pages_listed" || v.event === "fields_listed").map((v) => `${v.event} ${v.path}`).sort()).toEqual(["fields_listed /model/Sales.SemanticModel/definition/tables/Sales.tmdl", "pages_listed /report/Sales.Report/report.json"]);
+    expect(log.filter((v) => v.event === "file_opened")).toEqual([]);
     expect(JSON.stringify(log)).not.toMatch(/fact\.sal|the sale|On fact/i);
 
     // The create writes exactly the box's text under "Where:"; nothing else of a pick goes with it.

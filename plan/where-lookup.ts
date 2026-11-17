@@ -9,6 +9,7 @@
 // that are no thing of their own, and a database's schemas, security objects, shared queries and project file.
 import { groupThings, KIND_GROUPS, sqlTree, type Kind, type RepoSort, type RepoThings, type SqlType, type Thing, type SqlFolder } from "./code-kinds.ts";
 import { ANSWER_MAX } from "./three-questions.ts";
+import { whereMoreOf, type InnerField, type InnerPage, type InnerTable } from "./where-inner.ts";
 
 /** Where the lookup is used: the Code log names it (actions/code-actions.ts, plan/code.ts). */
 export const WHERE_FROM = ["new_form", "draft_editor"] as const;
@@ -25,8 +26,8 @@ export const WHERE_MIN = 2;
 /** From this many, a name that holds the word anywhere matches too (two letters inside names match nearly everything). */
 export const WHERE_HOLDS = 4;
 
-/** What a second level is: a report's pages, or a model table's measures and columns. */
-export type WhereMore = "pages" | "fields";
+/** What a second level is: a report's pages, a model table's measures and columns, or (RB-3b) a one-file model's tables. */
+export type WhereMore = "pages" | "fields" | "tables";
 
 /** One thing the box can offer. */
 export type WhereEntry = {
@@ -76,7 +77,18 @@ const offered = (t: Thing): boolean => WHERE_KINDS.includes(t.kind) && (!t.sqlTy
 export function whereOnly(r: RepoSort): RepoSort {
   const things = r.things.filter(offered);
   const kept = new Set(things.map((t) => t.file));
-  return { things: things.map((t) => (t.inside ? { ...t, inside: t.inside.filter((i) => kept.has(i.file)) } : t)), files: [] };
+  // RB-3b: what a report or a model opens to, from the files inside it, which the box itself never gets.
+  const paths = [...r.things.flatMap((t) => [t.file, ...(t.tables ?? []).map((x) => x.file)]), ...r.files.map((f) => f.file)];
+  return {
+    things: things.map((t) => {
+      const more = t.kind === "report" || t.kind === "model" ? whereMoreOf(t, paths) : null;
+      const u = t.inside ? { ...t, inside: t.inside.filter((i) => kept.has(i.file)) } : { ...t };
+      if (more) u.whereMore = more;
+      else delete u.whereMore;
+      return u;
+    }),
+    files: [],
+  };
 }
 
 /** Everything one client's names offer, in By kind's order, things before the things inside them. */
@@ -104,7 +116,8 @@ export function whereEntries(repos: readonly RepoThings[]): WhereEntry[] {
         repoId: r.repo.id,
         repoName: r.repo.name,
         file: t.file,
-        more: legacyReport(t) ? "pages" : null,
+        // RB-3b: what the server found it opens to; a legacy report is known from its own file name too.
+        more: t.whereMore ?? (legacyReport(t) ? "pages" : null),
         ...(t.sqlType ? { sqlType: t.sqlType } : {}),
         ...(t.schema ? { schema: t.schema } : {}),
       };
@@ -146,7 +159,7 @@ export function wordAt(text: string, cursor: number): { start: number; end: numb
  * where the cursor goes: right after the pick. A space keeps it apart from a word right before or after it. Null when
  * the answer would be longer than an answer may be.
  */
-export function withPick(text: string, cursor: number, pick: string, replace = true, from?: number): { text: string; cursor: number } | null {
+export function withPick(text: string, cursor: number, pick: string, replace = true, from?: number): { text: string; cursor: number; /** RB-3b: where the pick's words start. */ at: number } | null {
   const w = replace ? wordAt(text, cursor) : { start: cursor, end: cursor, word: "" };
   // `from`: where a phrase being typed starts ("load sa" is replaced whole by "Load sales (pipeline)").
   const [start, end] = w.word ? [from !== undefined && from < w.start ? from : w.start, w.end] : [cursor, cursor];
@@ -156,7 +169,7 @@ export function withPick(text: string, cursor: number, pick: string, replace = t
   const tail = after && !/^[\s,;.)]/.test(after) ? " " : "";
   const next = `${before}${lead}${pick}${tail}${after}`;
   if (next.length > ANSWER_MAX) return null;
-  return { text: next, cursor: before.length + lead.length + pick.length + tail.length };
+  return { text: next, cursor: before.length + lead.length + pick.length + tail.length, at: before.length + lead.length };
 }
 
 // ---------- matching ----------
@@ -276,8 +289,8 @@ export const groupLabel = (k: Kind): string => KIND_GROUPS[k];
 
 // ---------- the second level, read from one file ----------
 
-/** One page, measure or column, with the words a pick writes. */
-export type WhereInner = { id: string; name: string; what: "page" | "measure" | "column"; written: string; line: string };
+/** One page, measure, column or (RB-3b) a one-file model's table, with the words a pick writes. */
+export type WhereInner = { id: string; name: string; what: "page" | "measure" | "column" | "table"; written: string; line: string; /** RB-3b: a page hidden in view mode. */ hidden?: boolean; /** RB-3b: the level it opens to (a one-file model's table to its measures and columns). */ opens?: string };
 
 /**
  * A legacy report's pages from its report.json: each section's display name, in the file's order (by its ordinal
@@ -321,12 +334,30 @@ export function tmdlFields(text: string): { name: string; what: "measure" | "col
   return out;
 }
 
-/** A report's pages as picks: "Margin by region (page, Sales report)". */
-export const pagesOf = (report: WhereEntry, pages: readonly string[]): WhereInner[] =>
-  pages.map((p, i) => ({ id: `${report.id}#page${i}`, name: p, what: "page", written: `${p} (page, ${report.name} ${report.what})`, line: `Page of ${report.name}` }));
+/** A report's pages as picks: "Margin by region (page, Sales report)", "Store drill (hidden page, Sales report)". */
+export const pagesOf = (report: WhereEntry, pages: readonly (string | InnerPage)[]): WhereInner[] =>
+  pages.map((x, i) => {
+    const p = typeof x === "string" ? { name: x, hidden: false } : x;
+    return { id: `${report.id}#page${i}`, name: p.name, what: "page", written: `${p.name} (${p.hidden ? "hidden page" : "page"}, ${report.name} ${report.what})`, line: `Page of ${report.name}${p.hidden ? ` · ${WHERE_TEXT.hidden}` : ""}`, ...(p.hidden ? { hidden: true } : {}) };
+  });
+
+/**
+ * RB-3b: a one-file model's tables as picks ("Returns (table, Returns semantic model)"), each opening to its measures
+ * and columns, all from the one read: the tables, and each table's level by the key it opens to.
+ */
+export function tablesOf(model: WhereEntry, tables: readonly InnerTable[]): { rows: WhereInner[]; levels: Map<string, WhereInner[]> } {
+  const within = `${model.name} ${model.what}`;
+  const levels = new Map<string, WhereInner[]>();
+  const rows = tables.map((t, i): WhereInner => {
+    const id = `${model.id}#t${i}`;
+    levels.set(id, fieldsOf({ id, name: t.name, within }, t.fields));
+    return { id, name: t.name, what: "table", written: `${t.name} (table, ${within})`, line: `Table · ${within}`, ...(t.fields.length ? { opens: id } : {}) };
+  });
+  return { rows, levels };
+}
 
 /** A table's measures and columns as picks: "Total Sales (measure, Sales table, Sales semantic model)". Measures first. */
-export const fieldsOf = (table: WhereEntry, fields: readonly { name: string; what: "measure" | "column" }[]): WhereInner[] =>
+export const fieldsOf = (table: Pick<WhereEntry, "id" | "name" | "within">, fields: readonly InnerField[]): WhereInner[] =>
   [...fields.filter((f) => f.what === "measure"), ...fields.filter((f) => f.what === "column")].map((f, i) => ({
     id: `${table.id}#${f.what}${i}`,
     name: f.name,
@@ -348,6 +379,8 @@ export const innerMatches = (inner: readonly WhereInner[], word: string): WhereI
 /** RB-3: every word the lookup shows, here and nowhere else (docs/design/wording.md, "Where is it?"). */
 export const WHERE_TEXT = {
   browse: (client: string) => `Browse ${client}'s code`,
+  // RB-3b review 3: the button is out of the Tab order, so its tooltip names its key.
+  browseTip: (client: string) => `Browse ${client}'s code (Alt+Down)`,
   listName: (client: string) => `Names in ${client}'s code`,
   chooseClient: "Choose a client first",
   chooseClientLine: "Choose a client first, then you can choose from its code.",
@@ -359,12 +392,20 @@ export const WHERE_TEXT = {
   added: (name: string) => `Added ${name}.`,
   noRoom: "There's no room for that in this answer.",
   back: "Back",
-  open: { pages: "Pages", fields: "Measures and columns", list: "Open" } as const,
-  innerReading: "Reading the file…",
+  open: { pages: "Pages", fields: "Measures and columns", tables: "Tables", list: "Open" } as const,
   innerTooLarge: "This file is too large to list. Type the name.",
-  innerNone: { pages: "This report has no pages to list.", fields: "This table has no measures or columns to list." } as const,
+  innerNone: { pages: "This report has no pages to list.", fields: "This table has no measures or columns to list.", tables: "This model has no tables to list." } as const,
+  // RB-3b: a report in today's format, a one-file model, and measures kept apart from their table.
+  innerReadingOf: { pages: "Reading the report's pages…", fields: "Reading the table…", tables: "Reading the model…" } as const,
+  hidden: "Hidden",
+  pagesUnread: (n: number) => (n === 1 ? "1 page couldn't be read." : `${n.toLocaleString("en-US")} pages couldn't be read.`),
+  partsUnread: "Some of this table's measures are kept in files that couldn't be read.",
+  partsSkipped: "This model keeps measures in more files than FocusTime opens here, so some may be missing.",
+  tooManyPages: (max: number) => `This report has more than ${max} pages to list. Type the page's name.`,
+  modelTooLarge: "This model is too large to list. Type the table's name.",
   innerFailed: "This file couldn't be read. Type the name.",
-  innerNotLogged: "This file wasn't read because FocusTime couldn't record that you opened it.",
+  // RB-3b: a listing is one row in the Code log; without it, no names.
+  innerNotLogged: "These names weren't listed because FocusTime couldn't record that you listed them.",
   tryAgain: "Try again",
   // The quiet line under the box when nothing can be offered, by reason (Code's own rule decides who may read).
   teamOnly: (client: string) => `Only ${client}'s team can read its code, so no names are offered. Type the name.`,

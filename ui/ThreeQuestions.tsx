@@ -8,16 +8,17 @@ import { ANSWER_MAX, QUESTION_KEYS, QUESTIONS, type Answers } from "../plan/thre
 import type { WhereFrom } from "../plan/where-lookup.ts";
 import { TextBox } from "./TextBox.tsx";
 import { WhereBox } from "./WhereLookup.tsx";
+import type { Picked } from "./WherePicks.tsx";
 
 /** RB-3: the client the item is for (null until one is chosen) and where the form is, for the first question's lookup. */
-export type WhereLookupFor = { clientKey: string | null; clientName: string; from: WhereFrom };
+export type WhereLookupFor = { clientKey: string | null; clientName: string; from: WhereFrom; /** RB-3b: the form's memory of picks (ui/WherePicks.tsx). */ onPicked?: (p: Picked) => void };
 
 export function ThreeQuestions({ answers, onChange, idPrefix, layout = "grid", lookup }: { answers: Answers; onChange: (a: Answers) => void; idPrefix: string; layout?: "grid" | "stack"; lookup?: WhereLookupFor }) {
   const rows = QUESTION_KEYS.map((k) => {
     const id = `${idPrefix}-${k}`;
     const q = QUESTIONS[k];
     const box = k === "where" && lookup ? (
-      <WhereBox id={id} className="tq-box" clientKey={lookup.clientKey} clientName={lookup.clientName} from={lookup.from} maxLength={ANSWER_MAX} placeholder={q.hint} value={answers.where} onChange={(v) => onChange({ ...answers, where: v })} />
+      <WhereBox id={id} className="tq-box" clientKey={lookup.clientKey} clientName={lookup.clientName} from={lookup.from} onPicked={lookup.onPicked} maxLength={ANSWER_MAX} placeholder={q.hint} value={answers.where} onChange={(v) => onChange({ ...answers, where: v })} />
     ) : (
       <TextBox id={id} className="tq-box" data-question={k} minRows={1} maxRows={5} maxLength={ANSWER_MAX} placeholder={q.hint} value={answers[k]} onChange={(e) => onChange({ ...answers, [k]: e.target.value })} />
     );

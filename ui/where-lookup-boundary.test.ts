@@ -16,11 +16,14 @@ describe("RB-3: the lookup never reaches an AI or the assistant", () => {
     expect(actions.filter((a) => a.startsWith("code."))).toEqual([]);
     expect(JSON.stringify(TOOLS)).not.toMatch(/where_lookup|whereLookup|code\.kinds|code\.file/);
   });
-  it("the box reaches the server only through code.kinds and code.file, never ai/ or the assistant", () => {
+  it("the box reaches the server only through code.kinds and code.inner, never ai/ or the assistant", () => {
     const box = src("ui/WhereLookup.tsx");
-    expect([...box.matchAll(/call<[^>]*>\("([^"]+)"/g)].map((m) => m[1])).toEqual(["code.kinds", "code.file"]);
+    // RB-3b: the second level is code.inner (one row per listing), no longer code.file.
+    expect([...box.matchAll(/call<[^>]*>\("([^"]+)"/g)].map((m) => m[1])).toEqual(["code.kinds", "code.inner"]);
     expect(box).not.toMatch(/from "\.\.\/ai\/|from "\.\.\/assistant\/|Assistant|localStorage|sessionStorage|indexedDB|caches\./);
     expect(src("plan/where-lookup.ts")).not.toMatch(/from "\.\.\/ai\/|localStorage|sessionStorage/);
+    // RB-3b: the picks' memory and the second level's parsers never reach an AI or the browser's storage either.
+    for (const f of ["plan/where-inner.ts", "plan/where-picks.ts", "ui/WherePicks.tsx"]) expect(src(f)).not.toMatch(/from "\.\.\/ai\/|from "\.\.\/assistant\/|localStorage|sessionStorage|indexedDB|caches\./);
   });
   it("the draft's AI step reads the capture's words, never a draft's answers", () => {
     expect(src("actions/draft-prepare.ts")).not.toMatch(/answers|\.brief\b|keptOf/);

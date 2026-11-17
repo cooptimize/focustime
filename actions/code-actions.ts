@@ -36,10 +36,11 @@ import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
 import { whereOnly, WHERE_FROM, type WhereFrom } from "../plan/where-lookup.ts";
+import { bimFile, bimTables, legacyPages, partFiles, pbirPages, reportFiles, tmdlTableFields, tmdlTableName, WHERE_INNER_AT_ONCE, WHERE_LISTS, WHERE_PAGES_MAX, WHERE_PARTS_MAX, type InnerAnswer, type InnerField, type WhereList } from "../plan/where-inner.ts";
 import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type Kind, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
-export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside"] as const;
+export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside", "code.inner"] as const;
 export type CodeAction = (typeof CODE_ACTIONS)[number];
 
 /** Why someone isn't let in at all (step 1). */
@@ -87,6 +88,10 @@ export const CODE_TEXT = {
   error: (name: string) => `${name}'s code couldn't be read. Try again in a moment.`,
   notLogged: "The file wasn't opened because FocusTime couldn't record that you opened it. Try again in a moment.",
   namesNotLogged: "The names weren't read because FocusTime couldn't record that you read them. Try again in a moment.",
+  innerNotLogged: "The names weren't listed because FocusTime couldn't record that you listed them. Try again in a moment.",
+  notListable: "That can't be listed here.",
+  tooManyPages: `That report has more than ${WHERE_PAGES_MAX} pages to list.`,
+  tooLarge: "That file is too large to list.",
   notHere: "Code isn't available here.",
   // RB-6: one line, at the foot of every Code screen where a file can be opened or a search run.
   logLine: "FocusTime admins can see who opened, listed or searched which client's code, and when. Never the words.",
@@ -153,7 +158,7 @@ export function devopsLink(repo: GitRepo, path: string): string | null {
 export async function codeAction(ctx: CodeContext, action: CodeAction, input: unknown): Promise<ActionResponse> {
   const i = obj(input ?? {});
   if (!i) return bad("input must be an object");
-  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey", "from"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"] };
+  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey", "from"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"], "code.inner": ["clientKey", "repoId", "path", "list"] };
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
 
@@ -328,6 +333,9 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: repo.id, repoName: repo.name, path, event });
   };
 
+  // RB-3b: the second level of Where is it?, read here from only the files the listing needs and returned as names.
+  if (action === "code.inner") return inner(ctx.git, client, repo, view, i, log);
+
   try {
     if (action === "code.find") {
       if (view.state !== "ok") return { ok: true, data: { repo: view, paths: [], cut: false, max: FIND_MAX } };
@@ -367,6 +375,118 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     return { ok: true, data: { repo: view, file: out } };
   } catch (e) {
     return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+  }
+}
+
+/**
+ * RB-3b: one listing for Where is it?: a report's pages (its report.json, or in the PBIR format pages.json and every
+ * page.json, at most WHERE_PAGES_MAX), a TMDL table's measures and columns (its own file, and the model's other files
+ * that may declare its measures, at most WHERE_PARTS_MAX), or a one-file model's tables with their measures and columns
+ * (its model.bim). What to open comes from the repo's own file names, never from the request: the request names the
+ * report's, table's or model's file, which must be that thing in this repo. Files are opened a few at a time; one row
+ * is written once anything was read, with the repo and that file, and without it nothing is returned. Only names go
+ * back; the files' text stays here (and in the 5-minute memory every read uses).
+ */
+async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: CodeRepoView, i: Record<string, unknown>, log: (event: CodeViewInput["event"], path: string) => Promise<void>): Promise<ActionResponse> {
+  const list = i.list as WhereList;
+  if (!(WHERE_LISTS as readonly unknown[]).includes(list)) return bad("list is pages, fields or tables", 400, "bad_list");
+  const path = cleanPath(i.path);
+  if (!path || path === "/") return bad(CODE_TEXT.badPath, 400, "bad_path");
+  if (view.state !== "ok") return failure("not_found", client.name);
+  try {
+    const paths = (await git.files(client.clientKey, repo)).paths;
+    const { things } = sortRepo(paths);
+    const same = (a: string, b: string) => a === b;
+    /** Opens files a few at a time; the text of each, or null when it isn't text or couldn't be read. */
+    const open = async (files: readonly string[]): Promise<(string | null)[]> => {
+      const out: (string | null)[] = new Array(files.length).fill(null);
+      let next = 0;
+      const worker = async () => {
+        for (let n = next++; n < files.length; n = next++) {
+          try {
+            const f = await git.file(client.clientKey, repo, files[n]!);
+            out[n] = f.kind === "text" ? f.text : null;
+          } catch (e) {
+            // DevOps busy or the token refused: the listing stops (said as a failure); one missing file doesn't.
+            if (e instanceof CodeFailure && e.reason !== "not_found") throw e;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(WHERE_INNER_AT_ONCE, files.length) }, worker));
+      return out;
+    };
+    let answer: InnerAnswer;
+    let event: CodeViewInput["event"];
+    let read: boolean;
+    if (list === "pages") {
+      const report = things.find((t) => t.kind === "report" && same(t.file, path));
+      const files = report ? reportFiles(report, paths) : null;
+      if (!files) return bad(CODE_TEXT.notListable, 404, "not_listable");
+      event = "pages_listed";
+      if ("legacy" in files) {
+        const f = await git.file(client.clientKey, repo, files.legacy);
+        if (f.kind === "too_large") return bad(CODE_TEXT.tooLarge, 413, "too_large");
+        const text = f.kind === "text" ? f.text : null;
+        const pages = text === null ? null : legacyPages(text);
+        read = text !== null;
+        if (!pages) return read ? (await logged(log, event, path)) ?? bad(CODE_TEXT.notListable, 422, "unreadable") : failure("error", client.name);
+        answer = { list, pages, unreadable: 0 };
+      } else {
+        if (files.pages.length > WHERE_PAGES_MAX) return bad(CODE_TEXT.tooManyPages, 409, "too_many");
+        const texts = await open([...(files.pagesFile ? [files.pagesFile] : []), ...files.pages.map((p) => p.file)]);
+        const order = files.pagesFile ? texts.shift()! : null;
+        read = order !== null || texts.some((t) => t !== null);
+        if (!read) return failure("error", client.name);
+        answer = { list, ...pbirPages(order, files.pages.map((p, n) => ({ folder: p.folder, text: texts[n] ?? null }))) };
+      }
+    } else if (list === "fields") {
+      const model = things.find((t) => t.kind === "model" && t.tables?.some((x) => same(x.file, path)));
+      if (!model) return bad(CODE_TEXT.notListable, 404, "not_listable");
+      event = "fields_listed";
+      const parts = partFiles(model, paths);
+      const opened = parts.length <= WHERE_PARTS_MAX ? parts : [];
+      const [own, ...rest] = await open([path, ...opened]);
+      read = own !== null && own !== undefined;
+      if (!read) return failure("error", client.name);
+      const fields = tmdlTableFields(own!, null);
+      if (!fields) {
+        const r = await logged(log, event, path);
+        return r ?? bad(CODE_TEXT.notListable, 422, "unreadable");
+      }
+      // Measures declared for this table in the model's other files, after its own (TMDL's partial declaration).
+      const name = tmdlTableName(own!) ?? model.tables!.find((x) => same(x.file, path))!.name;
+      const seen = new Set(fields.map((f) => `${f.what}:${f.name.toLowerCase()}`));
+      const more: InnerField[] = [];
+      for (const t of rest) for (const f of (t === null ? [] : tmdlTableFields(t, name)) ?? []) if (!seen.has(`${f.what}:${f.name.toLowerCase()}`)) (seen.add(`${f.what}:${f.name.toLowerCase()}`), more.push(f));
+      answer = { list, fields: [...fields, ...more], partsSkipped: parts.length - opened.length, unreadable: rest.filter((t) => t === null).length };
+    } else {
+      const model = things.find((t) => t.kind === "model" && same(t.file, path) && bimFile(t) === path);
+      if (!model) return bad(CODE_TEXT.notListable, 404, "not_listable");
+      event = "tables_listed";
+      const f = await git.file(client.clientKey, repo, path);
+      if (f.kind === "too_large") return bad(CODE_TEXT.tooLarge, 413, "too_large");
+      if (f.kind !== "text" || f.text === null) return failure("error", client.name);
+      const tables = bimTables(f.text);
+      read = true;
+      if (!tables) return (await logged(log, event, path)) ?? bad(CODE_TEXT.notListable, 422, "unreadable");
+      answer = { list, tables };
+    }
+    // One row for the listing, once something was read; without it, nothing.
+    const refused = read ? await logged(log, event, path) : null;
+    if (refused) return refused;
+    return { ok: true, data: answer };
+  } catch (e) {
+    return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+  }
+}
+
+/** Writes the listing's row; a refusal when it can't be written (then nothing is returned), else null. */
+async function logged(log: (event: CodeViewInput["event"], path: string) => Promise<void>, event: CodeViewInput["event"], path: string): Promise<ActionResponse | null> {
+  try {
+    await log(event, path);
+    return null;
+  } catch {
+    return bad(CODE_TEXT.innerNotLogged, 503, "not_logged");
   }
 }
 
