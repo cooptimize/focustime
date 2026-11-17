@@ -88,6 +88,20 @@ describe("MC-1d: a failed AI pass says so", () => {
     expect(review.data.occurrence.aiMessage).toMatch(/sent in \d+ parts and part 2 failed, so nothing was proposed/);
   });
 
+  it("a reviewer's Propose again runs the step once more; an attendee can look but not Propose again", async () => {
+    let fail = true;
+    const t = await setup(() => (fail ? { ok: false, kind: "provider", status: 403 } : EMPTY));
+    await t.store.saveTranscript(t.occ.id, lines(4), "upload", REVIEWER);
+    await runPass(t.deps, t.s, t.occ, lines(4));
+    expect((await t.store.occurrence(t.occ.id))!.state).toBe("failed");
+    expect(await meetingAction(t.ctxAs(ATTENDEE), "meeting.rerun", { occurrenceId: t.occ.id })).toMatchObject({ ok: false, status: 403 });
+    const seen = (await meetingAction(t.ctxAs(ATTENDEE), "meeting.review", { occurrenceId: t.occ.id })) as { ok: true; data: Review & { canConfirm: boolean } };
+    expect(seen.data).toMatchObject({ canConfirm: false, occurrence: { state: "failed" } });
+    fail = false;
+    expect(await meetingAction(t.ctxAs(REVIEWER), "meeting.rerun", { occurrenceId: t.occ.id })).toMatchObject({ ok: true, data: { outcome: "done", proposals: 0 } });
+    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "ready", aiOutcome: "done", nextCheckAt: null });
+  });
+
   it("FocusTime's own missing context is said as such, not as the AI service", async () => {
     const t = await setup(() => EMPTY);
     const r = await runPass({ ...t.deps, capture: async () => null }, t.s, t.occ, lines(4));

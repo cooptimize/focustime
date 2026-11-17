@@ -5427,6 +5427,13 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-upload p { margin: 0; font-size: var(--fs-2); }
 .file-button { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
 .file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+/* MC-1d: a failed AI step (its why and what happens next), and a reviewer's Propose again and Upload a transcript. */
+.mtg-failed { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--watch); border-radius: 10px; background: var(--wash-watch); }
+.mtg-failed h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.mtg-failed p { margin: 0; font-size: var(--fs-2); }
+.mtg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mtg-actions .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mtg-actions .file-button.disabled { opacity: 0.6; cursor: default; }
 .mtg-done ul { margin: 0; padding-left: 18px; font-size: var(--fs-2); }
 .mtg-done li.problem { color: var(--risk); }
 .mtg-confirm { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in oklab, var(--bg) 55%, transparent); }

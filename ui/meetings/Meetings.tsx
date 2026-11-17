@@ -11,6 +11,7 @@ import type { DevOpsPreview } from "../../actions/types.ts";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
 import { callLabel, type MineData } from "./calls.ts";
+import { CALL_ACTIONS, CALL_STATE } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 
@@ -148,9 +149,16 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
         {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
         {editable ? "Tick what's right, change the words where needed, and skip the rest. Nothing changes until you confirm." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can confirm. You can look.`}
       </p>
-      {o.aiMessage && <p className="set-problem">{o.aiMessage}</p>}
+      {editable && <CallActions series={m} occ={o} onDone={load} />}
+      {o.state === "failed" && (
+        <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
+          <h3>{CALL_STATE.aiFailed}</h3>
+          {o.aiMessage && <p>{o.aiMessage.replace(`${CALL_STATE.aiFailed}: `, "").replace(/^./, (c) => c.toUpperCase())}</p>}
+          {o.aiNext && <p className="muted">{o.aiNext}</p>}
+        </section>
+      )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {(o.state === "needs_upload" || o.state === "waiting" || o.state === "failed" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
+      {(o.state === "needs_upload" || o.state === "waiting" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
       {done && (
         <section className="mtg-done" role="status" aria-label="What was done">
@@ -318,6 +326,57 @@ function PreviewRows({ rows }: { rows: DevOpsPreview["fields"] }) {
   );
 }
 const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 159)}…` : s);
+
+/**
+ * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
+ * it replaces the open proposals, the done and skipped ones stay) and Upload a transcript (a file in its place).
+ */
+function CallActions({ series, occ, onDone }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void> }) {
+  const [busy, setBusy] = useState<"rerun" | "upload" | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const rerun = async () => {
+    setBusy("rerun");
+    setMsg(null);
+    try {
+      const r = await call<{ outcome: string; proposals: number }>("meeting.rerun", { occurrenceId: occ.id });
+      setMsg(r.outcome === "done" ? (r.proposals ? `${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.` : "The AI step ran: nothing to propose from this call.") : CALL_STATE.aiFailed);
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const upload = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy("upload");
+    setMsg(null);
+    try {
+      const r = await uploadMeetingTranscript<{ lines: number; proposals: number; outcome?: string }>(series.id, occ.date, f);
+      setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines} lines. ${CALL_STATE.aiFailed}.` : `Read ${r.lines} lines. ${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.`);
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const canRerun = occ.hasTranscript && occ.state !== "waiting" && occ.state !== "fetching";
+  return (
+    <div className="mtg-actions" role="group" aria-label="This call">
+      {canRerun && (
+        <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done or skipped stay.">
+          {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
+        </button>
+      )}
+      <label className={`mini file-button${busy ? " disabled" : ""}`}>
+        {busy === "upload" ? "Reading…" : CALL_ACTIONS.upload}
+        <input type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!!busy} onChange={(e) => void upload(e.target.files?.[0])} />
+      </label>
+      {msg && <span className="muted" role="status">{msg}</span>}
+    </div>
+  );
+}
 
 function UploadBox({ series, occ, onDone }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
