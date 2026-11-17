@@ -5451,6 +5451,13 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .call-mark .call-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .call-mark.needs { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); color: var(--accent); font-weight: 600; }
 .call-mark:hover { color: var(--text); }
+/* MC-1d: the mark on a call's own meeting (Day, Week, the block panel, the phone); the title opens the call too. */
+.call-mark.ev-call { font: inherit; font-size: var(--fs-1); background: var(--surface); cursor: pointer; flex: none; align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
+.call-mark.ev-call.failed { border-color: var(--watch); color: var(--text); background: var(--wash-watch); font-weight: 500; }
+.call-mark.ev-call:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+[data-call-title] { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
+[data-call-title]:hover { text-decoration-color: currentColor; }
+.event.is-call .ev-line { flex-wrap: wrap; row-gap: 2px; }
 /* Admin › Clients › Meetings. */
 .mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }

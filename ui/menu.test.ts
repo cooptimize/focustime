@@ -402,6 +402,21 @@ describe("event menus by editing tier (step 13)", () => {
     show.items.find((i) => i.id === "free")!.run!();
     expect(calls).toContainEqual(["editEvent", { id: "A", showAs: "free" }]);
   });
+  it("MC-1d: a registered call's meeting leads with the call, then Open in Outlook; an attendee gets no Propose again or Upload", () => {
+    const web2 = { eventEdit: { "outlook:B": { isOrganizer: false, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } };
+    const call = { occurrenceId: 7, name: "Contoso weekly status call", role: "Weekly status call", clientKey: "contoso", startAt: "", endAt: "", label: "Review 6 proposals", needsMe: true, review: true, state: "ready" as const, open: 6, hasTranscript: true };
+    const ids = (s: MenuStep) => items(s).map((i) => i.id);
+    const reviewer = eventMenu(env(web2).e, ev("outlook:B", "Contoso weekly status"), call);
+    expect(ids(reviewer).slice(0, 4)).toEqual(["call-open", "call-transcript", "call-rerun", "call-upload"]);
+    expect(items(reviewer)[0]!.label).toBe("Review proposals");
+    expect(ids(reviewer).indexOf("open")).toBeGreaterThan(3);
+    expect(reviewer.title).toBe("Contoso weekly status · Review 6 proposals");
+    const attendee = eventMenu(env(web2).e, ev("outlook:B", "Contoso weekly status"), { ...call, review: false, needsMe: false, label: "6 proposals to review" });
+    expect(ids(attendee).filter((i) => i.startsWith("call-"))).toEqual(["call-open", "call-transcript"]);
+    expect(items(attendee)[0]!.label).toBe("Open the call");
+    // Not a call: the menu is as before.
+    expect(ids(eventMenu(env(web2).e, ev("outlook:B", "Contoso weekly status"))).some((i) => i.startsWith("call-"))).toBe(false);
+  });
   it("a meeting with other attendees: only Open in Outlook; every edit off with a reason", () => {
     const { e, calls } = env({ eventEdit: { "outlook:B": { isOrganizer: true, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } });
     const m = eventMenu(e, ev("outlook:B", "Sprint review"));

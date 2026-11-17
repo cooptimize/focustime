@@ -5,7 +5,8 @@
 // selects it and opens the block panel with the cursor in its Add box (WD-2); meetings as one summary line that opens into the list when there is no
 // rail. With the Timeline switch on the hour rail is a slim strip (about 56 px) so titles keep their width.
 import { Fragment, useContext, useState, type CSSProperties } from "react";
-import { callsIn, useCallMarks } from "./meetings/calls.ts";
+import { callForEvent, callsIn, useCallMarks } from "./meetings/calls.ts";
+import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
 import { LiveCalls } from "./cowork.tsx";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -161,7 +162,15 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
   const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
   // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
-  const calls = callsIn(useCallMarks(), slot.start, slot.end);
+  // MC-1d: a call whose meeting this card draws with its title (the wide timeline, or the open list) carries its mark on
+  // the meeting itself; the card's line keeps the others (the slim rail, a folded list, a call missing from the calendar).
+  const marks = useCallMarks();
+  const drawnCalls = new Set(slot.events.flatMap((p) => {
+    const c = callForEvent(marks, p.event);
+    return c ? [c.occurrenceId] : [];
+  }));
+  const drawsTitles = (!compact && !folded) || (listEvents && agendaOpen);
+  const calls = callsIn(marks, slot.start, slot.end).filter((c) => !(drawsTitles && drawnCalls.has(c.occurrenceId)));
   // CW-1: a call live in this client's delivery chat (only on today's first card for the client that hasn't ended).
   const liveCalls = useContext(LiveOnCard).get(`${slot.date}|${slot.half}`) ?? [];
 
@@ -252,12 +261,16 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       )}
       {listEvents && slot.events.length > 0 && agendaOpen && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
-          {slot.events.map((p) => (
+          {slot.events.map((p) => {
+            const call = callForEvent(marks, p.event);
+            return (
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
-              <span className="ce-title">{p.event.title}</span>
+              <span className="ce-title" {...titleOpensCall(call)}>{p.event.title}</span>
+              {call && <CallMarkButton call={call} tabIndex={selected ? 0 : -1} />}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}

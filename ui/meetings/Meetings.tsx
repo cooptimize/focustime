@@ -3,14 +3,14 @@
 // proposal with the words it came from; a reviewer ticks, edits or skips each, then one Confirm shows every change in
 // the usual preview and makes them through the existing writes. An attendee who isn't a reviewer can look, not confirm.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import type { DevOpsPreview } from "../../actions/types.ts";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
-import { callLabel, type MineData } from "./calls.ts";
+import { callLabel, takeRerun, type MineData } from "./calls.ts";
 import { CALL_ACTIONS, CALL_STATE } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
@@ -25,7 +25,8 @@ const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US
 const KIND_HEAD: Record<ProposalBody["kind"], string> = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on DevOps items" };
 const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
 
-export function Meetings({ occurrence, onOpen, onClose, colors }: { occurrence: number | null; onOpen: (id: number | null) => void; onClose: () => void; colors: Record<string, string> }) {
+type CallView = "transcript" | "upload";
+export function Meetings({ occurrence, view = null, line = null, onOpen, onClose, onChanged, colors }: { occurrence: number | null; view?: CallView | null; line?: number | null; onOpen: (id: number | null, view?: CallView, line?: number) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string> }) {
   useReturnFocus();
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && !(e.target as HTMLElement | null)?.closest("input, textarea, select, dialog") && (e.preventDefault(), occurrence ? onOpen(null) : onClose());
@@ -34,7 +35,7 @@ export function Meetings({ occurrence, onOpen, onClose, colors }: { occurrence: 
   }, [occurrence, onOpen, onClose]);
   return (
     <main className="mtg-view" aria-label="Client calls" tabIndex={-1}>
-      {occurrence ? <ReviewScreen id={occurrence} colors={colors} onBack={() => onOpen(null)} /> : <CallsList colors={colors} onOpen={onOpen} onClose={onClose} />}
+      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} colors={colors} onBack={() => onOpen(null)} onView={(v, n) => onOpen(occurrence, v ?? undefined, n)} onChanged={onChanged} /> : <CallsList colors={colors} onOpen={(id) => onOpen(id)} onClose={onClose} />}
     </main>
   );
 }
@@ -83,7 +84,7 @@ function CallsList({ colors, onOpen, onClose }: { colors: Record<string, string>
   );
 }
 
-function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<string, string>; onBack: () => void }) {
+function ReviewScreen({ id, view, colors, onBack, onChanged }: { id: number; view: CallView | null; line: number | null; colors: Record<string, string>; onBack: () => void; onView: (v: CallView | null, line?: number) => void; onChanged?: (() => void) | undefined }) {
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [keep, setKeep] = useState<Set<number>>(new Set());
@@ -96,10 +97,12 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
       setR(d);
       setKeep(new Set(d.proposals.filter((p) => p.state === "open" || p.state === "failed").map((p) => p.id)));
       setError(null);
+      // MC-1d: the marks on Day and Week follow what changed here (a rerun, an upload, a confirm).
+      onChanged?.();
     } catch (e) {
       setError(errText(e));
     }
-  }, [id]);
+  }, [id, onChanged]);
   useEffect(() => void load(), [load]);
 
   if (error) return (<><BackHead onBack={onBack} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
@@ -149,7 +152,7 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
         {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
         {editable ? "Tick what's right, change the words where needed, and skip the rest. Nothing changes until you confirm." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can confirm. You can look.`}
       </p>
-      {editable && <CallActions series={m} occ={o} onDone={load} />}
+      {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
           <h3>{CALL_STATE.aiFailed}</h3>
@@ -331,8 +334,19 @@ const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 159)}…` : s);
  * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
  * it replaces the open proposals, the done and skipped ones stay) and Upload a transcript (a file in its place).
  */
-function CallActions({ series, occ, onDone }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void> }) {
+function CallActions({ series, occ, onDone, focusUpload = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean }) {
   const [busy, setBusy] = useState<"rerun" | "upload" | null>(null);
+  // MC-1d: "Upload a transcript" from a meeting's menu lands here with the file button focused (the browser opens a
+  // file picker only from a press, so the person presses it once more).
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (focusUpload) fileRef.current?.focus();
+  }, [focusUpload]);
+  // MC-1d: Propose again chosen from the meeting's menu runs here, once, where its result shows.
+  useEffect(() => {
+    if (takeRerun(occ.id)) void rerun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occ.id]);
   const [msg, setMsg] = useState<string | null>(null);
   const rerun = async () => {
     setBusy("rerun");
@@ -371,7 +385,7 @@ function CallActions({ series, occ, onDone }: { series: SeriesView; occ: Occurre
       )}
       <label className={`mini file-button${busy ? " disabled" : ""}`}>
         {busy === "upload" ? "Reading…" : CALL_ACTIONS.upload}
-        <input type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!!busy} onChange={(e) => void upload(e.target.files?.[0])} />
+        <input ref={fileRef} type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!!busy} onChange={(e) => void upload(e.target.files?.[0])} />
       </label>
       {msg && <span className="muted" role="status">{msg}</span>}
     </div>
