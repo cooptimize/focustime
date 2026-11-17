@@ -1372,6 +1372,8 @@ export type MeetingsPort = {
   store: MeetingStore;
   users: () => Promise<MeetingUser[]>;
   /** ENV-1: Check now: one look for one registered call's transcript with this person's sign-in (absent: not here). */
+  /** MC-1d: the meeting job runs here (production), so a failed AI pass is tried again by itself. */
+  retriesHere?: boolean;
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
 };
 
@@ -1411,6 +1413,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
+    ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.

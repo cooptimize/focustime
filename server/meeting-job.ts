@@ -8,6 +8,7 @@
 //      hours, then it asks for an upload. Tokens are tried in order, the registrant's first, then the other
 //      reviewers'; one refused (signed out, consent missing, 401, 403, 404) moves to the next. The transcript is read
 //      as text/vtt, parsed, stored (30 days), and the AI pass runs with that person's switches and the app's cap.
+//   3. MC-1d: tries a failed AI pass again by itself, up to three times, 15 minutes apart (`retries`).
 // The Graph client refuses anything not registered before a request (sources/graph/meetings.ts). Logs keep counts
 // and outcomes: never a meeting name, link, id, person or transcript text. The idle rule (D431): its wake is the
 // soonest due check or occurrence end, known from its last run and held in memory.
@@ -15,7 +16,7 @@ import type { AiService } from "../ai/service.ts";
 import type { CaptureContext, MeetingUser } from "../actions/meeting-actions.ts";
 import { runPass } from "../actions/meeting-actions.ts";
 import type { Logger } from "../log/logger.ts";
-import { attendeeIds, graphReadable, nextCheck, occurrencesBetween, type LastRead, type MeetingSeries, type Occurrence, type CheckNowResult } from "../plan/meetings.ts";
+import { AI_RETRIES, AI_RETRY_MINUTES, attendeeIds, graphReadable, nextCheck, occurrencesBetween, parseOutcome, retryable, type LastRead, type MeetingSeries, type Occurrence, type CheckNowResult } from "../plan/meetings.ts";
 import { parseVtt, TranscriptError } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
 import { graphFailureOf, MeetingRefused, transcriptFor, type MeetingsClient } from "../sources/graph/meetings.ts";
@@ -146,7 +147,7 @@ export function meetingJob(d: MeetingJobDeps) {
           const lines = parseVtt(await p.graph.transcriptVtt(meetingId, ref.id));
           await d.store.saveTranscript(occ.id, lines, "automatic", null);
           await d.store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: uid, at: now.toString() } });
-          await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log }, s, (await d.store.occurrence(occ.id))!, lines);
+          await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString() }, s, (await d.store.occurrence(occ.id))!, lines);
           outcome = "found";
           break;
         } catch (e) {
@@ -181,6 +182,36 @@ export function meetingJob(d: MeetingJobDeps) {
   }
 
   /**
+   * MC-1d: failed AI passes due another try by themselves (this job runs only in production: ENV-1). Up to AI_RETRIES
+   * tries, AI_RETRY_MINUTES apart, through the first of the call's people whose AI can be built (the registrant, then
+   * the other reviewers), on the stored transcript; never for a failure a retry can't fix. Each try is counted, with
+   * the next one already set, before it runs, so a restart in between neither loses one nor runs one twice. Logged by
+   * kind and try only.
+   */
+  async function retries(series: readonly MeetingSeries[], who: ReturnType<typeof people>, now: Temporal.Instant): Promise<void> {
+    for (const occ of await d.store.dueRetries(now.toString())) {
+      const s = series.find((x) => x.id === occ.seriesId);
+      const kind = parseOutcome(occ.aiOutcome ?? "").kind;
+      const lines = s ? await d.store.transcript(occ.id) : null;
+      if (!s || !lines || !retryable(kind) || occ.checks >= AI_RETRIES) {
+        await d.store.updateOccurrence(occ.id, { nextCheckAt: null });
+        d.log({ source: "plan", op: "meeting_capture_retry", kind: !lines ? "no_transcript" : "stopped", count: occ.checks });
+        continue;
+      }
+      const tries = occ.checks + 1;
+      await d.store.updateOccurrence(occ.id, { checks: tries, nextCheckAt: tries < AI_RETRIES ? now.add({ minutes: AI_RETRY_MINUTES }).toString() : null });
+      let p: MeetingPerson | null = null;
+      for (const uid of order(s)) if ((p = await who(uid))) break;
+      if (!p) {
+        d.log({ source: "plan", op: "meeting_capture_retry", kind: "no_person", count: tries });
+        continue;
+      }
+      const r = await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString() }, s, (await d.store.occurrence(occ.id))!, lines, { retry: true });
+      d.log({ source: "ai", op: "meeting_capture_retry", kind: parseOutcome(r.outcome).kind, count: tries });
+    }
+  }
+
+  /**
    * ENV-1: Check now on one registered call (Admin › Clients › <client> › Meetings): lays out its recent occurrences
    * and looks once for the latest ended one's transcript, only with the sign-in of the person who pressed it (the AI
    * pass then runs under their switches, as on the schedule). Nothing is scheduled; works the same in production.
@@ -212,6 +243,7 @@ export function meetingJob(d: MeetingJobDeps) {
       laidOutAt = now;
     }
     await check(series, who, now);
+    await retries(series, who, now);
     // The wake: the soonest due check, else the next occurrence end after now (laid out on waking).
     const due = await d.store.nextDue().catch(() => null);
     const ends = series.flatMap((s) => occurrencesBetween(s, day(now, s.zone).toString(), day(now, s.zone).add({ days: 8 }).toString())).map((o) => Temporal.Instant.from(o.endAt)).filter((t) => Temporal.Instant.compare(t, now) > 0);

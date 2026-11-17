@@ -607,7 +607,8 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const kind = parseOutcome(outcome).kind;
     const tries = o.retry ? occ.checks : 0;
     await d.store.updateOccurrence(occ.id, { state: "failed", aiOutcome: outcome, checks: tries, nextCheckAt: nextRetry(kind, tries, d.now?.() ?? Temporal.Now.instant().toString()) });
-    d.log({ source: "ai", op: o.retry ? "meeting_capture_retry" : "meeting_capture", kind: parseOutcome(outcome).kind, ...(o.retry ? { count: tries } : {}) });
+    // A try by itself is logged once, by the job, with its number.
+    if (!o.retry) d.log({ source: "ai", op: "meeting_capture", kind: parseOutcome(outcome).kind });
   }
   return { outcome, proposals: n };
 }
