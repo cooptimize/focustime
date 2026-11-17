@@ -25,6 +25,7 @@ Read first: [CLAUDE.md](../../CLAUDE.md) (the rules and the glossary), the rest 
 | `npm test` | The full suite: unit, store (SQLite and SQL Server) and browser tests. Run `npm run db:up` first, or the SQL Server tests are skipped (`FOCUSTIME_TEST_SQL=required` makes them fail instead, `off` skips them) |
 | `npm run test:zones` | The suite under four US time zones, one after another |
 | `npm run docs:check` | These pages' checks (`scripts/tech-docs.test.ts`) |
+| `npm run shake -- <e2e file>` | Runs copies of one browser test file at once on a few cores, several times, and says how many passed ([Shaking a browser test](#shaking-a-browser-test)) |
 | `node scripts/first-download.ts` | Builds the UI and reports every file, what the first screen downloads and what its script is made of; `--why <module>` prints the imports that pull a module in, `--write` rewrites the limit's record |
 | `node scripts/first-screen-times.ts` | Times opening the app and each tab in a browser on the demo, slowed and unslowed (needs `FOCUSTIME_E2E_DIST=<a built dist>`); `--first-visit` blocks the service worker so every file comes from the server, `--bytes` counts the bytes on the wire, files and data apart (PF-2) |
 | `node scripts/data-sizes.ts` | Opens each place on the demo and lists every data read by action: calls, typical and largest size, and how it was sent (needs `FOCUSTIME_E2E_DIST`) |
@@ -62,7 +63,7 @@ The images from before CI-3 are on `shots/archive`, in their old `docs/ux/<step>
 - **Stopping servers by hand:** stop your own server by its process id, never by a pattern such as `pkill -f server/main.ts`: on a shared machine it also stops other sessions' test servers and the local service. If a run fails with `ERR_CONNECTION_REFUSED` or "The demo server on port N stopped during the test", look for that first.
 - **Test data** comes from the builders in `test/builders`, never hand-written fixtures. A test that starts a server takes its port from `test/ports.ts`.
 - **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`; what it runs is under [What CI runs and when](#what-ci-runs-and-when). There are no retries.
-- **A flaky test** is a cause to find, never a retry: rerun it once, and if it fails again, run that file several times at once on fewer cores to reproduce it ([How tests stay apart](#how-tests-stay-apart)).
+- **A flaky test** is a cause to find, never a retry: rerun it once, and if it fails again, shake that file to reproduce it ([Shaking a browser test](#shaking-a-browser-test)).
 
 ### How tests stay apart
 
@@ -72,7 +73,21 @@ Any order and any number at once gives the same result:
 - **Browser tests.** Each file's demo server has its own temp folder for config, data, cache and the launch file, its own port, and the clock pinned with `--clock` (Monday Nov 2, 2026 9:30 AM unless a file pins another). Each `freshPage` is a new browser context and a new demo session with its own in-memory store, so tests in a file never see each other's changes. `pageAs(h, you)` is a new browser context for a person signed in once (`person(h)`): the same demo store, so only for tests that read, or change only what no other test in the file looks at. `e2e/live.ts` does the same for a real session on fake sources, and a fake a test builds beside it takes the harness's clock too.
 - **Waiting.** A test waits for the condition it means (a locator, `expect.poll` on what the screen shows), never a fixed sleep. A count or text read once is only for what is already settled, after a wait on that same thing. There are no retries in the config or on CI.
 - **Workers.** `test/workers.ts` (read by `vite.config.ts`, and said at the start of a run as "test workers: unit N, SQL Server N, browser N") sets three limits, one per vitest project (BT-1). Browser files: 60% of the CPUs that aren't already busy (by the 1-minute load average, so a second session's suite takes what is left; not on CI, where the runner is the job's alone), at most one per GB of free memory beyond 2 GB, between 1 and CPUs − 1: 12 on a 20-core laptop and 2 on CI's 4-core runners, which is why the browser tests run in six shards there. Unit files (no browser, no SQL Server): every idle CPU, half a GB each: 4 on CI. SQL Server files (those that import `test/db.ts`, found each run by `test/projects.ts`): like the browser rule but at most 6, so two sessions at once put at most 12 on the shared container; on CI half the runner's CPUs (2), since the container runs on the same runner and the store isolation test needs its time. Projects with different limits run one after the other (SQL Server, then unit, then browser); equal limits run as one group. `FOCUSTIME_TEST_WORKERS=<n>` sets all three; `=1` runs one file at a time, to bisect a failure.
-- **As CI runs it.** One browser shard: `npx vitest run e2e/ --shard=2/6 --exclude e2e/shell/safari.test.ts` (the same six shards as `ci.yml`; the UI is built first, in about a second); WebKit's file: `FOCUSTIME_TEST_WEBKIT=required npx vitest run e2e/shell/safari.test.ts`. The unit and store half: `npx vitest run --exclude 'e2e/**'`, with `npm run db:up` and `FOCUSTIME_TEST_SQL=required`. One test: `npx vitest run e2e/<file>.test.ts -t "<name>"`. To check a fix for a flake, run that file several times at once on fewer cores, for example eight copies under `taskset -c 0-3`.
+- **As CI runs it.** One browser shard: `npx vitest run e2e/ --shard=2/6 --exclude e2e/shell/safari.test.ts` (the same six shards as `ci.yml`; the UI is built first, in about a second); WebKit's file: `FOCUSTIME_TEST_WEBKIT=required npx vitest run e2e/shell/safari.test.ts`. The unit and store half: `npx vitest run --exclude 'e2e/**'`, with `npm run db:up` and `FOCUSTIME_TEST_SQL=required`. One test: `npx vitest run e2e/<file>.test.ts -t "<name>"`. To check a fix for a flake, shake the file (`npm run shake -- <file>`, above).
+
+### Shaking a browser test
+
+A browser test that waits on the clock instead of on the thing itself passes alone and fails one CI run in ten. `npm run shake` finds it before the merge (FT-1, `scripts/shake.ts`):
+
+```
+npm run shake -- e2e/shell/opening-and-brand.test.ts
+npm run shake -- e2e/code/search-inside.test.ts --copies 6 --cores 4 --runs 3 --test "inside files"
+```
+
+- **When:** for every new or changed browser test, before the pull request, and for a test that failed on CI with no change to it.
+- **What it does:** it builds the UI once, as a browser run does. It puts copies of the file beside it (`<name>.shake-<n>.test.ts`, left out by `.gitignore`) and runs them all at once in the browser project as CI runs it (`CI=1`, in the time zone `ci.yml` names). The run is held to the first few CPUs with `taskset`, and the whole thing repeats a few times. By default that is 8 copies on 3 cores, 5 times: 40 copies, a load heavier than a CI shard's. Each run says how many copies passed and the first line of every failure. The copies and the build are removed at the end, on Ctrl+C too.
+- **Passing:** every copy of every run, 40 of 40 by default, and the command then exits 0. One failure is a cause to find, the same as on CI. Fix it by waiting for the thing itself: an event, a state the page reports, or the animation's own clock. A longer timeout, a retry or a skip is not a fix. A route a test sets goes in `freshPage`'s `before` and stays for the page's life, its answer changed through a variable: a route added to or removed from a page already open let a request through unseen under load (FT-1).
+- **Its cost:** about as long as five runs of the file. Run it on a machine with nothing else heavy running, or the count says more about the machine than the test.
 
 ### What CI runs and when
 

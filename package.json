@@ -11,6 +11,7 @@
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "guards": "node scripts/guards.ts",
+    "shake": "node scripts/shake.ts",
     "demo:check": "node scripts/demo-check.ts",
     "docs:diagrams": "node scripts/docs-diagrams.ts",
     "docs:check": "vitest run scripts/tech-docs.test.ts",
