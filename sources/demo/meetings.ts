@@ -33,7 +33,8 @@ export function demoMeetingVtt(): string {
 
 /** The demo's answer for the meeting capture task, built from the numbered transcript it was given. */
 export function demoMeetingAnswer(input: string): unknown {
-  const lines = [...input.matchAll(/^L(\d+) \[[^\]]*\] ([^:]+): (.*)$/gm)].map((m) => ({ n: Number(m[1]), who: m[2]!, text: m[3]! }));
+  // PK-1: a line from a Pocket export has no time ("L4 Speaker 2: words").
+  const lines = [...input.matchAll(/^L(\d+)(?: \[[^\]]*\])? ([^:]+): (.*)$/gm)].map((m) => ({ n: Number(m[1]), who: m[2]!, text: m[3]! }));
   const find = (words: string) => lines.filter((l) => l.text.toLowerCase().includes(words)).map((l) => l.n).slice(0, 1);
   const date = /\), (\d{4}-\d{2}-\d{2}) \(/.exec(input)?.[1] ?? null;
   // "by Thursday": the next Thursday on or after the meeting.

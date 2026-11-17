@@ -101,6 +101,7 @@ import { createMeetingStore } from "../store/meeting-store.ts";
 import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
 import { canView, graphReadable } from "../plan/meetings.ts";
 import { MEETING_JOB, meetingJob } from "./meeting-job.ts";
+import { pdfReader } from "./pdf-text.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { MeetingUser } from "../actions/meeting-actions.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
@@ -978,7 +979,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
-    meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
+    meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
     account: accountFor(who),
     photoCache: host.photos,
     push,

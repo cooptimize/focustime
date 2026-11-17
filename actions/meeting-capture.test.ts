@@ -139,3 +139,58 @@ describe("meeting capture AI pass (MC-1)", () => {
     expect(none.proposals.filter((p) => p.body.kind === "comment")).toEqual([]);
   });
 });
+
+describe("a transcript whose speakers aren't named (PK-1)", () => {
+  const pocket: TranscriptLine[] = [
+    { n: 1, speaker: "Speaker 1", at: null, text: "Morning. We need a holiday calendar import." },
+    { n: 2, speaker: "Speaker 2", at: null, text: "Sam here, I'll send the export spec by Friday." },
+    { n: 3, speaker: "Speaker 1", at: null, text: "I'll share sample rates." },
+    { n: 4, speaker: "Speaker 3", at: null, text: "Dana will check the import with her team." },
+    { n: 5, speaker: "Speaker 2", at: null, text: "Decided: CSV only for now." },
+  ];
+  const answer = {
+    gaps: [{ type: "User Story", parentId: 1201, title: "Holiday calendar import", description: "Holidays imported.", lines: [1] }],
+    commitments: [
+      { who: "Sam Tester", what: "Send the export spec", toName: null, due: null, lines: [2] },
+      { who: "Speaker 1", what: "Share sample rates", toName: null, due: null, lines: [3] },
+      // A name the cited words don't hold: a guess, so nobody's.
+      { who: "Sam Tester", what: "Share sample rates again", toName: null, due: null, lines: [3] },
+      { who: "Dana", what: "Check the import with her team", toName: null, due: null, lines: [4] },
+    ],
+    comments: [
+      { itemId: 1202, note: "decision", text: "CSV only for now.", lines: [5] },
+      { itemId: 1201, note: "status", text: "On the feature.", lines: [5] },
+    ],
+  };
+
+  it("tells the AI the labels aren't people only for such a transcript, and sends no times for its lines", async () => {
+    const named = setup(ANSWER);
+    await capturePass(named.ai, named.input);
+    expect(named.calls[0]!.instructions).not.toContain("speakers aren't named");
+    const t = setup(answer);
+    await capturePass(t.ai, { ...t.input, lines: pocket, speakersNamed: false });
+    const c = t.calls[0]!;
+    expect(c.instructions).toContain("Labels like Speaker 1 are not people");
+    expect(c.instructions).toContain("Name a person only where the words themselves name them");
+    expect(c.input).toContain("L2 Speaker 2: Sam here, I'll send the export spec by Friday.");
+    expect(c.input).not.toMatch(/\[\d+:\d\d\]/);
+  });
+
+  it("a promise is someone's only when its own words name them; otherwise it is noted with the call, nobody's", async () => {
+    const t = setup(answer);
+    const r = await capturePass(t.ai, { ...t.input, lines: pocket, speakersNamed: false });
+    if (!r.ok) throw new Error(r.message);
+    const promises = r.proposals.map((p) => p.body).filter((b) => b.kind === "commitment");
+    expect(promises).toEqual([
+      expect.objectContaining({ what: "Send the export spec", who: "Sam Tester", whoId: "me-id", side: "cooptimize" }),
+      expect.objectContaining({ what: "Share sample rates", who: "", whoId: null, side: "unknown" }),
+      expect.objectContaining({ what: "Share sample rates again", who: "", whoId: null, side: "unknown" }),
+      expect.objectContaining({ what: "Check the import with her team", who: "Dana", whoId: null, side: "client" }),
+    ]);
+    // New items as for any transcript; a comment still only on a story.
+    expect(r.proposals.filter((p) => p.body.kind === "gap")).toHaveLength(1);
+    expect(r.proposals.filter((p) => p.body.kind === "comment").map((p) => p.body)).toEqual([expect.objectContaining({ itemId: 1202 })]);
+    // Quotes carry no time.
+    expect(r.proposals.flatMap((p) => p.quotes).every((q) => q.at === "")).toBe(true);
+  });
+});

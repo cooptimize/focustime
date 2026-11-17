@@ -9,8 +9,11 @@ export type TranscriptLine = {
   /** 1-based, stable for the stored transcript: what proposals refer to. */
   n: number;
   speaker: string;
-  /** Seconds from the start of the meeting (0 when the source has no times). */
-  at: number;
+  /**
+   * Seconds from the start of the meeting; PK-1: null when the source has no times (a Pocket export), and then nothing
+   * shows or sends a time for the line, never a made-up one.
+   */
+  at: number | null;
   text: string;
 };
 
@@ -38,7 +41,7 @@ export function timeOf(s: string): number | null {
   return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number((m[4] ?? "0").padEnd(3, "0")) / 1000;
 }
 
-type Cue = { speaker: string; at: number; text: string };
+type Cue = { speaker: string; at: number | null; text: string };
 
 /** Merge consecutive cues of one speaker, split overlong lines, number them. */
 export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
@@ -49,7 +52,7 @@ export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
     const speaker = clean(c.speaker) || "Unknown";
     const last = merged.at(-1);
     if (last && last.speaker === speaker && last.text.length + text.length + 1 <= MAX_LINE_CHARS) last.text = `${last.text} ${text}`;
-    else merged.push({ speaker, at: Math.max(0, Math.floor(c.at)), text });
+    else merged.push({ speaker, at: c.at === null ? null : Math.max(0, Math.floor(c.at)), text });
   }
   const out: TranscriptLine[] = [];
   for (const c of merged) {
@@ -147,18 +150,20 @@ export function clock(seconds: number): string {
 /** Quotes for a proposal: at most 2 of the cited lines (in range, in order), each cut to 200 characters. */
 export const QUOTE_LINES = 2;
 export const QUOTE_CHARS = 200;
+/** A quote's time ("4:05"), or "" for a line with none (PK-1: a Pocket export's lines). */
+export const atOf = (l: Pick<TranscriptLine, "at">) => (l.at === null ? "" : clock(l.at));
 export function quotesOf(lines: readonly TranscriptLine[], refs: readonly number[]): { n: number; speaker: string; at: string; text: string }[] {
   const byN = new Map(lines.map((l) => [l.n, l]));
   const picked = [...new Set(refs)].filter((n) => byN.has(n)).sort((a, b) => a - b).slice(0, QUOTE_LINES);
   return picked.map((n) => {
     const l = byN.get(n)!;
-    return { n, speaker: l.speaker, at: clock(l.at), text: l.text.length > QUOTE_CHARS ? `${l.text.slice(0, QUOTE_CHARS - 1)}…` : l.text };
+    return { n, speaker: l.speaker, at: atOf(l), text: l.text.length > QUOTE_CHARS ? `${l.text.slice(0, QUOTE_CHARS - 1)}…` : l.text };
   });
 }
 
-/** The lines as the AI gets them: "L12 [4:05] Name: words". */
+/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time. */
 export function numbered(lines: readonly TranscriptLine[]): string {
-  return lines.map((l) => `L${l.n} [${clock(l.at)}] ${l.speaker}: ${l.text}`).join("\n");
+  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker}: ${l.text}`).join("\n");
 }
 
 /** Rough tokens of a text (4 characters a token), for chunking. */

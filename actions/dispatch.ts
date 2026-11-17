@@ -131,6 +131,7 @@ import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
 import { meetingAction, meetingWrites, type CaptureContext as MeetingCaptureContext, type MeetingAction, type MeetingContext, type MeetingUser, type MeetingWritePort } from "./meeting-actions.ts";
+import type { ReadPdf } from "./transcript-file.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import { MEETING_CHAT } from "../store/conversation-store.ts";
 import type { MeetingSeries } from "../plan/meetings.ts";
@@ -1387,6 +1388,8 @@ export type MeetingsPort = {
   /** MC-1d: the meeting job runs here (production), so a failed AI pass is tried again by itself. */
   retriesHere?: boolean;
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
+  /** PK-1: the PDF reader for a Pocket export (server/pdf-text.ts); absent: a PDF upload is refused in plain words. */
+  readPdf?: ReadPdf;
 };
 
 /**
@@ -1426,6 +1429,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
+    ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.

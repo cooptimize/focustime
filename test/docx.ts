@@ -1,13 +1,14 @@
-// MC-1 tests: a minimal .docx (a zip with word/document.xml) built in memory, deflated or stored.
+// MC-1 tests: a minimal .docx (a zip with word/document.xml) built in memory, deflated or stored. PK-1: entries may be
+// bytes (a PDF, another zip), and `lie` writes a smaller unpacked size in the headers than the entry has (a bomb).
 import { crc32, deflateRawSync } from "node:zlib";
 
-export function zipOf(files: Record<string, string>, o: { store?: boolean } = {}): Uint8Array {
+export function zipOf(files: Record<string, string | Uint8Array>, o: { store?: boolean; lie?: boolean } = {}): Uint8Array {
   const enc = new TextEncoder();
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;
   for (const [name, text] of Object.entries(files)) {
-    const raw = Buffer.from(enc.encode(text));
+    const raw = Buffer.from(typeof text === "string" ? enc.encode(text) : text);
     const data = o.store ? raw : deflateRawSync(raw);
     const nameB = Buffer.from(enc.encode(name));
     const crc = crc32(raw) >>> 0;
@@ -17,7 +18,7 @@ export function zipOf(files: Record<string, string>, o: { store?: boolean } = {}
     local.writeUInt16LE(o.store ? 0 : 8, 8);
     local.writeUInt32LE(crc, 14);
     local.writeUInt32LE(data.length, 18);
-    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt32LE(o.lie ? 10 : raw.length, 22);
     local.writeUInt16LE(nameB.length, 26);
     locals.push(local, nameB, data);
     const central = Buffer.alloc(46);
@@ -27,7 +28,7 @@ export function zipOf(files: Record<string, string>, o: { store?: boolean } = {}
     central.writeUInt16LE(o.store ? 0 : 8, 10);
     central.writeUInt32LE(crc, 16);
     central.writeUInt32LE(data.length, 20);
-    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt32LE(o.lie ? 10 : raw.length, 24);
     central.writeUInt16LE(nameB.length, 28);
     central.writeUInt32LE(offset, 42);
     centrals.push(central, nameB);
