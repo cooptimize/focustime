@@ -100,10 +100,12 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await page.keyboard.press("Escape");
     await expect(row(page, "Shipment list filter by region").count()).resolves.toBe(1);
 
-    // The hover button; Tab stages and moves on to the row's next editable cell.
+    // UC-2: no Rename button on the row; the row's menu has Rename. Tab stages and moves on to the row's next editable cell.
     const copy = row(page, "estimate accuracy report (copy)");
     await copy.hover();
-    await copy.getByRole("button", { name: "Rename estimate accuracy report (copy)" }).click();
+    expect(await copy.getByRole("button", { name: "Rename estimate accuracy report (copy)" }).count()).toBe(0);
+    await copy.getByRole("button", { name: /^More for estimate accuracy report \(copy\)/ }).click();
+    await page.getByRole("menuitem", { name: /^Rename/ }).click();
     await page.getByRole("textbox", { name: "Title of #3342" }).fill("Estimate accuracy report");
     await page.keyboard.press("Tab");
     await expect.poll(() => row(page, "Estimate accuracy report").locator("[data-unsaved=title]").count()).toBe(1);

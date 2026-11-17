@@ -634,11 +634,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                       <span className="muted ah-id">#{r.item.id}</span>
                     </span>
                   )}
-                  {canChange && editing !== "item" && (
-                    <button type="button" className="mini quiet icon-btn small ah-rename-btn" tabIndex={-1} aria-label={`Rename ${r.item.title}`} title="Rename (F2)" onClick={(e) => (e.stopPropagation(), rename())}>
-                      <Icon name="edit" />
-                    </button>
-                  )}
+                  {/* UC-2: Rename is in the row's menu and on F2 only; its hover button took the title's room. */}
                   <Unsaved r={r} parentTitle={parentTitle} />
                   {drop === "on" && <span className="ah-drop-say">Move under {r.item.title}</span>}
                   {parent && (
