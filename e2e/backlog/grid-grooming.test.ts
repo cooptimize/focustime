@@ -178,14 +178,14 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await pick.waitFor({ state: "detached" });
     await expect.poll(() => row(page, "Weekly rate digest").locator("[data-unsaved=parent]").count()).toBe(1);
     await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-item");
-    // An epic has no level above it: Move… says why, where it was tried.
+    // An epic is the top level: Move… says why, where it was tried.
     await pickLevel(page, "Epics");
     // (The Filter popover gives focus back to its button as it closes: wait for that before focusing the row.)
     await page.waitForTimeout(400);
     await itemCell(row(page, "Carrier relations")).focus();
     await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-item");
     await page.keyboard.press("m");
-    await expect(said(page)).resolves.toContain("Epic has no level above it in Logistics's process");
+    await expect(said(page)).resolves.toContain("In Logistics's process, Epic is the top level, so it has no parent to change");
     await page.locator(".error[role=alert]").waitFor();
     await pickLevel(page, "Features");
     for (const f of FEATURES) await open(page, f);

@@ -24,12 +24,12 @@ describe("ED-2: the move rule is ED-1's", () => {
     expect(moveTargets(items.map((i) => mi(i.id)), mi(101), "Portal").map((x) => x.id)).toEqual([11, 12]);
     expect(moveProblem(mi(101), null, "Portal")).toBeNull();
     expect(moveProblem(mi(101), mi(13), "Portal")).toBe("#13 is Closed; FocusTime moves items only under open parents");
-    expect(moveProblem(mi(101), mi(1), "Portal")).toMatch(/doesn't go under an Epic in Portal's process/);
-    expect(moveProblem(mi(101), mi(102), "Portal")).toMatch(/doesn't go under/);
+    expect(moveProblem(mi(101), mi(1), "Portal")).toMatch(/^In Portal's process, Epic isn't the level above /);
+    expect(moveProblem(mi(101), mi(102), "Portal")).toMatch(/isn't the level above/);
     // A feature under its own story (a loop) is a wrong level, like every loop.
-    expect(moveProblem(mi(11), mi(101), "Portal")).toMatch(/doesn't go under/);
+    expect(moveProblem(mi(11), mi(101), "Portal")).toMatch(/isn't the level above/);
     expect(moveProblem(mi(11), mi(11), "Portal")).toBe("An item can't be its own parent");
-    expect(moveProblem(mi(1), mi(11), "Portal")).toMatch(/no level above it/);
+    expect(moveProblem(mi(1), mi(11), "Portal")).toMatch(/is the top level, so it has no parent to change/);
     expect(moveProblem({ ...mi(101), rung: null }, mi(11), "Portal")).toMatch(/isn't a level/);
   });
   it("values: a title by its words, a parent by its id; checked the way ED-1's are", () => {
@@ -111,5 +111,26 @@ describe("ED-2: bulk", () => {
     expect(bulkMoveBlock([{ clientKey: "A", rung: 2 }, { clientKey: "B", rung: 2 }])).toMatch(/one client/);
     expect(bulkMoveBlock([{ clientKey: "A", rung: 2 }, { clientKey: "A", rung: 1 }])).toMatch(/one level/);
     expect(bulkMoveBlock([{ clientKey: "A", rung: 0 }])).toMatch(/no level above/);
+  });
+});
+
+describe("UC-2: the move rule's words need no article before a type's name", () => {
+  const at = (id: number, type: string, rung: number) => ({ id, type, title: `#${id}`, state: "Active", rung, open: true });
+  it("reads right for the demo's types and for a made-up type starting with a vowel", () => {
+    const said = [
+      moveProblem(at(1, "Epic", 0), null, "Portal"),
+      moveProblem(at(2, "User Story", 2), at(3, "Epic", 0), "Portal"),
+      moveProblem(at(4, "Feature", 1), at(5, "User Story", 2), "Portal"),
+      moveProblem(at(6, "Item of work", 2), at(7, "Objective", 0), "Portal"),
+      moveProblem(at(8, "Objective", 0), null, "Portal"),
+    ];
+    expect(said).toEqual([
+      "In Portal's process, Epic is the top level, so it has no parent to change",
+      "In Portal's process, Epic isn't the level above User Story",
+      "In Portal's process, User Story isn't the level above Feature",
+      "In Portal's process, Objective isn't the level above Item of work",
+      "In Portal's process, Objective is the top level, so it has no parent to change",
+    ]);
+    for (const s of said) expect(s).not.toMatch(/\b(a|an|An|A) [A-Z]/);
   });
 });

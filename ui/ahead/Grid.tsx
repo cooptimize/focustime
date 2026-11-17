@@ -449,7 +449,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   };
   // ED-2: rename, move and the card's editor from the Item cell. A row I can't change offers none of them.
   const rename = () => canChange && edit("item");
-  const moveNo = !r.has.parent ? `${r.item.type} has no level above it in ${c.project ?? c.clientName}'s process, so it has no parent to change` : null;
+  const moveNo = !r.has.parent ? `In ${c.project ?? c.clientName}'s process, ${r.item.type} is the top level, so it has no parent to change` : null;
   const startMove = () => {
     if (!canChange) return;
     if (moveNo) return say(moveNo), a.error(moveNo);

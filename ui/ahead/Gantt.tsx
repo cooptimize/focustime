@@ -501,7 +501,7 @@ function GanttRow({ node, open, kids, bar: b, sum, callouts, env, freeze, runFix
   const [op, setOp] = useState<"rename" | "move" | null>(null);
   const [told, setTold] = useState("");
   const canChange = r.editable && !a.readOnly;
-  const moveNo = r.has.parent ? null : `${r.item.type} has no level above it in ${c?.project ?? c?.clientName ?? "this project"}'s process, so it has no parent to change`;
+  const moveNo = r.has.parent ? null : `In ${c?.project ?? c?.clientName ?? "this project"}'s process, ${r.item.type} is the top level, so it has no parent to change`;
   const backToLabel = () => (setOp(null), requestAnimationFrame(() => label.current?.focus()));
   const startMove = () => (moveNo ? (setTold(moveNo), a.error(moveNo)) : setOp("move"));
   const rowMenu = (at: { x: number; y: number }) => {
