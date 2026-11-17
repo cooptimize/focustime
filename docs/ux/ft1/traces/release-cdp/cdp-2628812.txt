@@ -1,0 +1,47 @@
+38ms loads=0 nav about:blank
+67ms loads=0 load
+104ms loads=0 nav #/day
+213ms loads=0 load
+436ms loads=0 nav #/day
+1789ms loads=0 press 3
+1881ms loads=0 pw request Ahead-CE7EwZaZ.js
+1902ms loads=0 cdp willBeSent Ahead-CE7EwZaZ.js type=Script initiator=script
+1930ms loads=0 cdp response Ahead-CE7EwZaZ.js 404 disk=false prefetch=false sw=false
+1930ms loads=0 cdp failed Ahead-CE7EwZaZ.js net::ERR_ABORTED
+1930ms loads=0 pressed; entries Ahead-CE7EwZaZ.js@1753 transfer=300 dur=76
+1994ms loads=0 nav #/backlog
+2126ms loads=0 nav #/backlog
+2376ms loads=0 load
+2530ms loads=1 pw request Ahead-CE7EwZaZ.js
+2545ms loads=1 cdp willBeSent Ahead-CE7EwZaZ.js type=Script initiator=script
+2600ms loads=1 cdp response Ahead-CE7EwZaZ.js 200 disk=false prefetch=false sw=false
+2648ms loads=1 nav #/backlog
+4683ms loads=1 nav about:blank
+4717ms loads=1 load
+4807ms loads=2 nav #/week
+5124ms loads=2 load
+5842ms loads=3 nav #/week
+7028ms loads=0 cold done
+7045ms loads=0 press n
+7159ms loads=0 pw request Capture-DEzfAT5-.js
+7159ms loads=0 cdp willBeSent Capture-DEzfAT5-.js type=Script initiator=script
+7180ms loads=0 cdp response Capture-DEzfAT5-.js 200 disk=false prefetch=false sw=false
+7188ms loads=0 pressed; entries Capture-DEzfAT5-.js@2359 transfer=2832 dur=61
+7278ms loads=0 nav #/capture
+7528ms loads=0 nav #/capture
+8005ms loads=0 load
+8340ms loads=1 nav #/week
+8920ms loads=1 pw request Capture-DEzfAT5-.js
+8942ms loads=1 cdp willBeSent Capture-DEzfAT5-.js type=Script initiator=script
+9163ms loads=1 cdp response Capture-DEzfAT5-.js 200 disk=false prefetch=false sw=false
+9914ms loads=1 nav about:blank
+9968ms loads=1 load
+10065ms loads=2 nav #/day
+10288ms loads=2 load
+11228ms loads=3 nav #/day
+12338ms loads=0 cold done
+12358ms loads=0 press 4
+12426ms loads=0 cdp willBeSent Status-CdU4XgbF.js type=Script initiator=script
+12435ms loads=0 cdp response Status-CdU4XgbF.js 200 disk=false prefetch=false sw=false
+12446ms loads=0 pressed; entries Status-CdU4XgbF.js@2397 transfer=11751 dur=19
+12484ms loads=0 nav #/status
