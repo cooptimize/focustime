@@ -114,7 +114,10 @@ const thePass = (page: Page) =>
           if (!stage) return document.querySelector(".topbar") ? done(null) : void requestAnimationFrame(tick);
           // The parser can stop inside the stage under load: wait until it reached the line after the blocks.
           if (!stage.querySelector(".boot-wait") && document.readyState === "loading") return void requestAnimationFrame(tick);
-          if (Number(getComputedStyle(stage).opacity) === 0) return void requestAnimationFrame(tick);
+          // Shown by the loader's own clock: its appear animation exists (the stylesheet is in) and is past its 400 ms.
+          // Without the stylesheet the stage has no animation and the default opacity of 1, which proves nothing.
+          const show = stage.getAnimations().find((a) => (a as CSSAnimation).animationName === "boot-show");
+          if (!show || Number(show.currentTime ?? 0) < 400) return void requestAnimationFrame(tick);
           const blocks = [...document.querySelectorAll("#boot .wl")];
           const anims = blocks.flatMap((b) => b.getAnimations().filter((a) => /^wl-\d$/.test((a as CSSAnimation).animationName)));
           const running = anims.filter((a) => a.playState === "running").length;

@@ -64,7 +64,7 @@ B3, the three tests at 8 copies on 3 cores, 5 runs (40 copies each), on this bra
 |---|---|
 | `e2e/code/search-inside.test.ts`, the whole file | 40 of 40 |
 | `e2e/shell/first-download.test.ts`, the whole file | 39 of 40 at first, a wait the fix still left (the route told the old page by `load` events); after its fix 40 of 40, twice; after the review's fixes 40 of 40 |
-| `e2e/shell/opening-and-brand.test.ts`, "no words on screen before 8 seconds…" (`--test`) | 39 of 40, then 38 of 40, then 39 of 40, each a wait the fix still left (the line's own animation, the parser stopping inside the stage, then inside the status line); after those fixes 40 of 40, twice |
+| `e2e/shell/opening-and-brand.test.ts`, "no words on screen before 8 seconds…" (`--test`) | 39 of 40, then 38 of 40, then 39 of 40, each a wait the fix still left (the line's own animation, the parser stopping inside the stage, then inside the status line); after those fixes 40 of 40, twice. CI's third run then failed it once (the pass read before the loader's stylesheet applied); after that fix, see the pull request |
 
 Each was broken on purpose again after the last change, and failed: the line at 1 s, the blocks at full opacity, the pass's animations removed, the waiting words not written and the ready words changed (`opening-and-brand`); no reload after a release, a reload loop (the once-only guard removed) and the line at once (`first-download`).
 | `e2e/shell/opening-and-brand.test.ts`, the whole file | 0 of 40, in three tests FT-1 doesn't change (docs/open-questions.md, FT-1) |
