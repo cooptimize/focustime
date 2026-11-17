@@ -21,6 +21,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "../harness.ts";
+import { onePreview } from "../one-preview.ts";
 import { appReady, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "../live.ts";
 import { shotBoth, SHOTS } from "../shots.ts";
 import type { Page } from "playwright-core";
@@ -244,12 +245,15 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await shotAll(page, "break-down-review");
       await panel.getByRole("button", { name: "Preview 2 items…" }).click();
 
-      // Publish: the exact batch (types, titles, sizes, parent), nothing in DevOps until Create all.
-      await panel.getByRole("listitem", { name: "New User Story: Add a month filter to the export" }).waitFor();
-      await panel.getByRole("listitem", { name: "New User Story: Email the export to finance" }).getByText("S · 1h").waitFor();
+      // OP-1: the exact batch in the app's one preview (types, titles, sizes, parent), nothing in DevOps until Confirm.
+      const one = onePreview(page);
+      await one.waitFor();
+      await expect.poll(() => one.locator(".dw-row h3").allTextContents()).toEqual([expect.stringContaining("Add a month filter to the export"), expect.stringContaining("Email the export to finance")]);
+      await expect.poll(() => one.locator(".dw-row").nth(1).locator(".wd-fields").textContent()).toContain("S · 1h");
       expect(created()).toHaveLength(0);
       await shotAll(page, "break-down-publish");
-      await panel.getByRole("button", { name: "Create all" }).click();
+      await one.locator("button.commit").click();
+      await one.waitFor({ state: "detached", timeout: 30_000 });
       await panel.getByText(/^Created 2 items under/).waitFor();
       expect(created().map((i) => i.fields["System.Title"])).toEqual(["Add a month filter to the export", "Email the export to finance"]);
       expect(created().some((i) => i.fields["System.Title"] === "Review the export with finance")).toBe(false);

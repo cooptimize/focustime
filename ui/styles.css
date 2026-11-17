@@ -3975,7 +3975,7 @@ button.ask-label { cursor: pointer; }
 .brief-status.warn { color: var(--watch); font-weight: 600; }
 .bd-note { display: grid; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
 .bd-note textarea, .bd-field textarea, .bd-title, .bd-ac input, .bd-regen input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; min-width: 0; }
-.bd-run-line, .bd-latest, .bd-off, .bd-empty, .bd-busy, .bd-where, .bd-total { margin: 0; }
+.bd-run-line, .bd-latest, .bd-off, .bd-empty, .bd-busy, .bd-total { margin: 0; }
 .bd-run-line { font-size: var(--fs-2); color: var(--text-muted); }
 .bd-busy { color: var(--text-muted); }
 .bd-off { padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); }
@@ -4007,7 +4007,7 @@ button.ask-label { cursor: pointer; }
 .bd-ac-add { justify-self: start; }
 .bd-card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
 .bd-sizes { display: flex; gap: 4px; flex-wrap: wrap; }
-.bd-sizes .size-chip.on, .bd-batch .size-chip.on { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); cursor: default; }
+.bd-sizes .size-chip.on { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); cursor: default; }
 .bd-regen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .bd-regen input { flex: 1 1 14em; }
 .bd-card-why { font-size: var(--fs-2); }
@@ -4015,11 +4015,6 @@ button.ask-label { cursor: pointer; }
 .bd-state { margin: 0; font-size: var(--fs-2); }
 .bd-total { font-weight: 600; text-align: right; }
 
-.bd-where { font-size: var(--fs-2); color: var(--text-muted); }
-.bd-batch { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.bd-batch-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); min-width: 0; }
-.bd-batch-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.bd-batch-under { flex: none; font-size: var(--fs-2); }
 .bd-hint { margin: 0; font-size: var(--fs-2); }
 .bd-created p, .bd-notyet p { margin: 0; }
 .bd-created ul, .bd-notyet ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 3px; }
@@ -4634,6 +4629,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .bd-item-acts .muted { font-size: var(--fs-2); }
 /* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
 .cap-backdrop:has(> .send-dialog) { z-index: 61; }
+/* OP-1: the one DevOps preview opens over the screen that asked for it, a side panel too (Break down). */
+.cap-backdrop:has(> .write-dialog.devops) { z-index: 62; }
 
 /* SG-1: the board's suggestions. Offers in the dotted style (UI-B's dashed edge), quieter than to-dos: no checkbox, muted
    text, a + to keep and a × to clear on each row, one small line over them, and a day's line under its header. */

@@ -151,10 +151,8 @@ describe.skipIf(!CHROMIUM)("OP-1: the same writes reach DevOps (STEP 0.5)", () =
     await panel.getByRole("button", { name: "Run" }).click();
     await panel.getByRole("listitem", { name: /^Card / }).first().waitFor({ timeout: 30_000 });
     await panel.getByRole("button", { name: /^Preview \d+ items?/ }).click();
-    const createAll = panel.getByRole("button", { name: /^Create all/ });
-    await createAll.or(modal(page)).first().waitFor({ timeout: 20_000 });
-    if (await createAll.isVisible().catch(() => false)) await createAll.click();
-    else await confirmAll(page);
+    if (RECORD) await panel.getByRole("button", { name: /^Create all/ }).click();
+    else await confirmPreviews(page, 1);
     await expect.poll(() => logLength(page), { timeout: 30_000 }).toBe(since + 5);
     check("breakdown", await rows(page, since));
     await page.close();

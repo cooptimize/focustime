@@ -323,15 +323,16 @@ export const toProposal = (p: CoopProposal): Proposal => ({
 });
 
 /** A kept card's dependencies on dropped cards are left out of what is published ("after" only names kept ones). */
-export const keptDeps = (p: Proposal, all: readonly Proposal[]) => p.dependsOn.filter((d) => all.some((x) => x.id === d && x.keep));
+type Orderable = { id: string; keep: boolean; dependsOn: readonly string[] };
+export const keptDeps = (p: Orderable, all: readonly Orderable[]) => p.dependsOn.filter((d) => all.some((x) => x.id === d && x.keep));
 
 /**
  * The publish order: the person's order, except that a card comes after the ones it depends on (a stable
  * topological sort; a cycle, which edits can't make, keeps the remaining cards in order).
  */
-export function publishOrder(ps: readonly Proposal[]): Proposal[] {
+export function publishOrder<T extends Orderable>(ps: readonly T[]): T[] {
   const kept = ps.filter((p) => p.keep);
-  const out: Proposal[] = [];
+  const out: T[] = [];
   const placed = new Set<string>();
   while (out.length < kept.length) {
     const next = kept.find((p) => !placed.has(p.id) && keptDeps(p, kept).every((d) => placed.has(d))) ?? kept.find((p) => !placed.has(p.id))!;

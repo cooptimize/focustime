@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { confirmPreviews } from "../one-preview.ts";
 import { emptyFrom } from "../sg1-helpers.ts";
 
 const T = 180_000;
@@ -70,7 +71,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await bd.getByRole("button", { name: "Run" }).click();
     await bd.getByRole("listitem", { name: "Card Supplier sign-up form" }).waitFor({ timeout: 30_000 });
     await bd.getByRole("button", { name: /^Preview \d+ items/ }).click();
-    await bd.getByRole("button", { name: "Create all" }).click();
+    await confirmPreviews(page, 1);
     await bd.getByText(/Created \d+|\d+ created|in DevOps/).first().waitFor({ timeout: 30_000 });
     await bd.getByRole("button", { name: "Done" }).click();
     await expect.poll(() => placed.innerText(), { timeout: 30_000 }).toMatch(/\d+ stor(y|ies)/);

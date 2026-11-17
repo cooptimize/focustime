@@ -9,7 +9,9 @@
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
 import { StandardsNote } from "./StandardsNote.tsx";
 import type { StandardsUsed } from "../plan/standards.ts";
-import { MentionFlag } from "./DevOpsWrite.tsx";
+import { useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
+import { partsOf } from "../plan/preview-parts.ts";
+import { publishOrder } from "../plan/stories.ts";
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
 import { useOpenNew } from "./newitem-ctx.ts";
@@ -37,7 +39,6 @@ type Prepared = {
   sent: string[];
   ai: "on" | "off" | "client_off" | "not_set_up"; aiMessage: string | null; write: boolean; writeMessage: string | null; latest: Draft | null;
 };
-type Preview = { previewId: string; item: string; fields: { label: string; after: string | null }[]; links: string[]; notes: string[]; visibility: string; org: string; project: string; identity: string; /** GD-2: other clients my edited card names. */ mentions?: string[] };
 
 // ---------- the button ----------
 
@@ -142,10 +143,10 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [childType, setChildType] = useState<string | null>(null);
-  const [previews, setPreviews] = useState<Preview[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [allNote, setAllNote] = useState<string | null>(null);
   const changed = useRef(false);
+  const write = useDevOpsWrite();
   const first = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -217,41 +218,64 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
     return !!d;
   };
 
-  const preview = async (replace = false) => {
-    if (!draft) return;
-    const r = await act(replace ? "Replacing and previewing again…" : "Preparing the preview…", async () => {
-      await flush();
-      return call<{ previews: Preview[]; nothing?: string[] }>("stories.publish_preview", { draftId: draft.id, ...(replace ? { replace: true } : {}) });
-    });
-    if (r) {
-      setPreviews(r.previews);
-      setFailed(r.previews.length ? [] : (r.nothing ?? []));
+  // OP-1: the batch is the app's one preview: one create per kept card not yet sent, in the order DevOps gets them (a
+  // card after the ones it depends on), 10 at most in each preview. Only its Confirm writes; GD-2's flag and Replace
+  // are the preview's own. Afterwards the draft is read again, so each card says what happened to it.
+  const sendCards = (d: Draft, then?: () => void) => {
+    const todo = publishOrder(d.cards).filter((c) => c.status.state === "not_sent");
+    if (!todo.length) {
+      setFailed(["Every kept story is in DevOps already, or waiting for Retry"]);
       setStep("publish");
+      return;
     }
+    if (!write) return;
+    setBusy("Waiting for the preview…");
+    write.series(
+      partsOf(todo, () => d.clientKey).map((p) => ({ clientKey: p.clientKey, changes: p.items.map((c): DevOpsChange => ({ key: c.id, kind: "proposal_create", storyDraftId: d.id, proposalId: c.id })) })),
+      (end) => {
+        setBusy(null);
+        if (!end.results.length && !end.refused.length) {
+          // Not now (or a preview that couldn't be made): nothing was sent and the draft is as it was.
+          if (end.errors.length) setError(end.errors.join(" "));
+          then?.();
+          return;
+        }
+        void act("Checking DevOps…", () => save(d.cards, d)).then((r) => {
+          if (!r) return;
+          changed.current = changed.current || r.published > d.published;
+          setDraft(r);
+          setFailed([...end.refused.map((x) => x.error), ...end.results.filter((x) => !x.confirmed).map((x) => x.message), ...end.errors]);
+          setStep("publish");
+          then?.();
+        });
+      },
+      { where: () => `${prep?.clientName ?? d.clientKey}'s DevOps` },
+    );
   };
-
-  const createAll = async () => {
-    if (!draft || !previews?.length) return;
-    const r = await act("Creating in DevOps and checking…", () => call<{ draft: Draft; created: number; failed: string[] }>("stories.publish", { draftId: draft.id, previewIds: previews.map((p) => p.previewId), ...(previews.some((p) => p.mentions?.length) ? { mentionsOk: true } : {}) }));
-    if (r) {
-      changed.current = changed.current || r.created > 0;
-      setDraft(r.draft);
-      setFailed(r.failed);
-      setPreviews([]);
-    }
-  };
-
-  const retry = async () => {
+  const preview = async () => {
     if (!draft) return;
-    const r = await act("Checking DevOps and retrying…", () => call<{ draft: Draft; messages: string[]; toPreview: string[] }>("stories.retry", { draftId: draft.id }));
-    if (!r) return;
-    changed.current = changed.current || r.draft.published > (draft.published ?? 0);
-    setDraft(r.draft);
-    setFailed(r.messages);
-    if (r.toPreview.length) {
-      const p = await act("Preparing the preview…", () => call<{ previews: Preview[] }>("stories.publish_preview", { draftId: draft.id }));
-      if (p) setPreviews(p.previews);
+    const ok = await act("Saving your edits…", async () => (await flush(), true));
+    if (ok) sendCards(draft);
+  };
+
+  // Retry for the rest: each card whose write didn't confirm is retried (it checks DevOps first and never makes a second
+  // item); cards never sent go to the one preview again.
+  const retry = async () => {
+    if (!draft || !write) return;
+    const messages: string[] = [];
+    setBusy("Checking DevOps and retrying…");
+    for (const c of draft.cards) {
+      if (c.status.state !== "pending" && c.status.state !== "unconfirmed" && c.status.state !== "failed") continue;
+      const r = await write.retry(c.status.writeId);
+      if (r && !r.confirmed) messages.push(`${c.title}: ${r.message}`);
     }
+    setBusy(null);
+    const r = await act("Checking DevOps…", () => save(draft.cards, draft));
+    if (!r) return;
+    changed.current = changed.current || r.published > draft.published;
+    setDraft(r);
+    setFailed(messages);
+    if (r.cards.some((c) => c.keep && c.status.state === "not_sent")) sendCards(r);
   };
 
   const close = () => !busy && onClose(changed.current);
@@ -312,7 +336,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
           <div className="bd-body">
             {step === "prepare" && <PrepareStep prep={prep} childType={childType} setChildType={setChildType} onOpenLatest={prep?.latest ? () => (setDraft(prep.latest), setNote(prep.latest!.note), setStep("review")) : null} />}
             {step === "review" && draft && <ReviewStep clientKey={clientKey} draft={draft} busy={!!busy} onEdit={edit} onRegenerate={regenerate} />}
-            {step === "publish" && draft && <PublishStep clientKey={clientKey} draft={draft} previews={previews ?? []} failed={failed} parentUrl={prep?.url ?? null} busy={!!busy} onReplace={() => void preview(true)} />}
+            {step === "publish" && draft && <PublishStep clientKey={clientKey} draft={draft} failed={failed} parentUrl={prep?.url ?? null} />}
             {busy && <p className="bd-busy" role="status">{busy}</p>}
             {error && <p className="set-problem" role="alert">{error}</p>}
           </div>
@@ -386,11 +410,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
                   <button type="button" className="mini" disabled={!!busy} onClick={() => setStep("review")}>
                     Back to review
                   </button>
-                  {previews && previews.length > 0 ? (
-                    <button type="button" className="commit" disabled={!!busy} onClick={() => void createAll()}>
-                      {previews.some((p) => p.mentions?.length) ? "Create all as written" : "Create all"}
-                    </button>
-                  ) : draft.left > 0 ? (
+                  {draft.left > 0 ? (
                     <button type="button" className="commit" disabled={!!busy} onClick={() => void retry()}>
                       Retry the rest
                     </button>
@@ -767,10 +787,8 @@ function CardState({ status: s }: { status: CardStatus }) {
 
 // ---------- 3. Publish ----------
 
-const field = (p: Preview, label: string) => p.fields.find((f) => f.label === label)?.after ?? null;
 
-function PublishStep({ clientKey, draft, previews, failed, parentUrl, busy, onReplace }: { clientKey: string; draft: Draft; previews: Preview[]; failed: string[]; parentUrl: string | null; busy: boolean; onReplace: () => void }) {
-  const p0 = previews[0];
+function PublishStep({ clientKey, draft, failed, parentUrl }: { clientKey: string; draft: Draft; failed: string[]; parentUrl: string | null }) {
   const created = draft.cards.filter((c) => c.status.state === "created");
   const notYet = draft.cards.filter((c) => c.keep && c.status.state !== "created");
   const parent = (
@@ -780,30 +798,7 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl, busy, onRe
   );
   return (
     <>
-      {p0 && (
-        <>
-          <p className="bd-where">
-            DevOps · {p0.org} · {p0.project} · as {p0.identity}
-          </p>
-          <ol className="bd-batch">
-            {previews.map((p) => {
-              const t = field(p, "Type") ?? draft.storyType;
-              const size = (field(p, "Size in FocusTime") ?? "").replace(/\s*\(not written to DevOps\)$/, "");
-              return (
-                <li key={p.previewId} className="bd-batch-row" aria-label={p.item}>
-                  <TypeIcon clientKey={clientKey} type={t} />
-                  <span className="bd-batch-title">{field(p, "Title") ?? p.item}</span>
-                  {size && <span className="size-chip on">{size}</span>}
-                  <span className="muted bd-batch-under">under {parent}</span>
-                  {p.mentions?.length ? <MentionFlag names={p.mentions} where={`${clientKey}'s DevOps`} disabled={busy} onReplace={onReplace} /> : null}
-                </li>
-              );
-            })}
-          </ol>
-          <p className="muted bd-hint">Each is assigned to you, with the parent's area and iteration, its description and acceptance criteria. Sizes stay in FocusTime. {p0.visibility}</p>
-        </>
-      )}
-      {!p0 && created.length > 0 && (
+      {created.length > 0 && (
         <div className="dw-ok bd-created" role="status">
           <p>
             Created {plural(created.length, "item", "items")} under {parent}:
@@ -823,7 +818,7 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl, busy, onRe
           </ul>
         </div>
       )}
-      {!p0 && notYet.length > 0 && (
+      {notYet.length > 0 && (
         <div className="bd-notyet" role="alert">
           <p className="set-problem">Not created yet ({notYet.length}):</p>
           <ul>
@@ -836,7 +831,7 @@ function PublishStep({ clientKey, draft, previews, failed, parentUrl, busy, onRe
           <p className="muted bd-hint">Retry checks DevOps first and never makes a second item.</p>
         </div>
       )}
-      {failed.length > 0 && !p0 && notYet.length === 0 && failed.map((f) => <p key={f} className="muted">{f}</p>)}
+      {failed.length > 0 && failed.map((f) => <p key={f} className="muted">{f}</p>)}
     </>
   );
 }
