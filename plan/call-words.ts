@@ -46,8 +46,6 @@ export const CALL_ROW = {
   note: "Note with this call",
   skip: "Skip",
   bringBack: "Bring back",
-  edit: "Edit",
-  editDone: "Done editing",
   needed: "Needed",
   /** A required field the form fills, still empty: on the row, before any preview. */
   needs: (names: readonly string[]) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new item of this type.`,
@@ -56,7 +54,6 @@ export const CALL_ROW = {
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
   keptNote: (who: string) => `Noted with this call: ${who}`,
-  undone: "Taken back",
   tryAgain: "Try again",
   /** The folded lines at a section's foot. */
   skipped: (n: number) => `${n} skipped`,

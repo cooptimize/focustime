@@ -80,6 +80,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 |---|---|
 | `state` | The item's state, with an optional comment |
 | `comment` | A new comment |
+| `meeting_create`, `meeting_comment` | A client call's new item (the New form's create, `new_item`, with its required-field check, from the proposal's fields) and its comment (refused unless the item is at story level in the client's process); confirming settles the call's proposal (MC-1e) |
 | `comment_edit` | My own comment inside this week's status report window, before and after shown |
 | `comment_delete` | My own comment inside the report window; undo posts its text again |
 | `create` | A new item from a draft, Break down's batch, a conversation, a promise or a client call; from a conversation also its images as attachments (linked in the same patch; undo removes the links, never the attachment) |
