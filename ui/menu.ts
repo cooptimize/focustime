@@ -755,10 +755,10 @@ const outlookDay = (date: IsoDate) => {
 function registeredCallItems(c: CallMark): MenuItem[] {
   const review = c.state === "ready" && c.open > 0 && c.review;
   return [
-    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group: "Client call", hint: c.label, run: () => openCall(c.occurrenceId) },
+    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group: "Client call", run: () => openCall(c.occurrenceId) },
     ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group: "Client call", run: () => openCall(c.occurrenceId, "transcript") }] : []),
     ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group: "Client call", run: () => requestRerun(c.occurrenceId) }] : []),
-    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group: "Client call", run: () => openCall(c.occurrenceId, "upload") }] : []),
+    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group: "Client call", ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
   ];
 }
 

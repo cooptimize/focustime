@@ -473,7 +473,7 @@ async function transcriptOf(ctx: MeetingContext, store: MeetingStore, me: string
   const lines = await store.transcript(r.o.id);
   ctx.log({ source: "plan", op: "meeting_transcript_read", count: lines?.length ?? 0 });
   if (!lines) return { ok: true, data: { lines: [], gone: !!r.o.transcriptAt, missing: !r.o.transcriptAt } };
-  return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: clock(l.at), text: l.text })), gone: false, missing: false } };
+  return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: clock(l.at), sec: l.at, text: l.text })), gone: false, missing: false } };
 }
 
 /** The changes a Confirm would make, previewed through the DevOps write framework (a reviewer). */

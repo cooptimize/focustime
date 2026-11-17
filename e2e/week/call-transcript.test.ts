@@ -41,7 +41,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/transcript`);
     const lines = page.locator(".mtg-lines li");
     await expect.poll(() => lines.count()).toBe(8);
-    await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d\s*Alex Rivera\s*Morning everyone/);
+    await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d (AM|PM)\s*Alex Rivera\s*Morning everyone/);
     await expect.poll(() => page.locator(".mtg-lines li.marked").count()).toBeGreaterThan(0);
     // The filter: words or a name.
     const filter = page.getByRole("searchbox", { name: "Filter the transcript" });

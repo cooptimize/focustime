@@ -5480,6 +5480,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 [data-call-title] { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
 [data-call-title]:hover { text-decoration-color: currentColor; }
 .event.is-call .ev-line { flex-wrap: wrap; row-gap: 2px; }
+.card-events li.is-call, .grid.no-timeline .card-events li.is-call { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
 /* Admin › Clients › Meetings. */
 .mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }

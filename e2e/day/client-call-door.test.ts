@@ -47,7 +47,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await ev.locator(".ev-time").click();
     await page.locator(".popup-menu").waitFor();
     const labels = await menuLabels(page);
-    expect(labels.slice(0, 4).map((l) => l.replace(/Review 6 proposals$/, ""))).toEqual(["Review proposals", "Read the transcript", "Propose again", "Upload a transcript"]);
+    expect(labels.slice(0, 4)).toEqual(["Review proposals", "Read the transcript", "Propose again", "Upload a transcriptin place of this one"]);
     expect(labels.findIndex((l) => l.startsWith("Open in Outlook"))).toBeGreaterThan(3);
     await page.keyboard.press("Escape");
     // A meeting that isn't a registered call: no mark, no call items.

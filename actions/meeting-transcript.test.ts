@@ -38,7 +38,7 @@ describe("MC-1d: a call's transcript", () => {
     const t = await setup();
     for (const me of [REVIEWER, ATTENDEE]) {
       const r = await meetingAction(t.ctxAs(me), "meeting.transcript", { occurrenceId: t.occ.id });
-      expect(r).toEqual({ ok: true, data: { lines: [{ n: 1, speaker: "Sam Reviewer", at: "0:05", text: "The rates export goes first." }, { n: 2, speaker: "Dana Client", at: "1:02:05", text: "CSV only for now." }], gone: false, missing: false } });
+      expect(r).toEqual({ ok: true, data: { lines: [{ n: 1, speaker: "Sam Reviewer", at: "0:05", sec: 5, text: "The rates export goes first." }, { n: 2, speaker: "Dana Client", at: "1:02:05", sec: 3725, text: "CSV only for now." }], gone: false, missing: false } });
     }
   });
 

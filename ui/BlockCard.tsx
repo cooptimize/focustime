@@ -214,7 +214,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
           {calls.length > 0 && (
             <div className="card-calls">
               {calls.map((c) => (
-                <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
+                <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
                   <span className="call-name">{c.role}</span>
                   <span className="call-what">· {c.label}</span>
                 </a>
@@ -247,7 +247,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {calls.length > 0 && (
         <div className="card-calls">
           {calls.map((c) => (
-            <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`}>
+            <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
               <span className="call-name">{c.role}</span>
               <span className="call-what">· {c.label}</span>
             </a>
@@ -264,7 +264,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
           {slot.events.map((p) => {
             const call = callForEvent(marks, p.event);
             return (
-            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined} title={p.event.title}>
+            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : call ? "is-call" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
               <span className="ce-title" {...titleOpensCall(call)}>{p.event.title}</span>
               {call && <CallMarkButton call={call} tabIndex={selected ? 0 : -1} />}

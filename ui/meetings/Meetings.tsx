@@ -104,6 +104,13 @@ function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { i
     }
   }, [id, onChanged]);
   useEffect(() => void load(), [load]);
+  // MC-1d: opening a call puts focus on its heading (a screen reader starts there), not on the page's body.
+  const headed = useRef(false);
+  useEffect(() => {
+    if (!r || headed.current) return;
+    headed.current = true;
+    if (view !== "transcript" || !line) document.querySelector<HTMLElement>(".mtg-view h2")?.focus();
+  }, [r, view, line]);
 
   if (error) return (<><BackHead onBack={onBack} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
   if (!r) return (<><BackHead onBack={onBack} title="Client call" /><p className="muted">Loading…</p></>);
@@ -182,7 +189,7 @@ function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { i
         </div>
       )}
       {view === "transcript" ? (
-        <TranscriptView occurrenceId={o.id} proposals={r.proposals} line={line} />
+        <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} />
       ) : (<>
       {(["gap", "commitment", "comment"] as const).map((kind) => {
         const ps = r.proposals.filter((p) => p.body.kind === kind);
@@ -195,7 +202,6 @@ function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { i
         );
       })}
       {o.state === "ready" && !r.proposals.length && <p className="muted">Nothing to propose from this call.</p>}
-      </>)}
       {editable && open.length > 0 && (
         <div className="mtg-bar">
           <span role="status">{ticked.length} of {open.length} ticked{writes && !r.canWrite ? " · Enable DevOps writes for this client in Settings › DevOps first" : ""}</span>
@@ -207,12 +213,13 @@ function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { i
           </span>
         </div>
       )}
+      </>)}
       {prep && (prep.data || prep.error) && <ConfirmDialog prep={prep} skipped={open.length - ticked.length} onCancel={() => setPrep(null)} onConfirm={() => void confirm()} />}
     </>
   );
 }
 
-type Line = { n: number; speaker: string; at: string; text: string };
+type Line = { n: number; speaker: string; at: string; sec: number; text: string };
 
 /**
  * MC-1d: the call's transcript, read only: every line with its speaker and time, the lines a proposal rests on marked,
@@ -220,7 +227,9 @@ type Line = { n: number; speaker: string; at: string; text: string };
  * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
  * is scrolled to and focused.
  */
-function TranscriptView({ occurrenceId, proposals, line }: { occurrenceId: number; proposals: Proposal[]; line: number | null }) {
+function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrenceId: number; startAt: string; proposals: Proposal[]; line: number | null }) {
+  // A line's time of day (the call's start plus its offset), so "1:05" never reads as five past one.
+  const time = (sec: number) => new Date(Date.parse(startAt) + sec * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -265,7 +274,7 @@ function TranscriptView({ occurrenceId, proposals, line }: { occurrenceId: numbe
           const on = marks.get(l.n);
           return (
             <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}` } : {})}>
-              <span className="mtg-line-at">{l.at}</span>
+              <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>
               <span className="mtg-who">{l.speaker}</span>
               <span className="mtg-line-text">{l.text}</span>
               {on && (
@@ -286,7 +295,7 @@ function BackHead({ onBack, title, sub }: { onBack: () => void; title: string; s
     <header className="page-head">
       <div className="ph-title">
         <button type="button" className="mini quiet" onClick={onBack} aria-label="Back to client calls"><Icon name="back" /> Calls</button>
-        <h2>{title}</h2>
+        <h2 tabIndex={-1}>{title}</h2>
         {sub && <span className="muted">{sub}</span>}
       </div>
     </header>
@@ -438,7 +447,9 @@ function CallActions({ series, occ, onDone, focusUpload = false }: { series: Ser
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [occ.id]);
   const [msg, setMsg] = useState<string | null>(null);
-  const rerun = async () => {
+  const rerun = async (ask = true) => {
+    // It replaces the open proposals, with any words changed in them; the ones done or skipped stay.
+    if (ask && occ.open > 0 && !window.confirm(`Propose again? The ${occ.open} open ${occ.open === 1 ? "proposal is" : "proposals are"} replaced, with any words you changed. The ones done or skipped stay.`)) return;
     setBusy("rerun");
     setMsg(null);
     try {
