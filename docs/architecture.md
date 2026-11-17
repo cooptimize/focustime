@@ -47,7 +47,7 @@ The Inbox: `InboxPage.tsx` is the screen with its three lists (From chats, Promi
 
 ### `ui/meetings/`
 
-Client calls (`#/meetings`): `Meetings.tsx` lists a person's registered calls and opens a call's review; `calls.ts` is its model. Registering a call is in Admin (`ui/settings/AdminMeetings.tsx`).
+Client calls (`#/meetings`): `Meetings.tsx` lists a person's registered calls and opens a call's review; `calls.ts` is its model and remembers the place each call is opened from, for Back; `GapFields.tsx` is a new item's row in the New form's fields. Its DevOps writes go only through `ui/DevOpsWrite.tsx` (`one-door.test.ts`). Registering a call is in Admin (`ui/settings/AdminMeetings.tsx`).
 
 ### `ui/plan/`
 

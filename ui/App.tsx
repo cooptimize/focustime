@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Meetings } from "./meetings/Meetings.tsx";
 import { callMarks, callsNeedingMe, CallsProvider, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
@@ -1896,6 +1895,7 @@ export function App() {
   const CodePanel = screen("code")?.default;
   const Guide = screen("guide")?.default;
   const TechDocs = screen("docs")?.default;
+  const Meetings = screen("meetings")?.Meetings;
   // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
   // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
   const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && underTour);
@@ -2225,8 +2225,8 @@ export function App() {
             onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
             access={docsAccess}
           />
-      ) : meetingAt ? (
-        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} colors={data.clients} onOpen={(id, view, line) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(view ? { view } : {}), ...(line ? { line } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
+      ) : meetingAt && Meetings ? (
+        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} filter={meetingAt.filter ?? null} proposal={meetingAt.proposal ?? null} colors={data.clients} today={data.planDay.date} undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })} onOpen={(id, at) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(at?.view ? { view: at.view } : {}), ...(at?.line ? { line: at.line } : {}), ...(at?.filter ? { filter: at.filter } : {}), ...(at?.proposal ? { proposal: at.proposal } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
       ) : focusOpen && FocusM ? (
         <FocusM.FocusScreen
           t={data.timer}

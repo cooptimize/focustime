@@ -18,6 +18,83 @@ export const CALL_STATE = {
   aiFailed: "The AI step failed",
 } as const;
 
+/**
+ * MC-1e: a field a client's process requires on a new item of a type, with no default, and which of the New form's
+ * fields fills it (null: the form can't, so the row says so before any preview).
+ */
+export type RequiredField = { ref: string; name: string; fill: "date" | "size" | "description" | "check" | "assignTo" | null };
+/** MC-1e: one row's check before any preview: what it still needs, what the form can't fill, or why it won't be sent. */
+export type ProposalCheck = { needs?: { fill: NonNullable<RequiredField["fill"]>; name: string }[]; /** Fields the process requires that the form fills, filled or not. */ required?: NonNullable<RequiredField["fill"]>[]; cant?: string; blocked?: string };
+
+/** MC-1e: the call's page, made like the rest of the app: its filter, its sections, its rows and the bar for ticked rows. */
+export const CALL_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "gap", label: "New in DevOps" },
+  { key: "commitment", label: "Promises" },
+  { key: "comment", label: "Comments" },
+] as const;
+export type CallFilter = (typeof CALL_FILTERS)[number]["key"];
+export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on stories" } as const;
+
+/** QC-1's own words for a required field the form can't fill (the New form says the same, then its own next step). */
+export const processNeeds = (project: string, names: readonly string[], type: string) => `${project}'s process needs ${names.join(", ")} on a new ${type}, which FocusTime doesn't fill.`;
+
+export const CALL_ROW = {
+  create: "Create in DevOps",
+  comment: "Add comment",
+  promise: "Add to Promises",
+  note: "Note with this call",
+  skip: "Skip",
+  bringBack: "Bring back",
+  needed: "Needed",
+  /** A required field the form fills, still empty: on the row, before any preview. */
+  needs: (names: readonly string[]) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new item of this type.`,
+  cantFill: (project: string, names: readonly string[], type: string) => `${processNeeds(project, names, type)} Create this one in DevOps, then skip it here.`,
+  commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
+  noParent: "No parent yet. Choose one, or leave it without",
+  keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
+  keptNote: (who: string) => `Noted with this call: ${who}`,
+  tryAgain: "Try again",
+  /** The folded lines at a section's foot. */
+  skipped: (n: number) => `${n} skipped`,
+  done: (n: number) => `${n} done`,
+  selectAll: "Select all",
+  /** The one count. */
+  toReview: (n: number) => `${n} to review`,
+  showLine: (n: number) => (n === 1 ? "Proposal" : `${n} proposals`),
+  goToProposal: "Go to the proposal",
+} as const;
+
+/** MC-1e: the bar for ticked rows, as the Backlog's Grid has one. */
+export const CALL_BAR = {
+  selected: (n: number) => `${n} selected`,
+  devops: (n: number) => `Send ${n} to DevOps`,
+  /** Promises go to Promises, the client's go as notes with the call: said apart. */
+  promises: (mine: number, notes: number) => [mine ? `Add ${mine} to Promises` : "", notes ? `Note ${notes} with this call` : ""].filter(Boolean).join(", "),
+  skip: "Skip",
+  clear: "Clear",
+  tenAtATime: (n: number) => `DevOps changes go 10 at a time: the first 10 of ${n} now, the rest stay ticked.`,
+  noPat: "Enable DevOps writes for this client in Settings › DevOps first",
+  /** Ticked DevOps rows that still need a field: neither sent nor unticked. */
+  waiting: (n: number) => (n === 1 ? "1 needs something on its row first" : `${n} need something on their rows first`),
+} as const;
+
+/** MC-1e: Propose again's line: how many are new, and how many were left out as already done, skipped or failed. */
+export const rerunLine = (added: number, same: number) =>
+  `${added ? `${added} new ${added === 1 ? "proposal" : "proposals"} to review.` : "Nothing new to propose."}${same ? ` ${same} left out: the same as ${same === 1 ? "one" : "ones"} already done, skipped or failed here.` : ""}`;
+
+/**
+ * MC-1e: a write that didn't go through, in plain words on its row. A field DevOps said was required (a rule the check
+ * before the preview couldn't see) is named, with what to do; DevOps's own error text is never the message.
+ */
+export function callWriteWords(message: string, type: string | null): string {
+  const field = /TF401320: Rule Error for field ([^.]+)\./.exec(message)?.[1]?.trim();
+  if (field) return `DevOps says ${field} is needed on a new ${type ?? "item"}. Fill it in on this row and try again, or create this one in DevOps and skip it here.`;
+  if (/TF401320/.test(message)) return `DevOps refused one of this item's fields. Check the row's fields and try again.`;
+  if (/^DevOps refused the change: /.test(message)) return "DevOps refused this change. Check the row and try again.";
+  return message;
+}
+
 /** The call's actions, as its menu, its page and its notice name them. */
 export const CALL_ACTIONS = {
   review: "Review proposals",

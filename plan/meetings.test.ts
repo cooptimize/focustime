@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
+import { callBatch, commentLevelOk, newOnly, sameProposal, toReview, type ProposalBody, lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
 
 const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
@@ -99,5 +99,50 @@ describe("the last-read line (MC-1c)", () => {
     expect(line([occ({ lastRead: { kind: "missing", by: "rev", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: Microsoft didn't find this call for Kim Lead. Check they're on its invite, or switch it to Upload");
     expect(line([occ({ lastRead: { kind: "no_token", by: "gone", at: "x" } })], "2026-11-10T16:30:00Z")).toBe("Nov 10 call: a former teammate's sign-in was the one to read it. Change the reviewers");
     expect(line([], "2026-12-30T12:00:00Z")).toBe("No call in the last 3 weeks. The next one is Tue, Jan 5");
+  });
+});
+
+describe("MC-1e: the same proposal, by rule", () => {
+  const gap = (title: string, lines: number[]): ProposalBody => ({ kind: "gap", type: "User Story", parentId: 1, parentTitle: null, title, description: "", lines });
+  const comment = (itemId: number, text: string, lines: number[]): ProposalBody => ({ kind: "comment", itemId, itemTitle: "x", itemType: "User Story", note: "status", text, inReport: false, lines });
+  it("same kind and the same lines, or the same words apart from case and punctuation", () => {
+    expect(sameProposal(gap("Monthly statement as a PDF", [4]), gap("A different title", [4]))).toBe(true);
+    expect(sameProposal(gap("Monthly statement, as a PDF!", [4]), gap("monthly statement as a pdf", [9]))).toBe(true);
+    expect(sameProposal(gap("Monthly statement as a PDF", [4]), gap("Reorder from a past order", [5]))).toBe(false);
+    // Different kinds are never the same, nor comments on different items.
+    expect(sameProposal(gap("CSV only", [2]), comment(1111, "CSV only", [2]))).toBe(false);
+    expect(sameProposal(comment(1111, "On track", [2]), comment(1113, "On track", [2]))).toBe(false);
+    // No lines at all doesn't make two the same.
+    expect(sameProposal(gap("One", []), gap("Two", []))).toBe(false);
+  });
+  it("a new pass leaves out what is done, skipped or failed; an open one is replaced, not kept", () => {
+    const fresh = [{ body: gap("Monthly statement as a PDF", [4]) }, { body: gap("Date range in the file name", [10]) }, { body: gap("Accountant reporting area", [9]) }, { body: comment(1111, "CSV only", [2]) }];
+    const kept = [
+      { body: gap("monthly statement as a pdf", [4]), state: "confirmed" as const },
+      { body: gap("Date range in the export file name", [10]), state: "skipped" as const },
+      { body: comment(1111, "Decided: CSV only.", [2]), state: "failed" as const },
+      { body: gap("Accountant reporting area", [9]), state: "open" as const },
+    ];
+    expect(newOnly(fresh, kept).map((x) => (x.body.kind === "gap" ? x.body.title : x.body.kind))).toEqual(["Accountant reporting area"]);
+  });
+  it("one count: open and failed are still to review; done and skipped aren't", () => {
+    expect((["open", "failed", "confirmed", "skipped"] as const).map((state) => toReview({ state }))).toEqual([true, true, false, false]);
+  });
+  it("story level comes from the process's levels, never a type's name", () => {
+    const levels = { top: ["Initiative"], parent: ["Capability"], child: ["Product Backlog Item", "Bug"], task: ["Task"] };
+    expect(commentLevelOk(levels, "Product Backlog Item")).toBe(true);
+    expect(commentLevelOk(levels, "Capability")).toBe(false);
+    expect(commentLevelOk(levels, "User Story")).toBe(false);
+  });
+});
+
+describe("MC-1e: the bar's DevOps batch", () => {
+  it("sends the first 10 ready rows in page order; the rest stay ticked; rows needing a field wait", () => {
+    const rows = Array.from({ length: 14 }, (_, i) => ({ id: i + 1 }));
+    const b = callBatch(rows, (p) => p.id !== 3);
+    expect(b.now.map((p) => p.id)).toEqual([1, 2, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(b.later.map((p) => p.id)).toEqual([12, 13, 14]);
+    expect(b.waiting.map((p) => p.id)).toEqual([3]);
+    expect(callBatch(rows.slice(0, 4), () => true)).toEqual({ now: rows.slice(0, 4), later: [], waiting: [] });
   });
 });

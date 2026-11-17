@@ -49,7 +49,7 @@ async function setup(respond: (c: ProviderCall, i: number) => string | ProviderR
   const ctxAs = (me: string): MeetingContext => ({
     meetings: store, conversations: undefined, plan: undefined, me: async () => me, isAdmin: async () => false, config: async () => cfg.config, now: () => NOW, homeDomains: async () => [], graph: () => null,
     users: async () => [{ id: REVIEWER, name: "Sam Reviewer", emails: [] }, { id: ATTENDEE, name: "Lee Attendee", emails: [] }], client: async (k) => ({ key: k, name: "Contoso" }), leads: async () => [], capture: async () => capture(), ai: async () => ai,
-    devops: async () => ({ ok: false, status: 500, error: "not here" }), canWrite: async () => false, log: () => {},
+    canWrite: async () => false, log: () => {},
   });
   return { store, s, occ, deps, ctxAs };
 }

@@ -465,6 +465,18 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         return n;
       });
     },
+    /**
+     * MC-1e: Undo a promise a call's reviewer just kept from its row: the commitment goes, only while it is in that
+     * call's pseudo chat and nobody has acted on it yet (still open, no item, no follow-up). False when it stays.
+     */
+    async removeMeetingCommitment(id: number, chatId: string): Promise<boolean> {
+      return db.tx(async () => {
+        const r = await db.get("SELECT id FROM commitments WHERE id = ? AND chat_id = ? AND state = 'open' AND item_id IS NULL", [id, chatId]);
+        if (!r) return false;
+        await db.run("DELETE FROM commitments WHERE id = ?", [id]);
+        return true;
+      });
+    },
     async updateCommitment(id: number, p: CommitmentPatch): Promise<Commitment> {
       return db.tx(async () => {
         if (!(await commitmentById(id))) throw new PlanError("No such commitment");

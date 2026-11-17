@@ -24,7 +24,6 @@ const run = async <T = Record<string, unknown>>(ctx: ActionContext, action: stri
 };
 type Mine = { meetings: { id: number; name: string; source: string }[]; occurrences: { id: number; date: string; state: string; open: number }[]; nudges: { key: string; kind: string }[] };
 type Review = { proposals: Proposal[]; canConfirm: boolean; canWrite: boolean; transcript: { lines: number; speakers: number } | null };
-type Prepared = { previews: { previewId: string; key: string; op: string }[]; refused: unknown[]; commitments: { proposalId: number; side: string }[]; skip: number[] };
 
 describe("meeting capture on the demo (MC-1)", () => {
   const net = useNoOutbound();
@@ -34,51 +33,91 @@ describe("meeting capture on the demo (MC-1)", () => {
     const mine = await run<Mine>(ctx, "meeting.mine");
     expect(mine.meetings.map((m) => [m.name, m.source])).toEqual([["Northwind weekly status call", "upload"]]);
     const occ = mine.occurrences[0]!;
-    expect(occ).toMatchObject({ date: "2026-11-02", state: "ready", open: 6 });
+    expect(occ).toMatchObject({ date: "2026-11-02", state: "ready", open: 11 });
     expect(mine.nudges.map((n) => n.key)).toEqual([`meeting_review:${occ.id}`]);
     const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
-    expect(r.transcript).toEqual({ lines: 8, speakers: 3 });
-    expect(r.proposals.map((p) => p.body.kind)).toEqual(["gap", "commitment", "commitment", "commitment", "comment", "comment"]);
+    expect(r.transcript).toEqual({ lines: 12, speakers: 3 });
+    expect(r.proposals.map((p) => p.body.kind)).toEqual(["gap", "gap", "gap", "commitment", "commitment", "commitment", "commitment", "comment", "comment", "comment", "comment"]);
     const gap = r.proposals[0]!;
     expect(gap.body).toMatchObject({ parentId: 1110, title: "Monthly statement as a PDF" });
     expect(gap.quotes![0]).toMatchObject({ speaker: "Dana Brooks" });
     // Priya is a Cooptimize attendee (her own Promises), Dana is the client (my Waiting on).
     const sides = r.proposals.filter((p) => p.body.kind === "commitment").map((p) => p.body.kind === "commitment" && [p.body.who, p.body.side, p.body.whoId]);
-    expect(sides).toEqual([["Alex Rivera", "cooptimize", expect.any(String)], ["Dana Brooks", "client", null], ["Priya Shah", "cooptimize", PRIYA.aadId.toLowerCase()]]);
+    expect(sides).toEqual([["Alex Rivera", "cooptimize", expect.any(String)], ["Dana Brooks", "client", null], ["Priya Shah", "cooptimize", PRIYA.aadId.toLowerCase()], ["Alex Rivera", "cooptimize", expect.any(String)]]);
     net.expectNone();
   });
 
-  it("one Confirm makes the ticked ones through the existing writes; a skipped one writes nothing; Undo puts it back", async () => {
+  it("each row goes its own way: DevOps changes through the one preview, a promise at once; a skipped one writes nothing; Undo puts it back (MC-1e)", async () => {
     const ctx = await demo();
     const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
-    const { proposals } = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
+    const { proposals, checks } = await run<Review & { checks: Record<string, { needs?: { fill: string }[]; blocked?: string }> }>(ctx, "meeting.review", { occurrenceId: occ.id });
+    const gap = proposals.find((p) => p.body.kind === "gap" && p.body.parentId === 1110)!;
+    const decision = proposals.find((p) => p.body.kind === "comment" && p.body.note === "decision")!;
     const status = proposals.find((p) => p.body.kind === "comment" && p.body.itemId === 1113)!;
-    const keep = proposals.filter((p) => p.id !== status.id).map((p) => p.id);
-    const prep = await run<Prepared>(ctx, "meeting.prepare", { occurrenceId: occ.id, keep });
-    expect(prep.previews.map((p) => p.op).sort()).toEqual(["comment", "create"]);
-    expect(prep.skip).toEqual([status.id]);
+    const onFeature = proposals.find((p) => p.body.kind === "comment" && p.body.itemId === 1110)!;
+    const mine = proposals.find((p) => p.body.kind === "commitment" && p.body.what === "Send the date range filter for review")!;
+    // The checks: Northwind's Epic needs a target date; the older comment on the feature won't be sent.
+    const epic = proposals.find((p) => p.body.kind === "gap" && p.body.type === "Epic")!;
+    expect(checks[epic.id]?.needs).toEqual([{ fill: "date", name: "Target Date" }]);
+    expect(checks[onFeature.id]?.blocked).toMatch(/above story level/);
+    expect(checks[gap.id]).toBeUndefined();
+    // Two DevOps changes, ticked together, in one preview.
     const before = (await run<{ entries: unknown[] }>(ctx, "devops.log")).entries.length;
-    const previews = prep.previews.map((p) => ({ proposalId: Number(p.key.slice(1)), previewId: p.previewId }));
-    const done = await run<{ results: { proposalId: number; ok: boolean }[]; left: number }>(ctx, "meeting.confirm", { occurrenceId: occ.id, keep, previews });
-    expect(done.results.every((x) => x.ok)).toBe(true);
-    expect(done.left).toBe(0);
-    // Two DevOps writes (the create and the decision comment), each in the audit log; none for the skipped status.
+    const prep = await run<{ previews: { previewId: string; key: string; op: string }[]; refused: unknown[] }>(ctx, "devops.preview", { clientKey: "Northwind", changes: [{ kind: "meeting_create", proposalId: gap.id, key: `p${gap.id}` }, { kind: "meeting_comment", proposalId: decision.id, key: `p${decision.id}` }] });
+    expect(prep.previews.map((p) => p.op)).toEqual(["create", "comment"]);
+    const done = await run<{ results: { confirmed: boolean }[] }>(ctx, "devops.confirm", { previewIds: prep.previews.map((p) => p.previewId) });
+    expect(done.results.every((x) => x.confirmed)).toBe(true);
+    // The promise at once, from its row.
+    await run(ctx, "meeting.keep", { proposalId: mine.id });
+    // Skip the status; it writes nothing.
+    await run(ctx, "meeting.edit", { proposalId: status.id, skip: true });
     const log = (await run<{ entries: { id: number; op: string; itemId: number | null; status: string }[] }>(ctx, "devops.log")).entries;
     expect(log.length - before).toBe(2);
     expect(log.filter((e) => e.itemId === 1113 && e.op === "comment")).toEqual([]);
+    // A row skipped after its preview isn't sent at Confirm, and stays skipped (MC-1e, the diff review).
+    const promised = proposals.find((p) => p.body.kind === "comment" && p.body.note === "status" && p.body.itemId === 1111)!;
+    const late = (await run<{ preview: { previewId: string } }>(ctx, "devops.preview", { clientKey: "Northwind", change: { kind: "meeting_comment", proposalId: promised.id } })).preview;
+    await run(ctx, "meeting.edit", { proposalId: promised.id, skip: true });
+    expect(await dispatch(ctx, { action: "devops.confirm", input: { previewId: late.previewId } })).toMatchObject({ ok: false, code: "proposal_changed" });
+    expect((await run<{ entries: unknown[] }>(ctx, "devops.log")).entries.length - before).toBe(2);
+    // The server refuses a call's comment on the feature, whatever sends it.
+    expect(await dispatch(ctx, { action: "devops.preview", input: { clientKey: "Northwind", change: { kind: "meeting_comment", proposalId: onFeature.id } } })).toMatchObject({ ok: false, code: "above_story" });
     const after = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     expect(after.proposals.find((p) => p.id === status.id)!.state).toBe("skipped");
-    const created = after.proposals.find((p) => p.body.kind === "gap")!;
-    expect(created).toMatchObject({ state: "confirmed", result: { itemId: expect.any(Number), writeId: expect.any(Number) } });
-    // The occurrence is reviewed: no nudge for it any more.
-    expect((await run<Mine>(ctx, "meeting.mine")).nudges).toEqual([]);
-    // My commitment is in my Promises; the client's is my Waiting on.
-    const inbox = JSON.stringify(await run(ctx, "my_promises.list"));
-    expect(inbox).toContain("Send the date range filter for review");
+    expect(after.proposals.find((p) => p.id === gap.id)).toMatchObject({ state: "confirmed", result: { itemId: expect.any(Number), writeId: expect.any(Number) } });
+    // My commitment is in my Promises.
+    expect(JSON.stringify(await run(ctx, "my_promises.list"))).toContain("Send the date range filter for review");
     // Undo the comment through the write log: the framework's own undo.
-    const comment = after.proposals.find((p) => p.body.kind === "comment" && p.state === "confirmed")!;
+    const comment = after.proposals.find((p) => p.id === decision.id)!;
+    expect(comment.state).toBe("confirmed");
     const p = (await run<{ preview: { previewId: string } }>(ctx, "devops.preview", { clientKey: "Northwind", change: { kind: "undo", writeId: comment.result!.writeId } })).preview;
     expect(await run(ctx, "devops.confirm", { previewId: p.previewId })).toMatchObject({ confirmed: true });
+    net.expectNone();
+  });
+
+  it("Propose again leaves out what's done, skipped or failed, and says how many are new; the status report shows no call comment (MC-1e)", async () => {
+    const ctx = await demo();
+    const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
+    const { proposals } = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
+    const decision = proposals.find((p) => p.body.kind === "comment" && p.body.note === "decision")!;
+    const mine = proposals.find((p) => p.body.kind === "commitment" && p.body.what === "Send the date range filter for review")!;
+    const epic = proposals.find((p) => p.body.kind === "gap" && p.body.type === "Epic")!;
+    // A comment sent, a promise kept, an epic skipped.
+    const prep = await run<{ previews: { previewId: string }[] }>(ctx, "devops.preview", { clientKey: "Northwind", changes: [{ kind: "meeting_comment", proposalId: decision.id, key: `p${decision.id}` }] });
+    await run(ctx, "devops.confirm", { previewIds: prep.previews.map((p) => p.previewId) });
+    await run(ctx, "meeting.keep", { proposalId: mine.id });
+    await run(ctx, "meeting.edit", { proposalId: epic.id, skip: true });
+    const again = await run<{ outcome: string; added: number; same: number }>(ctx, "meeting.rerun", { occurrenceId: occ.id });
+    // The demo's answer is the same each time: 10 from the AI, 3 of them already decided.
+    expect(again).toMatchObject({ outcome: "done", same: 3, added: 7 });
+    const after = (await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id })).proposals;
+    for (const words of ["Decided with Northwind: CSV only for now; an Excel export waits until next quarter.", "Send the date range filter for review", "Accountant reporting area"]) {
+      const same = after.filter((p) => (p.body.kind === "gap" ? p.body.title : p.body.kind === "commitment" ? p.body.what : p.body.text) === words);
+      expect(same.length).toBe(1);
+    }
+    // The comment went on a story, so the Monday report (features' comments) carries none of the call's words.
+    const report = JSON.stringify(await run(ctx, "status.report", { clientKey: "Northwind" }));
+    expect(report).not.toContain("CSV only for now; an Excel export");
     net.expectNone();
   });
 
@@ -90,8 +129,8 @@ describe("meeting capture on the demo (MC-1)", () => {
     const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
     const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     expect(r.canConfirm).toBe(false);
-    const refused = await dispatch(ctx, { action: "meeting.prepare", input: { occurrenceId: occ.id, keep: [r.proposals[0]!.id] } });
-    expect(refused).toMatchObject({ ok: false, status: 403 });
+    expect(await dispatch(ctx, { action: "meeting.keep", input: { proposalId: r.proposals.find((p) => p.body.kind === "commitment")!.id } })).toMatchObject({ ok: false, status: 403 });
+    expect(await dispatch(ctx, { action: "devops.preview", input: { clientKey: "Northwind", change: { kind: "meeting_create", proposalId: r.proposals[0]!.id } } })).toMatchObject({ ok: false, status: 409 });
     expect((await run<Mine>(ctx, "meeting.mine")).nudges).toEqual([]);
   });
 });

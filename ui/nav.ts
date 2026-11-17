@@ -98,7 +98,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null; view?: "transcript" | "upload"; line?: number } | { kind: "item"; clientKey: string; itemId: number } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null; view?: "transcript" | "upload"; line?: number; /** MC-1e: the Proposals filter, and a proposal to bring into view. */ filter?: "gap" | "commitment" | "comment"; proposal?: number } | { kind: "item"; clientKey: string; itemId: number } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -196,6 +196,8 @@ export function locScreens(loc: Loc): ScreenName[] {
   // A tour is not here: its screen is drawn at once and the tour's card arrives over it (App asks for its file), so
   // the screen's own loading has the same head start on the tour's first step as it always had.
   if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs") out.push(o.kind);
+  // MC-1e: a call's page loads when first opened.
+  if (o?.kind === "meeting") out.push("meetings");
   else if (o?.kind === "item") out.push("card");
   return out;
 }
@@ -232,6 +234,9 @@ const validDate = (s: string) => {
  * "#/day", "#/day/checkin", "#/day/closeout/2026-10-30", "#/week/2026-11-09", "#/week/day/2026-11-03/PM" (the panel on
  * a block), "#/week/2026-11-09/add" (the panel on that week), "#/status", "#/ahead/gantt", "#/inbox", "#/settings/you".
  */
+/** MC-1e: the call page's filter as its address says it. */
+const FILTER_WORD = { gap: "new", commitment: "promises", comment: "comments" } as const;
+
 export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
   if (l.overlay?.kind === "settings") return l.overlay.section ? `#/settings/${l.overlay.section}${l.overlay.setting ? `/${encodeURIComponent(l.overlay.setting)}` : ""}` : "#/settings";
@@ -243,6 +248,9 @@ export function hashOf(l: Loc): string {
     const o = l.overlay;
     if (!o.occurrence) return "#/meetings";
     // MC-1d: a call's Transcript view (and a line in it) or its upload, each an address of its own.
+    // MC-1e: the Proposals filter (#/meetings/<id>/new, /promises, /comments) and a proposal in view (/proposal/<id>).
+    if (!o.view && o.proposal) return `#/meetings/${o.occurrence}/proposal/${o.proposal}`;
+    if (!o.view && o.filter) return `#/meetings/${o.occurrence}/${FILTER_WORD[o.filter]}`;
     return `#/meetings/${o.occurrence}${o.view ? `/${o.view}` : ""}${o.view === "transcript" && o.line ? `/${o.line}` : ""}`;
   }
   // FN-1: a story card, over the place it opened from.
@@ -422,6 +430,10 @@ export function parseHash(full: string): Loc | null {
       const occurrence = Number(a);
       if (b === undefined) return { nav: navOf.week(), overlay: { kind: "meeting", occurrence } };
       if (b === "upload") return c !== undefined || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "upload" } };
+      // MC-1e: the Proposals filter and a proposal in view.
+      const filter = (Object.keys(FILTER_WORD) as (keyof typeof FILTER_WORD)[]).find((k) => FILTER_WORD[k] === b);
+      if (filter) return c !== undefined || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, filter } };
+      if (b === "proposal") return c === undefined || !ID.test(c) || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, proposal: Number(c) } };
       if (b !== "transcript") return null;
       const line = c;
       if (rest.length) return null;

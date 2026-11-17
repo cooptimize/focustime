@@ -36,6 +36,7 @@ const LOADERS = {
   guide: () => import("./guide/Guide.tsx"),
   tour: () => import("./guide/tour/Tour.tsx"),
   docs: () => import("./docs/TechDocs.tsx"),
+  meetings: () => import("./meetings/Meetings.tsx"),
   // PH-1: the phone's own screens; asked for at start only on a phone (ui/main.tsx), never in the background.
   phone: () => import("./phone/PhoneScreens.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;

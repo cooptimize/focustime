@@ -1,41 +1,49 @@
 // MC-1: Client calls, over the page (#/meetings, #/meetings/<occurrence>). The list: the registered calls I review
 // or attend and their recent occurrences. The review: "Update <client>'s plan · <meeting> <date>", one row per
-// proposal with the words it came from; a reviewer ticks, edits or skips each, then one Confirm shows every change in
-// the usual preview and makes them through the existing writes. An attendee who isn't a reviewer can look, not confirm.
+// proposal with the words it came from. MC-1e: made like the rest of the app. Nothing is ticked to start; each row has
+// its own main button (Create in DevOps, Add comment, Add to Promises or Note with this call) and Skip. A new item is
+// edited with the New form's fields; DevOps changes go only through the one DevOps preview (ui/DevOpsWrite.tsx), for
+// one row or for the ticked ones (10 at a time); a promise is saved at once with Undo. A filter, one count, folded
+// skipped and done rows, headers that stay in view, and a way from a transcript line back to its proposals. An
+// attendee who isn't a reviewer can look, not act.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
-import type { DevOpsPreview } from "../../actions/types.ts";
+import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
-import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
-import { callLabel, takeRerun, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_STATE, TRANSCRIPT_TEXT } from "../../plan/call-words.ts";
+import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
+import { callFrom, callLabel, rememberCallFrom, takeRerun, type MineData } from "./calls.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
+import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; canConfirm: boolean; canWrite: boolean };
-type Preview = Pick<DevOpsPreview, "previewId" | "key" | "op" | "summary" | "item" | "identity" | "fields" | "visibility" | "mentions">;
-type Prepared = { previews: Preview[]; refused: { error: string; key?: string }[]; nothing: unknown[]; draftOnly: { proposalId: number; title: string; message: string }[]; commitments: { proposalId: number; who: string; side: string; what: string; due: string | null; shows: string }[]; skip: number[] };
-type Done = { results: { proposalId: number; ok: boolean; message: string }[]; left: number };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const KIND_HEAD: Record<ProposalBody["kind"], string> = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on DevOps items" };
 const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
+const KINDS = ["gap", "commitment", "comment"] as const;
 
 type CallView = "transcript" | "upload";
-export function Meetings({ occurrence, view = null, line = null, onOpen, onClose, onChanged, colors }: { occurrence: number | null; view?: CallView | null; line?: number | null; onOpen: (id: number | null, view?: CallView, line?: number) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string> }) {
+export type CallPlace = { view?: CallView; line?: number; filter?: Exclude<CallFilter, "all">; proposal?: number };
+export function Meetings({ occurrence, view = null, line = null, filter = null, proposal = null, onOpen, onClose, onChanged, colors, today, undoable }: { occurrence: number | null; view?: CallView | null; line?: number | null; filter?: Exclude<CallFilter, "all"> | null; proposal?: number | null; onOpen: (id: number | null, at?: CallPlace) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string>; today: string; undoable?: (text: string, undo: () => Promise<unknown>) => void }) {
   useReturnFocus();
+  // MC-1e: Back returns to where the call was opened from (Day, Week or Client calls); after a reload, Client calls.
+  const back = useCallback(() => {
+    const from = occurrence ? callFrom(occurrence) : null;
+    if (from && from !== location.hash) location.hash = from;
+    else onOpen(null);
+  }, [occurrence, onOpen]);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === "Escape" && !(e.target as HTMLElement | null)?.closest("input, textarea, select, dialog") && (e.preventDefault(), occurrence ? onOpen(null) : onClose());
+    const k = (e: KeyboardEvent) => e.key === "Escape" && !(e.target as HTMLElement | null)?.closest("input, textarea, select, dialog, [data-overlay]") && !document.querySelector("[data-overlay=modal]") && (e.preventDefault(), occurrence ? back() : onClose());
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [occurrence, onOpen, onClose]);
+  }, [occurrence, back, onClose]);
   return (
     <main className="mtg-view" aria-label="Client calls" tabIndex={-1}>
-      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} colors={colors} onBack={() => onOpen(null)} onView={(v, n) => onOpen(occurrence, v ?? undefined, n)} onChanged={onChanged} /> : <CallsList colors={colors} onOpen={(id) => onOpen(id)} onClose={onClose} />}
+      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} filter={filter} focus={proposal} colors={colors} today={today} undoable={undoable} onBack={back} onPlace={(at) => onOpen(occurrence, at)} onChanged={onChanged} /> : <CallsList colors={colors} onOpen={(id) => (rememberCallFrom(id, "#/meetings"), onOpen(id))} onClose={onClose} />}
     </main>
   );
 }
@@ -84,81 +92,191 @@ function CallsList({ colors, onOpen, onClose }: { colors: Record<string, string>
   );
 }
 
-function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { id: number; view: CallView | null; line: number | null; colors: Record<string, string>; onBack: () => void; onView: (v: CallView | null, line?: number) => void; onChanged?: (() => void) | undefined }) {
+function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; onBack: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
+  const w = useDevOpsWrite();
+  const backTo = backWord(callFrom(id));
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [keep, setKeep] = useState<Set<number>>(new Set());
-  const [prep, setPrep] = useState<{ busy: boolean; data: Prepared | null; error: string | null } | null>(null);
-  const [done, setDone] = useState<Done | null>(null);
+  // MC-1e: nothing is ticked to start.
+  const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /** A refusal from the preview, said on its own row (the row keeps everything typed). */
+  const [rowErr, setRowErr] = useState<Record<number, string>>({});
+  /** Folded groups opened: `${kind}:skipped` or `${kind}:done`. */
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   const load = useCallback(async () => {
     try {
       const d = await call<Review>("meeting.review", { occurrenceId: id });
       setR(d);
-      setKeep(new Set(d.proposals.filter((p) => p.state === "open" || p.state === "failed").map((p) => p.id)));
+      // Ticks stay only on rows still to review.
+      setTicked((t) => new Set([...t].filter((x) => d.proposals.some((p) => p.id === x && toReview(p)))));
       setError(null);
-      // MC-1d: the marks on Day and Week follow what changed here (a rerun, an upload, a confirm).
+      // MC-1d: the marks on Day and Week follow what changed here (a rerun, an upload, a write).
       onChanged?.();
     } catch (e) {
       setError(errText(e));
     }
   }, [id, onChanged]);
   useEffect(() => void load(), [load]);
+  const opts = useNewOptions(r?.meeting.clientKey ?? "", !!r?.canConfirm && r.proposals.some((p) => p.body.kind === "gap" && toReview(p)));
   // MC-1d: opening a call puts focus on its heading (a screen reader starts there), not on the page's body.
   const headed = useRef(false);
   useEffect(() => {
     if (!r || headed.current) return;
     headed.current = true;
-    if (view !== "transcript" || !line) document.querySelector<HTMLElement>(".mtg-view h2")?.focus();
-  }, [r, view, line]);
+    if ((view !== "transcript" || !line) && !focus) document.querySelector<HTMLElement>(".mtg-view h2")?.focus();
+  }, [r, view, line, focus]);
+  // MC-1e: a proposal asked for by the address (a transcript line's button): in view and focused, its fold opened.
+  useEffect(() => {
+    if (!r || !focus || view) return;
+    const p = r.proposals.find((x) => x.id === focus);
+    if (!p) return;
+    if (!toReview(p)) setUnfolded((u) => new Set(u).add(`${p.body.kind}:${p.state === "skipped" ? "skipped" : "done"}`));
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`mtg-prop-${p.id}`);
+      el?.scrollIntoView({ block: "start" });
+      el?.classList.add("jumped");
+      setTimeout(() => el?.classList.remove("jumped"), 2500);
+      el?.focus({ preventScroll: true });
+    });
+  }, [r, focus, view]);
+  // MC-1e: the sticky header's height, so each section's header sticks right under it.
+  const stickyRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = stickyRef.current;
+    const host = el?.closest<HTMLElement>(".mtg-view");
+    if (!el || !host) return;
+    // On the phone the document scrolls (under its sticky top bar), so the headers stick under that bar instead.
+    const set = () => {
+      host.style.setProperty("--mtg-head-h", `${el.getBoundingClientRect().height}px`);
+      const bar = host.closest(".app.phone")?.querySelector<HTMLElement>(":scope > .topbar");
+      host.style.setProperty("--mtg-top", bar ? `${bar.getBoundingClientRect().height}px` : "-8px");
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
-  if (error) return (<><BackHead onBack={onBack} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
-  if (!r) return (<><BackHead onBack={onBack} title="Client call" /><p className="muted">Loading…</p></>);
+  if (error) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
+  if (!r) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="muted">Loading…</p></>);
   const m = r.meeting;
   const o = r.occurrence;
-  const open = r.proposals.filter((p) => p.state === "open" || p.state === "failed");
-  const ticked = open.filter((p) => keep.has(p.id));
-  const writes = ticked.filter((p) => p.kind !== "commitment").length;
   const color = clientColor(m.clientKey, colors);
   const editable = r.canConfirm;
+  const can = !!w?.can(m.clientKey);
+  const open = r.proposals.filter(toReview);
+  const counts = { all: open.length, gap: 0, commitment: 0, comment: 0 } as Record<CallFilter, number>;
+  for (const p of open) counts[p.body.kind]++;
+  const done = r.proposals.filter((p) => p.state === "confirmed").length;
+  const skipped = r.proposals.filter((p) => p.state === "skipped").length;
+  const shownKinds = filter ? [filter] : KINDS;
+  const checkOf = (p: Proposal) => r.checks[String(p.id)];
+  /** Can this row go to DevOps now: nothing needed, nothing the form can't fill, not above story level. */
+  const ready = (p: Proposal) => !checkOf(p)?.needs?.length && !checkOf(p)?.cant && !checkOf(p)?.blocked;
 
   const edit = async (p: Proposal, patch: Record<string, unknown>) => {
     try {
-      const { proposal } = await call<{ proposal: Proposal }>("meeting.edit", { proposalId: p.id, ...patch });
-      setR((x) => (x ? { ...x, proposals: x.proposals.map((y) => (y.id === p.id ? proposal : y)) } : x));
+      await call<{ proposal: Proposal }>("meeting.edit", { proposalId: p.id, ...patch });
+      setRowErr((e) => (e[p.id] ? Object.fromEntries(Object.entries(e).filter(([k]) => Number(k) !== p.id)) : e));
+      await load();
     } catch (e) {
       setNote(errText(e));
     }
   };
-  const startConfirm = async () => {
-    setPrep({ busy: true, data: null, error: null });
-    try {
-      setPrep({ busy: false, data: await call<Prepared>("meeting.prepare", { occurrenceId: o.id, keep: ticked.map((p) => p.id) }), error: null });
-    } catch (e) {
-      setPrep({ busy: false, data: null, error: errText(e) });
-    }
+  /** DevOps changes, only through the one preview: one row, or the ticked ones (the first 10 in page order). */
+  const send = async (ps: Proposal[]) => {
+    if (!w || !ps.length) return;
+    const go = callBatch(ps, () => true).now;
+    const changes: DevOpsChange[] = go.map((p) => ({ kind: p.body.kind === "gap" ? "meeting_create" : "meeting_comment", proposalId: p.id, key: `p${p.id}` }));
+    setBusy(true);
+    setNote(null);
+    setRowErr((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !go.some((p) => p.id === Number(k)))));
+    await w.begin(m.clientKey, changes, (res) => {
+      setBusy(false);
+      if (res.refused?.length) setRowErr((e) => ({ ...e, ...Object.fromEntries(res.refused!.map((x) => [Number(x.key.slice(1)), x.error])) }));
+      if (res.error) (go.length === 1 ? setRowErr((e) => ({ ...e, [go[0]!.id]: res.error! })) : setNote(res.error));
+      if (res.confirmed) forgetCallOptions();
+      void load();
+    }, { inline: true });
   };
-  const confirm = async () => {
-    if (!prep?.data) return;
-    setPrep({ ...prep, busy: true });
-    try {
-      const previews = prep.data.previews.filter((p) => p.key?.startsWith("p")).map((p) => ({ proposalId: Number(p.key!.slice(1)), previewId: p.previewId }));
-      const mentionsOk = prep.data.previews.some((p) => p.mentions?.length);
-      setDone(await call<Done>("meeting.confirm", { occurrenceId: o.id, keep: ticked.map((p) => p.id), previews, ...(mentionsOk ? { mentionsOk: true } : {}) }));
-      setPrep(null);
+  const keep = async (ps: Proposal[]) => {
+    setBusy(true);
+    setNote(null);
+    const kept: number[] = [];
+    let last = "";
+    for (const p of ps) {
+      try {
+        last = (await call<{ message: string }>("meeting.keep", { proposalId: p.id })).message;
+        kept.push(p.id);
+      } catch (e) {
+        setRowErr((x) => ({ ...x, [p.id]: errText(e) }));
+      }
+    }
+    setBusy(false);
+    await load();
+    if (kept.length) undoable?.(kept.length === 1 ? last : `${kept.length} promises kept`, async () => {
+      for (const k of kept) await call("meeting.unkeep", { proposalId: k });
       await load();
-    } catch (e) {
-      setPrep({ ...prep, busy: false, error: errText(e) });
-    }
+    });
   };
+  const skip = async (ps: Proposal[], on = true) => {
+    setBusy(true);
+    const done: number[] = [];
+    for (const p of ps) await call("meeting.edit", { proposalId: p.id, skip: on }).then(() => done.push(p.id), (e: unknown) => setNote(errText(e)));
+    setBusy(false);
+    await load();
+    // Several skipped at once can be taken back together.
+    if (on && done.length > 1) undoable?.(CALL_ROW.skipped(done.length), async () => {
+      for (const k of done) await call("meeting.edit", { proposalId: k, skip: false });
+      await load();
+    });
+  };
+  const tick = (p: Proposal, on: boolean) => setTicked((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; });
+  const tickedRows = r.proposals.filter((p) => ticked.has(p.id) && toReview(p));
+  const tickedDevops = tickedRows.filter((p) => p.body.kind !== "commitment");
+  const batch = callBatch(tickedDevops, ready);
+  const sendable = [...batch.now, ...batch.later];
+  const tickedPromises = tickedRows.filter((p) => p.body.kind === "commitment");
 
   return (
     <>
-      <BackHead onBack={onBack} title={`Update ${m.clientName}'s plan`} sub={`${m.name} · ${dayLabel(o.date)}`} />
-      <p className="muted mtg-intro">
+      <div className="mtg-sticky" ref={stickyRef}>
+        <BackHead onBack={onBack} to={backTo} title={`Update ${m.clientName}'s plan`} sub={`${m.name} · ${dayLabel(o.date)}`} />
+        {r.transcript || r.proposals.length ? (
+          <div className="mtg-filter-row">
+            {view !== "transcript" && r.proposals.length > 0 && (
+              <div className="seg mtg-filter" role="group" aria-label="Show">
+                {CALL_FILTERS.map((f) => (
+                  <button key={f.key} type="button" className={`seg-btn${(filter ?? "all") === f.key ? " on" : ""}`} aria-pressed={(filter ?? "all") === f.key} onClick={() => onPlace(f.key === "all" ? undefined : { filter: f.key })}>
+                    {f.label} <span className="seg-count">{counts[f.key]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {r.transcript && (
+              <div className="seg mtg-switch" role="group" aria-label="This call">
+                <button type="button" className={`seg-btn${view !== "transcript" ? " on" : ""}`} aria-pressed={view !== "transcript"} onClick={() => onPlace(filter ? { filter } : undefined)}>
+                  {TRANSCRIPT_TEXT.tabProposals} <span className="seg-count">{open.length}</span>
+                </button>
+                <button type="button" className={`seg-btn${view === "transcript" ? " on" : ""}`} aria-pressed={view === "transcript"} onClick={() => onPlace({ view: "transcript" })}>
+                  {TRANSCRIPT_TEXT.tab}
+                </button>
+              </div>
+            )}
+            {r.proposals.length > 0 && (
+              <span className="muted mtg-count" role="status">
+                {CALL_ROW.toReview(open.length)}{done ? ` · ${CALL_ROW.done(done)}` : ""}{skipped ? ` · ${CALL_ROW.skipped(skipped)}` : ""}
+              </span>
+            )}
+          </div>
+        ) : null}
+      </div>
+      {view !== "transcript" && <p className="muted mtg-intro">
         {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
-        {editable ? "Tick what's right, change the words where needed, and skip the rest. Nothing changes until you confirm." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can confirm. You can look.`}
-      </p>
+        {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
+      </p>}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
@@ -170,51 +288,60 @@ function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { i
       {note && <p className="error-line" role="alert">{note}</p>}
       {(o.state === "needs_upload" || o.state === "waiting" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
-      {done && (
-        <section className="mtg-done" role="status" aria-label="What was done">
-          <h3>{done.results.filter((x) => x.ok).length} done{done.results.some((x) => !x.ok) ? `, ${done.results.filter((x) => !x.ok).length} didn't go through` : ""}</h3>
-          <ul>{done.results.map((x) => <li key={x.proposalId} className={x.ok ? undefined : "problem"}>{x.message}</li>)}</ul>
-          <p className="muted">Undo any DevOps change in Settings › Activity.</p>
-        </section>
-      )}
-      {/* MC-1d: Proposals and the Transcript (read only, loaded when opened), each its own address. */}
-      {r.transcript && (
-        <div className="mtg-tabs" role="tablist" aria-label="This call">
-          <button type="button" role="tab" id="mtg-tab-proposals" aria-selected={view !== "transcript"} aria-controls="mtg-panel" className={view !== "transcript" ? "on" : undefined} onClick={() => onView(null)}>
-            {TRANSCRIPT_TEXT.tabProposals} <span className="muted">{r.proposals.length}</span>
-          </button>
-          <button type="button" role="tab" id="mtg-tab-transcript" aria-selected={view === "transcript"} aria-controls="mtg-panel" className={view === "transcript" ? "on" : undefined} onClick={() => onView("transcript")}>
-            {TRANSCRIPT_TEXT.tab} <span className="muted">{r.transcript.lines}</span>
-          </button>
-        </div>
-      )}
       {view === "transcript" ? (
-        <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} />
+        <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
       ) : (<>
-      {(["gap", "commitment", "comment"] as const).map((kind) => {
-        const ps = r.proposals.filter((p) => p.body.kind === kind);
-        if (!ps.length) return null;
-        return (
-          <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={KIND_HEAD[kind]}>
-            <h3>{KIND_HEAD[kind]} <span className="muted">{ps.length}</span></h3>
-            {ps.map((p) => <ProposalRow key={p.id} p={p} ticked={keep.has(p.id)} editable={editable} onTick={(on) => setKeep((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; })} onEdit={(patch) => void edit(p, patch)} onShowLines={r.transcript ? (n) => onView("transcript", n) : undefined} />)}
-          </section>
-        );
-      })}
-      {o.state === "ready" && !r.proposals.length && <p className="muted">Nothing to propose from this call.</p>}
-      {editable && open.length > 0 && (
-        <div className="mtg-bar">
-          <span role="status">{ticked.length} of {open.length} ticked{writes && !r.canWrite ? " · Enable DevOps writes for this client in Settings › DevOps first" : ""}</span>
-          <span className="mtg-bar-actions">
-            <button type="button" className="mini" onClick={() => setKeep(new Set())} disabled={!ticked.length}>Untick all</button>
-            <button type="button" className="mini primary" disabled={!ticked.length || (writes > 0 && !r.canWrite) || prep?.busy} onClick={() => void startConfirm()}>
-              {prep?.busy ? "Preparing…" : `Confirm ${ticked.length}`}
-            </button>
-          </span>
-        </div>
-      )}
+        {shownKinds.map((kind) => {
+          const all = r.proposals.filter((p) => p.body.kind === kind);
+          if (!all.length) return null;
+          const rows = all.filter(toReview);
+          const folds = (["done", "skipped"] as const).map((k) => ({ k, ps: all.filter((p) => (k === "done" ? p.state === "confirmed" : p.state === "skipped")) })).filter((f) => f.ps.length);
+          const selectable = rows.filter((p) => !checkOf(p)?.blocked);
+          const allOn = selectable.length > 0 && selectable.every((p) => ticked.has(p.id));
+          return (
+            <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={SECTION_HEAD[kind]}>
+              <h3 className="mtg-sec-head">
+                <span>{SECTION_HEAD[kind]} <span className="muted">{CALL_ROW.toReview(rows.length)}</span></span>
+                {editable && selectable.length > 0 && (
+                  <button type="button" className="mini quiet" aria-pressed={allOn} onClick={() => setTicked((s) => { const n = new Set(s); for (const p of selectable) if (allOn) n.delete(p.id); else n.add(p.id); return n; })}>
+                    {allOn ? CALL_BAR.clear : CALL_ROW.selectAll}
+                  </button>
+                )}
+              </h3>
+              {rows.map((p) => <ProposalRow key={p.id} p={p} check={checkOf(p)} err={rowErr[p.id] ?? null} ticked={ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
+              {!rows.length && <p className="muted mtg-none">Nothing left to review here.</p>}
+              {folds.map((f) => {
+                const key = `${kind}:${f.k}`;
+                const isOpen = unfolded.has(key);
+                return (
+                  <div key={key} className="mtg-fold">
+                    <button type="button" className="link-btn" aria-expanded={isOpen} onClick={() => setUnfolded((u) => { const n = new Set(u); if (isOpen) n.delete(key); else n.add(key); return n; })}>
+                      <Icon name={isOpen ? "open" : "closed"} /> {f.k === "done" ? CALL_ROW.done(f.ps.length) : CALL_ROW.skipped(f.ps.length)}
+                    </button>
+                    {isOpen && f.ps.map((p) => <ProposalRow key={p.id} p={p} check={undefined} err={null} ticked={false} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={() => {}} onEdit={() => {}} onSend={() => {}} onKeep={() => {}} onSkip={(on) => void skip([p], on)} onEnable={() => {}} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })}
+        {o.state === "ready" && !r.proposals.length && <p className="muted">Nothing to propose from this call.</p>}
+        {editable && tickedRows.length > 0 && (
+          <div className="bl-bulk mtg-bulk" role="toolbar" aria-label="Selected proposals">
+            <strong>{CALL_BAR.selected(tickedRows.length)}</strong>
+            {tickedDevops.length > 0 && (can ? (
+              <button type="button" className="mini primary" disabled={busy || !sendable.length} onClick={() => void send(batch.now)}>{CALL_BAR.devops(batch.now.length)}</button>
+            ) : (
+              <button type="button" className="mini quiet dw-enable" onClick={() => w?.enable(m.clientKey)} title={CALL_BAR.noPat}>Enable DevOps writes</button>
+            ))}
+            {tickedPromises.length > 0 && <button type="button" className="mini" disabled={busy} onClick={() => void keep(tickedPromises)}>{CALL_BAR.promises(tickedPromises.filter((x) => x.body.kind === "commitment" && x.body.side === "cooptimize").length, tickedPromises.filter((x) => x.body.kind === "commitment" && x.body.side !== "cooptimize").length)}</button>}
+            <button type="button" className="mini" disabled={busy} onClick={() => void skip(tickedRows)}>{CALL_BAR.skip}</button>
+            <button type="button" className="mini quiet" disabled={busy} onClick={() => setTicked(new Set())}>{CALL_BAR.clear}</button>
+            {can && batch.later.length > 0 && <span className="muted" role="note">{CALL_BAR.tenAtATime(sendable.length)}</span>}
+            {can && batch.waiting.length > 0 && <span className="muted">{CALL_BAR.waiting(batch.waiting.length)}</span>}
+          </div>
+        )}
       </>)}
-      {prep && (prep.data || prep.error) && <ConfirmDialog prep={prep} skipped={open.length - ticked.length} onCancel={() => setPrep(null)} onConfirm={() => void confirm()} />}
     </>
   );
 }
@@ -227,7 +354,7 @@ type Line = { n: number; speaker: string; at: string; sec: number; text: string 
  * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
  * is scrolled to and focused.
  */
-function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrenceId: number; startAt: string; proposals: Proposal[]; line: number | null }) {
+function TranscriptView({ occurrenceId, startAt, proposals, line, onProposal }: { occurrenceId: number; startAt: string; proposals: Proposal[]; line: number | null; /** MC-1e: back to a proposal, in view and focused. */ onProposal: (id: number) => void }) {
   // A line's time of day (the call's start plus its offset), so "1:05" never reads as five past one.
   const time = (sec: number) => new Date(Date.parse(startAt) + sec * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
@@ -240,16 +367,13 @@ function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrence
       live = false;
     };
   }, [occurrenceId]);
-  // Which proposals rest on each line (their first words, for the mark's label).
+  // Which proposals rest on each line (their words, for the button's label).
   const marks = useMemo(() => {
-    const m = new Map<number, string[]>();
-    for (const p of proposals) {
-      const b = p.body;
-      const what = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
-      for (const n of b.lines) m.set(n, [...(m.get(n) ?? []), what]);
-    }
+    const m = new Map<number, { id: number; what: string }[]>();
+    for (const p of proposals) for (const n of p.body.lines) m.set(n, [...(m.get(n) ?? []), { id: p.id, what: proposalWords(p.body) }]);
     return m;
   }, [proposals]);
+  const [listAt, setListAt] = useState<number | null>(null);
   useEffect(() => {
     if (!data || !line) return;
     setQ("");
@@ -263,7 +387,7 @@ function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrence
   const needle = q.trim().toLowerCase();
   const shown = needle ? data.lines.filter((l) => l.text.toLowerCase().includes(needle) || l.speaker.toLowerCase().includes(needle)) : data.lines;
   return (
-    <section className="mtg-transcript" id="mtg-panel" role="tabpanel" aria-labelledby="mtg-tab-transcript">
+    <section className="mtg-transcript" aria-label={TRANSCRIPT_TEXT.tab}>
       <div className="mtg-tr-bar">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={TRANSCRIPT_TEXT.filterHint} aria-label={TRANSCRIPT_TEXT.filter} />
         <span className="muted" role="status">{needle && !shown.length ? TRANSCRIPT_TEXT.none(q.trim()) : TRANSCRIPT_TEXT.count(shown.length, data.lines.length)}</span>
@@ -273,13 +397,25 @@ function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrence
         {shown.map((l) => {
           const on = marks.get(l.n);
           return (
-            <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}` } : {})}>
+            <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.map((x) => x.what).join("; ")}` } : {})}>
               <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>
               <span className="mtg-who">{l.speaker}</span>
               <span className="mtg-line-text">{l.text}</span>
               {on && (
-                <span className="mtg-line-mark" title={`${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}`} aria-hidden="true">
-                  {on.length === 1 ? "Proposal" : `${on.length} proposals`}
+                // MC-1e: from the line to its proposal (a short list when several rest on it).
+                <span className="mtg-line-mark">
+                  {on.length === 1 ? (
+                    <button type="button" className="mini quiet" onClick={() => onProposal(on[0]!.id)} aria-label={`${CALL_ROW.goToProposal}: ${on[0]!.what}`} title={on[0]!.what}>{CALL_ROW.showLine(1)}</button>
+                  ) : (
+                    <>
+                      <button type="button" className="mini quiet" aria-expanded={listAt === l.n} aria-controls={`mtg-line-list-${l.n}`} onClick={() => setListAt(listAt === l.n ? null : l.n)}>{CALL_ROW.showLine(on.length)}</button>
+                      {listAt === l.n && (
+                        <ul className="mtg-line-list" id={`mtg-line-list-${l.n}`}>
+                          {on.map((x) => <li key={x.id}><button type="button" className="link-btn" onClick={() => onProposal(x.id)}>{x.what}</button></li>)}
+                        </ul>
+                      )}
+                    </>
+                  )}
                 </span>
               )}
             </li>
@@ -290,11 +426,15 @@ function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrence
   );
 }
 
-function BackHead({ onBack, title, sub }: { onBack: () => void; title: string; sub?: string }) {
+/** MC-1e: the place Back returns to, in words: where the call was opened from. */
+const BACK_TO: [RegExp, string][] = [[/^#\/(day|today)(\/|$)/, "Day"], [/^#\/week(\/|$)/, "Week"], [/^#\/backlog(\/|$)/, "Backlog"], [/^#\/status(\/|$)/, "Status"], [/^#\/inbox(\/|$)/, "Inbox"]];
+export const backWord = (hash: string | null): string => BACK_TO.find(([re]) => hash && re.test(hash))?.[1] ?? "Calls";
+
+function BackHead({ onBack, title, sub, to = "Calls" }: { onBack: () => void; title: string; sub?: string; to?: string }) {
   return (
     <header className="page-head">
       <div className="ph-title">
-        <button type="button" className="mini quiet" onClick={onBack} aria-label="Back to client calls"><Icon name="back" /> Calls</button>
+        <button type="button" className="mini quiet" onClick={onBack} aria-label={to === "Calls" ? "Back to client calls" : `Back to ${to}`}><Icon name="back" /> {to}</button>
         <h2 tabIndex={-1}>{title}</h2>
         {sub && <span className="muted">{sub}</span>}
       </div>
@@ -315,34 +455,41 @@ function Quotes({ qs }: { qs: Quote[] | null }) {
   );
 }
 
-function ProposalRow({ p, ticked, editable, onTick, onEdit, onShowLines }: { p: Proposal; ticked: boolean; editable: boolean; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onShowLines?: ((line: number) => void) | undefined }) {
+function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, onTick, onEdit, onSend, onKeep, onSkip, onEnable, onShowLines }: { p: Proposal; check: ProposalCheck | undefined; err: string | null; ticked: boolean; editable: boolean; can: boolean; busy: boolean; clientKey: string; opts: ReturnType<typeof useNewOptions>; today: string; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onSend: () => void; onKeep: () => void; onSkip: (on: boolean) => void; onEnable: () => void; onShowLines?: ((line: number) => void) | undefined }) {
   const b = p.body;
-  const decided = p.state === "confirmed" || p.state === "skipped";
-  const main = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
+  const live = toReview(p);
+  const main = proposalWords(b);
   const [text, setText] = useState(main);
   useEffect(() => setText(main), [main]);
   const field = b.kind === "gap" ? "title" : b.kind === "commitment" ? "what" : "text";
   const save = () => text.trim() && text.trim() !== main && onEdit({ [field]: text.trim() });
   const where =
-    b.kind === "gap" ? `${b.type}${b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ", not under a feature yet (saved as your draft)"}`
-    : b.kind === "commitment" ? `${b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
-    : `${NOTE[b.note]} on #${b.itemId} ${b.itemTitle}`;
-  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "client" ? "Noted with this call" : "Added to Promises") : "Done")) : p.state === "skipped" ? "Skipped" : p.state === "failed" ? (p.result?.message ?? "Didn't go through") : null;
+    b.kind === "commitment" ? `${b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
+    : b.kind === "comment" ? `${NOTE[b.note]} on #${b.itemId} ${b.itemTitle} (${b.itemType})`
+    : null;
+  const needs = check?.needs ?? [];
+  const blocked = check?.blocked ?? null;
+  const stuck = needs.length > 0 || !!check?.cant || !!blocked;
+  const failed = p.state === "failed";
+  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "client" ? "Noted with this call" : "Added to Promises") : "Done")) : p.state === "skipped" ? "Skipped" : null;
+  const mainLabel = b.kind === "commitment" ? (b.side === "cooptimize" ? CALL_ROW.promise : CALL_ROW.note) : failed ? CALL_ROW.tryAgain : b.kind === "gap" ? CALL_ROW.create : CALL_ROW.comment;
   return (
-    <article className={`mtg-prop ${p.state}`}>
-      <label className="mtg-tick">
-        <input type="checkbox" checked={decided ? p.state === "confirmed" : ticked} disabled={!editable || decided} onChange={(e) => onTick(e.target.checked)} aria-label={`Keep: ${main}`} />
-      </label>
+    <article id={`mtg-prop-${p.id}`} tabIndex={-1} className={`mtg-prop ${p.state}${ticked ? " ticked" : ""}${stuck ? " stuck" : ""}`} aria-label={main}>
+      <span className="mtg-tick">
+        {editable && live && !blocked && <input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} aria-label={`Select: ${main}`} />}
+      </span>
       <div className="mtg-prop-body">
-        {editable && !decided ? (
-          b.kind === "comment" ? <TextBox minRows={2} maxRows={8} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label="Comment" /> : <input value={text} maxLength={200} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label={b.kind === "gap" ? "Title" : "What"} />
+        {editable && live ? (
+          b.kind === "comment" ? <TextBox minRows={2} maxRows={8} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label="Comment" /> : <input value={text} maxLength={b.kind === "gap" ? 255 : 200} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label={b.kind === "gap" ? "Title" : "What"} />
         ) : (
           <p className="mtg-main">{main}</p>
         )}
-        <p className="muted mtg-where">{where}</p>
+        {where && <p className="muted mtg-where">{where}</p>}
+        {b.kind === "gap" && (live ? <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable} check={check} onEdit={onEdit} /> : <p className="muted mtg-where">{b.type}{b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ""}</p>)}
+        {live && needs.length > 0 && <p className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name))}</p>}
+        {live && check?.cant && <p className="mtg-need" role="status">{check.cant}</p>}
+        {live && blocked && <p className="mtg-need" role="note">{blocked}</p>}
         {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
-        {b.kind === "gap" && b.description && <p className="mtg-desc">{b.description}</p>}
-        {b.kind === "comment" && b.inReport && <p className="mtg-report">Will appear in Kat's Monday report</p>}
         <Quotes qs={p.quotes} />
         {/* MC-1d: the jump to the lines this proposal rests on, in the Transcript view (while the transcript is kept). */}
         {onShowLines && b.lines.length > 0 && p.quotes && (
@@ -350,88 +497,31 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit, onShowLines }: { p: 
             {CALL_ACTIONS.showLines}
           </button>
         )}
-        {state && <p className={`mtg-state-line${p.state === "failed" ? " problem" : ""}`}>{state}</p>}
+        {failed && p.result?.message && <p className="mtg-state-line problem" role="alert">{p.result.message}</p>}
+        {err && <p className="mtg-state-line problem" role="alert">{err}</p>}
+        {state && <p className="mtg-state-line">{state}</p>}
       </div>
-      {editable && !decided && (
-        <button type="button" className="mini quiet" onClick={() => onEdit({ skip: true })}>Skip</button>
-      )}
-      {editable && p.state === "skipped" && (
-        <button type="button" className="mini quiet" onClick={() => onEdit({ skip: false })}>Bring back</button>
+      {editable && (
+        <div className="mtg-prop-actions">
+          {live && !blocked && (b.kind === "commitment" ? (
+            <button type="button" className="mini primary" disabled={busy} onClick={onKeep}>{mainLabel}</button>
+          ) : can ? (
+            <button type="button" className="mini primary" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
+          ) : (
+            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › DevOps">Enable DevOps writes</button>
+          ))}
+          {live && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(true)}>{CALL_ROW.skip}</button>}
+          {p.state === "skipped" && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(false)}>{CALL_ROW.bringBack}</button>}
+        </div>
       )}
     </article>
   );
 }
 
-function ConfirmDialog({ prep, skipped, onCancel, onConfirm }: { prep: { busy: boolean; data: Prepared | null; error: string | null }; skipped: number; onCancel: () => void; onConfirm: () => void }) {
-  const d = prep.data;
-  // On document.body: the page's own layout makes a containing block, so a fixed backdrop inside it stops at its edge.
-  return createPortal(
-    <div className="mtg-confirm" role="dialog" aria-modal="true" aria-label="Confirm these changes">
-      <div className="mtg-confirm-box">
-        <h3>Confirm these changes</h3>
-        {prep.error && <p className="error-line" role="alert">{prep.error}</p>}
-        {d && (
-          <>
-            {d.previews.length > 0 && (
-              <section>
-                <h4>In DevOps, as you</h4>
-                <ul>
-                  {d.previews.map((p) => (
-                    <li key={p.previewId}>
-                      <strong>{p.summary}</strong> <span className="muted">{p.item} · as {p.identity}</span>
-                      <PreviewRows rows={p.fields} />
-                      {p.mentions?.length ? <p className="mention-flag" role="alert">This mentions {p.mentions.join(", ")}, and this client's DevOps can be seen by people outside Cooptimize. Edit the proposal to change it, or confirm to save your words as written.</p> : null}
-                      <span className="muted mtg-field">{p.visibility}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {d.refused.length > 0 && (
-              <section>
-                <h4>Can't be written</h4>
-                <ul>{d.refused.map((x, i) => <li key={i} className="problem">{x.error}</li>)}</ul>
-              </section>
-            )}
-            {d.draftOnly.length > 0 && (
-              <section>
-                <h4>Your drafts</h4>
-                <ul>{d.draftOnly.map((x) => <li key={x.proposalId}>{x.title}: {x.message}</li>)}</ul>
-              </section>
-            )}
-            {d.commitments.length > 0 && (
-              <section>
-                <h4>Promises</h4>
-                <ul>{d.commitments.map((c) => <li key={c.proposalId}>{c.who}: {c.what}{c.due ? ` · due ${dayLabel(c.due)}` : ""} <span className="muted">({c.shows})</span></li>)}</ul>
-              </section>
-            )}
-            {skipped > 0 && <p className="muted">{skipped} skipped: nothing is written for {skipped === 1 ? "it" : "them"}.</p>}
-          </>
-        )}
-        <div className="mtg-confirm-actions">
-          <button type="button" className="mini" onClick={onCancel}>Cancel</button>
-          <button type="button" className="mini primary" disabled={!d || prep.busy} onClick={onConfirm}>{prep.busy ? "Confirming…" : "Confirm"}</button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function PreviewRows({ rows }: { rows: DevOpsPreview["fields"] }) {
-  return (
-    <span className="mtg-fields">
-      {rows.filter((f) => f.changed).slice(0, 6).map((f, i) => (
-        <span key={i} className="mtg-field">{f.label}: {f.before ? <><s>{clip(f.before)}</s> → </> : null}{clip(f.after ?? "")}</span>
-      ))}
-    </span>
-  );
-}
-const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 159)}…` : s);
-
 /**
  * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
- * it replaces the open proposals, the done and skipped ones stay) and Upload a transcript (a file in its place).
+ * it replaces the open proposals, the done, skipped and failed ones stay; MC-1e: the same thing again is left out) and
+ * Upload a transcript (a file in its place).
  */
 function CallActions({ series, occ, onDone, focusUpload = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean }) {
   const [busy, setBusy] = useState<"rerun" | "upload" | null>(null);
@@ -449,12 +539,13 @@ function CallActions({ series, occ, onDone, focusUpload = false }: { series: Ser
   const [msg, setMsg] = useState<string | null>(null);
   const rerun = async (ask = true) => {
     // It replaces the open proposals, with any words changed in them; the ones done or skipped stay.
-    if (ask && occ.open > 0 && !window.confirm(`Propose again? The ${occ.open} open ${occ.open === 1 ? "proposal is" : "proposals are"} replaced, with any words you changed. The ones done or skipped stay.`)) return;
+    if (ask && occ.open > 0 && !window.confirm(`Propose again? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out.`)) return;
     setBusy("rerun");
     setMsg(null);
     try {
-      const r = await call<{ outcome: string; proposals: number }>("meeting.rerun", { occurrenceId: occ.id });
-      setMsg(r.outcome === "done" ? (r.proposals ? `${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.` : "The AI step ran: nothing to propose from this call.") : CALL_STATE.aiFailed);
+      const r = await call<{ outcome: string; proposals: number; added: number; same: number }>("meeting.rerun", { occurrenceId: occ.id });
+      // MC-1e: how many are new, and how many were left out as the same as one already done, skipped or failed.
+      setMsg(r.outcome === "done" ? rerunLine(r.added, r.same) : CALL_STATE.aiFailed);
       await onDone();
     } catch (e) {
       setMsg(errText(e));
@@ -480,7 +571,7 @@ function CallActions({ series, occ, onDone, focusUpload = false }: { series: Ser
   return (
     <div className="mtg-actions" role="group" aria-label="This call">
       {canRerun && (
-        <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done or skipped stay.">
+        <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done, skipped or failed stay, and the same thing again is left out.">
           {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
         </button>
       )}
