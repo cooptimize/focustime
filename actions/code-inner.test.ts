@@ -240,3 +240,13 @@ describe("the rules every read keeps", () => {
     expect(views).toEqual([]);
   });
 });
+
+describe("review 2: a TMDL line of any length parses in linear time", () => {
+  it("a million spaces in a table or measure line", async () => {
+    const { tmdlTableFields } = await import("../plan/where-inner.ts");
+    const pad = " ".repeat(1_000_000);
+    const t0 = performance.now();
+    expect(tmdlTableFields(`table a${pad}x\n\tmeasure m${pad}x = 1\n\tmeasure 'Total ''Net'' Sales' = 1\n\tcolumn Id\n`, null)).toEqual([{ name: `m${pad}x`, what: "measure" }, { name: "Total 'Net' Sales", what: "measure" }, { name: "Id", what: "column" }]);
+    expect(performance.now() - t0).toBeLessThan(500);
+  });
+});

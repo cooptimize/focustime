@@ -424,9 +424,11 @@ async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: C
       if (!files) return bad(CODE_TEXT.notListable, 404, "not_listable");
       event = "pages_listed";
       if ("legacy" in files) {
-        const [text] = await open([files.legacy]);
-        const pages = text === null || text === undefined ? null : legacyPages(text);
-        read = text !== null && text !== undefined;
+        const f = await git.file(client.clientKey, repo, files.legacy);
+        if (f.kind === "too_large") return bad(CODE_TEXT.tooLarge, 413, "too_large");
+        const text = f.kind === "text" ? f.text : null;
+        const pages = text === null ? null : legacyPages(text);
+        read = text !== null;
         if (!pages) return read ? (await logged(log, event, path)) ?? bad(CODE_TEXT.notListable, 422, "unreadable") : failure("error", client.name);
         answer = { list, pages, unreadable: 0 };
       } else {

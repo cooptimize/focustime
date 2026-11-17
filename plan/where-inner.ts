@@ -175,8 +175,23 @@ const unquote = (raw: string) => {
   const r = raw.trim();
   return r.startsWith("'") && r.endsWith("'") && r.length > 1 ? r.slice(1, -1).replace(/''/g, "'") : r;
 };
-const TABLE_LINE = /^(?:createOrReplace\s+)?table\s+('(?:[^']|'')*'|\S.*?)\s*$/;
-const FIELD_LINE = /^(?:\t| {4})(measure|column)\s+('(?:[^']|'')*'|[^\s='][^=]*?)\s*(?:=|$)/;
+// Linear on any line (review 2): the line's end is trimmed first and nothing is matched lazily up to a run of spaces.
+const TABLE_LINE = /^(?:createOrReplace\s+)?table\s+(\S.*)$/;
+const FIELD_LINE = /^(?:\t| {4})(measure|column)\s+(\S.*)$/;
+/** A declaration's name: 'Total Sales' up to its closing quote, or the words before " =". */
+const nameOf = (rest: string): string => {
+  if (rest.startsWith("'")) {
+    let i = 1;
+    while (i < rest.length) {
+      if (rest[i] === "'" && rest[i + 1] === "'") i += 2;
+      else if (rest[i] === "'") break;
+      else i++;
+    }
+    return unquote(rest.slice(0, i + 1));
+  }
+  const eq = rest.indexOf("=");
+  return (eq < 0 ? rest : rest.slice(0, eq)).trimEnd();
+};
 
 /**
  * The measures and columns declared under "table <name>" in one TMDL file (a table's own file, or another file that
@@ -188,17 +203,18 @@ export function tmdlTableFields(text: string, table: string | null): InnerField[
   let seen = false;
   let inTable = false;
   const out: InnerField[] = [];
-  for (const l of lines) {
+  for (const raw of lines) {
+    const l = raw.trimEnd();
     if (/^\S/.test(l)) {
       const m = TABLE_LINE.exec(l);
-      inTable = !!m && (table === null || lower(unquote(m[1]!)) === lower(table));
+      inTable = !!m && (table === null || lower(nameOf(m[1]!)) === lower(table));
       if (m) seen = true;
       continue;
     }
     if (!inTable) continue;
     const f = FIELD_LINE.exec(l);
     if (!f) continue;
-    const name = unquote(f[2]!);
+    const name = nameOf(f[2]!);
     if (name) out.push({ name, what: f[1] as "measure" | "column" });
   }
   return seen ? out : null;
@@ -207,8 +223,8 @@ export function tmdlTableFields(text: string, table: string | null): InnerField[
 /** The name a TMDL table's own file declares (its first "table" line), or null. */
 export function tmdlTableName(text: string): string | null {
   for (const l of text.split(/\r?\n/)) {
-    const m = TABLE_LINE.exec(l);
-    if (m) return unquote(m[1]!);
+    const m = TABLE_LINE.exec(l.trimEnd());
+    if (m) return nameOf(m[1]!);
   }
   return null;
 }
