@@ -2582,6 +2582,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.confirm":
     case "meeting.rerun":
     case "meeting.check_now":
+    case "meeting.transcript":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

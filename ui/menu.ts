@@ -1545,6 +1545,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.openSettings("admin-clients") };
     case "meeting.mine":
     case "meeting.review":
+    case "meeting.transcript":
     case "meeting.edit":
     case "meeting.no_transcript":
     case "meeting.prepare":

@@ -5434,6 +5434,28 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .mtg-actions .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-actions .file-button.disabled { opacity: 0.6; cursor: default; }
+/* MC-1d: Proposals and Transcript tabs; the transcript, read only, with the lines a proposal rests on marked. */
+.mtg-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.mtg-tabs [role=tab] { font: inherit; font-size: var(--fs-3); background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; color: var(--text-muted); cursor: pointer; min-height: var(--target, 32px); }
+.mtg-tabs [role=tab].on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.mtg-tabs [role=tab]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.mtg-transcript { display: grid; gap: 8px; }
+.mtg-tr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mtg-tr-bar input { flex: 1 1 16em; max-width: 28em; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+.mtg-tr-who { margin: 0; font-size: var(--fs-1); }
+.mtg-lines { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.mtg-lines li { display: grid; grid-template-columns: 5em minmax(6em, 10em) minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; padding: 6px 12px; border-top: 1px solid var(--border); font-size: var(--fs-2); scroll-margin: 80px; }
+.mtg-lines li:first-child { border-top: 0; }
+.mtg-lines li.marked { background: var(--wash-accent); box-shadow: inset 3px 0 0 var(--accent); }
+.mtg-lines li.at { outline: 2px solid var(--focus); outline-offset: -2px; }
+.mtg-lines li:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
+.mtg-line-at { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.mtg-line-text { overflow-wrap: anywhere; }
+.mtg-line-mark { font-size: var(--fs-1); color: var(--accent); font-weight: 500; white-space: nowrap; }
+.mtg-show-lines { justify-self: start; }
+.phone .mtg-lines li { grid-template-columns: auto minmax(0, 1fr); }
+.phone .mtg-lines li .mtg-line-text { grid-column: 1 / -1; }
+.phone .mtg-lines li .mtg-line-mark { grid-column: 1 / -1; }
 .mtg-done ul { margin: 0; padding-left: 18px; font-size: var(--fs-2); }
 .mtg-done li.problem { color: var(--risk); }
 .mtg-confirm { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in oklab, var(--bg) 55%, transparent); }

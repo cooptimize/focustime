@@ -15,7 +15,7 @@ import type { LogRecord } from "../log/logger.ts";
 import { attendeeIds, canConfirm, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
-import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { clock, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
@@ -29,7 +29,7 @@ import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun", "meeting.check_now"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun", "meeting.check_now", "meeting.transcript"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -282,6 +282,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, vo(o))), nudges } };
       }
       case "meeting.review": return await review(ctx, store, cfg, me, input);
+      case "meeting.transcript": return await transcriptOf(ctx, store, me, input);
       case "meeting.edit": {
         // Edit or skip one proposal (a reviewer); a decided one stays as it is.
         const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "type", "what", "due", "text"]);
@@ -457,6 +458,22 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       canWrite: reviewer ? await ctx.canWrite(r.series.clientKey).catch(() => false) : false,
     },
   };
+}
+
+/**
+ * MC-1d: the call's transcript, read only, for the same people as its review (the call's reviewers and attendees:
+ * `viewer`), loaded only when the Transcript view opens. Every line with its speaker and time; which proposals rest on
+ * a line comes from the proposals the review already returned. Never logged: the log line is a count. Gone after 30
+ * days with the stored transcript (`gone`).
+ */
+async function transcriptOf(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId"]);
+  const r = await store.viewer(me).occurrence(id(o.occurrenceId, "occurrenceId"));
+  if (!r) return bad("No such meeting", 404);
+  const lines = await store.transcript(r.o.id);
+  ctx.log({ source: "plan", op: "meeting_transcript_read", count: lines?.length ?? 0 });
+  if (!lines) return { ok: true, data: { lines: [], gone: !!r.o.transcriptAt, missing: !r.o.transcriptAt } };
+  return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: clock(l.at), text: l.text })), gone: false, missing: false } };
 }
 
 /** The changes a Confirm would make, previewed through the DevOps write framework (a reviewer). */

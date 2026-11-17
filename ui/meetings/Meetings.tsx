@@ -3,7 +3,7 @@
 // proposal with the words it came from; a reviewer ticks, edits or skips each, then one Confirm shows every change in
 // the usual preview and makes them through the existing writes. An attendee who isn't a reviewer can look, not confirm.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
@@ -11,7 +11,7 @@ import type { DevOpsPreview } from "../../actions/types.ts";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
 import { callLabel, takeRerun, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_STATE } from "../../plan/call-words.ts";
+import { CALL_ACTIONS, CALL_STATE, TRANSCRIPT_TEXT } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 
@@ -84,7 +84,7 @@ function CallsList({ colors, onOpen, onClose }: { colors: Record<string, string>
   );
 }
 
-function ReviewScreen({ id, view, colors, onBack, onChanged }: { id: number; view: CallView | null; line: number | null; colors: Record<string, string>; onBack: () => void; onView: (v: CallView | null, line?: number) => void; onChanged?: (() => void) | undefined }) {
+function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { id: number; view: CallView | null; line: number | null; colors: Record<string, string>; onBack: () => void; onView: (v: CallView | null, line?: number) => void; onChanged?: (() => void) | undefined }) {
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [keep, setKeep] = useState<Set<number>>(new Set());
@@ -170,17 +170,32 @@ function ReviewScreen({ id, view, colors, onBack, onChanged }: { id: number; vie
           <p className="muted">Undo any DevOps change in Settings › Activity.</p>
         </section>
       )}
+      {/* MC-1d: Proposals and the Transcript (read only, loaded when opened), each its own address. */}
+      {r.transcript && (
+        <div className="mtg-tabs" role="tablist" aria-label="This call">
+          <button type="button" role="tab" id="mtg-tab-proposals" aria-selected={view !== "transcript"} aria-controls="mtg-panel" className={view !== "transcript" ? "on" : undefined} onClick={() => onView(null)}>
+            {TRANSCRIPT_TEXT.tabProposals} <span className="muted">{r.proposals.length}</span>
+          </button>
+          <button type="button" role="tab" id="mtg-tab-transcript" aria-selected={view === "transcript"} aria-controls="mtg-panel" className={view === "transcript" ? "on" : undefined} onClick={() => onView("transcript")}>
+            {TRANSCRIPT_TEXT.tab} <span className="muted">{r.transcript.lines}</span>
+          </button>
+        </div>
+      )}
+      {view === "transcript" ? (
+        <TranscriptView occurrenceId={o.id} proposals={r.proposals} line={line} />
+      ) : (<>
       {(["gap", "commitment", "comment"] as const).map((kind) => {
         const ps = r.proposals.filter((p) => p.body.kind === kind);
         if (!ps.length) return null;
         return (
           <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={KIND_HEAD[kind]}>
             <h3>{KIND_HEAD[kind]} <span className="muted">{ps.length}</span></h3>
-            {ps.map((p) => <ProposalRow key={p.id} p={p} ticked={keep.has(p.id)} editable={editable} onTick={(on) => setKeep((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; })} onEdit={(patch) => void edit(p, patch)} />)}
+            {ps.map((p) => <ProposalRow key={p.id} p={p} ticked={keep.has(p.id)} editable={editable} onTick={(on) => setKeep((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; })} onEdit={(patch) => void edit(p, patch)} onShowLines={r.transcript ? (n) => onView("transcript", n) : undefined} />)}
           </section>
         );
       })}
       {o.state === "ready" && !r.proposals.length && <p className="muted">Nothing to propose from this call.</p>}
+      </>)}
       {editable && open.length > 0 && (
         <div className="mtg-bar">
           <span role="status">{ticked.length} of {open.length} ticked{writes && !r.canWrite ? " · Enable DevOps writes for this client in Settings › DevOps first" : ""}</span>
@@ -194,6 +209,75 @@ function ReviewScreen({ id, view, colors, onBack, onChanged }: { id: number; vie
       )}
       {prep && (prep.data || prep.error) && <ConfirmDialog prep={prep} skipped={open.length - ticked.length} onCancel={() => setPrep(null)} onConfirm={() => void confirm()} />}
     </>
+  );
+}
+
+type Line = { n: number; speaker: string; at: string; text: string };
+
+/**
+ * MC-1d: the call's transcript, read only: every line with its speaker and time, the lines a proposal rests on marked,
+ * and a filter. Loaded from the server when opened, held only in this component's memory (never browser storage or the
+ * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
+ * is scrolled to and focused.
+ */
+function TranscriptView({ occurrenceId, proposals, line }: { occurrenceId: number; proposals: Proposal[]; line: number | null }) {
+  const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    let live = true;
+    call<{ lines: Line[]; gone: boolean; missing: boolean }>("meeting.transcript", { occurrenceId }).then((d) => live && setData(d), (e) => live && setError(errText(e)));
+    return () => {
+      live = false;
+    };
+  }, [occurrenceId]);
+  // Which proposals rest on each line (their first words, for the mark's label).
+  const marks = useMemo(() => {
+    const m = new Map<number, string[]>();
+    for (const p of proposals) {
+      const b = p.body;
+      const what = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
+      for (const n of b.lines) m.set(n, [...(m.get(n) ?? []), what]);
+    }
+    return m;
+  }, [proposals]);
+  useEffect(() => {
+    if (!data || !line) return;
+    setQ("");
+    const el = document.getElementById(`mtg-line-${line}`);
+    el?.scrollIntoView({ block: "center" });
+    el?.focus({ preventScroll: true });
+  }, [data, line]);
+  if (error) return <p className="error-line" role="alert">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+  if (!data.lines.length) return <p className="muted">{data.gone ? TRANSCRIPT_TEXT.gone : TRANSCRIPT_TEXT.missing}</p>;
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? data.lines.filter((l) => l.text.toLowerCase().includes(needle) || l.speaker.toLowerCase().includes(needle)) : data.lines;
+  return (
+    <section className="mtg-transcript" id="mtg-panel" role="tabpanel" aria-labelledby="mtg-tab-transcript">
+      <div className="mtg-tr-bar">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={TRANSCRIPT_TEXT.filterHint} aria-label={TRANSCRIPT_TEXT.filter} />
+        <span className="muted" role="status">{needle && !shown.length ? TRANSCRIPT_TEXT.none(q.trim()) : TRANSCRIPT_TEXT.count(shown.length, data.lines.length)}</span>
+      </div>
+      <p className="muted mtg-tr-who">{TRANSCRIPT_TEXT.who}</p>
+      <ol className="mtg-lines">
+        {shown.map((l) => {
+          const on = marks.get(l.n);
+          return (
+            <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}` } : {})}>
+              <span className="mtg-line-at">{l.at}</span>
+              <span className="mtg-who">{l.speaker}</span>
+              <span className="mtg-line-text">{l.text}</span>
+              {on && (
+                <span className="mtg-line-mark" title={`${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}`} aria-hidden="true">
+                  {on.length === 1 ? "Proposal" : `${on.length} proposals`}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -222,7 +306,7 @@ function Quotes({ qs }: { qs: Quote[] | null }) {
   );
 }
 
-function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; ticked: boolean; editable: boolean; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void }) {
+function ProposalRow({ p, ticked, editable, onTick, onEdit, onShowLines }: { p: Proposal; ticked: boolean; editable: boolean; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onShowLines?: ((line: number) => void) | undefined }) {
   const b = p.body;
   const decided = p.state === "confirmed" || p.state === "skipped";
   const main = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
@@ -251,6 +335,12 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; tic
         {b.kind === "gap" && b.description && <p className="mtg-desc">{b.description}</p>}
         {b.kind === "comment" && b.inReport && <p className="mtg-report">Will appear in Kat's Monday report</p>}
         <Quotes qs={p.quotes} />
+        {/* MC-1d: the jump to the lines this proposal rests on, in the Transcript view (while the transcript is kept). */}
+        {onShowLines && b.lines.length > 0 && p.quotes && (
+          <button type="button" className="mini quiet mtg-show-lines" onClick={() => onShowLines(Math.min(...b.lines))} aria-label={`${CALL_ACTIONS.showLines}: ${main}`}>
+            {CALL_ACTIONS.showLines}
+          </button>
+        )}
         {state && <p className={`mtg-state-line${p.state === "failed" ? " problem" : ""}`}>{state}</p>}
       </div>
       {editable && !decided && (
