@@ -81,7 +81,7 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
     it(`the phone at ${width}: the line and Join fit on the Now card and the Week card, 44 px, no sideways scroll`, async () => {
       const page = await phonePage(h, width);
       await at(page, "#/today");
-      const now = page.locator(".ph-now .live-call");
+      const now = page.locator(".pn-card .live-call");
       await now.waitFor({ timeout: 30_000 });
       const join = now.locator(".lc-join");
       const box = (await join.boundingBox())!;

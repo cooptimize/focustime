@@ -23,7 +23,7 @@ export async function openField(page: Page, field: Field, phone: boolean): Promi
     return { box: surface.getByRole("textbox", { name: "Quick capture" }), surface };
   }
   if (field === "assistant") {
-    if (phone) await page.locator(".bottom-bar").getByRole("button", { name: "Ask the assistant" }).click();
+    if (phone) await page.locator(".topbar").getByRole("button", { name: "Ask the assistant" }).click();
     else {
       await page.locator("body").click({ position: { x: 5, y: 300 } });
       await page.keyboard.press("Control+j");

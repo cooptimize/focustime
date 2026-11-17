@@ -30,13 +30,14 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   it("has the bottom bar and a small top bar, no hover-only controls, Add work as a sheet on the phone, Ahead read-only", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await open(page, "#/today");
-    // MB-1: the bottom bar is Today, Week, the raised Capture, Inbox and Ask; the top bar only the logo, the status dot and ⋯.
-    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Day", "Week", expect.stringMatching(/^Inbox/), "Ask"]);
-    expect(await page.locator(".bottom-bar .bb-capture").count()).toBe(1);
+    // PH-1: the bar is Day, Week, the raised Capture, Inbox and More; the top bar the date, the VM and Ask.
+    expect(await page.locator(".bottom-bar .pb-tab .pb-label").allTextContents()).toEqual(["Day", "Week", "Inbox", "More"]);
+    expect(await page.locator(".bottom-bar .pb-capture").count()).toBe(1);
     expect(await page.locator(".topbar .views").count()).toBe(0);
     expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn, .topbar .phone-capture").count()).toBe(0);
-    expect(await page.locator(".topbar .status-dot-btn").count()).toBe(1);
-    expect(await page.locator(".topbar .top-more").count()).toBe(1);
+    expect(await page.locator(".topbar .status-dot-btn, .topbar .top-more").count()).toBe(0);
+    expect(await page.locator(".topbar .ph1-date").count()).toBe(1);
+    expect(await page.locator(".topbar .ph-ask").count()).toBe(1);
     // The page itself scrolls (Safari's own scrolling), with nothing left behind the bottom bar at the end.
     const scroll = await page.evaluate(() => {
       const inner = [...document.querySelectorAll(".app *")].filter((e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2 && !e.closest(".bottom-bar"));
@@ -86,29 +87,28 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
       { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Write the release notes", size: "S" },
     ]) expect((await call(page, "pick.add", input)).ok).toBe(true);
 
-    // Today: Now leads with the block and its next to-do; one Start on the page (MB-1).
+    // Today: Now leads with the block and its next to-do; one Start focus on the page (PH-1).
     await open(page, "#/today");
-    const now = page.locator(".ph-now");
-    await now.getByRole("button", { name: "Start", exact: true }).waitFor();
-    const first = (await now.locator(".pnt-title").textContent())!;
-    // One Start for focus (the VM's morning prompt has its own Start for the VM).
-    expect(await page.getByRole("button", { name: "Start", exact: true }).count()).toBe((await page.locator(".att-chip.vm").getByRole("button", { name: "Start", exact: true }).count()) + 1);
+    const now = page.locator(".pn-card");
+    await now.getByRole("button", { name: "Start focus" }).waitFor();
+    const first = (await now.locator(".pn-title").textContent())!;
+    expect(await page.getByRole("button", { name: "Start focus" }).count()).toBe(1);
 
     // Start, back to Today: the timer is in the Now card; Done ends it and ticks the to-do.
-    await now.getByRole("button", { name: "Start", exact: true }).click();
+    await now.getByRole("button", { name: "Start focus" }).click();
     // The timer has started (the focus screen runs) before the reload reads it back.
     await page.locator("main.focus-screen:not(.idle)").waitFor();
     await open(page, "#/today");
-    await now.locator(".pnt-count").waitFor();
+    await now.locator(".pn-count").waitFor();
     await now.getByRole("button", { name: "Done", exact: true }).click();
-    await expect.poll(async () => (await page.locator(".ph-now .pnt-title").textContent()) !== first).toBe(true);
+    await expect.poll(async () => (await page.locator(".pn-card .pn-title").textContent()) !== first, { timeout: 15_000 }).toBe(true);
 
-    // Done on the next to-do.
-    await now.getByRole("button", { name: "Done", exact: true }).click();
+    // Done on the next to-do: its Done box.
+    await now.getByRole("checkbox", { name: /^Done: / }).click();
     await expect.poll(async () => ((await call(page, "week.load", {})).data.plan["2026-11-02"].picks as { status: string }[]).filter((p) => p.status === "done").length).toBe(2);
 
     // Capture from the bottom bar's raised +: a full-screen sheet, Enter saves.
-    await page.locator(".bottom-bar .bb-capture").click();
+    await page.locator(".bottom-bar .pb-capture").click();
     const sheet = page.locator(".cap-dialog");
     await sheet.waitFor();
     expect(await sheet.evaluate((e) => Math.round(e.getBoundingClientRect().width))).toBe(PHONE.width);
@@ -119,45 +119,45 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     if (await sheet.count()) await page.keyboard.press("Escape");
     await sheet.waitFor({ state: "detached" });
 
-    // Part B: this morning's notifications: ⋯ has its dot; in the list the new one keeps its mark while it's open.
+    // Part B: this morning's notifications: More › Everything else says "1 new" (PH-1: was ⋯'s dot); in the list the
+    // new one keeps its mark while it's open.
     await open(page, "#/today");
-    await page.locator(".topbar .top-more .top-dot").waitFor();
-    await page.locator(".topbar .top-more").click();
-    await page.getByRole("menuitem", { name: /Notifications/ }).click();
+    const moreBtn = page.locator(".bottom-bar").getByRole("button", { name: /^More/ });
+    await moreBtn.click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    await expect.poll(() => page.locator('.mr-row[data-row="notifications"] .mr-line').textContent()).toMatch(/new$/);
+    await page.locator('.mr-row[data-row="notifications"]').click();
     const panel = page.locator(".notices-panel");
     await panel.waitFor();
     expect(await panel.locator(".notice-row").count()).toBeGreaterThanOrEqual(2);
     expect(await panel.locator(".notice-row.unread .nr-title").first().textContent()).toContain("Promises due");
     await panel.getByRole("button", { name: "Close" }).click();
-    // Read now: ⋯ no longer counts them.
+    // Read now: More's Notifications row no longer counts them.
     expect((await call(page, "notices.list", {})).data.unread).toBe(0);
-    await page.locator(".topbar .top-more").click();
-    expect(await page.getByRole("menuitem", { name: /Notifications/ }).textContent()).not.toContain("new");
+    await open(page, "#/today");
+    await moreBtn.click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    expect(await page.locator('.mr-row[data-row="notifications"]').textContent()).not.toContain("new");
     expect(errors).toEqual([]);
   }, T);
 
-  it("CV-3: the FocusTime name stays whole at the phone's 17px root font (and 21px), with no sideways overflow; the person chip is ⋯'s first row", async () => {
+  it("CV-3 (PH-1): the top bar's date, Demo, the VM and Ask stay whole at the phone's 17px root font (and 21px), with no sideways overflow; the person is a row in More › Everything else", async () => {
     // iPhone Safari's text is 17px and up (-apple-system-body); Chromium needs it set by hand (through the CSSOM, which the CSP allows).
     const { page } = await freshPage(h, { width: 390, height: 844 });
     for (const px of [17, 21]) {
       await page.evaluate((n) => document.documentElement.style.setProperty("font-size", `${n}px`, "important"), px);
-      await page.waitForFunction((n) => getComputedStyle(document.documentElement).fontSize === `${n}px` && !!document.querySelector(".topbar .brand .name"), px);
+      await page.waitForFunction((n) => getComputedStyle(document.documentElement).fontSize === `${n}px` && !!document.querySelector(".topbar .ph1-date"), px);
       // Measured once layout settles (a busy machine can be a frame behind).
-      await expect.poll(() => page.evaluate(() => { const n = document.querySelector<HTMLElement>(".topbar .brand .name")!; return Math.round(n.getBoundingClientRect().width) >= n.scrollWidth; })).toBe(true);
-      const m = await page.evaluate(() => {
-        const r = (s: string) => document.querySelector(s)?.getBoundingClientRect() ?? null;
-        const name = document.querySelector<HTMLElement>(".topbar .brand .name")!;
-        return { nameW: name.getBoundingClientRect().width, nameSW: name.scrollWidth, name: r(".topbar .brand .name")!, actions: r(".topbar .top-actions")!, doc: document.documentElement.scrollWidth, chip: !!document.querySelector(".topbar .person-chip") };
-      });
-      expect(Math.round(m.nameW)).toBeGreaterThanOrEqual(m.nameSW);
-      expect(m.name.right).toBeLessThanOrEqual(m.actions.left);
+      await expect.poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".topbar .ph1-date, .topbar .demo-tag, .topbar .ph-ask")].filter((e) => Math.round(e.getBoundingClientRect().width) + 1 < e.scrollWidth).map((e) => `${e.className} ${Math.round(e.getBoundingClientRect().width)}/${e.scrollWidth}`)), `whole at ${px}px`).toEqual([]);
+      const m = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, right: Math.max(...[...document.querySelectorAll(".topbar *")].map((e) => e.getBoundingClientRect().right)), chip: !!document.querySelector(".topbar .person-chip") }));
       expect(m.doc).toBeLessThanOrEqual(390);
+      expect(m.right).toBeLessThanOrEqual(390.5);
       expect(m.chip).toBe(false);
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/cv3-phone-topbar-${px}px.png`, clip: { x: 0, y: 0, width: 390, height: 120 } });
     }
-    await page.locator(".topbar .top-more").click();
-    const first = page.getByRole("menu").getByRole("menuitem").first();
-    await expect.poll(() => first.textContent()).toMatch(/^Alex Rivera/);
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    await expect.poll(() => page.locator('.mr-row[data-row="account"]').textContent()).toMatch(/^Alex Rivera/);
     await page.close();
   }, T);
 });

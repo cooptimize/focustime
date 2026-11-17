@@ -91,7 +91,10 @@ describe.skipIf(!CHROMIUM)("MB-1b: phone polish", () => {
 
       // The status sheet: nothing runs past the sheet's edge, the DevOps line included, and nothing scrolls sideways.
       await at(page, "#/today");
-      await page.locator(".status-dot-btn").click();
+      // PH-1: the sources sheet is in More › Everything else › Sources.
+      await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+      await page.getByRole("button", { name: /Everything else/ }).click();
+      await page.locator('.mr-row[data-row="sources"]').click();
       const sheet = page.locator(".ph-status");
       await sheet.waitFor();
       // HK-6: measured once the sheet has finished sliding in (its animations done), not after a set time.
