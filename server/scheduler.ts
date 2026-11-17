@@ -16,6 +16,7 @@
 // else's. A pass still running past its own limit no longer stops the next pass of its kind from starting. Each slow
 // pass first gives everyone's VM start its turn (PersonTicks.early), before the app jobs, which can take a minute.
 import type { Logger } from "../log/logger.ts";
+import type { PassView } from "../actions/admin-actions.ts";
 import type { WakeStore } from "../store/wake-store.ts";
 import type { PersonTicks } from "./ticks.ts";
 import { policyJobs, type BackgroundPolicy } from "../config/background-policy.ts";
@@ -68,17 +69,7 @@ export type PassLimits = {
 export const PASS_LIMITS: PassLimits = { fastPass: 2 * 60_000, slowPass: 10 * 60_000, job: 5 * 60_000, early: 3 * 60_000, wake: 30_000, maintenance: 5 * 60_000 };
 
 /** VM-3: what Admin › Status shows of a kind of pass. */
-export type PassView = {
-  kind: PassKind;
-  /** When the last pass of this kind finished, and how long it took. */
-  finishedAt: string | null;
-  ms: number | null;
-  /** Running now since (null: not running). */
-  since: string | null;
-  limitMs: number;
-  /** A plain warning when it runs past its limit, or hasn't finished for longer than it should while someone works. */
-  warning: string | null;
-};
+export type { PassView };
 
 /** Waits for a promise at most `ms`; true when it settled in time. The promise keeps running either way. */
 export function within(p: Promise<unknown>, ms: number): Promise<boolean> {

@@ -820,7 +820,7 @@ const DAY_NAMES: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", 
 const AUTO_MINUTES = [0, 5, 10, 15, 30] as const;
 
 /**
- * Settings › Accounts and connections › My VM, and setup's Your VM: "Start without a preview" (Q87, renamed in VM-2)
+ * Settings › Accounts and calendars › My VM, and setup's Your VM: "Start without a preview" (Q87, renamed in VM-2)
  * and the auto-start (off by default; production only). Saves each change at once through settings.save.
  */
 export function VmStartForm() {

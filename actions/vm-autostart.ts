@@ -174,10 +174,10 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
   const r = await power(vc, vm, "start", { auto: true }).catch((e: unknown) => ({ ok: false as const, status: 500, error: e instanceof AzureError || e instanceof AuthFailure ? e.message : "failed", code: e instanceof AzureError || e instanceof AuthFailure ? e.kind : "failed" }));
   const at = now.toString();
   if (r.ok) {
-    const why = second.late ? "started_late" : "started";
+    const why = second.afterStart ? "started_late" : "started";
     await settle(d, today, now, why, notes);
     // Azure has accepted the start; FocusTime follows it, and the write log has how it ended.
-    const said = second.late ? `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, after your day began.` : `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, before your day.`;
+    const said = second.afterStart ? `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, after your day began.` : `${vm.name} is starting: FocusTime started it at ${clock(now, zone)}, before your day.`;
     await notice(d, { kind: "started", date: today, at, text: [said, ...notes.map((n) => NOTE_TEXT[n])].join(" ") });
     return why;
   }

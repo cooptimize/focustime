@@ -92,11 +92,11 @@ export const isOutcomeReason = (x: unknown): x is OutcomeReason => typeof x === 
 
 /** What to do about it, after the reason, where there is something to do (the chip's menu and the notice). */
 export const OUTCOME_NEXT: Partial<Record<OutcomeReason, string>> = {
-  pto_unreadable: "Start it from here if you need it today.",
+  pto_unreadable: "Start it from the VM menu if you need it today.",
   sign_in: "Choose Allow Azure access in the VM menu, then start it if you need it.",
   no_vm: "Choose your VM again in Settings › Accounts and calendars › My VM.",
-  refused: "Start it from here; if Azure refuses again, Settings › Activity has what it said.",
-  not_running: "Start it from here if you need it.",
+  refused: "Start it from the VM menu; if Azure refuses again, Settings › Activity has what it said.",
+  not_running: "Start it from the VM menu if you need it.",
 };
 
 /** A note that goes with a start: what couldn't be checked, and what was used instead. */
@@ -237,7 +237,8 @@ export type DueFacts = {
   chip: VmChip | null;
 };
 export type NotDue = "off" | "paused" | "attempted" | DayReason | "early" | "too_late" | "not_stopped";
-export type Due = { due: true; date: IsoDate; at: Temporal.Instant; late: boolean } | { due: false; why: NotDue };
+/** `late`: past the planned time by more than a minute; `afterStart`: at or past the day's start (VM-3: what "after your day began" says). */
+export type Due = { due: true; date: IsoDate; at: Temporal.Instant; late: boolean; afterStart: boolean } | { due: false; why: NotDue };
 
 /**
  * Whether the automatic start runs now. Checked in this order, so the cheap and settled answers come first and Azure
@@ -257,7 +258,7 @@ export function autoStartDue(f: DueFacts): Due {
   if (Temporal.Instant.compare(f.now, start.add({ minutes: LATE_LIMIT_MINUTES })) >= 0) return { due: false, why: "too_late" };
   if (f.chip !== null && f.chip !== "deallocated" && f.chip !== "billing") return { due: false, why: "not_stopped" };
   // A minute's grace: a pass that runs a few seconds after the planned time isn't "late".
-  return { due: true, date: today, at, late: f.now.since(at).total("minutes") > 1 };
+  return { due: true, date: today, at, late: f.now.since(at).total("minutes") > 1, afterStart: Temporal.Instant.compare(f.now, start) >= 0 };
 }
 
 /** "7:55 AM" in my zone. */
@@ -274,7 +275,12 @@ export function whenText(t: Temporal.Instant, zone: string): string {
   return `${DOW[z.dayOfWeek - 1]}, ${MON[z.month - 1]} ${z.day} at ${clock(t, zone)}`;
 }
 /** "Thu 7:55 AM" (the chip's menu). */
-export const shortWhen = (t: Temporal.Instant, zone: string) => `${DOW[t.toZonedDateTimeISO(zone).dayOfWeek - 1]} ${clock(t, zone)}`;
+export const shortWhen = (t: Temporal.Instant, zone: string, now?: Temporal.Instant) => {
+  const z = t.toZonedDateTimeISO(zone);
+  // VM-3 review: a weekday alone reads as this week; past six days away (or today's weekday a week on) it gets the date.
+  const far = now && Temporal.PlainDate.compare(z.toPlainDate(), now.toZonedDateTimeISO(zone).toPlainDate().add({ days: 6 })) > 0;
+  return far ? `${DOW[z.dayOfWeek - 1]}, ${MON[z.month - 1]} ${z.day} ${clock(t, zone)}` : `${DOW[z.dayOfWeek - 1]} ${clock(t, zone)}`;
+};
 
 const WHY_WORD: Partial<Record<DayReason, string>> = { pto: "is PTO", holiday: "is a holiday", skipped: "is skipped" };
 
@@ -340,7 +346,7 @@ export function nextAutoStart(o: {
     }
     const next = `Next: ${whenText(at, o.zone)}`;
     const text = [todayText, note, next, unread].filter(Boolean).join(" ");
-    return { kind: "next", date, at: at.toString(), text, short: shortWhen(at, o.zone) };
+    return { kind: "next", date, at: at.toString(), text, short: shortWhen(at, o.zone, o.now) };
   }
   return { kind: "none", text: [todayText, note ? `${note} No start in the next two weeks.` : "No working days chosen, so it never starts.", unread].filter(Boolean).join(" ") };
 }

@@ -6,7 +6,7 @@
 // names a folder.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "../harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 const T = 240_000;
 const SHOTS = process.env.VM3_SHOTS ?? null;
@@ -42,9 +42,12 @@ async function leftOffNotices(page: Page) {
   return panel.locator(".notice-row", { hasText: "Your VM was left off" });
 }
 async function vmLine(page: Page) {
-  await openSettings(page);
-  await settingsSection(page, "connections");
+  // By address, the same after a reload whether or not Settings was open (the person chip's menu raced the reload).
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => (location.hash = "#/settings/connections"));
+  await page.locator('.ps-rail [data-settings-section="connections"][aria-current="page"]').first().waitFor();
   const form = page.locator('[data-setting="vm-autostart"]');
+  await form.waitFor();
   await form.scrollIntoViewIfNeeded();
   return form.locator(".vm-next");
 }

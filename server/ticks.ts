@@ -147,8 +147,9 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   // logged by name and left behind (still running), and later passes skip it until it ends.
   const limits = { ...PART_LIMIT_MS, ...d.partLimits };
   const partBusy = new Map<string, Promise<void>>();
-  const runPart = async (name: keyof typeof PART_LIMIT_MS, run: () => Promise<unknown>): Promise<void> => {
-    if (partBusy.has(name)) return;
+  /** "done" (settled in time, thrown or not), "busy" (still running from an earlier pass) or "over" (past its limit). */
+  const runPart = async (name: keyof typeof PART_LIMIT_MS, run: () => Promise<unknown>): Promise<"done" | "busy" | "over"> => {
+    if (partBusy.has(name)) return "busy";
     const p = Promise.resolve()
       .then(run)
       .then(
@@ -159,7 +160,9 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (partBusy.get(name) === tracked) partBusy.delete(name);
     });
     partBusy.set(name, tracked);
-    if (!(await within(tracked, limits[name]))) log({ source: "plan", op: "tick_part", kind: `${name}_over_limit` });
+    if (await within(tracked, limits[name])) return "done";
+    log({ source: "plan", op: "tick_part", kind: `${name}_over_limit` });
+    return "over";
   };
   const zonedNow = (tz: string) => d.now().toZonedDateTimeISO(tz);
   const host = { notifications: d.notifications, media: d.media };
@@ -583,7 +586,11 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const allowed = new Set<string>((await parts()).slow);
     // The gate's facts (settings, hours, PTO from Dataverse) only when a part that uses them may run.
     let facts: Awaited<ReturnType<typeof notifier.refresh>> | null = null;
-    if (SLOW_PARTS.some(([p, n]) => allowed.has(p) && (n === "notices" || n === "teams_rhythm"))) await runPart("gate", async () => void (facts = await notifier.refresh().catch(() => null)));
+    let gate: "done" | "busy" | "over" | "none" = "none";
+    if (SLOW_PARTS.some(([p, n]) => allowed.has(p) && (n === "notices" || n === "teams_rhythm"))) gate = await runPart("gate", async () => void (facts = await notifier.refresh().catch(() => null)));
+    // VM-3 review: a gate still running (stuck or slow) leaves the notifier's facts old (working hours, PTO, focus), so
+    // this pass sends no notices rather than send them on old facts; the next pass whose gate finishes sends them.
+    if (gate === "busy" || gate === "over") for (const [p, n] of SLOW_PARTS) if (n === "notices") allowed.delete(p);
     const slow: Record<SlowPart, () => Promise<unknown>> = {
       teams_rhythm: () => teamsTick(facts).catch(() => log({ source: "server", op: "teams_rhythm", kind: "failed" })),
       day_reminders: () => dayReminders(),

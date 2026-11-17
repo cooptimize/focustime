@@ -176,7 +176,7 @@ describe("VM-3: each reason, from the planned time on", () => {
     w.clock.advance(60_000);
     await autoStartCheck(w.deps());
     expect(w.sent.map((n) => [n.key, n.title])).toEqual([[`vm_auto_left:${TODAY}`, "Your VM was left off"]]);
-    expect(w.sent[0]!.body).toBe("Left off today: FocusTime couldn't read your PTO. Start it from here if you need it today.");
+    expect(w.sent[0]!.body).toBe("Left off today: FocusTime couldn't read your PTO. Start it from the VM menu if you need it today.");
   });
 
   it("before the planned time nothing is decided, logged or told", async () => {
@@ -295,4 +295,23 @@ describe("VM-3: with the gate closed nothing is read, logged, told or started, f
       expect(w.reads.daysOff).toBe(0);
     });
   }
+});
+
+describe("VM-3 review: the words match the clock", () => {
+  it('a few minutes after the planned time but before the day: "before your day"; at or after the day\'s start: "after your day began"', async () => {
+    const w = await world({ start: at(shift(PLANNED, 3)) });
+    expect(await autoStartCheck(w.deps())).toBe("started");
+    expect(w.sent[0]!.body).toMatch(/before your day\.$/);
+    const l = await world({ start: at(shift(WS, 2)) });
+    expect(await autoStartCheck(l.deps())).toBe("started_late");
+    expect(l.sent[0]!.body).toMatch(/after your day began\.$/);
+  });
+  it("the chip's next start gets its date when it is more than six days away", async () => {
+    // Tue Nov 10 to Thu Nov 12 skipped: the next start is Mon Nov 16, five days on (weekday only)...
+    const w = await world({ start: at("12:00", "2026-11-10"), state: { skipped: ["2026-11-11", "2026-11-12"] } });
+    expect((await w.status()).autoStart?.next?.short).toMatch(/^Mon \d+:\d\d AM$/);
+    // ...and from Mon Nov 9, Mon Nov 16 is seven days on: the date too.
+    const far = await world({ start: at("12:00", "2026-11-09"), state: { skipped: ["2026-11-10", "2026-11-11", "2026-11-12"] } });
+    expect((await far.status()).autoStart?.next?.short).toMatch(/^Mon, Nov 16 \d+:\d\d AM$/);
+  });
 });

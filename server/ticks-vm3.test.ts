@@ -37,6 +37,8 @@ type Opts = {
   teamsTick?: () => Promise<void>;
   holidaysOk?: boolean;
   partLimits?: Record<string, number>;
+  /** PTO reads after the first wait on this (the first is the VM start's; the gate's come after). */
+  ptoHold?: Promise<void>;
 };
 
 async function person(o: Opts = {}) {
@@ -56,6 +58,7 @@ async function person(o: Opts = {}) {
   await plan.setAccountState(vmKey(OID), { id: VM, name: "vm-ana-01", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", chosenAt: at.toString() });
   await plan.setState(AUTOSTART_KEY, { onSince: "2026-11-02", lastUseOn: "2026-11-02" });
   const account = { signIn: async () => ({ status: "connected" }), identity: async () => ({ oid: OID }), armToken: async () => "FAKE", writeAccess: async () => ({ status: "read_only", message: "x" }), signOut: async () => {} } as unknown as MicrosoftAccount;
+  let ptoCalls = 0;
   const shown: Notice[] = [];
   const logs: LogRecord[] = [];
   const notifications = { show: async (n: Notice) => (shown.push(n), null), close: () => {}, line: () => {} } as unknown as HostNotifications;
@@ -66,7 +69,7 @@ async function person(o: Opts = {}) {
     sleep: async (ms: number) => void (at = at.add({ milliseconds: ms })),
     // The real Dataverse source refuses PTO without a Dataverse user; the fake does the same.
     makeDataverse: (dv: { mySystemUserId: string | null }) => ({
-      pto: async () => (dv.mySystemUserId ? { status: "ok", items: [] } : { status: "misconfigured", items: [], message: "Your Dataverse user id is not resolved yet" }),
+      pto: async () => ((ptoCalls++ > 0 && o.ptoHold ? await o.ptoHold : undefined), dv.mySystemUserId ? { status: "ok", items: [] } : { status: "misconfigured", items: [], message: "Your Dataverse user id is not resolved yet" }),
       holidays: async () => (o.holidaysOk === false ? { ok: false, message: "Dataverse read failed" } : { ok: true, days: [] }),
     }),
     makeOutlook: () => { throw new Error("no Outlook here"); },
@@ -138,3 +141,31 @@ describe("VM-3 B: a person's parts can't hold the start or each other", () => {
     expect(p.starts()).toBe(1);
   });
 });
+
+describe("VM-3 review: a gate still running sends no notices on old facts", () => {
+  it("the 9:00 notices wait for a pass whose gate finishes", async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => (release = r));
+    const p = await person({ userInSettings: true, ptoHold: hold, partLimits: { gate: 30 } });
+    p.advance(1);
+    await p.ticks.slow();
+    await settled();
+    expect(p.starts()).toBe(1);
+    // 9:01: the gate's PTO read hangs, so no notice goes out.
+    p.advance(7);
+    await p.ticks.slow();
+    expect(p.logs).toContainEqual({ source: "plan", op: "tick_part", kind: "gate_over_limit" });
+    const before = p.shown.length;
+    p.advance(1);
+    await p.ticks.slow();
+    expect(p.shown.length).toBe(before);
+    // Let go: the next pass's gate finishes and the notices go out.
+    release();
+    await real(10);
+    p.advance(1);
+    await p.ticks.slow();
+    await settled();
+    expect(p.shown.length).toBeGreaterThan(before);
+  });
+});
+

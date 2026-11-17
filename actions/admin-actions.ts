@@ -5,7 +5,6 @@
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
 import type { CodeStatus } from "./code-actions.ts";
-import type { PassView } from "../server/scheduler.ts";
 import { CODE_VIEWS_SHOWN, type CodeViewsStore } from "../store/code-views-store.ts";
 import { articleUrl, DEFAULT_STANDARDS_REPO, STANDARDS_EVERY_MS, STANDARDS_TOKEN_BUDGET } from "../plan/standards.ts";
 import type { StandardsPort } from "./standards.ts";
@@ -77,6 +76,19 @@ export type AdminStatus = {
   groups?: StatusGroup[];
   /** VM-3: the scheduler's fast and slow passes: when each last finished, how long it took, and a warning if stuck. */
   passes?: PassView[];
+};
+
+/** VM-3: one of the scheduler's passes for Admin › Status (server/scheduler.ts builds it). */
+export type PassView = {
+  kind: "fast" | "slow";
+  /** When the last pass of this kind finished, and how long it took. */
+  finishedAt: string | null;
+  ms: number | null;
+  /** Running now since (null: not running). */
+  since: string | null;
+  limitMs: number;
+  /** A plain warning when it runs past its limit, or hasn't finished for longer than it should while someone works. */
+  warning: string | null;
 };
 
 export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };

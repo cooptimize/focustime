@@ -2,7 +2,7 @@
 // its own in server/demo.ts). Names, dates, counts and yes or no only: never anyone's plan, picks, follow-ups,
 // captures, focus sessions, tokens, PATs, AI request text, or chat messages. Each read below is a count or a flag.
 import type { StandardsPort } from "../actions/standards.ts";
-import type { PassView } from "./scheduler.ts";
+import type { PassView } from "../actions/admin-actions.ts";
 import type { StatusRegistry } from "../actions/status-rows.ts";
 import type { AdminCheck } from "../actions/admin.ts";
 import type { AdminOps, PersonHealth } from "../actions/admin-actions.ts";
