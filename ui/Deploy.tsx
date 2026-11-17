@@ -2,7 +2,7 @@
 // chip, and the offer after Done: "Tell <client> it's deployed" through LP-1's Close the loop (a draft with the note and
 // the items, the preview, Send only on Confirm), or Not now, which leaves it simply done. No runbook, checklist or
 // status flow: the runbook and the execution stay in Coop.
-import { useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { call } from "./api.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { Modal } from "./DevOpsWrite.tsx";
@@ -13,6 +13,7 @@ import { deployedWhen, afterHoursText, deployedText, doneLine, tellWhat, windowT
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { Icon } from "./icons.tsx";
+import { ClientNameCtx } from "./weekctx.ts";
 
 /** The Deployment icon: a small upward arrow out of a tray (shipping it), drawn in the row's text colour. */
 export function DeployIcon({ title = "Deployment" }: { title?: string }) {
@@ -33,6 +34,52 @@ export function WindowChip({ pick }: { pick: Pick }) {
 
 const WHY: Record<AfterHoursPart["why"], string> = { deployment: "deployment window", evening: "evening", weekend: "weekend" };
 const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short" });
+
+/**
+ * UC-2: a deployment's title on Week's cards. Where the title can't show whole (Week's weekend column, always; a card
+ * too narrow for it, measured: a word wider than the row or more than two lines), it shows its client instead, on its
+ * own whole line, with the window on the line under it as before. The full title is on hover and for a screen reader.
+ * A word is never broken in the middle.
+ */
+export function DeployTitle({ pick, short }: { pick: Pick; /** true: always the client (the weekend column); "auto": the title when it fits. */ short: true | "auto" }) {
+  const name = useContext(ClientNameCtx)(pick.clientKey);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(true);
+  useLayoutEffect(() => {
+    const el = measure.current;
+    if (short !== "auto" || !el) return;
+    const check = () => {
+      const cs = getComputedStyle(el);
+      const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 16;
+      setFits(el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height <= line * 2 + 1);
+    };
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [short, pick.title]);
+  const compact = short === true || !fits;
+  return (
+    <span className={`dep-title${compact ? " compact" : ""}`} data-dep-title={compact ? "client" : "title"} title={compact && pick.window ? `${pick.title} · ${windowText(pick.window)}` : pick.title}>
+      {short === "auto" && (
+        <span ref={measure} className="dep-measure" aria-hidden="true">
+          {pick.title}
+        </span>
+      )}
+      {compact ? (
+        <>
+          <span className="sr-only">{pick.title}</span>
+          <span className="dep-client" aria-hidden="true">
+            {name}
+          </span>
+        </>
+      ) : (
+        pick.title
+      )}
+    </span>
+  );
+}
 
 /** Week's header: "3h after hours this week" beside the borrowed-time chip, with what makes it up in its title. */
 export function AfterHoursChip({ after }: { after: WeekLoadData["afterHours"] }) {

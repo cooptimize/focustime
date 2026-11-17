@@ -6010,6 +6010,18 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .weekend-cell .pick-row:not(.ph-row) .deploy-window, .weekend-cell .pick-row:not(.ph-row) .pick-time { order: 2; }
 .weekend-cell .pick-row:not(.ph-row) .pr-title { order: 3; flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .weekend-cell .pick-row:not(.ph-row) .pr-hover { order: 2; margin-left: auto; }
+/* UC-2: a deployment's title on Week is never broken inside a word. Too narrow for it (the weekend column always), the
+   row shows its client on one whole line instead; the window stays on its own line. .dep-measure is the title laid
+   out unseen at the row's width, to tell whether it fits whole. */
+.pick-row .pr-title.dep, .weekend-cell .pick-row:not(.ph-row) .pr-title.dep { position: relative; overflow-wrap: normal; word-break: normal; }
+.dep-measure { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; white-space: normal; overflow-wrap: normal; word-break: normal; }
+.dep-title.compact .dep-client { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* In the weekend column the tick and the icon leave too little beside them for a client's name: a deployment's
+   window, items and client go on their own full-width line under them. */
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) > .pr-main { flex: 1 1 100%; order: 3; flex-wrap: wrap; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .pr-meta { display: contents; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .deploy-window { order: 2; flex: 1 1 100%; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .deploy-items-wrap { order: 4; }
 .today-weekend { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
 .today-weekend-head { margin: 0; font-size: var(--fs-4); }
 .today-weekend .we-client { font-size: var(--fs-2); margin-left: 6px; }

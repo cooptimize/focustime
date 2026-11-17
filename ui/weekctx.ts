@@ -22,6 +22,10 @@ export const TimelineCtx = createContext(true);
  * right of the row, where there is room; a Day card too narrow for the title's minimum switches to the stack in CSS.
  */
 export const RowFormCtx = createContext<"stack" | "side">("side");
+/** UC-2: a client's name by its key, for a row that shows its client (a deployment too narrow for its title). */
+export const ClientNameCtx = createContext<(key: string) => string>((k) => k);
+/** UC-2: inside Week's weekend column (narrow by design): a deployment there shows its client and window, not its title. */
+export const WeekendColumnCtx = createContext(false);
 
 /** UI-9: `late` is each card's late promises (by rail key), its chip's count when the card draws no rail; `onLate` opens several. */
 export type RulerCtxValue = { layout: Layout; promises: readonly RailItem[]; onPromise?: ((key: string) => void) | undefined; onLate?: ((clientKey: string | null) => void) | undefined; today: string; now: string; home: RailSpan | null; late: ReadonlyMap<string, RailItem[]> };
