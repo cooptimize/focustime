@@ -97,9 +97,10 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     // A file that is no thing of its own is found by its own name, last, under Files.
     await box.fill("definition.pbism");
     await box.press("Enter");
-    await results.locator('[data-code-result-kind="files"] [data-code-hit]').waitFor();
+    await results.locator('[data-code-result-kind="files"] [data-code-hit]').first().waitFor();
     expect(await results.locator(".cv-group-head").allTextContents()).toEqual(["Files"]);
-    expect(await results.locator('[data-code-hit="definition.pbism"] .cv-thing-detail').textContent()).toBe("File in Sales semantic model · sales-analytics");
+    // RB-3b's one-file model (Returns, model.bim) has a definition.pbism too.
+    expect(await results.locator('[data-code-hit="definition.pbism"] .cv-thing-detail').allTextContents()).toEqual(["File in Sales semantic model · sales-analytics", "File in Returns semantic model · store-portal"]);
     // Test 8: a names search sends no request that carries the words.
     expect(sent.filter((s) => /salesline|pbism|roles/i.test(s.body))).toEqual([]);
     expect(sent.filter((s) => s.action === "code.search").map((s) => s.body)).toEqual(Array.from({ length: 4 }, () => JSON.stringify({ action: "code.search", input: { clientKey: "Northwind" } })));

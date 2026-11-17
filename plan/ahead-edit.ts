@@ -6,7 +6,7 @@
 // to themselves. Automation accounts never edit (guests can't sign in, D602). Levels come from the process model's
 // ladder, never from type names.
 
-import { aOr, cleanTitle, TITLE_MAX } from "./quick-create.ts";
+import { cleanTitle, TITLE_MAX } from "./quick-create.ts";
 import { isOpen as isOpenCategory } from "./process.ts";
 
 export type EditWhy = "lead" | "owner" | "parent_owner";
@@ -202,10 +202,11 @@ export type MoveItem = { id: number; type: string; title: string; state: string;
  */
 export function moveProblem(item: MoveItem, to: MoveItem | null, project: string): string | null {
   if (item.rung === null) return `${item.type} isn't a level in ${project}'s process`;
-  if (item.rung === 0) return `${cap(aOr(item.type))} has no level above it in ${project}'s process, so it has no parent to change`;
+  // UC-2: the words need no "a" or "an" before a type's name, so no type reads wrong ("An User Story").
+  if (item.rung === 0) return `In ${project}'s process, ${item.type} is the top level, so it has no parent to change`;
   if (!to) return null;
   if (to.id === item.id) return "An item can't be its own parent";
-  if (to.rung === null || to.rung !== item.rung - 1) return `${cap(aOr(item.type))} doesn't go under ${aOr(to.type)} in ${project}'s process`;
+  if (to.rung === null || to.rung !== item.rung - 1) return `In ${project}'s process, ${to.type} isn't the level above ${item.type}`;
   if (!to.open) return `#${to.id} is ${to.state}; FocusTime moves items only under open parents`;
   return null;
 }
@@ -213,4 +214,3 @@ export function moveProblem(item: MoveItem, to: MoveItem | null, project: string
 export const moveItemFrom = (i: { id: number; type: string; title: string; state: string; rung: number | null; stateCategory: string }): MoveItem => ({ id: i.id, type: i.type, title: i.title, state: i.state, rung: i.rung, open: isOpenCategory(i.stateCategory) });
 /** The items this one may move under: its client's open items exactly one level up (ED-1's picker). */
 export const moveTargets = <T extends MoveItem>(items: readonly T[], item: MoveItem, project: string): T[] => items.filter((x) => moveProblem(item, x, project) === null);
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

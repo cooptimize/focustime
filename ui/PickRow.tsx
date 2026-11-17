@@ -14,7 +14,7 @@ import { pickMenu } from "./menu.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { PickTime } from "./PickTime.tsx";
-import { DeployIcon, WindowChip } from "./Deploy.tsx";
+import { DeployIcon, DeployTitle, WindowChip } from "./Deploy.tsx";
 import { DeployItemsChip } from "./DeployItems.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
@@ -25,7 +25,7 @@ import { PlanRow } from "./plan/PlanRow.tsx";
 import { useTodoSheet } from "./TodoSheet.tsx";
 import { DevOpsWork } from "./work.ts";
 import { isResolved } from "../plan/process.ts";
-import { RowFormCtx } from "./weekctx.ts";
+import { RowFormCtx, WeekendColumnCtx } from "./weekctx.ts";
 import { Icon } from "./icons.tsx";
 
 export const PICK_DRAG = "application/x-focustime-pick";
@@ -77,6 +77,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
   const planD = density === "plan";
   // WK-5: Week's cards put the time under the title (RowFormCtx), Day and the panel at the right.
   const stack = useContext(RowFormCtx) === "stack";
+  const weekendColumn = useContext(WeekendColumnCtx);
   const tbs = useTimeboxes();
   // WK-3: a Deployment always shows its window, where a timed to-do shows its time.
   const dep = pick.todoKind === "deployment";
@@ -164,8 +165,9 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         <label className="tick" onClick={stop} onDoubleClick={stop}><input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} /></label>
         {dep ? <DeployIcon /> : typeIcon && pick.itemType && <TypeIcon clientKey={pick.clientKey} type={pick.itemType} />}
         <span className="pr-main">
-          <span className="pr-title" title={pick.title}>
-            {linked(pick.title)}
+          {/* UC-2: a deployment too narrow for its title (the weekend column always) shows its client; the title on hover. */}
+          <span className={`pr-title${dep ? " dep" : ""}`} title={dep ? undefined : pick.title}>
+            {linked(dep ? <DeployTitle pick={pick} short={weekendColumn ? true : "auto"} /> : pick.title)}
           </span>
           {meta && <span className="pr-meta">{meta}</span>}
           {(extra || badge) && <span className="pr-extra">{extra}{badge}</span>}

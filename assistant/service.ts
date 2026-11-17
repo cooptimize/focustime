@@ -19,7 +19,7 @@ import { NOTHING_TO_CONFIRM_DAY, NOTHING_TO_CONFIRM_WEEK } from "../plan/no-conf
 import { removedNotice } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
-import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
+import { deployName, deploymentTitle, windowProblem, windowText } from "../plan/deploy.ts";
 import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
 import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer, WrapOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
@@ -996,7 +996,8 @@ export function createAssistant(env: AssistantEnv) {
         const bad = windowProblem(w);
         if (bad) throw new Refusal(bad);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) throw new Refusal("Say a day from today on");
-        const title = (typeof args.title === "string" && args.title.trim() ? args.title.trim() : DEPLOYMENT).slice(0, 200);
+        // UC-2: no title in my words: the same made title the capture box and the day menu give.
+        const title = deploymentTitle(typeof args.title === "string" ? args.title : null, env.clientName(client), date);
         const note = typeof args.note === "string" && args.note.trim() ? args.note.trim().slice(0, 2000) : null;
         const itemIds = [...new Set(Array.isArray(args.itemIds) ? args.itemIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [])].slice(0, 20);
         const rows: PreviewView["rows"] = [{ label: "When", before: null, after: `${dayWords(date)} ${windowText(w)}` }];
@@ -1013,7 +1014,10 @@ export function createAssistant(env: AssistantEnv) {
         const weekend = Temporal.PlainDate.from(date).dayOfWeek >= 6;
         const preview = plain("Plan a deployment", `Deployment: ${title}`, rows, weekend ? [`${Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" })} isn't a working day: it counts as after-hours time`] : []);
         if (match.unmatched.length) preview.notes.push(`Not matched to ${env.clientName(client)}'s list: ${match.unmatched.join(", ")}`);
-        return { view: base("deploy.add", client, `Plan "${title}" on ${dayWords(date)} ${windowText(w)}`, preview, "Only you"), held: { tool, args: { ...args, title, note, itemIds }, run: { action: "deploy.add", input: { clientKey: client, date, start: w.start, end: w.end, title, ...(note ? { note } : {}), ...(itemIds.length ? { itemIds } : {}), ...(groups ? { items: ticks.map((i) => i.key) } : {}) } } }, snapshot: null };
+        // UC-2: a made title isn't quoted into the line; it names the day ("Plan the Sat, Nov 7 deployment, 9:00–11:00").
+        const asNamed = deployName(title, date);
+        const line = asNamed.made ? `Plan ${asNamed.name}, ${windowText(w)}` : `Plan "${title}" on ${dayWords(date)} ${windowText(w)}`;
+        return { view: base("deploy.add", client, line, preview, "Only you"), held: { tool, args: { ...args, title, note, itemIds }, run: { action: "deploy.add", input: { clientKey: client, date, start: w.start, end: w.end, title, ...(note ? { note } : {}), ...(itemIds.length ? { itemIds } : {}), ...(groups ? { items: ticks.map((i) => i.key) } : {}) } } }, snapshot: null };
       }
       case "move_plan": {
         // AS-2: moves by day and block, built by the server. The to-dos: the ones the server matched from my words

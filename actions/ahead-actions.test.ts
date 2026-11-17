@@ -323,15 +323,15 @@ describe("ED-2: a title and a parent in the change set, by ED-1's rules", () => 
   it("forced through the action: itself, a wrong level (which is every loop), a closed parent, an id from anywhere else and the top level are refused", async () => {
     const s = world();
     const no = async (itemId: number, id: number) => (await s.fail("ahead.stage", { clientKey: K, itemId, field: "parent", value: { id } })).error;
-    expect(await no(110, 110)).toMatch(/doesn't go under a Feature|own parent/);
-    expect(await no(111, 100)).toMatch(/User Story doesn't go under an Epic in Portal's process$/);
+    expect(await no(110, 110)).toMatch(/Feature isn't the level above Feature|own parent/);
+    expect(await no(111, 100)).toMatch(/^In Portal's process, Epic isn't the level above User Story$/);
     // A feature under its own story would be a loop: the level rule refuses it.
-    expect(await no(110, 111)).toMatch(/^A Feature doesn't go under an? User Story in Portal's process$/);
-    expect(await no(111, 113)).toMatch(/User Story doesn't go under an? User Story in Portal's process$/);
+    expect(await no(110, 111)).toMatch(/^In Portal's process, User Story isn't the level above Feature$/);
+    expect(await no(111, 113)).toMatch(/^In Portal's process, User Story isn't the level above User Story$/);
     expect(await no(111, 130)).toBe("#130 is Done; FocusTime moves items only under open parents");
     // Another client's item id (or any id not among this client's items) is simply not found.
     expect(await no(111, 4242)).toBe("#4242 isn't in Northwind Foods's DevOps items here");
-    expect(await no(100, 110)).toMatch(/no level above it/);
+    expect(await no(100, 110)).toMatch(/is the top level, so it has no parent to change/);
     expect(await s.fail("ahead.stage", { clientKey: K, itemId: 111, field: "parent", value: { id: "120" } })).toMatchObject({ status: 400 });
     expect(await s.fail("ahead.stage", { clientKey: "Adatum", itemId: 111, field: "parent", value: { id: 120 } })).toMatchObject({ status: 404 });
     expect(await changes(s)).toEqual([]);
@@ -393,7 +393,7 @@ describe("ED-2: a title and a parent in the change set, by ED-1's rules", () => 
       expect(r.staged.map((x) => x.itemId)).toEqual([111, 112]);
       expect(r.skipped).toEqual([
         { clientKey: K, itemId: 113, reason: "Only Northwind Foods's leads and the owner can change this." },
-        { clientKey: K, itemId: 110, reason: "A Feature doesn't go under a Feature in Portal's process" },
+        { clientKey: K, itemId: 110, reason: "In Portal's process, Feature isn't the level above Feature" },
       ]);
       expect((await changes(s)).every((c) => c.field === "parent" && (c.value as { id: number }).id === 120 && (c.value as { title: string }).title === "Export")).toBe(true);
       const lead = world();

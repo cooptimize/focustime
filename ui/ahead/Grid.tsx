@@ -449,7 +449,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
   };
   // ED-2: rename, move and the card's editor from the Item cell. A row I can't change offers none of them.
   const rename = () => canChange && edit("item");
-  const moveNo = !r.has.parent ? `${r.item.type} has no level above it in ${c.project ?? c.clientName}'s process, so it has no parent to change` : null;
+  const moveNo = !r.has.parent ? `In ${c.project ?? c.clientName}'s process, ${r.item.type} is the top level, so it has no parent to change` : null;
   const startMove = () => {
     if (!canChange) return;
     if (moveNo) return say(moveNo), a.error(moveNo);
@@ -634,11 +634,7 @@ function GridRowView({ r, g, kids, open, toggle, focus, first, editing, setFocus
                       <span className="muted ah-id">#{r.item.id}</span>
                     </span>
                   )}
-                  {canChange && editing !== "item" && (
-                    <button type="button" className="mini quiet icon-btn small ah-rename-btn" tabIndex={-1} aria-label={`Rename ${r.item.title}`} title="Rename (F2)" onClick={(e) => (e.stopPropagation(), rename())}>
-                      <Icon name="edit" />
-                    </button>
-                  )}
+                  {/* UC-2: Rename is in the row's menu and on F2 only; its hover button took the title's room. */}
                   <Unsaved r={r} parentTitle={parentTitle} />
                   {drop === "on" && <span className="ah-drop-say">Move under {r.item.title}</span>}
                   {parent && (

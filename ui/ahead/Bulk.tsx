@@ -277,9 +277,9 @@ function BulkAssign({ rows, anchor, onPick, done }: { rows: Row[]; anchor: HTMLE
 }
 
 /**
- * ED-2: State… for the ticked rows. Only a state every row's type takes can be picked; where the types differ, the
- * other states are listed under it with the rows they fit, so it's plain why they aren't offered. All from each
- * client's process, never a fixed list.
+ * ED-2: State… for the ticked rows, from each client's process, never a fixed list. UC-2: a state only some rows'
+ * types take can be picked too, with how many rows it fits: those rows are staged and the others skipped, with the
+ * count and the reason. A state no ticked row's type takes is never listed.
  */
 function BulkState({ rows, anchor, onPick, done }: { rows: Row[]; anchor: HTMLElement; onPick: Picked<string>; done: () => void }) {
   const a = useAhead();
@@ -292,7 +292,10 @@ function BulkState({ rows, anchor, onPick, done }: { rows: Row[]; anchor: HTMLEl
     const s = look(name);
     return <span className={`ah-state-dot cat-${(s?.category ?? "").toLowerCase()}`} style={s?.color ? { background: `#${s.color}`, boxShadow: "none" } : undefined} aria-hidden="true" />;
   };
-  const options: ListOption[] = common.map((name) => ({ key: name, label: name, lead: dot(name), hint: categoryLabel(look(name)?.category ?? "") ?? undefined }));
+  const options: ListOption[] = [
+    ...common.map((name) => ({ key: name, label: name, lead: dot(name), hint: categoryLabel(look(name)?.category ?? "") ?? undefined })),
+    ...partial.map((p) => ({ key: p.state, label: p.state, lead: dot(p.state), hint: `${p.fits} of ${rows.length}: ${p.types.join(", ")}` })),
+  ];
   const save = async (name: string | null) => {
     if (!name) return;
     const no = await onPick(name);
@@ -308,24 +311,11 @@ function BulkState({ rows, anchor, onPick, done }: { rows: Row[]; anchor: HTMLEl
         current={chosen}
         onPick={(k) => (setChosen(k), void save(k))}
         placeholder="Filter states"
-        empty={common.length ? "No state matches" : "These rows' types share no state"}
+        empty="No state matches"
         note={
-          partial.length ? (
-            <span className="bl-state-partial">
-              <span>The selection has {types.length} types ({types.join(", ")}). Only states every row's type takes can be set at once. Not for every row:</span>
-              <span role="list" aria-label="States that fit only some of the selected rows">
-                {partial.map((p) => (
-                  <span role="listitem" key={p.state} className="bl-state-fit">
-                    {dot(p.state)}
-                    <strong>{p.state}</strong> fits {p.fits} of {rows.length}: {p.types.join(", ")}
-                  </span>
-                ))}
-              </span>
-              <span>Select only those rows to set one of these.</span>
-            </span>
-          ) : (
-            "Rows already in that state are skipped. Nothing is written until you save."
-          )
+          partial.length
+            ? `The selection has ${types.length} types (${types.join(", ")}). A state that fits only some rows sets those rows; the others are skipped. Nothing is written until you save.`
+            : "Rows already in that state are skipped. Nothing is written until you save."
         }
       />
     </CellPopover>

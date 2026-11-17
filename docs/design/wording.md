@@ -282,11 +282,11 @@ Backlog lists the level chosen in Filter › Levels, in that level's own rank or
 - A staged row says **Renamed, not saved** and **Moved, not saved**; hover: "Not in DevOps until you save. DevOps has: <old title>" and "In DevOps it is under #3350 <title>. Its place in the backlog order doesn't change".
 - Move…'s popover: **Move under**, the box "Find a feature" (the level's own name), **No parent**, the parent now marked **now**, the button **Move**; under the list: "Only <client>'s own open items one level up (Feature). Only the parent link changes: area, iteration and the backlog order stay as they are. Nothing is written until you save."
 - A drag: the pointer and the lit row say **"Move under <title>"**; over anything else "Drag onto a lit row to move #3354"; with nothing to take it "No row here can take it. Use Move… (M)". A screen reader hears "Dragging #3354 <title>. 2 rows can take it. Escape cancels.", then "#3354 <title> moves under <title>. Not saved until you save." or "Move cancelled."
-- A refused move says why: "A User Story doesn't go under an Epic in <project>'s process", "#130 is Done; FocusTime moves items only under open parents", "Epic has no level above it in <project>'s process, so it has no parent to change".
+- A refused move says why, with no "a" or "an" before a type's name (UC-2): "In <project>'s process, Epic isn't the level above User Story", "#130 is Done; FocusTime moves items only under open parents", "In <project>'s process, Epic is the top level, so it has no parent to change".
 - The bulk bar: **Assign to…**, **State…**, **Size…**, **Move to…**. After one: "Assign to Dana Reyes: staged 3, skipped 2. Nothing is written until you save.", "State Active: staged 4, skipped 0. …", "Size 5: staged 1, skipped 1. …", "Move under <title>: staged 2, skipped 0. …", then **Why 2 items were skipped**.
 - Skips: "Already assigned to Dana Reyes", "Already Active", "Closed isn't a state of Feature in <project>'s process", "Feature has no size in <project>'s process", "Already that size", "Already under it".
 - A button that can't open for these rows says why when pressed: "Move to… needs rows at one level, so one parent fits them all", "Move to… needs rows from one client. A move never crosses clients", "Assign to… needs rows from one client: each client has its own people".
-- State… on mixed types: "The selection has 2 types (Feature, User Story). Only states every row's type takes can be set at once. Not for every row:" then "On hold fits 1 of 2: Feature", and "Select only those rows to set one of these."
+- State… on mixed types (UC-2): every state any ticked row's type takes is listed; one only some take shows "1 of 2: Feature" beside it, and the note says "The selection has 2 types (Feature, User Story). A state that fits only some rows sets those rows; the others are skipped. Nothing is written until you save." Picked, the result is "State On hold: staged 1, skipped 1." with each skipped row's reason ("On hold isn't a state of User Story in Logistics's process").
 - Review's rows: **Title** and **Parent**, before → after ("#3350 Carrier rate alerts → #3310 Shipment tracking dashboard", "No parent"). Saved: "#3313 <title> Title · in DevOps", "not confirmed yet", "not written".
 - The preview's line for a change set write: "Change this item in DevOps" (it listed dates, state, size and owner before; the rows under it say which fields); its undo: "Undo: put what this change set changed back".
 - A title edit thrown away by a click elsewhere is said to a screen reader: "Title of #3313 not changed. Enter keeps an edit; a click elsewhere cancels it."
@@ -314,9 +314,32 @@ All in one place in code: `WHERE_TEXT` in `plan/where-lookup.ts`. The three ques
 - Inside a second level: **"Reading the file…"**, **"This file is too large to list. Type the name."**, **"This report has no pages to list."**, **"This table has no measures or columns to list."**, **"This file couldn't be read. Type the name."**, **"This file wasn't read because FocusTime couldn't record that you opened it."**
 - Admin › Audit › Code views: **"Listed names for Where is it? (New form)"** and **"Listed names for Where is it? (draft editor)"**.
 
+## RB-3b words (Nov 16)
+
+All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change) and `WHERE_TEXT` in `plan/where-lookup.ts` (the lookup).
+
+- After a client change took out picked names, one line under the Client field: **"Took out 2 names picked from Northwind's code."** (**"1 name"** for one; **"Northwind's and Atlas's code"** when they came from two) with **Undo** (its name for a screen reader: **"Undo: put back the 2 names"**). After Undo: **"Put back 2 names. They're from Northwind's code, not Atlas's."** (**"It's"** for one). Screen readers hear each line once.
+- A row that opens: **Pages** for a report in either format, **Tables** for any semantic model (review 3: TMDL models said **Open** before), **Measures and columns** for a table (a one-file model's table too).
+- The browse button's tooltip: **"Browse Northwind's code (Alt+Down)"** (its name for a screen reader stays **"Browse Northwind's code"**, with Alt+Down as its key shortcut).
+- A hidden page's row: **"Page of Region review · Hidden"**; what its pick writes: **"Store drill-through (hidden page, Region review report)"**. A one-file model's table writes **"Returns (table, Returns semantic model)"**, like any model table.
+- While a second level is read: **"Reading the report's pages…"**, **"Reading the table…"**, **"Reading the model…"** (replacing "Reading the file…").
+- Inside a second level, one line: **"1 page couldn't be read."** (**"2 pages couldn't be read."**), **"Some of this table's measures are kept in files that couldn't be read."**, **"This model keeps measures in more files than FocusTime opens here, so some may be missing."**, **"This report has more than 60 pages to list. Type the page's name."**, **"This model is too large to list. Type the table's name."**, **"This model has no tables to list."**, and, when the row can't be written, **"These names weren't listed because FocusTime couldn't record that you listed them."** (replacing the file line).
+- Admin › Audit › Code views, What: **"Pages listed"**, **"Measures and columns listed"**, **"Tables listed"**, with the repo and the report's, table's or model's file under File. Its line: **"Who opened which client's code in Code, and when: the repo, the file, Find, or a report's pages and a model's tables or measures listed for Where is it? Never any of the code."**
+
 ## UC-1 words (Nov 15)
 
 - A deployment saved with no title: **"Deployment - <client's name> - <date>"**, spaces around plain hyphens (never an em dash), the client's short name as its chip shows it, the date as everywhere ("Sat, Nov 7"; no year). Typed words are the title as typed.
 - The capture box with Deployment chosen and nothing typed: the hint is that title; under the kinds: "Enter saves it as "Deployment - Northwind - Sat, Nov 7" · ↓ to its details". With no client: "A deployment needs a client · ↓ to its details".
 - The Inbox's client chips: the name, then its number when something needs me there ("Northwind 3"); read aloud as "Northwind, 3 need you", "Harbor, 1 needs you", "All clients, 5 need you". No number when nothing does.
 - A chip's hover line: "3 need you in Northwind: suggestions from chats, and promises late or due today. The same count as the Inbox tab's".
+
+## UC-2 words (Nov 16)
+
+- A deployment left untitled, wherever it is made (capture, Plan a deployment…, the assistant): **"Deployment - <client's name> - <date>"**, as UC-1.
+- A sentence never quotes that made title; it names the day: **"The Sat, Nov 21 deployment is done."**, **"Tell Northwind the Sat, Nov 21 deployment is done"**, the assistant's **"Plan the Sat, Nov 21 deployment, 9:00–11:00"**. A typed title is used as typed: **"Release 4.2 is deployed."**, **"Tell Northwind it's deployed: Release 4.2"**.
+- A deployment too narrow for its title (Week's weekend column, a narrow card): the client's short name and the window, the full title (and the window) on hover and for a screen reader.
+- The Inbox's chip for things with no client: **"No client"** with its number, read aloud **"No client, 1 needs you"**; hover **"1 needs you with no client: …"**.
+- Code: the second choice under Databases: **"Show"** (labelled so in By kind and in Search code) with **"All types"**, **"Tables"**, **"Views"**, **"Stored procedures"**, **"Functions"**; named **"Object type"** for a screen reader, in By kind and beside Kind in Search code.
+- Backlog's bulk State… on mixed types: see ED-2 words (rewritten for UC-2).
+- The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
+- Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.

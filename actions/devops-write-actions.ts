@@ -26,7 +26,7 @@ import { canEdit, parentIdIn, rungOf, sameValue, valueText, type ChangeField, ty
 import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
 import { canonOf, editingOf, LIGHT_MAX, lightToHtml, lookHtml, LOSSY_TEXT, NOT_EDITABLE_TEXT, sameContent, storedValue, type FieldFormat } from "../plan/light-format.ts";
-import { aOr, parentTypesOf, TITLE_MAX } from "../plan/quick-create.ts";
+import { parentTypesOf, TITLE_MAX } from "../plan/quick-create.ts";
 import { EDIT_LABEL, editRefs, itemEditOps, PARENT_LABEL, PARENT_REL, parentIdOf, parentLinks, parentText, reparentOps, type EditPart } from "../plan/devopswrite.ts";
 import type { EditFieldOffer, EditOffer } from "./types.ts";
 /** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
@@ -1629,7 +1629,7 @@ async function moveCheck(env: Env, item: ItemSnapshot, to: number | null, memo: 
   const { writer, org, pat, project } = env;
   const ladder = await ladderOf(env, memo);
   const ups = parentTypesOf(ladder, item.type);
-  if (!ups.length) throw new Refused(`${cap(aOr(item.type))} has no level above it in ${env.projectName}'s process, so it has no parent to change`, 409, "no_parent_level");
+  if (!ups.length) throw new Refused(`In ${env.projectName}'s process, ${item.type} is the top level, so it has no parent to change`, 409, "no_parent_level");
   if (to === item.id) throw new Refused("An item can't be its own parent", 409);
   const links = parentLinks(item.relations);
   const was = links[0] ?? null;
@@ -1644,8 +1644,8 @@ async function moveCheck(env: Env, item: ItemSnapshot, to: number | null, memo: 
     }
     const inProject = String(parent.fields["System.TeamProject"] ?? "").toLowerCase();
     if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${to} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
-    const why = parentProblem(ladder, parent.type, item.type);
-    if (why) throw new Refused(why, 409, "wrong_level");
+    // UC-2: the move rule's own words, with no "a" or "an" before a type's name (QC-1's create rule keeps its own).
+    if (parentProblem(ladder, parent.type, item.type)) throw new Refused(`In ${env.projectName}'s process, ${parent.type} isn't the level above ${item.type}`, 409, "wrong_level");
     const ps = await writer.states(org, pat, project, parent.type);
     if (!isOpenCategory(ps.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime moves items only under open parents`, 409, "closed_parent");
   }
@@ -1698,7 +1698,6 @@ const editCurrent = (e: DevOpsWriteEntry, k: string, v: string | null | undefine
 };
 const CHILD_REL = "System.LinkTypes.Hierarchy-Forward";
 const REPRO = "Microsoft.VSTS.TCM.ReproSteps";
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** ED-1: the process ladder, read once per preview (the same memo key rightsOn uses). */
 const ladderOf = (env: Env, memo: Map<string, Promise<unknown>>) => (memo.get("ladder") ?? memo.set("ladder", env.writer.processConfig(env.org, env.pat, env.project).then(ladderFromProcessConfig)).get("ladder")!) as Promise<string[][]>;
 /** ED-1: the format a large text field is stored in (multilineFieldsFormat); anything not named Markdown is HTML. */

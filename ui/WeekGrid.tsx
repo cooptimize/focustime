@@ -33,7 +33,7 @@ import { useDropTarget } from "./WeekStories.tsx";
 import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
 import { NowLine } from "./NowLine.tsx";
 import { railNowOf, type RailNow } from "./Timeline.tsx";
-import { LiveOnCard, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus, type Selection } from "./weekctx.ts";
+import { LiveOnCard, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, WeekendColumnCtx, type PanelFocus, type Selection } from "./weekctx.ts";
 import { BlockCard, CardPick, CardPicks } from "./BlockCard.tsx";
 import { Icon } from "./icons.tsx";
 export type { PanelFocus, Selection } from "./weekctx.ts";
@@ -589,7 +589,9 @@ function WeekendDay({ day, tz, selected, refAm, refPm, onOpen, dayLabel }: { day
       )}
       {rows.picks.length > 0 && (
         <ul className="checklist we-todos" aria-label={`To-dos on ${dayLabel}`}>
-          {rows.picks.map((p) => <CardPick key={p.id} pick={p} tabIndex={selected ? 0 : -1} />)}
+          <WeekendColumnCtx.Provider value={true}>
+            {rows.picks.map((p) => <CardPick key={p.id} pick={p} tabIndex={selected ? 0 : -1} />)}
+          </WeekendColumnCtx.Provider>
         </ul>
       )}
       {rows.due.length > 0 && (
