@@ -109,6 +109,7 @@
   "e2e/week/break-down.test.ts": 5.8,
   "e2e/week/card-title-opens-story.test.ts": 5.5,
   "e2e/week/carry-over.test.ts": 6.5,
+  "e2e/week/call-pocket.test.ts": 7.5,
   "e2e/week/client-calls.test.ts": 5.6,
   "e2e/week/client-colors.test.ts": 16.7,
   "e2e/week/deployment-items.test.ts": 17.1,
