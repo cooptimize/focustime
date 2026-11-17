@@ -245,7 +245,7 @@
   "ui/CloseButton.tsx": 1446,
   "ui/CloseLoop.tsx": 2890,
   "ui/CreateDraft.tsx": 1596,
-  "ui/Day.tsx": 38815,
+  "ui/Day.tsx": 38870,
   "ui/DayTimeline.tsx": 33158,
   "ui/DayWeekend.tsx": 2294,
   "ui/Deploy.tsx": 7046,
