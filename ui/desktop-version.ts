@@ -43,12 +43,13 @@ const realPage: DesktopPage = {
 };
 
 /** Switch to the Desktop version (on) or back to the phone's (off). */
-export function setDesktopVersion(on: boolean, page: DesktopPage = realPage, screen: { width: number } = globalThis.screen): "reload" | "in_place" {
+export function setDesktopVersion(on: boolean, page: DesktopPage = realPage, screen?: { width: number }): "reload" | "in_place" {
   if (page.save(on)) {
     page.reload();
     return "reload";
   }
-  page.viewport(on ? desktopViewport(screen.width) : PHONE_VIEWPORT);
+  // The page's width now (this orientation); screen.width stays the portrait width on iOS.
+  page.viewport(on ? desktopViewport(screen?.width ?? (document.documentElement.clientWidth || globalThis.screen.width)) : PHONE_VIEWPORT);
   page.mark(on);
   listeners.forEach((f) => f());
   return "in_place";

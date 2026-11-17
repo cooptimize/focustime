@@ -60,7 +60,8 @@ export type OneWhy = "late" | "due_today" | "from_chat" | "other";
 export type OneThing = { key: string; why: OneWhy; title: string; who: string | null; of: number };
 
 const rank = (r: InboxItemView, today: string): OneWhy | null => {
-  if (r.done) return null;
+  // Only what the Inbox counts as needing me, so the one shown is one of the bar's N.
+  if (r.done || !r.views.includes("needs_you")) return null;
   if (r.kind === "promise" && r.late) return "late";
   if (r.kind === "promise" && r.due === today) return "due_today";
   if (r.kind === "conversation") return "from_chat";
@@ -93,6 +94,7 @@ export const PHONE_TEXT = {
   askLabel: "Ask the assistant",
   barLabel: "Tabs",
   moreDot: "More: a source needs attention",
+  moreNew: "More: new notifications",
   dayHeading: "Day",
   nowTag: "Now",
   until: (t: string) => `until ${t}`,

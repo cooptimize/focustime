@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
           }),
         );
         const where = `${w} px, ${size ?? "default"}`;
-        expect(items.map((i) => i.name.replace(/, \d+$/, "")), where).toEqual(["Day", "Week", "Capture", "Inbox", "More"]);
+        expect(items.map((i) => i.name.replace(/, \d+$|: .*$/, "")), where).toEqual(["Day", "Week", "Capture", "Inbox", "More"]);
         for (const i of items) {
           expect(Math.min(i.w, i.h), `${i.name} at ${where}`).toBeGreaterThanOrEqual(44);
           expect(i.clipped, `${i.name}'s label at ${where}`).toBe(false);
@@ -154,8 +154,11 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await expect.poll(() => card(page).locator(".pn-tag").textContent(), { timeout: 15_000 }).toBe("Your day starts");
     expect(await card(page).locator(".pn-name").textContent()).toBe("9:00 · Cooptimize");
     await open(page, h, "#/day", at("18:30"));
-    await expect.poll(() => card(page).textContent(), { timeout: 15_000 }).toBe("TodayDay doneNothing else is scheduled today.");
+    await expect.poll(() => card(page).textContent(), { timeout: 15_000 }).toBe("TodayDay doneNothing else is scheduled today.Close out");
     await shot(page, "ph1-now-after");
+    // After the day, Close out is on the card (it left the moment card, which isn't on the phone's Day).
+    await card(page).getByRole("button", { name: "Close out" }).click();
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/day\/closeout/);
     // Now in light.
     await open(page, h, "#/day", at("09:30"));
     await card(page).waitFor();
@@ -191,14 +194,15 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await page.close();
   }, T);
 
-  it("More: each row opens its place, by tap; the state lines; no dot while the sources are live", async () => {
+  it("More: each row opens its place, by tap; the state lines; the dot for new notifications", async () => {
     const page = await phonePage(h, 390);
     const errors = errorsOf(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, h, "#/day", at("09:30"));
     const more = () => bar(page).getByRole("button", { name: /^More/ });
-    expect(await more().getAttribute("aria-label")).toBeNull();
-    expect(await page.locator(".pb-dot").count()).toBe(0);
+    // The demo's notifications from this morning are new: More's dot says so (no source needs attention).
+    expect(await more().getAttribute("aria-label")).toBe("More: new notifications");
+    expect(await page.locator(".pb-dot").count()).toBe(1);
     await more().click();
     const screen = page.getByRole("main", { name: "More" });
     await screen.waitFor();
@@ -250,6 +254,33 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await go("about", true, () => page.getByRole("dialog", { name: /About/ }).waitFor());
     await go("admin", true, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/settings\/admin/));
     expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("More closes when the place changes under it: the browser's Back, a tab", async () => {
+    const page = await phonePage(h, 390);
+    await open(page, h, "#/week", at("09:30"));
+    await open(page, h, "#/day", at("09:30"));
+    await bar(page).getByRole("button", { name: /^More/ }).click();
+    const more = page.getByRole("main", { name: "More" });
+    await more.waitFor();
+    await page.goBack();
+    await more.waitFor({ state: "detached", timeout: 15_000 });
+    await bar(page).getByRole("button", { name: /^More/ }).click();
+    await more.waitFor();
+    await bar(page).getByRole("button", { name: /^Week/ }).click();
+    await more.waitFor({ state: "detached", timeout: 15_000 });
+    await page.close();
+  }, T);
+
+  it("a computer window narrowed to a phone's width draws at once, keeping what was open, and the phone's bar joins", async () => {
+    const { page } = await freshPage(h, { width: 1280, height: 900 });
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => document.querySelector("main")?.setAttribute("data-kept", "1"));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".phone-bar").waitFor({ timeout: 30_000 });
+    // Nothing was unmounted: the page drawn before is the same page.
+    expect(await page.locator("[data-kept]").count()).toBeGreaterThan(0);
     await page.close();
   }, T);
 

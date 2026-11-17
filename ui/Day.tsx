@@ -41,7 +41,6 @@ import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps } from "./Phone.tsx";
 import { PhoneTodos, phoneNowOf, phoneNameOf } from "./PhoneDay.tsx";
 import { isMeeting } from "../plan/phonenow.ts";
-import { nextLines, oneThing, PHONE_TEXT } from "../plan/phone-now.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
@@ -382,7 +381,7 @@ export function Day(props: Props) {
   return (
     <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
       {/* PH-1: Now has no header of its own: the date is the top bar's, and another day is reached from Week. */}
-      {phoneToday && <h1 className="sr-only">{PHONE_TEXT.dayHeading}</h1>}
+      {phoneToday && <h1 className="sr-only">{PhoneM!.PHONE_TEXT.dayHeading}</h1>}
       {!phoneToday && <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
@@ -486,11 +485,12 @@ export function Day(props: Props) {
               onTimer={props.onTimer}
               onFocusScreen={props.onFocusScreen}
               onAdd={(half) => openBlock(half as Half, { add: true })}
+              {...(props.onCloseOut ? { onCloseOut: props.onCloseOut } : {})}
             />
           )}
           {nudges && (
             <PhoneM.NextLines
-              lines={nextLines(
+              lines={PhoneM.nextLines(
                 (cal?.timed ?? []).filter((e) => isMeeting({ id: e.event.id, title: e.event.title, start: e.start, end: e.end, isPersonal: e.event.isPersonal, unavailable: e.event.unavailable, notMeeting: e.event.notMeeting, allDay: e.event.allDay })).map((e) => ({ title: e.event.title, start: e.start, end: e.end })),
                 blocks.map((b) => {
                   const st = blockStatus(b.risks);
@@ -501,7 +501,7 @@ export function Day(props: Props) {
               )}
             />
           )}
-          {nudges && <PhoneM.OneThingLine thing={oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onItem ?? (() => props.onInbox()))(k)} />}
+          {nudges && <PhoneM.OneThingLine thing={PhoneM.oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onItem ?? (() => props.onInbox()))(k)} />}
         </div>
       )}
       {!phoneToday && aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>
@@ -551,7 +551,7 @@ export function Day(props: Props) {
         </p>
       ) : phoneToday && !catchUpCell ? (
         <div className="today-body ph-today ph1-now" data-tour="today-blocks">
-          <PhoneTodos heading={PHONE_TEXT.today} blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
+          <PhoneTodos heading={PhoneM!.PHONE_TEXT.today} blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
         </div>
       ) : mode === "now" && timelineShown ? (
         <div className="today-body with-tl">

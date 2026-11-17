@@ -173,6 +173,9 @@ export function App() {
   // PH-1: the phone's own screens (the bar, Now, More); asked for at start on a phone (ui/main.tsx). The phone draws
   // once they are in, so it never shows the computer's shell first. The Desktop version is a computer's layout.
   const PhoneM = useScreen("phone", phone);
+  // PH-1: the phone's file holds back only the first paint; a window narrowed later draws at once and the phone's parts
+  // join when the file is in (no blank page, nothing unmounted).
+  const drawnOnce = useRef(false);
   const desktopVersion = useDesktopVersion();
   // MB-1: the status dot's sheet, and Ahead opened anyway on the phone (for this visit; a reload shows the notice again).
   const [statusOpen, setStatusOpen] = useState(false);
@@ -311,6 +314,17 @@ export function App() {
     return () => window.removeEventListener("popstate", on);
   }, []);
   const nav = loc.nav;
+  // PH-1: More closes when the place changes under it (a key, a link, the browser's Back); opening More itself may clear
+  // an overlay, which isn't such a change.
+  const placeSeen = useRef(hashOf(loc));
+  const keepMore = useRef(false);
+  useEffect(() => {
+    const h = hashOf(loc);
+    if (h === placeSeen.current) return;
+    placeSeen.current = h;
+    if (keepMore.current) keepMore.current = false;
+    else setMoreOpen(false);
+  }, [loc]);
   // ST-1: the section in the address ("" is the rail) and a setting in it; Settings maps old ids and unknown ones.
   const settingsAt: string | null = loc.overlay?.kind === "settings" ? loc.overlay.section : null;
   const overlayBefore = useRef<Loc["overlay"]>(loc.overlay);
@@ -1853,20 +1867,23 @@ export function App() {
         <h1>Signed out</h1>
         <p>Your FocusTime session ended. Sign in again to continue; your plan is as you left it.</p>
         <SignInAgainButton />
+        {desktopVersion && <PhoneVersionButton onBack={() => setDesktopVersion(false)} />}
       </div>
     );
   }
   // PF-1: opened at an address whose screen is still arriving: the loader stays, and nothing is drawn under it.
   // PH-1: on a phone, also until the phone's own file is in; if it can't be had (offline), the app is drawn without the
   // phone's bar and Now, and the line under the top bar says so with Retry, rather than the loader staying up.
-  if (!data || !env || !target || !firstScreen || (phone && !PhoneM && !screenFailed("phone"))) {
+  if (!data || !env || !target || !firstScreen || (phone && !PhoneM && !screenFailed("phone") && !drawnOnce.current)) {
     return (
       <>
         {opening}
         {state.kind === "failed" && <div className="center-note"><p>Nothing to show without a connection. Reload when you’re back online.</p></div>}
+        {desktopVersion && <PhoneVersionButton onBack={() => setDesktopVersion(false)} />}
       </>
     );
   }
+  drawnOnce.current = true;
 
   const { week } = shownData ?? data;
   // PF-1: the screens that load when first opened; each is null until its file is in (the place is drawn only then).
@@ -2506,13 +2523,14 @@ export function App() {
         <PhoneM.PhoneBar
           current={moreOpen || settingsAt !== null || guideAt || docsAt || meetingAt || nav.tab === "status" || nav.tab === "code" || nav.tab === "ahead" ? "more" : focusOpen ? null : nav.tab === "today" ? "day" : nav.tab === "week" ? "week" : nav.tab === "inbox" ? "inbox" : null}
           needsYou={inboxCount}
-          moreDot={sourceHealth(data.sources, data.devops) === "trouble"}
+          moreDot={sourceHealth(data.sources, data.devops) === "trouble" ? "trouble" : notices.unread > 0 ? "new" : null}
           captureOpen={captureOpen}
           onTab={(t) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
             setCaptureOpen(false);
             setAssistantAt(null);
             if (t === "more") {
+              keepMore.current = hashOf({ ...loc, overlay: null }) !== hashOf(loc);
               go((l) => ({ nav: l.nav, overlay: null }));
               setMoreOpen(true);
               return;

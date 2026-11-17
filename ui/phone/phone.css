@@ -54,8 +54,10 @@
   .app.phone .ph1-top .brand { flex: none; display: flex; align-items: center; gap: 8px; min-width: auto; max-width: none; overflow: visible; }
   .app.phone .ph1-top .demo-tag { flex: none; max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
   .ph1-top .top-actions { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; }
-  .ph1-top .vm-chip .vm-label, .ph1-top .vm-chip .vm-word { display: none; }
-  .ph1-top .vm-chip .vm-short { display: inline; }
+  /* Two words, "VM Stopped", as the computer's narrower widths say it; the full state is in its sheet. */
+  .ph1-top .vm-chip .vm-label { display: none; }
+  :root .app.phone .topbar.ph1-top .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-short) { display: inline; }
+  .app.phone .topbar.ph1-top .vm-chip .vm-word { font: inherit; letter-spacing: 0; color: inherit; }
   .ph1-top .vm-chip { min-height: var(--tap); min-width: var(--tap); flex: 0 1 auto; overflow: hidden; font-size: var(--fs-2); white-space: nowrap; }
   .ph1-top .vm-chip .vm-short { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .ph1-top .ph-ask { flex: none; }
@@ -116,7 +118,7 @@
 
   /* More: a full screen of rows, 56 px at least; Desktop version set apart. */
   .more-screen {
-    position: fixed; inset: 0 0 var(--bb-h) 0; z-index: 60; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);
+    position: fixed; inset: 0 0 var(--bb-h) 0; z-index: 75; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);
     display: grid; align-content: start; gap: 16px; padding: calc(env(safe-area-inset-top) + 8px) 16px 24px; font-size: var(--ph-body);
   }
   .mr-head { display: flex; align-items: center; gap: 8px; min-height: var(--tap); }

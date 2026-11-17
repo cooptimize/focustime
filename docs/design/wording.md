@@ -366,8 +366,8 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 
 ## PH-1 words (Nov 17)
 
-- The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** with its dot). The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
-- The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**).
+- The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** or **"More: new notifications"** with its dot). The VM: **"VM Stopped"**, **"VM Running"**. The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
+- The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**). After the day: **"Close out"**.
 - Next: **"Next"**, then **"11:00 AM Proposal review with Jordan · 45 min"**, **"12:30 PM Northwind · At risk · Dentist 12:00"**.
 - The one thing: **"Needs you"**, then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
 - More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Client calls"** with **"1 call to review"**, **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.

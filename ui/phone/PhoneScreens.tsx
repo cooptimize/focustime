@@ -8,6 +8,8 @@ import type { WeekLoadData } from "../../actions/types.ts";
 import type { Pick } from "../../plan/types.ts";
 import type { NowCard as NowState } from "../../plan/phonenow.ts";
 import { blockGone, blockLine, PHONE_TEXT as W, type NextLine, type OneThing } from "../../plan/phone-now.ts";
+// Day reads these through this file, so the phone's words and rules stay out of the computer's first download.
+export { nextLines, oneThing, PHONE_TEXT } from "../../plan/phone-now.ts";
 import { clientColor, startClock } from "../labels.ts";
 import { formatDuration } from "../../week/format.ts";
 import { countdown, timerLeft } from "../NowStrip.tsx";
@@ -19,11 +21,11 @@ import { VmCtx } from "../Account.tsx";
 
 export type PhoneTab = "day" | "week" | "inbox" | "more";
 
-/** The bar: Day, Week, Capture (the raised round button), Inbox (with its count), More (a dot when a source needs attention). */
+/** The bar: Day, Week, Capture (the raised round button), Inbox (with its count), More (a dot when a source needs attention or a notification is new). */
 export function PhoneBar({ current, needsYou, moreDot, captureOpen, onTab, onCapture }: {
   current: PhoneTab | null;
   needsYou: number;
-  moreDot: boolean;
+  moreDot: "trouble" | "new" | null;
   captureOpen: boolean;
   onTab: (t: PhoneTab) => void;
   onCapture: () => void;
@@ -49,7 +51,7 @@ export function PhoneBar({ current, needsYou, moreDot, captureOpen, onTab, onCap
         </button>
       </span>
       {tab("inbox", "inbox", W.tabs.inbox, needsYou > 0 ? <span className="pb-count" aria-hidden="true">{needsYou}</span> : null, needsYou > 0 ? `${W.tabs.inbox}, ${needsYou}` : undefined)}
-      {tab("more", "more", W.tabs.more, moreDot ? <span className="pb-dot" aria-hidden="true" /> : null, moreDot ? W.moreDot : undefined)}
+      {tab("more", "more", W.tabs.more, moreDot ? <span className="pb-dot" aria-hidden="true" /> : null, moreDot === "trouble" ? W.moreDot : moreDot === "new" ? W.moreNew : undefined)}
     </nav>
   );
 }
@@ -71,7 +73,7 @@ const ms = (iso: string) => Date.parse(iso.replace(/\[.*\]$/, ""));
  * time left and the meeting that matters, then the one thing (Done box, title, its item and size) and Start focus; a
  * running session shows its time left with Done and Stop. Before, between and after: what the phone said before PH-1.
  */
-export function NowCard({ card, data, pick, nowMs, name, tickable, onStart, onTick, onTimer, onFocusScreen, onAdd }: {
+export function NowCard({ card, data, pick, nowMs, name, tickable, onStart, onTick, onTimer, onFocusScreen, onAdd, onCloseOut }: {
   card: NowState;
   data: WeekLoadData;
   pick: Pick | null;
@@ -84,6 +86,8 @@ export function NowCard({ card, data, pick, nowMs, name, tickable, onStart, onTi
   onTimer: (a: "timer.done" | "timer.stop") => void;
   onFocusScreen: () => void;
   onAdd: (half: string) => void;
+  /** After the day: Close out, the moment card's own (it isn't on the phone's Day any more). */
+  onCloseOut?: () => void;
 }): ReactNode {
   const cowork = useCoworkData();
   if (card.kind === "none") return null;
@@ -166,6 +170,13 @@ export function NowCard({ card, data, pick, nowMs, name, tickable, onStart, onTi
       </h2>
       <p className="pn-line">{head.line}</p>
       {card.kind !== "after" && thing}
+      {card.kind === "after" && onCloseOut && (
+        <div className="pn-thing">
+          <button type="button" className="pn-main" onClick={onCloseOut}>
+            {W.else.closeout}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -316,7 +327,7 @@ export function PhoneMore({ statusNeeds, calls, code, health, unread, focusing, 
     { id: "guide", icon: "guide", label: W.rows.guide, run: to("guide") },
   ];
   const rest: MoreRow[] = [
-    { id: "notifications", icon: "notices", label: W.else.notifications, line: unread > 0 ? W.else.notificationsLine(unread) : null, run: to("notifications") },
+    { id: "notifications", icon: "notices", label: W.else.notifications, line: unread > 0 ? W.else.notificationsLine(unread) : null, dot: unread > 0, run: to("notifications") },
     { id: "sources", icon: "refresh", label: W.else.sources, line: W.else.sourcesLine[health], dot: health === "trouble", run: to("sources") },
     { id: "focus", icon: "focus", label: focusing ? W.else.focusScreen : W.else.focus, line: focusing ? null : W.else.focusLine, run: to("focus") },
     { id: "checkin", icon: "time", label: W.else.checkin, run: to("checkin") },

@@ -9,10 +9,11 @@ export function PhoneVersionButton({ onBack }: { onBack: () => void }) {
   const [place, setPlace] = useState<CSSProperties>({});
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    // Without the visual viewport: held at the layout's corner (still on the page, if not at the screen's size).
+    if (!vv) return setPlace({ position: "fixed", right: 12, bottom: 12 });
     const on = () => {
-      // CSS px per screen px: 1280 laid out on a 390 wide screen is about 3.3.
-      const k = Math.max(1, vv.width / Math.max(1, screen.width || vv.width));
+      // CSS px per screen px: the inverse of the zoom (1280 laid out on a 390 wide screen is about 3.3), in any orientation.
+      const k = Math.max(1, 1 / (vv.scale || 1));
       setPlace({ left: vv.pageLeft + vv.width - 12 * k, top: vv.pageTop + vv.height - 12 * k, transform: `translate(-100%, -100%) scale(${k})`, transformOrigin: "100% 100%" });
     };
     on();

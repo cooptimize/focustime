@@ -68,4 +68,8 @@ describe("PH-1: the one thing that needs you", () => {
     expect(oneThing([row("x", {})], 0, today)).toBeNull();
     expect(oneThing([row("x", { done: true })], 1, today)).toBeNull();
   });
+  it("only what the Inbox counts as needing me: a promise due next week isn't the one thing", () => {
+    expect(oneThing([row("later", { due: "2026-11-09", views: ["promises"] }), row("now", { kind: "conversation" })], 1, today)?.key).toBe("now");
+    expect(oneThing([row("later", { due: "2026-11-09", views: ["promises"] })], 1, today)).toBeNull();
+  });
 });
