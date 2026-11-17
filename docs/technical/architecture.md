@@ -38,7 +38,7 @@ Every piece of background work has a name in `BACKGROUND` (`config/background-po
 | Job | What it does |
 |---|---|
 | `requests_poll` | Reads every registered client chat with a follower's own sign-in, every 5 minutes in followers' working hours, then sorts new messages with AI; records co-working calls (`chat_calls`) |
-| `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass |
+| `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass, and tries a failed pass again (3 times, 15 minutes apart; MC-1d) |
 | `devops_poll` | Central DevOps reads: each client's changed items, once for everyone, with a change log |
 | `people_refresh` | People, levels and client leads from Dataverse into the directory, once a day; ends sessions of anyone now known as a guest |
 | `standards_sync` | Cooptimize's standards from public GitHub: at start, then hourly while FocusTime is in use |
@@ -82,7 +82,7 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
 | New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx`, `ui/WhereLookup.tsx` | `new.*`, `devops.preview`, `code.kinds`, `code.inner` | `actions/new-item-actions.ts`, `actions/code-actions.ts` |
 | Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file`, `code.kinds`, `code.search` | `plan/code.ts`, `plan/code-kinds.ts` |
-| Client calls | `ui/meetings/` | `meeting.mine`, `meeting.review` | `plan/meetings.ts`, `plan/meeting-views.ts` |
+| Client calls | `ui/meetings/` (the page, its Transcript view, the mark on a call's meeting in `CallMark.tsx`, the one list of my calls in `calls.ts`) | `meeting.mine`, `meeting.review`, `meeting.transcript`, `meeting.rerun` | `plan/meetings.ts`, `plan/meeting-views.ts`, `plan/call-words.ts` (every word a call shows about itself) |
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
 | Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |
 | Settings, Admin | `ui/Settings.tsx`, `ui/settings/` | `settings.load`, `admin.load` | `config/` |
