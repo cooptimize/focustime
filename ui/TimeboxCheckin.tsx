@@ -192,7 +192,12 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
       parts.map((p) => ({ clientKey: p.clientKey, changes: p.items.map(changeOf) })),
       (end) => {
         setBusy(false);
-        if (!end.results.length && !end.refused.length) return void (end.errors[0] && setError(end.errors[0]));
+        // Confirm pressed but nothing came back (a network failure): the offer closes for the day, as it did, so a write
+        // that may have landed isn't offered again; Settings › Activity has it.
+        if (!end.results.length && !end.refused.length) {
+          if (end.attempted) close();
+          return void (end.errors[0] && setError(end.errors[0]));
+        }
         const by = new Map(end.results.map((r) => [r.key, r]));
         const refused = new Map(end.refused.map((r) => [r.key, r.error]));
         // A refused row doesn't stop the others: each row says what happened to it.
@@ -202,7 +207,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
             return { offer, note: refused.get(String(offer.pickId)) ?? (r ? null : end.stopped ? PREVIEW_WORDS.notSent : PREVIEW_WORDS.nothingToChange), result: r ? { ok: r.confirmed, message: r.confirmed ? PREVIEW_WORDS.saved : r.message, entryId: r.writeId } : null };
           }),
         );
-        if (end.results.length) close();
+        if (end.attempted) close();
         onDone();
       },
     );
@@ -247,6 +252,12 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
       </ul>
       <p className="db-foot">
         <span className="muted">Undo is also in Settings › Activity.</span>
+        {/* Every row refused: nothing was written, so the offer can still be put away. */}
+        {!list.some((r) => r.result) && !gone && (
+          <button type="button" className="mini quiet tc-btn" onClick={close}>
+            Skip
+          </button>
+        )}
       </p>
     </div>
   );

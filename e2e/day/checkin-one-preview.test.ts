@@ -1,7 +1,7 @@
 // OP-1 A3: the timebox check-in's time to DevOps (Close out's "Update Remaining Work on 2 stories?") through the app's
 // one preview. Each row then says what happened to it: one a teammate changed since the preview is refused and the
 // other is still saved; a write whose answer was lost offers Retry on its row; a saved one offers Undo through the
-// same preview. Not now writes nothing and the offer stays.
+// same preview. Not now writes nothing and the offer stays. Reload previews again only the rows that didn't land.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -84,6 +84,27 @@ describe.skipIf(!CHROMIUM)("OP-1: the check-in's time to DevOps through the one 
     await u.waitFor({ state: "detached", timeout: 30_000 });
     expect((await log(page))[0]!.op).toBe("undo_remaining_work");
     expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+  it("Reload previews again only what didn't land: a written row is never sent twice", async () => {
+    const { page } = await freshPage(h);
+    await offer(page);
+    const before = (await log(page)).length;
+    await page.locator(".tc-offer").getByRole("button", { name: "Review" }).click();
+    const d = onePreview(page);
+    await d.waitFor();
+    await call(page, "demo.devops_change", { clientKey: "Cooptimize", change: { id: 4411, title: "Timesheet summary query (renamed)" } });
+    await d.locator("button.commit").click();
+    await d.getByRole("button", { name: "Reload and review again" }).click({ timeout: 30_000 });
+    const again = onePreview(page);
+    await expect.poll(() => again.locator(".dw-row").count(), { timeout: 20_000 }).toBe(1);
+    await expect.poll(() => again.locator(".dw-row h3").textContent()).toContain("#4411");
+    await again.locator("button.commit").click();
+    await again.waitFor({ state: "detached", timeout: 30_000 });
+    const written = (await log(page)).slice(0, (await log(page)).length - before).filter((e) => e.status === "confirmed");
+    expect(written.map((e) => e.itemId).sort()).toEqual([4411, 4412]);
+    // Both rows say Saved: the one that landed first kept its result.
+    await expect.poll(() => page.locator(".tc-preview .db-ok").count()).toBe(2);
     await page.close();
   }, T);
 });

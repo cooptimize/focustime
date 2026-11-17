@@ -25,7 +25,7 @@ const EXCEPTIONS: Record<string, { actions: string[]; why: string }> = {
   "DoneOffer.tsx": { actions: ["wrapup.preview", "wrapup.confirm"], why: "not yet moved: Close out's Wrap up batch is the same composite (docs/open-questions.md, OP-1)" },
 };
 /** A line that only names an action (the command menu's metadata), never calls it. */
-const naming = (line: string) => /^\s*case "[^"]+":/.test(line) || /\baction: "[^"]+"/.test(line) && !/\bcall\b/.test(line);
+const naming = (line: string) => (/^\s*case "[^"]+":/.test(line) || /\baction: "[^"]+"/.test(line)) && !/\bcall\b/.test(line);
 
 describe("one DevOps preview on every screen (OP-1)", () => {
   it("only DevOpsWrite.tsx calls the preview, confirm and retry actions, apart from the named exceptions", () => {

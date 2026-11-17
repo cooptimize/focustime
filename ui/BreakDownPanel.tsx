@@ -267,7 +267,8 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
     for (const c of draft.cards) {
       if (c.status.state !== "pending" && c.status.state !== "unconfirmed" && c.status.state !== "failed") continue;
       const r = await write.retry(c.status.writeId);
-      if (r && !r.confirmed) messages.push(`${c.title}: ${r.message}`);
+      if (!r) messages.push(`${c.title}: couldn't check DevOps. Try again`);
+      else if (!r.confirmed) messages.push(`${c.title}: ${r.message}`);
     }
     setBusy(null);
     const r = await act("Checking DevOps…", () => save(draft.cards, draft));

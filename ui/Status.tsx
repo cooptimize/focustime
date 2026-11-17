@@ -377,10 +377,14 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
           }),
         ];
         setPush(false);
+        // A part whose preview couldn't be made (no write access, DevOps unreachable) says why.
+        if (end.errors.length) setError(end.errors.join(" "));
         if (!results.length) return;
         // A line that went in leaves the boxes; one that didn't stays, with its reason, for Retry.
         const ok = new Set(results.filter((x) => x.ok).map((x) => x.key));
-        setLines((ls) => ls.filter((l) => !ok.has(l.key)));
+        // GD-2: a line that didn't go in keeps the text it was sent with (after Replace, "another client").
+        const sentText = new Map(results.filter((x) => !x.ok && x.kind !== "comment_delete").map((x) => [x.key, x.text]));
+        setLines((ls) => ls.filter((l) => !ok.has(l.key)).map((l) => (sentText.has(l.key) ? { ...l, text: sentText.get(l.key)! } : l)));
         setPushed((p) => [...results, ...p.filter((x) => !results.some((y) => y.key === x.key))]);
         void load().then(onChanged);
       },
