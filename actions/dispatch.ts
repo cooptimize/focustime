@@ -752,8 +752,11 @@ async function connect(ctx: ActionContext, which: "outlook" | "google") {
   return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
 }
 
-/** The context with config's "me" taken from the sign-in, and a found Dataverse user kept with the sign-in. */
-function withSignedIn(ctx: ActionContext): ActionContext {
+/**
+ * The context with config's "me" taken from the sign-in, and a found Dataverse user kept with the sign-in. Every request
+ * gets it; VM-3: so does the automatic start in the background (server/ticks.ts), which read PTO without it.
+ */
+export function withSignedIn(ctx: ActionContext): ActionContext {
   const me = storedIdentity(ctx.plan);
   if (!me) return ctx;
   return {

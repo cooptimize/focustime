@@ -11,7 +11,7 @@ import { withoutUpdate } from "../actions/status-actions.ts";
 import { nextStatusNudge, nudgeLineFor, statusNudgeDue } from "../plan/status-report.ts";
 import type { StatusLoad } from "../plan/status-types.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
-import { requestContext, teamCtx } from "../actions/dispatch.ts";
+import { requestContext, teamCtx, withSignedIn } from "../actions/dispatch.ts";
 import { teamNotices } from "../actions/team-actions.ts";
 import type { MeetingNudgeView } from "../actions/meeting-actions.ts";
 import { myLinkedLogins } from "../actions/identities.ts";
@@ -404,8 +404,17 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   // VM-2: start my VM before my day, when I opted in. Production only: autoStartTick asks the gate before anything
   // else (no settings, no store, no token read outside production).
+  // VM-3: with the sign-in's "me", as every request has it. A hosted person's Dataverse user is kept with the sign-in, not
+  // in their settings, so without it PTO was "unknown" and the start left the VM off without a word (Nov 17).
+  // Built on first use, after the start's gate: nothing is read for it outside production.
+  let signed: ActionContext | null = null;
+  const signedCtx = () => (signed ??= withSignedIn(liveCtx));
+  const signedConfig = async () => {
+    const r = await signedCtx().loadConfig();
+    return r.parsed.ok ? r.parsed.config : null;
+  };
   const autoTick = async () => {
-    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: configOrNull, vm: vmCtx, now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
+    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: signedConfig, vm: () => vmContext(signedCtx()), now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
     if (r !== "env" && r !== "off" && r !== "not_due") log({ source: "azure", op: "vm_autostart", kind: r });
   };
   // Shared polling (D517): the job reads the chats for everyone; here, one notification per request the AI sorted as
