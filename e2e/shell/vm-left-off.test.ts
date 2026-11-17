@@ -42,13 +42,15 @@ async function leftOffNotices(page: Page) {
   return panel.locator(".notice-row", { hasText: "Your VM was left off" });
 }
 async function vmLine(page: Page) {
-  // By address, the same after a reload whether or not Settings was open (the person chip's menu raced the reload).
-  await page.keyboard.press("Escape");
+  // By address, the same whether or not Settings was open: leave it first (a reload keeps the address, so Settings can
+  // be opening by itself), then open the section and wait for it.
+  await page.evaluate(() => (location.hash = "#/today"));
+  await page.locator(".ps-rail").first().waitFor({ state: "detached" });
   await page.evaluate(() => (location.hash = "#/settings/connections"));
   await page.locator('.ps-rail [data-settings-section="connections"][aria-current="page"]').first().waitFor();
   const form = page.locator('[data-setting="vm-autostart"]');
-  await form.waitFor();
-  await form.scrollIntoViewIfNeeded();
+  // The form may draw again as the VM's status arrives: scroll once it holds still.
+  await expect.poll(() => form.scrollIntoViewIfNeeded({ timeout: 2_000 }).then(() => true, () => false), { timeout: 15_000 }).toBe(true);
   return form.locator(".vm-next");
 }
 
