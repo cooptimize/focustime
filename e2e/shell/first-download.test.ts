@@ -58,6 +58,7 @@ const SCREENS: { name: string; shown: string; ways: Way[]; focus: Record<string,
   { name: "the Technical docs", shown: "main.panel-shell.tech-docs", ways: [address("#/docs")], focus: { address: "h2" } },
 ];
 
+type LineLog = { keys: { key: string; t: number }[]; line: { on: boolean; t: number }[]; status: number | null };
 /** A page on the demo with a session; `metered` makes the browser report a data-saving connection (nothing is fetched in the background). */
 async function session(h: Harness, opts: { metered?: boolean; serviceWorkers?: "allow" | "block" } = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const ctx = await h.browser.newContext({ viewport: VIEW, serviceWorkers: opts.serviceWorkers ?? "block" });
@@ -87,7 +88,6 @@ async function cold(page: Page, h: Harness, hash: string): Promise<void> {
   await page.goto(h.url + hash);
   await usable(page);
 }
-const screenFile = (name: string) => `**/assets/${name}-*.js`;
 
 describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, demo mode, built app)", () => {
   let h: Harness;
@@ -186,21 +186,53 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
 
   it("a slow file: the screen before it stays, Loading shows only past the delay, and nothing moves", async () => {
     const { ctx, page, errors } = await session(h, { metered: true });
+    // FT-1: one route, set before any page below fetches a screen and never added or removed while one is open (see the
+    // release test). `slow` names the file held back and what lets it go.
+    let slow: { file: string; held: Promise<void> } | null = null;
+    const holdBack = (file: string) => {
+      let go: () => void = () => {};
+      slow = { file, held: new Promise<void>((r) => (go = r)) };
+      return go;
+    };
+    await page.route("**/assets/*.js", async (route) => {
+      const s = slow;
+      if (s && route.request().url().includes(`/assets/${s.file}-`)) await s.held;
+      await route.fallback();
+    });
+    // FT-1: each key pressed and each time the line came or went, on the page's own clock, so "past 300 ms" is read
+    // where it happens and not by when this process gets to look.
+    await page.addInitScript(() => {
+      const log: LineLog = { keys: [], line: [], status: null };
+      (window as unknown as { __lineLog: LineLog }).__lineLog = log;
+      addEventListener("keydown", (e) => log.keys.push({ key: e.key, t: performance.now() }), true);
+      let on = false;
+      new MutationObserver(() => {
+        const now = !!document.querySelector(".screen-line");
+        if (now !== on) (on = now), log.line.push({ on, t: performance.now() });
+        if (log.status === null && document.querySelector("main.status-view")) log.status = performance.now();
+      }).observe(document, { childList: true, subtree: true });
+    });
+    const lineLog = () => page.evaluate(() => (window as unknown as { __lineLog: LineLog }).__lineLog);
+    /** After the last press of `key`: how long until the line first showed (null if it didn't), on the page's clock. */
+    const lineAfter = async (key: string) => {
+      const log = await lineLog();
+      const at = log.keys.filter((k) => k.key === key).at(-1)!.t;
+      const shown = log.line.find((l) => l.on && l.t >= at);
+      return { line: shown ? shown.t - at : null, status: log.status === null ? null : log.status - at };
+    };
+    const release = holdBack("Ahead");
     await cold(page, h, "#/day");
-    let release: () => void = () => {};
-    const held = new Promise<void>((r) => (release = r));
-    await page.route(screenFile("Ahead"), async (route) => (await held, route.continue()));
     const box = async (sel: string) => JSON.stringify(await page.locator(sel).first().boundingBox());
     const before = { top: await box(".topbar"), day: await box("main.today-view"), tabs: await box(".views") };
     await page.keyboard.press("3");
-    // At once: Day is still there, its tab still the current one, and no line yet.
+    // At once: Day is still there and its tab still the current one (the file is held, so this can't change yet).
     await page.waitForTimeout(120);
     expect(await page.locator("main.today-view").count()).toBe(1);
-    expect(await page.locator(".screen-line").count()).toBe(0);
     expect(await page.locator('.view-tab[aria-current="page"]').textContent()).toContain("Day");
-    // Past 300 ms: the line, said to screen readers too; Day is where it was.
+    // Past 300 ms, and not before: the line, said to screen readers too; Day is where it was.
     const line = page.locator(".screen-line");
     await line.waitFor({ timeout: 5000 });
+    expect((await lineAfter("3")).line).toBeGreaterThanOrEqual(299);
     expect(await line.textContent()).toBe("Loading…");
     expect(await line.getAttribute("role")).toBe("status");
     expect({ top: await box(".topbar"), day: await box("main.today-view"), tabs: await box(".views") }).toEqual(before);
@@ -215,19 +247,28 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect(await page.evaluate(() => location.hash)).toBe("#/backlog");
     expect(await box(".topbar")).toBe(before.top);
 
-    // A fast file never shows the line: Status arrives well inside the delay.
-    let sawLine = false;
-    await page.exposeFunction("pf1Line", () => (sawLine = true));
-    await page.evaluate(() => new MutationObserver(() => document.querySelector(".screen-line") && (window as unknown as { pf1Line: () => void }).pf1Line()).observe(document.body, { childList: true, subtree: true }));
+    // A fast file never shows the line: Status (not held) drawn inside the delay means no line; drawn later (a busy
+    // machine), the line may show, but only past the delay.
     await page.keyboard.press("4");
     await page.waitForSelector("main.status-view");
-    await page.waitForTimeout(400);
-    expect(sawLine).toBe(false);
+    // Read once the page's own clock is past the delay with Status drawn: no line can come after that.
+    await page.waitForFunction(() => {
+      const log = (window as unknown as { __lineLog: LineLog }).__lineLog;
+      const key = log.keys.filter((k) => k.key === "4").at(-1);
+      return !!key && log.status !== null && performance.now() - key.t >= 320;
+    }, null, { polling: "raf" });
+    const fast = await lineAfter("4");
+    expect(fast.status).not.toBeNull();
+    if (fast.status! < 300) expect(fast.line, `Status drawn after ${Math.round(fast.status!)} ms`).toBeNull();
+    else if (fast.line !== null) {
+      // A busy machine: the line only past the delay, only while Status wasn't drawn yet, and gone once it was.
+      expect(fast.line).toBeGreaterThanOrEqual(299);
+      expect(fast.status!, "the line showed after Status was drawn").toBeGreaterThanOrEqual(fast.line);
+      expect(await page.locator(".screen-line").count()).toBe(0);
+    }
 
     // A dialog the same way: Capture's file is slow, the screen stays, Esc takes the ask back.
-    let let2: () => void = () => {};
-    const held2 = new Promise<void>((r) => (let2 = r));
-    await page.route(screenFile("Capture"), async (route) => (await held2, route.continue()));
+    const let2 = holdBack("Capture");
     await page.keyboard.press("n");
     await line.waitFor({ timeout: 5000 });
     expect(await page.locator("main.status-view").count()).toBe(1);
@@ -242,10 +283,8 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
 
     // N and typing at once while the file is slow: nothing typed is lost, and none of it runs as a shortcut on the
     // screen behind (the w, the 3 and the e would each have gone somewhere).
+    const let3 = holdBack("Capture");
     await cold(page, h, "#/week");
-    let let3: () => void = () => {};
-    const held3 = new Promise<void>((r) => (let3 = r));
-    await page.route(screenFile("Capture"), async (route) => (await held3, route.continue()));
     await page.keyboard.press("n");
     await page.keyboard.type("Call Dana about the w3 export", { delay: 15 });
     expect(await page.locator("main.grid").count()).toBe(1);
@@ -270,45 +309,66 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect([gone404.status, gone404.headers.get("cache-control"), await gone404.text()]).toEqual([404, "no-store", ""]);
     const asMissing = { status: 404, contentType: "text/plain; charset=utf-8", headers: { "cache-control": "no-store" }, body: "" };
     const { ctx, page, errors } = await session(h, { metered: true });
-    await cold(page, h, "#/day");
-    let loads = 0;
-    page.on("load", () => loads++);
+    // FT-1: what the server sends for a screen's file is decided by one route, set before any page below fetches a
+    // screen, and never added or removed while a page is open. A route added to a page already open let that page's
+    // next screen file through now and then under load: Chromium fetched the real file and Playwright saw no request
+    // (docs/open-questions.md, FT-1). `serve` says what the file answers. The old page is told by the page itself (a
+    // mark set after the cold start, which a reload clears), not by counting load events: the new page can ask for the
+    // file before Playwright reports its load.
+    // FT-1: the page counts its own documents (an init script runs at the start of each, before the app's scripts), so
+    // a reload is counted before the new page can draw anything; Playwright's load event could come after that.
+    await page.addInitScript(() => {
+      try {
+        if (location.protocol.startsWith("http")) sessionStorage.setItem("ft1Loads", String(Number(sessionStorage.getItem("ft1Loads") ?? 0) + 1));
+      } catch {}
+    });
+    const loads = () => page.evaluate(() => Number(sessionStorage.getItem("ft1Loads") ?? 0));
+    let at = 0;
+    const reloads = async () => (await loads()) - at;
+    type Answer = { status: number; contentType: string; headers?: Record<string, string>; body: string };
+    let serve: { file: string; answer: Answer; oldPageOnly: boolean } | null = null;
+    await page.route("**/assets/*.js", async (route) => {
+      const file = /\/assets\/([A-Za-z]+)-[^/]*\.js$/.exec(route.request().url())?.[1];
+      if (!serve || file !== serve.file) return route.fallback();
+      if (serve.oldPageOnly && !(await route.request().frame().evaluate(() => "__ft1Old" in window).catch(() => false))) return route.fallback();
+      return route.fulfill(serve.answer);
+    });
+    /** The app opened from nothing, with the release already in place for the file named (so no fetch can beat it). */
+    const coldWith = async (hash: string, s: typeof serve) => {
+      serve = s;
+      await cold(page, h, hash);
+      await page.evaluate(() => void Object.assign(window, { __ft1Old: true }));
+      at = await loads();
+    };
 
     // The old page's file is gone; after the reload the new page's file is there.
-    await page.route(screenFile("Ahead"), (route) => (loads === 0 ? route.fulfill(asMissing) : route.continue()));
+    await coldWith("#/day", { file: "Ahead", answer: asMissing, oldPageOnly: true });
     await page.keyboard.press("3");
     await page.waitForSelector("main.ahead", { timeout: 30_000 });
-    expect(loads).toBe(1);
+    expect(await reloads()).toBe(1);
     expect(await page.evaluate(() => location.hash)).toBe("#/backlog");
     expect(await page.locator(".screen-line").count()).toBe(0);
-    await page.unroute(screenFile("Ahead"));
 
     // Capture asked for across a release: the reload opens it again.
-    await cold(page, h, "#/week");
-    loads = 0;
-    await page.route(screenFile("Capture"), (route) => (loads === 0 ? route.fulfill(asPage) : route.continue()));
+    await coldWith("#/week", { file: "Capture", answer: asPage, oldPageOnly: true });
     await page.keyboard.press("n");
     await page.getByRole("dialog", { name: "Quick capture" }).waitFor({ timeout: 30_000 });
-    expect(loads).toBe(1);
+    expect(await reloads()).toBe(1);
     expect(await page.locator("main.grid").count()).toBe(1);
-    await page.unroute(screenFile("Capture"));
     await page.keyboard.press("Escape");
 
     // Truly missing: one reload, never a second, then the line with Retry over a screen that works.
-    await cold(page, h, "#/day");
-    loads = 0;
-    let gone = true;
-    await page.route(screenFile("Status"), (route) => (gone ? route.fulfill(asMissing) : route.continue()));
+    await coldWith("#/day", { file: "Status", answer: asMissing, oldPageOnly: false });
     await page.keyboard.press("4");
     const failed = page.locator(".screen-line.failed");
     await failed.waitFor({ timeout: 30_000 });
-    expect(loads).toBe(1);
+    expect(await reloads()).toBe(1);
     expect(await failed.textContent()).toBe("This screen didn't load. Retry");
     expect(await failed.getAttribute("role")).toBe("alert");
     expect(await page.locator("main.today-view").count()).toBe(1);
     expect(await page.locator(".topbar").count()).toBe(1);
     await page.waitForTimeout(1500);
-    expect(loads, "no reload loop").toBe(1);
+    expect(await reloads(), "no reload loop").toBe(1);
     // Another tab still opens, and the line goes with the ask.
     await page.keyboard.press("2");
     await page.waitForSelector("main.grid");
@@ -316,34 +376,60 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     // Asked again while still missing: the line, with no reload this time.
     await page.keyboard.press("4");
     await failed.waitFor({ timeout: 30_000 });
-    expect(loads).toBe(1);
+    expect(await reloads()).toBe(1);
     // Retry while it is still missing: one more reload for that press, then the line again, and no loop.
     await failed.getByRole("button", { name: "Retry" }).click();
-    await expect.poll(() => loads, { timeout: 30_000 }).toBe(2);
+    await expect.poll(reloads, { timeout: 30_000 }).toBe(2);
     await failed.waitFor({ timeout: 30_000 });
     await page.waitForTimeout(1500);
-    expect(loads).toBe(2);
+    expect(await reloads()).toBe(2);
     // Retry once it is back: the screen (this browser remembers the failed file, so Retry's reload fetches it fresh).
-    gone = false;
+    serve = null;
     await failed.getByRole("button", { name: "Retry" }).click();
     await page.waitForSelector("main.status-view", { timeout: 30_000 });
     expect(await page.locator(".screen-line").count()).toBe(0);
     expect(await page.evaluate(() => location.hash)).toBe("#/status");
-    await page.unroute(screenFile("Status"));
     expect(errors).toEqual([]);
 
     // The screen's own code throws: no reload, no "didn't load" line; the error is reported as any other is.
-    await cold(page, h, "#/day");
-    loads = 0;
-    await page.route(screenFile("InboxPage"), (route) => route.fulfill({ status: 200, contentType: "text/javascript", body: 'throw new Error("pf1 boom");' }));
+    await coldWith("#/day", { file: "InboxPage", answer: { status: 200, contentType: "text/javascript", body: 'throw new Error("pf1 boom");' }, oldPageOnly: false });
     await page.keyboard.press("5");
     await expect.poll(() => errors.some((e) => e.includes("pf1 boom")), { timeout: 15_000 }).toBe(true);
     await page.waitForTimeout(800);
-    expect(loads).toBe(0);
+    expect(await reloads()).toBe(0);
     expect(await page.locator(".screen-line.failed").count()).toBe(0);
     expect(await page.locator("main.today-view").count()).toBe(1);
     await ctx.close();
   }, 240_000);
+
+  it("a release after a screen's file was fetched in the background: the screen opens from the copy the page holds, with no reload and no request", async () => {
+    // FT-1, STEP 0.4: the page keeps the module it fetched (the same build as the rest of the open app), so the
+    // release doesn't reach this page until it is next opened or reloaded. That is what it should do: the screen and
+    // the app around it stay one build.
+    const asMissing = { status: 404, contentType: "text/plain; charset=utf-8", headers: { "cache-control": "no-store" }, body: "" };
+    const { ctx, page, errors } = await session(h);
+    let released = false;
+    const asked: string[] = [];
+    await page.route("**/assets/*.js", (route) => {
+      if (!/\/assets\/Ahead-/.test(route.request().url())) return route.fallback();
+      asked.push(released ? "after" : "before");
+      return released ? route.fulfill(asMissing) : route.fallback();
+    });
+    await cold(page, h, "#/day");
+    // This document, marked: a reload would be a new one without the mark.
+    await page.evaluate(() => void Object.assign(window, { __ft1Doc: true }));
+    // The background fetching is done (ui/screens.ts says so on the page), Backlog's file among it.
+    await page.waitForSelector("html[data-screens=in]", { timeout: 60_000 });
+    expect(asked).toEqual(["before"]);
+    released = true;
+    await page.keyboard.press("3");
+    await page.waitForSelector("main.ahead", { timeout: 30_000 });
+    expect(await page.locator(".screen-line").count()).toBe(0);
+    expect(await page.evaluate(() => "__ft1Doc" in window), "no reload").toBe(true);
+    expect(asked, "the file isn't asked for again").toEqual(["before"]);
+    expect(errors).toEqual([]);
+    await ctx.close();
+  }, 120_000);
 
   it("offline: Day and Week open, a tab opened earlier opens, one never fetched says it needs a connection; the installed app keeps every split file", async () => {
     // In a browser tab with no worker, on a data-saving connection (so nothing was fetched ahead).
