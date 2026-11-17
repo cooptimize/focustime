@@ -343,3 +343,13 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - Backlog's bulk State… on mixed types: see ED-2 words (rewritten for UC-2).
 - The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
 - Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
+
+## PH-1 words (Nov 17)
+
+- The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** with its dot). The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
+- The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**).
+- Next: **"Next"**, then **"11:00 AM Proposal review with Jordan · 45 min"**, **"12:30 PM Northwind · At risk · Dentist 12:00"**.
+- The one thing: **"Needs you"**, then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
+- More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Client calls"** with **"1 call to review"**, **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.
+- Everything else: **"Notifications"** (**"2 new"**), **"Sources"** (**"All sources live"**, **"Some data is older"**, **"A source needs attention"**), **"Focus"** (**"Start a session or a break"**), **"Midday check-in"**, **"Close out"**, the person's name, **"Install app"**, **"Technical docs"**, **"About"**, **"Admin"**, and **"Back to More"**.
+- The way back: **"Phone version"** (**"Back to the phone version"**).
