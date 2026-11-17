@@ -40,10 +40,13 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     await box.fill("Show the free hours on Week\nIt would help me plan.");
 
     await box.press("Enter");
-    const title = dialog.locator(".feedback-title");
+    // OP-1: the preview shows through the one DevOps preview's parts, in its order.
+    const field = (label: string) => dialog.locator(".wd-fields tr", { has: page.locator(`th[scope="row"]`, { hasText: new RegExp(`^${label}$`) }) }).locator("td").last();
+    const title = field("Title");
     await title.waitFor();
+    expect(await dialog.evaluate((d) => [".wd-where", ".wd-fields", ".wd-visibility", ".wd-actions"].map((c) => [...d.querySelectorAll(".wd-where, .wd-fields, .wd-visibility, .wd-actions")].findIndex((x) => x.matches(c))))).toEqual([0, 1, 2, 3]);
     await expect(title.textContent()).resolves.toBe("Idea: Show the free hours on Week");
-    const desc = (await dialog.locator(".feedback-desc").textContent()) ?? "";
+    const desc = (await field("Description").textContent()) ?? "";
     expect(desc).toContain("It would help me plan.");
     expect(desc).toContain("From Alex Rivera (you@example.com)");
     expect(desc).toMatch(/View: Day$/m);
@@ -52,9 +55,12 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     expect(desc).toMatch(/Screen: \d+×\d+, window 1920×1080/);
     expect(desc).toContain("Environment: demo");
     expect(desc).not.toMatch(/Northwind|Harbor|Atlas/);
-    await expect(dialog.locator(".feedback-dest").textContent()).resolves.toBe("Goes to the FocusTime backlog in Cooptimize's DevOps.");
+    await expect(dialog.locator(".dw-row h3").textContent()).resolves.toBe("Goes to the FocusTime backlog in Cooptimize's DevOps");
     // FB-1: who it is created as and who can see it.
-    await expect(dialog.locator(".feedback-write").textContent()).resolves.toContain("Created as You (the demo person) in demo › Demo Internal.");
+    await expect(dialog.locator(".wd-where").textContent()).resolves.toBe("WhereDevOps · demo · Demo InternalWrites asYou (the demo person)");
+    await dialog.locator(".wd-visibility").waitFor();
+    await expect(dialog.getByRole("button", { name: /^Send feedback/ }).count()).resolves.toBe(1);
+    await expect(dialog.getByRole("button", { name: "Not now" }).count()).resolves.toBe(1);
     for (const theme of ["light", "dark"] as const) {
       await themed(page, theme);
       await shotBoth(page, `feedback-set-up-${theme}`);
@@ -81,8 +87,8 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     await box.press("Enter");
     await title.waitFor();
     await expect(title.textContent()).resolves.toBe("Question: Where is Close out?");
-    await expect(dialog.locator(".feedback-desc").textContent()).resolves.toBe("Where is Close out?\n\nFrom Alex Rivera (you@example.com)\nEnvironment: demo");
-    await dialog.getByRole("button", { name: "Back" }).click();
+    await expect(field("Description").textContent()).resolves.toBe("Where is Close out?\n\nFrom Alex Rivera (you@example.com)\nEnvironment: demo");
+    await dialog.getByRole("button", { name: "Not now" }).click();
     await expect(box.inputValue()).resolves.toBe("Where is Close out?");
     expect(errors).toEqual([]);
     await page.close();
@@ -122,7 +128,7 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     const box = dialog.getByRole("textbox", { name: "Your feedback" });
     await box.fill("The plan didn't save");
     await box.press("Enter");
-    await dialog.locator(".feedback-title").waitFor();
+    await dialog.locator(".wd-fields").waitFor();
     await page.keyboard.press("Control+Enter");
     const problem = dialog.getByRole("alert");
     await problem.waitFor();

@@ -239,7 +239,7 @@ function useModalFocus<T extends HTMLElement>() {
   }, []);
   return first;
 }
-export function Modal({ label, busy, onClose, children, wide }: { label: string; busy?: boolean; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ label, busy, onClose, children, wide, onKeyDown }: { label: string; busy?: boolean; onClose: () => void; children: ReactNode; wide?: boolean; /** OP-1: a key of the screen's own (Send feedback's Ctrl+Enter). */ onKeyDown?: (e: React.KeyboardEvent) => void }) {
   return (
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div
@@ -253,11 +253,89 @@ export function Modal({ label, busy, onClose, children, wide }: { label: string;
             e.stopPropagation();
             e.preventDefault();
             onClose();
+            return;
           }
+          onKeyDown?.(e);
         }}
       >
         {children}
       </div>
+    </div>
+  );
+}
+
+// ---------- OP-1: the one preview's parts ----------
+// The preview below is drawn from these, in this order: the head, Where and Writes as, a section per change with its
+// fields (Now and After, or Will be for a create) and notes, Who can see it, then Confirm, Not now and where it's
+// logged. Send feedback (its own action, feedback.preview and feedback.send) shows through the same parts; nothing
+// else may (ui/one-preview.test.ts).
+
+/** The dialog with its head: the label, "Preview n of m" when there are several, and ×. */
+export function PreviewFrame({ label, step, busy, wide, onClose, onKeyDown, children }: { label: string; step?: { n: number; of: number } | undefined; busy?: boolean; wide?: boolean; onClose: () => void; onKeyDown?: (e: React.KeyboardEvent) => void; children: ReactNode }) {
+  return (
+    <Modal label={label} busy={!!busy} onClose={onClose} wide={!!wide} {...(onKeyDown ? { onKeyDown } : {})}>
+      <div className="cap-dialog-head">
+        <h2>
+          {label}
+          {step && <span className="muted dw-step"> · Preview {step.n} of {step.of}</span>}
+        </h2>
+        <CloseButton onClose={onClose} disabled={!!busy} />
+      </div>
+      {children}
+    </Modal>
+  );
+}
+/** Where the change goes and who it's written as. */
+export function PreviewWhere({ where, identity }: { where: string; identity: string }) {
+  return (
+    <dl className="wd-where">
+      <dt>Where</dt>
+      <dd>{where}</dd>
+      <dt>Writes as</dt>
+      <dd>{identity}</dd>
+    </dl>
+  );
+}
+/** A change's fields: Now and After, or Will be for something new. */
+export function PreviewFields({ fields, create }: { fields: readonly { label: string; before?: string | null; after: string | null; changed?: boolean }[]; create: boolean }) {
+  return (
+    <table className="wd-fields">
+      <thead>
+        <tr>
+          <th scope="col">Field</th>
+          {!create && <th scope="col">Now</th>}
+          <th scope="col">{create ? "Will be" : "After"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {fields.map((f) => (
+          <tr key={f.label} className={f.changed && !create ? "changed" : ""}>
+            <th scope="row">{f.label}</th>
+            {!create && <td>{f.before ?? "(none)"}</td>}
+            <td>{f.after ?? "(none)"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+/** Who can see it once written. */
+export function PreviewVisibility({ text }: { text: string }) {
+  return (
+    <p className="wd-visibility">
+      <strong>Who can see it:</strong> {text}
+    </p>
+  );
+}
+/** Confirm (the screen's own words) first, then Not now (or Close once tried), then where it's logged. */
+export function PreviewActions({ children, closeLabel, onClose, busy, note }: { children?: ReactNode; closeLabel: string; onClose: () => void; busy?: boolean; note: string }) {
+  return (
+    <div className="wd-actions">
+      {children}
+      <button type="button" className="mini quiet" disabled={!!busy} onClick={onClose}>
+        {closeLabel}
+      </button>
+      <span className="muted">{note}</span>
     </div>
   );
 }
@@ -274,28 +352,14 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
   const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
   const flagged = rows.some((r) => r.preview.mentions?.length);
   return (
-    <Modal label={label} busy={busy} onClose={onClose} wide={rows.length > 1}>
-      <div className="cap-dialog-head">
-        <h2>
-          {label}
-          {flow.opts?.step && <span className="muted dw-step"> · Preview {flow.opts.step.n} of {flow.opts.step.of}</span>}
-        </h2>
-        <CloseButton onClose={onClose} disabled={busy} />
-      </div>
+    <PreviewFrame label={label} step={flow.opts?.step} busy={busy} onClose={onClose} wide={rows.length > 1}>
       {p0.op === "create" && (
         <p className="cd-client dw-client" style={{ "--c": client?.color(flow.clientKey) } as CSSProperties}>
           <span className="swatch" aria-hidden="true" />
           Creating in {clientWord}'s DevOps
         </p>
       )}
-      <dl className="wd-where">
-        <dt>Where</dt>
-        <dd>
-          DevOps · {clientWord} · {p0.org} · {p0.project}
-        </dd>
-        <dt>Writes as</dt>
-        <dd>{p0.identity}</dd>
-      </dl>
+      <PreviewWhere where={`DevOps · ${clientWord} · ${p0.org} · ${p0.project}`} identity={p0.identity} />
       <div className="dw-rows">
         {rows.map((r) => (
           <section key={r.preview.previewId} className={`dw-row${done(r) ? " done" : ""}`} aria-label={r.preview.item}>
@@ -303,24 +367,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
               {r.preview.item}
               {rows.length > 1 && <span className="muted"> · {r.preview.summary}</span>}
             </h3>
-            <table className="wd-fields">
-              <thead>
-                <tr>
-                  <th scope="col">Field</th>
-                  {r.preview.op !== "create" && <th scope="col">Now</th>}
-                  <th scope="col">{r.preview.op === "create" ? "Will be" : "After"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.preview.fields.filter((f) => !r.preview.looks?.some((l) => l.label === f.label)).map((f) => (
-                  <tr key={f.label} className={f.changed && r.preview.op !== "create" ? "changed" : ""}>
-                    <th scope="row">{f.label}</th>
-                    {r.preview.op !== "create" && <td>{f.before ?? "(none)"}</td>}
-                    <td>{f.after ?? "(none)"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <PreviewFields fields={r.preview.fields.filter((f) => !r.preview.looks?.some((l) => l.label === f.label))} create={r.preview.op === "create"} />
             {r.preview.looks?.map((l) => (
               <div key={l.label} className="dw-looks" role="group" aria-label={`${l.label}, now and after`}>
                 <h4>{l.label}</h4>
@@ -349,15 +396,13 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
           </section>
         ))}
       </div>
-      <p className="wd-visibility">
-        <strong>Who can see it:</strong> {p0.visibility}
-      </p>
+      <PreviewVisibility text={p0.visibility} />
       {error && (
         <p className="set-problem" role="alert">
           {error}
         </p>
       )}
-      <div className="wd-actions">
+      <PreviewActions closeLabel={tried ? "Close" : "Not now"} onClose={onClose} busy={busy} note="Logged in Settings › Activity, with Undo.">
         {!tried ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
             {busy ? "Writing and checking…" : flagged ? "Save as written" : rows.length === 1 ? confirmLabel(p0) : `Make all ${rows.length} changes in DevOps`}
@@ -371,12 +416,8 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
             {busy ? "Checking…" : "Retry"}
           </button>
         ) : null}
-        <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
-          {tried ? "Close" : "Not now"}
-        </button>
-        <span className="muted">Logged in Settings › Activity, with Undo.</span>
-      </div>
-    </Modal>
+      </PreviewActions>
+    </PreviewFrame>
   );
 }
 /**

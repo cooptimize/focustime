@@ -5,8 +5,11 @@
 // nothing is retried on its own. FB-1: it is sent with the person's own DevOps write PAT; without one the dialog says
 // how to turn writes on and offers Copy text only.
 // Keys: Enter in the text box goes to the preview (Shift+Enter is a new line); Ctrl+Enter sends from the preview.
-// UI-8: UI-3's header on every screen: ‹ Back at the top left on the preview and the error (back to the text), the ×
-// at the top right always, Esc closes. The header never scrolls away; only the body scrolls.
+// UI-8: UI-3's header on every screen: ‹ Back at the top left on the error (back to the text), the × at the top right
+// always, Esc closes. The header never scrolls away; only the body scrolls.
+// OP-1: the preview shows through the one DevOps preview's parts (ui/DevOpsWrite.tsx), in the same layout and order:
+// Where and Writes as, the new item's fields, Who can see it, then Send and Not now (back to the text, nothing lost).
+// It keeps its own action (feedback.preview, feedback.send): it writes to FocusTime's own backlog, not a client's.
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -15,6 +18,7 @@ import { ActionRefusal, call } from "./api.ts";
 import { FEEDBACK_KINDS, KIND_LABEL, type FeedbackKind, type Where } from "../plan/feedback.ts";
 import { WRITES_HREF, type FeedbackPreview, type FeedbackSent, type FeedbackSetup, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { Icon } from "./icons.tsx";
+import { PreviewActions, PreviewFields, PreviewFrame, PreviewVisibility, PreviewWhere } from "./DevOpsWrite.tsx";
 
 /** "Chrome 141 on Windows": the browser and system from the user agent, nothing more. */
 export function browserName(ua: string): string {
@@ -89,6 +93,45 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
     </button>
   );
 
+  if (step.kind === "preview") {
+    const p = step.p;
+    return (
+      <PreviewFrame
+        label="Send feedback"
+        busy={busy}
+        onClose={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            void send(p);
+          }
+        }}
+      >
+        <PreviewWhere where={p.write ? `DevOps · ${p.write.org} · ${p.write.project}` : p.destination} identity={p.write?.identity ?? "Not set up yet"} />
+        <div className="dw-rows">
+          <section className="dw-row feedback-row" aria-label={`New ${KIND_LABEL[kind].toLowerCase()}`}>
+            <h3>{p.destination}</h3>
+            <PreviewFields create fields={[{ label: "Title", after: p.title }, { label: "Description", after: p.description }, { label: "Tags", after: p.tags.join(", ") }]} />
+            {[...(p.write?.links ?? []), ...(p.write?.notes ?? [])].map((l) => (
+              <p key={l} className="muted dw-note">{l}</p>
+            ))}
+          </section>
+        </div>
+        {p.write && <PreviewVisibility text={p.write.visibility} />}
+        {p.message && (p.setup.state === "no_pat" ? <SetupNote setup={p.setup} line={p.message} onClose={onClose} /> : <p className="feedback-note" role="status">{p.message}</p>)}
+        <PreviewActions closeLabel="Not now" onClose={() => setStep({ kind: "write" })} busy={busy} note="Sent once; nothing is retried on its own.">
+          {p.setUp ? (
+            <button ref={primary} type="button" className="commit" disabled={busy || p.remaining <= 0} onClick={() => void send(p)}>
+              {busy ? "Sending…" : "Send feedback"} <kbd>Ctrl Enter</kbd>
+            </button>
+          ) : (
+            copyButton
+          )}
+        </PreviewActions>
+      </PreviewFrame>
+    );
+  }
+
   return (
     <div className="command-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div
@@ -102,19 +145,15 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
             e.preventDefault();
             onClose();
           }
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && step.kind === "preview") {
-            e.preventDefault();
-            void send(step.p);
-          }
         }}
       >
         <div className="command-head">
-          {(step.kind === "preview" || step.kind === "error") && (
+          {step.kind === "error" && (
             <button ref={step.kind === "error" ? primary : undefined} type="button" className="menu-back" onClick={() => setStep({ kind: "write" })} disabled={busy} aria-label="Back" title="Back to your text">
               <Icon name="back" />
             </button>
           )}
-          <span className="command-step-title">{step.kind === "preview" ? "Send feedback: preview" : "Send feedback"}</span>
+          <span className="command-step-title">Send feedback</span>
           <CloseButton onClose={onClose} disabled={busy} />
         </div>
 
@@ -162,41 +201,6 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
                 </button>
               )}
               <button type="button" className="mini quiet" onClick={onClose} disabled={busy}>Cancel</button>
-            </div>
-          </div>
-        )}
-
-        {step.kind === "preview" && (
-          <div className="feedback-body">
-            <dl className="feedback-preview">
-              <dt>Title</dt>
-              <dd className="feedback-title">{step.p.title}</dd>
-              <dt>Description</dt>
-              <dd className="feedback-desc">{step.p.description}</dd>
-              <dt>Tags</dt>
-              <dd>{step.p.tags.join(", ")}</dd>
-            </dl>
-            <p className="feedback-dest">{step.p.destination}.</p>
-            {step.p.write && (
-              <div className="feedback-write">
-                <p>
-                  Created as <strong>{step.p.write.identity}</strong> in {step.p.write.org} › {step.p.write.project}.
-                </p>
-                <p className="muted">{step.p.write.visibility}</p>
-                {[...step.p.write.links, ...step.p.write.notes].map((l) => (
-                  <p key={l} className="muted">{l}</p>
-                ))}
-              </div>
-            )}
-            {step.p.message && (step.p.setup.state === "no_pat" ? <SetupNote setup={step.p.setup} line={step.p.message} onClose={onClose} /> : <p className="feedback-note" role="status">{step.p.message}</p>)}
-            <div className="feedback-actions">
-              {step.p.setUp ? (
-                <button ref={primary} type="button" className="commit" disabled={busy || step.p.remaining <= 0} onClick={() => void send(step.p)}>
-                  {busy ? "Sending…" : "Send"} <kbd>Ctrl Enter</kbd>
-                </button>
-              ) : (
-                copyButton
-              )}
             </div>
           </div>
         )}
