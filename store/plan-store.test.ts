@@ -740,5 +740,17 @@ describe("week plan duplicates (U3, D388)", () => {
     expect((await store.weekPlan(W)).features).toHaveLength(1);
     expect((await store.weekPlan(W)).features[0]!.title).toBe("Export v3");
   });
+
+  // VM-4: production's "bad request" after a Close out (Nov 17): a check-in answer wrote the zoned time
+  // ("…-05:00[America/New_York]", 43 characters) into timeboxes.settled_at, nvarchar(40) on SQL Server, which refused it.
+  it("VM-4: a check-in answer in a long zone name is saved on SQL Server too", async () => {
+    const { store } = await fresh();
+    const p = await store.addPick({ date: "2026-11-02", ...item });
+    const t = await store.addTimebox({ date: "2026-11-02", clientKey: "Adatum", pickId: p.id, itemId: 101, title: "Story", start: "2026-11-02T09:00:00-05:00", end: "2026-11-02T10:00:00-05:00", outlook: false });
+    await expect(store.settleSessions({ pickId: p.id, timeboxIds: [t.id], as: "partly", spent: 60, remaining: 30 })).resolves.toEqual({ removed: [] });
+    expect((await store.getPick(p.id))?.remainingMinutes).toBe(30);
+    // Undo puts it back as before.
+    expect(await store.unsettleSessions([t.id])).toEqual([p.id]);
+  });
 });
 });

@@ -221,7 +221,8 @@ describe("my VM: find and confirm", () => {
     const s = await signedInWithVm();
     s.state.arm = "consent";
     clearVmState();
-    expect(await s.run("vm.status")).toMatchObject({ needsConsent: true, chip: "unknown", error: { kind: "consent" } });
+    // VM-4: no state read yet is "Checking…", never Unknown; the consent is still asked for at once.
+    expect(await s.run("vm.status")).toMatchObject({ needsConsent: true, chip: null, text: "Checking…", error: { kind: "consent" } });
   });
 });
 

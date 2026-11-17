@@ -1,5 +1,5 @@
 {
- "source": "ci runs 43880638572, 43882543516",
+ "source": "ci runs 43880638572, 43882543516; VM-4's two new files measured locally",
  "files": {
   "e2e/admin/console.test.ts": 9.1,
   "e2e/admin/delivery-chats.test.ts": 13.8,
@@ -37,6 +37,7 @@
   "e2e/day/timeline-checklist.test.ts": 38.2,
   "e2e/day/timeline.test.ts": 32.5,
   "e2e/day/today.test.ts": 18.5,
+  "e2e/day/unexpected-failure.test.ts": 45.0,
   "e2e/day/wrap-up-setting.test.ts": 10.6,
   "e2e/inbox/capture-to-devops.test.ts": 8,
   "e2e/inbox/chat-images.test.ts": 6.2,
@@ -97,6 +98,7 @@
   "e2e/shell/tabs-and-addresses.test.ts": 28.4,
   "e2e/shell/tech-docs.test.ts": 28.4,
   "e2e/shell/todo-wording.test.ts": 5.5,
+  "e2e/shell/vm-checking.test.ts": 65.0,
   "e2e/shell/vm-chip.test.ts": 53.5,
   "e2e/shell/vm-stop-and-autostart.test.ts": 135,
   "e2e/status/client-report.test.ts": 7.1,
