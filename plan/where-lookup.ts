@@ -391,11 +391,10 @@ export const WHERE_TEXT = {
   noRoom: "There's no room for that in this answer.",
   back: "Back",
   open: { pages: "Pages", fields: "Measures and columns", tables: "Tables", list: "Open" } as const,
-  innerReading: "Reading the file…",
   innerTooLarge: "This file is too large to list. Type the name.",
   innerNone: { pages: "This report has no pages to list.", fields: "This table has no measures or columns to list.", tables: "This model has no tables to list." } as const,
   // RB-3b: a report in today's format, a one-file model, and measures kept apart from their table.
-  innerReadingMany: "Reading the report's pages…",
+  innerReadingOf: { pages: "Reading the report's pages…", fields: "Reading the table…", tables: "Reading the model…" } as const,
   hidden: "Hidden",
   pagesUnread: (n: number) => (n === 1 ? "1 page couldn't be read." : `${n.toLocaleString("en-US")} pages couldn't be read.`),
   partsUnread: "Some of this table's measures are kept in files that couldn't be read.",
@@ -403,7 +402,8 @@ export const WHERE_TEXT = {
   tooManyPages: (max: number) => `This report has more than ${max} pages to list. Type the page's name.`,
   modelTooLarge: "This model is too large to list. Type the table's name.",
   innerFailed: "This file couldn't be read. Type the name.",
-  innerNotLogged: "This file wasn't read because FocusTime couldn't record that you opened it.",
+  // RB-3b: a listing is one row in the Code log; without it, no names.
+  innerNotLogged: "These names weren't listed because FocusTime couldn't record that you listed them.",
   tryAgain: "Try again",
   // The quiet line under the box when nothing can be offered, by reason (Code's own rule decides who may read).
   teamOnly: (client: string) => `Only ${client}'s team can read its code, so no names are offered. Type the name.`,

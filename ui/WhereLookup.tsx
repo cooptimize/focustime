@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type { RepoThings } from "../plan/code-kinds.ts";
 import { markMatches } from "../plan/code-kinds.ts";
-import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, suggestAt, tablesOf, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner } from "../plan/where-lookup.ts";
+import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, suggestAt, tablesOf, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner, type WhereMore } from "../plan/where-lookup.ts";
 import { WHERE_PAGES_MAX, type InnerAnswer } from "../plan/where-inner.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { Icon, type IconName } from "./icons.tsx";
@@ -30,7 +30,7 @@ type Names =
   | { state: "failed"; line: string; retry: boolean };
 
 /** A second level once asked for: its rows (with a line when some couldn't be read), or why there are none. */
-type Inner = { state: "loading" } | { state: "ready"; rows: WhereInner[]; note?: string; /** A one-file model's table: its name. */ title?: string } | { state: "failed"; line: string };
+type Inner = { state: "loading"; list: WhereMore } | { state: "ready"; rows: WhereInner[]; note?: string; /** A one-file model's table: its name. */ title?: string } | { state: "failed"; line: string };
 
 /** What the list shows: closed, the matches for the word being typed, or browsing (a level, or a thing's second level). */
 type Mode = { type: "closed" } | { type: "typing" } | { type: "browse"; at: string | null; inner: string | null; /** Opened from typing: a pick replaces the word. */ replace: boolean; trail: { at: string | null; inner: string | null }[]; /** Back from its first level goes back to the matches. */ fromTyping?: boolean };
@@ -126,7 +126,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (!clientKey || !e.more || inner.get(e.id)?.state === "ready" || inner.get(e.id)?.state === "loading") return;
     const k = clientKey;
     const list = e.more;
-    setInner((m) => new Map(m).set(e.id, { state: "loading" }));
+    setInner((m) => new Map(m).set(e.id, { state: "loading", list }));
     call<InnerAnswer>("code.inner", { clientKey: k, repoId: e.repoId, path: e.file, list }).then(
       (r) => {
         if (!live.current || forClient.current !== k) return;
@@ -415,7 +415,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (st && (st.state !== "ready" || st.note))
       out.push(
         <li key="inner-state" className="wl-note" role="presentation">
-          {st.state === "loading" ? WHERE_TEXT.innerReading : st.state === "failed" ? st.line : st.note}
+          {st.state === "loading" ? WHERE_TEXT.innerReadingOf[st.list] : st.state === "failed" ? st.line : st.note}
         </li>,
       );
     if (groups)
