@@ -70,8 +70,10 @@ describe.skipIf(!CHROMIUM)("Settings rail", () => {
   it("a phone gets the rail as a list page, each section a page with Back and ×, and Admin pages fit the width", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     // The phone opens Admin from More.
-    await page.getByRole("button", { name: /^More: notifications/ }).click();
-    await page.getByRole("menuitem", { name: "Admin" }).click();
+    // PH-1: More › Everything else › Admin.
+    await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
+    await page.getByRole("button", { name: /Everything else/ }).click();
+    await page.locator('.mr-row[data-row="admin"]').click();
     await page.locator(".ps-head h2", { hasText: "Admin › Clients" }).waitFor();
     expect(await page.locator(".ps-side").count()).toBe(0);
     // Back: the list.

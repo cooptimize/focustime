@@ -21,7 +21,8 @@ async function planToday(page: Page) {
   expect(st.error ?? "ok").toBe("ok");
   for (const itemId of [4411, 4412]) expect((await call(page, "pick.add", { date: TODAY, half: "AM", clientKey: "Cooptimize", itemId })).ok).toBe(true);
   await page.reload();
-  await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).waitFor();
+  // PH-1: the Now card's Done box has the same name as the list's; the list's.
+  await page.locator(".ph-todos, .today-view").first().getByRole("checkbox", { name: "Done: Timesheet summary query" }).last().waitFor();
 }
 
 describe.skipIf(!CHROMIUM)("FN-1 story card and Wrap it up (browser, demo mode)", () => {

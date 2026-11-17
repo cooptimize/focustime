@@ -141,7 +141,8 @@ describe.skipIf(!CHROMIUM)("RS-2: Day shows the catch-up day (browser, demo)", (
     await workingFriday(page);
     expect((await call(page, "pick.add", { date: FRI, half: "AM", clientKey: "Northwind", intention: "Reply to the release question", size: "S" })).ok).toBe(true);
     await page.reload();
-    await day(page, FRI);
+    // PH-1: today on the phone has no day bar; its to-dos are under the Now card.
+    await goTo(page, `#/day/${FRI}`, page.locator(".ph-todos").first());
     const heads = page.locator(".ph-todos .ph-block-head");
     await expect.poll(() => heads.count()).toBe(2);
     await expect.poll(async () => (await heads.allInnerTexts()).map((t) => t.split("·")[0]!.trim())).toEqual(["Catch-up", "Catch-up"]);

@@ -52,12 +52,12 @@ hidden" switch, Refresh and Settings for Disconnect.
 | ‹ › previous and next day | Week (its day bar), then another day, which keeps them |
 | The date and Today | The date in the top bar |
 | PTO or Holiday pill | Day says "You're off today", as before |
-| Cards or Timeline | Another day keeps it; today's Timeline: the desktop version (a compromise, open questions) |
-| Timebox my day | Another day keeps it; for today: the desktop version (a compromise, open questions) |
+| Cards or Timeline | Another day's ⋯ (the phone's setting, TY-1, so today follows it); with the timeline on, today's Day keeps its header under the Now card, Next and the one thing |
+| Timebox my day | Another day keeps it; today's header while the phone's timeline is on; the desktop version |
 | + Add (the header) | Add on each of today's blocks under Today, and on the Now card when its block has nothing planned |
 | ⋯ Day: Personal events | Settings › Display (Personal events); another day's ⋯ |
 | ⋯ Day: Suggestions on or off | Another day's ⋯ (a compromise, open questions) |
-| ⋯ Day: Timeline | As Cards or Timeline above |
+| ⋯ Day: Timeline | As Cards or Timeline above; with it on, today's ⋯ is back too |
 | The day's suggestions line (SG-1) | Another day keeps it; the suggestions in an empty block stay under Today |
 | The Now card: the block, until when, time left | The Now card (larger), with the block's bar |
 | The Now card: the meeting under way or next | One line on the Now card, and Next |

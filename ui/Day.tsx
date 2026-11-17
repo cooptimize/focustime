@@ -381,8 +381,9 @@ export function Day(props: Props) {
   return (
     <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
       {/* PH-1: Now has no header of its own: the date is the top bar's, and another day is reached from Week. */}
-      {phoneToday && <h1 className="sr-only">{PhoneM!.PHONE_TEXT.dayHeading}</h1>}
-      {!phoneToday && <header className="today-head day-bar">
+      {/* PH-1: a phone that turned the timeline on (TY-1) keeps the header: its Timebox my day, and the switch back. */}
+      {phoneToday && !timelineShown && <h1 className="sr-only">{PhoneM!.PHONE_TEXT.dayHeading}</h1>}
+      {(!phoneToday || timelineShown) && <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
             <h1>
@@ -549,7 +550,7 @@ export function Day(props: Props) {
             </button>
           )}
         </p>
-      ) : phoneToday && !catchUpCell ? (
+      ) : phoneToday && !catchUpCell && !timelineShown ? (
         <div className="today-body ph-today ph1-now" data-tour="today-blocks">
           <PhoneTodos heading={PhoneM!.PHONE_TEXT.today} blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
         </div>
