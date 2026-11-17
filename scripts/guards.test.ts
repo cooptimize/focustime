@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ARCHIVE, LARGE_OK, runGuards } from "./guards.ts";
+import { ARCHIVE, LARGE_OK, OFFICE, runGuards } from "./guards.ts";
 
 const SCRIPT = join(import.meta.dirname, "guards.ts");
 const client = Buffer.from("VyZD", "base64").toString("utf8");
@@ -87,8 +87,8 @@ describe("one guard script (HK-1)", () => {
     expect(r.stderr).not.toContain("notes.md");
   });
 
-  // PV-1: an archive anywhere under docs/ fails, whatever its size, tracked or not; the same name elsewhere doesn't.
-  it("fails on an archive added under docs/, small or large, and not on one outside docs/", () => {
+  // PV-1, FT-1: an archive anywhere in the repository fails, whatever its size, tracked or not.
+  it("fails on an archive anywhere, under docs/ or outside it, small or large", () => {
     const d = repo();
     mkdirSync(join(d, "docs/ux/zz2"), { recursive: true });
     mkdirSync(join(d, "docs/demo"), { recursive: true });
@@ -97,14 +97,28 @@ describe("one guard script (HK-1)", () => {
     writeFileSync(join(d, "docs/demo/shots.tar.gz"), Buffer.alloc(301 * 1024, 1));
     mkdirSync(join(d, "assets"), { recursive: true });
     writeFileSync(join(d, "assets/kit.zip"), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
-    expect(runGuards(d).hits.filter((h) => h.guard === "files").map((h) => h.at)).toEqual(["docs/demo/shots.tar.gz: an archive under docs/", "docs/ux/zz2/handoff.zip: an archive under docs/"]);
+    writeFileSync(join(d, "ui/backup.7z"), Buffer.from([0x37, 0x7a]));
+    expect(runGuards(d).hits.filter((h) => h.guard === "files").map((h) => h.at)).toEqual(["assets/kit.zip: an archive", "docs/demo/shots.tar.gz: an archive", "docs/ux/zz2/handoff.zip: an archive", "ui/backup.7z: an archive"]);
     const r = cli(d);
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/2 files hit.*never in an archive/);
+    expect(r.stderr).toMatch(/4 files hit.*never in an archive/);
   });
 
-  it("allows no archive as a large file", () => {
-    expect(Object.keys(LARGE_OK).filter((k) => ARCHIVE.test(k))).toEqual([]);
+  // FT-1: an Office file is a zip inside and can hold pictures: refused anywhere, whatever its size.
+  it("fails on an Office file anywhere, and not on a file that only has a similar name", () => {
+    const d = repo();
+    mkdirSync(join(d, "docs/plan"), { recursive: true });
+    mkdirSync(join(d, "assets"), { recursive: true });
+    for (const f of ["docs/plan/handoff.docx", "assets/numbers.XLSX", "deck.pptx", "assets/sheet.ods"]) writeFileSync(join(d, f), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    writeFileSync(join(d, "docs/plan/docx-notes.md"), "About a .docx file, in words.\n");
+    expect(runGuards(d).hits.filter((h) => h.guard === "files").map((h) => h.at)).toEqual(["assets/numbers.XLSX: an Office file", "assets/sheet.ods: an Office file", "deck.pptx: an Office file", "docs/plan/handoff.docx: an Office file"]);
+    const r = cli(d);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/4 files hit.*never in an archive or an Office file/);
+  });
+
+  it("allows no archive or Office file as a large file", () => {
+    expect(Object.keys(LARGE_OK).filter((k) => ARCHIVE.test(k) || OFFICE.test(k))).toEqual([]);
   });
 
   it("fails on a file over 300 KB outside the folders that need large files, and passes one inside them", () => {
@@ -123,7 +137,7 @@ describe("one guard script (HK-1)", () => {
     for (const [path, why] of Object.entries(LARGE_OK)) expect(why.length, path).toBeGreaterThan(20);
   });
 
-  it("passes this repo: no image under docs/ux, no archive under docs/ and no unexpected large file", () => {
+  it("passes this repo: no image under docs/ux, no archive or Office file anywhere and no unexpected large file", () => {
     expect(runGuards(join(import.meta.dirname, "..")).hits.filter((h) => h.guard === "files")).toEqual([]);
   });
 });
