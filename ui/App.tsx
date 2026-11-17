@@ -2210,7 +2210,7 @@ export function App() {
             access={docsAccess}
           />
       ) : meetingAt ? (
-        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} colors={data.clients} onOpen={(id, view, line) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(view ? { view } : {}), ...(line ? { line } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
+        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} filter={meetingAt.filter ?? null} proposal={meetingAt.proposal ?? null} colors={data.clients} today={data.planDay.date} undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })} onOpen={(id, at) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(at?.view ? { view: at.view } : {}), ...(at?.line ? { line: at.line } : {}), ...(at?.filter ? { filter: at.filter } : {}), ...(at?.proposal ? { proposal: at.proposal } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
       ) : focusOpen && FocusM ? (
         <FocusM.FocusScreen
           t={data.timer}

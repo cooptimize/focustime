@@ -1,13 +1,15 @@
 // Was e2e/meetings.test.ts until BT-1.
-// MC-1: meeting capture's main path in demo mode. Wednesday's Northwind weekly status call shows on its Week card with
-// what it needs from me; the mark opens the review screen ("Update Northwind's plan") with each proposal and its quotes;
-// I skip one, Confirm shows every write first, and one Confirm makes the rest; the skipped one stays Skipped and the
-// call reads Reviewed. The clock is pinned to Thursday Nov 5, 2026 10:00 AM ET (the seed's call was the day before).
+// MC-1: meeting capture's main path in demo mode. MC-1e: the page made like the rest of the app. From the Week card's
+// call mark: nothing ticked and no bar; the filter in the address; a new Epic that Northwind's process needs a target
+// date on says so on its row and can't be sent until it has one; a story with no parent gets the parent picker; a
+// row's Create opens the app's one DevOps preview and, confirmed, folds into "1 done"; a promise is kept at once with
+// Undo; the older comment on a feature says it won't be sent and offers only Skip; ticking shows the bar with its
+// count, Clear hides it; Back returns to Week. Clock: Thursday Nov 5, 2026 10:00 AM ET (the call was Monday).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
 let h: Harness;
-const T = 120_000;
+const T = 180_000;
 
 describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
   beforeAll(async () => {
@@ -15,31 +17,82 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("the Week card's call mark opens the review; skip one, Confirm the rest, the call is reviewed", async () => {
+  it("each row its own way: needed fields first, the one preview, a promise with Undo, the bar only when ticked; Back to Week", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/week"));
     const mark = page.locator(".call-mark").first();
     await mark.waitFor({ timeout: 30_000 });
-    await expect(mark.textContent()).resolves.toBe("Weekly status call· Review 6 proposals");
+    await expect(mark.textContent()).resolves.toBe("Weekly status call· Review 11 proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    await expect(page.locator(".mtg-prop").count()).resolves.toBe(6);
-    await expect(page.locator(".mtg-prop").first().locator(".mtg-quotes blockquote").first().textContent()).resolves.toContain("Dana Brooks");
-    // Skip the status comment, then Confirm: every write is shown before anything runs.
-    const status = page.locator(".mtg-prop").filter({ hasText: "ready for Northwind to try" });
-    await status.getByRole("button", { name: "Skip" }).click();
-    await page.getByRole("button", { name: "Confirm 5" }).click();
-    const dialog = page.getByRole("dialog", { name: "Confirm these changes" });
-    await dialog.waitFor();
-    await expect(dialog.textContent()).resolves.toMatch(/Create a DevOps item.*Add a comment to a DevOps item/s);
-    await expect(dialog.textContent()).resolves.not.toContain("ready for Northwind to try");
-    await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
-    await page.locator(".mtg-done").waitFor({ timeout: 30_000 });
-    await expect(page.locator(".mtg-done").textContent()).resolves.toContain("5 done");
-    await expect(status.textContent()).resolves.toContain("Skipped");
-    // Back on the list, the call is reviewed and nothing is left to do.
-    await page.getByRole("button", { name: "Back to client calls" }).first().click();
-    await expect.poll(() => page.locator(".mtg-series").first().textContent()).toContain("Reviewed");
+    const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);
+    // Nothing ticked to start, and no bar.
+    await expect(page.locator(".mtg-prop input[type=checkbox]:checked").count()).resolves.toBe(0);
+    await expect(page.locator(".mtg-bulk").count()).resolves.toBe(0);
+    // One count, the same on the Proposals switch and the page's line.
+    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(/^11 to review/);
+    await expect(page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).textContent()).resolves.toContain("11");
+
+    // The filter, in the address.
+    await page.locator(".mtg-filter").getByRole("button", { name: /New in DevOps/ }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/new`);
+    await expect.poll(() => page.locator(".mtg-group").count()).toBe(1);
+
+    // The Epic: Northwind's process needs a target date. Said on the row; Create waits for it.
+    const epic = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Accountant reporting area']") });
+    await expect(epic.locator(".mtg-need").textContent()).resolves.toContain("Target Date");
+    const create = epic.getByRole("button", { name: "Create in DevOps" });
+    await expect(create.isDisabled()).resolves.toBe(true);
+    await epic.getByRole("button", { name: /^Target date for Accountant reporting area/ }).click();
+    await page.locator(".dp-pop input.dp-box").fill("2026-12-18");
+    await page.locator(".dp-pop input.dp-box").press("Enter");
+    await page.locator(".dp-pop").waitFor({ state: "detached" });
+    await expect.poll(() => epic.locator(".mtg-need").count()).toBe(0);
+    await expect.poll(() => create.isDisabled()).toBe(false);
+
+    // A story with no parent gets the parent picker on its row.
+    const loose = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Date range in the export file name']") });
+    await expect(loose.getByRole("button", { name: /^Parent for Date range in the export file name/ }).count()).resolves.toBe(1);
+
+    // A row's Create opens the one DevOps preview; confirmed, it folds into "1 done".
+    const statement = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Monthly statement as a PDF']") });
+    await statement.getByRole("button", { name: "Create in DevOps" }).click();
+    const dialog = page.locator(".write-dialog.devops");
+    await dialog.waitFor({ timeout: 30_000 });
+    await expect(dialog.textContent()).resolves.toContain("Monthly statement as a PDF");
+    await dialog.getByRole("button", { name: "Create in DevOps" }).click();
+    await dialog.waitFor({ state: "detached", timeout: 30_000 });
+    await expect.poll(() => page.locator(".mtg-fold").first().textContent()).toContain("1 done");
+    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(/^10 to review · 1 done/);
+
+    // A promise is kept at once, with Undo.
+    await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/promises`);
+    const mine = page.locator(".mtg-prop:not(.confirmed)").filter({ has: page.locator("input[value='Send the date range filter for review']") });
+    await mine.getByRole("button", { name: "Add to Promises" }).click();
+    const toast = page.locator(".undo-toast");
+    await expect.poll(() => toast.textContent()).toContain("Promises");
+    await expect.poll(() => mine.count()).toBe(0);
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => mine.count()).toBe(1);
+
+    // Comments: the older one on a feature won't be sent and has only Skip; the rest tick into the bar.
+    await page.locator(".mtg-filter").getByRole("button", { name: /Comments/ }).click();
+    const onFeature = page.locator(".mtg-prop.stuck").filter({ hasText: "#1110" });
+    await expect(onFeature.textContent()).resolves.toContain("won't be sent");
+    await expect(onFeature.getByRole("button", { name: "Add comment" }).count()).resolves.toBe(0);
+    await expect(onFeature.getByRole("checkbox").count()).resolves.toBe(0);
+    await page.locator(".mtg-sec-head").getByRole("button", { name: "Select all" }).click();
+    const bar = page.locator(".mtg-bulk");
+    await bar.waitFor();
+    await expect(bar.textContent()).resolves.toContain("3 selected");
+    await expect(bar.getByRole("button", { name: "Send 3 to DevOps" }).count()).resolves.toBe(1);
+    await bar.getByRole("button", { name: "Clear" }).click();
+    await bar.waitFor({ state: "detached" });
+
+    // Back returns to Week, where the call was opened from.
+    await page.locator(".mtg-view").getByRole("button", { name: "Back to Week" }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");
     expect(errors).toEqual([]);
   }, T);
 });

@@ -67,7 +67,21 @@ export function callForEvent(marks: readonly CallMark[], e: DrawnMeeting): CallM
 
 /** "#/meetings/<occurrence>", or its Transcript view, or a line in it. */
 export const callHref = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => `#/meetings/${occurrenceId}${view ? `/${view}` : ""}${view === "transcript" && line ? `/${line}` : ""}`;
+/**
+ * MC-1e: where a call was opened from (Day, Week, Client calls), so its Back returns there rather than always to Week.
+ * Kept in memory only, for this page; after a reload Back goes to Client calls.
+ */
+let cameFrom: { occurrenceId: number; hash: string } | null = null;
+export const rememberCallFrom = (occurrenceId: number, hash: string) => void (cameFrom = { occurrenceId, hash });
+export const callFrom = (occurrenceId: number): string | null => (cameFrom?.occurrenceId === occurrenceId ? cameFrom.hash : null);
 export const openCall = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => void (location.hash = callHref(occurrenceId, view, line));
+// Any way in (a mark's link, a button, a typed address) passes through a hash change: the place before it is kept.
+if (typeof window !== "undefined")
+  window.addEventListener("hashchange", (e) => {
+    const to = /^#\/meetings\/(\d+)(\/|$)/.exec(new URL(e.newURL).hash);
+    const from = new URL(e.oldURL).hash;
+    if (to && !new RegExp(`^#/meetings/${to[1]}(/|$)`).test(from)) rememberCallFrom(Number(to[1]), from || "#/today");
+  });
 
 /**
  * MC-1d: Propose again from a meeting's menu opens the call's page, which runs it there (so the person sees it run and

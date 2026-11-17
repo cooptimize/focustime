@@ -1,5 +1,6 @@
 // MC-1d: the call's Transcript view in demo mode. Every line with its speaker and time, the lines a proposal rests on
-// marked, a filter, and Show in transcript from a proposal landing on its line; each an address. Nothing of the
+// marked, a filter, and Show in transcript from a proposal landing on its line; each an address. MC-1e: and from a
+// marked line back to its proposal. Nothing of the
 // transcript is kept in the browser's storage or the installed app's caches after the view closes. An attendee who isn't
 // a reviewer can read it but gets no Propose again or Upload. Clock: Thu Nov 5, 2026 10:00 AM ET (the call was Monday).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -37,25 +38,33 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     const id = mine.occurrences[0].id as number;
     await open(page, `#/meetings/${id}`);
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    await page.getByRole("tab", { name: /Transcript/ }).click();
+    await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/transcript`);
     const lines = page.locator(".mtg-lines li");
     // The transcript loads when the view opens.
     await lines.first().waitFor({ timeout: 30_000 });
-    await expect.poll(() => lines.count()).toBe(8);
+    await expect.poll(() => lines.count()).toBe(12);
     await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d (AM|PM)\s*Alex Rivera\s*Morning everyone/);
     await expect.poll(() => page.locator(".mtg-lines li.marked").count()).toBeGreaterThan(0);
     // The filter: words or a name.
     const filter = page.getByRole("searchbox", { name: "Filter the transcript" });
     await filter.fill("statement");
-    await expect.poll(() => lines.count()).toBe(2);
-    await expect(page.locator(".mtg-tr-bar [role=status]").textContent()).resolves.toBe("2 of 8 lines");
+    await expect.poll(() => lines.count()).toBe(4);
+    await expect(page.locator(".mtg-tr-bar [role=status]").textContent()).resolves.toBe("4 of 12 lines");
     await filter.fill("Priya");
-    await expect.poll(() => lines.count()).toBe(2);
+    await expect.poll(() => lines.count()).toBe(3);
     await filter.fill("nothing like this");
     await expect(page.locator(".mtg-tr-bar [role=status]").textContent()).resolves.toBe('No line has "nothing like this"');
+    // MC-1e: from a line to its proposal: the row in view and focused.
+    await filter.fill("reporting area");
+    const toProposal = page.locator(".mtg-lines li.marked").first().getByRole("button", { name: /^Go to the proposal/ });
+    await toProposal.click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/meetings/${id}/proposal/\\d+$`));
+    await expect.poll(() => page.evaluate(() => document.activeElement?.querySelector<HTMLInputElement>("input:not([type=checkbox])")?.value)).toBe("Accountant reporting area");
+    await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
+    await lines.first().waitFor({ timeout: 30_000 });
     // Show in transcript from a proposal: the Transcript view at its first line, focused.
-    await page.getByRole("tab", { name: /Proposals/ }).click();
+    await page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).click();
     const jump = page.locator(".mtg-prop").first().getByRole("button", { name: /^Show in transcript/ });
     await jump.click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/meetings/${id}/transcript/\\d+$`));
@@ -86,8 +95,8 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     const id = mine.occurrences[0].id as number;
     await open(page, `#/meetings/${id}/transcript`);
     await page.locator(".mtg-lines li").first().waitFor({ timeout: 30_000 });
-    await expect.poll(() => page.locator(".mtg-lines li").count()).toBe(8);
-    await page.getByRole("tab", { name: /Proposals/ }).click();
+    await expect.poll(() => page.locator(".mtg-lines li").count()).toBe(12);
+    await page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).click();
     await page.locator(".mtg-prop").first().waitFor();
     await expect(page.getByRole("button", { name: "Propose again" }).count()).resolves.toBe(0);
     await expect(page.getByText("Upload a transcript").count()).resolves.toBe(0);

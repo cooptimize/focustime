@@ -42,7 +42,9 @@ export type DevOpsChange =
   /** ED-1: the story card's Edit: only the parts that changed, guarded by the revision Edit read. */
   | { kind: "item_edit"; itemId: number; rev: number; title?: string; description?: string; acceptance?: string }
   /** ED-1: Move…: the parent link only (null: No parent). */
-  | { kind: "reparent"; itemId: number; rev: number; parentId: number | null };
+  | { kind: "reparent"; itemId: number; rev: number; parentId: number | null }
+  /** MC-1e: a call's proposal (a new item with the New form's fields, or a comment on a story), by its id; `key` brings a refusal back to its row. */
+  | { kind: "meeting_create" | "meeting_comment"; proposalId: number; key?: string };
 /** GD-2: a change sent again with another client's names written as "another client" (the flag's one click). */
 const replaced = (changes: readonly DevOpsChange[]) => changes.map((c) => ({ ...c, mentions: "replace" as const }));
 
@@ -69,7 +71,7 @@ export const DevOpsWriteCtx = createContext<DevOpsWriteEnv | null>(null);
 export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
-export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
+export type Settled = (r: { confirmed: boolean; sent: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** MC-1e: changes with a key that weren't previewed, and why (inline begins only: the caller says it on each row). */ refused?: { key: string; error: string; code: string | null }[]; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[] }) => void;
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined };
 /** CP-1: how the preview names and colors a client. */
 type ClientLook = { name: (clientKey: string) => string; color: (clientKey: string) => string | undefined };
@@ -87,14 +89,18 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
   const begin = useCallback(
     async (clientKey: string, changes: DevOpsChange[], settled?: Settled, opts?: { inline?: boolean }) => {
       try {
-        const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string }[] }>("devops.preview", { clientKey, changes });
+        const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { itemId: number | null; error: string; code?: string | null; key?: string }[] }>("devops.preview", { clientKey, changes });
+        // MC-1e: an inline begin's keyed refusals go back to the caller, who says each on its own row.
+        const keyed = opts?.inline ? (r.refused ?? []).flatMap((x) => (x.key ? [{ key: x.key, error: x.error, code: x.code ?? null }] : [])) : [];
+        const rest = (r.refused ?? []).filter((x) => !(opts?.inline && x.key));
+        const told: Settled | undefined = keyed.length && settled ? (x) => settled({ ...x, refused: keyed }) : settled;
         // AH-1: items of a change set that were refused (a conflict, no right) are said once; the rest go on.
-        if (r.refused?.length) notify(r.refused.length === 1 ? r.refused[0]!.error : `${r.refused.length} items weren't previewed: ${r.refused.map((x) => (x.itemId ? `#${x.itemId}` : "one")).join(", ")}. See the review.`);
+        if (rest.length) notify(rest.length === 1 ? rest[0]!.error : `${rest.length} items weren't previewed: ${rest.map((x) => (x.itemId ? `#${x.itemId}` : "one")).join(", ")}. See the review.`);
         if (!r.previews.length) {
           if (opts?.inline && !r.refused?.length) return void settled?.({ confirmed: false, sent: false, error: r.nothing[0] ?? "Nothing to change in DevOps" });
-          return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), settled?.({ confirmed: false, sent: false }));
+          return void (r.refused?.length ? null : notify(r.nothing[0] ?? "Nothing to change in DevOps"), told?.({ confirmed: false, sent: false }));
         }
-        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled });
+        setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled: told });
       } catch (e) {
         if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e), ...(e instanceof ActionRefusal && e.code ? { code: e.code } : {}) });
         settled?.({ confirmed: false, sent: false });
