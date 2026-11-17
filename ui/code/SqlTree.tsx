@@ -76,11 +76,43 @@ export function sqlOpened(m: SqlTreeMemo, path: readonly string[]): SqlTreeMemo 
   return { open, whole: new Set([...m.whole, path[path.length - 1]!]) };
 }
 
+/** UC-2: where the list is scrolled, to keep the place across a change of grouping. */
+export type SqlPlace = { listed: string | null; db: string | null; top: number };
+const scroller = (el: HTMLElement | null): HTMLElement | null => {
+  for (let e = el?.parentElement ?? null; e; e = e.parentElement) if (/(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight) return e;
+  return null;
+};
+/**
+ * UC-2: the place in By kind's list: the first SQL object showing whole under the open database's sticky row (its file, and
+ * how far down the list it is), and that database.
+ */
+export function sqlPlace(root: HTMLElement | null): SqlPlace | null {
+  const box = scroller(root);
+  if (!root || !box) return null;
+  const top = box.getBoundingClientRect().top;
+  const heads = [...root.querySelectorAll<HTMLElement>("[data-sql-head], .cv-sql-bar.sticky")];
+  const stuck = heads.find((h) => Math.abs(h.getBoundingClientRect().top - top) < 2) ?? heads[0] ?? null;
+  const under = stuck ? stuck.getBoundingClientRect().bottom : top;
+  const first = [...root.querySelectorAll<HTMLElement>(".cv-sql-row[data-code-listed]")].find((r) => r.getBoundingClientRect().top >= under - 1) ?? null;
+  return first ? { listed: first.dataset.codeListed ?? null, db: stuck?.dataset.sqlHead ?? null, top: first.getBoundingClientRect().top - top } : stuck ? { listed: null, db: stuck.dataset.sqlHead ?? null, top: 0 } : null;
+}
+/** UC-2: scrolls the list back to that place: the same object at the same height, else the database's row at the top. */
+export function sqlRestore(root: HTMLElement | null, p: SqlPlace): void {
+  const box = scroller(root);
+  if (!root || !box) return;
+  const top = box.getBoundingClientRect().top;
+  const row = p.listed ? [...root.querySelectorAll<HTMLElement>(".cv-sql-row[data-code-listed]")].find((r) => r.dataset.codeListed === p.listed) : null;
+  if (row) return void (box.scrollTop += row.getBoundingClientRect().top - top - p.top);
+  const head = p.db ? [...root.querySelectorAll<HTMLElement>("[data-sql-head]")].find((h) => h.dataset.sqlHead === p.db) : null;
+  const li = head?.closest("li");
+  if (li) box.scrollTop += li.getBoundingClientRect().top - top;
+}
+
 /** RB-6: the one Group by switch, with Expand all and Collapse all, at the top of By kind's Databases group. */
-export function SqlBar({ grouping, onGrouping, onAll, disabled }: { grouping: SqlGrouping; onGrouping: (g: SqlGrouping) => void; /** Expand all (true) or Collapse all (false), for every database. */ onAll: (open: boolean) => void; /** The filter has words: every folder with a match is open. */ disabled: boolean }) {
+export function SqlBar({ grouping, onGrouping, onAll, disabled, sticky = false }: { /** UC-2: sticks at the top of the list while the databases under it scroll. */ sticky?: boolean; grouping: SqlGrouping; onGrouping: (g: SqlGrouping) => void; /** Expand all (true) or Collapse all (false), for every database. */ onAll: (open: boolean) => void; /** The filter has words: every folder with a match is open. */ disabled: boolean }) {
   const byId = useId();
   return (
-    <div className="cv-sql-bar" data-sql-bar="">
+    <div className={`cv-sql-bar${sticky ? " sticky" : ""}`} data-sql-bar="">
       <span className="cv-sql-by" id={byId}>{SQL_TEXT.groupBy}</span>
       <span className="day-switch cv-sql-switch" role="group" aria-labelledby={byId} data-sql-group={grouping}>
         <button type="button" aria-pressed={grouping === "schema"} data-sql-group-btn="schema" title="Schemas, then the types in each" onClick={() => grouping !== "schema" && onGrouping("schema")}>

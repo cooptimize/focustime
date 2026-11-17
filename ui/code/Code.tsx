@@ -772,7 +772,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             ) : "message" in kindsState ? (
               <p className="cv-note problem" role="alert" data-code-state={kindsState.code ?? "error"}>{kindsState.message}</p>
             ) : (
-              <ByKind id={at.clientKey!} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
+              <ByKind id={at.clientKey!} narrow={narrow} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
             ))}
           {view === "files" && Array.isArray(repoList) && repoList.length > 1 && (
             <label className="cv-repo">

@@ -239,6 +239,9 @@
 .cv-sql-row .ah-chev-svg { flex: none; color: var(--text-muted); }
 .cv-sql-more { color: var(--accent); font-size: var(--fs-2); }
 .cv-sql-in-item { padding-left: 22px; }
+/* UC-2: an open database's row and the Group by switch under it stay in view while its objects scroll, each database
+   only while its own objects are on screen. */
+.cv-db-head, .cv-sql-bar.sticky { position: sticky; top: 0; z-index: 2; background: var(--bg); box-shadow: 0 -12px 0 var(--bg), 0 1px 0 var(--border); }
 .cv-sql-in-item .cv-sql-bar { padding-left: 6px; }
 .code-page.narrow .cv-sql-row { min-height: 44px; font-size: var(--fs-4); }
 .code-page.narrow .cv-sql-all-btn { min-height: 44px; padding-inline: 10px; font-size: var(--fs-2); }
