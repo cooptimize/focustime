@@ -9,17 +9,17 @@ header (the day arrows, Cards or Timeline, Timebox my day, Add and the Day menu)
 
 | Was | Is now |
 |---|---|
-| Day | Now (the bar's first item, the same address `#/day`) |
+| Day | Day (the bar's first item, the same address `#/day`) |
 | Week | Week (unchanged screen) |
 | Capture (the raised +) | Capture (unchanged sheet) |
-| Inbox, with the Needs you count | Needs you, with the same count (the same Inbox screen) |
+| Inbox, with its count | Inbox, with the same count (the same screen) |
 | Ask | Ask in the top bar (the same assistant) |
 
 ## The top bar
 
 | Was | Is now |
 |---|---|
-| The mark and FocusTime (opens Day) | Today's date at the left; Now is the bar's first item |
+| The mark and FocusTime (opens Day) | Today's date at the left; Day is the bar's first item |
 | Demo | Demo, where the demo shows it |
 | The sources' status dot (opens the sources sheet) | More › Everything else › Sources (the same sheet); a dot on More's bar item when a source needs attention |
 | ⋯ (the More menu) | More, the bar's last item, a full screen |
@@ -31,7 +31,7 @@ header (the day arrows, Cards or Timeline, Timebox my day, Add and the Day menu)
 | The person (Settings, Sign out or Sign in) | More › Everything else › the person's name (the same menu) |
 | Status, with "N to update" | More › Status, "N features need your update" |
 | Notifications, with "N new" | More › Everything else › Notifications |
-| Start focus (the start menu) or Focus screen | Now's Start focus for the to-do; More › Everything else › Focus (the same start menu, or the focus screen while one runs) |
+| Start focus (the start menu) or Focus screen | The Now card's Start focus for the to-do; More › Everything else › Focus (the same start menu, or the focus screen while one runs) |
 | Settings | More › Settings |
 | Admin (admins) | More › Everything else › Admin |
 | Guide | More › Guide |
@@ -51,7 +51,7 @@ hidden" switch, Refresh and Settings for Disconnect.
 |---|---|
 | ‹ › previous and next day | Week (its day bar), then another day, which keeps them |
 | The date and Today | The date in the top bar |
-| PTO or Holiday pill | Now says "You're off today", as before |
+| PTO or Holiday pill | Day says "You're off today", as before |
 | Cards or Timeline | Another day keeps it; today's Timeline: the desktop version (a compromise, open questions) |
 | Timebox my day | Another day keeps it; for today: the desktop version (a compromise, open questions) |
 | + Add (the header) | Add on each of today's blocks under Today, and on the Now card when its block has nothing planned |
@@ -64,17 +64,17 @@ hidden" switch, Refresh and Settings for Disconnect.
 | The Now card: Start, Done | Start focus, and the Done box beside the to-do |
 | The Now card while focusing: the countdown (opens the focus screen), Done, +15 | The countdown (opens the focus screen), Done and Stop; +15 is on the focus screen |
 | A live call in the client's chat, with Join (CW-1) | The Now card, unchanged |
-| Needs you: the urgent strip (3 lines and "N more in Inbox") | The one thing that needs you, "1 of N", then Needs you |
-| The chips: promises due, From chats · N | Needs you (the bar), where they are listed |
+| Needs you: the urgent strip (3 lines and "N more in Inbox") | The one thing that needs you, "1 of N", then the Inbox |
+| The chips: promises due, From chats · N | The bar's Inbox, where they are listed |
 | The chip for a source that needs a fix | The dot on More, then Sources |
-| The VM's morning prompt (Start, Not today) | The top of Now, unchanged |
+| The VM's morning prompt (Start, Not today) | The top of Day, unchanged |
 | The moment card: Plan today | Add on each block under Today; Week's Plan today |
 | The moment card: Midday check-in | More › Everything else › Midday check-in |
 | The moment card: Wrap up the day (Close out) | More › Everything else › Close out |
 | The setup line ("Finish setting up") | More › Settings › Setup |
 | To-dos by block: tick, the to-do's sheet, Add, suggestions | Today, under the Now card, unchanged |
 | Next up (the rest of today's meetings and blocks) | Next: the next meeting and the next block; the rest on Week |
-| Promises due (with Timeline on) | Needs you › Promises |
+| Promises due (with Timeline on) | Inbox › Promises |
 | Weekend, PTO, holiday, catch-up day, nothing scheduled | The same words, unchanged |
 
 ## Other places the phone reaches, unchanged
@@ -82,3 +82,9 @@ hidden" switch, Refresh and Settings for Disconnect.
 Week, the Inbox, Backlog's notice and Open anyway, Status, Code, Settings, the Guide, Technical docs, Client calls
 (`#/meetings`), a story's card, the focus screen, Capture and the assistant open as before; only how they are reached
 changed, as above.
+
+## STEP 0.2, 0.4 and 0.5
+
+- **Open pull requests (0.2):** none was open when PH-1 began its tests; VM-3's and MC-1d's had merged (MC-1d as #175). More's Client calls opens the client calls screen MC-1d left (`#/meetings`).
+- **Changing the viewport after load (0.4).** Read: MDN's viewport meta (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport), Apple's Using the Viewport (https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/UsingtheViewport/UsingtheViewport.html), WebKit's Designing websites for iPhone X (https://webkit.org/blog/7929/designing-websites-for-iphone-x/), MDN `env()` (https://developer.mozilla.org/en-US/docs/Web/CSS/env), MDN VisualViewport (https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport) and Chrome's viewport resize note (https://developer.chrome.com/blog/viewport-resize-behavior/). Each describes the viewport meta as the page loads (`width`, `initial-scale`, `viewport-fit=cover`) and the bottom safe area as `env(safe-area-inset-bottom)` with `viewport-fit=cover`; none describes changing the meta after load, or what an installed app does with it. So the reliable way is the one each documents: decide the viewport before the first paint. `public/prefs.js` reads the stored choice and writes the meta before anything draws, and switching saves and reloads. Only where storage is refused is the meta changed in place (it works in Chromium; untested on devices, `docs/open-questions.md`).
+- **The first download (0.5).** Before PH-1 the first screen's script was 326.8 kB and its styles 83.8 kB gzipped, under PF-1's limit of 337 kB and 87 kB. After: 329.2 kB and 83.9 kB for every device, plus the phone's own file on a phone only (3.2 kB of script, 2.3 kB of styles). The limit isn't raised.
