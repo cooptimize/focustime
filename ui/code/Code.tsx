@@ -498,10 +498,15 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   // back to where browsing was before it.
   const browseAt = useRef<CodeAt | null>(searching ? null : at);
   const openingResult = useRef(false);
+  /** The one repo opening on its own: not the person browsing elsewhere, so words being typed stay (RB-3b, CI). */
+  const autoOpening = useRef(false);
   useEffect(() => {
     if (searching) return;
     if (openingResult.current) openingResult.current = false;
-    else if (!fromRunRef.current) {
+    else if (autoOpening.current) {
+      autoOpening.current = false;
+      browseAt.current = at;
+    } else if (!fromRunRef.current) {
       // Browsing somewhere else (not a result): the search's words go with the search.
       browseAt.current = at;
       setQ("");
@@ -535,7 +540,10 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     );
   }, [at.clientKey, client, searching]);
   useEffect(() => {
-    if (view === "files" && at.clientKey && !at.repoId && Array.isArray(repoList) && repoList.length === 1) onGo({ clientKey: at.clientKey, repoId: repoList[0]!.id, path: null }, { replace: true });
+    if (view === "files" && at.clientKey && !at.repoId && Array.isArray(repoList) && repoList.length === 1) {
+      autoOpening.current = true;
+      onGo({ clientKey: at.clientKey, repoId: repoList[0]!.id, path: null }, { replace: true });
+    }
   }, [view, at.clientKey, at.repoId, repoList, onGo]);
 
   const loadFolder = useCallback(

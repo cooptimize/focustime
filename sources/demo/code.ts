@@ -1,5 +1,6 @@
 // RB-1: the demo's code. Made-up repos for the demo clients, answered in memory: a semantic model (TMDL with
-// measures), a report, a Fabric pipeline, a Data Factory pipeline, SQL scripts and a SQL project, a notebook stored as
+// measures), a report (RB-3b: and one in the PBIR format, a model kept as one model.bim, and measures declared apart
+// from their table), a Fabric pipeline, a Data Factory pipeline, SQL scripts and a SQL project, a notebook stored as
 // source, YAML, PowerShell and a README, plus one JSON file squashed onto one line, a binary file, an image, a file over
 // the size limit and a Git LFS pointer. Harbor shows "can't read yet" (its token lacks Code (read)) and Fabrikam is set
 // to its team only (server/demo.ts). Everything here is invented: no real client, person, repo or code. Only
@@ -453,6 +454,52 @@ const STORE_TMDL = `table Store
 		sourceColumn: Region
 `;
 
+// RB-3b: a report in the PBIR format (Power BI's default): one page.json per page under definition/pages, folders
+// named by ids, the order in pages.json, one page hidden in view mode. Made-up names.
+const PBIR_PAGE = (name: string, displayName: string, hidden = false) =>
+  `${JSON.stringify({ $schema: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json", name, displayName, displayOption: "FitToPage", height: 720, width: 1280, ...(hidden ? { visibility: "HiddenInViewMode" } : {}) }, null, 2)}\n`;
+const PBIR_VISUAL = (name: string, type: string) => `${JSON.stringify({ $schema: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.4.0/schema.json", name, position: { x: 24, y: 24, z: 0, width: 400, height: 220 }, visual: { visualType: type } }, null, 2)}\n`;
+const REGION_PAGES: [id: string, name: string, hidden?: boolean][] = [
+  ["3f1c0a9e5b7d2c4e6a80", "Summary"],
+  ["7a2e4c6b8d0f1e3a5c79", "By region"],
+  ["c5e7a9b1d3f50e2c4a68", "Store detail"],
+  ["e0b2d4f6a8c1e3b5d7f9", "Store drill-through", true],
+];
+const regionReview = (dir: string): Record<string, Content> => ({
+  [`${dir}/definition.pbir`]: `{\n  "version": "4.0",\n  "datasetReference": { "byPath": { "path": "../Store visits.SemanticModel" } }\n}\n`,
+  [`${dir}/.platform`]: PLATFORM("Report", "Region review"),
+  [`${dir}/definition/version.json`]: `{\n  "version": "2.0.0"\n}\n`,
+  [`${dir}/definition/report.json`]: `{\n  "themeCollection": { "baseTheme": { "name": "CY24SU06" } }\n}\n`,
+  [`${dir}/definition/pages/pages.json`]: `${JSON.stringify({ pageOrder: REGION_PAGES.map((p) => p[0]), activePageName: REGION_PAGES[0]![0] }, null, 2)}\n`,
+  ...Object.fromEntries(REGION_PAGES.flatMap(([id, name, hidden]) => [
+    [`${dir}/definition/pages/${id}/page.json`, PBIR_PAGE(id, name, hidden)],
+    [`${dir}/definition/pages/${id}/visuals/v${id.slice(0, 6)}/visual.json`, PBIR_VISUAL(`v${id.slice(0, 6)}`, "tableEx")],
+  ])),
+});
+// RB-3b: a semantic model kept as one file (model.bim, TMSL): its tables, columns and measures in model.tables.
+const RETURNS_BIM = `${JSON.stringify(
+  {
+    name: "Returns",
+    compatibilityLevel: 1567,
+    model: {
+      culture: "en-US",
+      tables: [
+        { name: "Returns", columns: [{ name: "ReturnId", dataType: "int64", sourceColumn: "ReturnId" }, { name: "Reason", dataType: "string", sourceColumn: "Reason" }, { name: "Amount", dataType: "decimal", sourceColumn: "Amount" }], measures: [{ name: "Return Rate", expression: "DIVIDE([Returned Amount], [Sold Amount])" }, { name: "Returned Amount", expression: "SUM(Returns[Amount])" }] },
+        { name: "Reason codes", columns: [{ name: "Code", dataType: "string", sourceColumn: "Code" }, { name: "Label", dataType: "string", sourceColumn: "Label" }] },
+      ],
+    },
+  },
+  null,
+  2,
+)}\n`;
+// RB-3b: TMDL lets a model declare a table's measures in another file (partial declaration): Store's live here.
+const STORE_MEASURES_TMDL = `table Store
+
+	measure 'Store Count' = COUNTROWS(Store)
+
+	measure 'Visits per Store' = DIVIDE([Visit Count], [Store Count])
+`;
+
 const STORES_PQ = `section Section1;
 
 shared Stores = let
@@ -558,6 +605,11 @@ const portal = (): Record<string, Content> => ({
   "/report/Store visits.SemanticModel/definition/tables/Date.tmdl": DATE_TMDL,
   "/report/Store visits.SemanticModel/definition/tables/Store.tmdl": STORE_TMDL,
   "/report/Store visits.SemanticModel/.platform": PLATFORM("SemanticModel", "Store visits"),
+  "/report/Store visits.SemanticModel/definition/measures.tmdl": STORE_MEASURES_TMDL,
+  ...regionReview("/report/Region review.Report"),
+  "/report/Returns.SemanticModel/definition.pbism": `{\n  "version": "1.0",\n  "settings": {}\n}\n`,
+  "/report/Returns.SemanticModel/model.bim": RETURNS_BIM,
+  "/report/Returns.SemanticModel/.platform": PLATFORM("SemanticModel", "Returns"),
   "/sql/portal/Views/vStoreVisits.sql": "CREATE VIEW [portal].[vStoreVisits]\nAS\nSELECT s.[StoreId], s.[Region], COUNT(*) AS [Visits]\nFROM [portal].[Visits] AS v\nJOIN [dbo].[Stores] AS s ON s.[StoreId] = v.[StoreId]\nGROUP BY s.[StoreId], s.[Region];\n",
 });
 

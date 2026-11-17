@@ -2018,6 +2018,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "code.kinds":
     case "code.search":
     case "code.inside":
+    case "code.inner":
       return codeAction(codeCtx(ctx), action as CodeAction, req.input);
     case "docs.access":
       // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).

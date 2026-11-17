@@ -75,6 +75,8 @@ export type Thing = {
   db?: string;
   /** RB-5: that database in words ("Gold warehouse", "Warehouse SQL project"). */
   dbName?: string;
+  /** RB-3b: only in code.kinds' answer to Where is it?: what the box may open it to (plan/where-inner.ts). */
+  whereMore?: "pages" | "tables";
 };
 /** RB-4: a file inside an item that is no thing of its own: found only by its own name, under Files. */
 export type RepoFile = { file: string; kind: Kind; detail: string; /** The item's folder: a folder inside it is found by name too. */ item: string };
