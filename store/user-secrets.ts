@@ -1,4 +1,5 @@
-// A2: each person's secrets (their Microsoft and Google refresh tokens, their DevOps write PATs), encrypted in the plan
+// A2: each person's secrets (their Microsoft and Google refresh tokens, their DevOps write PATs, PK-2: their Pocket
+// key and its last check), encrypted in the plan
 // store with the app's data key (AES-256-GCM, a fresh IV per value, the person and account bound in as associated
 // data, so a value moved to another row or person doesn't decrypt). The key comes from a KeyProvider: the local host
 // keeps it in its secret store (account data-key); the hosted app (A4) has it wrapped by a Key Vault key; tests use a
@@ -15,7 +16,7 @@ export type { KeyProvider };
 export const fakeKeyProvider = (key: Uint8Array = randomBytes(32)): KeyProvider => ({ dataKey: async () => key });
 
 /** What a person's secret can be. */
-export type UserSecretAccount = "outlook-refresh-token" | "google-refresh-token" | `devops-write-pat:${string}`;
+export type UserSecretAccount = "outlook-refresh-token" | "google-refresh-token" | `devops-write-pat:${string}` | "pocket-key" | "pocket-check";
 
 const VERSION = "v1";
 
@@ -58,7 +59,7 @@ export function createUserSecrets(o: { db: Conn; userId: string; keys: KeyProvid
     return key;
   };
   const check = (account: string) => {
-    if (!/^(outlook-refresh-token|google-refresh-token|devops-write-pat:[\w.-]{1,100})$/.test(account)) throw new Error("Not a personal secret account");
+    if (!/^(outlook-refresh-token|google-refresh-token|devops-write-pat:[\w.-]{1,100}|pocket-key|pocket-check)$/.test(account)) throw new Error("Not a personal secret account");
   };
   return {
     async get(account: UserSecretAccount): Promise<string> {

@@ -35,7 +35,10 @@ import { createPlanStore, openPlanDb, planStoreOn, SOLO_USER, type PlanStore } f
 import { exportUser } from "../store/user-data.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
-import { fakeKeyProvider } from "../store/user-secrets.ts";
+import { createUserSecrets, fakeKeyProvider } from "../store/user-secrets.ts";
+import { createPocketClient } from "../sources/pocket/client.ts";
+import { createDemoPocketFetch } from "../sources/demo/pocket.ts";
+import { pocketPort } from "../actions/pocket-actions.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
 import { createDemoIcsGet } from "../sources/demo/links.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
@@ -286,6 +289,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     makeOutlook: () => sources.outlook,
     makeGoogle: () => sources.google,
     // CAL-1: calendar links on the demo's own database, answered in memory (sources/demo/links.ts), never fetched.
+    // PK-2: the demo's Pocket: its own sealed secrets in this session's store, and a pretend Pocket (invented data; a
+    // short time limit so "didn't answer" shows quickly). Never the network.
+    pocket: pocketPort({ secrets: createUserSecrets({ db: shared, userId: DEMO_PERSON.oid, keys: fakeKeyProvider(), now: instant }), client: createPocketClient({ fetch: createDemoPocketFetch({ now: () => instant().epochMilliseconds }), log: () => {}, timeoutMs: 3000 }), now: () => instant().epochMilliseconds }),
     linkCalendars: createLinkCalendars({ store: createCalendarLinks({ db: shared, userId: DEMO_PERSON.oid, keys: fakeKeyProvider(), now: instant }), get: createDemoIcsGet(opts.now), log: () => {}, timeZone: () => DEMO_TZ, now: instant }),
     makeDevOps: () => sources.devops,
     saveSystemUserId: async () => {},

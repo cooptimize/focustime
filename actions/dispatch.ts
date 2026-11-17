@@ -138,6 +138,7 @@ import type { ClientChat } from "../plan/requests.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { LinkCalendars } from "../sources/ics/source.ts";
 import { calendarLinkAction } from "./calendar-link-actions.ts";
+import { pocketAction, type PocketPort } from "./pocket-actions.ts";
 
 /** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
 const TOUR_MARK = "tour_offer";
@@ -193,6 +194,8 @@ export type ActionContext = {
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   /** CAL-1: this person's calendars added by link (read only); absent where there are none (tests). */
   linkCalendars?: LinkCalendars;
+  /** PK-2: this person's own Pocket (their key in their sealed secrets, and the one-call client); absent: not here. */
+  pocket?: PocketPort;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   /** A2: the signed-in person's names (their sign-in email and UPN), to find them in Dataverse. */
@@ -1987,6 +1990,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "calendar_link.replace":
     case "calendar_link.remove":
       return calendarLinkAction(ctx.linkCalendars, action, req.input);
+    case "pocket.status":
+    case "pocket.connect":
+    case "pocket.check":
+    case "pocket.disconnect":
+      return pocketAction(ctx.pocket, action, req.input);
     case "notices.list":
     case "notices.read":
     case "push.status":
