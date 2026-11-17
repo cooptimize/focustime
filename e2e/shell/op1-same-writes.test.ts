@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { confirmPreviews } from "../one-preview.ts";
 
 const T = 300_000;
 const MON = "2026-11-02";
@@ -28,22 +29,17 @@ async function rows(page: Page, since: number): Promise<Row[]> {
 }
 const logLength = async (page: Page) => ((await call(page, "devops.log", {})).data.entries as Row[]).length;
 const modal = (page: Page) => page.locator('[role="dialog"][data-overlay="modal"]');
-/** Confirm whatever DevOps preview is open, one after another (the one preview opens one per client), then close it. */
+/** Confirm whatever DevOps previews open, one after another (the one preview opens one per client), until none is left. */
 async function confirmAll(page: Page, max = 5) {
   for (let n = 0; n < max; n++) {
-    const d = modal(page).last();
-    if (!(await d.isVisible().catch(() => false))) {
-      await page.waitForTimeout(800);
-      if (!(await modal(page).last().isVisible().catch(() => false))) return;
-      continue;
-    }
-    const go = d.locator("button.commit").first();
-    await go.waitFor({ timeout: 20_000 });
-    await go.click();
-    const close = d.getByRole("button", { name: "Close", exact: true }).last();
-    await close.or(d.locator(".dw-ok").first()).first().waitFor({ timeout: 30_000 }).catch(() => undefined);
+    const d = modal(page).filter({ has: page.locator("button.commit") }).last();
+    if (!(await d.waitFor({ timeout: n ? 3_000 : 20_000 }).then(() => true, () => false))) return;
+    const mark = await d.evaluate((el) => (el as HTMLElement & { __seen?: number }).__seen = (Math.random() * 1e9) | 0);
+    await d.locator("button.commit").first().click();
+    // Done when this dialog is gone or replaced by the next of the series.
+    await page.waitForFunction((m) => ![...document.querySelectorAll('[role="dialog"][data-overlay="modal"]')].some((el) => (el as HTMLElement & { __seen?: number }).__seen === m), mark, { timeout: 30_000 }).catch(() => undefined);
+    const close = modal(page).getByRole("button", { name: "Close", exact: true }).last();
     if (await close.isVisible().catch(() => false)) await close.click();
-    await page.waitForTimeout(600);
   }
 }
 
@@ -97,8 +93,9 @@ describe.skipIf(!CHROMIUM)("OP-1: the same writes reach DevOps (STEP 0.5)", () =
       await art.getByRole("textbox").last().fill(i === 0 ? "Sign-up form designed; review with purchasing on Friday." : "Export filter in test; finance checks it Monday.");
     }
     await page.getByRole("button", { name: "Push all" }).click();
-    await modal(page).first().waitFor({ timeout: 20_000 });
-    await confirmAll(page);
+    // Main showed both clients in one dialog; the one preview shows one client at a time.
+    if (RECORD) await confirmAll(page);
+    else await confirmPreviews(page, 2);
     await expect.poll(() => logLength(page), { timeout: 20_000 }).toBe(since + 2);
     await page.locator(".st-pushed").getByRole("button", { name: "Undo" }).first().click();
     await modal(page).first().waitFor({ timeout: 20_000 });

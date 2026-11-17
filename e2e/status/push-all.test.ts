@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS, shotBoth } from "../shots.ts";
+import { onePreview } from "../one-preview.ts";
 
 const T = 300_000;
 const THURSDAY = "2026-11-05T10:00:00-05:00";
@@ -37,14 +38,14 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     await supplier.getByRole("button", { name: "Add a line" }).click();
     await supplier.getByRole("textbox", { name: "New line for Supplier onboarding" }).fill("Sign-up form designed; review with purchasing on Friday.");
     await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("1 line to push");
+    // OP-1: Push all opens the app's one preview.
     await page.getByRole("button", { name: "Push all" }).click();
-    const dialog = page.getByRole("dialog", { name: "Push 1 line to DevOps" });
+    const dialog = onePreview(page);
     await dialog.waitFor();
-    await expect.poll(() => dialog.locator(".st-preview-text").first().textContent()).toBe("Sign-up form designed; review with purchasing on Friday.");
+    await expect.poll(() => dialog.locator(".wd-fields").textContent()).toContain("Sign-up form designed; review with purchasing on Friday.");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr1-push-preview-1920.png` });
-    await dialog.getByRole("button", { name: "Push 1 line to DevOps" }).click();
-    await dialog.locator(".dw-ok").waitFor({ timeout: 30_000 });
-    await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+    await dialog.getByRole("button", { name: "Add comment in DevOps" }).click();
+    await dialog.waitFor({ state: "detached", timeout: 30_000 });
     await expect.poll(() => page.locator(".st-count").textContent()).toBe("5 features · 3 with an update · 2 without · 3 features need your update");
     await page.locator(".st-pushed").getByRole("button", { name: "Undo" }).waitFor();
     // Preview reads like the email: the line is a bullet under its heading, with its author.

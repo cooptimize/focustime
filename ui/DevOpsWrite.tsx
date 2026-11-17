@@ -71,7 +71,7 @@ export type DevOpsWriteEnv = {
    * (nothing more is sent); a part whose Confirm ran goes on to the next even when some of its rows didn't land.
    * `settled` hears once, at the end, every row's result and every change that wasn't previewed, by key.
    */
-  series: (parts: readonly { clientKey: string; changes: DevOpsChange[] }[], settled: (r: SeriesEnd) => void, opts?: Pick<BeginOpts, "where">) => void;
+  series: (parts: readonly { clientKey: string; changes: DevOpsChange[] }[], settled: (r: SeriesEnd) => void, opts?: { /** Where each part's text goes, in GD-2's flag. */ where?: (clientKey: string) => string }) => void;
   /** The state picker for "Mark done in DevOps". */
   markDone: (t: { clientKey: string; itemId: number; title: string; followUpId?: number }) => void;
   /** The create preview, with the draft's saved values (step 15.3: edited in the draft editor). */
@@ -88,7 +88,7 @@ export const useDevOpsWrite = () => useContext(DevOpsWriteCtx);
 
 type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; status: number } | null };
 /** OP-1: how one previewed change ended, by the caller's key. */
-export type RowResult = { key: string | null; op: string; itemId: number | null; confirmed: boolean; message: string; /** The write log entry, for Undo or Retry; null when nothing was logged. */ writeId: number | null };
+export type RowResult = { key: string | null; op: string; itemId: number | null; confirmed: boolean; message: string; /** The write log entry, for Undo or Retry; null when nothing was logged. */ writeId: number | null; /** The first field's value as written (after GD-2's Replace, the replaced text). */ after: string | null };
 /** OP-1: a series' end: every row's result, the changes that weren't previewed (by key), and whether Not now stopped it. */
 export type SeriesEnd = { results: RowResult[]; refused: { key: string; error: string; code: string | null }[]; stopped: boolean; errors: string[] };
 export type BeginOpts = {
@@ -105,7 +105,7 @@ type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boo
 const rowResult = (r: Row): RowResult | null => {
   const res = r.result;
   if (!res) return null;
-  const base = { key: r.preview.key ?? null, op: r.preview.op };
+  const base = { key: r.preview.key ?? null, op: r.preview.op, after: r.preview.fields[0]?.after ?? null };
   return "error" in res ? { ...base, itemId: null, confirmed: false, message: res.error, writeId: null } : { ...base, itemId: res.entry.itemId ?? res.itemId ?? null, confirmed: res.confirmed, message: res.message, writeId: res.entry.id };
 };
 const resultsOf = (rows: readonly Row[]) => rows.flatMap((r) => rowResult(r) ?? []);
@@ -216,7 +216,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
             if (r.cancelled) return settled({ ...end, stopped: true });
             next(i + 1);
           },
-          { inline: true, ...(opts?.where ? { where: opts.where } : {}), ...(list.length > 1 ? { step: { n: i + 1, of: list.length } } : {}) },
+          { inline: true, ...(opts?.where ? { where: opts.where(p.clientKey) } : {}), ...(list.length > 1 ? { step: { n: i + 1, of: list.length } } : {}) },
         );
       };
       next(0);

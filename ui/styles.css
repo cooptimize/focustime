@@ -5205,11 +5205,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-pushed ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
 .st-pushed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-2); }
 .st-pushed-what { flex: 1 1 20em; min-width: 0; overflow-wrap: anywhere; }
-.st-push-client { display: grid; gap: 6px; }
-.st-push-client h3 { margin: 4px 0 0; font-size: var(--fs-3); }
-.st-push-client h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
-.st-preview-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-3); }
-.st-refused { border-left: 3px solid var(--risk); }
+/* OP-1: said before the first preview when Push all takes more than one. */
+.st-parts { font-size: var(--fs-2); }
 /* SR-2: My features · <Client> report, and the client report's PTO and No update yet. */
 .st-scope { display: inline-flex; flex-wrap: wrap; justify-self: start; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--sunken); max-width: 100%; }
 .st-scope .ms-btn { display: inline-flex; align-items: center; padding: 4px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
@@ -5249,9 +5246,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-text-edit:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .st-comment.st-deleting .st-text { text-decoration: line-through; color: var(--text-muted); }
 .st-holiday { font-style: italic; }
-.st-push-feature { display: grid; gap: 4px; padding: 4px 0 4px 10px; border-left: 2px solid var(--border-strong); }
-.st-push-op { margin: 0; font-size: var(--fs-2); }
-.st-deleted-text { text-decoration: line-through; color: var(--text-muted); }
 .st-add-feature { white-space: nowrap; }
 @media (max-width: 700px) {
   .status-view { padding: 8px 16px 24px; }
