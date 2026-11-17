@@ -1,6 +1,7 @@
 // Notifications (step 15.5): which kinds there are, whether one goes out now, is held for later or not sent, how held
 // ones collapse into one, and where clicking one opens FocusTime. Pure: no I/O, no host. The host only shows a
 // notification and says which button was clicked (desktop today, browser notifications in a hosted version).
+import { CALL_NOTICE } from "./call-words.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
@@ -296,13 +297,16 @@ export const notices = {
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */
   // SR-3: with features I worked on, the click opens Status on Needs your update.
   statusReport: (occasion: string, line: string, at: string, needsYou = false): Notice => ({ kind: "status_report", key: occasion, title: "Monday's status report", body: `${line}.\nClick to open Status.`, buttons: [open(needsYou ? "Open Needs your update" : "Open Status")], route: needsYou ? "status_needs" : "status", at, ref: occasion }),
-  /** MC-1: a call I review, once per occurrence: proposals ready, or a transcript to upload. The call's name, never its words. */
-  meetingReview: (key: string, occurrenceId: number, upload: boolean, clientName: string, meeting: string, dateLabel: string, at: string): Notice => ({
+  /**
+   * MC-1: a call I review, once per occurrence: proposals ready, or a transcript to upload. MC-1d: or the AI step failed
+   * and FocusTime stopped trying by itself. The call's name, never its words.
+   */
+  meetingReview: (key: string, occurrenceId: number, need: "review" | "upload" | "failed", clientName: string, meeting: string, dateLabel: string, at: string): Notice => ({
     kind: "meeting_review",
     key,
-    title: upload ? `Upload ${clientName}'s transcript` : `Update ${clientName}'s plan`,
-    body: `${meeting} · ${dateLabel}\n${upload ? "No transcript came through. Upload it, or say there isn't one this week." : "Proposals from the call are ready to review."}`,
-    buttons: [open(upload ? "Upload" : "Review")],
+    title: need === "upload" ? `Upload ${clientName}'s transcript` : need === "failed" ? CALL_NOTICE.failedTitle(clientName) : `Update ${clientName}'s plan`,
+    body: `${meeting} · ${dateLabel}\n${need === "upload" ? "No transcript came through. Upload it, or say there isn't one this week." : need === "failed" ? CALL_NOTICE.failedBody : "Proposals from the call are ready to review."}`,
+    buttons: [open(need === "upload" ? "Upload" : need === "failed" ? CALL_NOTICE.failedButton : "Review")],
     route: `meeting:${occurrenceId}`,
     at,
   }),

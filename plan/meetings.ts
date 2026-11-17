@@ -45,6 +45,10 @@ export type MeetingSeries = {
   removedAt: string | null;
 };
 
+/**
+ * An occurrence's state. MC-1d: "failed" is a failed AI pass (its kind in `aiOutcome`), never "ready with nothing";
+ * "ready" means the pass ran. A transcript that couldn't be read is "needs_upload" with `lastRead.kind` "failed".
+ */
 export const OCCURRENCE_STATES = ["waiting", "fetching", "ready", "needs_upload", "no_transcript", "reviewed", "failed"] as const;
 export type OccurrenceState = (typeof OCCURRENCE_STATES)[number];
 
@@ -56,13 +60,17 @@ export type Occurrence = {
   startAt: string;
   endAt: string;
   state: OccurrenceState;
-  /** When the next Graph check is due (Automatic, while waiting). */
+  /** When the next Graph check is due (Automatic, while waiting); MC-1d: the next AI try by itself (while failed). */
   nextCheckAt: string | null;
+  /** Graph looks while waiting; MC-1d: the AI tries by itself since the pass failed (0 to AI_RETRIES) while failed. */
   checks: number;
   /** Where the stored transcript came from, and when. */
   transcriptFrom: TranscriptSource | null;
   transcriptAt: string | null;
-  /** The AI pass: done, or why not (an AiErrorKind, or "no_ai" when AI is off for the client). */
+  /**
+   * The AI pass: done, or why not (an AiErrorKind; "no_ai" when AI is off for the client; MC-1d: "no_context" when
+   * FocusTime couldn't read the client's items to send). A call sent in parts keeps which part failed ("timeout@2/3").
+   */
   aiOutcome: string | null;
   dismissedBy: string | null;
   reviewedBy: string | null;
@@ -167,6 +175,34 @@ export function occurrencesBetween(s: Pick<MeetingSeries, "weekday" | "start" | 
   return out;
 }
 
+// ---- MC-1d: a failed AI pass ----
+
+/** After a failed pass FocusTime tries again by itself up to this many times, this far apart (production only). */
+export const AI_RETRIES = 3;
+export const AI_RETRY_MINUTES = 15;
+
+/**
+ * Failures a retry can't fix, so FocusTime doesn't try again by itself: AI off or not allowed for the client, AI not set
+ * up, the budget (FocusTime's or the provider account's), something the guard refused, and a request FocusTime got
+ * wrong. Everything else (busy, slow, the service down or saying no, an unusable answer, FocusTime unable to read the
+ * client's items) may pass on another try.
+ */
+export const NOT_RETRIED: ReadonlySet<string> = new Set(["no_ai", "off", "client_off", "not_set_up", "over_budget", "zero_budget", "quota", "refused_client", "refused_secret", "refused_email", "bad_task"]);
+export const retryable = (kind: string) => !NOT_RETRIED.has(kind);
+
+/** The stored outcome: the kind, and for a call sent in parts, which part failed ("timeout@2/3"); at most 40 characters. */
+export const outcomeOf = (kind: string, part?: number, parts?: number) => (parts && parts > 1 && part ? `${kind}@${part}/${parts}` : kind).slice(0, 40);
+export function parseOutcome(s: string): { kind: string; part: number | null; parts: number } {
+  const m = /^([a-z_]+)@(\d+)\/(\d+)$/.exec(s);
+  return m ? { kind: m[1]!, part: Number(m[2]), parts: Number(m[3]) } : { kind: s, part: null, parts: 1 };
+}
+
+/** When to try a failed pass again by itself, or null: never for a failure a retry can't fix, nor after AI_RETRIES. */
+export function nextRetry(kind: string, tries: number, nowIso: string): string | null {
+  if (!retryable(kind) || tries >= AI_RETRIES) return null;
+  return Temporal.Instant.from(nowIso).add({ minutes: AI_RETRY_MINUTES }).toString();
+}
+
 // ---- Proposals (the AI pass's output, after the server checked it) ----
 
 export type Quote = { n: number; speaker: string; at: string; text: string };
@@ -215,9 +251,12 @@ export const inKatsReport = (itemType: string, featureTypes: ReadonlySet<string>
 
 // ---- Nudges ----
 
-export type MeetingNudge = { kind: "review" | "upload"; key: string; occurrenceId: number; seriesId: number; clientKey: string; meeting: string; date: IsoDate };
+export type MeetingNudge = { kind: "review" | "upload" | "failed"; key: string; occurrenceId: number; seriesId: number; clientKey: string; meeting: string; date: IsoDate };
 
-/** What a reviewer should hear about now: proposals ready to review, or a transcript to upload. Once each by key. */
+/**
+ * What a reviewer should hear about now: proposals ready to review, a transcript to upload, or (MC-1d) an AI step that
+ * failed and that FocusTime has stopped trying by itself. Once each by key.
+ */
 export function nudgesFor(userId: string, series: readonly MeetingSeries[], occs: readonly Occurrence[]): MeetingNudge[] {
   const out: MeetingNudge[] = [];
   for (const o of occs) {
@@ -225,6 +264,7 @@ export function nudgesFor(userId: string, series: readonly MeetingSeries[], occs
     if (!s || s.removedAt || !canConfirm(s, userId) || o.dismissedBy) continue;
     if (o.state === "ready") out.push({ kind: "review", key: `meeting_review:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });
     else if (o.state === "needs_upload") out.push({ kind: "upload", key: `meeting_upload:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });
+    else if (o.state === "failed" && !o.nextCheckAt) out.push({ kind: "failed", key: `meeting_failed:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });
   }
   return out;
 }
@@ -285,5 +325,6 @@ export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | 
     if (r?.kind === "failed") return `${day}: the transcript couldn't be read. A reviewer can upload it`;
     return `${day}: no transcript was recorded. A reviewer can upload one`;
   }
+  if (o.state === "failed") return `${day}: the AI step failed. A reviewer can Propose again`;
   return `${day}: ${o.state === "reviewed" ? "reviewed" : "ready to review"}`;
 }

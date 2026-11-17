@@ -4,27 +4,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { call } from "../api.ts";
 import type { OccurrenceView, SeriesView, MeetingNudgeView } from "../../plan/meeting-views.ts";
+import { callLabel } from "../../plan/call-words.ts";
 
 export type MineData = { meetings: SeriesView[]; occurrences: OccurrenceView[]; nudges: MeetingNudgeView[] };
 export type CallMark = { occurrenceId: number; name: string; role: string; clientKey: string; startAt: string; endAt: string; label: string; needsMe: boolean };
 
-/** What an occurrence needs, in words: for a reviewer, Review or Upload; for an attendee, where it is. */
-export function callLabel(o: Pick<OccurrenceView, "state" | "open">, review: boolean): { label: string; needsMe: boolean } {
-  switch (o.state) {
-    case "ready":
-      return o.open ? { label: review ? `Review ${o.open} ${o.open === 1 ? "proposal" : "proposals"}` : `${o.open} to review`, needsMe: review } : { label: "Nothing proposed", needsMe: false };
-    case "needs_upload":
-      return { label: review ? "Upload the transcript" : "No transcript yet", needsMe: review };
-    case "reviewed":
-      return { label: "Reviewed", needsMe: false };
-    case "no_transcript":
-      return { label: "No transcript this week", needsMe: false };
-    case "failed":
-      return { label: "Couldn't read it", needsMe: review };
-    default:
-      return { label: "Waiting for the transcript", needsMe: false };
-  }
-}
+/** What an occurrence needs, in words (MC-1d: one place for the mark, the list and the page, plan/call-words.ts). */
+export { callLabel };
 
 export function callMarks(d: MineData | null): CallMark[] {
   if (!d) return [];

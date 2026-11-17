@@ -379,8 +379,8 @@ export function createRhythm(d: RhythmDeps) {
   async function meetingNudges(userId: string): Promise<{ key: string; item: MeetingsModel["items"][number] }[] | null> {
     const r = await d.run(userId, "meeting.mine", {}).catch(() => null);
     if (!r?.ok) return null;
-    const nudges = (r.data as { nudges: { key: string; kind: "review" | "upload"; occurrenceId: number; clientName: string; meeting: string; dateLabel: string }[] }).nudges;
-    return nudges.map((n) => ({ key: n.key, item: { clientName: n.clientName, meeting: n.meeting, dateLabel: n.dateLabel, upload: n.kind === "upload", route: `#/meetings/${n.occurrenceId}` } }));
+    const nudges = (r.data as { nudges: { key: string; kind: "review" | "upload" | "failed"; occurrenceId: number; clientName: string; meeting: string; dateLabel: string }[] }).nudges;
+    return nudges.map((n) => ({ key: n.key, item: { clientName: n.clientName, meeting: n.meeting, dateLabel: n.dateLabel, upload: n.kind === "upload", ...(n.kind === "failed" ? { failed: true } : {}), route: `#/meetings/${n.occurrenceId}` } }));
   }
 
   /**

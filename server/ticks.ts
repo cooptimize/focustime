@@ -498,7 +498,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (!r.ok) return;
     const at = instantNow().toString();
     for (const n of (r.data as { nudges: MeetingNudgeView[] }).nudges)
-      if (await store.markOnce(`${n.key}_notice`, n.date)) await send(notices.meetingReview(n.key, n.occurrenceId, n.kind === "upload", n.clientName, n.meeting, n.dateLabel, at));
+      if (await store.markOnce(`${n.key}_notice`, n.date)) await send(notices.meetingReview(n.key, n.occurrenceId, n.kind, n.clientName, n.meeting, n.dateLabel, at));
   };
   // TB-2: the rhythm in Teams, through the same gate facts (quiet hours, PTO, focus) as every notification.
   const teamsTick = async (f: Awaited<ReturnType<typeof notifier.refresh>> | null) => {

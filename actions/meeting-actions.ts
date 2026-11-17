@@ -10,10 +10,10 @@
 import type { CheckNowResult } from "../plan/meetings.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
-import { AI_MESSAGES } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, nudgesFor, proposalOrder, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import { levelOfType, type ProcessModel } from "../plan/process.ts";
 import { TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
@@ -50,6 +50,8 @@ export type MeetingContext = {
   /** My Graph meetings client (my calendar; the meetings token), or null when I'm not signed in with Microsoft. */
   graph: (cfg: AppConfig) => MeetingsClient | null;
   users: () => Promise<MeetingUser[]>;
+  /** MC-1d: the meeting job runs here (production), so a failed pass is tried again by itself; the page says so only then. */
+  retriesHere?: boolean;
   /** ENV-1: Check now (server/meeting-job.ts): one look, with my sign-in only. Absent: not available here. */
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
   /**
@@ -177,7 +179,6 @@ const CHECK_NOW_WORDS: Record<CheckNowResult, string> = {
   not_found: "No such meeting.",
 };
 
-const aiMessage = (o: string | null) => (!o || o === "done" ? null : o === "no_ai" ? "AI isn't on for this client, so nothing was proposed. A FocusTime admin allows it in Admin › AI." : (AI_MESSAGES as Record<string, string>)[o] ?? "The AI pass didn't finish");
 
 export async function meetingAction(ctx: MeetingContext, action: MeetingAction, input: unknown): Promise<ActionResponse> {
   try {
@@ -273,12 +274,14 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
           const ps = await store.proposals(o.id);
           counts.set(o.id, { all: ps.length, open: ps.filter((p) => p.state === "open").length });
         }
+        const kept = await store.withTranscript(occs.map((o) => o.id));
+        const vo = (o: Occurrence): ViewOpts => ({ counts: counts.get(o.id), hasTranscript: kept.has(o.id), retriesHere: !!ctx.retriesHere, zone: userZone(cfg) });
         // The nudges (in-app and the Teams kind): ready to review, or a transcript to upload; once each by key.
         const nameOf = await namesOf(ctx, mine.map((s) => s.clientKey));
         const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: nameOf(n.clientKey), dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
-        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, counts.get(o.id))), nudges } };
+        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, vo(o))), nudges } };
       }
-      case "meeting.review": return await review(ctx, store, me, input);
+      case "meeting.review": return await review(ctx, store, cfg, me, input);
       case "meeting.edit": {
         // Edit or skip one proposal (a reviewer); a decided one stays as it is.
         const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "type", "what", "due", "text"]);
@@ -305,7 +308,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
         const lines = await store.transcript(occ.id);
         if (!lines) return bad("There's no transcript for this meeting any more", 409);
-        const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log }, series, occ, lines);
+        const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, occ, lines);
         return { ok: true, data: r };
       }
       case "meeting.prepare": return await prepare(ctx, store, cfg, me, input);
@@ -323,7 +326,22 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
   }
 }
 
-const occView = (o: Occurrence, c?: { all: number; open: number }): OccurrenceView => ({ id: o.id, seriesId: o.seriesId, date: o.date, startAt: o.startAt, endAt: o.endAt, state: o.state, transcriptFrom: o.transcriptFrom, proposals: c?.all ?? 0, open: c?.open ?? 0, aiOutcome: o.aiOutcome, aiMessage: aiMessage(o.aiOutcome) });
+/** What the page, the mark and the list are told of an occurrence (MC-1d: the failed pass's words, the next try). */
+type ViewOpts = { counts?: { all: number; open: number } | undefined; hasTranscript?: boolean; retriesHere?: boolean; zone?: string };
+function occView(o: Occurrence, x: ViewOpts = {}): OccurrenceView {
+  const failed = o.state === "failed";
+  const kind = o.aiOutcome ? parseOutcome(o.aiOutcome).kind : "";
+  const retryAt = failed && x.retriesHere ? o.nextCheckAt : null;
+  const at = (iso: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(x.zone ?? "UTC").toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  return {
+    id: o.id, seriesId: o.seriesId, date: o.date, startAt: o.startAt, endAt: o.endAt, state: o.state, transcriptFrom: o.transcriptFrom, proposals: x.counts?.all ?? 0, open: x.counts?.open ?? 0, aiOutcome: o.aiOutcome,
+    aiMessage: failed ? aiFailedLine(o.aiOutcome) : null,
+    aiNext: failed ? aiNextLine({ retryAt, tries: o.checks, retryable: retryable(kind), retriesHere: !!x.retriesHere, at }) : null,
+    retryAt,
+    hasTranscript: !!x.hasTranscript,
+    readFailed: o.state === "needs_upload" && o.lastRead?.kind === "failed",
+  };
+}
 
 const roleOf = (v: unknown): MeetingRole => {
   if (!MEETING_ROLES.includes(v as MeetingRole)) throw new Invalid("role must be status or planning");
@@ -419,7 +437,7 @@ function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
 }
 
 /** The review screen: the call, the occurrence, its proposals in order with quotes, and what I may do. */
-async function review(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
+async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceId"]);
   const v = store.viewer(me);
   const r = await v.occurrence(id(o.occurrenceId, "occurrenceId"));
@@ -432,7 +450,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, me: string, inpu
     ok: true,
     data: {
       meeting: viewOf(r.series, (await namesOf(ctx, [r.series.clientKey]))(r.series.clientKey), users, me),
-      occurrence: occView(r.o, { all: ps.length, open: ps.filter((p) => p.state === "open").length }),
+      occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter((p) => p.state === "open").length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
       canConfirm: reviewer,
@@ -553,20 +571,28 @@ async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, inp
 
 export type PassDeps = {
   store: MeetingStore;
+  /** MC-1d: the clock for a retry's time (the job's; an action's otherwise). */
+  now?: () => string;
   ai: () => Promise<AiService | null>;
   capture: (clientKey: string) => Promise<CaptureContext | null>;
   users: () => Promise<MeetingUser[]>;
   log: (r: LogRecord) => void;
 };
 
-/** Runs the AI pass on a stored transcript and records its proposals and outcome; the occurrence becomes ready. */
-export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrence, lines: readonly TranscriptLine[]): Promise<{ outcome: string; proposals: number }> {
+/**
+ * Runs the AI pass on a stored transcript and records its proposals and outcome. MC-1d: a pass that ran is "ready"
+ * (with its proposals, or none); one that failed is "failed" with its kind (and, for a call sent in parts, which part),
+ * its open proposals untouched, and when FocusTime tries again by itself (`nextRetry`; only the job, in production,
+ * acts on it). `retry`: this run is one of those tries (the job counted it in `checks` before the run).
+ */
+export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrence, lines: readonly TranscriptLine[], o: { retry?: boolean } = {}): Promise<{ outcome: string; proposals: number }> {
   const ai = await d.ai().catch(() => null);
   const cap = await d.capture(series.clientKey).catch(() => null);
   let outcome = "done";
   let n = 0;
   if (!ai) outcome = "not_set_up";
-  else if (!cap) outcome = "provider";
+  // MC-1d: FocusTime couldn't read the client's items (DevOps, the client list): its own failure, not the AI service's.
+  else if (!cap) outcome = "no_context";
   else {
     const users = await d.users().catch((): MeetingUser[] => []);
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
@@ -574,10 +600,15 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     if (r.ok) {
       n = (await d.store.replaceProposals(occ.id, r.proposals)).filter((p) => p.state === "open").length;
       d.log({ source: "ai", op: "meeting_capture", count: n, kind: `windows:${r.windows} masked_client:${r.masked.client} masked_email:${r.masked.email} dropped:${r.dropped}` });
-    } else outcome = r.kind === "client_off" || r.kind === "off" ? "no_ai" : r.kind;
+    } else outcome = outcomeOf(r.kind === "client_off" || r.kind === "off" ? "no_ai" : r.kind, r.part, r.parts);
   }
-  await d.store.updateOccurrence(occ.id, { state: "ready", aiOutcome: outcome, nextCheckAt: null });
-  if (outcome !== "done") d.log({ source: "ai", op: "meeting_capture", kind: outcome });
+  if (outcome === "done") await d.store.updateOccurrence(occ.id, { state: "ready", aiOutcome: outcome, nextCheckAt: null, checks: 0 });
+  else {
+    const kind = parseOutcome(outcome).kind;
+    const tries = o.retry ? occ.checks : 0;
+    await d.store.updateOccurrence(occ.id, { state: "failed", aiOutcome: outcome, checks: tries, nextCheckAt: nextRetry(kind, tries, d.now?.() ?? Temporal.Now.instant().toString()) });
+    d.log({ source: "ai", op: o.retry ? "meeting_capture_retry" : "meeting_capture", kind: parseOutcome(outcome).kind, ...(o.retry ? { count: tries } : {}) });
+  }
   return { outcome, proposals: n };
 }
 
@@ -603,6 +634,6 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   const occ = await v.ensureOccurrence(series.id, q.date, start.toInstant().toString(), start.add({ minutes: series.minutes }).toInstant().toString());
   await v.saveTranscript(occ.id, lines);
   ctx.log({ source: "plan", op: "meeting_upload", count: lines.length });
-  const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log }, series, (await store.occurrence(occ.id))!, lines);
+  const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, (await store.occurrence(occ.id))!, lines);
   return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, ...r } };
 }
