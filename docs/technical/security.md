@@ -128,7 +128,7 @@ Every Cooptimizer may read every client's code in Code, read only, so people can
 - **Everyone on the client's team, nobody else.** Status's client report shows the whole of that client's Monday report to every Cooptimizer on its team: an Account Worker on the client or one of its leads (Dataverse, read by the directory job; `reportTeam` in `actions/team-actions.ts`). Not guests, not automation accounts, and not admins who aren't on the team: being an admin adds nothing here.
 - **Checked on the server, every call.** `status.report` answers 403 for anyone not on the client's team before anything is read, and lists only the clients the person is on. One client per report.
 - **What it shows.** DevOps comments on the client's features (text, the author's DevOps display name, the time; never an email address), the features' titles and owners, and the team's days away as dates only (never a PTO title or message). Comments are read when asked and never stored. Who committed which feature comes from the published team snapshot, never from anyone's plan.
-- **Writing.** A new comment on any feature in the report, and an edit or delete of my own comment in the report window, with my own write PAT, through the write framework (preview, Push all, read back, audit log, undo) and the client boundary's exit check. Others' comments are read only.
+- **Writing.** A new comment on any feature in the report, and an edit or delete of my own comment in the report window, with my own write PAT, through the write framework (Push all opens the one DevOps preview, a client at a time; read back, audit log, undo) and the client boundary's exit check. Others' comments are read only.
 
 ## AI: the guard and redaction
 
@@ -160,7 +160,7 @@ A calendar link is a URL a person types, fetched by the server, so it is the one
 
 ## External writes and the audit log
 
-Writes go only through the write framework (see [Architecture](architecture.md#an-external-write)). The complete list:
+Writes go only through the write framework (see [Architecture](architecture.md#an-external-write)). In the UI every change to a client's DevOps opens the one preview in `ui/DevOpsWrite.tsx`, one client per preview, and is written only on its Confirm; `ui/one-preview.test.ts` keeps every other file from calling the preview and confirm actions itself ([Architecture](architecture.md#the-one-devops-preview)). The complete list:
 
 | Where | What FocusTime may change | Undo |
 |---|---|---|

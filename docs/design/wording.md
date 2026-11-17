@@ -390,3 +390,14 @@ Every word below is in `plan/call-words.ts`.
 - From a transcript line: **"Proposal"** or **"2 proposals"** (opening a short list), named for a screen reader **"Go to the proposal: <words>"**.
 - Propose again: **"7 new proposals to review. 3 left out: the same as ones already done, skipped or failed here."**, or **"Nothing new to propose."**.
 - Back: **"Week"**, **"Day"**, **"Calls"** and the rest, named **"Back to Week"** or **"Back to client calls"**.
+
+## OP-1 words (Nov 17)
+
+Every word below is in `plan/preview-parts.ts` (`partsLine`, `PREVIEW_WORDS`). The one preview's other words (Where, Writes as, Who can see it, Not now, Retry, Reload and review again, the flag and Replace) are unchanged.
+
+- Before the first preview, when the changes take more than one: **"11 lines go in 2 previews, 10 at most in each."**, **"4 lines go in 3 previews, one client at a time."**, **"21 lines go in 4 previews, one client at a time and 10 at most in each."** Status says "lines", the timebox check-in "updates".
+- The preview's head when it is one of several: **"Add comment in DevOps · Preview 2 of 3"**, or **"3 DevOps changes · Preview 1 of 2"**.
+- Its Confirm for the kinds OP-1 brought to it: **"Save comment in DevOps"**, **"Delete comment in DevOps"**, **"Set Remaining Work in DevOps"**. GD-2's flag says where the text goes: **"Northwind's DevOps and Monday's report"** on Status.
+- The timebox check-in's rows after the preview: **"Saved"** with **Undo**, the refusal in the framework's words, **Retry** when the answer was lost, **"Not sent"** when Not now stopped the rest, **"Nothing to change"**.
+- Break down: **"Preview 5 items…"** opens the one preview; afterwards **"Created 5 items under #1120:"**, **"Not created yet (2):"** with each reason, **"Retry the rest"**; **"Every kept story is in DevOps already, or waiting for Retry"**. "Create all" is gone.
+- Send feedback's preview, in the same parts: the head **"Send feedback"**; Where **"DevOps · <org> · <project>"**, Writes as the person (or **"Not set up yet"**); the new item's **Title**, **Description** and **Tags**; Who can see it; **"Send feedback"** (Ctrl+Enter) and **"Not now"** (back to the text); **"Sent once; nothing is retried on its own."**

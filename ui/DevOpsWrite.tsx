@@ -1,3 +1,4 @@
+import { PREVIEW_WORDS } from "../plan/preview-parts.ts";
 import { TextBox } from "./TextBox.tsx";
 import { whenText } from "./labels.ts";
 // DevOps writes in the window (step 14). Every change opens one preview dialog: org, project, item, each field before
@@ -277,7 +278,7 @@ export function PreviewFrame({ label, step, busy, wide, onClose, onKeyDown, chil
       <div className="cap-dialog-head">
         <h2>
           {label}
-          {step && <span className="muted dw-step"> · Preview {step.n} of {step.of}</span>}
+          {step && <span className="muted dw-step"> · {PREVIEW_WORDS.step(step.n, step.of)}</span>}
         </h2>
         <CloseButton onClose={onClose} disabled={!!busy} />
       </div>
@@ -451,7 +452,7 @@ function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPr
   );
 }
 const confirmLabel = (p: DevOpsPreview) =>
-  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "comment_edit" ? "Save comment in DevOps" : p.op === "comment_delete" ? "Delete comment in DevOps" : p.op === "remaining_work" ? "Set Remaining Work in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" || p.op === "fields" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
+  p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "comment_edit" || p.op === "comment_delete" || p.op === "remaining_work" ? PREVIEW_WORDS.confirm[p.op] : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : p.op === "item_edit" || p.op === "fields" ? "Save in DevOps" : p.op === "reparent" ? "Move in DevOps" : p.op === "description" ? "Save in DevOps" : "Undo in DevOps";
 
 /** The small form before a preview: a state and comment, or a date. */
 function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void; onPreview: (c: DevOpsChange[]) => void }) {

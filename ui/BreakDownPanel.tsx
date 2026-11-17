@@ -3,14 +3,14 @@
 // state, priority, parent, description, existing children, and what's sent to the AI behind a fold); the right holds
 // the three steps. Prepare: the child type (only when there is a choice), a note, Run. Review: editable proposals
 // (Keep or Drop with Undo, title, description, acceptance checklist, size, order by drag or keys, "after <title>",
-// Regenerate one or all with a note) and the running total. Publish: the exact batch, then Create all; what was
-// created and what wasn't, with Retry for the rest. Run never creates anything; nothing reaches DevOps before Create
-// all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
+// Regenerate one or all with a note) and the running total. OP-1: Preview opens the app's one DevOps preview with the
+// exact batch; Publish then shows what was created and what wasn't, with Retry for the rest. Run never creates
+// anything; nothing reaches DevOps before the preview's Confirm. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
 import { StandardsNote } from "./StandardsNote.tsx";
 import type { StandardsUsed } from "../plan/standards.ts";
 import { useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
-import { partsOf } from "../plan/preview-parts.ts";
+import { partsOf, PREVIEW_WORDS } from "../plan/preview-parts.ts";
 import { publishOrder } from "../plan/stories.ts";
 import { TextBox } from "./TextBox.tsx";
 import { CloseButton } from "./CloseButton.tsx";
@@ -224,7 +224,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   const sendCards = (d: Draft, then?: () => void) => {
     const todo = publishOrder(d.cards).filter((c) => c.status.state === "not_sent");
     if (!todo.length) {
-      setFailed(["Every kept story is in DevOps already, or waiting for Retry"]);
+      setFailed([PREVIEW_WORDS.allSent]);
       setStep("publish");
       return;
     }

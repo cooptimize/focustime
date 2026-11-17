@@ -179,7 +179,7 @@ const STATUS: Tour = {
     { target: "st-toggle", title: "Edit and Preview", text: "Preview shows the report as its email will read: a heading per feature, each comment this week a bullet with its author." },
     { target: "st-add", title: "Add a line", text: "Each line becomes its own DevOps comment on the feature. Edit changes your own comments from this week.", example: "status-line" },
     { target: "st-draft", example: "status-draft", title: "Draft", text: "With AI allowed for the client, a first version from your story changes, close-out notes and captures. Edit it as you like." },
-    { target: "st-push", example: "status-push", title: "Push all", text: "One preview of every new line and edit, then each is written with its own result, Retry and Undo. FocusTime never sends the report." },
+    { target: "st-push", example: "status-push", title: "Push all", text: "The usual DevOps preview, one client at a time, then each line is written with its own result, Retry and Undo. FocusTime never sends the report." },
   ],
   end: { line: "That's Status. A few minutes on Friday afternoon is plenty.", tryIt: "Try it yourself: Preview shows what Monday's report will say." },
 };

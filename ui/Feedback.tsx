@@ -19,6 +19,7 @@ import { FEEDBACK_KINDS, KIND_LABEL, type FeedbackKind, type Where } from "../pl
 import { WRITES_HREF, type FeedbackPreview, type FeedbackSent, type FeedbackSetup, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { Icon } from "./icons.tsx";
 import { PreviewActions, PreviewFields, PreviewFrame, PreviewVisibility, PreviewWhere } from "./DevOpsWrite.tsx";
+import { PREVIEW_WORDS } from "../plan/preview-parts.ts";
 
 /** "Chrome 141 on Windows": the browser and system from the user agent, nothing more. */
 export function browserName(ua: string): string {
@@ -107,7 +108,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
           }
         }}
       >
-        <PreviewWhere where={p.write ? `DevOps · ${p.write.org} · ${p.write.project}` : p.destination} identity={p.write?.identity ?? "Not set up yet"} />
+        <PreviewWhere where={p.write ? `DevOps · ${p.write.org} · ${p.write.project}` : p.destination} identity={p.write?.identity ?? PREVIEW_WORDS.feedbackNotSetUp} />
         <div className="dw-rows">
           <section className="dw-row feedback-row" aria-label={`New ${KIND_LABEL[kind].toLowerCase()}`}>
             <h3>{p.destination}</h3>
@@ -119,10 +120,10 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
         </div>
         {p.write && <PreviewVisibility text={p.write.visibility} />}
         {p.message && (p.setup.state === "no_pat" ? <SetupNote setup={p.setup} line={p.message} onClose={onClose} /> : <p className="feedback-note" role="status">{p.message}</p>)}
-        <PreviewActions closeLabel="Not now" onClose={() => setStep({ kind: "write" })} busy={busy} note="Sent once; nothing is retried on its own.">
+        <PreviewActions closeLabel="Not now" onClose={() => setStep({ kind: "write" })} busy={busy} note={PREVIEW_WORDS.feedbackNote}>
           {p.setUp ? (
             <button ref={primary} type="button" className="commit" disabled={busy || p.remaining <= 0} onClick={() => void send(p)}>
-              {busy ? "Sending…" : "Send feedback"} <kbd>Ctrl Enter</kbd>
+              {busy ? "Sending…" : PREVIEW_WORDS.feedbackSend} <kbd>Ctrl Enter</kbd>
             </button>
           ) : (
             copyButton

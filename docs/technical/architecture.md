@@ -200,7 +200,7 @@ sequenceDiagram
 
 - **Capture** (`ui/Capture.tsx`, `capture.add`): one line saved at once to the plan store with Undo; its kind chips make it a promise, a draft story, a draft feature, or leave it To sort. A draft gets an AI-prepared DevOps version in the background when AI is on.
 - **The New form** (`ui/NewItem.tsx`, `actions/new-item-actions.ts`): any level the client's process has, with client, level, title, parent, assignee, target date, and three optional questions (Where is it?, What should change?, How will we know it's right?, `ui/ThreeQuestions.tsx`). RB-3: Where is it? offers the client's things from its code as you type (`ui/WhereLookup.tsx`, `plan/where-lookup.ts`, read once through `code.kinds` with `from`; RB-3b: a report's pages in either format, a model table's measures and columns, or a one-file model's tables through `code.inner`, which opens only the files that listing needs on the server and returns names, `plan/where-inner.ts`); a pick is plain text, and nothing of the code is kept or sent to an AI ([Security](security.md#client-code)). RB-3b: the form remembers in its memory which words were picked from which client's code (`plan/where-picks.ts`, `ui/WherePicks.tsx`) and takes them out when its client changes, with Undo. The draft editor uses the same box. Enter opens the write preview; Save as draft keeps it local. Before the preview the type's fields are read, so a required field without a default is refused there.
-- **Break down** (`ui/BreakDownPanel.tsx`, `stories.*`): AI proposes child items from the parent and the same client's past items; nothing is written until Create all after one batch preview.
+- **Break down** (`ui/BreakDownPanel.tsx`, `stories.*`): AI proposes child items from the parent and the same client's past items; Preview opens the one DevOps preview with the batch (`proposal_create`, in `publishOrder`), and nothing is written until its Confirm.
 
 ## Code
 
@@ -212,7 +212,7 @@ A check-in about timeboxes has no schedule, badge or reminder of its own. It rid
 
 - `plan/progress.ts` (pure): which timeboxes qualify, what each answer does, and the words.
 - `actions/progress-actions.ts`: `checkin.sessions`, `checkin.answer`, `checkin.all_to_plan`, `checkin.undo` and `checkin.offer_close`. Only the plan store changes.
-- `devops.progress_offer` (read only) builds the end of day offer. Its writes (`remaining_work` or a comment) go through the write framework, previewed and confirmed in Close out.
+- `devops.progress_offer` (read only) builds the end of day offer. Its writes (`remaining_work` or a comment) go through the one DevOps preview from Close out's Review, a client at a time; each row then says what happened, with Undo or Retry.
 
 ## Cooptimize's standards in the AI
 
@@ -307,6 +307,19 @@ sequenceDiagram
 - **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
 
 One write end to end, a DevOps state change: the button in `ui/DevOpsWrite.tsx` calls `devops.preview`, which `actions/dispatch.ts` hands to `actions/devops-write-actions.ts`; the patch (with its `test /rev`) is built by `stateOps` in `plan/devopswrite.ts`; `devops.confirm` sends it as a PATCH from `sources/devops/write.ts` with the person's write PAT (`sources/devops/pat.ts`). An Outlook write goes the same way through `actions/timebox-actions.ts` and `sources/graph/write.ts`.
+
+### The one DevOps preview
+
+In the UI, `ui/DevOpsWrite.tsx` is the only door to a client's DevOps (OP-1). Every screen hands it its changes through `useDevOpsWrite()`:
+
+- `begin(clientKey, changes, settled)` calls `devops.preview`, shows the one preview, and on Confirm calls `devops.confirm` with the preview ids. It shows where the change goes, who it is written as, each field now and after, the notes, who can see it, GD-2's flag with Replace, Retry for a write whose answer was lost, and Reload when the item changed since. `settled` tells the screen what happened to each change (`results`, by the change's `key`), or that it was closed before Confirm (`cancelled`).
+- `series(parts, settled)` runs several previews one after another: one client per preview and 10 changes at most in each (`partsOf` in `plan/preview-parts.ts`), headed "Preview 2 of 3". Not now on one stops the rest. The screen says first when there will be more than one (`partsLine`).
+- `retry(writeId)` retries a write that wasn't read back; it checks DevOps first and never writes twice.
+- `markDone` and the target date ask their one question first (the state, the date), then open the same preview.
+
+Mark done in DevOps, Status's Push all and Undo, the timebox check-in's Update Remaining Work and Break down's batch use it, each keeping its own button and its own words after. Send feedback keeps its own action (`feedback.preview`, `feedback.send`: FocusTime's own backlog, not a client's) and shows through the same parts (`PreviewFrame`, `PreviewWhere`, `PreviewFields`, `PreviewVisibility`, `PreviewActions`). Wrap it up and Close out's Wrap up batch still use `wrapup.preview` and `wrapup.confirm`, the server's composite of several changes to one item.
+
+`ui/one-preview.test.ts` reads every file in `ui/` and fails when any other file calls those actions, draws the DevOps write dialog or uses its parts; each exception is named there with its reason.
 
 The exceptions are listed in [Security](security.md#external-writes-and-the-audit-log): Teams presence during focus has no preview, the VM has no undo and its automatic start no preview, and plan store changes from the bot's buttons run at once with Undo.
 

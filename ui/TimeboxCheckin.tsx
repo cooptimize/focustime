@@ -7,7 +7,7 @@ import type { AppliedSession, DoneOffer, ProgressOffer, SessionView } from "../a
 import { durationText, LEFT_CHOICES, parseLeft, progressAsk } from "../plan/progress.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
-import { partsLine, partsOf } from "../plan/preview-parts.ts";
+import { partsLine, partsOf, PREVIEW_WORDS } from "../plan/preview-parts.ts";
 import { DoneBatch, useDoneOffer } from "./DoneOffer.tsx";
 import { Icon } from "./icons.tsx";
 
@@ -199,7 +199,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
         setList(
           offers.map((offer) => {
             const r = by.get(String(offer.pickId));
-            return { offer, note: refused.get(String(offer.pickId)) ?? (r ? null : end.stopped ? "Not sent" : "Nothing to change"), result: r ? { ok: r.confirmed, message: r.confirmed ? "Saved" : r.message, entryId: r.writeId } : null };
+            return { offer, note: refused.get(String(offer.pickId)) ?? (r ? null : end.stopped ? PREVIEW_WORDS.notSent : PREVIEW_WORDS.nothingToChange), result: r ? { ok: r.confirmed, message: r.confirmed ? PREVIEW_WORDS.saved : r.message, entryId: r.writeId } : null };
           }),
         );
         if (end.results.length) close();
@@ -211,7 +211,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
     if (r.result?.entryId == null || !write) return;
     setBusy(true);
     const res = await write.retry(r.result.entryId);
-    if (res) setList((l) => l?.map((x) => (x === r ? { ...x, result: { ok: res.confirmed, message: res.confirmed ? "Saved" : res.message, entryId: res.entry.id } } : x)) ?? null);
+    if (res) setList((l) => l?.map((x) => (x === r ? { ...x, result: { ok: res.confirmed, message: res.confirmed ? PREVIEW_WORDS.saved : res.message, entryId: res.entry.id } } : x)) ?? null);
     setBusy(false);
   };
   if (gone && !list) return null;

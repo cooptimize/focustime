@@ -86,7 +86,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".ah-grid tbody .ah-row").first().waitFor({ timeout: 30_000 });
     await shot(page, "ahead-fix-next");
 
-    // 5. Break down Supplier onboarding: five cards from the samples, Preview, Create all.
+    // 5. Break down Supplier onboarding: five cards from the samples, Preview, Confirm in the DevOps preview.
     const needs = page.locator(".ah-grid tbody .ah-row:not(.context)", { hasText: "Supplier onboarding" }).first();
     await needs.getByRole("button", { name: /Break down/ }).first().click();
     const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
