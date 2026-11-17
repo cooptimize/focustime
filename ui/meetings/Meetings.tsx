@@ -135,7 +135,9 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
     if (!toReview(p)) setUnfolded((u) => new Set(u).add(`${p.body.kind}:${p.state === "skipped" ? "skipped" : "done"}`));
     requestAnimationFrame(() => {
       const el = document.getElementById(`mtg-prop-${p.id}`);
-      el?.scrollIntoView({ block: "center" });
+      el?.scrollIntoView({ block: "start" });
+      el?.classList.add("jumped");
+      setTimeout(() => el?.classList.remove("jumped"), 2500);
       el?.focus({ preventScroll: true });
     });
   }, [r, focus, view]);
@@ -221,9 +223,15 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   };
   const skip = async (ps: Proposal[], on = true) => {
     setBusy(true);
-    for (const p of ps) await call("meeting.edit", { proposalId: p.id, skip: on }).catch((e: unknown) => setNote(errText(e)));
+    const done: number[] = [];
+    for (const p of ps) await call("meeting.edit", { proposalId: p.id, skip: on }).then(() => done.push(p.id), (e: unknown) => setNote(errText(e)));
     setBusy(false);
     await load();
+    // Several skipped at once can be taken back together.
+    if (on && done.length > 1) undoable?.(CALL_ROW.skipped(done.length), async () => {
+      for (const k of done) await call("meeting.edit", { proposalId: k, skip: false });
+      await load();
+    });
   };
   const tick = (p: Proposal, on: boolean) => setTicked((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; });
   const tickedRows = r.proposals.filter((p) => ticked.has(p.id) && toReview(p));
@@ -265,10 +273,10 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
           </div>
         ) : null}
       </div>
-      <p className="muted mtg-intro">
+      {view !== "transcript" && <p className="muted mtg-intro">
         {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
         {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
-      </p>
+      </p>}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
@@ -326,7 +334,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
             ) : (
               <button type="button" className="mini quiet dw-enable" onClick={() => w?.enable(m.clientKey)} title={CALL_BAR.noPat}>Enable DevOps writes</button>
             ))}
-            {tickedPromises.length > 0 && <button type="button" className="mini" disabled={busy} onClick={() => void keep(tickedPromises)}>{CALL_BAR.promises(tickedPromises.length)}</button>}
+            {tickedPromises.length > 0 && <button type="button" className="mini" disabled={busy} onClick={() => void keep(tickedPromises)}>{CALL_BAR.promises(tickedPromises.filter((x) => x.body.kind === "commitment" && x.body.side === "cooptimize").length, tickedPromises.filter((x) => x.body.kind === "commitment" && x.body.side !== "cooptimize").length)}</button>}
             <button type="button" className="mini" disabled={busy} onClick={() => void skip(tickedRows)}>{CALL_BAR.skip}</button>
             <button type="button" className="mini quiet" disabled={busy} onClick={() => setTicked(new Set())}>{CALL_BAR.clear}</button>
             {can && batch.later.length > 0 && <span className="muted" role="note">{CALL_BAR.tenAtATime(sendable.length)}</span>}

@@ -24,7 +24,7 @@ export const CALL_STATE = {
  */
 export type RequiredField = { ref: string; name: string; fill: "date" | "size" | "description" | "check" | "assignTo" | null };
 /** MC-1e: one row's check before any preview: what it still needs, what the form can't fill, or why it won't be sent. */
-export type ProposalCheck = { needs?: { fill: NonNullable<RequiredField["fill"]>; name: string }[]; cant?: string; blocked?: string };
+export type ProposalCheck = { needs?: { fill: NonNullable<RequiredField["fill"]>; name: string }[]; /** Fields the process requires that the form fills, filled or not. */ required?: NonNullable<RequiredField["fill"]>[]; cant?: string; blocked?: string };
 
 /** MC-1e: the call's page, made like the rest of the app: its filter, its sections, its rows and the bar for ticked rows. */
 export const CALL_FILTERS = [
@@ -69,7 +69,8 @@ export const CALL_ROW = {
 export const CALL_BAR = {
   selected: (n: number) => `${n} selected`,
   devops: (n: number) => `Send ${n} to DevOps`,
-  promises: (n: number) => `Keep ${n} ${n === 1 ? "promise" : "promises"}`,
+  /** Promises go to Promises, the client's go as notes with the call: said apart. */
+  promises: (mine: number, notes: number) => [mine ? `Add ${mine} to Promises` : "", notes ? `Note ${notes} with this call` : ""].filter(Boolean).join(", "),
   skip: "Skip",
   clear: "Clear",
   tenAtATime: (n: number) => `DevOps changes go 10 at a time: the first 10 of ${n} now, the rest stay ticked.`,

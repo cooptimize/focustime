@@ -614,7 +614,8 @@ async function checksOf(ctx: MeetingContext, cfg: AppConfig, clientKey: string, 
         const has = { date: !!b.date, size: b.size !== undefined && b.size !== null, description: !!b.description?.trim(), check: !!b.answers?.check?.trim(), assignTo: b.assignTo !== null } as const;
         const needs = fields.flatMap((f) => (f.fill && !has[f.fill] ? [{ fill: f.fill, name: f.name }] : []));
         const cant = fields.filter((f) => !f.fill);
-        if (needs.length || cant.length) out[p.id] = { ...(needs.length ? { needs } : {}), ...(cant.length ? { cant: CALL_ROW.cantFill(req.projectName, cant.map((f) => f.name), b.type) } : {}) };
+        const required = fields.flatMap((f) => (f.fill ? [f.fill] : []));
+        if (required.length || cant.length) out[p.id] = { ...(needs.length ? { needs } : {}), ...(required.length ? { required } : {}), ...(cant.length ? { cant: CALL_ROW.cantFill(req.projectName, cant.map((f) => f.name), b.type) } : {}) };
       }
   }
   return out;

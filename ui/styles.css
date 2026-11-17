@@ -5507,7 +5507,12 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-sec-head .muted { font-size: var(--fs-2); font-weight: 400; }
 .mtg-group .mtg-sec-head + .mtg-prop { border-top: 0; }
 .mtg-tick { min-width: 18px; padding-top: 6px; }
-.mtg-prop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.mtg-prop:focus-visible, .mtg-prop.jumped { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.mtg-prop.jumped { background: color-mix(in oklab, var(--focus) 8%, transparent); }
+/* A row brought into view lands under the headers that stay, never under them. */
+.mtg-prop { scroll-margin-top: calc(var(--mtg-top, -8px) + var(--mtg-head-h, 0px) + 48px); }
+.mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
+.mtg-view > .mtg-sticky { max-width: calc(1100px + 48px); }
 .mtg-prop.ticked { background: color-mix(in oklab, var(--selected) 6%, transparent); }
 .mtg-prop-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .mtg-prop.failed .mtg-prop-body > input { border-color: var(--watch); }
@@ -5524,10 +5529,10 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-bulk { position: sticky; top: auto; bottom: 0; z-index: 6; }
 /* On the phone the document scrolls: the page is no scroll box of its own, and the bar sits above the bottom bar. */
 .app.phone .mtg-view { overflow: visible; }
-.app.phone .mtg-bulk { bottom: calc(var(--bb-h, 0px) + 8px); }
+.app.phone .mtg-bulk { bottom: calc(var(--bb-h, 0px) + 36px); }
 .mtg-line-mark { position: relative; }
 .mtg-line-list { position: absolute; right: 0; top: 100%; z-index: 4; margin: 4px 0 0; padding: 6px 8px; list-style: none; display: grid; gap: 4px; min-width: 16em; max-width: 28em; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); font-size: var(--fs-2); }
-.mtg-line-list .link-btn { text-align: left; }
+.mtg-line-list .link-btn { text-align: left; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   .mtg-view { padding: 8px 16px 24px; }
   .mtg-prop { grid-template-columns: auto minmax(0, 1fr); }

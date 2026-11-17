@@ -37,6 +37,8 @@ export const forgetCallOptions = () => memo.clear();
 
 export function GapFields({ b, id, clientKey, opts, today, editable, check, onEdit }: { b: GapProposal; id: number; clientKey: string; opts: NewOptions | null; today: string; editable: boolean; check: ProposalCheck | undefined; onEdit: (patch: Record<string, unknown>) => void }) {
   const needs = new Set((check?.needs ?? []).map((n) => n.fill));
+  // Required by the process stays said once filled; Needed marks only what is still empty.
+  const required = new Set(check?.required ?? []);
   const ladder = useMemo(() => opts?.levels.map((l) => l.types) ?? [], [opts]);
   const types = useMemo(() => opts?.levels.flatMap((l) => l.types) ?? [], [opts]);
   const allowed = useMemo(() => new Set(parentTypesOf(ladder, b.type)), [ladder, b.type]);
@@ -102,7 +104,7 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
         <span className="set-label" id={`mtg-date-${id}`}>Target date{need("date")}</span>
         <span className="nf-date">
           <DateField value={b.date ?? null} onChange={(d) => onEdit({ date: d })} label={`Target date for ${b.title}${needs.has("date") ? ", needed" : ""}`} today={today} placeholder={needs.has("date") ? "Choose a date" : "None"} />
-          <span className={needs.has("date") ? "mtg-need-why" : "muted nf-why"}>{needs.has("date") ? "Needed by this client's process" : "Optional"}</span>
+          <span className={needs.has("date") ? "mtg-need-why" : "muted nf-why"}>{required.has("date") ? "Required by this client's process" : "Optional"}</span>
         </span>
       </div>
       <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>

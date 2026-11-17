@@ -1477,3 +1477,14 @@ From the IT review (TD-1):
 - **What didn't fit the New form or the preview, and the workaround.** The New form is a dialog with its own Create; a call needs its fields on many rows at once, so the row uses the form's field controls and rules (`ui/meetings/GapFields.tsx`: Level, Parent, Assigned to, Target date, More) and the server's `new_item`, not the dialog itself. The New form's Start date isn't asked (it isn't on the form either). The preview's refusals for an inline begin now come back to the caller by key, so the call says each on its own row; nothing else in the preview changed.
 - **The other screens with their own preview.** Mark done in DevOps, Week › Status, the timebox check-in, Break down and Send feedback use the write framework's preview and confirm with their own dialogs (STEP 0.4). The guard covers the call's page only. Should they move to the one preview, and the guard cover every screen?
 - **The phone's sticky header is tall.** The title row, the filter row (wrapping to two lines at 390 px) and the Proposals and Transcript switch take about a third of the screen while scrolling. A smaller form (the filter as one picker on the phone) would give rows more room.
+- **Found by the consultant review, left as they are:**
+  - *The New form doesn't ask first.* Northwind's demo Epic shows Target date "Optional" in the Backlog's New form, and the form says the field is needed only when Create is refused; the call's page now marks it Needed before. Bringing the New form's own check forward is a New form change, not in this step.
+  - *Three create forms still look different.* The Inbox suggestion's Create item has an older layout (a native parent list, an Assign it to me box, no target date or level switch). Out of this step.
+  - *The count includes a comment that won't be sent.* A stored comment above story level still needs a decision (Skip), so it stays in "to review". Should it be skipped by itself instead?
+  - *Section Clear and the bar's Clear.* "Select all" turns into "Clear" for that section only; the bar's Clear clears every section. No half-ticked state on a section header.
+  - *A promise's due date and whom it's to* can't be edited on the row (only its words), as before.
+  - *Done rows show #5100 as text,* not a link to DevOps, and Undo is in Settings › Activity, not on the row.
+  - *The transcript's line button doesn't say whether its proposal is done or skipped,* and quotes show time into the call ("1:05") while the transcript shows the time of day.
+  - *No "all done" state:* a reviewed call shows "0 to review · 3 done · 8 skipped"; the mark on Week says Reviewed.
+  - *The bar is at the foot* (the spec's choice); the Backlog's is at the top under its filters.
+  - *Propose again asks first* (a browser confirm) when open proposals would be replaced; a headless browser dismisses it, so the reviewer saw no change there.

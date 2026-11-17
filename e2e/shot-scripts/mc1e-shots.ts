@@ -51,7 +51,8 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-1e screenshots", () => {
       await shot(page, `${tag}-1-page`, () => go(`#/meetings/${id}`));
       // Scrolled into the rows: what stays in view.
       await shot(page, `${tag}-2-scrolled`, async () => {
-        await page.locator(".mtg-view").evaluate((el) => el.scrollTo(0, 900));
+        // The page scrolls on a computer; the document does on a phone.
+        await page.locator(".mtg-view").evaluate((el) => (el.scrollTo(0, 900), window.scrollTo(0, 900)));
       });
       // A new item's row (the Epic the demo's process needs a target date on, after; the first gap, before).
       await shot(page, `${tag}-3-new-item`, async () => {
@@ -76,6 +77,18 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-1e screenshots", () => {
         await page.locator(".write-dialog.devops, .mtg-confirm-box").first().waitFor({ timeout: 30_000 });
       });
       await page.keyboard.press("Escape");
+      // Skipped rows folded at their section's foot (after); before, they stay in place as Skipped.
+      await shot(page, `${tag}-8-folded`, async () => {
+        await go(`#/meetings/${id}/promises`).catch(() => go(`#/meetings/${id}`));
+        for (const words of ["Share three sample statements from last year", "Book a session with Northwind's accountants to walk through the statements"]) {
+          const row = page.locator(".mtg-prop").filter({ has: page.locator(`input[value="${words}"]`) });
+          if (await row.count()) await row.getByRole("button", { name: "Skip" }).click();
+          await page.waitForTimeout(500);
+        }
+        const fold = page.locator(".mtg-fold").first();
+        if (await fold.count()) await fold.scrollIntoViewIfNeeded();
+        else await page.locator(".mtg-prop.skipped").first().scrollIntoViewIfNeeded();
+      });
       await shot(page, `${tag}-6-transcript`, async () => {
         await page.evaluate((x) => (location.hash = x), `#/meetings/${id}/transcript`);
         await page.locator(".mtg-lines li").first().waitFor({ timeout: 30_000 });
