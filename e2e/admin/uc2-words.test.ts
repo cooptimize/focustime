@@ -1,5 +1,6 @@
 // UC-2 (browser, demo mode): today's words in Admin. Item 10: Admin says "Client chats", never "Delivery chats".
-// Fictional data only.
+// Item 11: Admin › Conversations doesn't show "Closed conversations stay shown (days)"; the value stays stored and is
+// still read and returned. Fictional data only.
 import type { Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "../harness.ts";
@@ -32,6 +33,21 @@ describe.skipIf(!CHROMIUM)("UC-2: today's words in Admin (browser, demo mode)", 
     await admin(page, "admin-clients");
     await page.getByRole("group", { name: /^Client chats for / }).first().waitFor();
     expect(await page.locator(".ps-rail").textContent()).toContain("Client chats");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("11: Admin › Conversations doesn't show the closed rule; its value is kept and still returned", async () => {
+    const { page, errors } = await freshPage(h, { width: 1440, height: 1000 });
+    expect((await call(page, "admin.set", { scope: "org", key: "conv.closed_shown_days", value: 21 })).ok).toBe(true);
+    await page.reload();
+    await openSettings(page);
+    await admin(page, "admin-conversations");
+    await page.getByText("Reading client chats").first().waitFor({ timeout: 15_000 });
+    expect(await readable(page)).not.toMatch(/Closed conversations stay shown/);
+    // Kept: the stored value comes back from the server as it was set.
+    const loaded = JSON.stringify((await call(page, "admin.load", { section: "conversations" })).data);
+    expect(loaded).toContain('"closedShownDays":21');
     expect(errors).toEqual([]);
     await page.close();
   }, T);
