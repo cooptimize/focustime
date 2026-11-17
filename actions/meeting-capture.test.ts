@@ -55,8 +55,10 @@ const ANSWER = {
     { who: "Nobody Said This", what: "x", toName: null, due: null, lines: [4] },
   ],
   comments: [
-    { itemId: 1201, note: "decision", text: "CSV only for now; Excel later.", lines: [4, 99] },
+    { itemId: 1202, note: "decision", text: "CSV only for now; Excel later.", lines: [4, 99] },
     { itemId: 4410, note: "status", text: "x", lines: [1] },
+    // MC-1e: on the Feature: never a proposal, whatever the model says.
+    { itemId: 1201, note: "status", text: "Rates export is on track.", lines: [1] },
   ],
 };
 
@@ -71,6 +73,9 @@ describe("meeting capture AI pass (MC-1)", () => {
     expect(sent).toContain("[another client]");
     expect(sent).toContain("[email]");
     expect(sent).toContain("#1201 Feature: Rates export");
+    // MC-1e: only story-level items are marked as taking a comment, and the instructions say so.
+    expect(sent).toContain("#1202 User Story [story]: Export CSV");
+    expect(calls[0]!.instructions).toContain("Comment only on items marked [story]; never on a feature, an epic or anything above a story.");
     expect(sent).toContain("L3 [1:10] Sam Tester: I'll send the export spec by 2026-11-13.");
     if (!r.ok) return;
     expect(r.masked).toEqual({ client: 2, email: 1 });
@@ -80,14 +85,14 @@ describe("meeting capture AI pass (MC-1)", () => {
     const { ai, input } = setup(ANSWER);
     const r = await capturePass(ai, input);
     if (!r.ok) throw new Error(r.message);
-    expect(r.dropped).toBe(4);
+    expect(r.dropped).toBe(5);
     const kinds = r.proposals.map((p) => p.body.kind);
     expect(kinds).toEqual(["gap", "commitment", "commitment", "comment"]);
     const [gap, mine, theirs, comment] = r.proposals.map((p) => p.body);
     expect(gap).toMatchObject({ type: "User Story", parentId: 1201, parentTitle: "Rates export", title: "Holiday calendar import" });
     expect(mine).toMatchObject({ who: "Sam Tester", whoId: "me-id", side: "cooptimize", due: "2026-11-13" });
     expect(theirs).toMatchObject({ who: "Dana Client", whoId: null, side: "client" });
-    expect(comment).toMatchObject({ itemId: 1201, inReport: true, lines: [4] });
+    expect(comment).toMatchObject({ itemId: 1202, itemType: "User Story", inReport: false, lines: [4] });
     expect(r.proposals[3]!.quotes).toEqual([{ n: 4, speaker: "Dana Client", at: "1:35", text: "Decided: CSV only for now, Excel later." }]);
   });
 
@@ -115,5 +120,22 @@ describe("meeting capture AI pass (MC-1)", () => {
     const r = await capturePass(ai, input);
     expect(r).toMatchObject({ ok: false, kind: "client_off" });
     expect(calls).toEqual([]);
+  });
+
+  it("MC-1e: comments go on story-level items only, whatever the process calls its levels", async () => {
+    // A process whose requirement level is "Product Backlog Item" under "Initiative" and "Capability": levels come from
+    // the backlogs, never from a type's name.
+    const odd = buildProcessModel(aClientProcess({ teamBacklogs: { value: [{ name: "Initiatives", rank: 4, type: "portfolio", workItemTypes: [{ name: "Initiative" }], defaultWorkItemType: { name: "Initiative" } }, { name: "Capabilities", rank: 3, type: "portfolio", workItemTypes: [{ name: "Capability" }], defaultWorkItemType: { name: "Capability" } }, { name: "Backlog items", rank: 2, type: "requirement", workItemTypes: [{ name: "Product Backlog Item" }], defaultWorkItemType: { name: "Product Backlog Item" } }, { name: "Tasks", rank: 1, type: "task", workItemTypes: [{ name: "Task" }], defaultWorkItemType: { name: "Task" } }] } as never }));
+    const answer = { gaps: [], commitments: [], comments: [{ itemId: 1301, note: "status", text: "On track.", lines: [1] }, { itemId: 1302, note: "decision", text: "CSV only for now.", lines: [4] }] };
+    const { ai, calls, input } = setup(answer);
+    const r = await capturePass(ai, { ...input, model: odd, items: [aWorkItem({ id: 1301, title: "Rates", type: "Capability", tier: "feature" }), aWorkItem({ id: 1302, title: "Export CSV", type: "Product Backlog Item", parentId: 1301 })] });
+    if (!r.ok) throw new Error(r.message);
+    expect(r.proposals.map((p) => p.body)).toEqual([expect.objectContaining({ kind: "comment", itemId: 1302 })]);
+    expect(calls[0]!.input).toContain("#1302 Product Backlog Item [story]: Export CSV");
+    expect(calls[0]!.input).not.toContain("Capability [story]");
+    // Without the client's process FocusTime can't tell a story from a feature, so no comment is proposed.
+    const none = await capturePass(ai, { ...input, model: null });
+    if (!none.ok) throw new Error(none.message);
+    expect(none.proposals.filter((p) => p.body.kind === "comment")).toEqual([]);
   });
 });

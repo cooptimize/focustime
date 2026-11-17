@@ -6,6 +6,7 @@
 // meeting (organized in another tenant) is Upload: FocusTime reads only what the registrant's own calendar shows of it
 // (time, title, join link), never asks Graph for its meeting or transcript.
 import type { IsoDate } from "../week/types.ts";
+import type { Answers } from "./three-questions.ts";
 
 export const MEETING_ROLES = ["status", "planning"] as const;
 export type MeetingRole = (typeof MEETING_ROLES)[number];
@@ -207,7 +208,21 @@ export function nextRetry(kind: string, tries: number, nowIso: string): string |
 
 export type Quote = { n: number; speaker: string; at: string; text: string };
 
-export type GapProposal = { kind: "gap"; type: string; parentId: number | null; parentTitle: string | null; title: string; description: string; lines: number[] };
+/**
+ * MC-1e: a new item, with the New form's fields. The AI sets type, parent, title and description; the reviewer may set
+ * the rest on the row (absent: the New form's defaults, assigned to me, no date, no size, no answers).
+ */
+export type GapProposal = {
+  kind: "gap"; type: string; parentId: number | null; parentTitle: string | null; title: string; description: string; lines: number[];
+  /** "me" (the default when absent), an email on the client's project, or null for nobody. */
+  assignTo?: string | null;
+  /** The target date. */
+  date?: IsoDate | null;
+  /** The type's size field (points or effort). */
+  size?: number | null;
+  /** TP-1b's three answers, as the New form has them. */
+  answers?: Answers | null;
+};
 export type CommitmentProposal = {
   kind: "commitment";
   who: string;
@@ -246,8 +261,36 @@ export type Proposal = {
 /** The order the review shows: gaps, then commitments, then comments (each in the AI's order). */
 export const proposalOrder = (a: Proposal, b: Proposal) => PROPOSAL_KINDS.indexOf(a.kind) - PROPOSAL_KINDS.indexOf(b.kind) || a.id - b.id;
 
-/** "Will appear in Kat's Monday report": a comment on a feature-tier item (Kat's report lists feature comments). */
-export const inKatsReport = (itemType: string, featureTypes: ReadonlySet<string>) => featureTypes.has(itemType);
+/**
+ * MC-1e: a call's comment goes only on a story-level item: the requirement backlog's types in the client's own process
+ * (never a type's name). Status is reported on features, and Monday's report reads their comments.
+ */
+export const commentLevelOk = (levels: { child: readonly string[] }, itemType: string) => levels.child.includes(itemType);
+
+/** MC-1e: still to review: open, or failed and waiting for its fix. The one count the page, its tab and Client calls show. */
+export const toReview = (p: Pick<Proposal, "state">) => p.state === "open" || p.state === "failed";
+
+/** The words a proposal carries (a new item's title, a promise's what, a comment's text). */
+export const proposalWords = (b: ProposalBody) => (b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text);
+const plainWords = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const sameLines = (a: readonly number[], b: readonly number[]) => a.length > 0 && a.length === b.length && [...a].sort((x, y) => x - y).every((n, i) => n === [...b].sort((x, y) => x - y)[i]);
+
+/**
+ * MC-1e: the same thing, by rule (never AI): the same kind, and resting on the same transcript lines or carrying the
+ * same words apart from case and punctuation. A new pass leaves out what the page already has done, skipped or failed.
+ */
+export function sameProposal(a: ProposalBody, b: ProposalBody): boolean {
+  if (a.kind !== b.kind) return false;
+  // Two comments on different stories can rest on the same line: a comment is the same only on the same item.
+  if (a.kind === "comment" && b.kind === "comment" && a.itemId !== b.itemId) return false;
+  return sameLines(a.lines, b.lines) || plainWords(proposalWords(a)) === plainWords(proposalWords(b));
+}
+
+/** MC-1e: a pass's proposals without the ones already done, skipped or failed on this call (those stay as they are). */
+export function newOnly<T extends { body: ProposalBody }>(fresh: readonly T[], kept: readonly Pick<Proposal, "body" | "state">[]): T[] {
+  const decided = kept.filter((p) => p.state !== "open");
+  return fresh.filter((x) => !decided.some((p) => sameProposal(x.body, p.body)));
+}
 
 // ---- Nudges ----
 

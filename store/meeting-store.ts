@@ -227,6 +227,13 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         return (await db.all("SELECT * FROM meeting_proposals WHERE occurrence_id = ? ORDER BY id", [occurrenceId])).map(toProposal);
       });
     },
+    /** MC-1e: proposals added beside the ones there (the demo's older comment); a pass uses replaceProposals. */
+    async addProposals(occurrenceId: number, xs: readonly { body: ProposalBody; quotes: Quote[] }[]): Promise<void> {
+      await db.tx(async () => {
+        const t = stamp();
+        for (const x of xs) await db.run("INSERT INTO meeting_proposals (occurrence_id, kind, body_json, quotes_json, state, created_at) VALUES (?, ?, ?, ?, 'open', ?)", [occurrenceId, x.body.kind, JSON.stringify(x.body), JSON.stringify(x.quotes), t]);
+      });
+    },
     async proposals(occurrenceId: number): Promise<Proposal[]> {
       return (await db.all("SELECT * FROM meeting_proposals WHERE occurrence_id = ? ORDER BY id", [occurrenceId])).map(toProposal);
     },

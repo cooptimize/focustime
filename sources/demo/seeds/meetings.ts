@@ -1,12 +1,13 @@
 // MC-1: Northwind's weekly status call in the demo. Registered by the demo's person (an admin of the demo) with a
 // pasted join link, as Upload, with me and Priya as Cooptimize attendees; the latest call's transcript is uploaded through
 // the app's own upload, so the AI pass (the demo's sample answer) makes the proposals: a gap, three commitments and two
-// comments, ready on the review screen. Attendees are written directly, as only a calendar read sets them.
+// comments, ready on the review screen (MC-1e: and one older comment on a feature, which won't be sent). Attendees are written directly, as only a calendar read sets them.
 import { meetingContext } from "../../../actions/dispatch.ts";
 import { uploadTranscript } from "../../../actions/meeting-actions.ts";
 import { DEMO_PEOPLE } from "../data.ts";
 import { DEMO_MEETING, demoMeetingVtt } from "../meetings.ts";
 import type { DemoSeed } from "./types.ts";
+import { clock } from "../../../plan/transcript.ts";
 
 const PRIYA = DEMO_PEOPLE.find((p) => p.name === "Priya Shah")!;
 
@@ -28,5 +29,11 @@ export const meetingsSeed: DemoSeed = {
     await store.updateSeries(seriesId, { attendees: [me.id.toLowerCase(), PRIYA.aadId.toLowerCase()] });
     const up = await uploadTranscript(await meetingContext(ctx), { seriesId, date: callDay, name: "Northwind weekly status call.vtt", bytes: new TextEncoder().encode(demoMeetingVtt()) });
     if (!up.ok) throw new Error(`demo seed meeting upload: ${up.error}`);
+    // MC-1e: one comment as a pass before MC-1e could leave it, on the feature itself. The page says it won't be sent
+    // (a call's comments go on stories only) and offers Skip. Fictional words, like the rest of the call.
+    const occurrenceId = (up.data as { occurrenceId: number }).occurrenceId;
+    const lines = (await store.transcript(occurrenceId)) ?? [];
+    const on = lines.find((l) => /on track/i.test(l.text));
+    if (on) await store.addProposals(occurrenceId, [{ body: { kind: "comment", itemId: 1110, itemTitle: "Order history export", itemType: "Feature", note: "status", text: "Order history export is on track with Northwind.", inReport: true, lines: [on.n] }, quotes: [{ n: on.n, speaker: on.speaker, at: clock(on.at), text: on.text }] }]);
   },
 };

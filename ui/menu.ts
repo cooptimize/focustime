@@ -1549,8 +1549,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.transcript":
     case "meeting.edit":
     case "meeting.no_transcript":
-    case "meeting.prepare":
-    case "meeting.confirm":
+    case "meeting.keep":
+    case "meeting.unkeep":
     case "meeting.rerun":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":

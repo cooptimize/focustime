@@ -64,7 +64,7 @@ import { holidayLabel } from "../sources/dataverse/holidays.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
-import { devopsWriteAction, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
+import { devopsWriteAction, requiredFor, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
 import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { OutlookWrite, PeopleReader, ScheduleReader } from "../sources/graph/source.ts";
@@ -130,7 +130,7 @@ import type { FeedbackWriteTarget } from "./devops-write-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
-import { meetingAction, type CaptureContext as MeetingCaptureContext, type MeetingAction, type MeetingContext, type MeetingUser } from "./meeting-actions.ts";
+import { meetingAction, meetingWrites, type CaptureContext as MeetingCaptureContext, type MeetingAction, type MeetingContext, type MeetingUser, type MeetingWritePort } from "./meeting-actions.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import { MEETING_CHAT } from "../store/conversation-store.ts";
 import type { MeetingSeries } from "../plan/meetings.ts";
@@ -980,6 +980,13 @@ export async function assistantTranscribe(ctx: ActionContext, t: { audio: Uint8A
 }
 
 /** The write framework's pieces (step 14): the person's write PAT, never the company read PAT. */
+/** MC-1e: the write framework's view of a call's proposals, as me (a reviewer only), or nothing when I'm not known. */
+async function meetingWritesFor(ctx: ActionContext): Promise<MeetingWritePort | undefined> {
+  const store = ctx.meetings?.store;
+  const me = store ? await (await chatContext(ctx)).me().catch(() => null) : null;
+  return store && me ? meetingWrites(store, me, ctx.now, ctx.log ?? (() => {})) : undefined;
+}
+
 async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContext> {
   return {
     plan: ctx.plan,
@@ -1000,6 +1007,8 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     boundary: (clientKey) => boundaryOf(ctx, clientKey),
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
+    // MC-1e: a call's proposals go through this one door, and their rows hear how each write ended.
+    ...(ctx.meetings ? { meetings: await meetingWritesFor(ctx) } : {}),
     // SR-1: a comment edit only inside the client's status report window (Kat's last send, else Monday 7:00 AM ET).
     reportSince: async (cfg, clientKey) => {
       const r = await katSentFor(ctx, cfg, [clientKey]).catch(() => null);
@@ -1436,7 +1445,8 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     leads: async (clientKey) => ((await ctx.org?.clientLeads(clientKey).catch(() => [])) ?? []).map((l) => l.personId),
     capture: (cfg, clientKey) => meetingCapture(ctx, cfg, clientKey),
     ai: () => aiFor(ctx, { waiting: true }),
-    devops: (action, input) => dispatch(ctx, { action, input }),
+    // MC-1e: the fields a new item needs, read with my write PAT, for the rows' check before any preview.
+    required: async (clientKey, types) => requiredFor(await devopsWriteContext(ctx), clientKey, types),
     canWrite: async (clientKey) => (await rc.writeClients()).includes(clientKey),
     log: ctx.log ?? (() => {}),
   };
@@ -2589,8 +2599,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.review":
     case "meeting.edit":
     case "meeting.no_transcript":
-    case "meeting.prepare":
-    case "meeting.confirm":
+    case "meeting.keep":
+    case "meeting.unkeep":
     case "meeting.rerun":
     case "meeting.check_now":
     case "meeting.transcript":

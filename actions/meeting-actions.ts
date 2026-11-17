@@ -12,9 +12,11 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, type MeetingRole, type MeetingSeries, type Occurrence, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
+import { callWriteWords, CALL_ROW, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
-import { levelOfType, type ProcessModel } from "../plan/process.ts";
+import type { ProcessModel } from "../plan/process.ts";
 import { clock, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
@@ -29,7 +31,7 @@ import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.prepare", "meeting.confirm", "meeting.rerun", "meeting.check_now", "meeting.transcript"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -65,8 +67,12 @@ export type MeetingContext = {
   capture: (cfg: AppConfig, clientKey: string) => Promise<CaptureContext | null>;
   /** The meeting AI: my switches, the app's cap (a background pass, like the conversations pipeline). */
   ai: () => Promise<AiService | null>;
-  /** The DevOps write framework, as the app's buttons call it (devops.preview, devops.confirm). */
-  devops: (action: "devops.preview" | "devops.confirm", input: unknown) => Promise<ActionResponse>;
+  /**
+   * MC-1e: the fields the client's process requires on a new item of each type, with no default, read with my write
+   * PAT (null when they can't be read now). The rows ask for them before any preview; the writes themselves go only
+   * through the DevOps write framework's one preview (kinds meeting_create and meeting_comment), never from here.
+   */
+  required?: (clientKey: string, types: readonly string[]) => Promise<{ projectName: string; types: Record<string, RequiredField[]> } | null>;
   /** Whether I have a checked write PAT for the client. */
   canWrite: (clientKey: string) => Promise<boolean>;
   log: (r: LogRecord) => void;
@@ -95,11 +101,6 @@ const text = (v: unknown, name: string, max: number, optional = false): string |
 const id = (v: unknown, name: string): number => {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be an id`);
   return v;
-};
-const ids = (v: unknown, name: string, max = 100): number[] => {
-  if (v === undefined) return [];
-  if (!Array.isArray(v) || v.length > max) throw new Invalid(`${name} must be up to ${max} ids`);
-  return v.map((x) => id(x, name));
 };
 const JOIN_URL = /^https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s]{10,3900}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -272,7 +273,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const counts = new Map<number, { all: number; open: number }>();
         for (const o of occs) {
           const ps = await store.proposals(o.id);
-          counts.set(o.id, { all: ps.length, open: ps.filter((p) => p.state === "open").length });
+          counts.set(o.id, { all: ps.length, open: ps.filter(toReview).length });
         }
         const kept = await store.withTranscript(occs.map((o) => o.id));
         const vo = (o: Occurrence): ViewOpts => ({ counts: counts.get(o.id), hasTranscript: kept.has(o.id), retriesHere: !!ctx.retriesHere, zone: userZone(cfg) });
@@ -285,10 +286,12 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       case "meeting.transcript": return await transcriptOf(ctx, store, me, input);
       case "meeting.edit": {
         // Edit or skip one proposal (a reviewer); a decided one stays as it is.
-        const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "type", "what", "due", "text"]);
+        const o = obj(input, ["proposalId"], ["skip", "title", "description", "parentId", "parentTitle", "type", "what", "due", "text", "assignTo", "date", "size", "answers"]);
         const p = await store.proposal(id(o.proposalId, "proposalId"));
         if (!p) return bad("No such proposal", 404);
         if (p.state === "confirmed") return bad("That one is already done", 409);
+        // MC-1e: a decided proposal's words stay as they were; Bring back first.
+        if (p.state === "skipped" && o.skip === undefined) return bad("Bring it back first", 409);
         if (o.skip !== undefined) {
           if (typeof o.skip !== "boolean") throw new Invalid("skip must be true or false");
           const next = await store.viewer(me).updateProposal(p.id, { state: o.skip ? "skipped" : "open", decidedBy: o.skip ? me : null, decidedAt: o.skip ? ctx.now() : null });
@@ -312,8 +315,8 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, occ, lines);
         return { ok: true, data: r };
       }
-      case "meeting.prepare": return await prepare(ctx, store, cfg, me, input);
-      case "meeting.confirm": return await confirm(ctx, store, me, input);
+      case "meeting.keep": return await keep(ctx, store, me, input);
+      case "meeting.unkeep": return await unkeep(ctx, store, me, input);
     }
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
@@ -428,7 +431,22 @@ async function register(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig
 function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
   if (b.kind === "gap") {
     const parentId = o.parentId === undefined ? b.parentId : o.parentId === null ? null : id(o.parentId, "parentId");
-    return { ...b, ...(o.title !== undefined ? { title: text(o.title, "title", 200)! } : {}), ...(o.description !== undefined ? { description: text(o.description, "description", 2000, true) ?? "" } : {}), ...(o.type !== undefined ? { type: text(o.type, "type", 100)! } : {}), parentId, parentTitle: parentId === b.parentId ? b.parentTitle : null };
+    // MC-1e: the New form's fields. Checked again by the write framework's preview before anything is sent.
+    const parentTitle = parentId === b.parentId ? b.parentTitle : o.parentTitle !== undefined ? text(o.parentTitle, "parentTitle", 255, true) : null;
+    const assignTo = o.assignTo === undefined ? undefined : o.assignTo === null || o.assignTo === "" || o.assignTo === "none" ? null : o.assignTo === "me" ? "me" : typeof o.assignTo === "string" && o.assignTo.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(o.assignTo) ? o.assignTo.toLowerCase() : (() => { throw new Invalid("assignTo must be me, nobody or an email"); })();
+    const date = o.date === undefined ? undefined : o.date === null || o.date === "" ? null : typeof o.date === "string" && DATE.test(o.date) ? o.date : (() => { throw new Invalid("date must be a date"); })();
+    const size = o.size === undefined ? undefined : o.size === null || o.size === "" ? null : typeof o.size === "number" && Number.isFinite(o.size) && o.size >= 0 && o.size <= 10_000 ? o.size : (() => { throw new Invalid("size must be a number from 0 to 10000"); })();
+    let answers: Answers | null | undefined;
+    try {
+      answers = o.answers === undefined ? undefined : o.answers === null ? null : parseAnswers(o.answers);
+    } catch (e) {
+      if (e instanceof AnswersError) throw new Invalid(e.message);
+      throw e;
+    }
+    return {
+      ...b, ...(o.title !== undefined ? { title: text(o.title, "title", 255)! } : {}), ...(o.description !== undefined ? { description: o.description === null || o.description === "" ? "" : text(o.description, "description", 8000)! } : {}), ...(o.type !== undefined ? { type: text(o.type, "type", 200)! } : {}), parentId, parentTitle,
+      ...(assignTo !== undefined ? { assignTo } : {}), ...(date !== undefined ? { date } : {}), ...(size !== undefined ? { size } : {}), ...(answers !== undefined ? { answers } : {}),
+    };
   }
   if (b.kind === "commitment") {
     const due = o.due === undefined ? b.due : o.due === null ? null : typeof o.due === "string" && DATE.test(o.due) ? o.due : (() => { throw new Invalid("due must be a date"); })();
@@ -443,19 +461,37 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
   const v = store.viewer(me);
   const r = await v.occurrence(id(o.occurrenceId, "occurrenceId"));
   if (!r) return bad("No such meeting", 404);
-  const ps = (await v.proposals(r.o.id)).sort(proposalOrder);
+  let ps = (await v.proposals(r.o.id)).sort(proposalOrder);
   const lines = await store.transcript(r.o.id);
   const users = await ctx.users();
   const reviewer = canConfirm(r.series, me);
+  // MC-1e: a failed write that the preview's Retry (or Settings › Activity) later confirmed counts as done here too.
+  if (reviewer && ctx.plan) {
+    let changed = false;
+    for (const p of ps.filter((x) => x.state === "failed" && x.result?.writeId)) {
+      const w = await ctx.plan.devopsWrite(p.result!.writeId!).catch(() => null);
+      if (w?.status === "confirmed" && w.undoneBy === null) {
+        await store.updateProposal(p.id, { state: "confirmed", result: { ...p.result, ...(w.itemId ? { itemId: w.itemId } : {}), message: w.message ?? "Done" } });
+        changed = true;
+      }
+    }
+    if (changed) {
+      await settledCall(store, r.o.id, me);
+      ps = (await v.proposals(r.o.id)).sort(proposalOrder);
+    }
+  }
+  const canWrite = reviewer ? await ctx.canWrite(r.series.clientKey).catch(() => false) : false;
   return {
     ok: true,
     data: {
       meeting: viewOf(r.series, (await namesOf(ctx, [r.series.clientKey]))(r.series.clientKey), users, me),
-      occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter((p) => p.state === "open").length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
+      occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter(toReview).length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
       canConfirm: reviewer,
-      canWrite: reviewer ? await ctx.canWrite(r.series.clientKey).catch(() => false) : false,
+      canWrite,
+      // MC-1e: each row's check before any preview (a reviewer's only; an attendee only looks).
+      checks: reviewer ? await checksOf(ctx, cfg, r.series.clientKey, ps) : {},
     },
   };
 }
@@ -476,112 +512,111 @@ async function transcriptOf(ctx: MeetingContext, store: MeetingStore, me: string
   return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: clock(l.at), sec: l.at, text: l.text })), gone: false, missing: false } };
 }
 
-/** The changes a Confirm would make, previewed through the DevOps write framework (a reviewer). */
-async function prepare(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
-  const o = obj(input, ["occurrenceId", "keep"]);
-  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
-  const keep = new Set(ids(o.keep, "keep"));
-  const ps = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed");
-  const kept = ps.filter((p) => keep.has(p.id));
-  if (!kept.length) return bad("Tick at least one proposal, or skip them all", 409);
-  const writes = kept.filter((p) => p.kind !== "commitment");
-  if (writes.length && !(await ctx.canWrite(series.clientKey).catch(() => false))) return bad("Enable DevOps writes for this client in Settings › DevOps first", 409);
-  const plan = ctx.plan;
-  const changes: Record<string, unknown>[] = [];
-  const draftOnly: { proposalId: number; title: string; message: string }[] = [];
-  const cap = writes.length ? await ctx.capture(cfg, series.clientKey).catch(() => null) : null;
-  for (const p of writes) {
-    const b = p.body;
-    if (b.kind === "comment") changes.push({ kind: "comment", itemId: b.itemId, text: b.text, key: `p${p.id}` });
-    else if (b.kind === "gap") {
-      if (!plan) return bad("The plan store isn't available", 503);
-      // My own draft (the existing draft and create path), with the meeting's description; reused on a retry.
-      const level = cap?.model ? (levelOfType(cap.model, b.type) === "parent" || levelOfType(cap.model, b.type) === "top" ? "feature" : "story") : "story";
-      let draftId = p.result?.draftId ?? null;
-      if (!draftId || !(await plan.getDraft(draftId))) {
-        const d = await plan.addDraft({ clientKey: series.clientKey, parentItemId: b.parentId, title: b.title, size: "M", level });
-        await plan.updateDraft(d.id, { description: b.description || null });
-        draftId = d.id;
-        await store.updateProposal(p.id, { result: { draftId } });
-      }
-      if (b.parentId === null) draftOnly.push({ proposalId: p.id, title: b.title, message: "Saved as your draft: put it under a feature or epic in Inbox › Captures, then create it" });
-      else changes.push({ kind: "create", draftId, type: b.type, key: `p${p.id}` });
-    }
-  }
-  let previews: unknown[] = [];
-  let refused: unknown[] = [];
-  let nothing: unknown[] = [];
-  for (let i = 0; i < changes.length; i += 10) {
-    const r = await ctx.devops("devops.preview", { clientKey: series.clientKey, changes: changes.slice(i, i + 10) });
-    if (!r.ok) return r;
-    const d = r.data as { previews: unknown[]; refused: unknown[]; nothing: unknown[] };
-    previews = [...previews, ...d.previews];
-    refused = [...refused, ...d.refused];
-    nothing = [...nothing, ...d.nothing];
-  }
-  const commitments = kept.flatMap((p) => (p.body.kind === "commitment" ? [{ proposalId: p.id, who: p.body.who, side: p.body.side, what: p.body.what, due: p.body.due, shows: p.body.side === "cooptimize" ? `In ${p.body.who === "" ? "their" : `${p.body.who.split(/\s+/)[0]}'s`} Promises, for them to keep or dismiss` : "Noted with this call" }] : []));
-  return { ok: true, data: { previews, refused, nothing, draftOnly, commitments, skip: ps.filter((p) => !keep.has(p.id)).map((p) => p.id) } };
+/**
+ * MC-1e: a promise from its row, saved at once (nothing leaves FocusTime, so no DevOps preview): shared like CV-1's, a
+ * Cooptimizer's shows in their own Promises, the client's in my Waiting on ("noted with this call"). Nobody's plan.
+ */
+async function keep(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["proposalId"]);
+  const p = await store.proposal(id(o.proposalId, "proposalId"));
+  if (!p) return bad("No such proposal", 404);
+  const { o: occ, series } = await store.viewer(me).reviewer(p.occurrenceId);
+  const b = p.body;
+  if (b.kind !== "commitment") return bad("Only a promise is kept from its row; DevOps changes go through the preview", 409);
+  if (!toReview(p)) return bad(p.state === "confirmed" ? "That one is already done" : "Bring it back first", 409);
+  if (!ctx.conversations) return bad("Promises aren't available here", 503);
+  const k = await ctx.conversations.addCommitment({
+    conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.who, toId: b.side === "client" ? me : null, toName: b.side === "client" ? null : b.toName,
+    what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
+  });
+  const message = b.side === "cooptimize" ? CALL_ROW.keptPromise(b.who) : CALL_ROW.keptNote(b.who);
+  const next = await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id, message }, decidedBy: me, decidedAt: ctx.now() });
+  await settledCall(store, occ.id, me);
+  ctx.log({ source: "plan", op: "meeting_kept", count: 1 });
+  return { ok: true, data: { proposal: next, message } };
 }
 
-/** One Confirm: the previewed DevOps writes, the shared commitments, and the rest skipped. */
-async function confirm(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
-  // GD-2: mentionsOk: I saw the flag on my own edited words and confirm them as written.
-  const o = obj(input, ["occurrenceId", "keep"], ["previews", "mentionsOk"]);
-  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
-  const keep = new Set(ids(o.keep, "keep"));
-  const pairs = o.previews === undefined ? [] : Array.isArray(o.previews) && o.previews.length <= 50 ? o.previews.map((x) => {
-    const r = obj(x, ["proposalId", "previewId"]);
-    return { proposalId: id(r.proposalId, "proposalId"), previewId: text(r.previewId, "previewId", 100)! };
-  }) : (() => { throw new Invalid("previews must be up to 50 pairs"); })();
-  const ps = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed");
-  const at = ctx.now();
-  const results: { proposalId: number; ok: boolean; message: string }[] = [];
-  // DevOps writes first, through the framework (read back, audit log, undo).
-  for (let i = 0; i < pairs.length; i += 10) {
-    const batch = pairs.slice(i, i + 10).filter((x) => keep.has(x.proposalId) && ps.some((p) => p.id === x.proposalId));
-    if (!batch.length) continue;
-    const r = await ctx.devops("devops.confirm", { previewIds: batch.map((x) => x.previewId), ...(o.mentionsOk === true ? { mentionsOk: true } : {}) });
-    const rs = r.ok ? ((r.data as { results: ({ entry: { id: number }; confirmed: boolean; message: string; itemId?: number | null } | { error: string })[] }).results) : batch.map(() => ({ error: r.ok ? "" : r.error }));
-    for (const [j, x] of batch.entries()) {
-      const p = ps.find((y) => y.id === x.proposalId)!;
-      const res = rs[j];
-      if (res && "entry" in res && res.confirmed) {
-        await store.updateProposal(p.id, { state: "confirmed", result: { ...p.result, writeId: res.entry.id, ...(res.itemId ? { itemId: res.itemId } : {}), message: res.message }, decidedBy: me, decidedAt: at });
-        results.push({ proposalId: p.id, ok: true, message: res.message });
-      } else {
-        const message = res && "error" in res ? res.error : res && "message" in res ? res.message : "That change didn't go through";
-        await store.updateProposal(p.id, { state: "failed", result: { ...p.result, message }, decidedBy: me, decidedAt: at });
-        results.push({ proposalId: p.id, ok: false, message });
-      }
-    }
+/** MC-1e: Undo a promise kept from its row: the shared commitment goes (while nobody has acted on it) and the row is open again. */
+async function unkeep(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["proposalId"]);
+  const p = await store.proposal(id(o.proposalId, "proposalId"));
+  if (!p) return bad("No such proposal", 404);
+  const { o: occ, series } = await store.viewer(me).reviewer(p.occurrenceId);
+  const cid = p.result?.commitmentId;
+  if (p.body.kind !== "commitment" || p.state !== "confirmed" || !cid) return bad("There's nothing to undo", 409);
+  if (!ctx.conversations) return bad("Promises aren't available here", 503);
+  const gone = await ctx.conversations.removeMeetingCommitment(cid, `${MEETING_CHAT}${series.id}`);
+  if (!gone) return bad("That promise was already changed in Promises, so it stays", 409);
+  const next = await store.updateProposal(p.id, { state: "open", result: null, decidedBy: null, decidedAt: null });
+  if (occ.state === "reviewed") await store.updateOccurrence(occ.id, { state: "ready", reviewedBy: null });
+  ctx.log({ source: "plan", op: "meeting_unkept", count: 1 });
+  return { ok: true, data: { proposal: next } };
+}
+
+/** Nothing left to review: the call is reviewed (its mark and nudge go). */
+async function settledCall(store: MeetingStore, occurrenceId: number, me: string): Promise<void> {
+  const left = (await store.proposals(occurrenceId)).filter(toReview).length;
+  const occ = await store.occurrence(occurrenceId);
+  if (!left && occ && occ.state === "ready") await store.updateOccurrence(occurrenceId, { state: "reviewed", reviewedBy: me });
+}
+
+/**
+ * MC-1e: what the DevOps write framework needs from a call's review, so a call's write goes through the one preview
+ * like every other screen's: the proposal (only for one of the call's reviewers, only while it is still to review, with
+ * the call's client), and the end of its write (confirmed, or the reason in plain words on the row).
+ */
+export type MeetingWritePort = {
+  proposal: (proposalId: number) => Promise<{ body: ProposalBody; clientKey: string } | null>;
+  written: (proposalId: number, r: { ok: boolean; writeId: number | null; itemId: number | null; message: string; type: string | null }) => Promise<void>;
+};
+export function meetingWrites(store: MeetingStore, me: string, now: () => string, log: (r: LogRecord) => void): MeetingWritePort {
+  return {
+    proposal: async (proposalId) => {
+      const p = await store.proposal(proposalId);
+      if (!p || !toReview(p)) return null;
+      const r = await store.viewer(me).reviewer(p.occurrenceId).catch(() => null);
+      return r ? { body: p.body, clientKey: r.series.clientKey } : null;
+    },
+    written: async (proposalId, r) => {
+      const p = await store.proposal(proposalId);
+      if (!p) return;
+      const at = now();
+      if (r.ok) await store.updateProposal(p.id, { state: "confirmed", result: { ...p.result, ...(r.writeId ? { writeId: r.writeId } : {}), ...(r.itemId ? { itemId: r.itemId } : {}), message: r.message }, decidedBy: me, decidedAt: at });
+      else await store.updateProposal(p.id, { state: "failed", result: { ...p.result, ...(r.writeId ? { writeId: r.writeId } : {}), message: callWriteWords(r.message, p.body.kind === "gap" ? (r.type ?? p.body.type) : null) }, decidedBy: me, decidedAt: at });
+      await settledCall(store, p.occurrenceId, me);
+      log({ source: "plan", op: "meeting_written", count: 1, kind: r.ok ? "ok" : "failed" });
+    },
+  };
+}
+
+/**
+ * MC-1e: each row's check before any preview: a new item's fields the client's process requires (asked for on the
+ * row, or said in the New form's words when the form can't fill them), and a comment on an item above story level
+ * (it won't be sent). Read only.
+ */
+async function checksOf(ctx: MeetingContext, cfg: AppConfig, clientKey: string, ps: readonly Proposal[]): Promise<Record<number, ProposalCheck>> {
+  const open = ps.filter(toReview);
+  const out: Record<number, ProposalCheck> = {};
+  const comments = open.filter((p) => p.body.kind === "comment");
+  if (comments.length) {
+    const model = (await ctx.capture(cfg, clientKey).catch(() => null))?.model ?? null;
+    if (model) for (const p of comments) if (p.body.kind === "comment" && !commentLevelOk(model.levels, p.body.itemType)) out[p.id] = { blocked: CALL_ROW.commentAboveStory(p.body.itemType) };
   }
-  for (const p of ps) {
-    if (!keep.has(p.id)) {
-      await store.updateProposal(p.id, { state: "skipped", decidedBy: me, decidedAt: at });
-      continue;
-    }
-    const b = p.body;
-    if (b.kind === "commitment") {
-      if (!ctx.conversations) {
-        results.push({ proposalId: p.id, ok: false, message: "Promises aren't available here" });
-        continue;
+  const gaps = open.filter((p) => p.body.kind === "gap");
+  if (gaps.length && ctx.required) {
+    const req = await ctx.required(clientKey, [...new Set(gaps.map((p) => (p.body.kind === "gap" ? p.body.type : "")))]).catch(() => null);
+    if (req)
+      for (const p of gaps) {
+        const b = p.body;
+        if (b.kind !== "gap") continue;
+        const fields = req.types[b.type] ?? [];
+        const has = { date: !!b.date, size: b.size !== undefined && b.size !== null, description: !!b.description?.trim(), check: !!b.answers?.check?.trim(), assignTo: b.assignTo !== null } as const;
+        const needs = fields.flatMap((f) => (f.fill && !has[f.fill] ? [{ fill: f.fill, name: f.name }] : []));
+        const cant = fields.filter((f) => !f.fill);
+        if (needs.length || cant.length) out[p.id] = { ...(needs.length ? { needs } : {}), ...(cant.length ? { cant: CALL_ROW.cantFill(req.projectName, cant.map((f) => f.name), b.type) } : {}) };
       }
-      // Shared, like CV-1's: a Cooptimizer's shows in their own Promises; the client's is my Waiting on. Nobody's plan.
-      const k = await ctx.conversations.addCommitment({
-        conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.who, toId: b.side === "client" ? me : null, toName: b.side === "client" ? null : b.toName,
-        what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
-      });
-      await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id }, decidedBy: me, decidedAt: at });
-      results.push({ proposalId: p.id, ok: true, message: b.side === "cooptimize" ? `A promise for ${b.who}` : `Noted with this call: ${b.who}` });
-    } else if (b.kind === "gap" && b.parentId === null && p.result?.draftId) {
-      await store.updateProposal(p.id, { state: "confirmed", decidedBy: me, decidedAt: at });
-      results.push({ proposalId: p.id, ok: true, message: "Saved as your draft" });
-    }
   }
-  const left = (await store.proposals(occ.id)).filter((p) => p.state === "open" || p.state === "failed").length;
-  if (!left) await store.updateOccurrence(occ.id, { state: "reviewed", reviewedBy: me });
-  ctx.log({ source: "plan", op: "meeting_confirmed", count: results.filter((r) => r.ok).length, kind: results.some((r) => !r.ok) ? "partial" : "ok" });
-  return { ok: true, data: { results, left } };
+  return out;
 }
 
 // ---- The AI pass, shared by uploads and the poll job ----
@@ -604,11 +639,13 @@ export type PassDeps = {
  * its open proposals untouched, and when FocusTime tries again by itself (`nextRetry`; only the job, in production,
  * acts on it). `retry`: this run is one of those tries (the job counted it in `checks` before the run).
  */
-export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrence, lines: readonly TranscriptLine[], o: { retry?: boolean } = {}): Promise<{ outcome: string; proposals: number }> {
+export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrence, lines: readonly TranscriptLine[], o: { retry?: boolean } = {}): Promise<{ outcome: string; /** Open proposals after the pass. */ proposals: number; /** MC-1e: how many of them this pass added, and how many it left out as the same as one already done, skipped or failed. */ added: number; same: number }> {
   const ai = await d.ai().catch(() => null);
   const cap = await d.capture(series.clientKey).catch(() => null);
   let outcome = "done";
   let n = 0;
+  let added = 0;
+  let same = 0;
   if (!ai) outcome = "not_set_up";
   // MC-1d: FocusTime couldn't read the client's items (DevOps, the client list): its own failure, not the AI service's.
   else if (!cap) outcome = "no_context";
@@ -617,8 +654,12 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines });
     if (r.ok) {
-      n = (await d.store.replaceProposals(occ.id, r.proposals)).filter((p) => p.state === "open").length;
-      d.log({ source: "ai", op: "meeting_capture", count: n, kind: `windows:${r.windows} masked_client:${r.masked.client} masked_email:${r.masked.email} dropped:${r.dropped}` });
+      // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.
+      const fresh = newOnly(r.proposals, await d.store.proposals(occ.id));
+      same = r.proposals.length - fresh.length;
+      added = fresh.length;
+      n = (await d.store.replaceProposals(occ.id, fresh)).filter((p) => p.state === "open").length;
+      d.log({ source: "ai", op: "meeting_capture", count: n, kind: `windows:${r.windows} masked_client:${r.masked.client} masked_email:${r.masked.email} dropped:${r.dropped} same:${same}` });
     } else outcome = outcomeOf(r.kind === "client_off" || r.kind === "off" ? "no_ai" : refusedRequest(r.kind, r.httpStatus) ? "provider_refused" : r.kind, r.part, r.parts);
   }
   if (outcome === "done") await d.store.updateOccurrence(occ.id, { state: "ready", aiOutcome: outcome, nextCheckAt: null, checks: 0 });
@@ -631,7 +672,7 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     // A try by itself is logged once, by the job, with its number.
     if (!o.retry) d.log({ source: "ai", op: "meeting_capture", kind: parseOutcome(outcome).kind });
   }
-  return { outcome, proposals: n };
+  return { outcome, proposals: n, added, same };
 }
 
 /**

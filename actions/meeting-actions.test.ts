@@ -21,7 +21,7 @@ import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { transcriptDocx, transcriptVtt } from "../test/docx.ts";
 import type { ActionResponse } from "./types.ts";
-import { meetingAction, uploadTranscript, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
+import { meetingAction, meetingWrites, uploadTranscript, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
 
 const ADMIN = "11111111-1111-4111-8111-111111111111";
 const LEAD = "22222222-2222-4222-8222-222222222222";
@@ -80,8 +80,6 @@ async function setup() {
     now: () => NOW,
     sleep: async () => {},
   });
-  const devopsCalls: { action: string; input: unknown }[] = [];
-  let seq = 0;
   const users = [
     { id: ADMIN, name: "Sam Admin", emails: ["sam@cooptimize.example"] },
     { id: LEAD, name: "Kim Lead", emails: ["kim@cooptimize.example"] },
@@ -98,20 +96,11 @@ async function setup() {
       if (o.clientsDown) return "unavailable"; const hit = orgClients.find((c) => c.toLowerCase() === k.trim().toLowerCase()); return hit ? { key: hit, name: hit } : null; }, leads: async () => [LEAD],
     capture: async (_c, k) => (k === "contoso" ? { clientName: "Contoso", internal: false, items: [aWorkItem({ id: 1201, title: "Rates export", type: "Feature", tier: "feature" })], model: buildProcessModel(aClientProcess()), directory: [aClientEntry({ key: "contoso", names: ["Contoso"], itemIds: [1201] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], itemIds: [4410] })] } : null),
     ai: async () => ai,
-    devops: async (action, input): Promise<ActionResponse> => {
-      devopsCalls.push({ action, input });
-      if (action === "devops.preview") {
-        const changes = (input as { changes: { key: string }[] }).changes;
-        return { ok: true, data: { previews: changes.map((c) => ({ previewId: `pv-${++seq}`, key: c.key })), refused: [], nothing: [] } };
-      }
-      const pids = (input as { previewIds: string[] }).previewIds;
-      return { ok: true, data: { results: pids.map((p, i) => ({ entry: { id: 100 + i }, confirmed: true, message: `Done ${p}`, itemId: 9000 + i })) } };
-    },
     canWrite: async () => o.write ?? true,
     log: o.log ?? (() => {}),
   });
   const act = (me: string, action: MeetingAction, input: unknown, o?: Parameters<typeof ctxAs>[1]) => meetingAction(ctxAs(me, o), action, input);
-  return { db, meetings, conversations, graphCalls, providerCalls, devopsCalls, act, ctxAs, graph, candidate };
+  return { db, meetings, conversations, graphCalls, providerCalls, act, ctxAs, graph, candidate };
 }
 
 const data = <T>(r: ActionResponse): T => {
@@ -150,7 +139,8 @@ describe("meeting capture actions (MC-1)", () => {
     expect(await uploadTranscript(ctxAs(OUTSIDER), { seriesId: m.id, date: "2026-11-10", name: "t.docx", bytes: docx })).toMatchObject({ ok: false, status: 404 });
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: 999, date: "2026-11-10", name: "t.docx", bytes: docx })).toMatchObject({ ok: false, status: 404 });
     const a = data<{ occurrenceId: number; outcome: string; proposals: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.docx", bytes: docx }));
-    expect(a).toMatchObject({ outcome: "done", proposals: 4 });
+    // MC-1e: the provider's comment on #1201, a Feature, is never a proposal (comments go on stories only).
+    expect(a).toMatchObject({ outcome: "done", proposals: 3 });
     const fromDocx = await meetings.transcript(a.occurrenceId);
     const b = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(LEAD), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     expect(b.occurrenceId).toBe(a.occurrenceId);
@@ -159,32 +149,32 @@ describe("meeting capture actions (MC-1)", () => {
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.pdf", bytes: new TextEncoder().encode("%PDF") })).toMatchObject({ ok: false, status: 422 });
   });
 
-  it("confirms each kept kind through the right write and writes nothing for skipped ones", async () => {
-    const { act, ctxAs, conversations, devopsCalls, meetings } = await setup();
+  it("keeps a promise from its row at once, sends DevOps changes only through the write framework, and writes nothing for a skipped one (MC-1e)", async () => {
+    const { act, ctxAs, conversations, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
     const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     const r = data<{ proposals: { id: number; kind: string; body: { side?: string } }[]; canConfirm: boolean }>(await act(ADMIN, "meeting.review", { occurrenceId }));
     expect(r.canConfirm).toBe(true);
-    const [gap, mateP, clientP, comment] = r.proposals;
-    expect([gap!.kind, mateP!.kind, clientP!.kind, comment!.kind]).toEqual(["gap", "commitment", "commitment", "comment"]);
-    // Attendees view; they can't confirm.
+    // The fake process's stories are User Story; the comment the provider proposed on the Feature never became one.
+    expect(r.proposals.map((p) => p.kind)).toEqual(["gap", "commitment", "commitment"]);
+    const [gap, mateP, clientP] = r.proposals;
+    // Attendees view; they can't keep, skip or send.
     expect(data<{ canConfirm: boolean }>(await act(MATE, "meeting.review", { occurrenceId })).canConfirm).toBe(false);
-    expect(await act(MATE, "meeting.prepare", { occurrenceId, keep: [comment!.id] })).toMatchObject({ ok: false, status: 403 });
+    expect(await act(MATE, "meeting.keep", { proposalId: mateP!.id })).toMatchObject({ ok: false, status: 403 });
+    expect(await act(MATE, "meeting.edit", { proposalId: gap!.id, skip: true })).toMatchObject({ ok: false, status: 403 });
+    expect(await meetingWrites(meetings, MATE, () => NOW, () => {}).proposal(gap!.id)).toBeNull();
     expect(await act(OUTSIDER, "meeting.review", { occurrenceId })).toMatchObject({ ok: false, status: 404 });
 
-    // Keep the gap, both commitments; skip the comment.
-    const keep = [gap!.id, mateP!.id, clientP!.id];
-    const prep = data<{ previews: { previewId: string; key: string }[]; commitments: unknown[] }>(await act(ADMIN, "meeting.prepare", { occurrenceId, keep }));
-    expect(devopsCalls[0]).toMatchObject({ action: "devops.preview", input: { clientKey: "contoso", changes: [{ kind: "create", type: "User Story", key: `p${gap!.id}` }] } });
-    expect(prep.commitments).toHaveLength(2);
-    const c = data<{ results: { ok: boolean }[]; left: number }>(await act(ADMIN, "meeting.confirm", { occurrenceId, keep, previews: prep.previews.map((p) => ({ proposalId: Number(p.key.slice(1)), previewId: p.previewId })) }));
-    expect(c.results.every((x) => x.ok)).toBe(true);
-    expect(c.left).toBe(0);
-    expect(devopsCalls.map((x) => x.action)).toEqual(["devops.preview", "devops.confirm"]);
-    expect(devopsCalls.some((x) => JSON.stringify(x.input).includes('"comment"'))).toBe(false);
+    // Both promises from their rows, at once; the gap through the write framework's port (the one preview).
+    expect(data<{ message: string }>(await act(ADMIN, "meeting.keep", { proposalId: mateP!.id })).message).toBe("Added to Lee's Promises");
+    expect(data<{ message: string }>(await act(ADMIN, "meeting.keep", { proposalId: clientP!.id })).message).toBe("Noted with this call: Dana Client");
+    expect(await act(ADMIN, "meeting.keep", { proposalId: gap!.id })).toMatchObject({ ok: false, status: 409 });
+    const port = meetingWrites(meetings, ADMIN, () => NOW, () => {});
+    expect(await port.proposal(gap!.id)).toMatchObject({ clientKey: "contoso", body: { kind: "gap", title: "Holiday calendar import" } });
+    await port.written(gap!.id, { ok: true, writeId: 100, itemId: 9000, message: "Created #9000", type: "User Story" });
     const after = await meetings.proposals(occurrenceId);
     expect(after.find((p) => p.id === gap!.id)).toMatchObject({ state: "confirmed", result: { writeId: 100, itemId: 9000 } });
-    expect(after.find((p) => p.id === comment!.id)?.state).toBe("skipped");
+    expect(await port.proposal(gap!.id)).toBeNull();
     expect((await meetings.occurrence(occurrenceId))?.state).toBe("reviewed");
 
     // The Cooptimizer's promise is in their own Promises; the client's is my Waiting on. Nobody's plan was written.
@@ -195,14 +185,32 @@ describe("meeting capture actions (MC-1)", () => {
     expect((await conversations.viewer(ADMIN).commitmentsTo([chat])).map((k) => k.what)).toEqual(["Send sample rates"]);
     expect(await conversations.viewer(OUTSIDER).commitmentsBy([chat])).toEqual([]);
     expect(await conversations.viewer(OUTSIDER).commitment(theirs[0]!.id)).toBeNull();
+
+    // Undo takes the promise back and opens the row and the call again.
+    expect(data<{ proposal: { state: string } }>(await act(ADMIN, "meeting.unkeep", { proposalId: mateP!.id })).proposal.state).toBe("open");
+    expect(await conversations.viewer(MATE).commitmentsBy([chat])).toEqual([]);
+    expect((await meetings.occurrence(occurrenceId))?.state).toBe("ready");
   });
 
-  it("asks for DevOps write access before a DevOps change, and dismisses with No transcript this week", async () => {
+  it("a failed write is said in plain words on its row, never DevOps's error text (MC-1e)", async () => {
     const { act, ctxAs, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
     const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
-    const comment = (await meetings.proposals(occurrenceId)).find((p) => p.kind === "comment")!;
-    expect(await act(ADMIN, "meeting.prepare", { occurrenceId, keep: [comment.id] }, { write: false })).toMatchObject({ ok: false, status: 409 });
+    const gap = (await meetings.proposals(occurrenceId)).find((p) => p.kind === "gap")!;
+    await meetingWrites(meetings, ADMIN, () => NOW, () => {}).written(gap.id, { ok: false, writeId: 7, itemId: null, message: "DevOps refused the change: TF401320: Rule Error for field Cost Center. Error code: Required, HasValues.", type: "User Story" });
+    const p = (await meetings.proposals(occurrenceId)).find((x) => x.id === gap.id)!;
+    expect(p.state).toBe("failed");
+    expect(p.result?.message).toBe("DevOps says Cost Center is needed on a new User Story. Fill it in on this row and try again, or create this one in DevOps and skip it here.");
+    expect(p.result?.message).not.toMatch(/TF4|Error code/);
+    // Still to review, and its words are kept: it can be fixed and tried again.
+    expect(await meetingWrites(meetings, ADMIN, () => NOW, () => {}).proposal(gap.id)).toMatchObject({ body: { title: "Holiday calendar import" } });
+  });
+
+  it("says DevOps is read only without my write PAT, and dismisses with No transcript this week", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    expect(data<{ canWrite: boolean }>(await act(ADMIN, "meeting.review", { occurrenceId }, { write: false })).canWrite).toBe(false);
     const o2 = await meetings.ensureOccurrence(m.id, "2026-11-17", "2026-11-17T15:00:00Z", "2026-11-17T16:00:00Z", "needs_upload", null);
     expect(await act(MATE, "meeting.no_transcript", { occurrenceId: o2.id })).toMatchObject({ ok: false, status: 403 });
     expect(data<{ occurrence: { state: string } }>(await act(LEAD, "meeting.no_transcript", { occurrenceId: o2.id })).occurrence.state).toBe("no_transcript");

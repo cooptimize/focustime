@@ -22,6 +22,9 @@ import { AnswersError, parseAnswers, withCarried, written, type Answers } from "
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
 import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
+import { commentLevelOk } from "../plan/meetings.ts";
+import type { RequiredField } from "../plan/call-words.ts";
+import type { MeetingWritePort } from "./meeting-actions.ts";
 import { canEdit, parentIdIn, rungOf, sameValue, valueText, type ChangeField, type ChangeValue, type EditRight, type StagedChange } from "../plan/ahead-edit.ts";
 import { addFixed, dropFixed, fills, FIXED_KEY, readFixed } from "../plan/readiness.ts";
 import type { NotesStore } from "../store/devops-notes.ts";
@@ -92,10 +95,12 @@ export type DevOpsWriteContext = {
    * refused for a comment counted before it. Absent: comment edits aren't available here.
    */
   reportSince?: ((cfg: AppConfig, clientKey: string) => Promise<string>) | undefined;
+  /** MC-1e: a call's proposals (kinds meeting_create and meeting_comment) and the end of their writes. Absent: not here. */
+  meetings?: MeetingWritePort | undefined;
 };
 
 /** Batch previews where one refused change doesn't stop the rest: AH-1's change set, SR-1's Push all lines. */
-const PER_ITEM = new Set(["fields", "comment", "comment_edit", "comment_delete", "state", "remaining_work"]);
+const PER_ITEM = new Set(["fields", "comment", "comment_edit", "comment_delete", "state", "remaining_work", /* MC-1e: a call's ticked rows */ "meeting_create", "meeting_comment"]);
 /** CV-4: images attached to one item at most, and the largest one (as read from Teams, after stripping). */
 export const ATTACH_LIMIT = 10;
 /** One image the create preview offers: from a message being included, with who sent it and when. */
@@ -180,6 +185,8 @@ type Held = {
   appendOnly?: boolean;
   /** ED-1: a description or acceptance criteria as it reads now and after (safe HTML). */
   looks?: { label: string; before: string; after: string }[];
+  /** MC-1e: the call's proposal this write comes from; its row hears how the write ended. */
+  meeting?: { proposalId: number };
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -249,7 +256,7 @@ class Refused extends Error {
   }
 }
 
-type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string; /** QC-1: the clock, for the twin check. */ now: () => string };
+type Env = { reportSince: DevOpsWriteContext["reportSince"]; cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string; /** QC-1: the clock, for the twin check. */ now: () => string; /** MC-1e */ meetings: MeetingWritePort | undefined };
 
 /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
 async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, clientKey: string): Promise<Env> {
@@ -270,7 +277,7 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   } catch {
     throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
   }
-  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey), now: ctx.now };
+  return { reportSince: ctx.reportSince, cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey), now: ctx.now, meetings: ctx.meetings };
 }
 
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -609,9 +616,14 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
             const r = await attempt(ctx, env, a.entry, false, tz);
             results.push({ ...r, message: `${r.message}${a.attached ? ` with ${a.attached === 1 ? "1 image" : `${a.attached} images`}` : ""}${a.failed ? `. ${a.failed === 1 ? "1 image" : `${a.failed} images`} couldn't be read from Teams or uploaded, so ${a.failed === 1 ? "it was" : "they were"} left out` : ""}` });
           } else results.push(await attempt(ctx, env, entry, false, tz));
+          // MC-1e: a call's row hears how its write ended (confirmed, or why not, in plain words there).
+          const r = results.at(-1)!;
+          if (h.meeting && ctx.meetings && "entry" in r) await ctx.meetings.written(h.meeting.proposalId, { ok: r.confirmed, writeId: r.entry.id, itemId: r.entry.itemId, message: r.message, type: h.type }).catch(() => {});
         } catch (e) {
-          if (e instanceof Refused) results.push({ error: e.message, status: e.status });
-          else throw e;
+          if (e instanceof Refused) {
+            results.push({ error: e.message, status: e.status });
+            if (h.meeting && ctx.meetings) await ctx.meetings.written(h.meeting.proposalId, { ok: false, writeId: null, itemId: null, message: e.message, type: h.type }).catch(() => {});
+          } else throw e;
         }
       }
       if (o.previewIds !== undefined) return { ok: true, data: { results } };
@@ -1201,6 +1213,30 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const after: Record<string, string | null> = { Type: type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: description, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: "The project's default", Iteration: "The project's default" };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: null, title, ops, rev: null, before: {}, after, type, ask: { chatId, messageId } };
     }
+    case "meeting_create":
+    case "meeting_comment": {
+      // MC-1e: a call's proposal, through this one door like every other screen's write: only one of the call's
+      // reviewers, only while it is still to review, only for the call's own client. A new item is the New form's
+      // create (its checks, a required field refused before anything is sent); a comment is the usual comment, only on a
+      // story-level item of the client's process (never a feature or above: Monday's report reads those).
+      const proposalId = posId(o.proposalId, "proposalId");
+      const m = env.meetings ? await env.meetings.proposal(proposalId) : null;
+      if (!m) throw new Refused("That proposal is done, skipped, or only the call's reviewers can send it", 409);
+      if (m.clientKey !== env.clientKey) throw new Refused("That proposal belongs to another client", 409);
+      const b = m.body;
+      let h: HeldIn | string;
+      if (o.kind === "meeting_create") {
+        if (b.kind !== "gap") throw new Invalid("That proposal isn't a new item");
+        h = await previewOne(env, { kind: "new_item", title: b.title, type: b.type, parentId: b.parentId, assignTo: b.assignTo === undefined ? "me" : b.assignTo, date: b.date ?? null, description: b.description.trim() || null, size: b.size ?? null, ...(b.answers ? { answers: b.answers } : {}) }, tz, memo);
+      } else {
+        if (b.kind !== "comment") throw new Invalid("That proposal isn't a comment");
+        const item = await writer.item(org, pat, project, b.itemId);
+        const pc = await ((memo.get("pc") ?? memo.set("pc", writer.processConfig(org, pat, project)).get("pc")!) as Promise<unknown>);
+        if (!commentLevelOk(levelsFromProcessConfig(pc).levels, item.type)) throw new Refused(`#${item.id} is a ${item.type}, above story level. A call's comment goes only on a story: Monday's status report reads the comments on features`, 409, "above_story");
+        h = await previewOne(env, { kind: "comment", itemId: b.itemId, text: b.text }, tz, memo);
+      }
+      return typeof h === "string" ? h : { ...h, meeting: { proposalId } };
+    }
     case "conversation_create": {
       // CV-1: a bug, story or feature from a whole conversation: the edited title and path of action, then the original
       // messages (sender, time, sanitized HTML) and the Teams link, appended by code. Under a parent feature (its area
@@ -1550,7 +1586,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
     }
     default:
-      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, new_item, request_create, proposal_create, conversation_create, conversation_comment, description_update, description_edit, item_edit, reparent, target_date, assign, fields or undo");
+      throw new Invalid("kind must be state, comment, comment_edit, comment_delete, create, new_item, request_create, proposal_create, conversation_create, conversation_comment, meeting_create, meeting_comment, description_update, description_edit, item_edit, reparent, target_date, assign, fields or undo");
   }
 }
 
@@ -2161,4 +2197,31 @@ export function feedbackWrites(ctx: DevOpsWriteContext, clients: () => Promise<{
       return { check, preview: hold(h, env), refused: null };
     },
   };
+}
+
+/**
+ * MC-1e: the fields the client's process requires on a new item of each type, with no default, that a create from the
+ * New form's fields would otherwise leave empty (the same rule as the create's own check, `missingRequired`), each with
+ * the form's field that fills it, or null when the form can't. Read with my write PAT; nothing is written.
+ */
+export async function requiredFor(ctx: DevOpsWriteContext, clientKey: string, types: readonly string[]): Promise<{ projectName: string; types: Record<string, RequiredField[]> }> {
+  const plan = ctx.plan;
+  const cfg = await ctx.config();
+  if (!plan || !cfg) throw new Refused("DevOps writes aren't available here", 503);
+  const env = await envFor(ctx, plan, cfg, clientKey);
+  const all = await env.writer.fields(env.org, env.pat, env.project);
+  const out: Record<string, RequiredField[]> = {};
+  for (const type of types.slice(0, 10)) {
+    const info = await env.writer.typeFieldInfo(env.org, env.pat, env.project, type).catch(() => null);
+    if (!info) continue;
+    const has = new Set(info.map((f) => f.ref));
+    const target = detectTargetField(all, has);
+    const size = detectTypeSizeField(has);
+    out[type] = missingRequired(info, new Set(["System.Title"])).map((f) => ({
+      ref: f.ref,
+      name: String(f.name ?? all.find((x) => x.referenceName === f.ref)?.name ?? f.ref.split(".").pop()),
+      fill: f.ref === target ? "date" : f.ref === size ? "size" : f.ref === "System.Description" ? "description" : f.ref === AC_FIELD ? "check" : f.ref === "System.AssignedTo" ? "assignTo" : null,
+    }));
+  }
+  return { projectName: env.projectName, types: out };
 }
