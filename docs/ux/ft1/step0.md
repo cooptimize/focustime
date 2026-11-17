@@ -46,3 +46,25 @@ Files that add or remove a route on a page already open and then send requests f
 | week | story-card, loading |
 
 These are safe, because a reload follows the route: register-client-call, today, guide (line 293), signin-needed, tab-order. Files that read an animation at fixed times: opening-and-brand's other tests (`t0+1300` for `markBox`, `t0+1000` for reduced motion) and `e2e/shot-scripts/br1-shots.ts`. `first-run-setup` uses a fake clock, not sampling. The sweep's results are in the open questions.
+
+## After the fixes: the shake itself, and B3
+
+The shake was checked on two throwaway browser tests, never committed:
+
+| Test | Alone | `npm run shake -- <file> --runs 2` | Exit code |
+|---|---|---|---|
+| A sound one: a fresh page, then wait for the top bar | passes | 16 of 16 | 0 |
+| One made flaky on purpose: the page's busy loop (about 200 ms alone) held to 400 ms on the wall clock | passes | 5 of 16 (705 to 2595 ms) | 1 |
+
+Both times no copy (`*.shake-*.test.ts`) and no temp folder was left, after the failing run too. A run stopped with Ctrl+C removes them the same way (the same clean-up, on SIGINT).
+
+B3, the three tests at 8 copies on 3 cores, 5 runs (40 copies each), on this branch:
+
+| Test | Result |
+|---|---|
+| `e2e/code/search-inside.test.ts`, the whole file | 40 of 40 |
+| `e2e/shell/first-download.test.ts`, the whole file | 39 of 40 at first, a wait the fix still left (the route told the old page by `load` events); after its fix 40 of 40, twice; after the review's fixes 40 of 40 |
+| `e2e/shell/opening-and-brand.test.ts`, "no words on screen before 8 seconds…" (`--test`) | 39 of 40, then 38 of 40, then 39 of 40, each a wait the fix still left (the line's own animation, the parser stopping inside the stage, then inside the status line); after those fixes 40 of 40, twice |
+
+Each was broken on purpose again after the last change, and failed: the line at 1 s, the blocks at full opacity, the pass's animations removed, the waiting words not written and the ready words changed (`opening-and-brand`); no reload after a release, a reload loop (the once-only guard removed) and the line at once (`first-download`).
+| `e2e/shell/opening-and-brand.test.ts`, the whole file | 0 of 40, in three tests FT-1 doesn't change (docs/open-questions.md, FT-1) |
