@@ -6,7 +6,7 @@ import type { PromiseCard } from "../../plan/conversation-views.ts";
 import type { FollowUpView } from "../../actions/types.ts";
 import { actsFor, ITEM_KEYS, type ActEnv } from "./ItemActions.tsx";
 import { promiseOrder } from "./InboxPage.tsx";
-import { chipHint, chipName, dueWords, lateText, needCounts } from "./model.ts";
+import { chipHint, chipName, dueWords, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
 import { suggestionActs } from "./Suggestion.tsx";
 
 const TODAY = "2026-11-05";
@@ -113,5 +113,20 @@ describe("UC-1: a chip's number", () => {
     expect(chipHint("Contoso", 0)).toBeNull();
     expect(chipHint("Contoso", 1)).toBe("1 needs you in Contoso: suggestions from chats, and promises late or due today. The same count as the Inbox tab's");
     expect(chipHint(null, 5)).toMatch(/^5 need you: /);
+  });
+});
+
+describe("UC-2: the No client chip", () => {
+  const r = (clientKey: string | null, ...views: string[]) => ({ clientKey, views });
+  it("counts only what the tab counts that has no client, so the chips add up to the tab", () => {
+    const items = [r("adatum", "needs_you"), r(null, "needs_you", "promises"), r(null, "captures"), r(null, "promises")];
+    expect(needNoClient(items)).toBe(1);
+    const perClient = [...needCounts(items).values()].reduce((a, n) => a + n, 0);
+    expect(perClient + needNoClient(items)).toBe(items.filter((x) => x.views.includes("needs_you")).length);
+    expect(needNoClient([r("adatum", "needs_you")])).toBe(0);
+  });
+  it("says what it counts", () => {
+    expect(chipName(NO_CLIENT, 2)).toBe("No client, 2 need you");
+    expect(chipHint(NO_CLIENT, 1)).toMatch(/^1 needs you with no client: suggestions from chats/);
   });
 });

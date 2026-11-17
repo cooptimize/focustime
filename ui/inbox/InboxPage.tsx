@@ -24,7 +24,7 @@ import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
 import { Detail } from "./Detail.tsx";
 import { actsFor, ITEM_KEYS, type FormId } from "./ItemActions.tsx";
-import { chipHint, chipName, dueWords, lateText, needCounts } from "./model.ts";
+import { chipHint, chipName, dueWords, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
 import { SuggestionOpen, type SuggestionForm } from "./Suggestion.tsx";
 import "./inbox.css";
 import { Icon } from "../icons.tsx";
@@ -95,12 +95,15 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     void call("ui.set_inbox", { view: LIST_PREF[nav.view] }, { background: true }).catch(() => undefined);
   }, [nav.view, lastList]);
   const chooseList = (l: InboxList) => (setKept(null), onNav({ tab: "inbox", view: l, item: null }));
+  // UC-2: the "No client" chip, chosen beside the clients. Kept for this visit only: the stored choice is client keys.
+  const [noClient, setNoClient] = useState(false);
   const toggleClient = (k: string | null) => {
+    if (k === null) setNoClient(false);
     const next = k === null ? [] : clients.includes(k) ? clients.filter((x) => x !== k) : [...clients, k];
     setClients(next);
     void call("ui.set_inbox", { clients: next }, { background: true }).catch(() => undefined);
   };
-  const inClients = useCallback((k: string | null) => !clients.length || (k !== null && clients.includes(k)), [clients]);
+  const inClients = useCallback((k: string | null) => (!clients.length && !noClient) || (k === null ? noClient : clients.includes(k)), [clients, noClient]);
 
   // ---- the three lists ----
   const items = useMemo(() => src.list?.items ?? [], [src.list]);
@@ -123,6 +126,13 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   // The phone's Inbox is unchanged: no numbers on its chips.
   const need = useMemo(() => (phone ? new Map<string, number>() : needCounts(items)), [items, phone]);
   const allNeed = phone ? 0 : (src.list?.needsYou ?? 0);
+  // UC-2: what the tab counts with no client, as its own chip after the clients (so the chips add up to the tab).
+  const noClientNeed = phone ? 0 : needNoClient(items);
+  // The chosen No client goes only once nothing in any list lacks a client (its rows may no longer need me but still show).
+  const anyNoClient = !phone && items.some((i) => !i.clientKey);
+  useEffect(() => {
+    if (!anyNoClient && noClient) setNoClient(false);
+  }, [anyNoClient, noClient]);
   // Every client with something in any list, for the chips.
   const chipClients = useMemo(() => {
     const ks = new Set<string>();
@@ -502,9 +512,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
           ))}
         </div>
       </header>
-      {chipClients.length > 1 && (
+      {chipClients.length + (noClientNeed > 0 || noClient ? 1 : 0) > 1 && (
         <div className="ib4-chips" role="group" aria-label="Clients">
-          <button type="button" className={`ib4-chip${clients.length ? "" : " on"}`} aria-pressed={!clients.length} aria-label={chipName("All clients", allNeed)} title={chipHint(null, allNeed) ?? undefined} onClick={() => toggleClient(null)}>
+          <button type="button" className={`ib4-chip${clients.length || noClient ? "" : " on"}`} aria-pressed={!clients.length && !noClient} aria-label={chipName("All clients", allNeed)} title={chipHint(null, allNeed) ?? undefined} onClick={() => toggleClient(null)}>
             All clients
             {allNeed > 0 && <span className="ib4-count">{allNeed}</span>}
           </button>
@@ -515,6 +525,12 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
               {(need.get(k) ?? 0) > 0 && <span className="ib4-count">{need.get(k)}</span>}
             </button>
           ))}
+          {(noClientNeed > 0 || noClient) && (
+            <button type="button" className={`ib4-chip ib4-chip-none${noClient ? " on" : ""}`} data-chip="no-client" aria-pressed={noClient} aria-label={chipName(NO_CLIENT, noClientNeed)} title={chipHint(NO_CLIENT, noClientNeed) ?? undefined} onClick={() => setNoClient((v) => !v)}>
+              {NO_CLIENT}
+              <span className="ib4-count">{noClientNeed}</span>
+            </button>
+          )}
         </div>
       )}
       {late && list === "promises" && (
