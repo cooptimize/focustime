@@ -86,6 +86,11 @@ export const OUTCOMES = {
   no_vm: { log: "no_vm", tell: true, tried: true, text: "Left off today: FocusTime couldn't find your VM" },
   refused: { log: "refused", tell: true, tried: true, text: "Left off today: Azure refused the start" },
   not_running: { log: "not_running", tell: true, tried: false, text: "Left off today: FocusTime wasn't running at the time" },
+  // VM-4: the VM's state couldn't be read at the planned time (Azure busy, unreachable or saying no to the read). Not
+  // the day's try: logged once, read again on later passes until the late limit. Not told yet: a later pass may start it.
+  state_retry: { log: "state_unreadable", tell: false, tried: false, text: "Today's start is waiting: FocusTime couldn't read your VM's state yet" },
+  // VM-4: still unreadable when the late limit came: left off, and the person is told.
+  state_unreadable: { log: "state_unreadable_late", tell: true, tried: false, text: "Left off today: FocusTime couldn't read your VM's state" },
 } as const satisfies Record<string, { log: string; tell: boolean; tried: boolean; text: string }>;
 export type OutcomeReason = keyof typeof OUTCOMES;
 export const isOutcomeReason = (x: unknown): x is OutcomeReason => typeof x === "string" && Object.hasOwn(OUTCOMES, x);
@@ -97,6 +102,7 @@ export const OUTCOME_NEXT: Partial<Record<OutcomeReason, string>> = {
   no_vm: "Choose your VM again in Settings › Accounts and calendars › My VM.",
   refused: "Start it from the VM menu; if Azure refuses again, Settings › Activity has what it said.",
   not_running: "Start it from the VM menu if you need it.",
+  state_unreadable: "Start it from the VM menu if you need it.",
 };
 
 /** A note that goes with a start: what couldn't be checked, and what was used instead. */
