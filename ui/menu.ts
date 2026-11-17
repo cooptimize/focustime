@@ -1292,6 +1292,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "demo.devops_change": return { disabled: "Runs from a demo script" };
     case "demo.vm_tick": return { disabled: "Runs from a demo check" };
     case "demo.pass_stall": return { disabled: "Runs from a demo check" };
+    case "demo.vm_fail": return { disabled: "Runs from a demo check" };
+    case "demo.fail_next": return { disabled: "Runs from a demo check" };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
