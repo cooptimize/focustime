@@ -77,6 +77,8 @@ export const CALL_BAR = {
   clear: "Clear",
   tenAtATime: (n: number) => `DevOps changes go 10 at a time: the first 10 of ${n} now, the rest stay ticked.`,
   noPat: "Enable DevOps writes for this client in Settings › DevOps first",
+  /** Ticked DevOps rows that still need a field: neither sent nor unticked. */
+  waiting: (n: number) => (n === 1 ? "1 needs something on its row first" : `${n} need something on their rows first`),
 } as const;
 
 /** MC-1e: Propose again's line: how many are new, and how many were left out as already done, skipped or failed. */

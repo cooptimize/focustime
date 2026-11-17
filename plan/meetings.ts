@@ -270,6 +270,17 @@ export const commentLevelOk = (levels: { child: readonly string[] }, itemType: s
 /** MC-1e: still to review: open, or failed and waiting for its fix. The one count the page, its tab and Client calls show. */
 export const toReview = (p: Pick<Proposal, "state">) => p.state === "open" || p.state === "failed";
 
+/** MC-1e: DevOps changes the one preview takes at once (the write framework's batch limit). */
+export const CALL_AT_ONCE = 10;
+/**
+ * MC-1e: what the bar sends from the ticked rows: the DevOps changes ready to go, in page order, the first 10 now and the
+ * rest left ticked; rows still needing a field are neither sent nor unticked.
+ */
+export function callBatch<T extends { id: number }>(tickedInPageOrder: readonly T[], ready: (p: T) => boolean): { now: T[]; later: T[]; waiting: T[] } {
+  const go = tickedInPageOrder.filter(ready);
+  return { now: go.slice(0, CALL_AT_ONCE), later: go.slice(CALL_AT_ONCE), waiting: tickedInPageOrder.filter((p) => !ready(p)) };
+}
+
 /** The words a proposal carries (a new item's title, a promise's what, a comment's text). */
 export const proposalWords = (b: ProposalBody) => (b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text);
 const plainWords = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();

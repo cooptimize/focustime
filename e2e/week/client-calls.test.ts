@@ -95,4 +95,72 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");
     expect(errors).toEqual([]);
   }, T);
+
+  it("from Client calls: the same count there; filter after a reload; Bring back; a line's button opens a folded row; Back to Client calls", async () => {
+    const { page, errors } = await freshPage(h);
+    await page.evaluate(() => (location.hash = "#/meetings"));
+    const series = page.locator(".mtg-series").first();
+    await series.waitFor({ timeout: 30_000 });
+    const listed = Number(/Review (\d+) proposals/.exec((await series.textContent()) ?? "")?.[1]);
+    await series.getByRole("button", { name: /Review|Open/ }).first().click();
+    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);
+    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(new RegExp(`^${listed} to review`));
+    // The filter survives a reload.
+    await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/promises`);
+    await page.reload();
+    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await expect(page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect.poll(() => page.locator(".mtg-group").count()).toBe(1);
+    // Skip one: it folds into "1 skipped" and the count drops; Bring back returns it.
+    const row = page.locator(".mtg-prop.open").filter({ has: page.locator("input[value='Add the row limit warning before the export ships']") });
+    await row.getByRole("button", { name: "Skip" }).click();
+    await expect.poll(() => row.count()).toBe(0);
+    const fold = page.locator(".mtg-fold").filter({ hasText: "1 skipped" });
+    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(new RegExp(`^${listed - 1} to review · 1 skipped`));
+    // From the transcript, the skipped row's line opens it, unfolded and focused.
+    await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
+    await page.getByRole("searchbox", { name: "Filter the transcript" }).fill("row limit");
+    await page.locator(".mtg-lines li.marked").first().getByRole("button", { name: /^Go to the proposal/ }).click();
+    await expect.poll(() => page.evaluate(() => document.activeElement?.querySelector(".mtg-main")?.textContent)).toBe("Add the row limit warning before the export ships");
+    await expect(fold.getByRole("button", { name: /1 skipped/ }).getAttribute("aria-expanded")).resolves.toBe("true");
+    await page.locator(".mtg-prop.skipped").getByRole("button", { name: "Bring back" }).click();
+    await expect.poll(() => row.count()).toBe(1);
+    await expect.poll(() => page.locator(".mtg-count").textContent()).toMatch(new RegExp(`^${listed} to review`));
+    // Back to Client calls, where it was opened from.
+    await page.locator(".mtg-view").getByRole("button", { name: "Back to client calls" }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/meetings");
+    expect(errors).toEqual([]);
+  }, T);
+
+  for (const [w, ht] of [[1440, 900], [390, 844]] as const)
+    it(`while scrolling at ${w} by ${ht}, the title row, the filter row and the section's header stay in view`, async () => {
+      const { page, errors } = await freshPage(h, { width: w, height: ht });
+      await page.evaluate(() => (location.hash = "#/week"));
+      const id = (await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "meeting.mine", input: {} }) }).then((r) => r.json()))).data.occurrences[0].id as number;
+      await page.evaluate((x) => (location.hash = x), `#/meetings/${id}`);
+      await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+      const view = page.locator(".mtg-view");
+      const top = await view.evaluate((el) => el.getBoundingClientRect().top);
+      const barH = await page.evaluate(() => document.querySelector(".app.phone > .topbar")?.getBoundingClientRect().height ?? null);
+      for (const steps of [1, 2]) {
+        // The wheel scrolls whatever scrolls here: the page on a computer, the document on a phone.
+        await page.mouse.move(Math.round(w / 2), Math.round(ht / 2));
+        await page.mouse.wheel(0, 700 * steps);
+        await page.waitForTimeout(400);
+        const head = (await page.locator(".mtg-sticky").boundingBox())!;
+        expect(Math.round(head.y)).toBe(Math.round(barH ?? top));
+        await expect(page.getByRole("heading", { name: "Update Northwind's plan" }).isVisible()).resolves.toBe(true);
+        await expect(page.locator(".mtg-filter").isVisible()).resolves.toBe(true);
+        // The header of the section being read sits right under them.
+        const stuck = await page.locator(".mtg-sec-head").evaluateAll((hs) => hs.map((x) => Math.round(x.getBoundingClientRect().top)));
+        expect(stuck.some((t) => Math.abs(t - (head.y + head.height)) <= 2), JSON.stringify({ stuck, head })).toBe(true);
+      }
+      // The page never scrolls sideways.
+      await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);
+      await expect(view.evaluate((el) => el.scrollWidth <= el.clientWidth)).resolves.toBe(true);
+      expect(errors).toEqual([]);
+      await page.close();
+    }, T);
 });

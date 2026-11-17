@@ -59,4 +59,27 @@ describe("a call's new item and a required field (MC-1e)", () => {
     expect(after).toMatchObject({ state: "confirmed", result: { itemId: expect.any(Number), writeId: expect.any(Number) } });
     net.expectNone();
   });
+
+  it("a required field the form can't fill is said on the row, in the New form's words, before any preview", async () => {
+    const ctx = await demo({ Northwind: { "User Story": ["Custom.Risk"] } });
+    const { proposals, checks } = await call(ctx);
+    const gap = proposals.find((p) => p.body.kind === "gap" && p.body.type === "User Story")!;
+    expect(checks[gap.id]?.cant).toBe("Portal's process needs Risk on a new User Story, which FocusTime doesn't fill. Create this one in DevOps, then skip it here.");
+    expect(checks[gap.id]?.needs ?? []).toEqual([]);
+    expect(await raw(ctx, "devops.preview", { clientKey: "Northwind", change: { kind: "meeting_create", proposalId: gap.id } })).toMatchObject({ ok: false, code: "required_field" });
+    net.expectNone();
+  });
+
+  it("a new item with no parent is given one on its row and created under it", async () => {
+    const ctx = await demo();
+    const { occ, proposals } = await call(ctx);
+    const loose = proposals.find((p) => p.body.kind === "gap" && p.body.parentId === null && p.body.type === "User Story")!;
+    await run(ctx, "meeting.edit", { proposalId: loose.id, parentId: 1110, parentTitle: "Order history export" });
+    const { preview } = await run<{ preview: { previewId: string; fields: { label: string; after: string | null }[] } }>(ctx, "devops.preview", { clientKey: "Northwind", change: { kind: "meeting_create", proposalId: loose.id } });
+    expect(preview.fields.find((f) => f.label === "Parent")?.after).toContain("#1110");
+    expect(await run(ctx, "devops.confirm", { previewId: preview.previewId })).toMatchObject({ confirmed: true });
+    const after = (await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id })).proposals.find((p) => p.id === loose.id)!;
+    expect(after.state).toBe("confirmed");
+    net.expectNone();
+  });
 });

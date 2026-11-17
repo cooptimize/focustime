@@ -5392,7 +5392,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 }
 
 /* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › Meetings) ---------- */
-.mtg-view { flex: 1; overflow: auto; padding: 8px 24px 32px; display: grid; align-content: start; gap: 12px; }
+.mtg-view { flex: 1; overflow: auto; overflow-x: hidden; padding: 8px 24px 32px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
 .mtg-view .page-head { flex-wrap: wrap; row-gap: 4px; }
 .mtg-view > * { max-width: 1100px; }
 .mtg-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
@@ -5497,12 +5497,12 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-check-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
 /* MC-1e: the title row, the filter row and the current section's header stay in view; the ticked rows' bar at the
    bottom (the Backlog's bar, placed at the foot). The same on the phone. */
-.mtg-sticky { position: sticky; top: -8px; z-index: 6; display: grid; gap: 6px; margin: -8px -24px 0; padding: 8px 24px 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.mtg-sticky { position: sticky; top: var(--mtg-top, -8px); z-index: 6; display: grid; gap: 6px; margin: -8px -24px 0; padding: 8px 24px 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
 .mtg-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .mtg-filter-row .seg-count { margin-left: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .mtg-filter-row .seg-btn.on .seg-count { color: inherit; }
 .mtg-count { font-size: var(--fs-2); margin-left: auto; }
-.mtg-sec-head { position: sticky; top: calc(var(--mtg-head-h, 0px) - 8px); z-index: 3; justify-content: space-between; margin: 0 -12px !important; padding: 6px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.mtg-sec-head { position: sticky; top: calc(var(--mtg-top, -8px) + var(--mtg-head-h, 0px)); z-index: 3; justify-content: space-between; margin: 0 -12px !important; padding: 6px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .mtg-sec-head > span { display: inline-flex; align-items: baseline; gap: 8px; }
 .mtg-sec-head .muted { font-size: var(--fs-2); font-weight: 400; }
 .mtg-group .mtg-sec-head + .mtg-prop { border-top: 0; }
@@ -5511,7 +5511,9 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-prop.ticked { background: color-mix(in oklab, var(--selected) 6%, transparent); }
 .mtg-prop-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .mtg-prop.failed .mtg-prop-body > input { border-color: var(--watch); }
-.mtg-gap-fields { display: grid; gap: 4px; }
+.mtg-gap-fields { display: grid; gap: 4px; min-width: 0; }
+.mtg-gap-fields .nf-grid { min-width: 0; }
+.mtg-gap-fields .seg { flex-wrap: wrap; }
 .mtg-nf { margin-top: 2px; }
 .mtg-needed { margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: var(--fs-1); font-weight: 600; color: var(--watch); border: 1px solid color-mix(in oklab, var(--watch) 50%, transparent); text-transform: none; letter-spacing: 0; }
 .mtg-need, .mtg-need-why { margin: 0; font-size: var(--fs-2); color: var(--watch); }
@@ -5520,6 +5522,9 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-fold { display: grid; gap: 0; padding-top: 4px; border-top: 1px solid var(--border); }
 .mtg-fold > .link-btn { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); min-height: var(--target, 28px); }
 .mtg-bulk { position: sticky; top: auto; bottom: 0; z-index: 6; }
+/* On the phone the document scrolls: the page is no scroll box of its own, and the bar sits above the bottom bar. */
+.app.phone .mtg-view { overflow: visible; }
+.app.phone .mtg-bulk { bottom: calc(var(--bb-h, 0px) + 8px); }
 .mtg-line-mark { position: relative; }
 .mtg-line-list { position: absolute; right: 0; top: 100%; z-index: 4; margin: 4px 0 0; padding: 6px 8px; list-style: none; display: grid; gap: 4px; min-width: 16em; max-width: 28em; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-pop); font-size: var(--fs-2); }
 .mtg-line-list .link-btn { text-align: left; }
@@ -5527,9 +5532,12 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
   .mtg-view { padding: 8px 16px 24px; }
   .mtg-prop { grid-template-columns: auto minmax(0, 1fr); }
   .mtg-prop > .mini, .mtg-prop-actions { grid-column: 2; justify-self: start; }
-  .mtg-sticky { margin: -8px -16px 0; padding: 8px 16px; }
-  .mtg-count { margin-left: 0; flex-basis: 100%; }
-  .mtg-filter { overflow-x: auto; max-width: 100%; }
+  .mtg-sticky { margin: -8px -16px 0; padding: 6px 16px; gap: 4px; }
+  .mtg-sticky .page-head .muted { font-size: var(--fs-1); }
+  .mtg-filter-row { gap: 4px 8px; }
+  .mtg-filter-row .seg-btn { padding-left: 8px; padding-right: 8px; }
+  .mtg-count { margin-left: 0; }
+  .mtg-filter { flex-wrap: wrap; max-width: 100%; }
   .mtg-date { min-width: 6em; }
 }
 

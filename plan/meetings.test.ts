@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commentLevelOk, newOnly, sameProposal, toReview, type ProposalBody, lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
+import { callBatch, commentLevelOk, newOnly, sameProposal, toReview, type ProposalBody, lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
 
 const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
@@ -133,5 +133,16 @@ describe("MC-1e: the same proposal, by rule", () => {
     expect(commentLevelOk(levels, "Product Backlog Item")).toBe(true);
     expect(commentLevelOk(levels, "Capability")).toBe(false);
     expect(commentLevelOk(levels, "User Story")).toBe(false);
+  });
+});
+
+describe("MC-1e: the bar's DevOps batch", () => {
+  it("sends the first 10 ready rows in page order; the rest stay ticked; rows needing a field wait", () => {
+    const rows = Array.from({ length: 14 }, (_, i) => ({ id: i + 1 }));
+    const b = callBatch(rows, (p) => p.id !== 3);
+    expect(b.now.map((p) => p.id)).toEqual([1, 2, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(b.later.map((p) => p.id)).toEqual([12, 13, 14]);
+    expect(b.waiting.map((p) => p.id)).toEqual([3]);
+    expect(callBatch(rows.slice(0, 4), () => true)).toEqual({ now: rows.slice(0, 4), later: [], waiting: [] });
   });
 });

@@ -213,7 +213,9 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     m = /^_apis\/wit\/workitemtypes\/(.+)\/fields$/.exec(rest);
     if (m) {
       const must = requiredOf(clientKey, m[1]!);
-      return json({ value: typeFields(clientKey, m[1]!).map((referenceName) => ({ referenceName, ...(referenceName === "System.Title" || must.includes(referenceName) ? { alwaysRequired: true, name: FIELDS.find((f) => f.referenceName === referenceName)?.name ?? referenceName.split(".").pop() } : {}) })) });
+      // A required field of the client's own (one the form can't fill) is listed with the type's fields.
+      const own = typeFields(clientKey, m[1]!);
+      return json({ value: [...own, ...must.filter((r) => !own.includes(r))].map((referenceName) => ({ referenceName, ...(referenceName === "System.Title" || must.includes(referenceName) ? { alwaysRequired: true, name: FIELDS.find((f) => f.referenceName === referenceName)?.name ?? referenceName.split(".").pop() } : {}) })) });
     }
     if (rest === "_apis/wit/wiql") {
       // The create's "did it land already?" check: by parent, type and title, among the items I created.

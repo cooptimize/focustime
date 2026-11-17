@@ -12,7 +12,7 @@ import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
-import { proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
+import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
 import { callFrom, callLabel, rememberCallFrom, takeRerun, type MineData } from "./calls.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
@@ -25,8 +25,6 @@ const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Erro
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
 const KINDS = ["gap", "commitment", "comment"] as const;
-/** DevOps changes the one preview takes at once (BATCH_LIMIT). */
-const AT_ONCE = 10;
 
 type CallView = "transcript" | "upload";
 export type CallPlace = { view?: CallView; line?: number; filter?: Exclude<CallFilter, "all">; proposal?: number };
@@ -147,7 +145,12 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
     const el = stickyRef.current;
     const host = el?.closest<HTMLElement>(".mtg-view");
     if (!el || !host) return;
-    const set = () => host.style.setProperty("--mtg-head-h", `${el.getBoundingClientRect().height}px`);
+    // On the phone the document scrolls (under its sticky top bar), so the headers stick under that bar instead.
+    const set = () => {
+      host.style.setProperty("--mtg-head-h", `${el.getBoundingClientRect().height}px`);
+      const bar = host.closest(".app.phone")?.querySelector<HTMLElement>(":scope > .topbar");
+      host.style.setProperty("--mtg-top", bar ? `${bar.getBoundingClientRect().height}px` : "-8px");
+    };
     set();
     const ro = new ResizeObserver(set);
     ro.observe(el);
@@ -183,7 +186,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   /** DevOps changes, only through the one preview: one row, or the ticked ones (the first 10 in page order). */
   const send = async (ps: Proposal[]) => {
     if (!w || !ps.length) return;
-    const go = ps.slice(0, AT_ONCE);
+    const go = callBatch(ps, () => true).now;
     const changes: DevOpsChange[] = go.map((p) => ({ kind: p.body.kind === "gap" ? "meeting_create" : "meeting_comment", proposalId: p.id, key: `p${p.id}` }));
     setBusy(true);
     setNote(null);
@@ -225,7 +228,8 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   const tick = (p: Proposal, on: boolean) => setTicked((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; });
   const tickedRows = r.proposals.filter((p) => ticked.has(p.id) && toReview(p));
   const tickedDevops = tickedRows.filter((p) => p.body.kind !== "commitment");
-  const sendable = tickedDevops.filter(ready);
+  const batch = callBatch(tickedDevops, ready);
+  const sendable = [...batch.now, ...batch.later];
   const tickedPromises = tickedRows.filter((p) => p.body.kind === "commitment");
 
   return (
@@ -318,15 +322,15 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
           <div className="bl-bulk mtg-bulk" role="toolbar" aria-label="Selected proposals">
             <strong>{CALL_BAR.selected(tickedRows.length)}</strong>
             {tickedDevops.length > 0 && (can ? (
-              <button type="button" className="mini primary" disabled={busy || !sendable.length} onClick={() => void send(sendable)}>{CALL_BAR.devops(Math.min(sendable.length, AT_ONCE))}</button>
+              <button type="button" className="mini primary" disabled={busy || !sendable.length} onClick={() => void send(batch.now)}>{CALL_BAR.devops(batch.now.length)}</button>
             ) : (
               <button type="button" className="mini quiet dw-enable" onClick={() => w?.enable(m.clientKey)} title={CALL_BAR.noPat}>Enable DevOps writes</button>
             ))}
             {tickedPromises.length > 0 && <button type="button" className="mini" disabled={busy} onClick={() => void keep(tickedPromises)}>{CALL_BAR.promises(tickedPromises.length)}</button>}
             <button type="button" className="mini" disabled={busy} onClick={() => void skip(tickedRows)}>{CALL_BAR.skip}</button>
             <button type="button" className="mini quiet" disabled={busy} onClick={() => setTicked(new Set())}>{CALL_BAR.clear}</button>
-            {can && sendable.length > AT_ONCE && <span className="muted" role="note">{CALL_BAR.tenAtATime(sendable.length)}</span>}
-            {can && tickedDevops.length > sendable.length && <span className="muted">{tickedDevops.length - sendable.length === 1 ? "1 needs something on its row first" : `${tickedDevops.length - sendable.length} need something on their rows first`}</span>}
+            {can && batch.later.length > 0 && <span className="muted" role="note">{CALL_BAR.tenAtATime(sendable.length)}</span>}
+            {can && batch.waiting.length > 0 && <span className="muted">{CALL_BAR.waiting(batch.waiting.length)}</span>}
           </div>
         )}
       </>)}
@@ -415,7 +419,8 @@ function TranscriptView({ occurrenceId, startAt, proposals, line, onProposal }: 
 }
 
 /** MC-1e: the place Back returns to, in words: where the call was opened from. */
-export const backWord = (hash: string | null): string => (hash?.startsWith("#/week") ? "Week" : hash?.startsWith("#/today") ? "Today" : hash?.startsWith("#/inbox") ? "Inbox" : hash?.startsWith("#/ahead") ? "Ahead" : "Calls");
+const BACK_TO: [RegExp, string][] = [[/^#\/(day|today)(\/|$)/, "Day"], [/^#\/week(\/|$)/, "Week"], [/^#\/backlog(\/|$)/, "Backlog"], [/^#\/status(\/|$)/, "Status"], [/^#\/inbox(\/|$)/, "Inbox"]];
+export const backWord = (hash: string | null): string => BACK_TO.find(([re]) => hash && re.test(hash))?.[1] ?? "Calls";
 
 function BackHead({ onBack, title, sub, to = "Calls" }: { onBack: () => void; title: string; sub?: string; to?: string }) {
   return (
@@ -475,7 +480,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
         {b.kind === "gap" && (live ? <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable} check={check} onEdit={onEdit} /> : <p className="muted mtg-where">{b.type}{b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ""}</p>)}
         {live && needs.length > 0 && <p className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name))}</p>}
         {live && check?.cant && <p className="mtg-need" role="status">{check.cant}</p>}
-        {live && blocked && <p className="mtg-state-line problem">{blocked}</p>}
+        {live && blocked && <p className="mtg-need" role="note">{blocked}</p>}
         {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
         <Quotes qs={p.quotes} />
         {/* MC-1d: the jump to the lines this proposal rests on, in the Transcript view (while the transcript is kept). */}
