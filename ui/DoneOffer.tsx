@@ -1,13 +1,11 @@
-// PK-1: checking off a to-do offers the DevOps update, never automatically. After a tick on Today or the Board, a
-// small card asks "Set #<id> to <done state>?" with the write's own preview (the state before and after, who it writes
-// as) and Confirm, which is the existing state write (test /rev, read back, audit log, undo). Not now writes nothing.
-// Unchecking a to-do whose item its offer just set offers that write's Undo (the write framework's undo preview).
-// Close out asks once for the day's done to-dos (DoneBatch; FN-1: Finished or Made progress, time left and a comment per row). Offers come from devops.done_offer: only items I can
+// PK-1: checking off a to-do offers the DevOps update, never automatically. Since FN-1 a tick opens Wrap it up
+// (ui/WrapUp.tsx, which owns the tick's context below); OP-1 took out PK-1's own card with its own preview, which no
+// screen showed any more. Mark done in DevOps (Close out's owed list, a follow-up) is the one preview's
+// (ui/DevOpsWrite.tsx: the state picker, then the preview). Close out asks once for the day's done to-dos (DoneBatch; FN-1: Finished or Made progress, time left and a comment per row). Offers come from devops.done_offer: only items I can
 // change, not done already, with my write PAT; Settings › Planning's "never ask" turns them off.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { DevOpsPreview, DevOpsResult, DoneOffer, UndoOffer } from "../actions/types.ts";
-import { ActionRefusal, call } from "./api.ts";
-import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import type { DevOpsPreview, DoneOffer } from "../actions/types.ts";
+import { call } from "./api.ts";
 import { commentPlaceholder, LEFT_PICKS, parseLeftText } from "../plan/wrapup.ts";
 import { Icon } from "./icons.tsx";
 
@@ -22,152 +20,6 @@ export type DoneOfferEnv = {
 };
 export const DoneOfferCtx = createContext<DoneOfferEnv>({ ticked: () => {} });
 export const useDoneOffer = () => useContext(DoneOfferCtx);
-
-type Card =
-  | { kind: "done"; offer: DoneOffer; state: string; preview: DevOpsPreview | null; busy: boolean; error: string | null; result: DevOpsResult | null }
-  | { kind: "undo"; offer: UndoOffer };
-
-/** Owned by App: `allowed` are the clients with my write PAT; `ask` is Settings › Planning's choice. */
-export function useDoneOfferFlow(o: { allowed: readonly string[]; ask: boolean; onDone: () => void }) {
-  const [card, setCard] = useState<Card | null>(null);
-  const seq = useRef(0);
-  const { onDone } = o;
-  // Read at tick time, so `ticked` stays the same function across renders.
-  const opts = useRef(o);
-  opts.current = o;
-  const previewFor = useCallback(async (offer: DoneOffer, state: string) => (await call<{ preview?: DevOpsPreview; nothing?: string }>("devops.preview", { clientKey: offer.clientKey, change: { kind: "state", itemId: offer.itemId, state, pickId: offer.pickId, ...(offer.followUpId !== null ? { followUpId: offer.followUpId } : {}) } })).preview ?? null, []);
-  const ticked = useCallback(
-    (pickId: number, done: boolean, clientKey?: string | null, itemId?: number | null) => {
-      if (!opts.current.ask || itemId === null || (clientKey && !opts.current.allowed.includes(clientKey))) return;
-      const n = ++seq.current;
-      void (async () => {
-        try {
-          if (done) {
-            const r = await call<{ offers: DoneOffer[] }>("devops.done_offer", { pickIds: [pickId] });
-            const offer = r.offers[0];
-            if (!offer || n !== seq.current) return;
-            const state = offer.choices[0]!;
-            const preview = await previewFor(offer, state);
-            if (n === seq.current && preview) setCard({ kind: "done", offer, state, preview, busy: false, error: null, result: null });
-          } else {
-            // Unchecked before Confirm: the offer goes, nothing was written. After a write: offer its Undo.
-            setCard((c) => (c?.kind === "done" && c.offer.pickId === pickId && !c.result ? null : c));
-            const r = await call<{ offer: UndoOffer | null }>("devops.undo_offer", { pickId });
-            if (r.offer && n === seq.current) setCard({ kind: "undo", offer: r.offer });
-          }
-        } catch {
-          // The tick stands; an offer that can't be prepared just isn't shown.
-        }
-      })();
-    },
-    [previewFor],
-  );
-  const view = card ? <DoneOfferCard card={card} setCard={setCard} previewFor={previewFor} onDone={onDone} /> : null;
-  const env = useMemo<DoneOfferEnv>(() => ({ ticked }), [ticked]);
-  return { env, card: view };
-}
-
-function DoneOfferCard({ card, setCard, previewFor, onDone }: { card: Card; setCard: (c: Card | null) => void; previewFor: (o: DoneOffer, s: string) => Promise<DevOpsPreview | null>; onDone: () => void }) {
-  const writes = useDevOpsWrite();
-  // A confirmed change says so, then goes after a few seconds (Undo stays in Settings › Data).
-  useEffect(() => {
-    if (card.kind !== "done" || !card.result?.confirmed) return;
-    const t = window.setTimeout(() => setCard(null), 8000);
-    return () => window.clearTimeout(t);
-  }, [card, setCard]);
-  const close = () => setCard(null);
-  if (card.kind === "undo") {
-    const u = card.offer;
-    return (
-      <div className="done-offer" role="region" aria-label="DevOps update">
-        <p className="do-title">
-          You set #{u.itemId} to {u.after} in DevOps. Undo that too?
-        </p>
-        <p className="do-item muted">{u.title}</p>
-        <div className="do-acts">
-          <button type="button" className="mini primary" onClick={() => (close(), void writes?.begin(u.clientKey, [{ kind: "undo", writeId: u.writeId }]))}>
-            Undo in DevOps
-          </button>
-          <button type="button" className="mini" onClick={close}>
-            Keep {u.after}
-          </button>
-        </div>
-      </div>
-    );
-  }
-  const { offer, state, preview, busy, error, result } = card;
-  const choose = async (s: string) => {
-    setCard({ ...card, state: s, busy: true, error: null });
-    try {
-      setCard({ ...card, state: s, preview: await previewFor(offer, s), busy: false, error: null });
-    } catch (e) {
-      setCard({ ...card, state: s, busy: false, error: errText(e) });
-    }
-  };
-  const confirm = async () => {
-    setCard({ ...card, busy: true, error: null });
-    try {
-      // Trying again after a write that didn't confirm: its log entry is retried (it checks before writing).
-      const r = result && !result.confirmed ? await call<DevOpsResult>("devops.retry", { id: result.entry.id }) : await call<DevOpsResult>("devops.confirm", { previewId: preview!.previewId });
-      onDone();
-      setCard({ ...card, busy: false, error: null, result: r });
-    } catch (e) {
-      // The item changed in DevOps, or the preview went stale: a fresh preview to confirm again.
-      const fresh = await previewFor(offer, state).catch(() => null);
-      setCard({ ...card, preview: fresh ?? preview, busy: false, error: e instanceof ActionRefusal && e.code === "changed" ? "It changed in DevOps since. Here it is as it is now." : errText(e) });
-    }
-  };
-  if (result?.confirmed)
-    return (
-      <div className="done-offer" role="status" aria-label="DevOps update">
-        <p className="do-title">{result.message}</p>
-        <div className="do-acts">
-          <button type="button" className="mini" onClick={() => (close(), void writes?.begin(offer.clientKey, [{ kind: "undo", writeId: result.entry.id }]))}>
-            Undo
-          </button>
-          <button type="button" className="mini quiet icon-btn small" aria-label="Dismiss" onClick={close}>
-            <Icon name="close" />
-          </button>
-        </div>
-      </div>
-    );
-  const row = preview?.fields.find((f) => f.label === "State");
-  return (
-    <div className="done-offer" role="region" aria-label="DevOps update">
-      <p className="do-title">
-        Set #{offer.itemId} to {state}?
-      </p>
-      <p className="do-item muted">{offer.title}</p>
-      {offer.choices.length > 1 && (
-        <div className="cap-kinds do-choices" role="radiogroup" aria-label="Done state">
-          {offer.choices.map((s) => (
-            <button key={s} type="button" role="radio" className="chip-btn" aria-checked={s === state} disabled={busy} onClick={() => s !== state && void choose(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-      <dl className="do-preview">
-        <dt>State</dt>
-        <dd>
-          {row?.before ?? offer.state} → {row?.after ?? state}
-        </dd>
-        <dt>As</dt>
-        <dd>{preview?.identity.replace(/\s*<[^>]*>$/, "") ?? "you"}, in {offer.clientName}'s DevOps</dd>
-      </dl>
-      {result && !result.confirmed && <p className="do-error">{result.message}</p>}
-      {error && <p className="do-error">{error}</p>}
-      <div className="do-acts">
-        <button type="button" className="mini primary" disabled={busy || !preview} onClick={() => void confirm()}>
-          {busy ? "Writing…" : result && !result.confirmed ? "Retry" : "Confirm"}
-        </button>
-        <button type="button" className="mini" disabled={busy} onClick={close}>
-          Not now
-        </button>
-      </div>
-    </div>
-  );
-}
 
 type BatchResult = { ok: boolean; message: string; retry: boolean };
 type BatchRow = { offer: DoneOffer; on: boolean; outcome: "finished" | "progress"; state: string; left: number; leftText: string; comment: string; result: BatchResult | null };
