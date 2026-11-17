@@ -263,6 +263,8 @@ export const notices = {
   vmAutoStarted: (date: string, body: string, at: string): Notice => ({ kind: "vm", key: `vm_auto:${date}`, title: "Your VM is starting", body, buttons: [], route: "vm", at, ref: date }),
   /** VM-2: the automatic start couldn't sign in to Azure (once a day; no retries). */
   vmAutoSignIn: (date: string, at: string): Notice => ({ kind: "vm", key: `vm_auto_signin:${date}`, title: "Auto-start couldn't sign in to Azure", body: "Your VM was left off. Allow Azure access, then start it when you need it.", buttons: [{ key: "consent", label: "Allow Azure access" }], route: "vm", at, ref: date }),
+  /** VM-3: the automatic start left the VM off, and why (once a day; the words are OUTCOMES', plan/vm-autostart.ts). */
+  vmAutoLeftOff: (date: string, body: string, at: string): Notice => ({ kind: "vm", key: `vm_auto_left:${date}`, title: "Your VM was left off", body, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
   /** VM-2: the automatic start failed for another reason (once a day; no retries). */
   vmAutoFailed: (date: string, body: string, at: string): Notice => ({ kind: "vm", key: `vm_auto_failed:${date}`, title: "Auto-start couldn't start your VM", body, buttons: [], route: "vm", at, ref: date }),
   followUps: (date: string, due: { id: number; what: string; overdue: boolean }[], at: string): Notice | null => {

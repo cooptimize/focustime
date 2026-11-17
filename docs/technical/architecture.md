@@ -31,7 +31,7 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 
 ### Background work
 
-The scheduler (`server/scheduler.ts`) runs a fast pass every 5 seconds and a slow pass every 30 seconds, but only while someone has used FocusTime in the last 15 minutes. Otherwise it sleeps until the next stored due time (`scheduler_state`), making no database call, so the database can rest.
+The scheduler (`server/scheduler.ts`) runs a fast pass every 5 seconds and a slow pass every 30 seconds, but only while someone has used FocusTime in the last 15 minutes. VM-3: nothing can hold it. Each pass, each app job, each person's VM start, each person's other parts and the wake have a time limit (`PASS_LIMITS`; a person's parts `PART_LIMIT_MS` in `server/ticks.ts`). Work over its limit is logged by name and left behind; it is never started again while it still runs, and a pass still running past its limit no longer stops the next one. A part that throws is logged and the parts after it run. In every slow pass the VM's automatic start goes first, for everyone, before the app jobs and the other parts, and one person's stuck work never stops another's. Admin › Status shows each pass's last finish, how long it took and a warning when one is stuck (`scheduler.passes()`). Otherwise it sleeps until the next stored due time (`scheduler_state`), making no database call, so the database can rest.
 
 Every piece of background work has a name in `BACKGROUND` (`config/background-policy.ts`), which also says what it does outside production ([Operations](operations.md#what-runs-on-its-own)). The app jobs run at the start of each slow pass, each with its own next-due time (`server/main.ts`):
 

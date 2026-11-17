@@ -172,6 +172,7 @@ export const ACTIONS = [
   { name: "demo.status", title: "Demo status", group: "Display", target: "none", summary: "In the demo: whether AI answers came from the real provider or the stored samples (counts only), for the preflight" },
   { name: "demo.devops_change", title: "Simulate a teammate's DevOps change", group: "Display", target: "none", summary: "In the demo: a teammate changes or adds an item in the demo's DevOps, so you can watch FocusTime pick it up on its own" },
   { name: "demo.vm_tick", title: "Run the VM auto-start (demo check)", group: "Display", target: "none", summary: "In a demo verification run only: moves the demo's clock on and runs the VM auto-start's pass once, with the environment the demo was given" },
+  { name: "demo.pass_stall", title: "Hold Admin's slow pass (demo check)", group: "Display", target: "none", summary: "In a demo verification run only: Admin › Status's pretend slow pass holds or lets go, to show its warning" },
   { name: "demo.reset", title: "Reset demo", group: "Display", target: "none", summary: "In the demo: puts every demo change back as it started (writes, to-dos, captures, sends), so each run starts the same" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves FocusTime and your plan isn't touched" },
   { name: "setup.load", title: "Setup status", group: "Settings", target: "none", summary: "First-run setup: which steps are done, skipped or closed, and the clients screen's list (S1)" },

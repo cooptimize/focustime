@@ -1315,7 +1315,10 @@ type StatusData = {
   warnings?: { area: string; text: string }[];
   jobs?: { name: string; every: string; lastRun: string | null; note: string | null }[];
   groups?: StatusGroup[];
+  passes?: { kind: "fast" | "slow"; finishedAt: string | null; ms: number | null; since: string | null; limitMs: number; warning: string | null }[];
 };
+const PASS_WORDS: Record<string, string> = { fast: "Fast pass (focus timer, notices)", slow: "Slow pass (VM start, reminders, chat reads)" };
+const took = (ms: number | null) => (ms === null ? "" : ms < 1000 ? "under a second" : ms < 60_000 ? `${Math.round(ms / 1000)} seconds` : `${Math.round(ms / 60_000)} minutes`);
 const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
 const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "promises", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
 const countLine = (m: Record<string, number>, words: Record<string, string>) => Object.entries(m).map(([k, n]) => `${n} ${words[k] ?? k}`).join(" · ");
@@ -1386,6 +1389,32 @@ function AdminStatus() {
                   <th scope="row">{j.name}</th>
                   <td>{j.every}</td>
                   <td>{j.note ? <span className="muted">{j.note}</span> : when(j.lastRun)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {data.passes && data.passes.length > 0 && (
+        <>
+          <h3>Background passes</h3>
+          <p className="muted">Each piece of work in a pass has a time limit; work over it is named in the log and left behind, and the next pass runs anyway.</p>
+          <table className="adm-table" data-status="passes">
+            <thead>
+              <tr>
+                <th scope="col">Pass</th>
+                <th scope="col">Last finished</th>
+                <th scope="col">Took</th>
+                <th scope="col">Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.passes.map((x) => (
+                <tr key={x.kind} data-pass={x.kind}>
+                  <th scope="row">{PASS_WORDS[x.kind] ?? x.kind}</th>
+                  <td>{x.warning ? <span className="field-problem">{x.warning}</span> : when(x.finishedAt)}</td>
+                  <td>{took(x.ms)}</td>
+                  <td>{took(x.limitMs)}</td>
                 </tr>
               ))}
             </tbody>
