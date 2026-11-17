@@ -37,3 +37,6 @@ config.toml
 AGENTS.md
 .codex/
 AGENTS.override.md
+
+# FT-1: the shake command's copies of a browser test, there only while it runs (scripts/shake.ts)
+e2e/**/*.shake-*.test.ts

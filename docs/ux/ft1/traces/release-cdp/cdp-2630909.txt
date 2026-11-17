@@ -1,0 +1,10 @@
+242ms loads=0 nav about:blank
+247ms loads=0 load
+300ms loads=0 nav #/day
+384ms loads=0 load
+654ms loads=0 nav #/day
+1996ms loads=0 press 3
+2049ms loads=0 cdp willBeSent Ahead-CE7EwZaZ.js type=Script initiator=script
+2060ms loads=0 cdp response Ahead-CE7EwZaZ.js 200 disk=false prefetch=false sw=false
+2064ms loads=0 pressed; entries Ahead-CE7EwZaZ.js@1767 transfer=37306 dur=6
+2113ms loads=0 nav #/backlog

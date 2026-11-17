@@ -128,7 +128,18 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
   });
 
   it("inside files: a table's name lists what uses it across clients; each client that can't answer says why; the words are in no address or storage", { timeout: T }, async () => {
-    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    // One slow client, to see the others fill in first: held only while `slow` (FT-1: the route is set before the page
+    // opens and stays, so it can't miss the search's requests and every one of them is seen).
+    let slow = false;
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 }, {
+      before: (p) =>
+        p.route("**/api/action", async (route) => {
+          if (slow && (route.request().postData() ?? "").includes('"Tailspin"')) await held;
+          await route.continue();
+        }),
+    });
     await theme(page, "dark");
     const sent = watchActions(page);
     // The command menu opens Code with the switch set and the box focused.
@@ -147,21 +158,15 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await page.waitForTimeout(300);
     expect(sent.some((s) => s.action === "code.inside")).toBe(false);
 
-    // One slow client, to see the others fill in first.
-    let release = () => {};
-    const held = new Promise<void>((r) => (release = r));
-    await page.route("**/api/action", async (route) => {
-      if ((route.request().postData() ?? "").includes('"Tailspin"')) await held;
-      await route.continue();
-    });
+    slow = true;
     await page.keyboard.press("Enter");
     const results = panel(page).locator("[data-code-inside-results]");
     await results.locator('[data-code-result-client="Northwind"]').waitFor();
     await results.locator('[data-code-result-client="Cooptimize"]').waitFor();
     expect(await results.locator("[data-code-progress]").textContent()).toMatch(/^Asked [1-4] of 5 clients…$/);
     release();
+    slow = false;
     await results.locator('[data-code-result-client="Tailspin"]').waitFor();
-    await page.unroute("**/api/action");
     await page.waitForFunction(() => !document.querySelector("[data-code-progress]")?.textContent?.startsWith("Asked"));
     expect(await results.locator("[data-code-progress]").textContent()).toBe("10 files. 3 of 5 clients could be searched.");
     expect(await results.locator("[data-code-result-client]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-result-client")))).toEqual(["Atlas", "Cooptimize", "Harbor", "Northwind", "Tailspin"]);
@@ -200,6 +205,8 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await box.fill('"Orders');
     await box.press("Enter");
     await results.locator('[data-code-result-client="Northwind"] [data-code-result-failed="bad_query"]').waitFor();
+    // FT-1: Northwind answers first; the line is read once every client has (until then it says "Asked 4 of 5…").
+    await page.waitForFunction(() => !document.querySelector("[data-code-progress]")?.textContent?.startsWith("Asked"));
     expect(await results.locator("[data-code-progress]").textContent()).toBe("");
     await box.fill("Watermarks");
     await box.press("Enter");

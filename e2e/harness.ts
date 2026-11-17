@@ -158,12 +158,16 @@ export async function screensIn(page: Page): Promise<void> {
 }
 
 /** A fresh page in its own browser context: the sign-in page, then "Try the demo" (a new demo session, a fresh store). */
-export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }, /** PS-1: "default" leaves Day's panel to open on a wide window, as for a first visit. */ opts: { dayPanel?: "default" } = {}): Promise<{ page: Page; errors: string[] }> {
+export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }, /** PS-1: "default" leaves Day's panel to open on a wide window, as for a first visit. */ opts: { dayPanel?: "default"; before?: (page: Page) => Promise<unknown> } = {}): Promise<{ page: Page; errors: string[] }> {
   const page = await h.browser.newPage({ viewport });
   const errors: string[] = [];
   // Vite's dev client reports its websocket (HMR is off in the server): not an app error.
   page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
   await page.addInitScript(hints, opts.dayPanel === "default");
+  // FT-1: routes go here, before the page opens, and stay. Added to a page already open (or removed from one), a route
+  // let a request through unseen now and then under load: Chromium sent it to the server and Playwright reported no
+  // request (docs/open-questions.md, FT-1). A test changes what its route answers with a variable instead.
+  await opts.before?.(page);
   if (h.gone()) throw new Error(h.gone()!);
   await page.goto(h.url);
   await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });

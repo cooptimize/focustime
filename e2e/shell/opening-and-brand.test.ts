@@ -40,9 +40,23 @@ const WATCH = () => {
 };
 const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: Seen }).__seen);
 
-/** Every piece of text a sighted person can see right now (screen reader only text and hidden text left out). */
-const visibleText = (page: Page) =>
-  page.evaluate(() => {
+type Words = { frames: number; early: { clock: number; text: string[] }[]; at8: string[] | null; said: string[] };
+/**
+ * FT-1: what a sighted person can read in each frame while the loader is up and hasn't lit to move, against the
+ * loader's own clock (since its first frame, as ui/brand/boot.ts reads it). Any text in a frame before that clock
+ * reaches 8 s is kept in `early`; the text in the first frame at or past it is `at8`. `said` is what the
+ * screen reader line said, in order.
+ */
+const WORDS = () => {
+  const words: Words = { frames: 0, early: [], at8: null, said: [] };
+  (window as unknown as { __words: Words }).__words = words;
+  // What the screen reader line says, each time it changes (it is removed a few seconds after the app shows).
+  new MutationObserver(() => {
+    const say = document.querySelector("#boot .boot-say[role=status]")?.textContent ?? null;
+    // An empty line is the parser part way through the element (under load); a screen reader says nothing for it.
+    if (say && say !== words.said.at(-1)) words.said.push(say);
+  }).observe(document, { childList: true, subtree: true, characterData: true });
+  const textNow = () => {
     const out: string[] = [];
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
@@ -53,19 +67,82 @@ const visibleText = (page: Page) =>
       if (r.width < 2 || r.height < 2 || getComputedStyle(el).visibility !== "visible") continue;
       let o = 1;
       for (let a: Element | null = el; a; a = a.parentElement) o *= Number(getComputedStyle(a).opacity);
-      if (o > 0) out.push(text);
+      // Under the loader's own background (the app drawn behind it before the move): not on screen, but only once the
+      // stage is opaque (before its 400 ms it is see-through, and the hit test ignores opacity).
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const stage = document.querySelector("#boot .brand-stage");
+      const opaque = !!stage && Number(getComputedStyle(stage).opacity) >= 1;
+      const covered = opaque && !!top && !el.contains(top) && !!top.closest("#boot") && !el.closest("#boot");
+      if (o > 0 && !covered) out.push(text);
     }
     return out;
-  });
+  };
+  const tick = () => {
+    // The loader's clock, as ui/brand/boot.ts keeps it: since its stage's appear animation started (its first frame).
+    const stage = document.querySelector("#boot .brand-stage");
+    const show = stage?.getAnimations().find((a) => (a as CSSAnimation).animationName === "boot-show");
+    const clock = typeof show?.startTime === "number" ? Number(document.timeline.currentTime) - show.startTime : null;
+    // Up and not yet lit to move (the app fades in under it only then).
+    if (document.body && clock !== null && !document.querySelector("#boot .week-loader.lit")) {
+      words.frames++;
+      const text = textNow();
+      // The line's own animation (8 s by its CSS) may have started a frame or two after the stage's under load: past 8 s,
+      // its words are read once that animation has come due (or at once if the line has none, so a missing line fails).
+      const line = document.querySelector("#boot .boot-wait")?.getAnimations().find((a) => (a as CSSAnimation).animationName === "boot-line");
+      if (clock < 8000) {
+        if (text.length) words.early.push({ clock: Math.round(clock), text });
+      } else if (!line || line.playState === "finished") words.at8 ??= text;
+    }
+    if (!document.querySelector(".topbar") || document.querySelector("#boot .brand-stage")) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+
+/**
+ * FT-1: the loader's pass read by its own time. Once the stage shows, each block's animation is set to 16 points of one
+ * pass in turn (every 100 ms of its 1.6 s) and the opacity the page computes for each block is read there; then each
+ * goes back to the time it was at. All in one task, so no frame is drawn meanwhile and nothing on screen moves. Null
+ * if the app came up with no loader showing.
+ */
+const thePass = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<{ running: number; opacities: number[]; seen: string } | null>((done) => {
+        const tick = () => {
+          const stage = document.querySelector("#boot .brand-stage");
+          // Not parsed yet: wait. Gone with the app up: it never showed.
+          if (!stage) return document.querySelector(".topbar") ? done(null) : void requestAnimationFrame(tick);
+          // The parser can stop inside the stage under load: wait until it reached the line after the blocks.
+          if (!stage.querySelector(".boot-wait") && document.readyState === "loading") return void requestAnimationFrame(tick);
+          // Shown by the loader's own clock: its appear animation exists (the stylesheet is in) and is past its 400 ms.
+          // Without the stylesheet the stage has no animation and the default opacity of 1, which proves nothing.
+          const show = stage.getAnimations().find((a) => (a as CSSAnimation).animationName === "boot-show");
+          if (!show || Number(show.currentTime ?? 0) < 400) return void requestAnimationFrame(tick);
+          const blocks = [...document.querySelectorAll("#boot .wl")];
+          const anims = blocks.flatMap((b) => b.getAnimations().filter((a) => /^wl-\d$/.test((a as CSSAnimation).animationName)));
+          const running = anims.filter((a) => a.playState === "running").length;
+          const was = anims.map((a) => a.currentTime);
+          const seen = new Set<number>();
+          for (let k = 0; k < 16; k++) {
+            for (const a of anims) a.currentTime = 400 + k * 100;
+            for (const b of blocks) seen.add(Math.round(Number(getComputedStyle(b).opacity) * 10));
+          }
+          anims.forEach((a, i) => (a.currentTime = was[i]!));
+          done({ running, opacities: [...seen].sort((x, y) => x - y), seen: `${blocks.length} blocks, ${anims.length} animations, lit ${!!document.querySelector("#boot .week-loader.lit")}, ${document.readyState}` });
+        };
+        tick();
+      }),
+  );
 
 const isAction = (name: string) => (r: Route) => (r.request().postData() ?? "").includes(`"${name}"`);
-/** Holds every request matching until `ms` after the first one. */
-async function hold(ctx: BrowserContext, glob: string, match: (r: Route) => boolean, ms: number) {
+/** Holds every request matching until `ms` after the first one, and (FT-1) until `also` settles when it is given. */
+async function hold(ctx: BrowserContext, glob: string, match: (r: Route) => boolean, ms: number, also?: Promise<unknown>) {
   let until: number | null = null;
   await ctx.route(glob, async (route) => {
     if (match(route)) {
       until ??= Date.now() + ms;
       await new Promise((r) => setTimeout(r, Math.max(0, until! - Date.now())));
+      await also;
     }
     await route.continue();
   });
@@ -195,28 +272,35 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     for (const [scheme, theme] of [["dark", "cooptimize-dark"], ["light", "cooptimize-light"], ["light", "neutral"], ["dark", "neutral"]] as const) {
       const long = scheme === "dark" && theme === "cooptimize-dark";
       const ctx = await signedIn(base, { colorScheme: scheme, prefs: { "focustime.theme": theme } });
-      await hold(ctx, "**/api/action", isAction("week.load"), long ? 9500 : 1500);
+      await ctx.addInitScript(WORDS);
+      // The app's week is held until the pass below has been read: the loader stops its pass once the app is in, so on a
+      // starved machine a fixed hold could end before the test's first look (FT-1).
+      let passRead!: () => void;
+      const read = new Promise<void>((r) => (passRead = r));
+      await hold(ctx, "**/api/action", isAction("week.load"), long ? 9500 : 1500, read);
       const page = await ctx.newPage();
-      const t0 = Date.now();
       await page.goto(h.url, { waitUntil: "commit" });
-      await page.waitForTimeout(t0 + 1200 - Date.now());
-      expect(await visibleText(page), theme).toEqual([]);
-      await expect(page.locator("#boot .boot-say[role=status]").textContent()).resolves.toBe("Loading FocusTime");
+      // FT-1: everything below is read by the loader's own clock (its animations' time), never by the test's: a busy
+      // machine can run this process late but can't move the page's animations.
+      const pass = await thePass(page);
+      passRead();
+      expect(pass, `${theme}: the loader showed`).not.toBeNull();
       // The pass runs (in the built CSS too): eight blocks, each its own animation, and their opacities differ over time.
-      expect(await page.evaluate(() => document.getAnimations().filter((a) => /^wl-\d$/.test((a as CSSAnimation).animationName) && a.playState === "running").length)).toBe(8);
-      const o = () => page.evaluate(() => [...document.querySelectorAll("#boot .wl")].map((e) => Number(getComputedStyle(e).opacity)));
-      const seenOpacities = new Set<number>();
-      // Sampled across a whole pass (1.6 s), so a slow sampler can't land only in the all-lit hold.
-      for (let i = 0; i < 16; i++) (await o()).forEach((v) => seenOpacities.add(Math.round(v * 10))), await page.waitForTimeout(110);
-      expect(seenOpacities.size).toBeGreaterThan(2);
+      expect(pass!.running, pass!.seen).toBe(8);
+      expect(pass!.opacities.length, pass!.opacities.join(" ")).toBeGreaterThan(2);
       if (long) {
-        await page.waitForTimeout(t0 + 7400 - Date.now());
-        expect(await visibleText(page)).toEqual([]);
-        await page.waitForTimeout(t0 + 8700 - Date.now());
-        expect(await visibleText(page)).toEqual(["Still waiting on Dataverse, Outlook and 2 more"]);
+        // The line is due at 8 s by its own animation; it has to be on screen then.
+        const at8 = await page.waitForFunction(() => (window as unknown as { __words: Words }).__words.at8, null, { polling: "raf", timeout: 30_000 }).then((h) => h.jsonValue());
+        expect(at8, theme).toEqual(["Still waiting on Dataverse, Outlook and 2 more"]);
       }
       await appUp(page);
-      await expect(page.locator("#boot .boot-say").textContent()).resolves.toBe("FocusTime is ready");
+      // Nothing to read on screen while the loader was loading and its own clock was under 8 s, in any frame.
+      const words = await page.evaluate(() => (window as unknown as { __words: Words }).__words);
+      expect(words.frames, `${theme}: frames watched`).toBeGreaterThan(0);
+      expect(words.early, theme).toEqual([]);
+      // A screen reader hears loading, then ready.
+      // (finish() writes it in the same task that takes the stage away, so it is recorded once appUp has seen that.)
+      expect((await page.evaluate(() => (window as unknown as { __words: Words }).__words)).said, theme).toEqual(["Loading FocusTime", "FocusTime is ready"]);
       await ctx.close();
     }
   }, 120_000);

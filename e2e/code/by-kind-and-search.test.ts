@@ -126,7 +126,18 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
   });
 
   it("a search across clients groups by client, names the client left out and the one that failed; the keyboard opens a result and Back returns; the words go nowhere", { timeout: T }, async () => {
-    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    // One slow client, to see the others fill in first: held only while `slow` (FT-1: the route is set before the page
+    // opens and stays, so it can't miss the search's requests and every one of them is seen).
+    let slow = false;
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 }, {
+      before: (p) =>
+        p.route("**/api/action", async (route) => {
+          if (slow && (route.request().postData() ?? "").includes('"Tailspin"')) await held;
+          await route.continue();
+        }),
+    });
     await theme(page, "dark");
     const sent = watchActions(page);
     // The command menu opens Code with the box focused.
@@ -144,13 +155,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await page.waitForTimeout(300);
     expect(sent.some((s) => s.action === "code.search")).toBe(false);
 
-    // One slow client, to see the others fill in first.
-    let release = () => {};
-    const held = new Promise<void>((r) => (release = r));
-    await page.route("**/api/action", async (route) => {
-      if ((route.request().postData() ?? "").includes('"Tailspin"')) await held;
-      await route.continue();
-    });
+    slow = true;
     await page.keyboard.press("Enter");
     const results = panel(page).locator("[data-code-results]");
     await results.locator('[data-code-result-client="Northwind"]').waitFor();
@@ -158,8 +163,8 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     expect(await results.locator("[data-code-progress]").textContent()).toMatch(/^Read [1-4] of 5 clients…$/);
     await shots(page, "06-search-reading");
     release();
+    slow = false;
     await results.locator('[data-code-result-client="Tailspin"]').waitFor();
-    await page.unroute("**/api/action");
     expect(await results.locator("[data-code-progress]").textContent()).toBe("6 results");
     // By client, in the list's order; the team-only client is named as left out; the one without Code (read) says why.
     expect(await results.locator("[data-code-result-client]").evaluateAll((els) => els.map((e) => e.getAttribute("data-code-result-client")))).toEqual(["Atlas", "Harbor", "Northwind", "Tailspin"]);
@@ -214,6 +219,9 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     const sent = watchActions(page);
     await go(page, "#/code/Atlas");
+    // FT-1: Atlas has one repo, which Code opens by itself once its list is in (the address gains the repo), and any
+    // move inside Code empties the box. Typed before that, the words were gone by the time Enter was pressed.
+    await page.waitForFunction(() => location.hash.startsWith("#/code/Atlas/"));
     const box = panel(page).getByRole("searchbox", { name: "Search code" });
     await box.fill("shipments pl");
     const where = panel(page).getByRole("group", { name: "Where to search" });

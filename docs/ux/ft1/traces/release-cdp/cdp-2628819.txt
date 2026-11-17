@@ -1,0 +1,28 @@
+30ms loads=0 nav about:blank
+47ms loads=0 load
+119ms loads=0 nav #/day
+234ms loads=0 load
+947ms loads=0 nav #/day
+2145ms loads=0 press 3
+2257ms loads=0 pw request Ahead-CE7EwZaZ.js
+2280ms loads=0 cdp willBeSent Ahead-CE7EwZaZ.js type=Script initiator=script
+2313ms loads=0 cdp response Ahead-CE7EwZaZ.js 404 disk=false prefetch=false sw=false
+2313ms loads=0 cdp failed Ahead-CE7EwZaZ.js net::ERR_ABORTED
+2319ms loads=0 pressed; entries Ahead-CE7EwZaZ.js@2127 transfer=300 dur=96
+2375ms loads=0 nav #/backlog
+2547ms loads=0 nav #/backlog
+2832ms loads=0 load
+2903ms loads=1 pw request Ahead-CE7EwZaZ.js
+2910ms loads=1 cdp willBeSent Ahead-CE7EwZaZ.js type=Script initiator=script
+2954ms loads=1 cdp response Ahead-CE7EwZaZ.js 200 disk=false prefetch=false sw=false
+2980ms loads=1 nav #/backlog
+4654ms loads=1 nav about:blank
+4686ms loads=1 load
+4851ms loads=2 nav #/week
+5066ms loads=2 load
+5891ms loads=3 nav #/week
+8115ms loads=0 cold done
+8126ms loads=0 press n
+8276ms loads=0 cdp willBeSent Capture-DEzfAT5-.js type=Script initiator=script
+8310ms loads=0 cdp response Capture-DEzfAT5-.js 200 disk=false prefetch=false sw=false
+8318ms loads=0 pressed; entries Capture-DEzfAT5-.js@3463 transfer=6018 dur=22
