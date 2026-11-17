@@ -180,7 +180,8 @@ describe.skipIf(!CHROMIUM || !DIR)(`OP-1 screenshots (${BEFORE ? "before" : "aft
           await panel.getByRole("button", { name: /^Create all/ }).waitFor({ timeout: 20_000 });
           return;
         }
-        await anyDialog(page).getByRole("button", { name: /DevOps/ }).first().waitFor({ timeout: 20_000 });
+        // The one preview opens over the panel (the panel is a modal dialog too, so not anyDialog's last).
+        await page.locator('[role="dialog"][data-overlay="modal"]').filter({ has: page.locator(".wd-where") }).locator("button.commit").waitFor({ timeout: 20_000 });
       });
       await page.close();
     }
