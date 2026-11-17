@@ -7484,9 +7484,6 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* The bulk bar's four pickers: a button that can't open for these rows stays reachable and says why. */
 .bl-bulk .mini.bl-off { color: var(--text-faint); }
 .bl-result.bl-why { color: var(--text); }
-.bl-state-partial { display: flex; flex-direction: column; gap: 4px; }
-.bl-state-partial [role="list"] { display: flex; flex-direction: column; gap: 2px; }
-.bl-state-fit { display: flex; align-items: center; gap: 6px; color: var(--text); }
 .ah-pop-bulk-state { width: min(380px, 92vw); }
 
 /* ---- RB-6: six tabs (Code for the people who may read code) ------------------------------------------------------ */

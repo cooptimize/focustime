@@ -1,6 +1,6 @@
 // Was e2e/ed2-grid.test.ts (ED-2) until BT-1.
 // ED-2 (browser, demo mode): grooming Atlas Freight's backlog in the Grid. Two titles renamed in place (F2 and the
-// hover button, Enter and Tab), an empty one refused where it was typed; a story dragged onto another feature (only the
+// the row's menu, Enter and Tab), an empty one refused where it was typed; a story dragged onto another feature (only the
 // rows that can take it light up, a drop between rows or on a wrong row does nothing, Esc cancels) and another moved
 // with Move… by the keyboard alone; three rows assigned in bulk, State… on mixed types, Move to… blocked for a mixed
 // selection; Review lists Title and Parent; Save writes each item once and never an order field; the ranked list keeps
@@ -209,14 +209,22 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await moveTo.focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".bl-why").textContent()).resolves.toBe("Move to… needs rows at one level, so one parent fits them all");
-    // State… on the same mixed selection: only what a Feature and a User Story both take can be picked; the state only
-    // features have is listed with the rows it fits.
+    // State… on the same mixed selection (UC-2): what both types take, then the state only features have, with the
+    // rows it fits. Picked, the feature is staged and the story skipped with the reason; nothing is written.
+    const written = (await log(page)).length;
     await bar.getByRole("button", { name: "State…" }).click();
     const sp = page.locator(".ah-pop-bulk-state");
     await sp.waitFor();
-    await expect(sp.locator("[role=option] .fl-label").allTextContents()).resolves.toEqual(["New", "Active", "Resolved", "Closed", "Removed"]);
-    await expect(sp.getByRole("listitem").allTextContents()).resolves.toEqual(["On hold fits 1 of 2: Feature"]);
-    await page.keyboard.press("Escape");
+    await expect(sp.locator("[role=option] .fl-label").allTextContents()).resolves.toEqual(["New", "Active", "Resolved", "Closed", "Removed", "On hold"]);
+    await expect(sp.getByRole("option", { name: /On hold/ }).textContent()).resolves.toContain("1 of 2: Feature");
+    await sp.getByRole("option", { name: /On hold/ }).click();
+    await expect.poll(() => page.locator(".bl-result").first().textContent()).toContain("State On hold: staged 1, skipped 1. Nothing is written until you save.");
+    await page.locator(".bl-result summary").click();
+    await expect(page.locator(".bl-result li").textContent()).resolves.toContain("On hold isn't a state of User Story in Logistics's process");
+    await expect.poll(() => row(page, "Carrier rate alerts").locator("td.ah-col-state").textContent()).toContain("On hold");
+    expect(await row(page, "Alert settings page").locator("td.ah-col-state").textContent()).not.toContain("On hold");
+    expect((await log(page)).length).toBe(written);
+    await call(page, "ahead.unstage", { clientKey: "Atlas", itemId: 3350, field: "state" });
     // The keyboard alone: Size… from the bar (Enter opens it, type, Enter stages); the feature has no size and is skipped with why.
     await bar.getByRole("button", { name: "Size…" }).focus();
     await page.keyboard.press("Enter");
