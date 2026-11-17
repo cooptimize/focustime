@@ -88,8 +88,10 @@ import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { useAdmin } from "./settings/use-admin.ts";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
-import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
-import { AheadNotice, sourceHealth, StatusDot, StatusSheet } from "./PhoneShell.tsx";
+import { InstallHowTo, PhoneReadOnly } from "./Phone.tsx";
+import { setDesktopVersion, useDesktopVersion } from "./desktop-version.ts";
+import { PhoneVersionButton } from "./PhoneVersion.tsx";
+import { AheadNotice, sourceHealth, StatusSheet } from "./PhoneShell.tsx";
 import { TodoSheet, TodoSheetCtx } from "./TodoSheet.tsx";
 import { commandList, withoutAhead, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
@@ -107,7 +109,7 @@ import type { DocsAccess } from "../actions/docs-actions.ts";
 // UI-5: the Guide and its tours load only when opened (no weight on the app's first load).
 // DOC-1: the Technical docs, their pages and diagrams load only when opened.
 // RB-1: Code and its coloring library load only when opened.
-import { drawnLoc, fetchAhead, prefetchScreens, screen, screenArriving, screensReady, tryAgain, setReloadAddress, useScreen, useScreens, wantScreens } from "./screens.ts";
+import { drawnLoc, fetchAhead, prefetchScreens, screen, screenArriving, screenFailed, screensReady, tryAgain, setReloadAddress, useScreen, useScreens, wantScreens } from "./screens.ts";
 import { ScreenLine } from "./ScreenLine.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
@@ -164,7 +166,13 @@ export function App() {
   const { layout, compact } = useLayout();
   // P1: under 600 px, the phone app (bottom bar, one day at a time, planning read-only).
   const phone = usePhone();
-  const [phoneMoreAt, setPhoneMoreAt] = useState<{ x: number; y: number } | null>(null);
+  // PH-1: More, the phone's full screen (the bar's last item), and the person's menu opened from it.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [accountAt, setAccountAt] = useState<{ x: number; y: number } | null>(null);
+  // PH-1: the phone's own screens (the bar, Now, More); asked for at start on a phone (ui/main.tsx). The phone draws
+  // once they are in, so it never shows the computer's shell first. The Desktop version is a computer's layout.
+  const PhoneM = useScreen("phone", phone);
+  const desktopVersion = useDesktopVersion();
   // MB-1: the status dot's sheet, and Ahead opened anyway on the phone (for this visit; a reload shows the notice again).
   const [statusOpen, setStatusOpen] = useState(false);
   // MB-1: Open anyway on Ahead's phone notice lasts for this browser session (a reload keeps it; nothing else does).
@@ -384,7 +392,6 @@ export function App() {
   // RB-6: Code is a tab on a computer, shown by the same test More used: until the list is read it shows, and the page
   // says why when it can't open; an empty list (an automation account) means no Code anywhere. The phone keeps it in More.
   const codeShown = !(codeList && !codeList.length);
-  const codeItem = codeShown ? [{ id: "code", label: "Code", run: () => openCode() }] : [];
   const tabShown = useCallback((t: Tab) => t !== "code" || codeShown, [codeShown]);
   useEffect(() => void (cmdOpen && askCode()), [cmdOpen, askCode]);
   // P1: opening the list marks every notice read (the dot goes).
@@ -1844,7 +1851,9 @@ export function App() {
     );
   }
   // PF-1: opened at an address whose screen is still arriving: the loader stays, and nothing is drawn under it.
-  if (!data || !env || !target || !firstScreen) {
+  // PH-1: on a phone, also until the phone's own file is in; if it can't be had (offline), the app is drawn without the
+  // phone's bar and Now, and the line under the top bar says so with Retry, rather than the loader staying up.
+  if (!data || !env || !target || !firstScreen || (phone && !PhoneM && !screenFailed("phone"))) {
     return (
       <>
         {opening}
@@ -2013,12 +2022,14 @@ export function App() {
     >
     <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
-      <header className={`topbar${codeShown && !phone ? " six-tabs" : ""}`}>
+      <header className={`topbar${codeShown && !phone ? " six-tabs" : ""}${phone ? " ph1-top" : ""}`}>
+        {/* PH-1: on the phone the top bar starts with today's date; Now is the bar's first item. */}
+        {phone && <p className="ph1-date">{Temporal.PlainDate.from(data.planDay.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>}
         <div className="brand">
-          <button type="button" className="brand-home" onClick={() => setView("today")} title="Day">
+          {!phone && <button type="button" className="brand-home" onClick={() => setView("today")} title="Day">
             <WeekMark height={18} />
             <span className="name">FocusTime</span>
-          </button>
+          </button>}
           {data.demo && (
             <button type="button" className="demo-tag" onClick={() => setSettingsAt("data", "demo-reset")} title="Demo mode: fictional data, nothing leaves FocusTime. Settings › Your data has Reset demo">
               {phone ? "Demo" : "Demo data"}
@@ -2038,23 +2049,11 @@ export function App() {
         <ScreenLine />
         <div className="top-actions">
           {!phone && <VmChip />}
-          {phone && <>
-          {/* MB-1: on the phone the header is the logo, the status dot and ⋯; Capture and Ask are in the bottom bar, and the
-              VM and the sources are in the status dot's sheet. */}
-          <StatusDot health={sourceHealth(data.sources, data.devops)} open={statusOpen} onOpen={() => setStatusOpen(true)} />
-          <button
-            type="button"
-            className="top-btn top-more"
-            aria-haspopup="menu"
-            aria-label="More: notifications, focus, Settings and the Guide"
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setPhoneMoreAt({ x: r.right, y: r.bottom + 4 });
-            }}
-          >
-            <Icon name="more" />
-            {notices.unread > 0 && <span className="top-dot" aria-label={`${notices.unread} new notifications`} />}
-          </button>
+          {phone && PhoneM && <>
+          {/* PH-1: on the phone the top bar's right is the VM in a word or two (its menu, as before) and Ask; the
+              sources' dot moved to More, and ⋯ is More, the bar's last item. */}
+          <VmChip />
+          <PhoneM.PhoneAsk open={!!assistantAt && !!AssistantPanel} onAsk={() => (setCaptureOpen(false), setMoreOpen(false), setAssistantAt((a) => (a ? null : { text: "" })))} />
           </>}
           {!phone && <>
           {/* Step 15.2: Focus is always here. Idle it opens the start menu (next pick first); running it is the countdown. */}
@@ -2496,46 +2495,64 @@ export function App() {
         />
       )}
 
-      {phone && (
-        <BottomBar
-          current={settingsAt !== null || guideAt || docsAt || meetingAt || focusOpen || nav.tab === "status" || nav.tab === "code" ? null : nav.tab}
-          inboxCount={inboxCount}
-          onTab={(t: BottomTab) => {
+      {phone && PhoneM && (
+        <PhoneM.PhoneBar
+          current={moreOpen || settingsAt !== null || guideAt || docsAt || meetingAt || nav.tab === "status" || nav.tab === "code" || nav.tab === "ahead" ? "more" : focusOpen ? null : nav.tab === "today" ? "day" : nav.tab === "week" ? "week" : nav.tab === "inbox" ? "inbox" : null}
+          needsYou={inboxCount}
+          moreDot={sourceHealth(data.sources, data.devops) === "trouble"}
+          captureOpen={captureOpen}
+          onTab={(t) => {
             // The bar stays on screen under Capture and Ask: a tab closes them and goes there.
             setCaptureOpen(false);
             setAssistantAt(null);
-            openTab(t);
+            if (t === "more") {
+              go((l) => ({ nav: l.nav, overlay: null }));
+              setMoreOpen(true);
+              return;
+            }
+            setMoreOpen(false);
+            openTab(t === "day" ? "today" : t === "inbox" ? "inbox" : "week");
           }}
-          captureOpen={captureOpen}
-          onCapture={() => (setAssistantAt(null), setCaptureOpen(true))}
-          askOpen={!!assistantAt && !!AssistantPanel}
-          onAsk={() => (setCaptureOpen(false), setAssistantAt((a) => (a ? null : { text: "" })))}
+          onCapture={() => (setAssistantAt(null), setMoreOpen(false), setCaptureOpen(true))}
         />
       )}
-      {phoneMoreAt && (
-        <PopupMenu
-          at={phoneMoreAt}
-          step={{
-            title: "More",
-            items: [
-              // CV-3: on the phone the person chip is this first row (the top bar keeps room for the name).
-              { id: "account", label: account.title, next: account.step },
-              // WD-1: Status is a top-level place; the phone's bottom bar has no room for it, so it is here.
-              { id: "status", label: "Status", ...(statusNeeds?.needs ? { hint: `${statusNeeds.needs} to update` } : {}), ...(statusTone !== "none" ? { mark: { tone: statusTone, text: statusText } } : {}), run: () => openTab("status") },
-              { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
-              ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
-              { id: "settings", label: "Settings", run: () => setSettingsAt("") },
-              ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
-              { id: "guide", label: "Guide", run: () => openGuide() },
-              { id: "docs", label: "Technical docs", run: () => openDocs() },
-              ...codeItem,
-              ...installItem,
-              { id: "about", label: "About", run: () => setAboutOpen(true) },
-            ],
+      {phone && PhoneM && moreOpen && (
+        <PhoneM.PhoneMore
+          statusNeeds={statusNeeds?.needs ?? 0}
+          code={codeShown}
+          health={sourceHealth(data.sources, data.devops)}
+          unread={notices.unread}
+          focusing={!!data.timer}
+          install={installItem.length > 0}
+          admin={!!isAdmin}
+          person={account.title}
+          onClose={() => setMoreOpen(false)}
+          go={(where, at) => {
+            setMoreOpen(false);
+            if (where === "backlog") openTab("ahead");
+            else if (where === "status") openTab("status");
+            else if (where === "calls") go({ nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } });
+            else if (where === "code") openCode();
+            else if (where === "settings") setSettingsAt("");
+            else if (where === "guide") openGuide();
+            else if (where === "notifications") openNotices();
+            else if (where === "sources") setStatusOpen(true);
+            else if (where === "focus") (data.timer ? setView("focus") : setTimerMenuAt(at));
+            else if (where === "checkin") goNav(navOf.today("checkin"));
+            else if (where === "closeout") goNav(navOf.today("closeout"));
+            else if (where === "install") installItem[0]?.run();
+            else if (where === "docs") openDocs();
+            else if (where === "about") setAboutOpen(true);
+            else if (where === "admin") setSettingsAt("admin-clients");
+            else if (where === "account") setAccountAt(at);
+            else if (where === "vm") setSettingsAt("connections", "vm");
           }}
-          onClose={() => setPhoneMoreAt(null)}
+          onDesktop={() => setDesktopVersion(true)}
         />
       )}
+      {accountAt && <PopupMenu at={accountAt} step={account.step()} onClose={() => setAccountAt(null)} />}
+      {/* PH-1: the Desktop version's one piece of the phone: the way back. */}
+      {desktopVersion && <PhoneVersionButton onBack={() => setDesktopVersion(false)} />}
       {assistantAt && AssistantPanel && (
         <AssistantPanel
           phone={phone}

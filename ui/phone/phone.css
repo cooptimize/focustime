@@ -1,0 +1,139 @@
+/* PH-1: the phone's bar, top bar, Now and More. Loaded with ui/phone/PhoneScreens.tsx, only on a phone, and only
+   ever applied under the phone width. The app's own tokens: its ground, panels, client colors, type and green for the
+   main action; no new colors. Body text 16 px at the default Text size (--text-base + 1px), secondary text 13 px or
+   more (--fs-1, --fs-2), every control 44 px (--tap) or more; all of it follows the Text size setting. Selectors that
+   set a size are specific enough to win over the phone's general 44 px rule for buttons (styles.css, P1). */
+@media (max-width: 599.98px) {
+  :root {
+    --ph-body: calc(var(--text-base) + 1px);
+    /* The bar: an icon over a label that may wrap to two lines at the largest Text size, never clipped. */
+    --pb-h: max(62px, calc(var(--fs-1) * 2.4 + 32px));
+    --bb-h: calc(var(--pb-h) + env(safe-area-inset-bottom));
+  }
+
+  /* The bar: Now, Week, Capture (raised, round, in the middle), Needs you, More. Above the bottom safe area. */
+  .phone-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 65; box-sizing: border-box; height: var(--bb-h);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 68px minmax(0, 1fr) minmax(0, 1fr); align-items: stretch;
+    padding: 0 4px env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--border);
+  }
+  .app.phone .pb-tab {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-width: 0; min-height: var(--tap); padding: 6px 2px; border: 0; border-radius: 0; background: none; box-shadow: none;
+    color: var(--text-muted); font: 500 var(--fs-1)/1.15 var(--font-ui); -webkit-tap-highlight-color: transparent;
+  }
+  .pb-tab:hover { border: 0; }
+  .pb-tab::before { content: ""; position: absolute; top: 0; left: calc(50% - 14px); width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: transparent; }
+  /* The current place: by weight and the mark above it, and aria-current for screen readers; never by color alone. */
+  .app.phone .pb-tab[aria-current="page"] { color: var(--text); font-weight: 600; }
+  .pb-tab[aria-current="page"]::before { background: var(--accent); }
+  .pb-tab:focus-visible { outline: 2px solid var(--text); outline-offset: -3px; }
+  .pb-icon { position: relative; display: inline-grid; place-items: center; }
+  .pb-icon svg { width: 22px; height: 22px; }
+  .pb-label { max-width: 100%; text-align: center; overflow-wrap: break-word; }
+  .pb-count {
+    position: absolute; top: -6px; left: calc(100% - 6px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    border-radius: 9px; background: var(--accent); color: var(--on-accent, var(--bg)); font: 600 var(--fs-1)/18px var(--font-ui); text-align: center;
+  }
+  .pb-dot { position: absolute; top: -2px; left: calc(100% - 2px); width: 9px; height: 9px; border-radius: 50%; background: var(--risk); box-shadow: 0 0 0 2px var(--surface); }
+  .pb-capture-slot { position: relative; display: flex; justify-content: center; }
+  .app.phone .pb-capture {
+    position: absolute; top: -18px; width: 58px; height: 58px; min-height: 58px; padding: 0; border-radius: 50%;
+    display: grid; place-items: center; border: 3px solid var(--bg); background: var(--action); color: var(--on-action);
+    box-shadow: var(--shadow-pop); -webkit-tap-highlight-color: transparent;
+  }
+  .pb-capture svg { width: 26px; height: 26px; }
+  /* The page ends clear of Capture's rise above the bar (18 px), so its last row can be tapped. */
+  .app.phone:has(.phone-bar) { padding-bottom: calc(var(--bb-h) + 24px); }
+  .pb-capture:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+  /* The top bar: the date at the left; the VM in a word or two and Ask at the right; one line. */
+  .app.phone .topbar.ph1-top { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+  /* The date stays whole; at the largest sizes the VM's word gives way first (its dot and its sheet stay). */
+  .ph1-top .ph1-date { margin: 0; min-width: auto; flex: none; white-space: nowrap; font: 600 var(--ph-body)/1.2 var(--font-ui); color: var(--text); }
+  .app.phone .ph1-top .brand { flex: none; display: flex; align-items: center; gap: 8px; min-width: auto; max-width: none; overflow: visible; }
+  .app.phone .ph1-top .demo-tag { flex: none; max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
+  .ph1-top .top-actions { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; }
+  .ph1-top .vm-chip .vm-label, .ph1-top .vm-chip .vm-word { display: none; }
+  .ph1-top .vm-chip .vm-short { display: inline; }
+  .ph1-top .vm-chip { min-height: var(--tap); min-width: var(--tap); flex: 0 1 auto; overflow: hidden; font-size: var(--fs-2); white-space: nowrap; }
+  .ph1-top .vm-chip .vm-short { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .ph1-top .ph-ask { flex: none; }
+  .app.phone .ph-ask { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0 12px; font: 500 var(--fs-2)/1 var(--font-ui); white-space: nowrap; }
+  .ph-ask svg { width: 18px; height: 18px; }
+
+  /* Now: the card, Next, the one thing, then Today. */
+  .ph1-now { display: grid; gap: 18px; font-size: var(--ph-body); }
+  .ph1-now .section-label { margin: 0 0 6px; font-size: var(--fs-1); }
+  .pn-card {
+    display: grid; gap: 6px; padding: 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface);
+    font-size: var(--ph-body);
+  }
+  /* Calm: the client's color as a tint and an edge, never a fill. */
+  .pn-block { background: color-mix(in srgb, var(--c, var(--border-strong)) 10%, var(--surface)); border-color: color-mix(in srgb, var(--c, var(--border-strong)) 35%, var(--border)); }
+  .pn-tag { margin: 0; display: flex; gap: 8px; align-items: baseline; font-size: var(--fs-2); color: var(--text-muted); }
+  .pn-now { font-size: var(--fs-1); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+  .pn-name { margin: 0; font-size: calc(var(--ph-body) + 8px); line-height: 1.2; font-weight: 600; overflow-wrap: anywhere; }
+  .pn-bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text-muted) 22%, transparent); overflow: hidden; }
+  .pn-bar span { display: block; height: 100%; border-radius: 2px; background: var(--c, var(--accent)); }
+  @media (prefers-reduced-motion: no-preference) { :root:not([data-reduce-motion]) .pn-bar span { transition: width .6s ease; } }
+  .pn-line { margin: 0; color: var(--text-muted); font-size: var(--fs-2); }
+  .pn-thing { margin-top: 8px; display: grid; gap: 12px; }
+  .pn-row { display: grid; grid-template-columns: var(--tap) minmax(0, 1fr); align-items: start; }
+  .pn-tick { display: grid; place-items: center; min-width: var(--tap); min-height: var(--tap); margin: -10px 0 0 -10px; cursor: pointer; }
+  .app.phone .pn-tick input[type="checkbox"] { width: 24px; height: 24px; }
+  .pn-what { min-width: 0; }
+  .pn-title { margin: 0; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .pn-sub { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+  .app.phone .pn-card .pn-thing button.pn-main { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; font-size: var(--ph-body); font-weight: 600; }
+  .pn-acts { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .app.phone .pn-card .pn-thing button.pn-count { min-height: 48px; font: 600 calc(var(--ph-body) + 4px)/1 var(--font-mono, var(--font-ui)); }
+  .app.phone .pn-card .pn-thing button.pn-btn { min-height: 48px; padding: 0 18px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--ph-body); }
+  .pn-none { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .pn-none .pn-sub { margin: 0; }
+
+  .pn-next ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .pn-next-row { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; padding: 8px 0; min-height: var(--tap); box-sizing: border-box; align-items: baseline; }
+  .pn-at { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: var(--fs-2); min-width: 3.4em; }
+  .pn-next-text { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .pn-next-text svg { width: 15px; height: 15px; flex: none; align-self: center; color: var(--text-muted); }
+  .pn-next-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pn-next-detail { grid-column: 2; color: var(--text-muted); font-size: var(--fs-2); }
+  .pn-next-detail.risk { color: var(--risk-text, var(--risk)); }
+
+  .app.phone .ph1-now .pn-one button.pn-one-row {
+    width: 100%; min-height: 56px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "why of go" "title title go";
+    column-gap: 8px; row-gap: 2px; align-items: center; padding: 10px 12px; border-radius: 12px; text-align: left;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: var(--ph-body);
+  }
+  .pn-one-why { grid-area: why; font-size: var(--fs-2); font-weight: 600; color: var(--text-muted); }
+  .pn-one-row.late .pn-one-why { color: var(--watch-text, var(--watch)); }
+  .pn-one-title { grid-area: title; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pn-one-of { grid-area: of; font-size: var(--fs-2); color: var(--text-muted); }
+  .pn-one-row > svg { grid-area: go; width: 18px; height: 18px; color: var(--text-muted); }
+
+  .ph1-now .ph-todos .section-label { font-size: var(--fs-1); }
+
+  /* More: a full screen of rows, 56 px at least; Desktop version set apart. */
+  .more-screen {
+    position: fixed; inset: 0 0 var(--bb-h) 0; z-index: 60; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);
+    display: grid; align-content: start; gap: 16px; padding: calc(env(safe-area-inset-top) + 8px) 16px 24px; font-size: var(--ph-body);
+  }
+  .mr-head { display: flex; align-items: center; gap: 8px; min-height: var(--tap); }
+  .mr-head h1 { margin: 0; font-size: calc(var(--ph-body) + 4px); font-weight: 600; }
+  .mr-head h1:focus { outline: none; }
+  .app.phone .mr-back { min-width: var(--tap); min-height: var(--tap); padding: 0; display: grid; place-items: center; border: 0; background: none; }
+  .mr-list { list-style: none; margin: 0; padding: 0; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+  .mr-list li + li { border-top: 1px solid var(--border); }
+  .mr-apart { margin-top: 8px; }
+  .app.phone .more-screen .mr-list button.mr-row {
+    width: 100%; min-height: 56px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+    padding: 8px 14px; border: 0; border-radius: 0; background: none; color: var(--text); text-align: left; font-size: var(--ph-body);
+  }
+  .mr-row > svg { width: 20px; height: 20px; color: var(--text-muted); }
+  .mr-row > svg:last-child { width: 18px; height: 18px; }
+  .mr-text { display: grid; gap: 2px; min-width: 0; }
+  .mr-name { font-weight: 500; }
+  .mr-line { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+  .mr-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--risk); }
+}

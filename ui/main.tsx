@@ -13,6 +13,7 @@ import { startKeyboardInset } from "./keyboard.ts";
 import { OfflineLine } from "./Offline.tsx";
 import { HOME, locScreens, parseHash } from "./nav.ts";
 import { loadScreen } from "./screens.ts";
+import { isPhoneWidth } from "./viewport.ts";
 
 // The style guide renders fixture data, so it exists only in development builds (no-demo-leak): Vite drops this
 // branch, and the fixtures with it, from the production bundle.
@@ -21,6 +22,9 @@ const StyleGuide = import.meta.env.DEV ? lazy(() => import("./StyleGuide.tsx").t
 // PF-1: opened at an address whose screen loads on demand: its file is asked for now, alongside the sign-in check
 // and the week's read, not after them.
 for (const n of locScreens(parseHash(location.hash) ?? HOME)) void loadScreen(n);
+// PH-1: on a phone, the phone's own screens (the shell and Now) arrive with the first download; a computer, or a phone
+// showing the Desktop version (1280 wide from public/prefs.js), never asks for them.
+if (isPhoneWidth(window.innerWidth)) void loadScreen("phone");
 
 applyTheme(initialTheme());
 applyReduceMotion();

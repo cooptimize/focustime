@@ -39,7 +39,10 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps } from "./Phone.tsx";
-import { PhoneNextUp, PhoneNowCard, PhoneTodos, phoneNowOf } from "./PhoneDay.tsx";
+import { PhoneTodos, phoneNowOf, phoneNameOf } from "./PhoneDay.tsx";
+import { isMeeting } from "../plan/phonenow.ts";
+import { nextLines, oneThing, PHONE_TEXT } from "../plan/phone-now.ts";
+import { blockStatus } from "../plan/blockstatus.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
@@ -110,7 +113,7 @@ type Props = {
   onStart: (pick: Pick | null) => void;
   onFocusScreen: () => void;
   /** The running timer's Done and +15. */
-  onTimer: (action: "timer.done" | "timer.extend") => void;
+  onTimer: (action: "timer.done" | "timer.extend" | "timer.stop") => void;
   onInbox: () => void;
   /** AP-2: Inbox › Requests (Check-in's "Walked in, not resolved"). */
   onAsks?: (conversationId?: number) => void;
@@ -162,8 +165,11 @@ export function Day(props: Props) {
   const tz = userZone(data);
   const phone = usePhone();
   const view = useContext(PlanCtx);
-  // MB-1: today on the phone: the Now card, Needs you, the to-dos by block and Next up (other days and the flows use the cards).
-  const phoneToday = phone && mode === "now" && isToday;
+  // PH-1: today on the phone is Now: the VM's morning prompt, the Now card, Next, the one thing that needs you, then
+  // today's to-dos by block. Other days and the flows are as before. The phone's own parts come from its screen file.
+  const PhoneM = phone ? screen("phone") : null;
+  const phoneToday = phone && mode === "now" && isToday && !!PhoneM;
+  const vmPrompt = vmNeedsToday(useContext(VmCtx).status);
   // PF-1: the check-in and Close out load when first opened (ui/screens.ts); App draws their flow only once the file is in.
   const CheckinM = mode === "checkin" ? screen("checkin") : null;
   const CloseOutM = mode === "closeout" ? screen("closeout") : null;
@@ -375,7 +381,9 @@ export function Day(props: Props) {
 
   return (
     <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
-      <header className="today-head day-bar">
+      {/* PH-1: Now has no header of its own: the date is the top bar's, and another day is reached from Week. */}
+      {phoneToday && <h1 className="sr-only">{PHONE_TEXT.dayHeading}</h1>}
+      {!phoneToday && <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
             <h1>
@@ -446,7 +454,7 @@ export function Day(props: Props) {
             }}
           />
         </ModeArea>
-      </header>
+      </header>}
       {moreAt && (
         <PopupMenu
           at={moreAt}
@@ -459,13 +467,44 @@ export function Day(props: Props) {
           onClose={() => setMoreAt(null)}
         />
       )}
-      {mode === "now" && nudges && phoneToday && (
-        <PhoneNowCard card={phoneNowOf(blocks, cal?.timed ?? [], clockNow)} data={data} pick={nextPick} nowMs={nowMs} nameOf={nameOf} tickable={tickable} onStart={props.onStart} onDone={tickWithUndo} onTimer={props.onTimer} onFocusScreen={props.onFocusScreen} />
+      {phoneToday && PhoneM && (
+        <div className="ph1-now">
+          {vmPrompt && <VmToday />}
+          {nudges && (
+            <PhoneM.NowCard
+              card={phoneNowOf(blocks, cal?.timed ?? [], clockNow)}
+              data={data}
+              pick={nextPick}
+              nowMs={nowMs}
+              name={(() => {
+                const c = phoneNowOf(blocks, cal?.timed ?? [], clockNow);
+                return c.kind === "none" || c.kind === "after" ? "" : phoneNameOf(data, nameOf, c.block);
+              })()}
+              tickable={tickable}
+              onStart={props.onStart}
+              onTick={(p) => tickWithUndo(p, true)}
+              onTimer={props.onTimer}
+              onFocusScreen={props.onFocusScreen}
+              onAdd={(half) => openBlock(half as Half, { add: true })}
+            />
+          )}
+          {nudges && (
+            <PhoneM.NextLines
+              lines={nextLines(
+                (cal?.timed ?? []).filter((e) => isMeeting({ id: e.event.id, title: e.event.title, start: e.start, end: e.end, isPersonal: e.event.isPersonal, unavailable: e.event.unavailable, notMeeting: e.event.notMeeting, allDay: e.event.allDay })).map((e) => ({ title: e.event.title, start: e.start, end: e.end })),
+                blocks.map((b) => {
+                  const st = blockStatus(b.risks);
+                  return { start: b.start, name: phoneNameOf(data, nameOf, { half: b.half, clientKey: b.focus[0]?.clientKey ?? null }), risk: st.kind === "at_risk" ? `${st.label}${st.short ? ` · ${st.short}` : ""}` : null };
+                }),
+                clockNow,
+                (iso) => clock(iso, tz),
+              )}
+            />
+          )}
+          {nudges && <PhoneM.OneThingLine thing={oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onItem ?? (() => props.onInbox()))(k)} />}
+        </div>
       )}
-      {/* MB-1: on the phone one heading over the strip (its 3 lines and "N more in Inbox"). */}
-      {mode === "now" && nudges && phoneToday && urgentLines(urgentSources, clockNow, tz).length > 0 && <h2 className="section-label ph-urgent-head">Needs you</h2>}
-      {/* WD-2: above the blocks, in this order and nothing else: the urgent strip, one line of chips, the card for the moment. */}
-      {aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>
+      {!phoneToday && aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>
         part === "urgent" ? (
           <UrgentStrip key={part} sources={urgentSources} now={clockNow} today={date} tz={tz} clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onItem={props.onItem ?? (() => props.onInbox())} onAskFocus={(u) => void startAsk(u)} />
         ) : part === "chips" ? (
@@ -474,7 +513,7 @@ export function Day(props: Props) {
           <MomentCard key={part} phone={phoneToday} m={props.moment!} onPlan={() => props.onAdd(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} suggested={morning} />
         ),
       )}
-      {mode === "now" && nudges && props.setupLine && props.onSetup && (
+      {mode === "now" && nudges && !phoneToday && props.setupLine && props.onSetup && (
         <p className="setup-line">
           <button type="button" className="link-btn" onClick={() => props.onSetup!(props.setupLine!.step)} title="Finish setting up FocusTime">
             {props.setupLine.text}
@@ -510,10 +549,9 @@ export function Day(props: Props) {
             </button>
           )}
         </p>
-      ) : phoneToday && !timelineShown && !catchUpCell ? (
-        <div className="today-body ph-today">
-          <PhoneTodos blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
-          <PhoneNextUp blocks={blocks} events={cal?.timed ?? []} data={data} nameOf={nameOf} now={clockNow} />
+      ) : phoneToday && !catchUpCell ? (
+        <div className="today-body ph-today ph1-now" data-tour="today-blocks">
+          <PhoneTodos heading={PHONE_TEXT.today} blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
         </div>
       ) : mode === "now" && timelineShown ? (
         <div className="today-body with-tl">
