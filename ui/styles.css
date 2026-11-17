@@ -5435,6 +5435,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-actions .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-actions .file-button.disabled { opacity: 0.6; cursor: default; }
 /* MC-1d: Proposals and Transcript tabs; the transcript, read only, with the lines a proposal rests on marked. */
+.mtg-view h2[tabindex="-1"]:focus { outline: none; }
 .mtg-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 .mtg-tabs [role=tab] { font: inherit; font-size: var(--fs-3); background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; color: var(--text-muted); cursor: pointer; min-height: var(--target, 32px); }
 .mtg-tabs [role=tab].on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
@@ -5474,13 +5475,13 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .call-mark.needs { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); color: var(--accent); font-weight: 600; }
 .call-mark:hover { color: var(--text); }
 /* MC-1d: the mark on a call's own meeting (Day, Week, the block panel, the phone); the title opens the call too. */
-.call-mark.ev-call { font: inherit; font-size: var(--fs-1); background: var(--surface); cursor: pointer; flex: none; align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
+.call-mark.ev-call { display: inline-flex; align-items: center; font: inherit; font-size: var(--fs-1); line-height: 1.3; background: var(--surface); cursor: pointer; flex: none; align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
 .call-mark.ev-call.failed { border-color: var(--watch); color: var(--text); background: var(--wash-watch); font-weight: 500; }
 .call-mark.ev-call:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 [data-call-title] { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 2px; }
 [data-call-title]:hover { text-decoration-color: currentColor; }
 .event.is-call .ev-line { flex-wrap: wrap; row-gap: 2px; }
-.card-events li.is-call, .grid.no-timeline .card-events li.is-call { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.card-events li.is-call, .grid.no-timeline .card-events li.is-call { grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: center; }
 /* Admin › Clients › Meetings. */
 .mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
