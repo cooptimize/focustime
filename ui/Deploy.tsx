@@ -9,7 +9,7 @@ import { Modal } from "./DevOpsWrite.tsx";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { SendLoop } from "./SendLoop.tsx";
 import type { WeekLoadData } from "../actions/types.ts";
-import { deployedWhen, afterHoursText, deployedText, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
+import { deployedWhen, afterHoursText, deployedText, doneLine, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { Icon } from "./icons.tsx";
@@ -67,7 +67,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
     setError(null);
     try {
       const r = await call<{ followUp: { id: number } }>("followup.add", {
-        what: tellWhat(clientName, pick.title),
+        what: tellWhat(clientName, pick.title, pick.date),
         clientKey: pick.clientKey,
         ...(who.who.trim() ? { who: who.who.trim(), ...(who.whoRef ? { whoRef: who.whoRef } : {}) } : {}),
         ...(links[0] ? { itemId: links[0].id } : {}),
@@ -91,7 +91,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
       </div>
       {promise === null ? (
         <div className="deployed-ask">
-          <p className="deployed-done"><DeployIcon /> {pick.title} is done</p>
+          <p className="deployed-done" title={pick.title}><DeployIcon /> {doneLine(pick.title, pick.date)}</p>
           <p className="muted">
             {pick.window ? `${windowText(pick.window)} · ` : ""}
             {[pick.deployItems?.map((i) => i.name).join(", "), pick.notes].filter(Boolean).join(" · ") || "No note of what went"}
@@ -111,7 +111,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
           promiseKey={`f${promise}`}
           who={who.who.trim() || null}
           demo={demo}
-          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, note: pick.notes, links, items: pick.deployItems ?? [], when: deployedWhen(pick, today), myName: null }), from: "A plain draft from what the deployment moved. Edit it as you like." }}
+          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, date: pick.date, note: pick.notes, links, items: pick.deployItems ?? [], when: deployedWhen(pick, today), myName: null }), from: "A plain draft from what the deployment moved. Edit it as you like." }}
           onClosed={(m) => onDone(m)}
           onCancel={() => void back()}
           closeWithout={async (v) => {

@@ -973,6 +973,8 @@ describe("WK-3", () => {
     s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i), "deploy.items": async () => ITEMS } });
     s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here."));
     const r = await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11");
+    // UC-2 2: the made title isn't quoted into the proposal's line; the line names the day.
+    expect(r.proposals[0]!.title).toBe("Plan the Sat, Nov 7 deployment, 9:00–11:00");
     await s.a.confirm(r.proposals[0]!.id);
     expect(s.writes().at(-1)).toMatchObject({ action: "deploy.add", input: { title: "Deployment - Fabrikam - Sat, Nov 7" } });
   });

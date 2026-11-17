@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { aDeployment, aPick, aWeekConfig, WEEK } from "../test/builders/index.ts";
 import { hoursOn } from "../week/hours.ts";
 import { weekDates7 } from "../week/dates.ts";
-import { afterHours, afterHoursText, deployedText, deployedWhen, deploymentTitle, madeTitle, movedTitle, windowHalf, windowProblem, windowText } from "./deploy.ts";
+import { afterHours, afterHoursText, deployedText, deployedWhen, deploymentTitle, deployName, doneLine, isMadeTitle, madeTitle, tellWhat, movedTitle, windowHalf, windowProblem, windowText } from "./deploy.ts";
 import { pickNeed, SIZE_MINUTES } from "./types.ts";
 
 const model = aWeekConfig().hours;
@@ -134,5 +134,31 @@ describe("UC-2: one title for a new deployment, whoever makes it", () => {
     for (const none of [undefined, null, "", "   "]) expect(deploymentTitle(none, "Contoso", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
     expect(deploymentTitle("  Release 4.2  ", "Contoso", "2026-11-21")).toBe("Release 4.2");
     expect(deploymentTitle("x".repeat(250), "Contoso", "2026-11-21")).toHaveLength(200);
+  });
+});
+
+describe("UC-2: a sentence names a made title's day, and quotes a typed one", () => {
+  const made = madeTitle("Contoso", "2026-11-21");
+  it("tells a made title from typed words, by the day the deployment is on", () => {
+    expect(isMadeTitle(made, "2026-11-21")).toBe(true);
+    expect(isMadeTitle("Deployment", "2026-11-21")).toBe(true);
+    expect(isMadeTitle(made, "2026-11-22")).toBe(false);
+    for (const typed of ["Release 4.2", "Deployment - Sat, Nov 21", "Deployment of the warehouse"]) expect(isMadeTitle(typed, "2026-11-21"), typed).toBe(false);
+    expect(deployName(made, "2026-11-21")).toEqual({ made: true, name: "the Sat, Nov 21 deployment" });
+    expect(deployName("Release 4.2.", "2026-11-21")).toEqual({ made: false, name: "Release 4.2" });
+  });
+  it("the draft to the client", () => {
+    const base = { who: "Jordan Lee", clientName: "Contoso", note: null, links: [], myName: null };
+    expect(deployedText({ ...base, title: made, date: "2026-11-21" })).toContain("Hi Jordan,\n\nThe Sat, Nov 21 deployment is done.\n");
+    expect(deployedText({ ...base, title: "Release 4.2", date: "2026-11-21" })).toContain("Release 4.2 is deployed.");
+    expect(deployedText({ ...base, title: made, date: "2026-11-21" })).not.toContain(made);
+  });
+  it("the promise, which notices and Teams show", () => {
+    expect(tellWhat("Contoso", made, "2026-11-21")).toBe("Tell Contoso the Sat, Nov 21 deployment is done");
+    expect(tellWhat("Contoso", "Release 4.2", "2026-11-21")).toBe("Tell Contoso it's deployed: Release 4.2");
+  });
+  it("the line after Done", () => {
+    expect(doneLine(made, "2026-11-21")).toBe("The Sat, Nov 21 deployment is done");
+    expect(doneLine("Release 4.2", "2026-11-21")).toBe("Release 4.2 is done");
   });
 });
