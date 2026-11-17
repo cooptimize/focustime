@@ -228,7 +228,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -752,8 +752,11 @@ async function connect(ctx: ActionContext, which: "outlook" | "google") {
   return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
 }
 
-/** The context with config's "me" taken from the sign-in, and a found Dataverse user kept with the sign-in. */
-function withSignedIn(ctx: ActionContext): ActionContext {
+/**
+ * The context with config's "me" taken from the sign-in, and a found Dataverse user kept with the sign-in. Every request
+ * gets it; VM-3: so does the automatic start in the background (server/ticks.ts), which read PTO without it.
+ */
+export function withSignedIn(ctx: ActionContext): ActionContext {
   const me = storedIdentity(ctx.plan);
   if (!me) return ctx;
   return {
@@ -1372,6 +1375,8 @@ export type MeetingsPort = {
   store: MeetingStore;
   users: () => Promise<MeetingUser[]>;
   /** ENV-1: Check now: one look for one registered call's transcript with this person's sign-in (absent: not here). */
+  /** MC-1d: the meeting job runs here (production), so a failed AI pass is tried again by itself. */
+  retriesHere?: boolean;
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
 };
 
@@ -1411,6 +1416,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     graph: (cfg) => ctx.account?.(cfg)?.meetings ?? null,
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
+    ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -1579,19 +1585,18 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
     focusRunning: async () => !!(await ctx.plan?.getState<TimerState>(TIMER_KEY))?.runningSince,
     workday: async (cfg, date) => (await hasHoursOn(ctx.plan, cfg.week.hours, date)) && !(await ptoOn(ctx, cfg, date)),
     ...(ctx.autoStartEnv !== undefined ? { autoStartEnv: ctx.autoStartEnv } : {}),
-    // VM-2: my whole-day PTO (the Time Off Tracker) and Cooptimize's observed holidays (Working Days Calendar). A read
-    // that fails throws: the tick then leaves the VM off.
+    // VM-2: my whole-day PTO (the Time Off Tracker) and Cooptimize's observed holidays (Working Days Calendar). VM-3:
+    // each is null when it can't be read, so the start can tell them apart (unread PTO leaves the VM off unless a read
+    // from the last 24 hours covers today; unread holidays don't stop it).
     daysOff: async (cfg, from, to) => {
       const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
       // VM-2 review: PTO that can't be read fresh (Dataverse down, no role, no Dataverse user yet) is unknown, never
-      // "none": the reader doesn't throw, so its status decides. The auto-start then leaves the VM off.
-      if (!cfg.dataverse.mySystemUserId) throw new Error("PTO unknown: no Dataverse user");
-      const read = await dv.pto(from, to);
-      if (read.status !== "ok") throw new Error("PTO unavailable");
-      const pto = read.items.map((e) => e.date);
-      const h = dv.holidays ? await dv.holidays(from, to) : { ok: true as const, days: [] };
-      if (!h.ok) throw new Error("holidays unavailable");
-      return { pto: new Set(pto), holidays: new Set(h.days.map((x) => x.date)) };
+      // "none": the reader doesn't throw, so its status decides.
+      const read = cfg.dataverse.mySystemUserId ? await dv.pto(from, to).catch(() => null) : null;
+      const pto = read?.status === "ok" ? new Set(read.items.map((e) => e.date)) : null;
+      const h = dv.holidays ? await dv.holidays(from, to).catch(() => null) : { ok: true as const, days: [] };
+      const holidays = h?.ok ? new Set(h.days.map((x) => x.date)) : null;
+      return { pto, holidays };
     },
   };
 }
@@ -1736,6 +1741,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const m = i && typeof i === "object" && !Array.isArray(i) && Object.keys(i).every((k) => k === "advanceMinutes") ? (i.advanceMinutes ?? 0) : null;
       if (typeof m !== "number" || !Number.isInteger(m) || m < 0 || m > 1440) return bad("demo.vm_tick takes { advanceMinutes?: 0 to 1440 }");
       return { ok: true, data: { outcome: await ctx.demo.vmTick(m), now: ctx.now() } };
+    }
+    case "demo.pass_stall": {
+      // VM-3: only in a demo session started with --clock (the e2e tests): Admin › Status's pretend slow pass holds or
+      // lets go, so its warning can be seen once the demo's clock moves past the limit (demo.vm_tick).
+      if (!ctx.demo?.on || !ctx.demo.passStall) return { ok: false, status: 403, error: "Only in a demo verification run" };
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("demo.pass_stall takes { on: true | false }");
+      ctx.demo.passStall(i.on);
+      return { ok: true, data: { on: i.on } };
     }
     case "demo.status": {
       if (!noInput(req.input)) return bad("demo.status takes no input");
@@ -2579,6 +2593,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.confirm":
     case "meeting.rerun":
     case "meeting.check_now":
+    case "meeting.transcript":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

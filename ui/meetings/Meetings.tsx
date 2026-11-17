@@ -3,14 +3,15 @@
 // proposal with the words it came from; a reviewer ticks, edits or skips each, then one Confirm shows every change in
 // the usual preview and makes them through the existing writes. An attendee who isn't a reviewer can look, not confirm.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import type { DevOpsPreview } from "../../actions/types.ts";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import type { Proposal, ProposalBody, Quote } from "../../plan/meetings.ts";
-import { callLabel, type MineData } from "./calls.ts";
+import { callLabel, takeRerun, type MineData } from "./calls.ts";
+import { CALL_ACTIONS, CALL_STATE, TRANSCRIPT_TEXT } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 
@@ -24,7 +25,8 @@ const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US
 const KIND_HEAD: Record<ProposalBody["kind"], string> = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on DevOps items" };
 const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
 
-export function Meetings({ occurrence, onOpen, onClose, colors }: { occurrence: number | null; onOpen: (id: number | null) => void; onClose: () => void; colors: Record<string, string> }) {
+type CallView = "transcript" | "upload";
+export function Meetings({ occurrence, view = null, line = null, onOpen, onClose, onChanged, colors }: { occurrence: number | null; view?: CallView | null; line?: number | null; onOpen: (id: number | null, view?: CallView, line?: number) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string> }) {
   useReturnFocus();
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && !(e.target as HTMLElement | null)?.closest("input, textarea, select, dialog") && (e.preventDefault(), occurrence ? onOpen(null) : onClose());
@@ -33,7 +35,7 @@ export function Meetings({ occurrence, onOpen, onClose, colors }: { occurrence: 
   }, [occurrence, onOpen, onClose]);
   return (
     <main className="mtg-view" aria-label="Client calls" tabIndex={-1}>
-      {occurrence ? <ReviewScreen id={occurrence} colors={colors} onBack={() => onOpen(null)} /> : <CallsList colors={colors} onOpen={onOpen} onClose={onClose} />}
+      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} colors={colors} onBack={() => onOpen(null)} onView={(v, n) => onOpen(occurrence, v ?? undefined, n)} onChanged={onChanged} /> : <CallsList colors={colors} onOpen={(id) => onOpen(id)} onClose={onClose} />}
     </main>
   );
 }
@@ -82,7 +84,7 @@ function CallsList({ colors, onOpen, onClose }: { colors: Record<string, string>
   );
 }
 
-function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<string, string>; onBack: () => void }) {
+function ReviewScreen({ id, view, line, colors, onBack, onView, onChanged }: { id: number; view: CallView | null; line: number | null; colors: Record<string, string>; onBack: () => void; onView: (v: CallView | null, line?: number) => void; onChanged?: (() => void) | undefined }) {
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [keep, setKeep] = useState<Set<number>>(new Set());
@@ -95,11 +97,20 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
       setR(d);
       setKeep(new Set(d.proposals.filter((p) => p.state === "open" || p.state === "failed").map((p) => p.id)));
       setError(null);
+      // MC-1d: the marks on Day and Week follow what changed here (a rerun, an upload, a confirm).
+      onChanged?.();
     } catch (e) {
       setError(errText(e));
     }
-  }, [id]);
+  }, [id, onChanged]);
   useEffect(() => void load(), [load]);
+  // MC-1d: opening a call puts focus on its heading (a screen reader starts there), not on the page's body.
+  const headed = useRef(false);
+  useEffect(() => {
+    if (!r || headed.current) return;
+    headed.current = true;
+    if (view !== "transcript" || !line) document.querySelector<HTMLElement>(".mtg-view h2")?.focus();
+  }, [r, view, line]);
 
   if (error) return (<><BackHead onBack={onBack} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
   if (!r) return (<><BackHead onBack={onBack} title="Client call" /><p className="muted">Loading…</p></>);
@@ -148,9 +159,16 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
         {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
         {editable ? "Tick what's right, change the words where needed, and skip the rest. Nothing changes until you confirm." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can confirm. You can look.`}
       </p>
-      {o.aiMessage && <p className="set-problem">{o.aiMessage}</p>}
+      {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} />}
+      {o.state === "failed" && (
+        <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
+          <h3>{CALL_STATE.aiFailed}</h3>
+          {o.aiMessage && <p>{o.aiMessage.replace(`${CALL_STATE.aiFailed}: `, "").replace(/^./, (c) => c.toUpperCase())}</p>}
+          {o.aiNext && <p className="muted">{o.aiNext}</p>}
+        </section>
+      )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {(o.state === "needs_upload" || o.state === "waiting" || o.state === "failed" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
+      {(o.state === "needs_upload" || o.state === "waiting" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
       {done && (
         <section className="mtg-done" role="status" aria-label="What was done">
@@ -159,13 +177,27 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
           <p className="muted">Undo any DevOps change in Settings › Activity.</p>
         </section>
       )}
+      {/* MC-1d: Proposals and the Transcript (read only, loaded when opened), each its own address. */}
+      {r.transcript && (
+        <div className="mtg-tabs" role="tablist" aria-label="This call">
+          <button type="button" role="tab" id="mtg-tab-proposals" aria-selected={view !== "transcript"} aria-controls="mtg-panel" className={view !== "transcript" ? "on" : undefined} onClick={() => onView(null)}>
+            {TRANSCRIPT_TEXT.tabProposals} <span className="muted">{r.proposals.length}</span>
+          </button>
+          <button type="button" role="tab" id="mtg-tab-transcript" aria-selected={view === "transcript"} aria-controls="mtg-panel" className={view === "transcript" ? "on" : undefined} onClick={() => onView("transcript")}>
+            {TRANSCRIPT_TEXT.tab} <span className="muted">{r.transcript.lines}</span>
+          </button>
+        </div>
+      )}
+      {view === "transcript" ? (
+        <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} />
+      ) : (<>
       {(["gap", "commitment", "comment"] as const).map((kind) => {
         const ps = r.proposals.filter((p) => p.body.kind === kind);
         if (!ps.length) return null;
         return (
           <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={KIND_HEAD[kind]}>
             <h3>{KIND_HEAD[kind]} <span className="muted">{ps.length}</span></h3>
-            {ps.map((p) => <ProposalRow key={p.id} p={p} ticked={keep.has(p.id)} editable={editable} onTick={(on) => setKeep((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; })} onEdit={(patch) => void edit(p, patch)} />)}
+            {ps.map((p) => <ProposalRow key={p.id} p={p} ticked={keep.has(p.id)} editable={editable} onTick={(on) => setKeep((s) => { const n = new Set(s); if (on) n.add(p.id); else n.delete(p.id); return n; })} onEdit={(patch) => void edit(p, patch)} onShowLines={r.transcript ? (n) => onView("transcript", n) : undefined} />)}
           </section>
         );
       })}
@@ -181,8 +213,80 @@ function ReviewScreen({ id, colors, onBack }: { id: number; colors: Record<strin
           </span>
         </div>
       )}
+      </>)}
       {prep && (prep.data || prep.error) && <ConfirmDialog prep={prep} skipped={open.length - ticked.length} onCancel={() => setPrep(null)} onConfirm={() => void confirm()} />}
     </>
+  );
+}
+
+type Line = { n: number; speaker: string; at: string; sec: number; text: string };
+
+/**
+ * MC-1d: the call's transcript, read only: every line with its speaker and time, the lines a proposal rests on marked,
+ * and a filter. Loaded from the server when opened, held only in this component's memory (never browser storage or the
+ * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
+ * is scrolled to and focused.
+ */
+function TranscriptView({ occurrenceId, startAt, proposals, line }: { occurrenceId: number; startAt: string; proposals: Proposal[]; line: number | null }) {
+  // A line's time of day (the call's start plus its offset), so "1:05" never reads as five past one.
+  const time = (sec: number) => new Date(Date.parse(startAt) + sec * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    let live = true;
+    call<{ lines: Line[]; gone: boolean; missing: boolean }>("meeting.transcript", { occurrenceId }).then((d) => live && setData(d), (e) => live && setError(errText(e)));
+    return () => {
+      live = false;
+    };
+  }, [occurrenceId]);
+  // Which proposals rest on each line (their first words, for the mark's label).
+  const marks = useMemo(() => {
+    const m = new Map<number, string[]>();
+    for (const p of proposals) {
+      const b = p.body;
+      const what = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
+      for (const n of b.lines) m.set(n, [...(m.get(n) ?? []), what]);
+    }
+    return m;
+  }, [proposals]);
+  useEffect(() => {
+    if (!data || !line) return;
+    setQ("");
+    const el = document.getElementById(`mtg-line-${line}`);
+    el?.scrollIntoView({ block: "center" });
+    el?.focus({ preventScroll: true });
+  }, [data, line]);
+  if (error) return <p className="error-line" role="alert">{error}</p>;
+  if (!data) return <p className="muted">Loading…</p>;
+  if (!data.lines.length) return <p className="muted">{data.gone ? TRANSCRIPT_TEXT.gone : TRANSCRIPT_TEXT.missing}</p>;
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? data.lines.filter((l) => l.text.toLowerCase().includes(needle) || l.speaker.toLowerCase().includes(needle)) : data.lines;
+  return (
+    <section className="mtg-transcript" id="mtg-panel" role="tabpanel" aria-labelledby="mtg-tab-transcript">
+      <div className="mtg-tr-bar">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={TRANSCRIPT_TEXT.filterHint} aria-label={TRANSCRIPT_TEXT.filter} />
+        <span className="muted" role="status">{needle && !shown.length ? TRANSCRIPT_TEXT.none(q.trim()) : TRANSCRIPT_TEXT.count(shown.length, data.lines.length)}</span>
+      </div>
+      <p className="muted mtg-tr-who">{TRANSCRIPT_TEXT.who}</p>
+      <ol className="mtg-lines">
+        {shown.map((l) => {
+          const on = marks.get(l.n);
+          return (
+            <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}` } : {})}>
+              <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>
+              <span className="mtg-who">{l.speaker}</span>
+              <span className="mtg-line-text">{l.text}</span>
+              {on && (
+                <span className="mtg-line-mark" title={`${TRANSCRIPT_TEXT.marked}: ${on.join("; ")}`} aria-hidden="true">
+                  {on.length === 1 ? "Proposal" : `${on.length} proposals`}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -191,7 +295,7 @@ function BackHead({ onBack, title, sub }: { onBack: () => void; title: string; s
     <header className="page-head">
       <div className="ph-title">
         <button type="button" className="mini quiet" onClick={onBack} aria-label="Back to client calls"><Icon name="back" /> Calls</button>
-        <h2>{title}</h2>
+        <h2 tabIndex={-1}>{title}</h2>
         {sub && <span className="muted">{sub}</span>}
       </div>
     </header>
@@ -211,7 +315,7 @@ function Quotes({ qs }: { qs: Quote[] | null }) {
   );
 }
 
-function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; ticked: boolean; editable: boolean; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void }) {
+function ProposalRow({ p, ticked, editable, onTick, onEdit, onShowLines }: { p: Proposal; ticked: boolean; editable: boolean; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onShowLines?: ((line: number) => void) | undefined }) {
   const b = p.body;
   const decided = p.state === "confirmed" || p.state === "skipped";
   const main = b.kind === "gap" ? b.title : b.kind === "commitment" ? b.what : b.text;
@@ -240,6 +344,12 @@ function ProposalRow({ p, ticked, editable, onTick, onEdit }: { p: Proposal; tic
         {b.kind === "gap" && b.description && <p className="mtg-desc">{b.description}</p>}
         {b.kind === "comment" && b.inReport && <p className="mtg-report">Will appear in Kat's Monday report</p>}
         <Quotes qs={p.quotes} />
+        {/* MC-1d: the jump to the lines this proposal rests on, in the Transcript view (while the transcript is kept). */}
+        {onShowLines && b.lines.length > 0 && p.quotes && (
+          <button type="button" className="mini quiet mtg-show-lines" onClick={() => onShowLines(Math.min(...b.lines))} aria-label={`${CALL_ACTIONS.showLines}: ${main}`}>
+            {CALL_ACTIONS.showLines}
+          </button>
+        )}
         {state && <p className={`mtg-state-line${p.state === "failed" ? " problem" : ""}`}>{state}</p>}
       </div>
       {editable && !decided && (
@@ -318,6 +428,70 @@ function PreviewRows({ rows }: { rows: DevOpsPreview["fields"] }) {
   );
 }
 const clip = (s: string) => (s.length > 160 ? `${s.slice(0, 159)}…` : s);
+
+/**
+ * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
+ * it replaces the open proposals, the done and skipped ones stay) and Upload a transcript (a file in its place).
+ */
+function CallActions({ series, occ, onDone, focusUpload = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean }) {
+  const [busy, setBusy] = useState<"rerun" | "upload" | null>(null);
+  // MC-1d: "Upload a transcript" from a meeting's menu lands here with the file button focused (the browser opens a
+  // file picker only from a press, so the person presses it once more).
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (focusUpload) fileRef.current?.focus();
+  }, [focusUpload]);
+  // MC-1d: Propose again chosen from the meeting's menu runs here, once, where its result shows.
+  useEffect(() => {
+    if (takeRerun(occ.id)) void rerun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occ.id]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const rerun = async (ask = true) => {
+    // It replaces the open proposals, with any words changed in them; the ones done or skipped stay.
+    if (ask && occ.open > 0 && !window.confirm(`Propose again? The ${occ.open} open ${occ.open === 1 ? "proposal is" : "proposals are"} replaced, with any words you changed. The ones done or skipped stay.`)) return;
+    setBusy("rerun");
+    setMsg(null);
+    try {
+      const r = await call<{ outcome: string; proposals: number }>("meeting.rerun", { occurrenceId: occ.id });
+      setMsg(r.outcome === "done" ? (r.proposals ? `${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.` : "The AI step ran: nothing to propose from this call.") : CALL_STATE.aiFailed);
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const upload = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy("upload");
+    setMsg(null);
+    try {
+      const r = await uploadMeetingTranscript<{ lines: number; proposals: number; outcome?: string }>(series.id, occ.date, f);
+      setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines} lines. ${CALL_STATE.aiFailed}.` : `Read ${r.lines} lines. ${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.`);
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const canRerun = occ.hasTranscript && occ.state !== "waiting" && occ.state !== "fetching";
+  return (
+    <div className="mtg-actions" role="group" aria-label="This call">
+      {canRerun && (
+        <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done or skipped stay.">
+          {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
+        </button>
+      )}
+      <label className={`mini file-button${busy ? " disabled" : ""}`}>
+        {busy === "upload" ? "Reading…" : CALL_ACTIONS.upload}
+        <input ref={fileRef} type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!!busy} onChange={(e) => void upload(e.target.files?.[0])} />
+      </label>
+      {msg && <span className="muted" role="status">{msg}</span>}
+    </div>
+  );
+}
 
 function UploadBox({ series, occ, onDone }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);

@@ -9,7 +9,7 @@ import { DEMO_PEOPLE } from "../sources/demo/data.ts";
 import { useNoOutbound } from "../test/no-outbound.ts";
 import { createDemoContext, seedDemo } from "./demo.ts";
 
-const NOW = "2026-11-05T15:00:00Z"; // Thursday 10:00 AM in New York; the call was on Wednesday
+const NOW = "2026-11-05T15:00:00Z"; // Thursday 10:00 AM in New York; the call was on Monday (MC-1d: the demo calendar's Monday 13:00 meeting)
 const PRIYA = DEMO_PEOPLE.find((p) => p.name === "Priya Shah")!;
 
 async function demo() {
@@ -34,7 +34,7 @@ describe("meeting capture on the demo (MC-1)", () => {
     const mine = await run<Mine>(ctx, "meeting.mine");
     expect(mine.meetings.map((m) => [m.name, m.source])).toEqual([["Northwind weekly status call", "upload"]]);
     const occ = mine.occurrences[0]!;
-    expect(occ).toMatchObject({ date: "2026-11-04", state: "ready", open: 6 });
+    expect(occ).toMatchObject({ date: "2026-11-02", state: "ready", open: 6 });
     expect(mine.nudges.map((n) => n.key)).toEqual([`meeting_review:${occ.id}`]);
     const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     expect(r.transcript).toEqual({ lines: 8, speakers: 3 });

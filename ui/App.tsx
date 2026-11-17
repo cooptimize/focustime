@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Meetings } from "./meetings/Meetings.tsx";
+import { callMarks, callsNeedingMe, CallsProvider, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -333,6 +334,10 @@ export function App() {
   const Tour = useScreen("tour", !!tourAt)?.default;
   // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
+  // MC-1d: the registered calls I review or attend, once for the app: Day, Week, the block panel, the phone and the
+  // More menu's count all read them, so a call's meeting is its door everywhere it is drawn.
+  const mine = useMine();
+  const callsNeed = callsNeedingMe(callMarks(mine.data));
   /** FN-1: a story card over the place (#/item/<client>/<id>). */
   const itemAt = loc.overlay?.kind === "item" ? loc.overlay : null;
   // FN-1: any work item title asks for its card; it opens over what's on screen, and Back closes it.
@@ -1363,7 +1368,8 @@ export function App() {
     // WD-1, WD-2: not while the block panel has focus (its Add box keeps it), nor a dialog, a menu or a text box (Day
     // has cards to select now, so a command that opens Capture must not lose its cursor to the card behind it).
     const a = document.activeElement as HTMLElement | null;
-    const busy = !!a && (!!a.closest(".block-panel, [data-overlay], [role='dialog'], [role='menu'], dialog") || isTypingTarget(a));
+    // MC-1d: nor the client call page over Week (its heading or a transcript line has the focus).
+    const busy = !!a && (!!a.closest(".block-panel, .mtg-view, [data-overlay], [role='dialog'], [role='menu'], dialog") || isTypingTarget(a));
     if (!cmdOpen && !keysOpen && !busy) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
   }, [sel, data?.weekStart, layout, cmdOpen, keysOpen]);
 
@@ -1983,6 +1989,7 @@ export function App() {
   return (
     <>
     {opening}
+    <CallsProvider mine={mine}>
     <SampleSources.Provider value={samples}>
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
@@ -2202,7 +2209,7 @@ export function App() {
             access={docsAccess}
           />
       ) : meetingAt ? (
-        <Meetings occurrence={meetingAt.occurrence} colors={data.clients} onOpen={(id) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
+        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} colors={data.clients} onOpen={(id, view, line) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(view ? { view } : {}), ...(line ? { line } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
       ) : focusOpen && FocusM ? (
         <FocusM.FocusScreen
           t={data.timer}
@@ -2519,6 +2526,7 @@ export function App() {
       {phone && PhoneM && moreOpen && (
         <PhoneM.PhoneMore
           statusNeeds={statusNeeds?.needs ?? 0}
+          calls={callsNeed}
           code={codeShown}
           health={sourceHealth(data.sources, data.devops)}
           unread={notices.unread}
@@ -2531,7 +2539,7 @@ export function App() {
             setMoreOpen(false);
             if (where === "backlog") openTab("ahead");
             else if (where === "status") openTab("status");
-            else if (where === "calls") go({ nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } });
+            else if (where === "calls") go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } }));
             else if (where === "code") openCode();
             else if (where === "settings") setSettingsAt("");
             else if (where === "guide") openGuide();
@@ -2592,6 +2600,8 @@ export function App() {
             title: "More",
             items: [
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
+              // MC-1d: my registered client calls, with how many need me (proposals to review, a transcript to upload, a failed step).
+              { id: "calls", label: "Client calls", ...(callsNeed > 0 ? { hint: `${callsNeed} need you` } : {}), run: () => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } })) },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },
@@ -2697,6 +2707,7 @@ export function App() {
     </DevOpsWork.Provider>
     </CoworkCtx.Provider>
     </SampleSources.Provider>
+    </CallsProvider>
     </>
   );
 }

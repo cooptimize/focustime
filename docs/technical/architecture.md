@@ -31,14 +31,14 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 
 ### Background work
 
-The scheduler (`server/scheduler.ts`) runs a fast pass every 5 seconds and a slow pass every 30 seconds, but only while someone has used FocusTime in the last 15 minutes. Otherwise it sleeps until the next stored due time (`scheduler_state`), making no database call, so the database can rest.
+The scheduler (`server/scheduler.ts`) runs a fast pass every 5 seconds and a slow pass every 30 seconds, but only while someone has used FocusTime in the last 15 minutes. VM-3: nothing can hold it. Each pass, each app job, each person's VM start, each person's other parts and the wake have a time limit (`PASS_LIMITS`; a person's parts `PART_LIMIT_MS` in `server/ticks.ts`). Work over its limit is logged by name and left behind; it is never started again while it still runs, and a pass still running past its limit no longer stops the next one. A part that throws is logged and the parts after it run. In every slow pass the VM's automatic start goes first, for everyone, before the app jobs and the other parts, and one person's stuck work never stops another's. Admin › Status shows each pass's last finish, how long it took and a warning when one is stuck (`scheduler.passes()`). Otherwise it sleeps until the next stored due time (`scheduler_state`), making no database call, so the database can rest.
 
 Every piece of background work has a name in `BACKGROUND` (`config/background-policy.ts`), which also says what it does outside production ([Operations](operations.md#what-runs-on-its-own)). The app jobs run at the start of each slow pass, each with its own next-due time (`server/main.ts`):
 
 | Job | What it does |
 |---|---|
 | `requests_poll` | Reads every registered client chat with a follower's own sign-in, every 5 minutes in followers' working hours, then sorts new messages with AI; records co-working calls (`chat_calls`) |
-| `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass |
+| `meeting_capture` | Registered client calls: lays out occurrences, looks for transcripts after each call, runs the AI pass, and tries a failed pass again (3 times, 15 minutes apart; MC-1d) |
 | `devops_poll` | Central DevOps reads: each client's changed items, once for everyone, with a change log |
 | `people_refresh` | People, levels and client leads from Dataverse into the directory, once a day; ends sessions of anyone now known as a guest |
 | `standards_sync` | Cooptimize's standards from public GitHub: at start, then hourly while FocusTime is in use |
@@ -83,7 +83,7 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 | Story card | `ui/StoryCard.tsx`, `ui/StoryCardEdit.tsx`, `ui/WrapUp.tsx` | `item.card` | `plan/item-card.ts` |
 | New form | `ui/NewItem.tsx`, `ui/ThreeQuestions.tsx`, `ui/WhereLookup.tsx` | `new.*`, `devops.preview`, `code.kinds`, `code.inner` | `actions/new-item-actions.ts`, `actions/code-actions.ts` |
 | Code | `ui/code/` | `code.clients`, `code.repos`, `code.folder`, `code.find`, `code.file`, `code.kinds`, `code.search` | `plan/code.ts`, `plan/code-kinds.ts` |
-| Client calls | `ui/meetings/` | `meeting.mine`, `meeting.review` | `plan/meetings.ts`, `plan/meeting-views.ts` |
+| Client calls | `ui/meetings/` (the page, its Transcript view, the mark on a call's meeting in `CallMark.tsx`, the one list of my calls in `calls.ts`) | `meeting.mine`, `meeting.review`, `meeting.transcript`, `meeting.rerun` | `plan/meetings.ts`, `plan/meeting-views.ts`, `plan/call-words.ts` (every word a call shows about itself) |
 | Midday check-in, Close out | `ui/Checkin.tsx`, `ui/CloseOut.tsx`, `ui/TimeboxCheckin.tsx` | `week.load`, `checkin.sessions` | `plan/progress.ts` |
 | Focus screen | `ui/FocusScreen.tsx` | `timer.*` | `plan/timer.ts` |
 | Settings, Admin | `ui/Settings.tsx`, `ui/settings/` | `settings.load`, `admin.load` | `config/` |

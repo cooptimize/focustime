@@ -182,9 +182,10 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async dueChecks(nowIso: string): Promise<Occurrence[]> {
       return (await db.all("SELECT * FROM meeting_occurrences WHERE state = 'waiting' AND next_check_at IS NOT NULL AND next_check_at <= ? ORDER BY next_check_at", [nowIso])).map(toOccurrence);
     },
-    /** The soonest check any occurrence waits for (the scheduler's wake), or null. */
+    /** The soonest check or AI retry any occurrence waits for (the scheduler's wake), or null. */
     async nextDue(): Promise<string | null> {
-      const r = await db.get("SELECT MIN(next_check_at) AS at FROM meeting_occurrences WHERE state = 'waiting' AND next_check_at IS NOT NULL");
+      // MC-1d: a failed pass's next try by itself is a wake too.
+      const r = await db.get("SELECT MIN(next_check_at) AS at FROM meeting_occurrences WHERE state IN ('waiting', 'failed') AND next_check_at IS NOT NULL");
       return s(r?.at);
     },
     async recentOccurrences(seriesIds: readonly number[], fromDay: string): Promise<Occurrence[]> {
@@ -200,6 +201,16 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         await db.run("INSERT INTO meeting_transcripts (occurrence_id, lines_json, line_count, source, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?)", [occurrenceId, JSON.stringify(lines), lines.length, source, uploadedBy ? lower(uploadedBy) : null, t]);
         await db.run("UPDATE meeting_occurrences SET transcript_from = ?, transcript_at = ?, updated_at = ? WHERE id = ?", [source, t, t, occurrenceId]);
       });
+    },
+    /** MC-1d: which of these occurrences still have a stored transcript (kept 30 days); ids only, never the text. */
+    async withTranscript(occurrenceIds: readonly number[]): Promise<Set<number>> {
+      if (!occurrenceIds.length) return new Set();
+      const rows = await db.all(`SELECT occurrence_id FROM meeting_transcripts WHERE occurrence_id IN (${occurrenceIds.map(() => "?").join(", ")})`, [...occurrenceIds]);
+      return new Set(rows.map((r) => Number(r.occurrence_id)));
+    },
+    /** MC-1d: failed AI passes whose next try by itself is due (the job, production only). */
+    async dueRetries(nowIso: string): Promise<Occurrence[]> {
+      return (await db.all("SELECT * FROM meeting_occurrences WHERE state = 'failed' AND next_check_at IS NOT NULL AND next_check_at <= ? ORDER BY next_check_at", [nowIso])).map(toOccurrence);
     },
     async transcript(occurrenceId: number): Promise<TranscriptLine[] | null> {
       const r = await db.get("SELECT lines_json FROM meeting_transcripts WHERE occurrence_id = ?", [occurrenceId]);

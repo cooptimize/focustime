@@ -4,7 +4,6 @@
 import { DaySuggestLine } from "./Suggest.tsx";
 import { offWord, ptoLabel } from "../plan/days.ts";
 import { useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { callMarks, MeetingCalls, useMine } from "./meetings/calls.ts";
 import { liveOf, useCoworkData } from "./cowork.tsx";
 import { liveCallCard, type CoworkChatView } from "../plan/cowork.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -100,8 +99,6 @@ export function WeekGrid(props: Props) {
     }),
   );
   const late = lateOnCards(props.promises ?? [], cardRails, { today: props.today, now: props.now });
-  // MC-1: the registered client calls I review or attend, marked on the card they start in.
-  const mine = useMine();
   // CW-1: a call live in a client's delivery chat, on that client's first card today that hasn't ended.
   const cowork = useCoworkData();
   const liveOn = new Map<string, CoworkChatView[]>();
@@ -112,7 +109,6 @@ export function WeekGrid(props: Props) {
   }
   return (
     <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, onLate: props.onLate, today: props.today, now: props.now, home, late }}>
-      <MeetingCalls.Provider value={callMarks(mine)}>
         <LiveOnCard.Provider value={liveOn}>
           <TimelineCtx.Provider value={props.timeline ?? true}>
             {/* WK-5: Week's cards put a to-do's time under its title; Day (one day, `only`) keeps it at the right. */}
@@ -121,7 +117,6 @@ export function WeekGrid(props: Props) {
             </RowFormCtx.Provider>
           </TimelineCtx.Provider>
         </LiveOnCard.Provider>
-      </MeetingCalls.Provider>
     </RulerCtx.Provider>
   );
 }

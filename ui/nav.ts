@@ -98,7 +98,7 @@ export type LateFilter = { client: string | null };
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 /** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null } | { kind: "item"; clientKey: string; itemId: number } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null; view?: "transcript" | "upload"; line?: number } | { kind: "item"; clientKey: string; itemId: number } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -239,7 +239,12 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
   // DOC-1: the Technical docs, at a page and a heading.
   if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
-  if (l.overlay?.kind === "meeting") return l.overlay.occurrence ? `#/meetings/${l.overlay.occurrence}` : "#/meetings";
+  if (l.overlay?.kind === "meeting") {
+    const o = l.overlay;
+    if (!o.occurrence) return "#/meetings";
+    // MC-1d: a call's Transcript view (and a line in it) or its upload, each an address of its own.
+    return `#/meetings/${o.occurrence}${o.view ? `/${o.view}` : ""}${o.view === "transcript" && o.line ? `/${o.line}` : ""}`;
+  }
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
   const n = l.nav;
@@ -410,8 +415,19 @@ export function parseHash(full: string): Loc | null {
       return a !== DOC_CONTENTS && DOC_ANCHOR.test(b) ? docs(a, b) : null;
     }
     // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
-    case "meetings":
-      return b !== undefined ? null : a === undefined ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } } : ID.test(a) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence: Number(a) } } : null;
+    // MC-1d: #/meetings/<occurrence>/transcript[/<line>] (the Transcript view, at a line) and /upload.
+    case "meetings": {
+      if (a === undefined) return b !== undefined ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } };
+      if (!ID.test(a)) return null;
+      const occurrence = Number(a);
+      if (b === undefined) return { nav: navOf.week(), overlay: { kind: "meeting", occurrence } };
+      if (b === "upload") return c !== undefined || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "upload" } };
+      if (b !== "transcript") return null;
+      const line = c;
+      if (rest.length) return null;
+      if (line === undefined) return { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "transcript" } };
+      return ID.test(line) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "transcript", line: Number(line) } } : null;
+    }
     // WP-1's #/patterns (the DevOps patterns page, removed in RM-1): Today, like it opened for anyone without the switch.
     case "patterns":
       return a === undefined ? { nav: navOf.today(), overlay: null } : null;

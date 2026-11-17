@@ -77,6 +77,11 @@ export type AutoStartView = {
   pauseNotice: boolean;
   /** Today's automatic start couldn't sign in to Azure; `seen` once it was shown. */
   signInProblem: { seen: boolean } | null;
+  /**
+   * VM-3: today's start left the VM off for a reason the person is told (production only): the reason's word, the line
+   * for the chip's menu and its title, and whether it was shown (the chip's mark until the menu is opened).
+   */
+  leftOff: { reason: string; short: string; text: string; seen: boolean } | null;
   /** The weekdays my working hours cover (mon…sun), each switchable off. */
   days: string[];
 };

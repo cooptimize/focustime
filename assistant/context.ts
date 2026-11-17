@@ -30,7 +30,7 @@ export type CtxPromise = { id: number; key: string | null; clientKey: string; wh
 export type CtxWaiting = { key: string; clientKey: string | null; title: string; who: string | null; due: string | null; late: boolean };
 export type CtxGap = { clientKey: string; id: number; title: string; tier: string; gaps: string[]; target: string | null; why: "dated" | "planned" | "on_week" };
 export type CtxFeature = { clientKey: string; id: number; title: string };
-export type CtxCall = { clientKey: string; meeting: string; date: string; kind: "review" | "upload" };
+export type CtxCall = { clientKey: string; meeting: string; date: string; kind: "review" | "upload" | "failed" };
 
 export type AnswerContext = {
   period: Period;
@@ -214,7 +214,7 @@ export async function buildContext(d: ContextDeps, period: Period, client: strin
 
   if (want.calls) {
     const m = await data<{ nudges: MeetingNudgeView[] }>(d.run("meeting.mine", {}));
-    if (typeof m !== "string") for (const n of m.nudges ?? []) if (ok(n.clientKey)) ctx.calls.push({ clientKey: n.clientKey, meeting: n.meeting, date: n.date, kind: n.kind === "upload" ? "upload" : "review" });
+    if (typeof m !== "string") for (const n of m.nudges ?? []) if (ok(n.clientKey)) ctx.calls.push({ clientKey: n.clientKey, meeting: n.meeting, date: n.date, kind: n.kind === "upload" ? "upload" : n.kind === "failed" ? "failed" : "review" });
   }
 
   // Bounds: the most pressing first, then cut.

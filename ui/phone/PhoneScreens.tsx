@@ -15,7 +15,6 @@ import { todoLine } from "../TodoSheet.tsx";
 import { userZone } from "../../week/zone.ts";
 import { LiveCalls, liveOf, useCoworkData } from "../cowork.tsx";
 import { Icon, type IconName } from "../icons.tsx";
-import { callMarks, useMine } from "../meetings/calls.ts";
 import { VmCtx } from "../Account.tsx";
 
 export type PhoneTab = "day" | "week" | "inbox" | "more";
@@ -282,11 +281,12 @@ export type MoreWhere = "backlog" | "status" | "calls" | "code" | "vm" | "settin
 
 /**
  * More with its rows, from facts the app already has: Status's features to update (the Status tab's own count), the
- * client calls I review (MC-1's meeting.mine, read while More is open, as Week reads it), the VM's word, the sources'
+ * client calls that need me (MC-1d's count, the one the computer's ⋯ shows), the VM's word, the sources'
  * health, unread notifications. Each row opens its place through `go`; the VM's row opens the VM's own menu.
  */
-export function PhoneMore({ statusNeeds, code, health, unread, focusing, install, admin, person, go, onDesktop, onClose }: {
+export function PhoneMore({ statusNeeds, calls, code, health, unread, focusing, install, admin, person, go, onDesktop, onClose }: {
   statusNeeds: number;
+  calls: number;
   code: boolean;
   health: "live" | "stale" | "trouble";
   unread: number;
@@ -298,7 +298,6 @@ export function PhoneMore({ statusNeeds, code, health, unread, focusing, install
   onDesktop: () => void;
   onClose: () => void;
 }) {
-  const calls = callMarks(useMine()).filter((c) => c.needsMe).length;
   const vm = useContext(VmCtx);
   const at = (e: React.MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();

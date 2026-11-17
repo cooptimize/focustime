@@ -148,7 +148,7 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
       await page.evaluate((n) => document.documentElement.style.setProperty("font-size", `${n}px`, "important"), px);
       await page.waitForFunction((n) => getComputedStyle(document.documentElement).fontSize === `${n}px` && !!document.querySelector(".topbar .ph1-date"), px);
       // Measured once layout settles (a busy machine can be a frame behind).
-      await expect.poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".topbar .ph1-date, .topbar .demo-tag, .topbar .ph-ask")].filter((e) => Math.round(e.getBoundingClientRect().width) + 1 < e.scrollWidth).map((e) => `${e.className} ${Math.round(e.getBoundingClientRect().width)}/${e.scrollWidth}`)), `whole at ${px}px`).toEqual([]);
+      await expect.poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".topbar .ph1-date, .topbar .demo-tag, .topbar .ph-ask")].filter((e) => Math.round(e.getBoundingClientRect().width) + 1 < e.scrollWidth).map((e) => `${e.className} ${Math.round(e.getBoundingClientRect().width)}/${e.scrollWidth}`)), { message: `whole at ${px}px` }).toEqual([]);
       const m = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, right: Math.max(...[...document.querySelectorAll(".topbar *")].map((e) => e.getBoundingClientRect().right)), chip: !!document.querySelector(".topbar .person-chip") }));
       expect(m.doc).toBeLessThanOrEqual(390);
       expect(m.right).toBeLessThanOrEqual(390.5);

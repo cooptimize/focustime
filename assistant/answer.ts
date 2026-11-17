@@ -129,7 +129,7 @@ function planCheck(ctx: AnswerContext, link: LinkFn): Composed {
       itemRefs.push(f);
       lines.push({ text: `#${f.id} ${f.title}: no update yet for Monday's report`, link: link("#/status", "Open Status") });
     }
-    for (const k of ctx.calls.filter((k) => k.clientKey === c.key)) lines.push({ text: `${k.meeting} on ${dateLabel(k.date)}: ${k.kind === "upload" ? "a transcript to upload" : "proposals to review"}`, link: link("#/meetings", "Open Client calls") });
+    for (const k of ctx.calls.filter((k) => k.clientKey === c.key)) lines.push({ text: `${k.meeting} on ${dateLabel(k.date)}: ${k.kind === "upload" ? "a transcript to upload" : k.kind === "failed" ? "the AI step failed" : "proposals to review"}`, link: link("#/meetings", "Open Client calls") });
     count += lines.length;
     if (lines.length) sections.push({ title: c.name, lines });
   }
@@ -234,7 +234,7 @@ function done(ctx: AnswerContext, link: LinkFn): Composed {
 }
 
 function calls(ctx: AnswerContext, link: LinkFn): Composed {
-  const sections = byClient(ctx, ctx.calls, (k) => ({ text: `${k.meeting} on ${dateLabel(k.date)}: ${k.kind === "upload" ? "a transcript to upload" : "proposals to review"}`, link: link("#/meetings", "Open Client calls") }));
+  const sections = byClient(ctx, ctx.calls, (k) => ({ text: `${k.meeting} on ${dateLabel(k.date)}: ${k.kind === "upload" ? "a transcript to upload" : k.kind === "failed" ? "the AI step failed" : "proposals to review"}`, link: link("#/meetings", "Open Client calls") }));
   return { reply: ctx.calls.length ? `${plural(ctx.calls.length, "client call")} to review.` : "No client calls are waiting for your review.", sections, suggestions: [], refs: refsOf(ctx, [], [], []), links: [link("#/meetings", "Open Client calls")] };
 }
 

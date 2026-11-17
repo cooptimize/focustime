@@ -344,6 +344,26 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
 - Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
 
+## VM-3 words (Nov 17)
+
+- The reasons, one list (`OUTCOMES`, `plan/vm-autostart.ts`), each "Left off today: …": **"it is PTO"**, **"it is a holiday"**, **"FocusTime couldn't read your PTO"**, **"your Azure sign-in needs renewing"**, **"FocusTime couldn't find your VM"**, **"Azure refused the start"**, **"FocusTime wasn't running at the time"**. Not told, only shown: **"Started today"**, **"Started today, after your day began"**, **"Already on today"**, **"Not a day you chose"**, **"Skipped today"**, **"Paused"**.
+- What to do next, after the reason: **"Start it from the VM menu if you need it today."**, **"Choose Allow Azure access in the VM menu, then start it if you need it."**, **"Choose your VM again in Settings › Accounts and calendars › My VM."**, **"Start it from the VM menu; if Azure refuses again, Settings › Activity has what it said."**
+- Notes: **"Holidays couldn't be checked."**, **"Your PTO couldn't be read just now, so FocusTime used what it read earlier."**
+- Settings' line after the planned time: **"Started today at 8:55 AM. Next: Tue, Nov 3 at 8:55 AM"**, **"Left off today: it is PTO. Next: …"**, **"Today's start (8:55 AM) hasn't run yet. Next: …"**. Unread days: **"Your PTO couldn't be read, so a day off may still show a time."**
+- The notice: **"Your VM was left off"** with the reason and what to do (Start is in the VM chip's menu). VM-2's **"Auto-start couldn't sign in to Azure"** and **"Auto-start couldn't start your VM"** are kept for those two.
+- Admin › Status: **"Background passes"**; **"<pass> has been running for N minutes, past its N minutes limit. The next pass runs anyway; the work that is stuck is named in the log."**; **"<pass> hasn't finished for N minutes while someone is using FocusTime."**
+
+## MC-1d words (Nov 17)
+
+- A call's states, the same on its meeting's mark, Client calls and its page: **"Waiting for the transcript"**, **"Review 6 proposals"** (an attendee: **"6 proposals to review"**), **"Nothing proposed"**, **"Reviewed"**, **"Upload the transcript"**, **"No transcript this week"**, **"Couldn't read the transcript"**, **"The AI step failed"**.
+- A call's actions, in its meeting's menu (before Open in Outlook) and on its page: **"Review proposals"** (or **"Open the call"**), **"Read the transcript"**, **"Propose again"**, **"Upload a transcript"**; on a proposal **"Show in transcript"**; in More **"Client calls"** with **"1 need you"**.
+- The mark for a screen reader: **"<call>: <state>. Review proposals"** (or **"Open the call"**).
+- A failed step on the page: **"The AI step failed"**, then why, in the app's words for that failure ("The AI service didn't answer in time."), FocusTime's own reasons in its own words (**"FocusTime couldn't read this client's DevOps items to send with the call."**, **"AI isn't on for this client. A FocusTime admin allows it in Admin › AI."**), and for a call sent in parts **"The call was sent in 3 parts and part 2 failed, so nothing was proposed: a reviewer never confirms from half a call."**
+- What happens next: **"FocusTime tries again by itself at 3:15 PM (1 of 3). A reviewer can Propose again now."**, **"FocusTime tried again 3 times and stopped. A reviewer can Propose again."**, **"FocusTime doesn't try this one again by itself: once that's fixed, a reviewer presses Propose again."**, **"A reviewer can Propose again."** (where nothing retries by itself).
+- The reviewer's note (in the app and Teams): **"Northwind's call: the AI step failed"**, **"Nothing was proposed. Open the call to see why, then Propose again."**, button **"Open the call"**.
+- The Transcript view: tabs **"Proposals"** and **"Transcript"** with their counts; **"Filter the transcript"** (placeholder **"Words or a name"**); **"2 of 8 lines"**, **"No line has "<words>""**; a marked line **"Proposal"** (read as **"A proposal rests on this line: <proposal>"**); **"Kept 30 days, for this call's reviewers and attendees only. Read only."**; **"The transcript is kept 30 days after the call. This one is gone; the proposals and what was done stay."**
+- Last 20 requests: **"Failed · HTTP 400"**; the meeting task is **"Read a client call"**.
+
 ## PH-1 words (Nov 17)
 
 - The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** with its dot). The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).

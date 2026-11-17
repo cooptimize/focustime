@@ -44,10 +44,13 @@ export type AiErrorKind =
 
 export class AiError extends Error {
   readonly kind: AiErrorKind;
-  constructor(kind: AiErrorKind, message: string) {
+  /** MC-1d: the provider's HTTP status when it answered with an error (a number only). */
+  readonly httpStatus: number | undefined;
+  constructor(kind: AiErrorKind, message: string, httpStatus?: number) {
     super(message);
     this.name = "AiError";
     this.kind = kind;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -151,7 +154,7 @@ export type AiLogEntry = {
   costMicros: number;
   latencyMs: number;
   outcome: AiOutcome;
-  /** The error kind when not ok (refused_client, timeout, ...). */
+  /** The error kind when not ok (refused_client, timeout, ...); MC-1d: with the provider's HTTP status when it gave one ("provider:400"). */
   detail: string | null;
   /** CV-1: whose cap the request counted against: the person's own, or the app's (the shared conversations pipeline). */
   cap?: "person" | "app";
