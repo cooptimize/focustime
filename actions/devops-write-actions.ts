@@ -593,6 +593,12 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
           results.push({ error: "That preview has expired. Review the change again", status: 410 });
           continue;
         }
+        // MC-1e: a call's row is checked again at Confirm, as the preview checked it: still to review (not skipped, done
+        // or replaced by Propose again since) and I'm still one of the call's reviewers. Otherwise nothing is sent.
+        if (h.meeting && !(await ctx.meetings?.proposal(h.meeting.proposalId).catch(() => null))) {
+          results.push({ error: "This proposal changed since its preview (skipped, done, proposed again, or you're no longer a reviewer). Nothing was sent; look at the call again", status: 409, code: "proposal_changed" });
+          continue;
+        }
         try {
           const env = await envOf(h.clientKey);
           // DS-1: a card that already has a write is never sent again (Retry checks that one instead).
@@ -601,6 +607,8 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
             const twin = await twinOf(plan, { clientKey: h.clientKey, title: h.title, type: h.type, parentId: h.parentId, draftId: h.draftId }, msOf(ctx.now()));
             if (twin) {
               results.push({ error: twin.message, status: 409, code: "pending_write" });
+              // MC-1e: a call's row says why on the row.
+              if (h.meeting && ctx.meetings) await ctx.meetings.written(h.meeting.proposalId, { ok: false, writeId: null, itemId: null, message: twin.message, type: h.type }).catch(() => {});
               continue;
             }
           }

@@ -36,6 +36,7 @@ const LOADERS = {
   guide: () => import("./guide/Guide.tsx"),
   tour: () => import("./guide/tour/Tour.tsx"),
   docs: () => import("./docs/TechDocs.tsx"),
+  meetings: () => import("./meetings/Meetings.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;
 
 export type { ScreenName };

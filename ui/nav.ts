@@ -196,6 +196,8 @@ export function locScreens(loc: Loc): ScreenName[] {
   // A tour is not here: its screen is drawn at once and the tour's card arrives over it (App asks for its file), so
   // the screen's own loading has the same head start on the tour's first step as it always had.
   if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs") out.push(o.kind);
+  // MC-1e: a call's page loads when first opened.
+  if (o?.kind === "meeting") out.push("meetings");
   else if (o?.kind === "item") out.push("card");
   return out;
 }

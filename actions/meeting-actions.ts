@@ -579,7 +579,8 @@ export function meetingWrites(store: MeetingStore, me: string, now: () => string
     },
     written: async (proposalId, r) => {
       const p = await store.proposal(proposalId);
-      if (!p) return;
+      // A failure never overwrites a row decided since (a success is recorded: the item exists in DevOps).
+      if (!p || (!r.ok && !toReview(p))) return;
       const at = now();
       if (r.ok) await store.updateProposal(p.id, { state: "confirmed", result: { ...p.result, ...(r.writeId ? { writeId: r.writeId } : {}), ...(r.itemId ? { itemId: r.itemId } : {}), message: r.message }, decidedBy: me, decidedAt: at });
       else await store.updateProposal(p.id, { state: "failed", result: { ...p.result, ...(r.writeId ? { writeId: r.writeId } : {}), message: callWriteWords(r.message, p.body.kind === "gap" ? (r.type ?? p.body.type) : null) }, decidedBy: me, decidedAt: at });

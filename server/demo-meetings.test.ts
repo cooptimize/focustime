@@ -74,6 +74,12 @@ describe("meeting capture on the demo (MC-1)", () => {
     const log = (await run<{ entries: { id: number; op: string; itemId: number | null; status: string }[] }>(ctx, "devops.log")).entries;
     expect(log.length - before).toBe(2);
     expect(log.filter((e) => e.itemId === 1113 && e.op === "comment")).toEqual([]);
+    // A row skipped after its preview isn't sent at Confirm, and stays skipped (MC-1e, the diff review).
+    const promised = proposals.find((p) => p.body.kind === "comment" && p.body.note === "status" && p.body.itemId === 1111)!;
+    const late = (await run<{ preview: { previewId: string } }>(ctx, "devops.preview", { clientKey: "Northwind", change: { kind: "meeting_comment", proposalId: promised.id } })).preview;
+    await run(ctx, "meeting.edit", { proposalId: promised.id, skip: true });
+    expect(await dispatch(ctx, { action: "devops.confirm", input: { previewId: late.previewId } })).toMatchObject({ ok: false, code: "proposal_changed" });
+    expect((await run<{ entries: unknown[] }>(ctx, "devops.log")).entries.length - before).toBe(2);
     // The server refuses a call's comment on the feature, whatever sends it.
     expect(await dispatch(ctx, { action: "devops.preview", input: { clientKey: "Northwind", change: { kind: "meeting_comment", proposalId: onFeature.id } } })).toMatchObject({ ok: false, code: "above_story" });
     const after = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
