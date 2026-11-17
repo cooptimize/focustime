@@ -36,6 +36,7 @@ type Opts = {
   /** The Teams rhythm's tick, before the start in the slow pass. */
   teamsTick?: () => Promise<void>;
   holidaysOk?: boolean;
+  partLimits?: Record<string, number>;
 };
 
 async function person(o: Opts = {}) {
@@ -75,7 +76,7 @@ async function person(o: Opts = {}) {
     autoStartEnv: "prod",
   } as unknown as ActionContext;
   const teams = o.teamsTick ? { tick: o.teamsTick, wake: async () => null } : undefined;
-  const ticks = personTicks({ policy: backgroundPolicy({ FOCUSTIME_ENV: "prod" }), log: (r) => void logs.push(r), now: () => at, notifications, media: MEDIA, openRoute: () => {}, ...(teams ? { teams } : {}) }, plan, ctx, { zone: NY });
+  const ticks = personTicks({ policy: backgroundPolicy({ FOCUSTIME_ENV: "prod" }), log: (r) => void logs.push(r), now: () => at, notifications, media: MEDIA, openRoute: () => {}, ...(teams ? { teams } : {}), ...(o.partLimits ? { partLimits: o.partLimits } : {}) }, plan, ctx, { zone: NY });
   const starts = () => arm.calls.filter((c) => c.path.endsWith("/start")).length;
   return { ticks, arm, shown, logs, plan, starts, advance: (m: number) => void (at = at.add({ minutes: m })) };
 }
@@ -105,5 +106,35 @@ describe("VM-3: the three leads, on the real tick", () => {
     await settled();
     expect(p.starts()).toBe(1);
     expect(p.logs.filter((l) => l.op === "vm_autostart").length).toBeGreaterThan(0);
+  });
+});
+
+describe("VM-3 B: a person's parts can't hold the start or each other", () => {
+  it("a part that throws is logged by its name and the parts after it still run; the start ran first", async () => {
+    let calls = 0;
+    const p = await person({ userInSettings: true, teamsTick: async () => (calls++, Promise.reject(new Error("bot down"))) });
+    p.advance(1);
+    await p.ticks.slow();
+    await settled();
+    expect(p.starts()).toBe(1);
+    expect(calls).toBe(1);
+    expect(p.logs).toContainEqual({ source: "server", op: "teams_rhythm", kind: "failed" });
+    // chat_text_cleanup, near the end of the pass, still ran.
+    expect(p.logs.some((l) => l.op === "asks_cleanup")).toBe(true);
+  });
+
+  it("a part that never returns: logged by name over its limit, the pass moves on, and the next pass doesn't run it again", async () => {
+    let calls = 0;
+    const p = await person({ userInSettings: true, teamsTick: () => (calls++, new Promise<void>(() => {})), partLimits: { teams_rhythm: 30 } });
+    p.advance(1);
+    await p.ticks.slow();
+    await settled();
+    expect(p.starts()).toBe(1);
+    expect(p.logs).toContainEqual({ source: "plan", op: "tick_part", kind: "teams_rhythm_over_limit" });
+    expect(p.logs.some((l) => l.op === "asks_cleanup")).toBe(true);
+    p.advance(1);
+    await p.ticks.slow();
+    expect(calls).toBe(1);
+    expect(p.starts()).toBe(1);
   });
 });
