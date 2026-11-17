@@ -13,24 +13,26 @@ export const POCKET_FAILURE_TEXT: Record<PocketFailure, string> = {
   not_accepted: "Pocket didn't accept this key. Check that you copied all of it, or make a new one in Pocket and paste that",
   no_answer: "Pocket didn't answer in time. Try again in a few minutes",
   busy: "Pocket is busy right now. Try again in a few minutes",
-  unexpected: "Pocket answered in a way FocusTime doesn't understand. Pocket's API is new and may have changed; try again later, and tell your FocusTime admin if it keeps happening",
+  unexpected: "Pocket answered in a way FocusTime doesn't understand; Pocket may have changed how it answers. Try again later, and tell your FocusTime admin if it keeps happening",
 };
 
 export const POCKET_WORDS = {
   title: "Pocket recorder",
   /** What connecting does, in one sentence. */
   intro:
-    "Connect your own Pocket so FocusTime can bring in a recording of a client call when you ask (that comes in a later update). For now FocusTime only checks that your key works by counting your recordings from the last 7 days; it never reads their titles, words or audio.",
+    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. It never reads a recording's title, words or audio. Bringing in a recording for a client call comes later.",
   stepsLabel: "How to connect",
   steps: [
     "In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team.",
-    "If Pocket asks what the key may do, choose only reading recordings (recordings:read).",
-    "Copy the whole key. It starts with pk_, and Pocket may show it only once.",
-    "Paste it below and press Check and save. Nothing is saved unless Pocket answers.",
+    "Choose what the key may do: tick only reading recordings (recordings:read). Pocket gives a key every permission when none is ticked. If Pocket asks for an expiry date, any date is fine; when the key expires, paste a new one here.",
+    "Copy the whole key. It starts with pk_ (often pk_live_), and Pocket may show it only once.",
+    "Paste it below and press Check and save. Nothing is saved unless Pocket accepts it.",
   ],
   docsLink: "Pocket's guide to API keys",
+  /** What a person wants to know before pasting. */
+  trust: "Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees it or whether you connected, admins included, and it never goes to the AI or the logs.",
   field: "Your Pocket key",
-  fieldHint: "Paste your Pocket key (pk_…)",
+  fieldHint: "pk_…",
   checkAndSave: "Check and save",
   checking: "Checking with Pocket…",
   connected: "Connected",
@@ -44,7 +46,7 @@ export const POCKET_WORDS = {
   cancel: "Cancel",
   kept: "FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here.",
   notChecked: "Not checked yet",
-  saved: "Connected. Pocket answered.",
+  replaced: "New key checked and saved.",
   checkedNow: "Checked. Pocket answered.",
   gone: "Disconnected. FocusTime forgot your key.",
 } as const;

@@ -25,7 +25,7 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
     return () => clearInterval(t);
   }, []);
 
-  const run = async (kind: "save" | "check" | "disconnect", action: string, input: Record<string, unknown>, done: string) => {
+  const run = async (kind: "save" | "check" | "disconnect", action: string, input: Record<string, unknown>, done: string | null) => {
     setBusy(kind);
     setProblem(null);
     setSaid(null);
@@ -51,7 +51,7 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
         <>
           <p className="muted set-intro">{W.intro}</p>
           <Guide />
-          <KeyForm busy={busy} label={W.checkAndSave} onSubmit={(key) => run("save", "pocket.connect", { key }, W.saved)} />
+          <KeyForm busy={busy} label={W.checkAndSave} onSubmit={(key) => run("save", "pocket.connect", { key }, null)} />
         </>
       ) : (
         <>
@@ -60,22 +60,22 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
             <span className="muted">{[v.checkedAt ? checkedAgo(v.checkedAt, clock, timeZone) : W.notChecked, v.recordings === null ? null : recordingsLine(v.recordings)].filter(Boolean).join(" · ")}</span>
           </p>
           <p className="muted set-intro">{W.kept}</p>
-          <div className="pocket-actions">
+          {mode !== "ask" && <div className="pocket-actions">
             <button type="button" className="mini primary" disabled={busy !== null} onClick={() => void run("check", "pocket.check", {}, W.checkedNow)}>
               {busy === "check" ? W.checking : W.checkAgain}
             </button>
             <button type="button" className="mini" aria-expanded={mode === "replace"} disabled={busy !== null} onClick={() => setMode(mode === "replace" ? null : "replace")}>
               {W.replace}
             </button>
-            <button type="button" className="mini quiet" aria-expanded={mode === "ask"} disabled={busy !== null} onClick={() => setMode(mode === "ask" ? null : "ask")}>
+            <button type="button" className="mini quiet" aria-expanded={false} disabled={busy !== null} onClick={() => (setSaid(null), setProblem(null), setMode("ask"))}>
               {W.disconnect}
             </button>
-          </div>
+          </div>}
           {mode === "replace" && (
             <div className="pocket-replace">
               <p className="muted">{W.replaceHint}</p>
               <Guide />
-              <KeyForm busy={busy} label={W.checkAndSave} onSubmit={(key) => run("save", "pocket.connect", { key }, W.saved)} onCancel={() => setMode(null)} />
+              <KeyForm busy={busy} label={W.checkAndSave} onSubmit={(key) => run("save", "pocket.connect", { key }, W.replaced)} onCancel={() => setMode(null)} />
             </div>
           )}
           {mode === "ask" && <DisconnectAsk busy={busy !== null} onYes={() => void run("disconnect", "pocket.disconnect", {}, W.gone)} onNo={() => setMode(null)} />}
@@ -107,6 +107,7 @@ function Guide() {
           <li key={s}>{s}</li>
         ))}
       </ol>
+      <p className="muted">{W.trust}</p>
       <p className="muted">
         <a href={POCKET_KEYS_DOC} target="_blank" rel="noopener noreferrer">
           {W.docsLink}

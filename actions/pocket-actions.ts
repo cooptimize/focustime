@@ -76,7 +76,8 @@ export async function pocketAction(port: PocketPort | undefined, action: PocketA
           if (!k) throw new PocketError("not_accepted", 0, POCKET_FAILURE_TEXT.not_accepted);
           return k;
         }, at);
-        await port.check.set({ at: new Date(at).toISOString(), recordings: count.recordings });
+        // A Disconnect while Pocket was answering wins: no check is kept without a key (review).
+        if (await port.key.has()) await port.check.set({ at: new Date(at).toISOString(), recordings: count.recordings });
       } catch (e) {
         return failed(e, true);
       }

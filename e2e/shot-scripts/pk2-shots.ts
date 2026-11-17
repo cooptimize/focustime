@@ -18,7 +18,9 @@ async function shot(page: Page, name: string, run: () => Promise<Locator | null>
     const target = await run();
     await page.waitForTimeout(400);
     if (target) {
-      await target.scrollIntoViewIfNeeded();
+      // The section's top under the header, so its end isn't behind the phone's bottom bar.
+      await target.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(200);
       const b = await target.boundingBox();
       const vp = page.viewportSize()!;
       // The section with a margin, inside the window: what a person sees there.

@@ -61,9 +61,10 @@ export class PocketError extends Error {
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const PARAMS: Record<string, RegExp> = { start_date: DATE, end_date: DATE, page: /^[1-9]\d{0,3}$/, limit: /^(100|[1-9]\d?)$/ };
+/** The one call, exactly as FocusTime builds it: two dates, the first page, one item. */
+const listUrl = (from: string, to: string) => `${POCKET_ORIGIN}${POCKET_LIST_PATH}?start_date=${from}&end_date=${to}&page=1&limit=1`;
 
-/** Which allowed call a request is ("list"), or null: refused. GET on the one path, known parameters only. */
+/** Which allowed call a request is ("list"), or null: refused. Only the one call, character for character. */
 export function allowedPocketCall(method: string, url: string): "list" | null {
   if (method !== "GET" || typeof url !== "string" || /[\u0000-\u001f\u007f\s]/.test(url)) return null;
   if (!url.startsWith(`${POCKET_ORIGIN}/`)) return null;
@@ -76,9 +77,10 @@ export function allowedPocketCall(method: string, url: string): "list" | null {
   if (u.origin !== POCKET_ORIGIN || u.username || u.password || u.hash || url.includes("#")) return null;
   const rawPath = url.slice(POCKET_ORIGIN.length).split("?")[0]!;
   if (rawPath !== POCKET_LIST_PATH || u.pathname !== POCKET_LIST_PATH) return null;
-  const keys = [...u.searchParams.keys()];
-  if (new Set(keys).size !== keys.length) return null;
-  for (const [k, v] of u.searchParams) if (!PARAMS[k]?.test(v)) return null;
+  // Pinned to the one call (review): no other parameter, page or size, and no encoded spelling of one.
+  const from = u.searchParams.get("start_date") ?? "";
+  const to = u.searchParams.get("end_date") ?? "";
+  if (!DATE.test(from) || !DATE.test(to) || url !== listUrl(from, to)) return null;
   return "list";
 }
 
@@ -125,7 +127,7 @@ export function createPocketClient(d: PocketDeps) {
    */
   async function countRecordings(key: () => Promise<PocketKey>, from: string, to: string): Promise<PocketCount> {
     if (!DATE.test(from) || !DATE.test(to)) throw fail("refused");
-    const url = `${POCKET_ORIGIN}${POCKET_LIST_PATH}?start_date=${from}&end_date=${to}&page=1&limit=1`;
+    const url = listUrl(from, to);
     const res = await send("GET", url, key);
     let total: unknown;
     try {

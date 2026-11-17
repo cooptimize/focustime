@@ -65,7 +65,6 @@ describe.skipIf(!CHROMIUM)("PK-2: Connect your Pocket", () => {
     await field.fill(GOOD);
     await s.getByRole("button", { name: "Check and save" }).click();
     await expect.poll(() => s.locator(".pocket-state").textContent(), { timeout: 15_000 }).toMatch(/^Connectedchecked just now · \d+ recordings? in the last 7 days$/);
-    await expect(s.getByRole("status").textContent()).resolves.toBe("Connected. Pocket answered.");
     await expect(s.getByLabel("Your Pocket key").count()).resolves.toBe(0);
 
     // Check again, from the keyboard.
@@ -79,6 +78,8 @@ describe.skipIf(!CHROMIUM)("PK-2: Connect your Pocket", () => {
     await expect(ask.textContent()).resolves.toMatch(/^Disconnect Pocket\? FocusTime forgets your key now\./);
     // The question's Disconnect has the focus, so Enter or Escape is one key away; Keep it is next.
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent)).toBe("Disconnect");
+    // One Disconnect on screen while it asks: the question's own.
+    await expect(s.getByRole("button", { name: "Disconnect" }).count()).resolves.toBe(1);
     await ask.getByRole("button", { name: "Keep it" }).click();
     await expect(s.locator(".pocket-state").count()).resolves.toBe(1);
     await s.getByRole("button", { name: "Disconnect" }).click();

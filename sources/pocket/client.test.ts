@@ -55,6 +55,13 @@ describe("PK-2: the Pocket client", () => {
     ["GET", `${LIST}?page=1&page=2`],
     ["GET", `${LIST}#x`],
     ["GET", `${LIST}?start_date=2026-11-11%0A`],
+    ["GET", LIST],
+    ["GET", `${LIST}?constructor=1`],
+    ["GET", `${LIST}?__proto__=1`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=100`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=2&limit=1`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&lim%69t=1`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1&`],
   ])("refuses %s %s before the key is read or the network is used", async (method, url) => {
     const t = setup();
     await expect(t.client.request(method, url, t.key())).rejects.toMatchObject({ kind: "refused" });
@@ -65,7 +72,6 @@ describe("PK-2: the Pocket client", () => {
 
   it("allows only the list call with known parameters", () => {
     expect(allowedPocketCall("GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1`)).toBe("list");
-    expect(allowedPocketCall("GET", LIST)).toBe("list");
     expect(allowedPocketCall("HEAD", LIST)).toBeNull();
   });
 
