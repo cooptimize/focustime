@@ -7,7 +7,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
-import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm, deployForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -223,6 +223,14 @@ describe("⋯ menus", () => {
     expect(labels).not.toContain("Timebox");
     expect(labels).not.toContain("I'll make it up…");
     expect(find(pickMenu(env().e, dep), "Kind").hint).toBe("Deployment");
+  });
+  it("UC-2: Plan a deployment… with no What titles it as capture does; typed words are the title", async () => {
+    const t = env();
+    const form = deployForm(t.e, { date: "2026-11-07" });
+    const base = { client: "internal", date: "2026-11-07", start: "09:00", end: "11:00", item: "", items: "", note: "" };
+    await form.save!({ ...base, title: "" });
+    await form.save!({ ...base, title: "  Release 4.2  " });
+    expect(t.calls.map((c) => (c[1] as { title?: string }).title)).toEqual(["Deployment - Internal - Sat, Nov 7", "Release 4.2"]);
   });
   it("WK-3: Move offers Saturday and Sunday with the weekend note, and no weekday-only list hides them (D947)", () => {
     const m = find(pickMenu(env().e, pick), "Move").next!();

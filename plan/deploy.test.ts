@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { aDeployment, aPick, aWeekConfig, WEEK } from "../test/builders/index.ts";
 import { hoursOn } from "../week/hours.ts";
 import { weekDates7 } from "../week/dates.ts";
-import { afterHours, afterHoursText, deployedText, deployedWhen, madeTitle, movedTitle, windowHalf, windowProblem, windowText } from "./deploy.ts";
+import { afterHours, afterHoursText, deployedText, deployedWhen, deploymentTitle, madeTitle, movedTitle, windowHalf, windowProblem, windowText } from "./deploy.ts";
 import { pickNeed, SIZE_MINUTES } from "./types.ts";
 
 const model = aWeekConfig().hours;
@@ -126,5 +126,13 @@ describe("UC-1: a deployment's made title", () => {
     for (const mine of ["Release 4.2 to production", "Deployment", "Deployment - Contoso", "Deployment - Sat, Nov 21", "Contoso - Sat, Nov 21", "Deployment - Contoso - Sat, Nov 21 (phase 2)", "Deployment - Contoso - Fri, Nov 20"])
       expect(movedTitle(mine, "2026-11-21", "2026-11-22"), mine).toBe(mine);
     expect(movedTitle(madeTitle("Contoso", "2026-11-21"), "2026-11-21", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
+  });
+});
+
+describe("UC-2: one title for a new deployment, whoever makes it", () => {
+  it("is the made title with no words, the words when typed, cut at 200", () => {
+    for (const none of [undefined, null, "", "   "]) expect(deploymentTitle(none, "Contoso", "2026-11-21")).toBe("Deployment - Contoso - Sat, Nov 21");
+    expect(deploymentTitle("  Release 4.2  ", "Contoso", "2026-11-21")).toBe("Release 4.2");
+    expect(deploymentTitle("x".repeat(250), "Contoso", "2026-11-21")).toHaveLength(200);
   });
 });

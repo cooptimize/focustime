@@ -19,7 +19,7 @@ import { NOTHING_TO_CONFIRM_DAY, NOTHING_TO_CONFIRM_WEEK } from "../plan/no-conf
 import { removedNotice } from "../plan/progress.ts";
 import { SIZE_MINUTES } from "../plan/types.ts";
 import type { ActionName } from "../actions/registry.ts";
-import { DEPLOYMENT, windowProblem, windowText } from "../plan/deploy.ts";
+import { deploymentTitle, windowProblem, windowText } from "../plan/deploy.ts";
 import { matchNamed, namedInRequest, type ItemGroup } from "../plan/deploy-items.ts";
 import type { ActionResponse, AheadLoad, DevOpsPreview, DevOpsResult, DoneOffer, ItemDoneOffer, UndoOffer, WrapOffer } from "../actions/types.ts";
 import { dropCheck } from "../plan/weekdrop.ts";
@@ -996,7 +996,8 @@ export function createAssistant(env: AssistantEnv) {
         const bad = windowProblem(w);
         if (bad) throw new Refusal(bad);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) throw new Refusal("Say a day from today on");
-        const title = (typeof args.title === "string" && args.title.trim() ? args.title.trim() : DEPLOYMENT).slice(0, 200);
+        // UC-2: no title in my words: the same made title the capture box and the day menu give.
+        const title = deploymentTitle(typeof args.title === "string" ? args.title : null, env.clientName(client), date);
         const note = typeof args.note === "string" && args.note.trim() ? args.note.trim().slice(0, 2000) : null;
         const itemIds = [...new Set(Array.isArray(args.itemIds) ? args.itemIds.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [])].slice(0, 20);
         const rows: PreviewView["rows"] = [{ label: "When", before: null, after: `${dayWords(date)} ${windowText(w)}` }];

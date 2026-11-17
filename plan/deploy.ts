@@ -16,6 +16,18 @@ export const DEPLOYMENT = "Deployment";
  */
 export const madeTitle = (clientName: string, date: IsoDate): string => `${DEPLOYMENT} - ${clientName.replace(/\s+/g, " ").trim().slice(0, 150)} - ${dayLabel(date)}`;
 
+/** The longest title a deployment keeps (the capture box, the day menu and the assistant cut at the same length). */
+export const DEPLOY_TITLE_MAX = 200;
+
+/**
+ * UC-2: the one way a new deployment gets its title, whoever makes it (the capture box, Plan a deployment… from the
+ * day menu or the command menu, the assistant and so the Teams bot): the words typed, or with none the made title.
+ */
+export function deploymentTitle(typed: string | null | undefined, clientName: string, date: IsoDate): string {
+  const words = (typed ?? "").trim();
+  return (words || madeTitle(clientName, date)).slice(0, DEPLOY_TITLE_MAX);
+}
+
 /**
  * UC-1: a title FocusTime made follows its deployment to another day. A title is a made one when it still reads
  * "Deployment - <something> - <the day it was on>"; anything else is the person's own words and is kept as it is.
