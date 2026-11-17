@@ -5439,6 +5439,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-actions.mtg-drop.dropping { padding: 6px 8px; background: var(--wash-accent); }
 .mtg-drop-hint { font-size: var(--fs-2); font-weight: 500; color: var(--text); }
 .mtg-upload .mtg-drop-or { font-size: var(--fs-2); }
+.phone .mtg-upload .mtg-drop-or { display: none; }
 .mtg-upload .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-date-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--watch); border-radius: 10px; background: var(--wash-watch); }
 .mtg-date-ask:focus { outline: 2px solid var(--focus); outline-offset: 2px; }

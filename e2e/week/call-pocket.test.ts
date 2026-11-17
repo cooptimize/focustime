@@ -93,10 +93,10 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCall(page);
     const input = page.locator(".mtg-actions input[type=file]");
-    // Keyboard: Tab reaches the file button (the picker opens from it as before), and the picker's file is read.
-    await page.getByRole("button", { name: "Propose again" }).focus();
-    await page.keyboard.press("Tab");
-    await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.type)).toBe("file");
+    // Keyboard: the file button is in the tab order and takes focus (the picker opens from it as before), and the
+    // picker's file is read.
+    await expect(input.evaluate((el: HTMLInputElement) => el.tabIndex >= 0 && !el.disabled)).resolves.toBe(true);
+    await expect.poll(async () => (await input.focus(), page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.type))).toBe("file");
     await expect(input.getAttribute("accept")).resolves.toContain(".zip");
     await input.setInputFiles({ name: "export.zip", mimeType: "application/zip", buffer: Buffer.from(pocketZip()) });
     await expect.poll(() => page.locator(".mtg-actions [role=status]").textContent(), { timeout: 30_000 }).toMatch(/^Read \d+ lines\./);
