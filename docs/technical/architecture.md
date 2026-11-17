@@ -268,7 +268,7 @@ Some reads, such as `week.load`, are handled in `actions/dispatch.ts` itself rat
 5. Every plan store statement goes through `store/scope.ts`, which adds the session's `user_id`; a user id never comes from the browser.
 6. The answer is JSON. Source failures come back as a status with a plain message and a fix, never as another source's data.
 
-Two routes take a raw body instead of an action, behind the same guard, session and CSRF checks: `POST /api/assistant/transcribe` (push-to-talk audio, 60 seconds and 2 MB at most) and `POST /api/meetings/upload` (a reviewer's .vtt or .docx transcript, 5 MB at most, parsed in memory). Both are named in `server/app.ts`.
+Two routes take a raw body instead of an action, behind the same guard, session and CSRF checks: `POST /api/assistant/transcribe` (push-to-talk audio, 60 seconds and 2 MB at most) and `POST /api/meetings/upload` (a reviewer's transcript, 5 MB at most, parsed in memory: a Teams .vtt or .docx, or a Pocket export's PDF or the zip holding it, told apart by content; PK-1). Both are named in `server/app.ts`.
 
 ## What the server sends, compressed
 
