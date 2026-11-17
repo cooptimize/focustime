@@ -21,6 +21,10 @@ describe("MC-1d: which drawn meeting is a call", () => {
   });
   it("anything else stays an ordinary meeting", () => {
     expect(callForEvent(marks, ev({ start: "2026-11-02T13:05:00-05:00" }))).toBeNull();
+    // Another meeting at the same start (a standup) isn't the call; nor my own hold, nor a calendar added by link.
+    expect(callForEvent(marks, ev({ end: "2026-11-02T13:15:00-05:00" }))).toBeNull();
+    expect(callForEvent(marks, ev({ notMeeting: "solo" }))).toBeNull();
+    expect(callForEvent(marks, ev({ source: "ics" }))).toBeNull();
     expect(callForEvent(marks, ev({ isPersonal: true }))).toBeNull();
     expect(callForEvent(marks, ev({ allDay: true }))).toBeNull();
     expect(callForEvent(marks, ev({ source: "google" }))).toBeNull();

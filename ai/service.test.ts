@@ -268,7 +268,7 @@ describe("validation and retries", () => {
     const r = await s.ai.run(TASK, INPUT, SCHEMA);
     expect(r.ok ? null : r.error.kind).toBe("provider");
     const line = s.records.find((x) => x.op === "request")!;
-    expect(line).toMatchObject({ source: "ai", status: 400, kind: `${TASK.name}:provider:standard` });
+    expect(line).toMatchObject({ source: "ai", status: 400, kind: `${TASK.name}:provider_error:standard` });
     expect(Object.keys(line).sort()).toEqual(["count", "durationMs", "kind", "op", "source", "status"]);
     expect(s.log[0]).toMatchObject({ outcome: "provider_error", detail: "provider:400", tier: "standard" });
     // Nothing of the request or an answer: the same closed set of fields as before.
@@ -276,7 +276,7 @@ describe("validation and retries", () => {
     // A failure with no answer at all (a timeout) keeps its kind and no status.
     const t = setup({ replies: [{ ok: false, kind: "timeout" }] });
     await t.ai.run(TASK, INPUT, SCHEMA);
-    expect(t.records.find((x) => x.op === "request")).toMatchObject({ status: "timeout", kind: `${TASK.name}:timeout:standard` });
+    expect(t.records.find((x) => x.op === "request")).toMatchObject({ status: "timeout", kind: `${TASK.name}:provider_error:standard` });
     expect(t.log[0]!.detail).toBe("timeout");
   });
   it("a Retry-After longer than is worth waiting fails as busy without a retry", async () => {

@@ -44,10 +44,13 @@ export type AiErrorKind =
 
 export class AiError extends Error {
   readonly kind: AiErrorKind;
-  constructor(kind: AiErrorKind, message: string) {
+  /** MC-1d: the provider's HTTP status when it answered with an error (a number only). */
+  readonly httpStatus: number | undefined;
+  constructor(kind: AiErrorKind, message: string, httpStatus?: number) {
     super(message);
     this.name = "AiError";
     this.kind = kind;
+    this.httpStatus = httpStatus;
   }
 }
 

@@ -48,19 +48,21 @@ export function callsIn(marks: readonly CallMark[], start: string, end: string):
 }
 
 /** What a drawn meeting needs to be matched: when it starts, and whether it is a meeting at all. */
-export type DrawnMeeting = { start: string; allDay?: boolean; isPersonal?: boolean; unavailable?: unknown; notMeeting?: string; source?: string };
+export type DrawnMeeting = { start: string; end: string; allDay?: boolean; isPersonal?: boolean; unavailable?: unknown; notMeeting?: string; source?: string };
 
 /**
- * MC-1d: the registered call (one I review or attend) a drawn meeting is an occurrence of, or null. A work calendar's
- * timed meeting that starts at the same instant as an occurrence FocusTime laid out for a call I can see is that call;
- * a personal event, an all-day one, unavailable time or a timebox never is. Nothing about the meeting is sent anywhere:
- * the match is made here, against what meeting.mine already returned.
+ * MC-1d: the registered call (one I review or attend) a drawn meeting is an occurrence of, or null. A meeting on my
+ * Outlook calendar with other people on it that starts and ends at the same instants as an occurrence of a call I can see
+ * is that call; a personal event, an all-day one, unavailable time, a timebox, my own hold with nobody else on it or a
+ * calendar added by link never is. Nothing about the meeting is sent anywhere: the match is made here, against what
+ * meeting.mine already returned. (The events FocusTime reads carry no join link to match on; open questions.)
  */
 export function callForEvent(marks: readonly CallMark[], e: DrawnMeeting): CallMark | null {
-  if (e.allDay || e.isPersonal || e.unavailable || e.notMeeting === "timebox" || e.source === "focustime" || e.source === "google") return null;
-  const t = Date.parse(e.start);
-  if (!Number.isFinite(t)) return null;
-  return marks.find((m) => Date.parse(m.startAt) === t) ?? null;
+  if (e.source !== "outlook" || e.allDay || e.isPersonal || e.unavailable || e.notMeeting) return null;
+  const a = Date.parse(e.start);
+  const b = Date.parse(e.end);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return marks.find((m) => Date.parse(m.startAt) === a && Date.parse(m.endAt) === b) ?? null;
 }
 
 /** "#/meetings/<occurrence>", or its Transcript view, or a line in it. */
@@ -97,9 +99,15 @@ export function useMine(on = true): { data: MineData | null; reload: () => void 
   useEffect(() => {
     if (!on) return;
     let live = true;
-    const load = () => call<MineData>("meeting.mine", {}, { background: true }).then((d) => live && setData(d), () => undefined);
+    // Only a change re-renders (the whole app reads these); a hidden tab doesn't ask.
+    let last = "";
+    const load = () =>
+      call<MineData>("meeting.mine", {}, { background: true }).then((d) => {
+        const key = JSON.stringify(d);
+        if (live && key !== last) (last = key), setData(d);
+      }, () => undefined);
     void load();
-    const t = window.setInterval(load, 5 * 60_000);
+    const t = window.setInterval(() => !document.hidden && void load(), 5 * 60_000);
     return () => {
       live = false;
       window.clearInterval(t);

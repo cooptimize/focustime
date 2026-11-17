@@ -80,7 +80,7 @@ export type CaptureInput = {
 export type CaptureResult =
   | { ok: true; proposals: { body: ProposalBody; quotes: Quote[] }[]; windows: number; masked: { client: number; email: number }; dropped: number; costUsd: number }
   /** MC-1d: which part of a call sent in parts failed (1-based), and how many parts; one failed part fails the pass. */
-  | { ok: false; kind: AiErrorKind; message: string; part: number; parts: number };
+  | { ok: false; kind: AiErrorKind; message: string; part: number; parts: number; httpStatus?: number };
 
 /** The items the AI is told about: features and epics first, then stories, at most this many. */
 export const CONTEXT_ITEMS = 250;
@@ -180,7 +180,7 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
     // GD-2 point 5: a proposal's text goes into the client's DevOps, so another client's name in it is replaced by
     // "another client" and that proposal is marked, rather than the whole window refused (Internal keeps names).
     const r = await ai.run<Answer>({ name: MEETING_CAPTURE_TASK, client: x.clientKey, instructions: x.internal ? MEETING_CAPTURE_INSTRUCTIONS : `${MEETING_CAPTURE_INSTRUCTIONS}\n${NO_OTHER_CLIENTS}`, mentions: { answer: "allow" } }, m.text, MEETING_CAPTURE_SCHEMA);
-    if (!r.ok) return { ok: false, kind: r.error.kind, message: r.error.message, part: i + 1, parts: windows.length };
+    if (!r.ok) return { ok: false, kind: r.error.kind, message: r.error.message, part: i + 1, parts: windows.length, ...(r.error.httpStatus !== undefined ? { httpStatus: r.error.httpStatus } : {}) };
     cost += r.costUsd;
     const c = checkAnswer(r.value, x, w, featureTypes);
     all.push(...c.proposals.map((p) => {

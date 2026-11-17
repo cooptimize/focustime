@@ -60,8 +60,9 @@ describe("MC-1d: a failed AI pass says so", () => {
   it("is the failed state with the kind, never ready with nothing; the review says why", async () => {
     const t = await setup(() => ({ ok: false, kind: "provider", status: 400 }));
     const r = await runPass(t.deps, t.s, t.occ, lines(4));
-    expect(r.outcome).toBe("provider");
-    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", aiOutcome: "provider" });
+    // A 400 is the provider refusing the request itself: stored as such, and never tried again by itself.
+    expect(r.outcome).toBe("provider_refused");
+    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", aiOutcome: "provider_refused", nextCheckAt: null });
     const review = (await meetingAction(t.ctxAs(REVIEWER), "meeting.review", { occurrenceId: t.occ.id })) as { ok: true; data: Review };
     expect(review.data.occurrence.state).toBe("failed");
     expect(review.data.occurrence.aiMessage).toMatch(/^The AI step failed: /);
@@ -80,7 +81,7 @@ describe("MC-1d: a failed AI pass says so", () => {
     const t = await setup((_c, i) => (i === 1 ? { ok: false, kind: "provider", status: 403 } : EMPTY));
     const long = lines(1600, "A long stretch of the call about the rates export, the holiday calendar import, the sample rates Dana sends and the export spec.");
     const r = await runPass(t.deps, t.s, t.occ, long);
-    expect(r.outcome).toMatch(/^provider@2\/\d+$/);
+    expect(r.outcome).toMatch(/^provider_refused@2\/\d+$/);
     const o = (await t.store.occurrence(t.occ.id))!;
     expect(o.state).toBe("failed");
     expect(await t.store.proposals(t.occ.id)).toEqual([]);

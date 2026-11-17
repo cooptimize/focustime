@@ -41,13 +41,13 @@ async function setup(reply: () => string | ProviderReply) {
   const occ = await store.ensureOccurrence(s.id, "2026-11-10", "2026-11-10T15:00:00Z", "2026-11-10T16:00:00Z", "needs_upload", null);
   await store.saveTranscript(occ.id, LINES, "upload", REG);
   // The first pass (an upload's): it fails, and the next try by itself is set.
-  await runPass({ store, ai: person.ai, capture: person.capture, users: async () => [], log: (r) => logs.push(r), now: () => now.toString() }, s, (await store.occurrence(occ.id))!, LINES);
+  await runPass({ store, ai: person.ai, capture: person.capture, users: async () => [], log: (r) => logs.push(r), now: () => now.toString(), retriesHere: true }, s, (await store.occurrence(occ.id))!, LINES);
   return { store, occ, calls, logs, newJob, at: (iso: string) => (now = Temporal.Instant.from(iso)) };
 }
 
 describe("MC-1d: a failed AI pass is tried again by itself", () => {
   it("three more times, 15 minutes apart, then stops and leaves the state for a person", async () => {
-    const t = await setup(() => ({ ok: false, kind: "provider", status: 403 }));
+    const t = await setup(() => ({ ok: false, kind: "provider" }));
     expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", checks: 0, nextCheckAt: "2026-11-10T17:15:00Z" });
     const job = t.newJob();
     // Not due yet: nothing runs, and the wake is the next try.
@@ -72,7 +72,7 @@ describe("MC-1d: a failed AI pass is tried again by itself", () => {
 
   it("stops at the first try that works: ready, with nothing more scheduled", async () => {
     let fail = true;
-    const t = await setup(() => (fail ? { ok: false, kind: "provider", status: 403 } : EMPTY));
+    const t = await setup(() => (fail ? { ok: false, kind: "provider" } : EMPTY));
     const job = t.newJob();
     fail = false;
     t.at("2026-11-10T17:15:00Z");
@@ -83,17 +83,33 @@ describe("MC-1d: a failed AI pass is tried again by itself", () => {
     expect(t.calls).toHaveLength(2);
   });
 
-  it("never retries a failure a retry can't fix", async () => {
-    const t = await setup(() => ({ ok: false, kind: "quota", status: 429 }));
-    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", aiOutcome: "quota", nextCheckAt: null });
+  it.each([
+    [{ ok: false, kind: "quota", status: 429 } as ProviderReply, "quota"],
+    // The provider refusing the request itself (a bad request, a key or a model it won't take) would refuse it again.
+    [{ ok: false, kind: "provider", status: 400 } as ProviderReply, "provider_refused"],
+    [{ ok: false, kind: "provider", status: 401 } as ProviderReply, "provider_refused"],
+  ])("never retries a failure a retry can't fix: %o", async (reply, stored) => {
+    const t = await setup(() => reply);
+    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", aiOutcome: stored, nextCheckAt: null });
+    // (A 400 on Flex is asked once more on standard inside the first pass; nothing after it.)
+    const first = t.calls.length;
     const job = t.newJob();
     t.at("2026-11-10T18:00:00Z");
     await job.run();
-    expect(t.calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(first);
+  });
+
+  it("outside production a failed pass has no next try, so the reviewer hears about it at once", async () => {
+    const t = await setup(() => ({ ok: false, kind: "provider" }));
+    await t.store.updateOccurrence(t.occ.id, { nextCheckAt: null, checks: 0 });
+    const { runPass: again } = await import("../actions/meeting-actions.ts");
+    const s = (await t.store.allSeries())[0]!;
+    await again({ store: t.store, ai: async () => null, capture: async () => null, users: async () => [], log: () => {} }, s, (await t.store.occurrence(t.occ.id))!, LINES);
+    expect(await t.store.occurrence(t.occ.id)).toMatchObject({ state: "failed", nextCheckAt: null });
   });
 
   it("a restart in between neither loses a try nor runs one twice", async () => {
-    const t = await setup(() => ({ ok: false, kind: "provider", status: 403 }));
+    const t = await setup(() => ({ ok: false, kind: "provider" }));
     t.at("2026-11-10T17:15:00Z");
     await t.newJob().run();
     // A new process: the schedule is in the database, not in memory.

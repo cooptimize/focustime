@@ -36,6 +36,7 @@ describe("MC-1d: a call's state in words", () => {
     expect(aiFailedLine("provider")).toBe(`The AI step failed: ${AI_MESSAGES.provider.replace(/^The/, "the")}.`);
     expect(aiFailedLine("not_set_up")).toBe("The AI step failed: AI isn't set up.");
     expect(aiFailedLine("no_context")).not.toContain("AI service");
+    expect(aiFailedLine("provider_refused")).toBe(aiFailedLine("provider"));
     expect(aiFailedLine("no_ai")).toContain("Admin › AI");
     expect(aiFailedLine("provider@2/3")).toContain("The call was sent in 3 parts and part 2 failed, so nothing was proposed");
     for (const k of Object.keys(AI_MESSAGES)) expect(aiFailedLine(k)).not.toMatch(/Nothing to propose/);
@@ -51,7 +52,7 @@ describe("MC-1d: a call's state in words", () => {
 
   it("which failures are retried, and the stored outcome of a call sent in parts", () => {
     for (const k of ["rate_limited", "timeout", "provider", "invalid_output", "no_context"]) expect(retryable(k), k).toBe(true);
-    for (const k of ["no_ai", "off", "client_off", "not_set_up", "over_budget", "zero_budget", "quota", "refused_client", "refused_secret", "refused_email", "bad_task"]) expect(retryable(k), k).toBe(false);
+    for (const k of ["provider_refused", "no_ai", "off", "client_off", "not_set_up", "over_budget", "zero_budget", "quota", "refused_client", "refused_secret", "refused_email", "bad_task"]) expect(retryable(k), k).toBe(false);
     expect(outcomeOf("timeout")).toBe("timeout");
     expect(outcomeOf("timeout", 2, 3)).toBe("timeout@2/3");
     expect(outcomeOf("timeout", 1, 1)).toBe("timeout");

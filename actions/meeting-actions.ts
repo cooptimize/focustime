@@ -309,7 +309,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
         const lines = await store.transcript(occ.id);
         if (!lines) return bad("There's no transcript for this meeting any more", 409);
-        const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, occ, lines);
+        const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, occ, lines);
         return { ok: true, data: r };
       }
       case "meeting.prepare": return await prepare(ctx, store, cfg, me, input);
@@ -594,6 +594,8 @@ export type PassDeps = {
   capture: (clientKey: string) => Promise<CaptureContext | null>;
   users: () => Promise<MeetingUser[]>;
   log: (r: LogRecord) => void;
+  /** MC-1d: the meeting job runs here (production), so a failed pass gets a next try; elsewhere none is set. */
+  retriesHere?: boolean;
 };
 
 /**
@@ -617,18 +619,26 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     if (r.ok) {
       n = (await d.store.replaceProposals(occ.id, r.proposals)).filter((p) => p.state === "open").length;
       d.log({ source: "ai", op: "meeting_capture", count: n, kind: `windows:${r.windows} masked_client:${r.masked.client} masked_email:${r.masked.email} dropped:${r.dropped}` });
-    } else outcome = outcomeOf(r.kind === "client_off" || r.kind === "off" ? "no_ai" : r.kind, r.part, r.parts);
+    } else outcome = outcomeOf(r.kind === "client_off" || r.kind === "off" ? "no_ai" : refusedRequest(r.kind, r.httpStatus) ? "provider_refused" : r.kind, r.part, r.parts);
   }
   if (outcome === "done") await d.store.updateOccurrence(occ.id, { state: "ready", aiOutcome: outcome, nextCheckAt: null, checks: 0 });
   else {
     const kind = parseOutcome(outcome).kind;
+    // A person's try (Propose again, an upload, Check now) starts a fresh series of tries by itself; the job's go on.
     const tries = o.retry ? occ.checks : 0;
-    await d.store.updateOccurrence(occ.id, { state: "failed", aiOutcome: outcome, checks: tries, nextCheckAt: nextRetry(kind, tries, d.now?.() ?? Temporal.Now.instant().toString()) });
+    const next = d.retriesHere ? nextRetry(kind, tries, d.now?.() ?? Temporal.Now.instant().toString()) : null;
+    await d.store.updateOccurrence(occ.id, { state: "failed", aiOutcome: outcome, checks: tries, nextCheckAt: next });
     // A try by itself is logged once, by the job, with its number.
     if (!o.retry) d.log({ source: "ai", op: "meeting_capture", kind: parseOutcome(outcome).kind });
   }
   return { outcome, proposals: n };
 }
+
+/**
+ * MC-1d: the provider refused the request itself (a 4xx other than 408, 409 and 429: a bad request, a key or a model
+ * it won't take). The same request would be refused again, so it isn't tried again by itself.
+ */
+const refusedRequest = (kind: string, status: number | undefined) => kind === "provider" && status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
 
 /** An uploaded transcript for a series' dated occurrence (a reviewer): parsed, stored, then the AI pass. */
 export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; name: string; bytes: Uint8Array }): Promise<ActionResponse> {
@@ -652,6 +662,6 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   const occ = await v.ensureOccurrence(series.id, q.date, start.toInstant().toString(), start.add({ minutes: series.minutes }).toInstant().toString());
   await v.saveTranscript(occ.id, lines);
   ctx.log({ source: "plan", op: "meeting_upload", count: lines.length });
-  const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, (await store.occurrence(occ.id))!, lines);
+  const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, (await store.occurrence(occ.id))!, lines);
   return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, ...r } };
 }

@@ -187,7 +187,7 @@ export const AI_RETRY_MINUTES = 15;
  * wrong. Everything else (busy, slow, the service down or saying no, an unusable answer, FocusTime unable to read the
  * client's items) may pass on another try.
  */
-export const NOT_RETRIED: ReadonlySet<string> = new Set(["no_ai", "off", "client_off", "not_set_up", "over_budget", "zero_budget", "quota", "refused_client", "refused_secret", "refused_email", "bad_task"]);
+export const NOT_RETRIED: ReadonlySet<string> = new Set(["provider_refused", "no_ai", "off", "client_off", "not_set_up", "over_budget", "zero_budget", "quota", "refused_client", "refused_secret", "refused_email", "bad_task"]);
 export const retryable = (kind: string) => !NOT_RETRIED.has(kind);
 
 /** The stored outcome: the kind, and for a call sent in parts, which part failed ("timeout@2/3"); at most 40 characters. */

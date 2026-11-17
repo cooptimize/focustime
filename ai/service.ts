@@ -95,7 +95,7 @@ export const halfPrices = (p: Prices): Prices => ({ inputPerMillion: p.inputPerM
 /** AI-F1: what one provider call at a tier came to: the reply, every attempt's usage, the tier that answered, and counts. */
 type Attempt = { reply: ProviderReply; spent: Usage; tier: AiTier; flexTries: number; fellBack: boolean };
 
-const fail = (kind: AiErrorKind): { ok: false; error: AiError } => ({ ok: false, error: new AiError(kind, AI_MESSAGES[kind]) });
+const fail = (kind: AiErrorKind, httpStatus?: number): { ok: false; error: AiError } => ({ ok: false, error: new AiError(kind, AI_MESSAGES[kind], httpStatus) });
 /** GD-1: an answer naming another client was sent and paid for, but is never shown. */
 export const OUTPUT_REFUSED = "The AI's answer mentions another client, so nothing is shown";
 const ZERO: Usage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
@@ -120,9 +120,9 @@ export function createAi(d: AiDeps) {
     const status = detail && httpStatus !== undefined && Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? httpStatus : null;
     await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail: detail && status !== null ? `${detail}:${status}` : detail, cap: scope, tier });
     if (cost > 0) await d.appSpend.add(monthOf(at), cost);
-    // App Insights: counts and outcomes only, whose cap it counted against and (MC-1d) the tier that answered; a failed
-    // request's status is the provider's HTTP status as a number when it gave one, else the kind.
-    logger({ source: "ai", op: "request", kind: `${task.name}:${detail ?? outcome}:${tier}${scope === "app" ? ":app" : ""}`, ...(status !== null ? { status } : detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
+    // App Insights: counts and outcomes only, whose cap it counted against and (MC-1d) the tier; a failed request's
+    // status is the provider's HTTP status as a number when it gave one, else its kind, as before.
+    logger({ source: "ai", op: "request", kind: `${task.name}:${outcome}:${tier}${scope === "app" ? ":app" : ""}`, ...(status !== null ? { status } : detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
     return cost;
   }
 
@@ -273,7 +273,7 @@ export function createAi(d: AiDeps) {
     if (!reply.ok) {
       const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
       await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model, used, reply.status);
-      return fail(kind);
+      return fail(kind, reply.status);
     }
     let value: unknown;
     try {
@@ -380,7 +380,7 @@ export function createAi(d: AiDeps) {
       if (!reply.ok) {
         const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
         cost += await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, used, ms, model, t, reply.status);
-        return { ...fail(kind), refused, calls: ran };
+        return { ...fail(kind, reply.status), refused, calls: ran };
       }
       if (reply.calls?.length) {
         cost += await record(task, "ok", null, used, ms, reply.model, t);

@@ -147,7 +147,7 @@ export function meetingJob(d: MeetingJobDeps) {
           const lines = parseVtt(await p.graph.transcriptVtt(meetingId, ref.id));
           await d.store.saveTranscript(occ.id, lines, "automatic", null);
           await d.store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: uid, at: now.toString() } });
-          await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString() }, s, (await d.store.occurrence(occ.id))!, lines);
+          await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString(), retriesHere: true }, s, (await d.store.occurrence(occ.id))!, lines);
           outcome = "found";
           break;
         } catch (e) {
@@ -206,8 +206,13 @@ export function meetingJob(d: MeetingJobDeps) {
         d.log({ source: "plan", op: "meeting_capture_retry", kind: "no_person", count: tries });
         continue;
       }
-      const r = await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString() }, s, (await d.store.occurrence(occ.id))!, lines, { retry: true });
-      d.log({ source: "ai", op: "meeting_capture_retry", kind: parseOutcome(r.outcome).kind, count: tries });
+      try {
+        const r = await runPass({ store: d.store, ai: p.ai, capture: p.capture, users: d.users, log: d.log, now: () => now.toString(), retriesHere: true }, s, (await d.store.occurrence(occ.id))!, lines, { retry: true });
+        d.log({ source: "ai", op: "meeting_capture_retry", kind: parseOutcome(r.outcome).kind, count: tries });
+      } catch (e) {
+        // One call's trouble never holds up the others; this try was counted already.
+        d.log({ source: "ai", op: "meeting_capture_retry", kind: e instanceof Error ? e.name : "unknown", count: tries });
+      }
     }
   }
 
