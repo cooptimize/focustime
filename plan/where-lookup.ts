@@ -146,7 +146,7 @@ export function wordAt(text: string, cursor: number): { start: number; end: numb
  * where the cursor goes: right after the pick. A space keeps it apart from a word right before or after it. Null when
  * the answer would be longer than an answer may be.
  */
-export function withPick(text: string, cursor: number, pick: string, replace = true, from?: number): { text: string; cursor: number } | null {
+export function withPick(text: string, cursor: number, pick: string, replace = true, from?: number): { text: string; cursor: number; /** RB-3b: where the pick's words start. */ at: number } | null {
   const w = replace ? wordAt(text, cursor) : { start: cursor, end: cursor, word: "" };
   // `from`: where a phrase being typed starts ("load sa" is replaced whole by "Load sales (pipeline)").
   const [start, end] = w.word ? [from !== undefined && from < w.start ? from : w.start, w.end] : [cursor, cursor];
@@ -156,7 +156,7 @@ export function withPick(text: string, cursor: number, pick: string, replace = t
   const tail = after && !/^[\s,;.)]/.test(after) ? " " : "";
   const next = `${before}${lead}${pick}${tail}${after}`;
   if (next.length > ANSWER_MAX) return null;
-  return { text: next, cursor: before.length + lead.length + pick.length + tail.length };
+  return { text: next, cursor: before.length + lead.length + pick.length + tail.length, at: before.length + lead.length };
 }
 
 // ---------- matching ----------

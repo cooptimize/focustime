@@ -4,7 +4,7 @@
 // was opened. Create in DevOps opens the write framework's preview (confirm, read back, audit log, undo); Save as draft
 // keeps it local. Without the client's write PAT it says so in one line and Save as draft is the way. No browser
 // controls: the app's own select, date field and people list (AH-5). Works with no AI; a draft's AI version is offered.
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { aOr, formDefaults, parentTypesOf, TITLE_MAX, type NewOptions, type NewPlace } from "../plan/quick-create.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { PeopleField } from "./ahead/People.tsx";
@@ -19,6 +19,7 @@ import { TextBox } from "./TextBox.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { answersEmpty, descriptionMax, NO_ANSWERS, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
+import { useWherePicks, WherePicksLine } from "./WherePicks.tsx";
 import { usePhone } from "./viewport.ts";
 import { Icon } from "./icons.tsx";
 import { CREATED_EVENT, type Created, type NewHooks } from "./newitem-ctx.ts";
@@ -115,6 +116,13 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   }, [draft, clientKey]);
 
   const clientName = clients.find((c) => c.clientKey === clientKey)?.clientName ?? clientKey ?? "";
+  // RB-3b: names picked from one client's code are taken out of Where is it? when the client changes (Undo puts them back).
+  const setWhere = useCallback((v: string) => setAnswers((a) => ({ ...a, where: v })), []);
+  const picks = useWherePicks(answers.where, setWhere, clientKey, clientName);
+  useEffect(() => {
+    // On the phone the questions are under More: open it so the line's Undo and the box are in sight.
+    if (picks.line && phone) setMore(true);
+  }, [picks.line]); // eslint-disable-line react-hooks/exhaustive-deps
   const ladder = useMemo(() => opts?.levels.map((l) => l.types) ?? [], [opts]);
   const types = useMemo(() => opts?.levels.flatMap((l) => l.types) ?? [], [opts]);
   const allowedParents = useMemo(() => (type ? new Set(parentTypesOf(ladder, type)) : new Set<string>()), [ladder, type]);
@@ -243,7 +251,10 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             // A draft belongs to its client.
             <span className="nf-fixed">{clientName}</span>
           ) : (
-            <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+            <span className="nf-client">
+              <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+              <WherePicksLine state={picks} />
+            </span>
           )}
           <span className="set-label" id="nf-type">Level</span>
           <span className="nf-types">
@@ -271,7 +282,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             />
             {titleProblem && <span className="set-problem nf-line" role="alert">{titleProblem}</span>}
           </span>
-          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" lookup={{ clientKey, clientName, from: "new_form" }} />}
+          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
           <span className="set-label">Parent</span>
           <span className="nf-parent">
             {type && !allowedParents.size ? (
@@ -294,7 +305,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
           <Icon name={more ? "open" : "closed"} /> {phone ? "More: details, description and size" : "More: description and size"}
         </button>
-        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" lookup={{ clientKey, clientName, from: "new_form" }} />}
+        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
         {more && (
           <div className="nf-grid nf-more-body">
             <label className="set-label" htmlFor="nf-desc">Description</label>

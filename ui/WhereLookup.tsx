@@ -19,6 +19,7 @@ import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, reportPages, suggest
 import { ActionRefusal, call } from "./api.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { TextBox } from "./TextBox.tsx";
+import type { Picked } from "./WherePicks.tsx";
 import "./where-lookup.css";
 
 /** The names read for one client: what the box can offer, or why it can't. */
@@ -55,9 +56,11 @@ export type WhereBoxProps = {
   placeholder: string;
   maxLength: number;
   className?: string;
+  /** RB-3b: told of each pick (where its words start), so the form can take it out if its client changes. */
+  onPicked?: ((p: Picked) => void) | undefined;
 };
 
-export function WhereBox({ id, clientKey, clientName, from, value, onChange, placeholder, maxLength, className }: WhereBoxProps) {
+export function WhereBox({ id, clientKey, clientName, from, value, onChange, placeholder, maxLength, className, onPicked }: WhereBoxProps) {
   const box = useRef<HTMLTextAreaElement | null>(null);
   const listId = useId();
   const lineId = `${id}-line`;
@@ -77,7 +80,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     return () => void (live.current = false);
   }, []);
 
-  // A new client: what was typed stays; the names are read again the next time the box is used.
+  // A new client: what was typed stays (the form takes out names picked from the other client's code, ui/WherePicks.tsx);
+  // the names are read again the next time the box is used.
   useEffect(() => {
     forClient.current = clientKey;
     setNames({ state: "idle" });
@@ -195,6 +199,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     const next = withPick(value, at, text, replace, from);
     if (!next) return void (setSaid(WHERE_TEXT.noRoom), setNote(WHERE_TEXT.noRoom));
     onChange(next.text);
+    onPicked?.({ start: next.at, text, in: next.text });
     setCursor(next.cursor);
     setNote(null);
     picked.current = { text: next.text, at: next.cursor };

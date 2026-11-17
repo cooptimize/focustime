@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
+import { SHOTS } from "../shots.ts";
 
 let h: Harness;
 const T = 240_000;
@@ -22,6 +23,17 @@ function actions(page: Page): { action: string; input: Record<string, unknown> }
     }
   });
   return seen;
+}
+const call = <R = unknown>(page: Page, action: string, input: unknown) =>
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: R; error?: string }>;
+async function shot(page: Page, name: string) {
+  if (!SHOTS) return;
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "cooptimize-dark"));
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${SHOTS}/${name}-dark.png` });
+  await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
+  await page.emulateMedia({ colorScheme: "light" });
 }
 const form = (page: Page) => page.getByRole("dialog", { name: /^New (in .*DevOps|work item)$/ });
 const whereBox = (scope: Locator) => scope.locator('textarea[data-question="where"]');
@@ -94,6 +106,110 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     expect(sent.client).toBe("Atlas");
     expect(String(sent.where)).not.toMatch(/SalesLine|dim\.Store|Gold/);
     expect(sent.where).toBe("The totals and");
+    await page.close();
+  }, T);
+
+  it("the New form: the line and Undo, an edited pick stays as typed, a second change the same, and nothing of the picks is kept", async () => {
+    const { page, errors } = await freshPage(h, VIEW);
+    const seen = actions(page);
+    const f = await openNew(page, "Northwind");
+    await f.getByRole("radio", { name: "User Story" }).click();
+    await f.locator("#nf-title").fill("Store totals");
+    const box = whereBox(f);
+    await box.focus();
+    await page.keyboard.type("The fact.sal");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "fact.SalesLine");
+    await page.keyboard.type(" totals and dim.sto");
+    await list(page).waitFor();
+    await downTo(page, "dim.Store");
+    const both = "The fact.SalesLine (table, Gold warehouse) totals and dim.Store (table, Gold warehouse)";
+    await expect(box.inputValue()).resolves.toBe(both);
+
+    // A client change: the picks go, the typed words stay, one line with Undo, heard by a screen reader.
+    await choose(page, f, "Client", "Atlas");
+    await expect(box.inputValue()).resolves.toBe("The totals and");
+    const line = f.locator("[data-where-picks]");
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 2 names picked from Northwind's code.");
+    await expect(line.getByRole("button", { name: "Undo: put back the 2 names" }).count()).resolves.toBe(1);
+    await shot(page, "rb3b-taken-out");
+    // Undo puts them back, and says once whose code they are from.
+    await line.getByRole("button", { name: /^Undo/ }).click();
+    await expect(box.inputValue()).resolves.toBe(both);
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 2 names. They're from Northwind's code, not Atlas's.");
+    await expect(line.getByRole("button").count()).resolves.toBe(0);
+    await shot(page, "rb3b-put-back");
+
+    // An edited pick is typed text: edit the first, change client again, and only the second goes.
+    await box.focus();
+    await box.evaluate((t: HTMLTextAreaElement, n) => t.setSelectionRange(n, n), "The fact.SalesLine (table, Gold".length);
+    await page.keyboard.type("en");
+    const edited = "The fact.SalesLine (table, Golden warehouse) totals and dim.Store (table, Gold warehouse)";
+    await expect(box.inputValue()).resolves.toBe(edited);
+    await choose(page, f, "Client", "Harbor");
+    await expect(box.inputValue()).resolves.toBe("The fact.SalesLine (table, Golden warehouse) totals and");
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 1 name picked from Northwind's code.");
+    // Back to Northwind: nothing comes back by itself, and the old Undo is gone.
+    await choose(page, f, "Client", "Northwind");
+    await expect(box.inputValue()).resolves.toBe("The fact.SalesLine (table, Golden warehouse) totals and");
+    await expect(line.getByRole("button").count()).resolves.toBe(0);
+
+    // The create is never held up, and carries only the box's text: no pick, client or path goes with it.
+    await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
+    await f.locator("#nf-title").press("Control+Enter");
+    await expect.poll(() => sentWhere(seen), { timeout: 30_000 }).not.toBeNull();
+    const last = [...seen].reverse().find((s) => s.action === "devops.preview" || s.action === "draft.add")!;
+    expect(JSON.stringify(last.input)).not.toMatch(/"picks?"|start|Northwind's code|a1b2c3d4|\.sql"/);
+    const kept = await page.evaluate(async () => {
+      const all: string[] = [];
+      for (const s of [localStorage, sessionStorage]) for (let i = 0; i < s.length; i++) all.push(`${s.key(i)}=${s.getItem(s.key(i)!)}`);
+      const caches_ = "caches" in window ? await caches.keys() : [];
+      for (const k of caches_) for (const r of await (await caches.open(k)).keys()) all.push(r.url);
+      const dbs = indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name ?? "") : [];
+      return [...all, ...dbs].join("\n");
+    });
+    expect(kept).not.toMatch(/SalesLine|dim\.Store|Gold|picked/);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("the draft editor: the same on a client change, and the saved draft keeps only the text", async () => {
+    const { page, errors } = await freshPage(h, VIEW);
+    const f = await openNew(page, "Northwind");
+    await f.getByRole("radio", { name: "User Story" }).click();
+    await f.locator("#nf-title").fill("Region view check");
+    await f.getByRole("button", { name: "Save as draft" }).click();
+    await expect.poll(() => f.count(), { timeout: 30_000 }).toBe(0);
+    const load = async () => (await call<{ drafts: { id: number; title: string; clientKey: string; answers?: Record<string, string> | null }[] }>(page, "capture.load", {})).data.drafts.find((x) => x.title === "Region view check")!;
+    const d = await load();
+    await page.evaluate((i) => (location.hash = `#/inbox/item/d${i}`), d.id);
+    await page.locator("li.ib4-row.open").getByRole("button", { name: "Edit draft" }).click({ timeout: 30_000 });
+    const ed = page.locator(".draft-editor");
+    await ed.waitFor();
+    const box = whereBox(ed);
+    await box.focus();
+    await page.keyboard.type("Check dim.vst");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "dim.vStoreRegion");
+    await page.keyboard.type(" by hand");
+    await expect(box.inputValue()).resolves.toBe("Check dim.vStoreRegion (view, Gold warehouse) by hand");
+    await ed.getByRole("combobox", { name: "Client" }).selectOption("Atlas");
+    await expect(box.inputValue()).resolves.toBe("Check by hand");
+    const line = ed.locator("[data-where-picks]");
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 1 name picked from Northwind's code.");
+    await line.getByRole("button", { name: /^Undo/ }).click();
+    await expect(box.inputValue()).resolves.toBe("Check dim.vStoreRegion (view, Gold warehouse) by hand");
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 1 name. It's from Northwind's code, not Atlas's.");
+    // A second change: the same again; then save. The draft's row holds the text only.
+    await ed.getByRole("combobox", { name: "Client" }).selectOption("Harbor");
+    await expect(box.inputValue()).resolves.toBe("Check by hand");
+    await ed.getByRole("button", { name: /^Save/ }).first().click();
+    await expect.poll(() => ed.count(), { timeout: 30_000 }).toBe(0);
+    const after = await load();
+    expect(after.clientKey).toBe("Harbor");
+    expect(after.answers).toEqual({ where: "Check by hand", change: "", check: "" });
+    expect(JSON.stringify(after)).not.toMatch(/vStoreRegion|Gold|Northwind's code|pick/);
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 });
