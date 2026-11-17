@@ -28,7 +28,8 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
 import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
-import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
+import { createPlanStore, openPlanDb, planStoreOn, SOLO_USER, type PlanStore } from "../store/plan-store.ts";
+import { exportUser } from "../store/user-data.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
 import { fakeKeyProvider } from "../store/user-secrets.ts";
@@ -84,7 +85,12 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const devops = createDemoDevOps({ items: demoItems(), people: demoDevOpsPeople(), now: opts.now });
   const outlook = createDemoOutlook({ now: opts.now });
   const sources = createDemoSources(devops, outlook, opts.now, (k) => rulesOf(k), (k) => scopeOf(k));
-  const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
+  const zoned = () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ);
+  // FT-1, a test seam: with FOCUSTIME_TEST_DEMO_EXPORT=1 (set only by e2e/shell/guide-tour.test.ts) the demo's plan
+  // store can be read back with Export my data, so the tours' "the plan store is unchanged" check runs on the demo.
+  // Unset (everywhere else), nothing changes: the demo has no export.
+  const readBack = !opts.plan && process.env.FOCUSTIME_TEST_DEMO_EXPORT === "1" ? sqliteConn(openPlanDb({ path: ":memory:", now: zoned })) : null;
+  const plan = opts.plan ?? (readBack ? planStoreOn(readBack, { now: zoned, userId: SOLO_USER }) : createPlanStore({ path: ":memory:", now: zoned }));
   // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
   // The demo reads no messages, so Refresh has nothing to do.
   const instant = () => Temporal.Instant.from(opts.now());
@@ -275,6 +281,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     azure: demoAzure.azure,
     feedback: { demo: feedback, sender: async () => ({ name: DEMO_PERSON.name, email: DEMO_PERSON.email }) },
     // P1: the demo's notifications stay in the page: a test lands in ⋯ › Notifications (no desktop, no push).
+    ...(readBack ? { myData: { export: () => exportUser(readBack, { id: SOLO_USER, tenantId: "", upn: DEMO_PERSON.username, displayName: DEMO_PERSON.name, email: DEMO_PERSON.email, timeZone: DEMO_TZ, createdAt: "", lastSignInAt: "", deletedAt: null }, instant()), remove: async () => Promise.reject(new Error("Not in the demo")) } } : {}),
     notifications: {
       test: async () => void (await plan.addNotice({ key: `test:${opts.now()}`, kind: "test", title: "FocusTime", body: "Test notification. It shows here and as a toast.", route: "settings:notifications" })),
       sample: async () => false,

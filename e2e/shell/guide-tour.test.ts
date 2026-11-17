@@ -115,7 +115,8 @@ async function walk(page: Page, t: Tour, frames: string | null): Promise<string[
 
 describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
   beforeAll(async () => {
-    h = await startDemo();
+    // FT-1: the demo's plan store can be read back here (server/demo.ts's test seam), so "unchanged" is checked.
+    h = await startDemo("chromium", { FOCUSTIME_TEST_DEMO_EXPORT: "1" });
     you = await person(h);
   }, T);
   afterAll(async () => h?.stop());
@@ -175,7 +176,8 @@ describe.skipIf(!CHROMIUM)("UI-5: Start here and the tours", () => {
         const extra = [...new Set(calls)].filter((a) => !baseline.includes(a) && a !== "data.export_mine");
         expect(extra, "actions the tour added").toEqual([]);
         const after = await snapshot(page);
-        if (before !== null) expect(after).toBe(before);
+        expect(before, "the plan store can be read back").not.toBeNull();
+        expect(after).toBe(before);
         expect(errors).toEqual([]);
         await page.close();
       });

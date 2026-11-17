@@ -1,7 +1,6 @@
 {
  "source": "ci runs 43880638572, 43882543516",
  "files": {
-  "e2e/admin/admin-screens-shots.test.ts": 1,
   "e2e/admin/console.test.ts": 9.1,
   "e2e/admin/delivery-chats.test.ts": 13.8,
   "e2e/admin/invite-send.test.ts": 12.8,

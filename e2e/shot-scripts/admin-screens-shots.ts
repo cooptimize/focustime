@@ -1,10 +1,11 @@
-// Was e2e/adm2-shots.test.ts (ADM-2) until BT-1.
+// Was e2e/adm2-shots.test.ts (ADM-2) until BT-1, then e2e/admin/admin-screens-shots.test.ts until FT-1, which moved it
+// here with the other screenshot scripts: its one check (nothing wider than the phone) runs in CI now, in
+// e2e/admin/admin-phone-width.test.ts. Usage: FOCUSTIME_SHOTS=screenshots/adm2 npm run shots -- e2e/shot-scripts/admin-screens-shots.ts.
 // ADM-2: the screenshots for the report (demo data only), when FOCUSTIME_SHOTS names a folder: Admin › Clients
 // (Customers and All accounts), Admin › AI, Admin › People (the rows, the Not Cooptimizers fold, the mapping table),
 // Admin › Status, the side menu scrolled to the bottom with Admin folded and unfolded, and the phone picker; at
-// 1920×1080, 1366×768, Text size Larger and a phone (390×844, a 17px root font as on iPhone). The phone pass also checks
-// that the page scrolls and nothing is wider than the screen.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+// 1920×1080, 1366×768, Text size Larger and a phone (390×844, a 17px root font as on iPhone).
+import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
@@ -93,10 +94,7 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
       await page.evaluate((x) => (location.hash = `#/settings/${x}`), id);
       await page.locator(".ps-head h2").waitFor();
       await page.waitForTimeout(600);
-      const m = await page.evaluate(() => ({ over: document.documentElement.scrollWidth - document.documentElement.clientWidth, scrolls: document.scrollingElement!.scrollHeight > innerHeight }));
-      expect(m.over, `${id} is wider than the phone`).toBeLessThanOrEqual(0);
       await page.screenshot({ path: `${SHOTS}/adm2-phone-${id}.png` });
-      void m.scrolls;
     }
     await page.close();
   }, T);
