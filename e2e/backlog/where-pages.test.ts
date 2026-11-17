@@ -77,7 +77,8 @@ describe.skipIf(!CHROMIUM)("RB-3b: pages in today's report format and a one-file
     await box.focus();
 
     // A report in today's format: "Pages" lists its pages in the report's own order, the hidden one marked.
-    await page.keyboard.type("The regio");
+    // Two words typed as one name: the pick from its pages replaces them both (review 3).
+    await page.keyboard.type("The region revi");
     await list(page).waitFor({ timeout: 30_000 });
     await downTo(page, "Region review, Report", "ArrowRight");
     await option(page, /^Summary, Page of Region review/).waitFor({ timeout: 30_000 });

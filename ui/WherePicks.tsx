@@ -91,7 +91,17 @@ export function WherePicksLine({ state, className }: { state: ReturnType<typeof 
       {l?.kind === "taken" && (
         <>
           {" "}
-          <button type="button" className="link-btn" aria-label={PICKS_TEXT.undoLabel(l.n)} onClick={state.undo}>
+          <button
+            type="button"
+            className="link-btn"
+            aria-label={PICKS_TEXT.undoLabel(l.n)}
+            onClick={(e) => {
+              // The button goes once it is used: focus goes to the box the names went back into (review 3).
+              const box = e.currentTarget.closest("[role=dialog]")?.querySelector<HTMLTextAreaElement>('textarea[data-question="where"]');
+              state.undo();
+              requestAnimationFrame(() => box?.isConnected && box.focus());
+            }}
+          >
             {PICKS_TEXT.undo}
           </button>
         </>

@@ -33,7 +33,7 @@ type Names =
 type Inner = { state: "loading"; list: WhereMore } | { state: "ready"; rows: WhereInner[]; note?: string; /** A one-file model's table: its name. */ title?: string } | { state: "failed"; line: string };
 
 /** What the list shows: closed, the matches for the word being typed, or browsing (a level, or a thing's second level). */
-type Mode = { type: "closed" } | { type: "typing" } | { type: "browse"; at: string | null; inner: string | null; /** Opened from typing: a pick replaces the word. */ replace: boolean; trail: { at: string | null; inner: string | null }[]; /** Back from its first level goes back to the matches. */ fromTyping?: boolean };
+type Mode = { type: "closed" } | { type: "typing" } | { type: "browse"; at: string | null; inner: string | null; /** Opened from typing: a pick replaces the word. */ replace: boolean; trail: { at: string | null; inner: string | null }[]; /** Back from its first level goes back to the matches. */ fromTyping?: boolean; /** RB-3b review 3: where the words typed before it opened start, so a pick from it replaces them all. */ phraseFrom?: number };
 
 /** One row of the list as drawn and as the keys move through it. */
 type Row =
@@ -88,6 +88,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     setInner(new Map());
     setMode({ type: "closed" });
     setNote(null);
+    // RB-3b review 3: "Added <name>." isn't left standing for names a client change may have taken out.
+    setSaid("");
   }, [clientKey]);
 
   const read = useCallback(() => {
@@ -203,7 +205,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   const pick = (text: string, name: string, replace: boolean) => {
     const at = caret();
     // A phrase being typed ("load sa") is replaced whole when the pick came from its matches.
-    const from = replace && matches && at === cursor ? matches.start : undefined;
+    // RB-3b review 3: a pick from a level opened while typing ("region review", Right, a page) replaces the whole phrase.
+    const from = !replace ? undefined : mode.type === "browse" && mode.phraseFrom !== undefined ? mode.phraseFrom : matches && at === cursor ? matches.start : undefined;
     const next = withPick(value, at, text, replace, from);
     if (!next) return void (setSaid(WHERE_TEXT.noRoom), setNote(WHERE_TEXT.noRoom));
     onChange(next.text);
@@ -248,8 +251,9 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (r.type !== "entry" || !r.opens) return;
     if (mode.type === "typing") {
       // From typing: browsing starts at this thing, and a pick from it still replaces the word typed.
-      setMode({ type: "browse", at: r.entry.more ? null : r.entry.id, inner: r.entry.more ? r.entry.id : null, replace: true, trail: [{ at: null, inner: null }], fromTyping: true });
-      setActive(0);
+      setMode({ type: "browse", at: r.entry.more ? null : r.entry.id, inner: r.entry.more ? r.entry.id : null, replace: true, trail: [{ at: null, inner: null }], fromTyping: true, ...(matches ? { phraseFrom: matches.start } : {}) });
+      // A level opened with Right starts on its first row (after Back), from typing as from browsing (review 3).
+      setActive(1);
     } else if (mode.type === "browse") goTo(r.entry.more ? { at: mode.at, inner: r.entry.id } : { at: r.entry.id, inner: null });
     if (r.entry.more) readInner(r.entry);
   };
@@ -386,7 +390,8 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     const e = r.entry;
     const marked = mode.type === "typing" ? markMatches(e.name, matches?.typed.split(/\s+/).pop() ?? "") : [{ text: e.name, hit: false }];
     const what = `${lineOf(e)}${manyRepos ? ` · ${e.repoName}` : ""}`;
-    const opener = e.more ? WHERE_TEXT.open[e.more] : WHERE_TEXT.open.list;
+    // A model opens to its tables, whether they come from file names or from its one file (review 3).
+    const opener = e.more ? WHERE_TEXT.open[e.more] : e.kind === "model" ? WHERE_TEXT.open.tables : WHERE_TEXT.open.list;
     return (
       <li key={r.key} {...common} aria-label={`${e.name}, ${what}${r.opens ? `. Right arrow: ${opener}` : ""}`} onClick={() => choose(r)}>
         <Icon name={KIND_ICON[e.kind]} />
@@ -468,7 +473,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
           tabIndex={-1}
           aria-keyshortcuts="Alt+ArrowDown"
           aria-label={clientKey ? WHERE_TEXT.browse(clientName) : WHERE_TEXT.chooseClient}
-          title={clientKey ? WHERE_TEXT.browse(clientName) : WHERE_TEXT.chooseClient}
+          title={clientKey ? WHERE_TEXT.browseTip(clientName) : WHERE_TEXT.chooseClient}
           data-off={canLook ? undefined : ""}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => (canLook || !clientKey ? browse() : box.current?.focus())}

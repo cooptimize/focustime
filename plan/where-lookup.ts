@@ -379,6 +379,8 @@ export const innerMatches = (inner: readonly WhereInner[], word: string): WhereI
 /** RB-3: every word the lookup shows, here and nowhere else (docs/design/wording.md, "Where is it?"). */
 export const WHERE_TEXT = {
   browse: (client: string) => `Browse ${client}'s code`,
+  // RB-3b review 3: the button is out of the Tab order, so its tooltip names its key.
+  browseTip: (client: string) => `Browse ${client}'s code (Alt+Down)`,
   listName: (client: string) => `Names in ${client}'s code`,
   chooseClient: "Choose a client first",
   chooseClientLine: "Choose a client first, then you can choose from its code.",

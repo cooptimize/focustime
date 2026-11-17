@@ -136,6 +136,8 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     // Undo puts them back, and says once whose code they are from.
     await line.getByRole("button", { name: /^Undo/ }).click();
     await expect(box.inputValue()).resolves.toBe(both);
+    // Focus goes back to the box the names went into (review 3).
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-question"))).toBe("where");
     await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 2 names. They're from Northwind's code, not Atlas's.");
     await expect(line.getByRole("button").count()).resolves.toBe(0);
     await shot(page, "rb3b-put-back");
