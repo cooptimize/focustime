@@ -968,6 +968,16 @@ describe("WK-3", () => {
     await s.a.confirm(none.proposals[0]!.id);
     expect(s.writes().at(-1)).toMatchObject({ input: { items: ["fabric.warehouse_sql", "fabric.reports"] } });
   });
+  it("UC-2: with no title in my words, the deployment gets the made title the capture box gives", async () => {
+    let s!: ReturnType<typeof setup>;
+    s = setup({ handlers: { "deploy.add": (i) => deployFake(s)(i), "deploy.items": async () => ITEMS } });
+    s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "09:00", end: "11:00", title: null, note: null, items: [], itemIds: [] }]), say("Here."));
+    const r = await s.a.handle("Plan a Fabrikam deployment Saturday 9 to 11");
+    // UC-2 2: the made title isn't quoted into the proposal's line; the line names the day.
+    expect(r.proposals[0]!.title).toBe("Plan the Sat, Nov 7 deployment, 9:00–11:00");
+    await s.a.confirm(r.proposals[0]!.id);
+    expect(s.writes().at(-1)).toMatchObject({ action: "deploy.add", input: { title: "Deployment - Fabrikam - Sat, Nov 7" } });
+  });
   it("refuses a deployment without a valid window or with an item nobody named", async () => {
     const s = setup();
     s.script(["plan_deployment"], call(["plan_deployment", { date: SAT, start: "11:00", end: "09:00", title: null, note: null, items: [], itemIds: [] }]), say("I couldn't."));

@@ -195,11 +195,11 @@ describe("ED-2: a title and a parent in the change set's one write per item", ()
     await refused(500, "title", "   ", "Import mapping", /Type a title/);
     await refused(500, "title", "x".repeat(256), "Import mapping", /at most 255 characters/);
     await refused(500, "parent", { id: 500, title: "" }, { id: 437, title: "Import" }, /can't be its own parent/);
-    await refused(500, "parent", { id: 600, title: "" }, { id: 437, title: "Import" }, /doesn't go under an Epic/);
+    await refused(500, "parent", { id: 600, title: "" }, { id: 437, title: "Import" }, /Epic isn't the level above/);
     await refused(500, "parent", { id: 439, title: "" }, { id: 437, title: "Import" }, /only under open parents/);
     await refused(500, "parent", { id: 700, title: "" }, { id: 437, title: "Import" }, /isn't in Cooptimize's project/);
     await refused(500, "parent", { id: 99999, title: "" }, { id: 437, title: "Import" }, /isn't in Cooptimize's project/);
-    await refused(600, "parent", { id: 437, title: "" }, null, /no level above it/);
+    await refused(600, "parent", { id: 437, title: "" }, null, /is the top level, so it has no parent to change/);
     expect(s.patches().length).toBe(0);
   });
 

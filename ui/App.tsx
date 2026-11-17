@@ -36,7 +36,7 @@ import { BlockPanel, ToPlaceNotice } from "./BlockPanel.tsx";
 import { panelBlock } from "../plan/blockpanel.ts";
 import { takeOffPick } from "./takeoff.ts";
 import { readDayPanel, writeDayPanel } from "./daypanel.ts";
-import { AddPanelCtx } from "./weekctx.ts";
+import { AddPanelCtx, ClientNameCtx } from "./weekctx.ts";
 
 /** WD-1: Thursday and Friday offer next week when it's empty. */
 const nextWeekEmptyDay = (d: IsoDate) => [4, 5].includes(Temporal.PlainDate.from(d).dayOfWeek);
@@ -1887,6 +1887,8 @@ export function App() {
   ) : null;
   // Weekend: "Today" shows the coming week (D36), so say so.
   const localToday = data.planDay.date;
+  // UC-2: client names for rows that show their client (a deployment too narrow for its title).
+  const clientNameOf = clientNames(data);
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   // WK-5: the days Week shows, and the note when a hidden day has open to-dos or is today.
@@ -1977,6 +1979,7 @@ export function App() {
     <DevOpsWork.Provider value={work}>
     <WeekItems.Provider value={weekItems}>
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date, checkins: data.checkins ?? [], resolved: data.planBits?.resolved ?? [] }}>
+    <ClientNameCtx.Provider value={clientNameOf}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsFreshCtx.Provider value={fresh}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
@@ -2671,6 +2674,7 @@ export function App() {
     </DevOpsWriteCtx.Provider>
     </DevOpsFreshCtx.Provider>
     </TimeboxCtx.Provider>
+    </ClientNameCtx.Provider>
     </PlanCtx.Provider>
     </WeekItems.Provider>
     </DevOpsWork.Provider>

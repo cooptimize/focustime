@@ -26,7 +26,7 @@ import { LANG_NAMES, languageOf, tooLargeToColor } from "./languages.ts";
 import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
 import { INSIDE_WORDS_MAX, SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
-import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings, type SqlGrouping } from "../../plan/code-kinds.ts";
+import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings, type SqlGrouping, type SqlType } from "../../plan/code-kinds.ts";
 import { ByKind, InsideResults, NAMES_TEXT, newKindsMemo, SearchChoices, SearchResults, type InsideRun, type KindsMemo, type SearchRun } from "./Names.tsx";
 import type { CodeAt } from "../nav.ts";
 import "./code.css";
@@ -466,6 +466,8 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   const [kindsMemo, setKindsMemo] = useState<Map<string, KindsMemo>>(new Map());
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<Kind | null>(null);
+  // UC-2: one object type under Databases, or all: By kind's and the search's one choice, for this visit only.
+  const [sqlType, setSqlType] = useState<SqlType | null>(null);
   const [scopeAll, setScopeAll] = useState(false);
   const [run, setRun] = useState<SearchRun | null>(null);
   const runId = useRef(0);
@@ -748,6 +750,8 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
         q={q}
         kind={kind}
         onKind={setKind}
+        sqlType={sqlType}
+        {...(narrow ? {} : { onSqlType: setSqlType })}
         scopeAll={!at.clientKey || scopeAll}
         onScope={setScopeAll}
         canScope={!!at.clientKey}
@@ -780,7 +784,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             ) : "message" in kindsState ? (
               <p className="cv-note problem" role="alert" data-code-state={kindsState.code ?? "error"}>{kindsState.message}</p>
             ) : (
-              <ByKind id={at.clientKey!} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
+              <ByKind id={at.clientKey!} narrow={narrow} sqlType={narrow ? null : sqlType} {...(narrow ? {} : { onSqlType: setSqlType })} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
             ))}
           {view === "files" && Array.isArray(repoList) && repoList.length > 1 && (
             <label className="cv-repo">
@@ -888,7 +892,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             )
           ) : /* A search shows only where it was made: one client's results never sit under another client's name. */
           run && run.scope === (at.clientKey ?? null) ? (
-            <SearchResults run={run} kind={kind} onOpen={(clientKey, repoId, file) => ((openingResult.current = true), onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} />
+            <SearchResults run={run} kind={kind} sqlType={narrow ? null : sqlType} onOpen={(clientKey, repoId, file) => ((openingResult.current = true), onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} />
           ) : (
             <p className="cv-empty">{NAMES_TEXT.searchStart}</p>
           )}

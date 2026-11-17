@@ -7,7 +7,7 @@ import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, t
 import type { WeekLoadData } from "../actions/types.ts";
 import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, SIZES, type Capture, type Size } from "../plan/types.ts";
-import { madeTitle, windowProblem, windowText } from "../plan/deploy.ts";
+import { deploymentTitle, madeTitle, windowProblem, windowText } from "../plan/deploy.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
@@ -304,7 +304,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (kind === "deployment" && key) {
       // WK-3: a Deployment is a to-do on its date and window (no capture row); Undo removes it.
       try {
-        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: (body || madeTitle(clientName(key), depDate)).slice(0, 200), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
+        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: deploymentTitle(body, clientName(key), depDate), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
         const moving = itemsSummary(r.pick.deployItems);
         reset();
         setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${moving ? ` · ${moving}` : ""}${r.note ? ` · ${r.note}` : ""}`, body, client: key });

@@ -16,6 +16,45 @@ export const DEPLOYMENT = "Deployment";
  */
 export const madeTitle = (clientName: string, date: IsoDate): string => `${DEPLOYMENT} - ${clientName.replace(/\s+/g, " ").trim().slice(0, 150)} - ${dayLabel(date)}`;
 
+/** The longest title a deployment keeps (the capture box, the day menu and the assistant cut at the same length). */
+export const DEPLOY_TITLE_MAX = 200;
+
+/**
+ * UC-2: the one way a new deployment gets its title, whoever makes it (the capture box, Plan a deployment… from the
+ * day menu or the command menu, the assistant and so the Teams bot): the words typed, or with none the made title.
+ */
+export function deploymentTitle(typed: string | null | undefined, clientName: string, date: IsoDate): string {
+  const words = (typed ?? "").trim();
+  return (words || madeTitle(clientName, date)).slice(0, DEPLOY_TITLE_MAX);
+}
+
+/**
+ * UC-2: whether a deployment's title is one FocusTime made rather than words a person typed: the made form naming the
+ * day the deployment is on, or the bare "Deployment" an untitled one was given before UC-2.
+ */
+export function isMadeTitle(title: string, date: IsoDate): boolean {
+  const t = title.trim();
+  if (t === DEPLOYMENT) return true;
+  const head = `${DEPLOYMENT} - `;
+  const tail = ` - ${dayLabel(date)}`;
+  return t.startsWith(head) && t.endsWith(tail) && t.length > head.length + tail.length;
+}
+
+/**
+ * UC-2: how a sentence names a deployment. A made title is never quoted into a sentence: the sentence names the day
+ * instead ("the Sat, Nov 21 deployment"). A typed title is used as it is.
+ */
+export function deployName(title: string, date: IsoDate): { made: boolean; name: string } {
+  return isMadeTitle(title, date) ? { made: true, name: `the ${dayLabel(date)} deployment` } : { made: false, name: title.trim().replace(/[.!]+$/, "") };
+}
+
+/** UC-2: the line after a deployment is ticked done: "The Sat, Nov 21 deployment is done", or "<typed title> is done". */
+export function doneLine(title: string, date: IsoDate): string {
+  const n = deployName(title, date);
+  return `${n.made ? cap(n.name) : n.name} is done`;
+}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /**
  * UC-1: a title FocusTime made follows its deployment to another day. A title is a made one when it still reads
  * "Deployment - <something> - <the day it was on>"; anything else is the person's own words and is kept as it is.
@@ -153,11 +192,14 @@ export function inEvening(p: Pick, shape: Span | null): boolean {
  * The draft for "Tell <client> it's deployed" (LP-1's Close the loop): who, what went (the note) and the items, then a
  * sign-off. Plain text, always editable in the draft step.
  */
-export function deployedText(o: { who: string | null; clientName: string; title: string; note: string | null; links: readonly TodoLink[]; items?: readonly DeployItem[]; when?: string; myName: string | null }): string {
+export function deployedText(o: { who: string | null; clientName: string; title: string; /** UC-2: the deployment's day, so a made title reads as "The Sat, Nov 21 deployment is done." */ date?: IsoDate; note: string | null; links: readonly TodoLink[]; items?: readonly DeployItem[]; when?: string; myName: string | null }): string {
   const hi = o.who ? `Hi ${firstName(o.who)},` : "Hi,";
   const note = o.note?.trim();
+  // UC-2: a made title isn't quoted; the sentence names the day. A typed title reads as it always did.
+  const named = o.date ? deployName(o.title, o.date) : { made: false, name: o.title.trim().replace(/[.!]+$/, "") };
+  const done = named.made ? `${cap(named.name)} is done.` : `${named.name} is deployed.`;
   // DP-2: the ticked items, then the Note. A deployment with none (every one from before DP-2) reads as it always did.
-  const went = o.items?.length ? [`Deployed ${o.when ?? "today"}: ${o.items.map((i) => i.name).join(", ")}.${note ? ` Also: ${note}` : ""}`] : [`${o.title.trim().replace(/[.!]+$/, "")} is deployed.`, ...(note ? ["", `What went: ${note}`] : [])];
+  const went = o.items?.length ? [`Deployed ${o.when ?? "today"}: ${o.items.map((i) => i.name).join(", ")}.${note ? ` Also: ${note}` : ""}`] : [done, ...(note ? ["", `What went: ${note}`] : [])];
   const lines = [hi, "", ...went];
   if (o.links.length) lines.push("", "Items:", ...o.links.map((l) => `- #${l.id} ${l.title.trim()}`));
   lines.push("", "Let me know if you see anything off.");
@@ -172,7 +214,11 @@ export function deployedWhen(p: Pick, today: IsoDate): string {
 }
 
 /** The promise "Tell <client> it's deployed" opens (a follow-up of mine, kept until the loop is closed or deleted). */
-export const tellWhat = (clientName: string, title: string) => `Tell ${clientName} it's deployed: ${title}`.slice(0, 200);
+export function tellWhat(clientName: string, title: string, date?: IsoDate): string {
+  // UC-2: "Tell Northwind the Sat, Nov 21 deployment is done" for a made title; a typed one reads as before.
+  const named = date ? deployName(title, date) : null;
+  return (named?.made ? `Tell ${clientName} ${named.name} is done` : `Tell ${clientName} it's deployed: ${title}`).slice(0, 200);
+}
 
 /** The "HH:MM" of a local minute count, for windows built from a time picker. */
 export const hm = (n: number) => toHm(Math.max(0, Math.min(1440, n)));

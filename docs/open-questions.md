@@ -1393,3 +1393,17 @@ From the IT review (TD-1):
 - **"Nothing matches" while typing** (review 3). A word that matches nothing shows nothing, as RB-3 decided (the box is a text box then). A quiet "Nothing named drill. Browse with Alt+Down" would help someone looking, and distract someone writing.
 - **Undo on another client** (review 3). Undo puts Northwind's names into Atlas's form and says so; a consultant expected it to switch the client back too. The step decided Undo only puts the names back.
 - **Keeping the Level on a client change** (review 3). The New form resets Level to the new client's default; keeping it when the new client has that type would save a click. Not this step's.
+
+## UC-2
+
+- **The server's `deploy.add` still saves "Deployment" when a caller sends no title.** Every screen and the assistant now send the made title, so only a direct call sees it. Should the server make the title itself? It needs the client's name, which the action has; left as it was, the reading that changes less.
+- **Deployments saved before UC-2 as "Deployment"** keep that title. `isMadeTitle` treats a bare "Deployment" as made, so their sentences still name the day.
+- **QC-1's create rule keeps "a" and "an"** ("A User Story doesn't go under an Epic in this process. Under an Epic go: Feature"), in the New form, drafts and `new_item`. Item 9 named only the move rule. The same rewording would fit it ("In this process, Epic isn't the level above User Story. Under Epic go: Feature").
+- **The No client chip and the Code object type are for the visit only.** Storing them would be a new setting, which UC-2 rules out. Should No client be remembered with the chosen clients?
+- **Code's switch with several databases open** sticks at the top of the Databases group rather than under each one (one switch for all of them, as RB-6 has it). Under each open database it would be several copies of one choice.
+- **Keeping the place across a Schema · Type switch** puts the object at the top of the list back at the same height when it is in both trees, which every object is; with a filter typed the switch is off, as before.
+- **"Exported" for item 11.** `conv.closed_shown_days` is a team Rule in `org_settings`, never in a person's Export. It is still stored, read by the conversations job and returned by `admin.load`; nothing about it changed.
+- **Items 10 to 12 were already done on main** by NM-2 (26463b84). UC-2 adds checks only.
+- **Next round:** the Inbox's chips on the phone have no No client chip (the phone was to stay unchanged); a deployment's weekday card at Larger text could show the window on its own line; Backlog's title is still only part of a 602 px Item cell at 1280 because the parent chip and New under share the line.
+- **Review 1 (a daily user on the pairs), left for the next round:** the Inbox's chip numbers count what needs me (UC-1, the tab's count) while the group headings count every row shown, so "Harbor 1" sits over "Harbor 3"; changing either would change a count's meaning, which UC-2 rules out. The bulk result line reads "State On hold: staged 1, skipped 1." as every bulk action's does ("Set to On hold: 1 staged, 1 skipped" was suggested for all of them). The sticky switch doesn't name the database scrolling under it when several are open.
+- **The Code test "inside a client the search starts on This client" timed out once** in the full browser run under load. RB-3b (f0bebb59, merged into this branch) found and fixed its cause; left here only as a record.

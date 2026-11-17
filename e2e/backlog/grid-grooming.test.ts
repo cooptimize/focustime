@@ -1,6 +1,6 @@
 // Was e2e/ed2-grid.test.ts (ED-2) until BT-1.
 // ED-2 (browser, demo mode): grooming Atlas Freight's backlog in the Grid. Two titles renamed in place (F2 and the
-// hover button, Enter and Tab), an empty one refused where it was typed; a story dragged onto another feature (only the
+// the row's menu, Enter and Tab), an empty one refused where it was typed; a story dragged onto another feature (only the
 // rows that can take it light up, a drop between rows or on a wrong row does nothing, Esc cancels) and another moved
 // with Move… by the keyboard alone; three rows assigned in bulk, State… on mixed types, Move to… blocked for a mixed
 // selection; Review lists Title and Parent; Save writes each item once and never an order field; the ranked list keeps
@@ -100,10 +100,12 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await page.keyboard.press("Escape");
     await expect(row(page, "Shipment list filter by region").count()).resolves.toBe(1);
 
-    // The hover button; Tab stages and moves on to the row's next editable cell.
+    // UC-2: no Rename button on the row; the row's menu has Rename. Tab stages and moves on to the row's next editable cell.
     const copy = row(page, "estimate accuracy report (copy)");
     await copy.hover();
-    await copy.getByRole("button", { name: "Rename estimate accuracy report (copy)" }).click();
+    expect(await copy.getByRole("button", { name: "Rename estimate accuracy report (copy)" }).count()).toBe(0);
+    await copy.getByRole("button", { name: /^More for estimate accuracy report \(copy\)/ }).click();
+    await page.getByRole("menuitem", { name: /^Rename/ }).click();
     await page.getByRole("textbox", { name: "Title of #3342" }).fill("Estimate accuracy report");
     await page.keyboard.press("Tab");
     await expect.poll(() => row(page, "Estimate accuracy report").locator("[data-unsaved=title]").count()).toBe(1);
@@ -176,14 +178,14 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await pick.waitFor({ state: "detached" });
     await expect.poll(() => row(page, "Weekly rate digest").locator("[data-unsaved=parent]").count()).toBe(1);
     await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-item");
-    // An epic has no level above it: Move… says why, where it was tried.
+    // An epic is the top level: Move… says why, where it was tried.
     await pickLevel(page, "Epics");
     // (The Filter popover gives focus back to its button as it closes: wait for that before focusing the row.)
     await page.waitForTimeout(400);
     await itemCell(row(page, "Carrier relations")).focus();
     await expect.poll(() => page.evaluate(() => document.activeElement?.className ?? "")).toContain("ah-col-item");
     await page.keyboard.press("m");
-    await expect(said(page)).resolves.toContain("Epic has no level above it in Logistics's process");
+    await expect(said(page)).resolves.toContain("In Logistics's process, Epic is the top level, so it has no parent to change");
     await page.locator(".error[role=alert]").waitFor();
     await pickLevel(page, "Features");
     for (const f of FEATURES) await open(page, f);
@@ -207,14 +209,22 @@ describe.skipIf(!CHROMIUM)("ED-2 rename, move and bulk edit in Backlog's Grid (b
     await moveTo.focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".bl-why").textContent()).resolves.toBe("Move to… needs rows at one level, so one parent fits them all");
-    // State… on the same mixed selection: only what a Feature and a User Story both take can be picked; the state only
-    // features have is listed with the rows it fits.
+    // State… on the same mixed selection (UC-2): what both types take, then the state only features have, with the
+    // rows it fits. Picked, the feature is staged and the story skipped with the reason; nothing is written.
+    const written = (await log(page)).length;
     await bar.getByRole("button", { name: "State…" }).click();
     const sp = page.locator(".ah-pop-bulk-state");
     await sp.waitFor();
-    await expect(sp.locator("[role=option] .fl-label").allTextContents()).resolves.toEqual(["New", "Active", "Resolved", "Closed", "Removed"]);
-    await expect(sp.getByRole("listitem").allTextContents()).resolves.toEqual(["On hold fits 1 of 2: Feature"]);
-    await page.keyboard.press("Escape");
+    await expect(sp.locator("[role=option] .fl-label").allTextContents()).resolves.toEqual(["New", "Active", "Resolved", "Closed", "Removed", "On hold"]);
+    await expect(sp.getByRole("option", { name: /On hold/ }).textContent()).resolves.toContain("1 of 2: Feature");
+    await sp.getByRole("option", { name: /On hold/ }).click();
+    await expect.poll(() => page.locator(".bl-result").first().textContent()).toContain("State On hold: staged 1, skipped 1. Nothing is written until you save.");
+    await page.locator(".bl-result summary").click();
+    await expect(page.locator(".bl-result li").textContent()).resolves.toContain("On hold isn't a state of User Story in Logistics's process");
+    await expect.poll(() => row(page, "Carrier rate alerts").locator("td.ah-col-state").textContent()).toContain("On hold");
+    expect(await row(page, "Alert settings page").locator("td.ah-col-state").textContent()).not.toContain("On hold");
+    expect((await log(page)).length).toBe(written);
+    await call(page, "ahead.unstage", { clientKey: "Atlas", itemId: 3350, field: "state" });
     // The keyboard alone: Size… from the bar (Enter opens it, type, Enter stages); the feature has no size and is skipped with why.
     await bar.getByRole("button", { name: "Size…" }).focus();
     await page.keyboard.press("Enter");

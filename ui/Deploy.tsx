@@ -2,17 +2,18 @@
 // chip, and the offer after Done: "Tell <client> it's deployed" through LP-1's Close the loop (a draft with the note and
 // the items, the preview, Send only on Confirm), or Not now, which leaves it simply done. No runbook, checklist or
 // status flow: the runbook and the execution stay in Coop.
-import { useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { call } from "./api.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { Modal } from "./DevOpsWrite.tsx";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { SendLoop } from "./SendLoop.tsx";
 import type { WeekLoadData } from "../actions/types.ts";
-import { deployedWhen, afterHoursText, deployedText, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
+import { deployedWhen, afterHoursText, deployedText, doneLine, tellWhat, windowText, type AfterHoursPart } from "../plan/deploy.ts";
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { Icon } from "./icons.tsx";
+import { ClientNameCtx } from "./weekctx.ts";
 
 /** The Deployment icon: a small upward arrow out of a tray (shipping it), drawn in the row's text colour. */
 export function DeployIcon({ title = "Deployment" }: { title?: string }) {
@@ -33,6 +34,52 @@ export function WindowChip({ pick }: { pick: Pick }) {
 
 const WHY: Record<AfterHoursPart["why"], string> = { deployment: "deployment window", evening: "evening", weekend: "weekend" };
 const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short" });
+
+/**
+ * UC-2: a deployment's title on Week's cards. Where the title can't show whole (Week's weekend column, always; a card
+ * too narrow for it, measured: a word wider than the row or more than two lines), it shows its client instead, on its
+ * own whole line, with the window on the line under it as before. The full title is on hover and for a screen reader.
+ * A word is never broken in the middle.
+ */
+export function DeployTitle({ pick, short }: { pick: Pick; /** true: always the client (the weekend column); "auto": the title when it fits. */ short: true | "auto" }) {
+  const name = useContext(ClientNameCtx)(pick.clientKey);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [fits, setFits] = useState(true);
+  useLayoutEffect(() => {
+    const el = measure.current;
+    if (short !== "auto" || !el) return;
+    const check = () => {
+      const cs = getComputedStyle(el);
+      const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 16;
+      setFits(el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().height <= line * 2 + 1);
+    };
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [short, pick.title]);
+  const compact = short === true || !fits;
+  return (
+    <span className={`dep-title${compact ? " compact" : ""}`} data-dep-title={compact ? "client" : "title"} title={compact && pick.window ? `${pick.title} · ${windowText(pick.window)}` : pick.title}>
+      {short === "auto" && (
+        <span ref={measure} className="dep-measure" aria-hidden="true">
+          {pick.title}
+        </span>
+      )}
+      {compact ? (
+        <>
+          <span className="sr-only">{pick.title}</span>
+          <span className="dep-client" aria-hidden="true">
+            {name}
+          </span>
+        </>
+      ) : (
+        pick.title
+      )}
+    </span>
+  );
+}
 
 /** Week's header: "3h after hours this week" beside the borrowed-time chip, with what makes it up in its title. */
 export function AfterHoursChip({ after }: { after: WeekLoadData["afterHours"] }) {
@@ -67,7 +114,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
     setError(null);
     try {
       const r = await call<{ followUp: { id: number } }>("followup.add", {
-        what: tellWhat(clientName, pick.title),
+        what: tellWhat(clientName, pick.title, pick.date),
         clientKey: pick.clientKey,
         ...(who.who.trim() ? { who: who.who.trim(), ...(who.whoRef ? { whoRef: who.whoRef } : {}) } : {}),
         ...(links[0] ? { itemId: links[0].id } : {}),
@@ -91,7 +138,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
       </div>
       {promise === null ? (
         <div className="deployed-ask">
-          <p className="deployed-done"><DeployIcon /> {pick.title} is done</p>
+          <p className="deployed-done" title={pick.title}><DeployIcon /> {doneLine(pick.title, pick.date)}</p>
           <p className="muted">
             {pick.window ? `${windowText(pick.window)} · ` : ""}
             {[pick.deployItems?.map((i) => i.name).join(", "), pick.notes].filter(Boolean).join(" · ") || "No note of what went"}
@@ -111,7 +158,7 @@ export function DeployedOffer({ pick, clientName, demo, today, onDone }: { pick:
           promiseKey={`f${promise}`}
           who={who.who.trim() || null}
           demo={demo}
-          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, note: pick.notes, links, items: pick.deployItems ?? [], when: deployedWhen(pick, today), myName: null }), from: "A plain draft from what the deployment moved. Edit it as you like." }}
+          initialText={{ text: deployedText({ who: who.who.trim() || null, clientName, title: pick.title, date: pick.date, note: pick.notes, links, items: pick.deployItems ?? [], when: deployedWhen(pick, today), myName: null }), from: "A plain draft from what the deployment moved. Edit it as you like." }}
           onClosed={(m) => onDone(m)}
           onCancel={() => void back()}
           closeWithout={async (v) => {

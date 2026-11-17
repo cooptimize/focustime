@@ -6010,6 +6010,18 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .weekend-cell .pick-row:not(.ph-row) .deploy-window, .weekend-cell .pick-row:not(.ph-row) .pick-time { order: 2; }
 .weekend-cell .pick-row:not(.ph-row) .pr-title { order: 3; flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .weekend-cell .pick-row:not(.ph-row) .pr-hover { order: 2; margin-left: auto; }
+/* UC-2: a deployment's title on Week is never broken inside a word. Too narrow for it (the weekend column always), the
+   row shows its client on one whole line instead; the window stays on its own line. .dep-measure is the title laid
+   out unseen at the row's width, to tell whether it fits whole. */
+.pick-row .pr-title.dep, .weekend-cell .pick-row:not(.ph-row) .pr-title.dep { position: relative; overflow-wrap: normal; word-break: normal; }
+.dep-measure { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; white-space: normal; overflow-wrap: normal; word-break: normal; }
+.dep-title.compact .dep-client { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* In the weekend column the tick and the icon leave too little beside them for a client's name: a deployment's
+   window, items and client go on their own full-width line under them. */
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) > .pr-main { flex: 1 1 100%; order: 3; flex-wrap: wrap; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .pr-meta { display: contents; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .deploy-window { order: 2; flex: 1 1 100%; }
+.weekend-cell .pick-row:not(.ph-row):has(.pr-title.dep) .deploy-items-wrap { order: 4; }
 .today-weekend { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
 .today-weekend-head { margin: 0; font-size: var(--fs-4); }
 .today-weekend .we-client { font-size: var(--fs-2); margin-left: 6px; }
@@ -7446,10 +7458,10 @@ button:disabled { cursor: default; }
 .ah-rename-box[aria-invalid="true"] { border-color: var(--risk); }
 .ah-rename-why { position: absolute; left: 0; top: calc(100% + 4px); z-index: 5; max-width: 420px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--raised); color: var(--text); font-size: var(--fs-2); box-shadow: var(--shadow-pop); }
 /* Rename and the row's ⋯ show on hover and on focus, like New under. */
-.ah-rename-btn, .ah-row-more { flex: none; visibility: hidden; }
+.ah-row-more { flex: none; visibility: hidden; }
 .ah-row-more { width: calc(22px * var(--text-scale)); height: calc(22px * var(--text-scale)); margin-block: calc(-2px * var(--text-scale)); }
-.ah-row:is(:hover, :focus-within) :is(.ah-rename-btn, .ah-row-more), .pa-row:is(:hover, :focus-within) .ah-row-more, :is(.ah-rename-btn, .ah-row-more):focus-visible { visibility: visible; }
-@media (hover: none) { .ah-rename-btn, .ah-row-more { visibility: visible; } }
+.ah-row:is(:hover, :focus-within) .ah-row-more, .pa-row:is(:hover, :focus-within) .ah-row-more, .ah-row-more:focus-visible { visibility: visible; }
+@media (hover: none) { .ah-row-more { visibility: visible; } }
 .pa-label .ah-row-more { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; background: var(--surface); box-shadow: 0 0 0 4px var(--surface); }
 .pa-label:has(.ah-new-under) .ah-row-more { right: calc(96px * var(--text-scale)); }
 /* A drag onto a new parent: only the rows that can take it light up; the row under the pointer says where it goes. */
@@ -7460,7 +7472,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .ah-row.ah-drop-ok > td { background: color-mix(in oklab, var(--selected) 10%, transparent); box-shadow: inset 0 1px 0 var(--selected), inset 0 -1px 0 var(--selected); }
 .ah-row.ah-drop-on > td { background: color-mix(in oklab, var(--selected) 26%, transparent); box-shadow: inset 0 2px 0 var(--selected), inset 0 -2px 0 var(--selected); }
 .ah-item { position: relative; }
-.ah-grid-box.dragging .ah-row :is(.ah-rename-btn, .ah-row-more, .ah-new-under) { visibility: hidden; }
+.ah-grid-box.dragging .ah-row :is(.ah-row-more, .ah-new-under) { visibility: hidden; }
 .pa-unsaved { margin-left: 6px; }
 .pa-label .ah-rename { margin-right: 6px; }
 .ah-drop-say { position: absolute; right: 6px; top: 0; font-size: var(--fs-1); font-weight: 600; white-space: nowrap; max-width: 46%; overflow: hidden; text-overflow: ellipsis; border-radius: 999px; padding: 0 8px; background: var(--action); color: var(--on-action); }
@@ -7472,9 +7484,6 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* The bulk bar's four pickers: a button that can't open for these rows stays reachable and says why. */
 .bl-bulk .mini.bl-off { color: var(--text-faint); }
 .bl-result.bl-why { color: var(--text); }
-.bl-state-partial { display: flex; flex-direction: column; gap: 4px; }
-.bl-state-partial [role="list"] { display: flex; flex-direction: column; gap: 2px; }
-.bl-state-fit { display: flex; align-items: center; gap: 6px; color: var(--text); }
 .ah-pop-bulk-state { width: min(380px, 92vw); }
 
 /* ---- RB-6: six tabs (Code for the people who may read code) ------------------------------------------------------ */

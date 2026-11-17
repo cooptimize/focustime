@@ -280,3 +280,21 @@ describe("one home per thing (RB-6)", () => {
     expect(searchThings(sorted.things, "loose", "script").map((x) => x.name)).toEqual(["Loose"]);
   });
 });
+
+describe("UC-2: one object type under Databases, in the search", () => {
+  const db = "/lake/Gold.Warehouse";
+  const things = thingsOf([`${db}/.platform`, `${db}/dbo/Tables/Store.sql`, `${db}/dbo/Views/StoreSales.sql`, `${db}/dbo/StoredProcedures/LoadStore.sql`, `${db}/dbo/Functions/StoreMargin.sql`, "/scripts/store_cleanup.sql"]);
+  const names = (kind: Parameters<typeof searchThings>[2], type: Parameters<typeof searchThings>[4]) => searchThings(things, "store", kind, [], type).map((h) => h.name).sort();
+  it("narrows Databases to that type only; all types shows what it shows today", () => {
+    expect(names("database", "table")).toEqual(["Store"]);
+    expect(names("database", "view")).toEqual(["StoreSales"]);
+    expect(names("database", "procedure")).toEqual(["LoadStore"]);
+    expect(names("database", "function")).toEqual(["StoreMargin"]);
+    expect(names("database", null)).toEqual(searchThings(things, "store", "database").map((h) => h.name).sort());
+    expect(names("database", null)).toEqual(["LoadStore", "Store", "StoreMargin", "StoreSales"]);
+  });
+  it("means nothing under another kind", () => {
+    expect(names(null, "table")).toEqual(searchThings(things, "store").map((h) => h.name).sort());
+    expect(names("script", "table")).toEqual(searchThings(things, "store", "script").map((h) => h.name).sort());
+  });
+});

@@ -19,7 +19,7 @@ import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
 import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek, type Size } from "../plan/types.ts";
-import { DEPLOYMENT, windowText } from "../plan/deploy.ts";
+import { DEPLOYMENT, deploymentTitle, windowText } from "../plan/deploy.ts";
 import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
@@ -520,18 +520,20 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
       const itemIds = v.item ? [Number(v.item)] : [];
       // DP-2: the ticks, once the list has loaded (else the server keeps what it has, or uses the client's defaults).
       const items = v.items ? { items: JSON.parse(v.items) as string[] } : {};
+      // UC-2: with no What the deployment is titled as capture titles it ("Deployment - <client> - <date>").
+      const title = p ? "" : deploymentTitle(v.title, clients.find((c) => c.value === v.client)?.label ?? v.client ?? "", v.date!);
       if (p) {
         const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}), ...items };
         return setKind(env, p, input, p.todoKind === "deployment" ? `Deployment saved · ${windowText({ start: v.start!, end: v.end! })}` : `Now a deployment · ${windowText({ start: v.start!, end: v.end! })}`);
       }
       return env.planAction
-        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items }).then((r) => {
+        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items }).then((r) => {
             const id = (r as { pick?: { id: number } } | null)?.pick?.id;
             const note = (r as { note?: string | null } | null)?.note;
             if (id && env.undoable) env.undoable(`Deployment planned for ${weekdayLong(v.date!)} ${windowText({ start: v.start!, end: v.end! })}${note ? ` · ${note}` : ""}`, () => env.runPlan("pick.remove", { id }));
             return !!r;
           })
-        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, ...(v.title ? { title: v.title } : {}), ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items });
+        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items });
     },
   };
 }

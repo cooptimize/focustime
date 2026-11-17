@@ -7,11 +7,11 @@
 // RB-4: the search box has a switch, Names · Inside files. Inside files asks each client's DevOps code search which
 // files hold the words (code.inside): for that search, and only that one, the words go through FocusTime's server to
 // DevOps. Its results are files, never lines: no text of a file shows until a person opens it.
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons.tsx";
-import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, type SqlGrouping, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
+import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, sqlTypePasses, type SqlGrouping, type SqlType, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
 import { INSIDE_MAX, SEARCH_MAX } from "../../plan/code.ts";
-import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, SqlTree, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
+import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, sqlPlace, sqlRestore, SqlTree, SQL_TEXT, SqlTypeSelect, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
 export type NamesClient = { clientKey: string; name: string; color: string | null; locked: boolean };
@@ -91,7 +91,7 @@ export const newKindsMemo = (): KindsMemo => ({ folded: new Set(), whole: new Se
  * what sits inside another (a database's objects, a model's tables) shows only when that one is opened, and the
  * Databases group has the one Group by switch for every database in it.
  */
-export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup, memo, onMemo }: { /** The client's key: this list's own name for what it remembers. */ id: string; repos: RepoThings[]; max: number; selected: { repoId: string | null; path: string | null }; onOpen: (repoId: string, file: string) => void; /** RB-5: SQL objects by schema then type, or by type then schema (the person's own choice). */ sqlGroup: SqlGrouping; onSqlGroup: (g: SqlGrouping) => void; memo: KindsMemo; onMemo: (change: (m: KindsMemo) => KindsMemo) => void }) {
+export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup, memo, onMemo, narrow = false, sqlType = null, onSqlType }: { /** UC-2: the phone's list (unchanged: the switch stays at the top of the group). */ narrow?: boolean; /** UC-2: one object type under Databases, or all (null); the search's choice too. */ sqlType?: SqlType | null; onSqlType?: (t: SqlType | null) => void; /** The client's key: this list's own name for what it remembers. */ id: string; repos: RepoThings[]; max: number; selected: { repoId: string | null; path: string | null }; onOpen: (repoId: string, file: string) => void; /** RB-5: SQL objects by schema then type, or by type then schema (the person's own choice). */ sqlGroup: SqlGrouping; onSqlGroup: (g: SqlGrouping) => void; memo: KindsMemo; onMemo: (change: (m: KindsMemo) => KindsMemo) => void }) {
   const [filter, setFilter] = useState("");
   const { folded, whole, openModels } = memo;
   const setFolded = (f: (s: ReadonlySet<Kind>) => ReadonlySet<Kind>) => onMemo((m) => ({ ...m, folded: f(m.folded) }));
@@ -112,16 +112,43 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
   const groups = groupThings(shown);
   const keyOf = (t: Row) => `${t.repoId}\u0000${t.folder}\u0000${t.file}`;
   const treeId = (t: Row) => `${id}-${t.repoId}-${t.folder}`;
-  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.sqlType).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
+  const sqlKidsOf = (t: Row, kids: readonly ThingInside[]) => kids.filter((tb) => tb.sqlType && sqlTypePasses(tb, sqlType)).map((tb): SqlRow => ({ ...tb, repoId: t.repoId }));
   // Changing the switch keeps the file on the right and opens the new tree to it.
+  // UC-2: and keeps the place as well as it can: the object at the top of the list (under the sticky row) is opened to
+  // in the new tree and put back where it was on screen; failing that, the database's own row stays where it was.
+  const listRef = useRef<HTMLDivElement>(null);
+  const place = useRef<{ listed: string | null; db: string | null; top: number } | null>(null);
+  const changeGroup = (g: SqlGrouping) => {
+    place.current = sqlPlace(listRef.current);
+    onSqlGroup(g);
+  };
   const wasGroup = useRef(sqlGroup);
   useEffect(() => {
     if (wasGroup.current === sqlGroup) return;
     wasGroup.current = sqlGroup;
-    if (!selected.path) return;
-    const paths = rows.filter((t) => t.repoId === selected.repoId && t.inside?.some((x) => x.file === selected.path)).map((t) => sqlPathTo(treeId(t), sqlKidsOf(t, t.inside!), sqlGroup, selected));
-    onMemo((m) => ({ ...m, sql: paths.reduce(sqlOpened, m.sql) }));
+    const anchor = place.current?.listed ?? null;
+    const want = [selected.path ? { repoId: selected.repoId, path: selected.path } : null, anchor ? { repoId: anchor.slice(0, anchor.indexOf(":")), path: anchor.slice(anchor.indexOf(":") + 1) } : null].filter((x): x is { repoId: string | null; path: string } => !!x);
+    const paths = want.flatMap((w) => rows.filter((t) => t.repoId === w.repoId && t.inside?.some((x) => x.file === w.path)).map((t) => sqlPathTo(treeId(t), sqlKidsOf(t, t.inside!), sqlGroup, w)));
+    if (paths.length) onMemo((m) => ({ ...m, sql: paths.reduce(sqlOpened, m.sql) }));
+    // The place is put back once the new tree is drawn with those folders open (the layout effect below), or as well
+    // as it can be a moment later. With no folder to open nothing else draws, so it is put back now; either way a place
+    // never outlives the moment, so a later, unrelated draw can't move the list.
+    restoreBy.current = Date.now() + 400;
+    const p = place.current;
+    if (p && !paths.length) {
+      place.current = null;
+      requestAnimationFrame(() => sqlRestore(listRef.current, p));
+    } else if (p) setTimeout(() => place.current === p && (place.current = null), 450);
   }, [sqlGroup]); // eslint-disable-line react-hooks/exhaustive-deps
+  const restoreBy = useRef(0);
+  useLayoutEffect(() => {
+    const p = place.current;
+    if (!p || wasGroup.current !== sqlGroup) return;
+    const ready = !p.listed || !!listRef.current?.querySelector(`.cv-sql-row[data-code-listed="${CSS.escape(p.listed)}"]`);
+    if (!ready && Date.now() < restoreBy.current) return;
+    place.current = null;
+    sqlRestore(listRef.current, p);
+  });
   /** RB-6: Expand all and Collapse all, for every database: the rows open (or close) and every folder in their trees. */
   const allDatabases = (open: boolean) => {
     const dbs = rows.filter((t) => t.kind === "database" && sqlKidsOf(t, kidsOf(t)).length);
@@ -142,8 +169,15 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
     return n;
   };
   const notes = repos.flatMap((r) => (r.problem ? [`${r.repo.name}: ${r.problem}`] : r.cut ? [NAMES_TEXT.cut(r.repo.name, max)] : []));
+  /**
+   * UC-2: the one switch stays in view while objects scroll. With one database open it sits under that database's row
+   * and sticks there with it; with none or several open it is at the top of the Databases group and sticks there. The
+   * phone's list is unchanged.
+   */
+  const bar = (sticky: boolean) => <SqlBar grouping={sqlGroup} onGrouping={changeGroup} onAll={allDatabases} disabled={words.length > 0} sticky={sticky} sqlType={sqlType} {...(onSqlType ? { onSqlType } : {})} />;
+  const dbOpen = (t: Row) => (openModels.has(keyOf(t)) || (words.length > 0 && kidsOf(t).some((tb) => tableHit(tb)))) && kidsOf(t).some((tb) => tb.sqlType && sqlTypePasses(tb, sqlType));
   return (
-    <div className="cv-kinds" data-code-kinds="">
+    <div className="cv-kinds" data-code-kinds="" ref={listRef}>
       <input type="search" className="cv-find-input" placeholder={NAMES_TEXT.filter} aria-label={NAMES_TEXT.filter} value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => e.key === "Escape" && filter && (e.preventDefault(), e.stopPropagation(), setFilter(""))} />
       {notes.map((n) => (
         <p key={n} className="cv-note problem" data-code-kinds-note="">
@@ -162,7 +196,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
               <span className="cv-kind-label">{g.label}</span>
               <span className="cv-kind-count">{g.things.length.toLocaleString()}</span>
             </button>
-            {open && g.kind === "database" && <SqlBar grouping={sqlGroup} onGrouping={onSqlGroup} onAll={allDatabases} disabled={words.length > 0} />}
+            {open && g.kind === "database" && (narrow || things.filter(dbOpen).length !== 1) && bar(!narrow && things.some(dbOpen))}
             {open && (
               <ul className="cv-things">
                 {things.map((t) => {
@@ -179,8 +213,9 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                   const kidsLabel = NAMES_TEXT.insideOf(t.name, !!t.tables);
                   const tablesOpen = openModels.has(key) || hits.length > 0;
                   const on = selected.repoId === t.repoId && selected.path === t.file;
-                  return (
-                    <li key={key} className="cv-thing">
+                  // UC-2: an open database's row and the switch under it stay in view while its objects scroll.
+                  const head = !narrow && tablesOpen && sqlKids.length > 0 && things.filter(dbOpen).length === 1;
+                  const row = (
                       <div className={`cv-thing-row${on ? " selected" : ""}`}>
                         {tables.length ? (
                           <button type="button" className="cv-thing-caret" aria-expanded={tablesOpen} aria-label={kidsLabel} title={kidsLabel} onClick={() => setOpenModels((s) => flip(s, key))}>
@@ -198,6 +233,17 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
                           </span>
                         </button>
                       </div>
+                  );
+                  return (
+                    <li key={key} className={`cv-thing${head ? " db-open" : ""}`}>
+                      {head ? (
+                        <div className="cv-db-head" data-sql-head={t.name}>
+                          {row}
+                          {bar(false)}
+                        </div>
+                      ) : (
+                        row
+                      )}
                       {tablesOpen && sqlKids.length > 0 && (
                         <div className="cv-sql-in-item">
                           <SqlTree id={treeId(t)} label={NAMES_TEXT.sqlOf(t.name)} attr="data-code-table" grouping={sqlGroup} selected={selected} onOpen={onOpen} memo={memo.sql} onMemo={onSqlMemo} filtering={tables !== kids} objects={sqlKids} />
@@ -246,7 +292,7 @@ export function ByKind({ id, repos, max, selected, onOpen, sqlGroup, onSqlGroup,
  * This client or All clients (only inside a client), the kind, Search, and one line saying what the search does. The
  * box itself sits in the row above and belongs to this form, so Enter runs it. Nothing is read until Enter or Search.
  */
-export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
+export function SearchChoices({ floating = false, open, q, kind, onKind, sqlType = null, onSqlType, scopeAll, onScope, canScope, disabled, onSearch, inside, onInside }: { /** RB-6: over the page (while browsing) rather than pushing it down (on a results page). */ floating?: boolean; open: boolean; q: string; kind: Kind | null; onKind: (k: Kind | null) => void; /** UC-2: with Databases chosen, one object type or all. */ sqlType?: SqlType | null; onSqlType?: (t: SqlType | null) => void; scopeAll: boolean; onScope: (all: boolean) => void; canScope: boolean; disabled: boolean; onSearch: () => void; inside: boolean; onInside: (inside: boolean) => void }) {
   const ready = inside ? q.trim().length > 0 : searchWords(q).length > 0;
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -289,6 +335,13 @@ export function SearchChoices({ floating = false, open, q, kind, onKind, scopeAl
             </option>
           ))}
         </select>
+        {/* UC-2: with Databases chosen, a second choice narrows the names to one object type. */}
+        {kind === "database" && !inside && onSqlType && (
+          <label className="cv-sql-type cv-search-sqltype-label">
+            <span>{SQL_TEXT.showType}</span>
+            <SqlTypeSelect value={sqlType} onChange={onSqlType} className="cv-search-kind cv-search-sqltype" />
+          </label>
+        )}
         <button type="submit" className="mini primary cv-search-go" disabled={disabled || !ready}>
           Search
         </button>
@@ -314,12 +367,12 @@ export type SearchRun = {
 type Hit = NameHit & { repoId: string; repoName: string };
 
 /** Results by client, then by kind. Up, Down and Enter move through them; at most SEARCH_MAX show. */
-export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kind | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
+export function SearchResults({ run, kind, sqlType = null, onOpen }: { run: SearchRun; kind: Kind | null; /** UC-2: with Databases as the kind, one object type only. */ sqlType?: SqlType | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
   const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
   const byClient = useMemo(() => {
     const found = run.targets.map((c) => {
       const r = run.results.get(c.clientKey);
-      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? []).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
+      return Array.isArray(r) ? r.flatMap((repo) => searchThings(repo.things, run.q, kind, repo.files ?? [], sqlType).map((h): Hit => ({ ...h, repoId: repo.repo.id, repoName: repo.repo.name }))) : [];
     });
     // Over the limit, clients take what is left in order; each still says how many it has.
     const shown = shareCap(found.map((f) => f.length), SEARCH_MAX);
@@ -330,7 +383,7 @@ export function SearchResults({ run, kind, onOpen }: { run: SearchRun; kind: Kin
       return { client: c, state: "ok" as const, hits: found[i]!.slice(0, shown[i]), count: found[i]!.length, many: r.length > 1, problems };
     });
     return { out, total: found.reduce((n, f) => n + f.length, 0) };
-  }, [run, kind]);
+  }, [run, kind, sqlType]);
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const all = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-code-hit]")];
