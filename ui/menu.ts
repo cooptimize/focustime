@@ -1252,6 +1252,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "code.kinds":
     case "code.search":
     case "code.inside":
+    case "code.inner":
       return { disabled: "Open Code to read a client's code" };
     case "setup.load":
     case "setup.prefill":

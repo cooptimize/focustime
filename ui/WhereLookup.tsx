@@ -14,8 +14,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type { RepoThings } from "../plan/code-kinds.ts";
 import { markMatches } from "../plan/code-kinds.ts";
-import type { CodeFileView } from "../plan/code.ts";
-import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, reportPages, suggestAt, tmdlFields, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner } from "../plan/where-lookup.ts";
+import { afterPick, browseLevel, fieldsOf, lineOf, pagesOf, suggestAt, tablesOf, whereEntries, whereRefusal, withPick, wordAt, writtenOf, WHERE_TEXT, type WhereEntry, type WhereFrom, type WhereInner } from "../plan/where-lookup.ts";
+import { WHERE_PAGES_MAX, type InnerAnswer } from "../plan/where-inner.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { Icon, type IconName } from "./icons.tsx";
 import { TextBox } from "./TextBox.tsx";
@@ -29,8 +29,8 @@ type Names =
   | { state: "ready"; entries: WhereEntry[]; repos: number; problems: string[]; /** The client they were read for. */ client: string }
   | { state: "failed"; line: string; retry: boolean };
 
-/** A second level once asked for: its rows, or why there are none. */
-type Inner = { state: "loading" } | { state: "ready"; rows: WhereInner[] } | { state: "failed"; line: string };
+/** A second level once asked for: its rows (with a line when some couldn't be read), or why there are none. */
+type Inner = { state: "loading" } | { state: "ready"; rows: WhereInner[]; note?: string; /** A one-file model's table: its name. */ title?: string } | { state: "failed"; line: string };
 
 /** What the list shows: closed, the matches for the word being typed, or browsing (a level, or a thing's second level). */
 type Mode = { type: "closed" } | { type: "typing" } | { type: "browse"; at: string | null; inner: string | null; /** Opened from typing: a pick replaces the word. */ replace: boolean; trail: { at: string | null; inner: string | null }[]; /** Back from its first level goes back to the matches. */ fromTyping?: boolean };
@@ -39,7 +39,7 @@ type Mode = { type: "closed" } | { type: "typing" } | { type: "browse"; at: stri
 type Row =
   | { key: string; type: "entry"; entry: WhereEntry; opens: boolean }
   | { key: string; type: "folder"; at: string; label: string; count: number }
-  | { key: string; type: "inner"; inner: WhereInner }
+  | { key: string; type: "inner"; inner: WhereInner; /** RB-3b: a one-file model's table opens to its measures and columns. */ opens: boolean }
   | { key: string; type: "back"; label: string };
 
 /** Past this long, the line says the read is still going (typing is never held up by it). */
@@ -118,28 +118,36 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   const matches = useMemo(() => (entries && mode.type === "typing" ? suggestAt(entries, value, cursor) : null), [entries, mode.type, value, cursor]);
   const manyRepos = names.state === "ready" && names.repos > 1;
 
-  /** Reads a report's pages or a table's measures and columns from its one file (logged as a file opened). */
+  /**
+   * RB-3b: lists a report's pages (either format), a table's measures and columns, or a one-file model's tables, on the
+   * server from only the files it needs (code.inner, one row in the Code log per listing). Only names come back.
+   */
   const readInner = (e: WhereEntry) => {
     if (!clientKey || !e.more || inner.get(e.id)?.state === "ready" || inner.get(e.id)?.state === "loading") return;
     const k = clientKey;
+    const list = e.more;
     setInner((m) => new Map(m).set(e.id, { state: "loading" }));
-    call<{ file: CodeFileView }>("code.file", { clientKey: k, repoId: e.repoId, path: e.file }).then(
+    call<InnerAnswer>("code.inner", { clientKey: k, repoId: e.repoId, path: e.file, list }).then(
       (r) => {
         if (!live.current || forClient.current !== k) return;
-        let next: Inner;
-        if (r.file.text === null) next = { state: "failed", line: WHERE_TEXT.innerTooLarge };
-        else if (e.more === "pages") {
-          const pages = reportPages(r.file.text);
-          next = pages === null ? { state: "failed", line: WHERE_TEXT.innerFailed } : pages.length ? { state: "ready", rows: pagesOf(e, pages) } : { state: "failed", line: WHERE_TEXT.innerNone.pages };
+        const next = new Map<string, Inner>();
+        if (r.list === "pages") {
+          const note = r.unreadable ? WHERE_TEXT.pagesUnread(r.unreadable) : undefined;
+          next.set(e.id, r.pages.length ? { state: "ready", rows: pagesOf(e, r.pages), ...(note ? { note } : {}) } : { state: "failed", line: note ?? WHERE_TEXT.innerNone.pages });
+        } else if (r.list === "fields") {
+          const note = r.partsSkipped ? WHERE_TEXT.partsSkipped : r.unreadable ? WHERE_TEXT.partsUnread : undefined;
+          next.set(e.id, r.fields.length ? { state: "ready", rows: fieldsOf(e, r.fields), ...(note ? { note } : {}) } : { state: "failed", line: WHERE_TEXT.innerNone.fields });
         } else {
-          const fields = tmdlFields(r.file.text);
-          next = fields === null ? { state: "failed", line: WHERE_TEXT.innerFailed } : fields.length ? { state: "ready", rows: fieldsOf(e, fields) } : { state: "failed", line: WHERE_TEXT.innerNone.fields };
+          const t = tablesOf(e, r.tables);
+          next.set(e.id, t.rows.length ? { state: "ready", rows: t.rows } : { state: "failed", line: WHERE_TEXT.innerNone.tables });
+          t.rows.forEach((row) => row.opens && next.set(row.opens, { state: "ready", rows: t.levels.get(row.opens) ?? [], title: row.name }));
         }
-        setInner((m) => new Map(m).set(e.id, next));
+        setInner((m) => new Map([...m, ...next]));
       },
       (err: unknown) => {
         if (!live.current || forClient.current !== k) return;
-        const line = err instanceof ActionRefusal && err.code === "not_logged" ? WHERE_TEXT.innerNotLogged : WHERE_TEXT.innerFailed;
+        const code = err instanceof ActionRefusal ? err.code : null;
+        const line = code === "not_logged" ? WHERE_TEXT.innerNotLogged : code === "too_many" ? WHERE_TEXT.tooManyPages(WHERE_PAGES_MAX) : code === "too_large" ? (list === "tables" ? WHERE_TEXT.modelTooLarge : WHERE_TEXT.innerTooLarge) : WHERE_TEXT.innerFailed;
         setInner((m) => new Map(m).set(e.id, { state: "failed", line }));
       },
     );
@@ -153,7 +161,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     if (mode.trail.length) out.push({ key: "back", type: "back", label: WHERE_TEXT.back });
     if (mode.inner) {
       const st = inner.get(mode.inner);
-      if (st?.state === "ready") for (const x of st.rows) out.push({ key: x.id, type: "inner", inner: x });
+      if (st?.state === "ready") for (const x of st.rows) out.push({ key: x.id, type: "inner", inner: x, opens: !!x.opens });
       return out;
     }
     for (const g of browseLevel(entries, mode.at).groups)
@@ -236,6 +244,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   const openRow = (r: Row) => {
     if (r.type === "folder") return goTo({ at: r.at, inner: null });
     if (r.type === "back") return back();
+    if (r.type === "inner") return void (r.inner.opens && mode.type === "browse" && goTo({ at: mode.at, inner: r.inner.opens }));
     if (r.type !== "entry" || !r.opens) return;
     if (mode.type === "typing") {
       // From typing: browsing starts at this thing, and a pick from it still replaces the word typed.
@@ -296,7 +305,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
       e.preventDefault();
       return choose(row);
     }
-    if (e.key === "ArrowRight" && row && (row.type === "folder" || (row.type === "entry" && row.opens))) {
+    if (e.key === "ArrowRight" && row && (row.type === "folder" || ((row.type === "entry" || row.type === "inner") && row.opens))) {
       e.preventDefault();
       return openRow(row);
     }
@@ -363,10 +372,15 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
       );
     if (r.type === "inner")
       return (
-        <li key={r.key} {...common} aria-label={`${r.inner.name}, ${r.inner.line}`} onClick={() => choose(r)}>
+        <li key={r.key} {...common} aria-label={`${r.inner.name}, ${r.inner.line}${r.opens ? `. Right arrow: ${WHERE_TEXT.open.fields}` : ""}`} onClick={() => choose(r)} data-hidden={r.inner.hidden ? "" : undefined}>
           <Icon name={r.inner.what === "page" ? "report" : "table"} />
           <span className="wl-name">{r.inner.name}</span>
           <span className="wl-what">{r.inner.line}</span>
+          {r.opens && (
+            <button type="button" tabIndex={-1} className="wl-open link-btn" onMouseDown={(ev) => ev.preventDefault()} onClick={(ev) => (ev.stopPropagation(), openRow(r))}>
+              {WHERE_TEXT.open.fields} <Icon name="arrow-right" />
+            </button>
+          )}
         </li>
       );
     const e = r.entry;
@@ -388,7 +402,7 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
   };
 
   const st = mode.type === "browse" && mode.inner ? inner.get(mode.inner) : undefined;
-  const title = mode.type === "browse" && entries ? (mode.inner ? entries.find((x) => x.id === mode.inner)?.name : mode.at ? browseLevel(entries, mode.at).title : null) : null;
+  const title = mode.type === "browse" && entries ? (mode.inner ? (entries.find((x) => x.id === mode.inner)?.name ?? (st?.state === "ready" ? st.title : undefined)) : mode.at ? browseLevel(entries, mode.at).title : null) : null;
   const groups = mode.type === "browse" && !mode.inner && entries ? browseLevel(entries, mode.at).groups : null;
 
   // The browse list's rows by group, with headings at the top level (the keys move through `rows` in the same order).
@@ -398,10 +412,10 @@ export function WhereBox({ id, clientKey, clientName, from, value, onChange, pla
     let n = 0;
     const out: ReactNode[] = [];
     if (mode.type === "browse" && mode.trail.length) out.push(draw(rows[n]!, n++));
-    if (st && st.state !== "ready")
+    if (st && (st.state !== "ready" || st.note))
       out.push(
         <li key="inner-state" className="wl-note" role="presentation">
-          {st.state === "loading" ? WHERE_TEXT.innerReading : st.line}
+          {st.state === "loading" ? WHERE_TEXT.innerReading : st.state === "failed" ? st.line : st.note}
         </li>,
       );
     if (groups)

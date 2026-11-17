@@ -1468,9 +1468,11 @@ const shown = (v: string | null) => {
   }
 };
 
-type CodeViewRow = { id: number; at: string; actorId: string; actorName: string; clientKey: string; repoName: string; path: string; event: "repo_opened" | "file_opened" | "find_used" | "kinds_listed" | "names_searched" | "inside_searched" | "where_new_form" | "where_draft_editor" };
+type CodeViewRow = { id: number; at: string; actorId: string; actorName: string; clientKey: string; repoName: string; path: string; event: "repo_opened" | "file_opened" | "find_used" | "kinds_listed" | "names_searched" | "inside_searched" | "where_new_form" | "where_draft_editor" | "pages_listed" | "fields_listed" | "tables_listed" };
 type CodeViewsData = { views: CodeViewRow[]; counts: { clientKey: string; views: number }[]; people: { id: string; name: string }[]; shown: number };
-const CODE_EVENT_WORDS: Record<CodeViewRow["event"], string> = { repo_opened: "Opened the repo", file_opened: "Opened a file", find_used: "Used Find", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files", where_new_form: "Listed names for Where is it? (New form)", where_draft_editor: "Listed names for Where is it? (draft editor)" };
+const CODE_EVENT_WORDS: Record<CodeViewRow["event"], string> = { repo_opened: "Opened the repo", file_opened: "Opened a file", find_used: "Used Find", kinds_listed: "Listed by kind", names_searched: "Searched names", inside_searched: "Searched inside files", where_new_form: "Listed names for Where is it? (New form)", where_draft_editor: "Listed names for Where is it? (draft editor)", pages_listed: "Pages listed", fields_listed: "Measures and columns listed", tables_listed: "Tables listed" };
+/** RB-3b: the rows whose File column names a thing: the file opened, or the report's, table's or model's file a listing read. */
+const CODE_EVENT_PATH = new Set<CodeViewRow["event"]>(["file_opened", "pages_listed", "fields_listed", "tables_listed"]);
 /** RB-1: Admin › Audit › Code views: who opened which client's code, newest first, never any content. */
 function CodeViews() {
   const [clientKey, setClientKey] = useState("");
@@ -1493,7 +1495,7 @@ function CodeViews() {
   return (
     <section className="set-form adm-code-views" data-setting="code-views" aria-labelledby="code-views-h">
       <h3 id="code-views-h">Code views</h3>
-      <p className="muted">Who opened which client's code in Code, and when: the repo, the file or Find. Never any of the code. The newest {data?.shown ?? 200}; kept 12 months.</p>
+      <p className="muted">Who opened which client's code in Code, and when: the repo, the file, Find, or a report's pages and a model's tables or measures listed for Where is it? Never any of the code. The newest {data?.shown ?? 200}; kept 12 months.</p>
       {data && data.counts.length > 0 && (
         <p className="adm-code-counts">
           Last 30 days: {data.counts.map((c) => `${c.clientKey} ${c.views}`).join(" · ")}
@@ -1536,7 +1538,7 @@ function CodeViews() {
                   <td>{v.clientKey}</td>
                   <td>{v.repoName || (v.event === "kinds_listed" || v.event === "names_searched" || v.event === "inside_searched" || v.event === "where_new_form" || v.event === "where_draft_editor" ? "All its repos" : "")}</td>
                   <td>{CODE_EVENT_WORDS[v.event]}</td>
-                  <td className="adm-val">{v.event === "file_opened" ? v.path : ""}</td>
+                  <td className="adm-val">{CODE_EVENT_PATH.has(v.event) ? v.path : ""}</td>
                 </tr>
               ))}
             </tbody>

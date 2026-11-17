@@ -72,7 +72,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     // Every group, in order, with its count; an empty group wouldn't show.
     // RB-6: Lakehouses, Databases and SQL scripts in place of Lakehouses and warehouses and SQL; each thing once.
     expect(await panel(page).locator(".cv-kind-head .cv-kind-label").allTextContents()).toEqual(["Reports", "Semantic models", "Pipelines", "Notebooks", "Dataflows", "Lakehouses", "Databases", "SQL scripts", "Other Fabric items", "Other"]);
-    expect(await group(page, "report").locator("[data-code-thing]").allTextContents()).toEqual(["SalesReport · sales-analytics", "Store visitsReport · store-portal"]);
+    expect(await group(page, "report").locator("[data-code-thing]").allTextContents()).toEqual(["SalesReport · sales-analytics", "Region reviewReport · store-portal", "Store visitsReport · store-portal"]);
     expect(await group(page, "lake").locator(".cv-thing-name").allTextContents()).toEqual(["Bronze"]);
     expect(await group(page, "fabric").locator(".cv-thing-detail").allTextContents()).toEqual(["Activator · sales-analytics"]);
     // RB-6: the warehouse, the SQL database and the SQL project are databases, each with how many objects it holds.
