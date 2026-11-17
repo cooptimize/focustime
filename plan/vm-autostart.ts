@@ -30,7 +30,7 @@ export const PAUSE_AFTER_DAYS = 3;
 /** How far ahead the "Next:" line looks. */
 const LOOK_DAYS = 14;
 
-/** My setting (Settings › Accounts and connections › My VM): off by default; every day my hours cover unless switched off. */
+/** My setting (Settings › Accounts and calendars › My VM): off by default; every day my hours cover unless switched off. */
 export type AutoStartSettings = { on: boolean; minutes: AutoStartMinutes; offDays: WeekdayKey[] };
 export const DEFAULT_AUTOSTART: AutoStartSettings = { on: false, minutes: 0, offDays: [] };
 
@@ -94,7 +94,7 @@ export const isOutcomeReason = (x: unknown): x is OutcomeReason => typeof x === 
 export const OUTCOME_NEXT: Partial<Record<OutcomeReason, string>> = {
   pto_unreadable: "Start it from here if you need it today.",
   sign_in: "Choose Allow Azure access in the VM menu, then start it if you need it.",
-  no_vm: "Choose your VM again in Settings › Accounts and connections › My VM.",
+  no_vm: "Choose your VM again in Settings › Accounts and calendars › My VM.",
   refused: "Start it from here; if Azure refuses again, Settings › Activity has what it said.",
   not_running: "Start it from here if you need it.",
 };

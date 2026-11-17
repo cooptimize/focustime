@@ -343,3 +343,13 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - Backlog's bulk State… on mixed types: see ED-2 words (rewritten for UC-2).
 - The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
 - Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
+
+## VM-3 words (Nov 17)
+
+- The reasons, one list (`OUTCOMES`, `plan/vm-autostart.ts`), each "Left off today: …": **"it is PTO"**, **"it is a holiday"**, **"FocusTime couldn't read your PTO"**, **"your Azure sign-in needs renewing"**, **"FocusTime couldn't find your VM"**, **"Azure refused the start"**, **"FocusTime wasn't running at the time"**. Not told, only shown: **"Started today"**, **"Started today, after your day began"**, **"Already on today"**, **"Not a day you chose"**, **"Skipped today"**, **"Paused"**.
+- What to do next, after the reason: **"Start it from here if you need it today."**, **"Choose Allow Azure access in the VM menu, then start it if you need it."**, **"Choose your VM again in Settings › Accounts and calendars › My VM."**, **"Start it from here; if Azure refuses again, Settings › Activity has what it said."**
+- Notes: **"Holidays couldn't be checked."**, **"Your PTO couldn't be read just now, so FocusTime used what it read earlier."**
+- Settings' line after the planned time: **"Started today at 8:55 AM. Next: Tue, Nov 3 at 8:55 AM"**, **"Left off today: it is PTO. Next: …"**, **"Today's start (8:55 AM) hasn't run yet. Next: …"**. Unread days: **"Your PTO couldn't be read, so a day off may still show a time."**
+- The notice: **"Your VM was left off"** with the reason, and Start. VM-2's **"Auto-start couldn't sign in to Azure"** and **"Auto-start couldn't start your VM"** are kept for those two.
+- Admin › Status: **"Background passes"**; **"<pass> has been running for N minutes, past its N minutes limit. The next pass runs anyway; the work that is stuck is named in the log."**; **"<pass> hasn't finished for N minutes while someone is using FocusTime."**
+

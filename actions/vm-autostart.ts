@@ -198,7 +198,7 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
 }
 
 /** VM-3: the write log's words for a try whose VM record couldn't be found. */
-export const NO_VM_MESSAGE = "Not started: FocusTime couldn't find your VM. Choose it again in Settings › Accounts and connections › My VM";
+export const NO_VM_MESSAGE = "Not started: FocusTime couldn't find your VM. Choose it again in Settings › Accounts and calendars › My VM";
 
 /** Today's PTO and holidays; each null when it can't be read (a read that throws is both). */
 async function daysOffToday(vc: VmContext, cfg: AppConfig, today: string): Promise<{ pto: ReadonlySet<string> | null; holidays: ReadonlySet<string> | null }> {

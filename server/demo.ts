@@ -180,7 +180,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     if (stall && !release) release = () => {};
     const view = passes.passes();
     // Not stalled: a pass now, as the hosted app's would have run a moment ago. Stalled: one that never ends, started once.
-    if (!stall) await Promise.all([passes.pass("fast"), passes.pass("slow")]);
+    await passes.pass("fast");
+    if (!stall) await passes.pass("slow");
     else if (!view.find((x) => x.kind === "slow")?.since) void passes.pass("slow");
     return passes.passes();
   };

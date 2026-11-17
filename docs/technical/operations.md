@@ -67,6 +67,8 @@ One pure module decides it: `config/background-policy.ts`. `server/main.ts` comp
 | Retention purge (`retention_purge`), ownership backfill (`conversation_ownership_backfill`), maintenance (`maintenance`), notice sweep (`notice_sweep`), old chat rows (`chat_text_cleanup`) | App jobs and ticks | None | That database only | Runs | Runs |
 | Start-up moves (`startup_upkeep`) | Once at start | None | One-time database moves: team settings, the Who repair, old requests to conversations, guest sessions, cancelled VM restores | Runs | Runs |
 
+**The automatic VM start (VM-3):** in production, from the person's planned time on, each outcome is logged once a day as `azure vm_autostart <word>` (started, started_late, already_on, not_chosen, skipped, paused, pto, holiday, pto_unreadable, sign_in, no_vm, refused, not_running; and holidays_unchecked, pto_earlier). The words and what each person is told are one list, `OUTCOMES` in `plan/vm-autostart.ts`. When it leaves the VM off for a reason that isn't their own choice, the person sees it on the VM chip, in its menu, in one notice and in Settings. A try with no VM record is in their Azure write log. The scheduler's own lines: `scheduler <pass>_over_limit`, `<pass>_finished_late`, `<pass>_slow`, `<job>_over_limit`, `early_over_limit`; a person's parts: `tick_part <name>_failed`, `<name>_over_limit`. Admin › Status › Background passes shows the same.
+
 Admin › Status on a test site has a "This is a test site" row listing what runs there only on a button (`server/background-status.ts`), and a second row while a watch period is on. What a test site's database already holds stays; the usual retention rules still expire old chat text and transcripts.
 
 **Adding background work:** name it in `BACKGROUND` with what it touches and what it does outside production, then start it from the scheduler or a tick under that name. Nothing else reads `FOCUSTIME_ENV` to decide what runs.
@@ -168,5 +170,6 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 | Dev is slow on the first request | A cold start: dev scales to zero | Wait a few seconds |
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |
 | Push notifications aren't set up | No `ft-vapid-key` | `infra/scripts/vapid-key.sh` |
+| My VM didn't start before my day | The person's chip, its menu and Settings say why (PTO, a holiday, PTO unreadable, the Azure sign-in, no VM, Azure refused, or FocusTime wasn't running). Nothing at all: it wasn't production, or auto-start is off, or it was their own choice (a day not chosen, skipped, paused) | Ask what the chip's menu says. In the log, `azure vm_autostart` lines that day (one per reason). Admin › Status › Background passes: a warning means a pass is stuck; the log names the work (`tick_part`, `scheduler … over_limit`). It doesn't try again that day: Start in the chip's menu |
 
 History: environments, deploys and the background policy are recorded in [docs/decisions.md](../decisions.md).
