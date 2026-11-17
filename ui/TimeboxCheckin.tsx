@@ -3,10 +3,11 @@
 // to it, and "All went to plan" at the top. Answers apply at once and stay on screen with Undo. Nothing shows when
 // nothing qualifies, and there are no badges or reminders anywhere else. ProgressOffer is the end of day DevOps offer.
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { AppliedSession, DevOpsPreview, DevOpsResult, DoneOffer, ProgressOffer, SessionView } from "../actions/types.ts";
+import type { AppliedSession, DoneOffer, ProgressOffer, SessionView } from "../actions/types.ts";
 import { durationText, LEFT_CHOICES, parseLeft, progressAsk } from "../plan/progress.ts";
 import { call } from "./api.ts";
-import { useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
+import { partsLine, partsOf } from "../plan/preview-parts.ts";
 import { DoneBatch, useDoneOffer } from "./DoneOffer.tsx";
 import { Icon } from "./icons.tsx";
 
@@ -153,13 +154,14 @@ export function TimeboxCheckin({ date, moment, color, onChanged, onError }: { da
   );
 }
 
-type RowResult = { ok: boolean; message: string; entryId: number | null };
-type Chosen = { offer: ProgressOffer; preview: DevOpsPreview | null; note: string | null; result: RowResult | null };
+type RowOutcome = { ok: boolean; message: string; entryId: number | null };
+type Chosen = { offer: ProgressOffer; note: string | null; result: RowOutcome | null };
 
 /**
- * TX-1: the end of day offer, once: one line with Review and Skip. Review shows the batch (each story's Remaining Work
- * before and after, or its comment) from the write framework's own preview; only Confirm writes, each story read back
- * and logged, with Undo on its row. Skip is one click, and either way it isn't offered again that day.
+ * TX-1: the end of day offer, once: one line with Review and Skip. OP-1: Review opens the app's one preview (each
+ * story's Remaining Work before and after, or its comment), a client at a time and 10 at most in each; only its
+ * Confirm writes, each story read back and logged. Each row then says what happened to it, with Undo (or Retry when its
+ * answer was lost). Skip is one click, and once anything is written it isn't offered again that day.
  */
 export function ProgressOfferCard({ date, version, onDone }: { date: string; /** Bumped by an answer: the list may have changed. */ version: number; onDone: () => void }) {
   const [offers, setOffers] = useState<ProgressOffer[]>([]);
@@ -179,65 +181,37 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
     setGone(true);
     void call("checkin.offer_close", { date }).catch(() => undefined);
   }, [date]);
-  const changeOf = (o: ProgressOffer, replace: boolean) => ({ key: String(o.pickId), itemId: o.itemId, ...(o.mode === "remaining" ? { kind: "remaining_work", hours: o.hours, pickId: o.pickId } : { kind: "comment", text: o.text, ...(replace ? { mentions: "replace" } : {}) }) });
-  const review = async (replace = false) => {
+  const changeOf = (o: ProgressOffer): DevOpsChange => (o.mode === "remaining" ? { key: String(o.pickId), kind: "remaining_work", itemId: o.itemId, hours: o.hours, pickId: o.pickId } : { key: String(o.pickId), kind: "comment", itemId: o.itemId, text: o.text });
+  const parts = partsOf(offers, (o) => o.clientKey);
+  const partsSaid = partsLine(offers.length, parts.length, new Set(parts.map((p) => p.clientKey)).size, "update");
+  const review = () => {
+    if (!write) return;
     setBusy(true);
     setError(null);
-    const next: Chosen[] = offers.map((offer) => ({ offer, preview: null, note: null, result: null }));
-    const byClient = new Map<string, ProgressOffer[]>();
-    for (const o of offers) byClient.set(o.clientKey, [...(byClient.get(o.clientKey) ?? []), o]);
-    try {
-      for (const [clientKey, all] of byClient)
-        for (let i = 0; i < all.length; i += 10) {
-          const r = await call<{ previews: DevOpsPreview[]; nothing: string[]; refused?: { error: string; key?: string }[] }>("devops.preview", { clientKey, changes: all.slice(i, i + 10).map((o) => changeOf(o, replace)) });
-          for (const p of r.previews) {
-            const row = next.find((x) => String(x.offer.pickId) === p.key);
-            if (row) row.preview = p;
-          }
-          for (const x of r.refused ?? []) {
-            const row = next.find((y) => String(y.offer.pickId) === x.key);
-            if (row) row.note = x.error;
-          }
-        }
-      for (const row of next) if (!row.preview && !row.note) row.note = "Nothing to change";
-      setList(next);
-    } catch (e) {
-      setError(errText(e));
-    }
-    setBusy(false);
-  };
-  const confirm = async () => {
-    if (!list) return;
-    setBusy(true);
-    const todo = list.filter((r) => r.preview && !r.result?.ok);
-    close();
-    const next = [...list];
-    for (let i = 0; i < todo.length; i += 10) {
-      const chunk = todo.slice(i, i + 10);
-      try {
-        const out = await call<{ results: (DevOpsResult | { error: string; status: number })[] }>("devops.confirm", { previewIds: chunk.map((r) => r.preview!.previewId), mentionsOk: chunk.some((r) => r.preview!.mentions?.length) });
-        chunk.forEach((r, j) => {
-          const res = out.results[j];
-          const at = next.indexOf(r);
-          next[at] = { ...r, result: res && "confirmed" in res ? { ok: res.confirmed, message: res.confirmed ? "Saved" : res.message, entryId: res.entry.id } : { ok: false, message: res?.error ?? "Not written", entryId: null } };
-        });
-      } catch (e) {
-        for (const r of chunk) next[next.indexOf(r)] = { ...r, result: { ok: false, message: errText(e), entryId: null } };
-      }
-    }
-    setList(next);
-    setBusy(false);
-    onDone();
+    write.series(
+      parts.map((p) => ({ clientKey: p.clientKey, changes: p.items.map(changeOf) })),
+      (end) => {
+        setBusy(false);
+        if (!end.results.length && !end.refused.length) return void (end.errors[0] && setError(end.errors[0]));
+        const by = new Map(end.results.map((r) => [r.key, r]));
+        const refused = new Map(end.refused.map((r) => [r.key, r.error]));
+        // A refused row doesn't stop the others: each row says what happened to it.
+        setList(
+          offers.map((offer) => {
+            const r = by.get(String(offer.pickId));
+            return { offer, note: refused.get(String(offer.pickId)) ?? (r ? null : end.stopped ? "Not sent" : "Nothing to change"), result: r ? { ok: r.confirmed, message: r.confirmed ? "Saved" : r.message, entryId: r.writeId } : null };
+          }),
+        );
+        if (end.results.length) close();
+        onDone();
+      },
+    );
   };
   const retry = async (r: Chosen) => {
-    if (r.result?.entryId == null) return;
+    if (r.result?.entryId == null || !write) return;
     setBusy(true);
-    try {
-      const res = await call<DevOpsResult>("devops.retry", { id: r.result.entryId });
-      setList((l) => l?.map((x) => (x === r ? { ...x, result: { ok: res.confirmed, message: res.confirmed ? "Saved" : res.message, entryId: res.entry.id } } : x)) ?? null);
-    } catch (e) {
-      setError(errText(e));
-    }
+    const res = await write.retry(r.result.entryId);
+    if (res) setList((l) => l?.map((x) => (x === r ? { ...x, result: { ok: res.confirmed, message: res.confirmed ? "Saved" : res.message, entryId: res.entry.id } } : x)) ?? null);
     setBusy(false);
   };
   if (gone && !list) return null;
@@ -247,44 +221,32 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
     return (
       <div className="tc-offer" role="group" aria-label="Update DevOps">
         <span>{ask}</span>
-        <button type="button" className="mini primary tc-btn" disabled={busy} onClick={() => void review()}>Review</button>
+        {partsSaid && <span className="muted">{partsSaid}</span>}
+        <button type="button" className="mini primary tc-btn" disabled={busy || !write} onClick={review}>Review</button>
         <button type="button" className="mini quiet tc-btn" disabled={busy} onClick={close}>Skip</button>
         {error && <span className="db-fail">{error}</span>}
       </div>
     );
-  const pending = list.filter((r) => r.preview && !r.result?.ok);
-  const sent = list.some((r) => r.result);
-  const flags = [...new Set(list.flatMap((r) => r.preview?.mentions ?? []))];
   return (
-    <div className="done-batch tc-preview" role="group" aria-label="DevOps updates to confirm">
+    <div className="done-batch tc-preview" role="group" aria-label="DevOps updates">
       <p className="db-ask">{ask}</p>
       <ul className="db-rows">
-        {list.map((r) => {
-          const f = r.preview?.fields.find((x) => x.changed);
-          return (
-            <li key={r.offer.pickId}>
-              <span className="db-what">#{r.offer.itemId} {r.offer.title}</span>
-              <span className="db-state muted">{r.note ?? (r.offer.mode === "remaining" ? `Remaining Work ${f?.before ?? "none"} → ${f?.after ?? r.offer.hours}` : r.offer.text)}</span>
-              {r.result && (
-                <span className={r.result.ok ? "db-ok" : "db-fail"}>
-                  {r.result.ok && <><Icon name="done" /> </>}{r.result.message}
-                  {r.result.ok && r.result.entryId !== null && <button type="button" className="mini" onClick={() => void write?.begin(r.offer.clientKey, [{ kind: "undo", writeId: r.result!.entryId! }])}>Undo</button>}
-                  {!r.result.ok && r.result.entryId !== null && <button type="button" className="mini" disabled={busy} onClick={() => void retry(r)}>Retry</button>}
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {list.map((r) => (
+          <li key={r.offer.pickId}>
+            <span className="db-what">#{r.offer.itemId} {r.offer.title}</span>
+            <span className="db-state muted">{r.note ?? (r.offer.mode === "remaining" ? `Remaining Work ${r.offer.hours}h` : r.offer.text)}</span>
+            {r.result && (
+              <span className={r.result.ok ? "db-ok" : "db-fail"}>
+                {r.result.ok && <><Icon name="done" /> </>}{r.result.message}
+                {r.result.ok && r.result.entryId !== null && <button type="button" className="mini" onClick={() => void write?.begin(r.offer.clientKey, [{ kind: "undo", writeId: r.result!.entryId! }])}>Undo</button>}
+                {!r.result.ok && r.result.entryId !== null && <button type="button" className="mini" disabled={busy} onClick={() => void retry(r)}>Retry</button>}
+              </span>
+            )}
+          </li>
+        ))}
       </ul>
-      {flags.length > 0 && !sent && (
-        <p className="db-fail">
-          This mentions {flags.join(", ")}. <button type="button" className="mini" disabled={busy} onClick={() => void review(true)}>Replace with "another client"</button>
-        </p>
-      )}
       <p className="db-foot">
-        {pending.length > 0 && <button type="button" className="mini primary tc-btn" disabled={busy} onClick={() => void confirm()}>{busy ? "Writing…" : `Confirm ${pending.length}`}</button>}
-        {!sent && <button type="button" className="mini quiet tc-btn" disabled={busy} onClick={() => { close(); setList(null); }}>Skip</button>}
-        <span className="muted">{sent ? "Undo is also in Settings › Activity." : "Written as you, each only if the item hasn't changed in DevOps since."}</span>
+        <span className="muted">Undo is also in Settings › Activity.</span>
       </p>
     </div>
   );

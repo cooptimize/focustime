@@ -128,10 +128,10 @@ describe.skipIf(!CHROMIUM)("OP-1: the same writes reach DevOps (STEP 0.5)", () =
       await r.locator(".tc-said").waitFor();
     }
     await page.locator(".tc-offer").getByRole("button", { name: "Review" }).click();
-    const own = page.locator(".tc-preview");
-    await own.or(modal(page)).first().waitFor({ timeout: 20_000 });
-    if (await own.isVisible().catch(() => false)) await own.getByRole("button", { name: /^Confirm/ }).click();
-    else await confirmAll(page);
+    if (RECORD) {
+      // Main's own list with its Confirm.
+      await page.locator(".tc-preview").getByRole("button", { name: /^Confirm/ }).click();
+    } else await confirmPreviews(page, 1);
     await expect.poll(() => logLength(page), { timeout: 20_000 }).toBe(since + 2);
     check("checkin", await rows(page, since));
     await page.close();
