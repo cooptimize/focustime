@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { permissionRows } from "./permissions.ts";
+import { PERMISSIONS, permissionRows } from "./permissions.ts";
 
 const state = (rows: ReturnType<typeof permissionRows>, scope: string) => rows.find((r) => r.scope === scope)!.state;
 
@@ -50,5 +50,13 @@ describe("the Connections list matches what the app registration asks for", () =
     // AP-1 (D490): a scope each person allows when switching a feature on stays off the registration.
     const listed = PERMISSIONS.filter((p) => p.api === "Microsoft Graph" && !p.later).map((p) => p.scope);
     expect([...listed].sort()).toEqual([...graph].sort());
+  });
+});
+
+describe("UC-2: the missing chat permission's line", () => {
+  it("says a FocusTime admin adds a client's chats in Admin › Clients", () => {
+    const read = PERMISSIONS.find((p) => p.scope === "Chat.Read")!;
+    expect(read.later).toBe("A FocusTime admin adds a client's chats in Admin › Clients");
+    for (const p of PERMISSIONS) expect(`${p.why} ${p.later ?? ""}`).not.toMatch(/Delivery chats?|Settings › Clients/);
   });
 });
