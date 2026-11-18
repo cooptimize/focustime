@@ -16,7 +16,7 @@ import { CARD_MEETING_ROWS, CARD_MEETINGS, MEETING_WORDS } from "../plan/call-wo
 import { LiveCalls } from "./cowork.tsx";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
-import { freeMinutes } from "../week/free.ts";
+import { meetingsLine, meetingsSum } from "./meetingsLine.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { chipFold, foldDone } from "../plan/cardfold.ts";
 import type { CalEvent, Slot } from "../week/types.ts";
@@ -53,24 +53,8 @@ import { AddPanelCtx, LiveOnCard, NamedMeetingsCtx, NextTodoCtx, RulerCtx, TierC
 import { PlacedFeatures } from "./BlockPanel.tsx";
 import { Icon } from "./icons.tsx";
 
-/**
- * WD-1 (MB-1's agenda line on every card with no rail): "3 meetings · 2h 30m · 1h 45m free", the block's meetings and
- * personal events (shown as free left out), their time inside the block, and the free time.
- */
-export function meetingsLine(slot: Slot): string {
-  const { n, minutes, free } = meetingParts(slot);
-  return [n ? `${n} meeting${n === 1 ? "" : "s"}` : "No meetings", n && minutes ? formatDuration(minutes) : "", free].filter(Boolean).join(" · ");
-}
-/** WK-6: the named meetings' heading after its word: the meetings' time in the block, then the free time ("1h 30m · 2h free"). */
-export function meetingsSum(slot: Slot): string {
-  const { n, minutes, free } = meetingParts(slot);
-  return [n && minutes ? formatDuration(minutes) : "", free].filter(Boolean).join(" · ");
-}
-function meetingParts(slot: Slot) {
-  const busy = slot.events.filter((e) => e.event.showAs !== "free");
-  const minutes = busy.reduce((m, e) => m + Math.max(0, Math.round((ms(e.clipEnd) - ms(e.clipStart)) / 60000)), 0);
-  return { n: busy.length, minutes, free: `${formatDuration(freeMinutes(slot))} free` };
-}
+// WK-6: the meetings line's words are in ./meetingsLine.ts (the block panel reads them too); exported here as before.
+export { meetingsLine, meetingsSum } from "./meetingsLine.ts";
 export type BlockCardProps = {
   /** Ids of events drawn in the block before this one on the same day (labelHere, D271). */
   earlier: ReadonlySet<string>;

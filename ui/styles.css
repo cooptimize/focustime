@@ -7825,3 +7825,14 @@ body.ah-dragging * { cursor: grabbing !important; }
 .meetings-switch.on .ms-knob { transform: translateX(calc(12px * var(--text-scale))); box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .meetings-switch .ms-track, .meetings-switch .ms-knob { transition: none; } }
 :root[data-reduce-motion] .meetings-switch .ms-track, :root[data-reduce-motion] .meetings-switch .ms-knob { transition: none; }
+
+/* WK-6: the block panel's agenda: a call's state under its meeting's name (wrapping whole words, never past the
+   panel's edge), and a call with no meeting as a row of its own. */
+.pd-agenda .ag-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; color: inherit; text-decoration: none; }
+.pd-agenda .ag-main:hover .ag-title { text-decoration: underline; text-underline-offset: 2px; }
+.pd-agenda .ag-name { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.pd-agenda .ag-call { font-size: var(--fs-1); color: var(--accent); font-weight: 600; overflow-wrap: break-word; }
+.pd-agenda li.is-call { border-left-color: var(--accent); }
+.pd-agenda .ag-call-icon { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--accent); --icon: calc(13px * var(--text-scale)); }
+.pd-agenda .ag-call-icon .ft-icon { width: var(--icon); height: var(--icon); }
+.card-meetings a.cm-hit, .card-meetings a.cm-hit:visited { color: var(--text); }
