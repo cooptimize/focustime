@@ -85,10 +85,6 @@ export const NEEDED_WORDS = {
   /** A refusal at Confirm, or one stored from before RQ-1: the field in plain words, never DevOps's own text. */
   refusedField: (field: string, type: string | null) => `DevOps says ${field} is needed on a new ${type ?? "item"}. Fill it in and try again.`,
   refusedFields: "DevOps refused one of this item's fields. Check the fields and try again.",
-  /** A call's row: Create and break down, and Break down on a feature created from the call. */
-  createAndBreakDown: "Create and break down",
-  createAndBreakDownWhy: "Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories.",
-  breakDown: "Break down",
 } as const;
 
 /** A rule error's text as DevOps words it ("TF401320: Rule Error for field <name>.") made plain, or the message as it was. */

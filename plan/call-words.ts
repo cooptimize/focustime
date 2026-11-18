@@ -68,6 +68,9 @@ export const CALL_ROW = {
   toReview: (n: number) => `${n} to review`,
   showLine: (n: number) => (n === 1 ? "Proposal" : `${n} proposals`),
   goToProposal: "Go to the proposal",
+  /** RQ-1: a new item at the feature tier: create it through the one preview, then Break down on it with Run started. */
+  createAndBreakDown: "Create and break down",
+  createAndBreakDownWhy: "Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories.",
 } as const;
 
 /** MC-1e: the bar for ticked rows, as the Backlog's Grid has one. */

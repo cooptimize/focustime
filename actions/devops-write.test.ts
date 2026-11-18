@@ -1608,6 +1608,8 @@ describe("RQ-1: DevOps checks a new item without saving it", () => {
     rules.Feature = [TARGET];
     const r = await s.confirm(p);
     expect(r).toMatchObject({ confirmed: false, message: "DevOps says Target Date is needed on a new Feature. Fill it in and try again." });
+    // The field comes back for Try again, which returns to what was typed with it marked Needed.
+    expect((r as { needed?: unknown }).needed).toEqual([{ ref: TARGET, name: "Target Date", fill: "date" }]);
     expect(s.dv.items.size).toBe(4);
     const old = await s.plan.logDevopsWrite({ clientKey: COOP, org: "cooptimize", project: "Cooptimize Project", op: "create", itemId: null, parentId: 600, title: "From before", identity: "avery@cooptimize.example", before: {}, after: { Type: "Feature" }, ops: [], revBefore: null, revAfter: null, commentId: null, draftId: null, pickIds: [], followUpId: null, undoOf: null, ask: null, conv: null });
     await s.plan.settleDevopsWrite(old.id, { status: "failed", message: "DevOps refused the change: TF401320: Rule Error for field Target Date. Error code: Required, InvalidEmpty.", retry: false });

@@ -378,7 +378,7 @@ export type DevOpsPreview = {
   /** ED-1: a description or acceptance criteria before and after, as each will read (safe HTML, made on the server). */
   looks?: { label: string; before: string; after: string }[];
 };
-export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
+export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; /** RQ-1: a create DevOps refused at Confirm for a field its process needs: that field, for Try again. */ needed?: import("../plan/needed.ts").NeededField[]; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
 /** FN-1: what Wrap it up offers for one item (devops.wrap_offer): its done states by category, the state a New item moves to, Remaining Work, my right to change it, its parent. */

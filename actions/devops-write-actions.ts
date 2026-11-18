@@ -2165,7 +2165,16 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (e.kind === "network") return settle("unconfirmed", "DevOps didn't answer, so FocusTime can't tell whether the change landed. Retry checks first and won't write twice");
       if (e.kind === "auth" || e.kind === "forbidden") return settle("failed", e.message);
       if (e.kind === "not_found") return settle("refused", e.message);
-      // RQ-1: a rule DevOps still refuses at Confirm: the field in plain words, never DevOps's own text.
+      // RQ-1: a rule DevOps still refuses at Confirm: the field in plain words, never DevOps's own text, and (for a
+      // create) the field itself, so Try again takes the person back to what they typed with it marked Needed.
+      if (e.kind === "rejected" && entry.op === "create" && entry.after.Type) {
+        const name = /TF401320: Rule Error for field ([^.]{1,120})\./.exec(e.message)?.[1]?.trim();
+        if (name) {
+          const known = await fillRefs(env, entry.after.Type, new Map()).catch(() => null);
+          const needed = known ? neededFrom([{ ref: null, name }], known.all, known.refs) : [{ ref: null, name, fill: null }];
+          return settle("failed", plainRefusal(e.message, entry.after.Type), {}, { needed });
+        }
+      }
       return settle("failed", e.kind === "rejected" ? plainRefusal(e.message, entry.after.Type ?? null) : e.message);
     }
     if (e instanceof PlanError) return settle("refused", e.message);

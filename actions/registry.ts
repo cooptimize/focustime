@@ -364,7 +364,7 @@ export const ACTIONS = [
   { name: "devops.find", title: "Find an item", group: "DevOps", target: "none", summary: "Why an item isn't showing: whether DevOps and FocusTime have it, the scope, and where it shows (Settings › DevOps)", aka: ["why isn't it showing", "missing item"] },
   { name: "devops.write_status", title: "Check DevOps write access", group: "DevOps", target: "none", summary: "Which clients have a write PAT, whose it is and its expiry" },
   { name: "devops.states", title: "List an item's states", group: "DevOps", target: "item", summary: "The states of a work item's type, for Mark done in DevOps (read-only)" },
-  { name: "devops.needed", title: "Check what a new item needs", group: "DevOps", target: "devops", summary: "Asks DevOps to check a new item without saving it, so the fields its process needs are marked before the preview (read only)" },
+  { name: "devops.needed", title: "Check what a new item needs", group: "DevOps", target: "devops", summary: "DevOps checks a new item without saving it, so the fields its process needs are marked before the preview (read only)" },
   { name: "devops.preview", title: "Preview a DevOps change", group: "DevOps", target: "devops", summary: "State, comment, create from a draft or target date: every field before and after, who it writes as, before anything is written" },
   { name: "devops.confirm", title: "Confirm a DevOps change", group: "DevOps", target: "devops", summary: "Write the previewed change (only if the item didn't change since), read it back, log it" },
   { name: "devops.retry", title: "Retry a DevOps change", group: "DevOps", target: "write", summary: "Check and try again; never writes twice" },

@@ -6,7 +6,7 @@
 // one row or for the ticked ones (10 at a time); a promise is saved at once with Undo. A filter, one count, folded
 // skipped and done rows, headers that stay in view, and a way from a transcript line back to its proposals. An
 // attendee who isn't a reviewer can look, not act.
-import { isFeatureTier, NEEDED_WORDS } from "../../plan/needed.ts";
+import { isFeatureTier } from "../../plan/needed.ts";
 import { BreakDownButton } from "../BreakDownPanel.tsx";
 import { openBreakDown } from "../menu.ts";
 import { TextBox } from "../TextBox.tsx";
@@ -525,7 +525,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
             <>
               <button type="button" className="mini primary" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
               {featureTier && onSendBreakDown && !failed && (
-                <button type="button" className="mini" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : NEEDED_WORDS.createAndBreakDownWhy} onClick={onSendBreakDown}>{NEEDED_WORDS.createAndBreakDown}</button>
+                <button type="button" className="mini" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>
               )}
             </>
           ) : (

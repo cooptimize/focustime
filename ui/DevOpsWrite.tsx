@@ -247,7 +247,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     void begin(f.clientKey, left, settled, f.opts);
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled, flow.opts)} onReload={() => reloadFlow(flow)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled, flow.opts)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result), ...(flow.rows.some((r) => r.result) ? { results: resultsOf(flow.rows) } : flow.attempted ? { attempted: true, ...(flow.error ? { error: flow.error } : {}) } : { cancelled: true }) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled, flow.opts)} onReload={() => reloadFlow(flow)} onTryAgain={flow.settled ? (needed) => (setFlow(null), flow.settled?.({ confirmed: false, sent: false, attempted: true, code: "required_field", needed, error: flow.rows.map((r) => (r.result && "message" in r.result && !("confirmed" in r.result && r.result.confirmed) ? r.result.message : "")).filter(Boolean)[0] ?? "" })) : undefined} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled, flow.opts)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result), ...(flow.rows.some((r) => r.result) ? { results: resultsOf(flow.rows) } : flow.attempted ? { attempted: true, ...(flow.error ? { error: flow.error } : {}) } : { cancelled: true }) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -364,14 +364,16 @@ export function PreviewActions({ children, closeLabel, onClose, busy, note }: { 
   );
 }
 
-function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose, onTryAgain }: { flow: Flow; client?: ClientLook | undefined; /** RQ-1 */ onTryAgain?: ((needed: NeededField[]) => void) | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
   const done = (r: Row) => !!r.result && "confirmed" in r.result && r.result.confirmed;
   const tried = rows.some((r) => r.result);
   const changed = rows.some((r) => r.result && "entry" in r.result && r.result.entry.status === "refused" && r.result.changed);
-  const retryable = rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
+  // RQ-1: a create DevOps refused for a field its process needs: Try again goes back to the form, not the same create again.
+  const needed = rows.flatMap((r) => (r.result && "needed" in r.result && r.result.needed && !r.result.confirmed ? r.result.needed : []));
+  const retryable = !needed.length && rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
   const label = rows.length === 1 ? p0.summary : `${rows.length} DevOps changes`;
   const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
   const flagged = rows.some((r) => r.preview.mentions?.length);
@@ -434,6 +436,10 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
         ) : changed ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onReload}>
             Reload and review again
+          </button>
+        ) : needed.length && onTryAgain ? (
+          <button ref={first} type="button" className="commit" disabled={busy} onClick={() => onTryAgain(needed)}>
+            Try again
           </button>
         ) : retryable ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
