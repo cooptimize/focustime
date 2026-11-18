@@ -7890,3 +7890,11 @@ a.sp-btn:hover { background: var(--wash-1); }
 .app.phone .sp-help .sp-go, .app.phone .sp-more-text .sp-go { display: inline; min-height: 0; }
 .ps-body .sp-subhead { margin: 14px 0 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
 .sp-subhead + .sp-row { border-top: 0; }
+.sp-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
+.sp-link-item { display: flex; align-items: center; gap: 10px; min-height: var(--h-control); padding: 6px 8px; border-radius: var(--radius-input); color: var(--text); text-decoration: none; }
+.app.phone .sp-link-item { min-height: var(--target); }
+.sp-link-item:hover { background: var(--wash-1); }
+.sp-link-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sp-link-item .sp-help { flex: 1; min-width: 0; }
+.sp-swatch-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
+.sp-chev { color: var(--text-faint); display: inline-flex; }

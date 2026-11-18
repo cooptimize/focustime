@@ -6,12 +6,11 @@ import { FindItem } from "./settings/FindItem.tsx";
 import { AzureWriteLog, LoopSendsLog, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
-import { DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
+import { MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import type { ClientWork } from "../week/types.ts";
-import type { FollowState } from "../week/follow.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
@@ -34,8 +33,6 @@ import { siteLine, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
-import { DeploySettings } from "./DeployItems.tsx";
-import { Icon } from "./icons.tsx";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
@@ -44,6 +41,7 @@ import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
 import { FocusSection } from "./settings/sections/Focus.tsx";
 import { BacklogSection } from "./settings/sections/Backlog.tsx";
 import { ChatsSection } from "./settings/sections/Chats.tsx";
+import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -293,7 +291,6 @@ export function Settings(props: Props) {
 
 
 function SectionBody(p: BodyProps) {
-  const d = p.data;
   const dev = useDeveloperLoop();
   switch (p.section) {
     default:
@@ -311,13 +308,9 @@ function SectionBody(p: BodyProps) {
     case "ahead":
       return <BacklogSection {...p} />;
     case "clients":
-      return <ClientList {...p} />;
+      return <ClientsSection {...p} />;
     case "client":
-      return p.client ? (
-        <DeliveryChatsProvider>
-          <ClientCard c={p.client} d={d} p={p} />
-        </DeliveryChatsProvider>
-      ) : <p className="muted">This client isn't one of yours. <a href={settingsHref("clients")} onClick={(e) => (e.preventDefault(), p.go("clients"))}>See your clients</a>.</p>;
+      return <ClientSection {...p} />;
     case "chats":
       return <ChatsSection {...p} />;
     case "ai":
@@ -396,50 +389,6 @@ function AutoField<V>({ a, k, label, hint, children, sid }: { a: AutoSave<V>; k:
   );
 }
 
-const PLANNING_LABELS: Record<string, string> = {
-  minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
-  unsizedMinutes: "Count unsized work as", reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
-  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound", devopsOnDone: "When I tick a story", progressOffer: "Offer DevOps updates at end of day", suggest: "Suggest work for empty blocks",
-};
-
-/** The [plan] keys a form edits: each form saves only its own (the server takes any subset). */
-function usePlan<K extends keyof PlanValues>(p: FormProps, keys: readonly K[]) {
-  const pl = p.data.planning;
-  const all: PlanValues = {
-    unsizedMinutes: pl.sizes.unsized, minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
-    focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, devopsOnDone: pl.devopsOnDone, progressOffer: pl.progressOffer, suggest: pl.suggest !== false, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
-    checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
-  };
-  return useAutoSave({
-    section: "planning",
-    initial: Object.fromEntries(keys.map((k) => [k, all[k]])) as Pick<PlanValues, K>,
-    payload: (v) => {
-      const { minS, minM, minL, ...rest } = v as Partial<PlanValues>;
-      return { ...rest, ...(minS !== undefined ? { minSizes: { S: minS, M: minM, L: minL } } : {}) };
-    },
-    onSaved: p.onSavedData,
-    label: (k) => PLANNING_LABELS[k as string] ?? "Planning",
-  });
-}
-type PlanValues = {
-  unsizedMinutes: number; minS: number; minM: number; minL: number; carryDays: number; reminderOffsetMinutes: number; focusMinutes: number; breakMinutes: number; endSound: boolean;
-  devopsOnDone: "ask" | "never"; progressOffer: boolean; suggest: boolean; followGraceDays: number; closeoutReminderMinutes: number; checkinReminderMinutes: number; weekNudgeThu: string; weekNudgeFri: string; weekNudgeMon: string;
-};
-type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
-function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: string, step = 5, max = 480) {
-  const v = a.v as unknown as Record<NumKey, number>;
-  return (
-    <AutoField a={a} k={k} label={label} hint={hint}>
-      <input type="number" min={0} max={max} step={step} value={v[k]} onChange={(e) => a.set(k, Number(e.target.value) as never)} {...a.text(k)} />
-    </AutoField>
-  );
-}
-
-/** ST-1: Clients › Keep following after focus time ends (a [plan] key; under Planning before). */
-function FollowGraceForm(p: FormProps) {
-  const a = usePlan(p, ["followGraceDays"] as const);
-  return <div className="set-grid">{numField(a, "followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after their focus time ends.", 1, 90)}</div>;
-}
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
 type TeamsStatus = { available: boolean; chat: boolean; blocked: boolean };
@@ -453,71 +402,6 @@ function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
   if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
   if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
   return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
-}
-
-const fullDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
-/** Why a client is (or isn't) followed, in plain words (step 6d). */
-export function followText(f: FollowState | null, grace: number): string {
-  if (!f) return "Unknown until Dataverse connects.";
-  switch (f.why) {
-    case "internal": return "Always followed (internal).";
-    case "standing": return "Always followed (standing block).";
-    case "ongoing": return "Followed: focus time is ongoing.";
-    case "until": return `Followed: focus time until ${fullDate(f.date)}.`;
-    case "grace": return `Followed until ${fullDate(f.until)}: focus time ended ${fullDate(f.date)} (${grace} days grace).`;
-    case "kept": return "Followed because Keep following is on.";
-    case "ended": return `Not followed: focus time ended ${fullDate(f.date)}. No DevOps items or Open half-day choices.`;
-    case "none": return "Not followed: no focus time. No DevOps items or Open half-day choices.";
-  }
-}
-
-/** Followed clients (or follow unknown) first; Dataverse clients FocusTime doesn't follow fold away. */
-const followedFirst = (cs: readonly SettingsClient[]) => ({ followed: cs.filter((c) => c.follow?.active !== false), other: cs.filter((c) => c.follow?.active === false) });
-
-/** ST-1: Clients: how long a client stays followed, then one row per client that opens its own page. */
-function ClientList(p: BodyProps) {
-  const d = p.data;
-  const { followed, other } = followedFirst(d.clients);
-  const row = (c: SettingsClient) => {
-    const color = c.setting.color || c.teamColor || "";
-    return (
-      <li key={c.key}>
-        <a
-          className="set-client-row"
-          href={settingsHref("client", c.key)}
-          onClick={(e) => (e.preventDefault(), p.go("client", c.key))}
-          style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}
-        >
-          <span className="swatch" aria-hidden="true" />
-          <strong>{c.setting.name ?? c.dataverseName ?? c.key}</strong>
-          <span className="muted">{c.follow?.active === false ? "Not followed" : "Followed"}</span>
-          <span className="muted">{c.devops ? (c.write ? "DevOps writes on" : "DevOps read-only") : "No DevOps"}</span>
-          <span className="ps-chev"><Icon name="next" /></span>
-        </a>
-      </li>
-    );
-  };
-  return (
-    <>
-      <FollowGraceForm {...p} />
-      <Group title="Your clients" sid="client-list" intro="From Dataverse (your Account Worker records and focus time). Open one to change how it shows.">
-        {d.dataverseProblem && (
-          <p className="set-problem" role="status">
-            {d.dataverseProblem}{" "}
-            <button type="button" className="link-btn" onClick={() => void p.reload()}>Refresh</button>
-          </p>
-        )}
-        {d.clients.length === 0 && !d.dataverseProblem && <p className="muted">No clients yet.</p>}
-        <ul className="set-client-list">{followed.map(row)}</ul>
-        {other.length > 0 && (
-          <details className="set-client-more">
-            <summary>Not followed · {other.length}</summary>
-            <ul className="set-client-list">{other.map(row)}</ul>
-          </details>
-        )}
-      </Group>
-    </>
-  );
 }
 
 /** ST-1: DevOps: each client's read status (from the week's fetch) and my own write access per client. */
@@ -564,63 +448,6 @@ function DevOpsSection(p: BodyProps) {
       <Group title="Find an item" sid="find-item" intro="Why an item isn't showing: whether FocusTime's last check of DevOps found it, the scope, and where it shows. It answers from what FocusTime already read; Refresh checks DevOps now.">
         <FindItem clients={withDevOps.map((c) => ({ key: c.key, name: c.setting.name ?? c.dataverseName ?? c.key }))} />
       </Group>
-    </div>
-  );
-}
-
-/** One client: its settings, its DevOps identity (Dataverse's) and, when it has DevOps, my write access. */
-function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSavedData: (d: SettingsData) => void; reload: () => Promise<void>; go: (section: string, setting?: string | null) => void } }) {
-  return (
-    <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
-      <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
-      <div className="set-form set-allow-ai">
-      {c.devops ? (
-        <ReadOnly
-          label="DevOps writes"
-          value={c.write ? "On" : "Off, read-only"}
-          where={c.write ? `As ${c.write.name} on ${c.write.org}${c.write.expires ? `, expires ${shortDate(c.write.expires)}` : ""}.` : "Add your own PAT to write to DevOps."}
-        />
-      ) : (
-        d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>
-      )}
-      {c.devops && (
-        <p className="set-fix">
-          <a href={settingsHref("devops", "devops-write")} onClick={(e) => (e.preventDefault(), p.go("devops", "devops-write"))}>
-            {c.write ? "Change DevOps write access" : "Turn on DevOps writes"}
-          </a>
-        </p>
-      )}
-      </div>
-      <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} readOnly />
-      <AllowAi c={c} d={d} />
-      <DeploySettings clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
-      {c.devops && <HouseStyleField clientKey={c.key} name={c.setting.name ?? c.dataverseName ?? c.key} />}
-    </div>
-  );
-}
-
-/** ADM-1: whether AI may be used for this client: an admin's Rule (Admin › AI), shown read-only. */
-function AllowAi({ c, d }: { c: SettingsClient; d: SettingsData }) {
-  const name = c.setting.name ?? c.dataverseName ?? c.key;
-  const allowed = d.aiRules.allowedClients.includes(c.key);
-  return (
-    <div className="set-form set-allow-ai">
-      <ReadOnly label="AI for this client" value={!d.aiRules.on ? "Off for FocusTime" : allowed ? `Allowed for ${name}` : `Not allowed for ${name}`} where={ADMIN} />
-    </div>
-  );
-}
-
-type HouseStyleData = { clientKey: string; text: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; team?: string | null; read?: boolean | null };
-
-/** DS-1, ADM-1: the client's house style for Break down. The team's (a Rule, Admin › Clients) when set, else learned. */
-function HouseStyleField({ clientKey, name }: { clientKey: string; name: string }) {
-  const [h, setH] = useState<HouseStyleData | null>(null);
-  useEffect(() => void call<HouseStyleData>("stories.house_style", { clientKey }).then(setH, () => setH(null)), [clientKey]);
-  if (!h) return null;
-  const where = h.team ? ADMIN : h.learned ? `Learned from ${name}'s own features each week. A FocusTime admin can set the team's in Admin › Clients.` : "The default: too few features with stories to learn from yet.";
-  return (
-    <div className="set-form set-house-style">
-      <ReadOnly label="House style for Break down" value={<span className="set-pre">{h.text}</span>} where={where} />
     </div>
   );
 }
@@ -730,69 +557,6 @@ function AiForm(p: FormProps) {
 /** Names for the task names the log keeps. */
 const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI", "asks.classify": "Sort an ask", "promises.extract": "Read a promise", "stories.draft": "Break down", "meeting.capture": "Read a client call" };
 const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
-
-function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const reached = data.dataverseReached;
-  const a = useAutoSave({
-    section: "client",
-    initial: { name: c.setting.name ?? "", color: c.setting.color ?? "", keep: c.setting.follow },
-    payload: (v) => ({ key: c.key, name: v.name, color: v.color, follow: v.keep }),
-    onSaved: onSavedData,
-    label: (k) => `${c.setting.name ?? c.key}: ${k === "name" ? "Shown as" : k === "color" ? "Color" : "Keep following"}`,
-  });
-  // ADM-1: the team color (a Default set by an admin) unless you pick your own; Reset to team color clears yours.
-  const team = c.teamColor ?? "";
-  const color = a.v.color || team;
-  const own = !!a.v.color && a.v.color !== team;
-  const openStates = data.org?.clients[c.key]?.openStates ?? c.setting.openStates;
-  return (
-    <div className="set-form set-client" style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}>
-      <h3>
-        <span className="swatch" /> {c.setting.name ?? c.key}
-      </h3>
-      <div className="set-grid">
-        <ReadOnly label="Dataverse nickname" value={c.dataverseName ?? c.key} where="Change this in Dataverse" />
-        <ReadOnly label="Your DevOps identity" value={c.devopsEmail ?? (reached ? null : "unknown until Dataverse connects")} where="Change this in Dataverse" />
-        <AutoField a={a} k="name" label="Shown as" hint="Empty shows the Dataverse nickname.">
-          <input value={a.v.name} placeholder={c.key} maxLength={60} onChange={(e) => a.set("name", e.target.value)} {...a.text("name")} />
-        </AutoField>
-        <fieldset className="set-choice palette">
-          <legend>Color</legend>
-          {data.palette.map((slot) => (
-            <label key={slot} className="slot" title={slot}>
-              <input type="radio" name={`color-${c.key}`} checked={color === slot} onChange={() => a.change("color", slot)} aria-label={slot} />
-              <span className="slot-swatch" style={{ background: `var(--client-${slot})` }} />
-            </label>
-          ))}
-          {color.startsWith("#") && <span className="set-hint">Custom color {color} (pick a palette color to use theme-aware colors)</span>}
-          <span className="set-hint set-team-color">
-            {own ? (
-              <>
-                Your own color.{team ? " " : ""}
-                {team && (
-                  <button type="button" className="link-btn" onClick={() => a.change("color", "")}>
-                    Reset to team color
-                  </button>
-                )}
-              </>
-            ) : team ? (
-              "The team color, set by your FocusTime admin. Pick another to use your own."
-            ) : (
-              "No team color yet."
-            )}
-          </span>
-          <SaveMark s={a.status("color")} retry={() => a.commit("color")} />
-        </fieldset>
-        <AutoField a={a} k="keep" label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.keep} onChange={(e) => a.change("keep", e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
-          </label>
-        </AutoField>
-        <ReadOnly label="States treated as open" value={openStates.join(", ") || "None"} where={ADMIN} />
-      </div>
-    </div>
-  );
-}
 
 function Connections(p: BodyProps) {
   return (

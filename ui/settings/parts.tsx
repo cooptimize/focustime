@@ -11,6 +11,7 @@ import { createContext, useContext, useId, type ChangeEvent, type CSSProperties,
 import type { FieldStatus } from "./autosave.tsx";
 import { settingOf, settingsHref, type SettingDef } from "./registry.ts";
 import { TimeField } from "../TimeField.tsx";
+import { Icon } from "../icons.tsx";
 
 /** The words the team line says, the same everywhere. */
 export const TEAM_LINE = "Set by your FocusTime admin";
@@ -484,4 +485,30 @@ export function Form({ children, onSubmit, label }: { children: ReactNode; onSub
 /** Pre-formatted text kept as written (a house style). */
 export function Pre({ children }: { children: ReactNode }) {
   return <span className="sp-pre">{children}</span>;
+}
+
+/** A client's color as a CSS value: a palette slot, a custom #hex, or none. */
+export const colorVar = (c: string) => (c ? (c.startsWith("#") ? c : `var(--client-${c})`) : "var(--client-none)");
+
+/** A list of places to open (the clients, each opening its own page): a swatch, a name, a line, a chevron. */
+export function Links({ children, label }: { children: ReactNode; label?: string | undefined }) {
+  return (
+    <ul className="sp-links" aria-label={label}>
+      {children}
+    </ul>
+  );
+}
+export function LinkItem({ href, onGo, color, name, detail }: { href: string; onGo: () => void; color?: string | undefined; name: string; detail: string }) {
+  return (
+    <li>
+      <a className="sp-link-item" href={href} onClick={(e) => (e.preventDefault(), onGo())} style={color === undefined ? undefined : ({ "--c": colorVar(color) } as CSSProperties)}>
+        {color !== undefined && <span className="sp-swatch-dot" aria-hidden="true" />}
+        <span className="sp-label">{name}</span>
+        <span className="sp-help">{detail}</span>
+        <span className="sp-chev" aria-hidden="true">
+          <Icon name="next" />
+        </span>
+      </a>
+    </li>
+  );
 }
