@@ -55,7 +55,7 @@ Four small planning components shared by Week's and Day's cards, the block panel
 
 ### `ui/settings/`
 
-Settings and Admin. `registry.ts` is the one list of Settings' groups, sections and addresses; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. Each other file is one section (Admin, client chats, calendar links, Diagnostics, Find an item, client calls). `ui/Settings.tsx` is the panel that holds them, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
+Settings and Admin. `registry.ts` is the one list of Settings' groups, sections and addresses; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. Each other file is one section (Admin, client chats, calendar links, the Pocket recorder, Diagnostics, Find an item, client calls). `ui/Settings.tsx` is the panel that holds them, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
 
 ## `actions/`
 
@@ -113,7 +113,7 @@ Rules: SQL Server changes only through `sql/migrate.ts`; migrations only add; ev
 
 ## `sources/`
 
-The adapters that read outside systems, one folder each: `dataverse/` (clients, focus time patterns, PTO, holidays, the directory), `graph/` (Outlook, Teams chats and meetings, people, presence, photos, and the Graph writes in `write.ts` and `send.ts`), `google/` (the personal calendar), `ics/` (calendar links), `calendar/` (the shared calendar reader), `devops/` (work items, processes and Git, and the DevOps writes in `write.ts`), `azure/` (the VM, behind the allowlist in `client.ts`), `github/` (Cooptimize's standards) and `oauth/` (token exchange and ID token checks). `demo/` holds the demo's fictional sources. `not-set-up.ts` is what a calendar says when it isn't set up.
+The adapters that read outside systems, one folder each: `dataverse/` (clients, focus time patterns, PTO, holidays, the directory), `graph/` (Outlook, Teams chats and meetings, people, presence, photos, and the Graph writes in `write.ts` and `send.ts`), `google/` (the personal calendar), `ics/` (calendar links), `calendar/` (the shared calendar reader), `devops/` (work items, processes and Git, and the DevOps writes in `write.ts`), `azure/` (the VM, behind the allowlist in `client.ts`), `pocket/` (a person's own Pocket, one list call behind the allowlist in `client.ts`), `github/` (Cooptimize's standards) and `oauth/` (token exchange and ID token checks). `demo/` holds the demo's fictional sources. `not-set-up.ts` is what a calendar says when it isn't set up.
 
 Rules: a source that fails or isn't set up says so with its fix, and nothing stands in for it; only `server/demo.ts` wires `sources/demo/` (`host/no-demo-leak.test.ts`); each client sends only the requests its allowlist names. What each source reads and writes is in [Where each source is read and written](technical/architecture.md#where-each-source-is-read-and-written) and [Integrations](technical/integrations.md).
 

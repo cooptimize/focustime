@@ -20,6 +20,8 @@ import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf, type Calendar } from "./status.ts";
 import { CalendarLinks } from "./settings/CalendarLinks.tsx";
+import { PocketRecorder } from "./settings/Pocket.tsx";
+import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
@@ -1835,6 +1837,9 @@ function Connections(p: BodyProps) {
       </Group>
       <Group title="Calendars added by link" sid="calendar-links">
         <CalendarLinks timeZone={Temporal.Now.timeZoneId()} onChanged={p.onRefresh} />
+      </Group>
+      <Group title={POCKET_WORDS.title} sid="pocket">
+        <PocketRecorder timeZone={Temporal.Now.timeZoneId()} />
       </Group>
       <div data-setting="outlook-changes"><OutlookWriteRow /></div>
       <div data-setting="permissions"><MicrosoftPermissions /></div>

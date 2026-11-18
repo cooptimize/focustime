@@ -1288,6 +1288,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "calendar_link.update":
     case "calendar_link.replace":
     case "calendar_link.remove": return { run: () => env.openSettings("connections", "calendar-links") };
+    case "pocket.status":
+    case "pocket.connect":
+    case "pocket.check":
+    case "pocket.disconnect": return { run: () => env.openSettings("connections", "pocket") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.devops_change": return { disabled: "Runs from a demo script" };
     case "demo.vm_tick": return { disabled: "Runs from a demo check" };
