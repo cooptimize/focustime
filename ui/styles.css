@@ -7795,7 +7795,8 @@ body.ah-dragging * { cursor: grabbing !important; }
 .adm-tabpanel:focus { outline: none; }
 .adm-by-level .set-check, .adm-ai-tiers .set-check { white-space: nowrap; }
 /* At the largest Text size on a computer, People's table keeps inside the page: it wraps before it scrolls. */
-.adm-people-table th, .adm-people-table td { overflow-wrap: anywhere; }
+.adm-people-table .adm-email { overflow-wrap: anywhere; }
+.adm-people-table :is(button, .link-btn, td:nth-child(5)) { white-space: nowrap; }
 .adm-people-table select { max-width: 12em; }
 
 /* The phone: lists, not tables; every control at least 44 px. */
