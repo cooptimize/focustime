@@ -16,7 +16,9 @@ import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel } from "../plan/weeklist.ts";
 import { DEFAULT_SIZE_SCALE, MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type SizeScale, type StorySize } from "../plan/estimate.ts";
 import type { DeployItem } from "../plan/deploy-items.ts";
-import { movedTitle } from "../plan/deploy.ts";
+import { movedTitle, windowMinutes } from "../plan/deploy.ts";
+import { sharedDeployments, StaleDeployment, type SharedRow } from "./deployments.ts";
+import { instantsOf, localOf, movedTo, STALE_SAVE, type DeployPerson, type HoldState, type SharedView } from "../plan/shared-deploy.ts";
 import type { InboxMark, InboxMarkPatch } from "../plan/inbox-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
@@ -1480,6 +1482,7 @@ const toPick = (r: Row): Pick => ({
   ...(r.window_start != null && r.window_end != null ? { window: { start: r.window_start as string, end: r.window_end as string } } : {}),
   ...(r.links != null ? { links: json<TodoLink[]>(r.links) ?? [] } : {}),
   ...(r.deploy_items != null ? { deployItems: json<DeployItem[]>(r.deploy_items) ?? [] } : {}),
+  ...(r.deployment_id != null ? { deploymentId: Number(r.deployment_id) } : {}),
   position: r.position as number,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
@@ -1693,7 +1696,7 @@ export const SOLO_USER = "solo";
  * The plan store on an open connection (A3: SQL Server, or SQLite for the demo). `close` closes the connection (so
  * only its one owner calls it). `backup` (SQLite only) copies the store before Reset local plan; `path` names the copy.
  */
-export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTime; userId: string; path?: string; backup?: (to: string) => Promise<void> }) {
+export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTime; userId: string; path?: string; backup?: (to: string) => Promise<void>; /** DP-3: who this person is on a shared deployment (their users.id); the user id when absent. The demo's person has their own. */ personId?: string }) {
   // A2: every statement below is this person's only (store/scope.ts); nothing here names user_id itself.
   const db = scopedDb(conn, opts.userId, () => opts.now().timeZoneId);
 
@@ -1729,7 +1732,12 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   };
   const getPick = async (id: number): Promise<Pick | null> => {
     const r = (await db.get(`${PICK_SELECT} WHERE p.id = ?`, id)) as Row | undefined;
-    return r ? toPick(r) : null;
+    if (!r) return null;
+    if (r.deployment_id == null) return toPick(r);
+    // DP-3: my to-do for a shared deployment reads as the deployment is now.
+    await refreshOne(id);
+    const again = (await db.get(`${PICK_SELECT} WHERE p.id = ?`, id)) as Row | undefined;
+    return again ? (await withShared([toPick(again)]))[0]! : null;
   };
   const mustPick = async (id: number): Promise<Pick> => {
     const p = (await getPick(id));
@@ -1808,8 +1816,193 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     return base;
   }
 
-  const picksBetween = async (from: IsoDate, to: IsoDate): Promise<Pick[]> =>
-    ((await db.all(`${PICK_SELECT} WHERE p.date >= ? AND p.date <= ? ORDER BY p.date, p.half, p.position`, from, to)) as Row[]).map(toPick);
+  // ---- DP-3: shared deployments ----
+  // A deployment several people share lives once, in the shared store (store/deployments.ts). Each person on it has
+  // their own to-do for it in their own plan (a handle: picks.deployment_id), made and refreshed only by their own
+  // session, never by anyone else's. The handle is what they act on (its id), with their own half and position; its
+  // other columns mirror the shared row, which is the truth, so every other read of the plan stays as it was.
+  const personId = (opts.personId ?? opts.userId).toLowerCase();
+  const myName = async (): Promise<string> => {
+    const r = (await db.get("SELECT value FROM account_state WHERE key = ?", "ms_identity")) as Row | undefined;
+    try {
+      return ((r ? (JSON.parse(r.value as string) as { name?: string }) : null)?.name ?? "").trim() || "A teammate";
+    } catch {
+      return "A teammate";
+    }
+  };
+  const shared = sharedDeployments(conn, () => opts.now().toInstant()).as(personId, myName);
+  const zone = () => opts.now().timeZoneId;
+  const ownEventOf = async (uid: string): Promise<OwnEvent | null> => {
+    const r = (await db.get("SELECT * FROM outlook_events WHERE uid = ?", uid)) as Row | undefined;
+    return r ? toOwn(r) : null;
+  };
+  /** The note a hold gets when its deployment left my plan (Take me off, a removal, a delete): put back if I come back. */
+  const LEFT_NOTE = "Deployment left";
+  /** A half for a window by the clock alone (a handle made by my own read, before my day's hours are known). */
+  const guessHalf = (date: IsoDate, w: TodoWindow): Half => {
+    if (Temporal.PlainDate.from(date).dayOfWeek >= 6) return "EVE";
+    const h = Number(w.start.slice(0, 2));
+    return h >= 17 ? "EVE" : h < 12 ? "AM" : "PM";
+  };
+  const stale = (e: unknown): never => {
+    if (e instanceof StaleDeployment) throw new PlanError(e.current ? STALE_SAVE : "That deployment isn't on your plan any more");
+    throw e;
+  };
+  /** The local ISO times (with offset) of an instant in my zone, as timeboxes keep them. */
+  const localIso = (iso: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone()).toString({ timeZoneName: "never", smallestUnit: "second" });
+
+  /** What the handle should say for the shared row, as I see it in my zone. */
+  const mirrorOf = (d: SharedRow) => {
+    const l = localOf(d.startAt, d.endAt, zone());
+    return { date: l.date, window: l.window, clipped: l.clipped, status: d.doneAt ? "done" : "planned", title: d.title, notes: d.notes, links: d.links?.length ? JSON.stringify(d.links) : null, items: d.deployItems?.length ? JSON.stringify(d.deployItems) : null, clientKey: d.clientKey, minutes: Math.min(480, windowMinutes(l.window)) };
+  };
+  /** My hold (my own timebox for the handle), its window kept to the deployment's. Its Outlook event is never written here. */
+  async function keepHold(handleId: number, d: SharedRow, m: ReturnType<typeof mirrorOf>): Promise<void> {
+    const boxes = (await db.all("SELECT * FROM timeboxes WHERE pick_id = ? ORDER BY id DESC", handleId)) as Row[];
+    for (const r of boxes.map(toTimebox)) {
+      if (r.removedAt) {
+        // Back on it (an Undo of Take me off, or added again) while the hold is still on Outlook: it is mine again.
+        if (r.outlookNote === LEFT_NOTE) {
+          const own = await ownEventOf(r.uid);
+          if (own && !own.deletedAt) await db.run("UPDATE timeboxes SET removed_at = NULL, outlook_note = NULL, updated_at = ? WHERE id = ?", stamp(), r.id);
+        }
+        continue;
+      }
+      if (r.conflict) continue;
+      const span = instantsOf(m.date, m.window, zone());
+      const start = localIso(span.startAt);
+      const end = localIso(span.endAt);
+      const same = Temporal.Instant.compare(Temporal.Instant.from(r.start), Temporal.Instant.from(start)) === 0 && Temporal.Instant.compare(Temporal.Instant.from(r.end), Temporal.Instant.from(end)) === 0;
+      if (!same || r.title !== d.title || r.date !== m.date || r.clientKey !== d.clientKey) {
+        await db.run("UPDATE timeboxes SET date = ?, start_at = ?, end_at = ?, title = ?, client_key = ?, updated_at = ? WHERE id = ?", m.date, start, end, d.title, d.clientKey, stamp(), r.id);
+      }
+    }
+  }
+  /** Brings my handle in step with the shared row (only my own rows change). */
+  async function mirror(r: Row, d: SharedRow): Promise<void> {
+    const m = mirrorOf(d);
+    const moved = r.date !== m.date || r.window_start !== m.window.start || r.window_end !== m.window.end;
+    const differs = moved || r.status !== m.status || r.title !== m.title || (r.notes ?? null) !== m.notes || (r.links ?? null) !== m.links || (r.deploy_items ?? null) !== m.items || r.client_key !== m.clientKey || (r.minutes ?? null) !== m.minutes;
+    if (differs) {
+      const half = moved ? guessHalf(m.date, m.window) : (r.half as Half);
+      await ensurePlan(m.date);
+      await db.run("UPDATE picks SET date = ?, half = ?, status = ?, title = ?, notes = ?, links = ?, deploy_items = ?, client_key = ?, window_start = ?, window_end = ?, minutes = ?, todo_kind = 'deployment', updated_at = ? WHERE id = ?", m.date, half, m.status, m.title, m.notes, m.links, m.items, m.clientKey, m.window.start, m.window.end, m.minutes, stamp(), r.id as number);
+    }
+    await keepHold(r.id as number, d, m);
+  }
+  /** The deployment left my plan (Take me off, a removal, a delete): my handle is dropped and my hold comes off. */
+  async function detach(r: Row): Promise<void> {
+    if (r.status !== "dropped") await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", stamp(), r.id as number);
+    for (const t of ((await db.all("SELECT * FROM timeboxes WHERE pick_id = ? AND removed_at IS NULL", r.id as number)) as Row[]).map(toTimebox)) {
+      const own = await ownEventOf(t.uid);
+      // Still on Outlook: removed from it the way a changed hold is updated (my own preview, by my own setting).
+      if (own && !own.deletedAt) await db.run("UPDATE timeboxes SET removed_at = ?, outlook_note = ?, updated_at = ? WHERE id = ?", stamp(), LEFT_NOTE, stamp(), t.id);
+      else await db.run("DELETE FROM timeboxes WHERE id = ?", t.id);
+    }
+  }
+  const HANDLE = "SELECT id, deployment_id, date, half, client_key, title, status, window_start, window_end, notes, links, deploy_items, minutes FROM picks";
+  /**
+   * Pre-DP-3 deployments become shared ones with me on them, by my own session (my zone turns their local window into
+   * the instants). Only planned or done ones; a moved one's history stays as it was. Once each: the update only takes
+   * a row that has no deployment yet, and a second one made at the same moment is taken back.
+   */
+  async function adoptLegacy(): Promise<void> {
+    const rows = (await db.all("SELECT id FROM picks WHERE todo_kind = 'deployment' AND deployment_id IS NULL AND status IN ('planned', 'done')")) as Row[];
+    for (const { id } of rows) {
+      await tx(async () => {
+        const p = await rawPick(id as number);
+        if (!p || !p.window || p.deploymentId) return;
+        const span = instantsOf(p.date, p.window, zone());
+        const d = await shared.create({ clientKey: p.clientKey, title: p.title, ...span, zone: zone(), notes: p.notes, links: p.links ?? null, deployItems: p.deployItems ?? null, done: p.status === "done" });
+        const r = await db.run("UPDATE picks SET deployment_id = ? WHERE id = ? AND deployment_id IS NULL", d.id, id as number);
+        if (!r.changes) await shared.remove(d.id);
+      });
+    }
+  }
+  /** My handles, made and kept in step with every deployment I'm on. Returns the shared rows I'm on, by id. */
+  async function refresh(): Promise<Map<number, SharedRow>> {
+    await adoptLegacy();
+    return tx(async () => {
+      const mine = new Map((await shared.mine()).map((d) => [d.id, d] as const));
+      const rows = (await db.all(`${HANDLE} WHERE deployment_id IS NOT NULL ORDER BY id`)) as Row[];
+      const have = new Set(rows.map((r) => Number(r.deployment_id)));
+      for (const d of mine.values()) if (!have.has(d.id)) await addHandle(d);
+      for (const r of rows) {
+        const d = mine.get(Number(r.deployment_id));
+        if (d) await mirror(r, d);
+        else if (r.status !== "dropped") await detach(r);
+      }
+      return mine;
+    });
+  }
+  /** One handle, kept in step (a read or change of one to-do). */
+  async function refreshOne(id: number): Promise<SharedRow | null> {
+    const r = (await db.get(`${HANDLE} WHERE id = ?`, id)) as Row | undefined;
+    if (!r || r.deployment_id == null) return null;
+    return tx(async () => {
+      const d = await shared.get(Number(r.deployment_id));
+      if (d) await mirror(r, d);
+      else if (r.status !== "dropped") await detach(r);
+      return d;
+    });
+  }
+  /** A deployment I'm on but have no to-do for yet (someone added me): my own to-do for it, made by my own read. */
+  async function addHandle(d: SharedRow): Promise<number> {
+    const m = mirrorOf(d);
+    const p = await insertPick({ date: m.date, half: guessHalf(m.date, m.window), clientKey: d.clientKey, kind: "intention", title: d.title, itemType: "Deployment", size: null, minutes: m.minutes, todoKind: "deployment", window: m.window, links: d.links, deployItems: d.deployItems, notes: d.notes });
+    await db.run("UPDATE picks SET deployment_id = ?, status = ? WHERE id = ?", d.id, m.status, p.id);
+    return p.id;
+  }
+  /** My own Outlook state for a handle (never anyone else's). */
+  async function holdOf(handleId: number): Promise<SharedView["hold"]> {
+    const t = (((await db.all("SELECT * FROM timeboxes WHERE pick_id = ? AND removed_at IS NULL ORDER BY id DESC", handleId)) as Row[]).map(toTimebox))[0];
+    if (!t) return { state: "off", uid: null, timeboxId: null };
+    const at = { uid: t.uid, timeboxId: t.id };
+    if (t.conflict) return { state: "moved_in_outlook", ...at };
+    if (!t.outlook) return { state: t.outlookNote === "Removed in Outlook" ? "deleted_in_outlook" : "off", ...at };
+    const own = await ownEventOf(t.uid);
+    if (!own || own.deletedAt) return { state: "pending", ...at };
+    const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
+    const behind = ms(own.fields.start) !== ms(t.start) || ms(own.fields.end) !== ms(t.end) || !own.fields.subject.endsWith(`: ${t.title}`.slice(0, 255)) && own.fields.subject !== t.title;
+    return { state: (behind ? "behind" : "on") as HoldState, ...at };
+  }
+  /** The shared part of a handle's read model. */
+  async function viewOf(p: Pick, d: SharedRow): Promise<SharedView> {
+    const meOn = d.people.find((x) => x.id === personId);
+    return { id: d.id, version: d.version, people: d.people, addedBy: meOn && meOn.addedBy !== personId ? meOn.addedBy : null, createdBy: d.createdBy, startAt: d.startAt, endAt: d.endAt, clipped: localOf(d.startAt, d.endAt, zone()).clipped, hold: await holdOf(p.id) };
+  }
+  async function withShared(list: Pick[], mine?: Map<number, SharedRow>): Promise<Pick[]> {
+    const ids = list.filter((p) => p.deploymentId != null && (p.status === "planned" || p.status === "done")).map((p) => p.deploymentId!);
+    if (!ids.length) return list;
+    const seen = mine ?? (await shared.seen(ids));
+    return Promise.all(list.map(async (p) => {
+      const d = p.deploymentId != null ? seen.get(p.deploymentId) : undefined;
+      return d && (p.status === "planned" || p.status === "done") ? { ...p, shared: await viewOf(p, d) } : p;
+    }));
+  }
+  const rawPick = async (id: number): Promise<Pick | null> => {
+    const r = (await db.get(`${PICK_SELECT} WHERE p.id = ?`, id)) as Row | undefined;
+    return r ? toPick(r) : null;
+  };
+  /** Delete on a to-do: for a shared deployment only when nobody else is on it (else Take me off, or Delete for everyone). */
+  async function deleteShared(id: number): Promise<void> {
+    const { d } = await mustShared(id);
+    if (d.people.length > 1) throw new PlanError("Others are on this deployment. Take yourself off it, or delete it for everyone");
+    await shared.remove(d.id).catch(stale);
+  }
+  /** A handle and the shared row I'm on, or a refusal in plain words. */
+  async function mustShared(id: number): Promise<{ p: Pick; d: SharedRow }> {
+    const d = await refreshOne(id);
+    const p = await rawPick(id);
+    if (!p || p.deploymentId == null) throw new PlanError(`No deployment ${id}`);
+    if (!d) throw new PlanError("That deployment isn't on your plan any more");
+    return { p, d };
+  }
+
+  const picksBetween = async (from: IsoDate, to: IsoDate): Promise<Pick[]> => {
+    const mine = await refresh();
+    return withShared(((await db.all(`${PICK_SELECT} WHERE p.date >= ? AND p.date <= ? ORDER BY p.date, p.half, p.position`, from, to)) as Row[]).map(toPick), mine);
+  };
 
   return {
     /** Creates the day plan if missing. */
@@ -1833,6 +2026,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async removePick(id: number): Promise<{ result: "deleted" | "dropped"; pick: Pick }> {
       return tx(async () => {
         const p = (await mustPick(id));
+        if (p.deploymentId != null) await deleteShared(id);
         const referenced = (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id));
         // TX-1c: a to-do with time on it is kept off the plan instead of deleted, so the story keeps its spent and left.
         const worked = p.itemId !== null && ((p.spentMinutes ?? 0) > 0 || (p.remainingMinutes ?? 0) > 0);
@@ -1880,6 +2074,15 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async uncarry(id: number): Promise<Pick> {
       return tx(async () => {
         const p = await mustPick(id);
+        if (p.deploymentId != null) {
+          // DP-3: Undo of my move of a shared deployment: back where it was, if nobody changed it since.
+          const { d } = await mustShared(id);
+          const last = d.lastMove;
+          if (!last || last.by !== personId || last.version !== d.version) throw new PlanError("Someone on this deployment changed it since. Move it back by hand");
+          await shared.update(d.id, d.version, { startAt: last.startAt, endAt: last.endAt, ...(last.title ? { title: last.title } : {}) }).catch(stale);
+          await refreshOne(id);
+          return mustPick(id);
+        }
         if (p.status !== "planned" || p.carriedFrom === null) throw new PlanError("Only a planned to-do that was carried can be put back");
         const origin = await mustPick(p.carriedFrom);
         if (origin.status !== "moved") throw new PlanError("The to-do it came from has changed since");
@@ -1908,6 +2111,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         const p = (await mustPick(id));
         if (p.status !== "planned") throw new PlanError("Only a planned to-do can be dropped");
+        if (p.deploymentId != null) await deleteShared(id);
         (await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", stamp(), id));
         return (await mustPick(id));
       });
@@ -1924,6 +2128,16 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         const p = (await mustPick(id));
         if (p.status !== "planned") throw new PlanError("Only a planned to-do can be moved");
+        if (p.deploymentId != null && p.date !== date) {
+          // DP-3: a shared deployment moves for everyone on it: the same deployment, on the new day at the same times.
+          const { d } = await mustShared(id);
+          // UC-1: a title FocusTime made names its day, so it follows; a typed title, or a DevOps item's or draft's, is kept.
+          const title = p.kind === "intention" && p.followUpId === null ? movedTitle(d.title, p.date, date) : d.title;
+          await shared.update(d.id, null, { ...movedTo(d.startAt, d.endAt, zone(), date), ...(title !== d.title ? { title } : {}) }, { move: true }).catch(stale);
+          await refreshOne(id);
+          await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", half, (await nextPosition(date, half)), stamp(), id);
+          return (await mustPick(id));
+        }
         if (p.date === date) {
           if (p.half === half) return p;
           (await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", half, (await nextPosition(date, half)), stamp(), id));
@@ -1937,10 +2151,26 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * WK-3: make a planned to-do a Deployment (its window, items and note) or a plain to-do again (todoKind null clears
      * the window and items; the note stays). `half` is where its window puts it on its date (actions/deploy-actions.ts).
      */
-    async setTodoKind(id: number, k: { todoKind: NewPick["todoKind"]; window: NewPick["window"]; links: NewPick["links"]; deployItems?: NewPick["deployItems"]; notes?: string | null; half?: Half; itemType?: string | null; minutes?: number | null }): Promise<Pick> {
+    async setTodoKind(id: number, k: { todoKind: NewPick["todoKind"]; window: NewPick["window"]; links: NewPick["links"]; deployItems?: NewPick["deployItems"]; notes?: string | null; half?: Half; itemType?: string | null; minutes?: number | null; /** DP-3: a shared deployment's title, and the version the form saw. */ title?: string; version?: number | null }): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
         if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done to-do can change kind");
+        if (p.deploymentId != null) {
+          const { d } = await mustShared(id);
+          if (!k.todoKind) {
+            // DP-3: back to a plain to-do is mine alone: only when nobody else is on it (the deployment goes).
+            if (d.people.length > 1) throw new PlanError("Others are on this deployment. Take yourself off it instead");
+            await shared.remove(d.id).catch(stale);
+            await db.run("UPDATE picks SET deployment_id = NULL WHERE id = ?", id);
+          } else {
+            // DP-3: the details are the shared deployment's, for everyone on it; refused on an older version.
+            const span = k.window ? instantsOf(p.date, k.window, zone()) : {};
+            await shared.update(d.id, k.version ?? null, { ...span, ...(k.title !== undefined ? { title: k.title } : {}), ...(k.notes !== undefined ? { notes: k.notes } : {}), ...(k.links !== undefined ? { links: k.links } : {}), ...(k.deployItems !== undefined ? { deployItems: k.deployItems } : {}) }).catch(stale);
+            await refreshOne(id);
+            if (k.half && k.half !== p.half) (await db.run("UPDATE picks SET half = ?, position = ? WHERE id = ?", k.half, (await nextPosition(p.date, k.half)), id));
+            return (await mustPick(id));
+          }
+        }
         (await writeTodoKind(id, k.todoKind ? k : { todoKind: null, window: null, links: null, deployItems: null }));
         if (k.notes !== undefined) (await db.run("UPDATE picks SET notes = ? WHERE id = ?", k.notes, id));
         if (k.itemType !== undefined) (await db.run("UPDATE picks SET item_type = ? WHERE id = ?", k.itemType, id));
@@ -1949,10 +2179,95 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await mustPick(id));
       });
     },
+    // ---- DP-3: shared deployments (each reaches only a deployment I'm on, through my own to-do for it) ----
+    /** A new deployment, shared from the start: my to-do for it, and the people on it with me. */
+    async addDeployment(p: NewPick, people: readonly { id: string; name: string }[] = []): Promise<Pick> {
+      if (!p.window) throw new PlanError("A deployment needs a start and an end time");
+      return tx(async () => {
+        const pick = await insertPick(p);
+        const d = await shared.create({ clientKey: p.clientKey, title: p.title, ...instantsOf(p.date, p.window!, zone()), zone: zone(), notes: p.notes ?? null, links: p.links ?? null, deployItems: p.deployItems ?? null }, people);
+        await db.run("UPDATE picks SET deployment_id = ? WHERE id = ?", d.id, pick.id);
+        return (await mustPick(pick.id));
+      });
+    },
+    /** The shared deployment behind one of my to-dos, as I may see it (null: not a shared one, or not mine any more). */
+    async deploymentOf(id: number): Promise<{ pick: Pick; people: DeployPerson[]; version: number; createdBy: string } | null> {
+      const p = await rawPick(id);
+      if (!p || p.deploymentId == null) return null;
+      const d = await refreshOne(id);
+      return d ? { pick: (await mustPick(id)), people: d.people, version: d.version, createdBy: d.createdBy } : null;
+    },
+    /** Who is on it (anyone on it may change it). Refused on an older version. */
+    async deploySetPeople(id: number, version: number | null, people: readonly { id: string; name: string }[]): Promise<{ pick: Pick; before: DeployPerson[] }> {
+      return tx(async () => {
+        const { d } = await mustShared(id);
+        await shared.setPeople(d.id, version, people).catch(stale);
+        return { pick: (await mustPick(id)), before: d.people };
+      });
+    },
+    /** Take me off: only me; the last person off deletes it. It leaves my plan at once (my hold comes off Outlook my own way). */
+    async deployLeave(id: number): Promise<{ deleted: boolean; was: DeployPerson; others: DeployPerson[]; title: string }> {
+      return tx(async () => {
+        const { d } = await mustShared(id);
+        const r = await shared.leave(d.id).catch(stale);
+        await refreshOne(id);
+        return { deleted: r.deleted, was: d.people.find((p) => p.id === personId)!, others: d.people.filter((p) => p.id !== personId), title: d.title };
+      });
+    },
+    /** Undo of Take me off. */
+    async deployRejoin(id: number, was: DeployPerson): Promise<Pick> {
+      return tx(async () => {
+        const p = await rawPick(id);
+        if (!p || p.deploymentId == null) throw new PlanError(`No deployment ${id}`);
+        await shared.rejoin(p.deploymentId, was).catch(stale);
+        await refreshOne(id);
+        return (await mustPick(id));
+      });
+    },
+    /** Delete for everyone on it. */
+    async deployDeleteAll(id: number): Promise<{ people: DeployPerson[]; title: string }> {
+      return tx(async () => {
+        const { d } = await mustShared(id);
+        await shared.remove(d.id).catch(stale);
+        await refreshOne(id);
+        return { people: d.people, title: d.title };
+      });
+    },
+    /** Undo of my Delete for everyone. */
+    async deployRestore(id: number): Promise<Pick> {
+      return tx(async () => {
+        const p = await rawPick(id);
+        if (!p || p.deploymentId == null) throw new PlanError(`No deployment ${id}`);
+        await shared.restore(p.deploymentId).catch(stale);
+        await refreshOne(id);
+        return (await mustPick(id));
+      });
+    },
+    /** A hold I moved in Outlook, taken as the deployment's new window (for everyone on it). */
+    async deployFollow(id: number, startAt: string, endAt: string, half?: Half): Promise<Pick> {
+      return tx(async () => {
+        const { d } = await mustShared(id);
+        await shared.update(d.id, null, { startAt, endAt }, { move: true }).catch(stale);
+        await refreshOne(id);
+        if (half) await db.run("UPDATE picks SET half = ? WHERE id = ?", half, id);
+        return (await mustPick(id));
+      });
+    },
+    /** My deployment notices since an instant (added, moved, removed, deleted), oldest first. */
+    deployNotes: (since: string) => shared.notes(since),
+    /** Who I am on a shared deployment. */
+    deployPerson: () => personId,
     async setDone(id: number, done: boolean): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));
         if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done to-do can be ticked");
+        // DP-3: done is for everyone on a shared deployment.
+        if (p.deploymentId != null) {
+          const { d } = await mustShared(id);
+          if (!!d.doneAt !== done) await shared.update(d.id, null, { done }).catch(stale);
+          await refreshOne(id);
+          return (await mustPick(id));
+        }
         (await db.run("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?", done ? "done" : "planned", stamp(), id));
         // Step 13.5: ticking a follow-up pick done closes the loop.
         const fu = ((await db.get("SELECT follow_up_id FROM picks WHERE id = ?", id)) as Row).follow_up_id as number | null;

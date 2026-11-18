@@ -7,6 +7,7 @@ import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
 import { createTeamsBotStore } from "./teams-bot-store.ts";
 import type { Conn } from "./sql/conn.ts";
+import { sharedDeployments } from "./deployments.ts";
 
 /**
  * User tables left out of the export: sealed secrets, push subscriptions (sealed, and tied to one browser), and the
@@ -63,6 +64,8 @@ export async function exportUser(db: Conn, user: UserRow, now: Temporal.Instant)
     schemaVersion: USER_SCHEMA_VERSION,
     you: { id: user.id, tenantId: user.tenantId, upn: user.upn, displayName: user.displayName, email: user.email, timeZone: user.timeZone, createdAt: user.createdAt, lastSignInAt: user.lastSignInAt },
     tables,
+    // DP-3: the deployments they are on, as everyone on it sees them (who is on it by name; never anyone's Outlook state).
+    deployments: (await sharedDeployments(db, () => now).of(user.id)).map((d) => ({ id: d.id, clientKey: d.clientKey, title: d.title, startAt: d.startAt, endAt: d.endAt, zone: d.zone, notes: d.notes, links: d.links, deployItems: d.deployItems, doneAt: d.doneAt, createdAt: d.createdAt, updatedAt: d.updatedAt, people: d.people.map((p) => ({ name: p.name, addedAt: p.addedAt, me: p.id === user.id.toLowerCase() })) })),
   };
 }
 
@@ -73,6 +76,8 @@ export async function exportUser(db: Conn, user: UserRow, now: Temporal.Instant)
  */
 export async function recordSoftDelete(db: Conn, userId: string, at: Temporal.Instant): Promise<void> {
   await db.run("INSERT INTO deletions (user_hash, requested_at) VALUES (?, ?)", [hashOf(userId), at.toString()]);
+  // DP-3: off every deployment at once; one others are still on stays for them.
+  await sharedDeployments(db, () => at).forget(userId);
   await createTeamsBotStore({ db, userId, now: () => at }).forget();
 }
 
@@ -98,6 +103,8 @@ export async function hardDeleteUser(db: Conn, id: string, now: Temporal.Instant
     await db.run("DELETE FROM look_asks WHERE from_id = ? OR to_id = ?", [pid, pid]);
     // IN-1: an admin's record of having invited them.
     await db.run("DELETE FROM people_invites WHERE person_id = ?", [pid]);
+    // DP-3: off every deployment (one others are on stays for them; the soft delete did this already, so usually nothing).
+    await sharedDeployments(db, () => now).forget(pid);
     await db.run("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL", [now.toString(), hashOf(id)]);
   });
 }

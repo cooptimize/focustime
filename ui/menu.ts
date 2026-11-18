@@ -1222,6 +1222,14 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!on.length) return { disabled: "No calendar is connected" };
       return { next: () => ({ title: "Disconnect which calendar?", items: on.map((c) => ({ id: c, label: c === "outlook" ? "Outlook" : "Google", danger: true, run: () => env.disconnect(c) })) }) };
     }
+    case "deploy.people":
+    case "deploy.leave":
+    case "deploy.delete":
+    case "deploy.hold": return { next: () => choosePick(env, "Which deployment?", (p) => deployForm(env, { pick: p })) };
+    case "deploy.rejoin":
+    case "deploy.restore":
+    case "deploy.hold_back":
+    case "deploy.hold_follow": return { disabled: "From a deployment's panel, or Undo" };
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
@@ -1304,6 +1312,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "demo.vm_fail": return { disabled: "Runs from a demo check" };
     case "demo.fail_next": return { disabled: "Runs from a demo check" };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
+    case "demo.be": return env.demo ? { run: () => env.openSettings("data", "demo-be") } : { disabled: "Only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };

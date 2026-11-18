@@ -39,6 +39,7 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
   { name: "devops_takes", table: "devops_takes", keep: "14 days", source: "PV-1 D572", run: del("DELETE FROM devops_takes WHERE taken_at < ?", (n) => ago(n, days(14))) },
   { name: "devops_notes", table: "devops_notes", keep: "14 days", source: "AH-1 D664", run: del("DELETE FROM devops_notes WHERE at < ?", (n) => ago(n, days(14))) },
   { name: "devops_edit_notes", table: "devops_edit_notes", keep: "14 days", source: "ED-1", run: del("DELETE FROM devops_edit_notes WHERE at < ?", (n) => ago(n, days(14))) },
+  { name: "deployment_notes", table: "deployment_notes", keep: "14 days", source: "DP-3", run: del("DELETE FROM deployment_notes WHERE at < ?", (n) => ago(n, days(14))) },
   { name: "devops_changes", table: "devops_changes", keep: "30 days", source: "DV-1 D590", run: del("DELETE FROM devops_changes WHERE logged_at < ?", (n) => ago(n, days(30))) },
   {
     name: "delivery_snapshots",

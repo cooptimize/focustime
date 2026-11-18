@@ -2201,9 +2201,43 @@ function DataSection(p: BodyProps) {
               <DemoSection />
             </div>
           )}
+          {p.demo && (
+            <div data-setting="demo-be">
+              <DemoPerson />
+            </div>
+          )}
         </Group>
       )}
     </div>
+  );
+}
+
+/**
+ * DP-3: in the demo, see FocusTime as one of its teammates who use it (their own plan, with what is shared with them),
+ * or as yourself again: a second signed-in person, so a shared deployment can be tried from both sides.
+ */
+function DemoPerson() {
+  const [st, setSt] = useState<{ current: string; people: { id: string; name: string }[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => void call<{ current: string; people: { id: string; name: string }[] }>("demo.be", {}).then(setSt, (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check")), []);
+  const choose = async (who: string) => {
+    try {
+      await call("demo.be", { who });
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't work");
+    }
+  };
+  return (
+    <fieldset className="set-choice">
+      <legend>See the demo as</legend>
+      <select value={st?.current ?? "me"} disabled={!st} onChange={(e) => void choose(e.target.value)} aria-describedby="demo-be-hint">
+        {(st?.people ?? []).map((x) => (
+          <option key={x.id} value={x.id}>{x.id === "me" ? `${x.name} (you)` : x.name}</option>
+        ))}
+      </select>
+      <p className="set-hint" id="demo-be-hint">{error ?? "A teammate who uses FocusTime, with their own plan: a deployment you add them to shows there."}</p>
+    </fieldset>
   );
 }
 

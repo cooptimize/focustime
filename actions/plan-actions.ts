@@ -21,6 +21,7 @@ import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
+import { peopleIds, resolvePeople, type PeopleResolver } from "./shared-deploy-actions.ts";
 
 export const PLAN_ACTIONS = ["planday.start", "planday.carry", "pick.add", "pick.remove", "pick.take_off", "pick.put_back", "pick.set_size", "pick.move", "pick.mark_done", "deploy.add", "pick.set_kind", "pick.uncarry", "pick.undrop", "suggest.load", "suggest.clear", "suggest.unclear", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 /** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
@@ -48,6 +49,8 @@ export type PlanContext = {
   storeItem?: (clientKey: string, itemId: number) => Promise<import("../week/types.ts").WorkItem | null>;
   /** DP-2: the client's data platform and its list of deployment items (Admin › Clients); absent: not set. */
   clientDeploy?: (clientKey: string) => Promise<ClientDeploy | null>;
+  /** DP-3: who a deployment's People names (Cooptimizers who use FocusTime), checked on the server. */
+  people?: PeopleResolver;
 };
 
 /**
@@ -520,7 +523,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       }
       case "deploy.add": {
         // WK-3 (DP-0): a Deployment to-do: a client, a date and a window; items and a note optional. Local only.
-        const o = fields(input, ["clientKey", "date", "start", "end"], ["title", "note", "itemIds", "items"]);
+        const o = fields(input, ["clientKey", "date", "start", "end"], ["title", "note", "itemIds", "items", "people"]);
         const key = clientKey(o.clientKey);
         const d = date(o.date);
         const w = deployWindow(o);
@@ -533,15 +536,18 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const clk = await clock(ctx);
         const note = placeNote(d, { pto: !!(await ptoOf(ctx, clk.cfg, d)), hasHours: await clk.hasHours(d) });
         const title = o.title === undefined || o.title === null || o.title === "" ? DEPLOYMENT : text(o.title, "title");
-        const pick = await plan.addPick({
+        // DP-3: the people on it with me (Cooptimizers who use FocusTime), checked here; none: only me, as before.
+        const people = o.people === undefined ? [] : await resolvePeople(ctx.people, peopleIds(o.people), plan.deployPerson());
+        if (typeof people === "string") return bad(people, 422);
+        const pick = await plan.addDeployment({
           date: d, half: windowHalf(hoursOn(clk.model, d), w), clientKey: key, kind: "intention", title, itemType: DEPLOYMENT, size: null,
           minutes: Math.min(480, windowMinutes(w)), todoKind: "deployment", window: w, links, deployItems, notes: deployNote(o.note),
-        });
+        }, people);
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date), note } };
       }
       case "pick.set_kind": {
         // WK-3: change a to-do's kind (to-do menu › Kind): a Deployment needs its window; back to a to-do clears it.
-        const o = fields(input, ["id", "kind"], ["start", "end", "note", "itemIds", "items"]);
+        const o = fields(input, ["id", "kind"], ["start", "end", "note", "itemIds", "items", "title", "version", "people"]);
         const pid = id(o.id);
         const before = await plan.getPick(pid);
         if (!before) return bad(`No to-do ${pid}`, 404);
@@ -559,11 +565,24 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const deployItems = await deployTicks(ctx, before.clientKey, o.items, before);
         if (typeof deployItems === "string") return bad(deployItems, 409);
         const { model } = await clock(ctx);
-        const pick = await plan.setTodoKind(pid, {
+        // DP-3: a shared deployment's title can change too (blank keeps it); People is the whole list, checked here.
+        if (o.title !== undefined && o.title !== "" && before.deploymentId == null) throw new Invalid("A to-do's title is its own");
+        const title = o.title === undefined || o.title === "" ? undefined : text(o.title, "title");
+        const people = o.people === undefined ? null : await resolvePeople(ctx.people, peopleIds(o.people), plan.deployPerson());
+        if (typeof people === "string") return bad(people, 422);
+        if (o.version !== undefined && (typeof o.version !== "number" || !Number.isSafeInteger(o.version) || o.version <= 0)) throw new Invalid("version must be a positive whole number");
+        let pick = await plan.setTodoKind(pid, {
           todoKind: "deployment", window: w, links, deployItems, half: windowHalf(hoursOn(model, before.date), w), minutes: Math.min(480, windowMinutes(w)),
           ...(before.kind === "intention" && !before.followUpId ? { itemType: DEPLOYMENT } : {}),
           ...(o.note !== undefined ? { notes: deployNote(o.note) } : {}),
+          ...(title !== undefined ? { title } : {}),
+          ...(typeof o.version === "number" ? { version: o.version } : {}),
         });
+        if (people) {
+          // A to-do just made a deployment becomes a shared one first (it is mine alone until someone is added).
+          if (pick.deploymentId == null) await plan.picksFor(pick.date);
+          if ((await plan.deploymentOf(pid)) && (people.length || pick.deploymentId != null)) pick = (await plan.deploySetPeople(pid, null, people)).pick;
+        }
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "draft.add_story": {
