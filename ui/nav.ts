@@ -82,7 +82,7 @@ export type Nav =
    * IB-4: three lists. `view` null is the bare #/inbox (the list I used last); `item` is the row open in place
    * (#/inbox/item/<key>), in the list its key belongs to.
    */
-  | { tab: "inbox"; view: InboxList | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true }
+  | { tab: "inbox"; view: InboxList | null; item: string | null; late?: LateFilter; /** LP-1: open the item's Close the loop draft (#/inbox/item/<key>/loop: the assistant's link). */ loop?: true; /** PH-2: on the phone, what needs me one at a time (#/inbox/one, #/inbox/one/<key>); a computer shows the item in its list. */ one?: true }
   /**
    * RB-1, RB-6: Code at a client, a repo and a file (#/code/<client>/<repo id>/<path>). RB-2: By kind, or a search
    * (no client: every client); RB-4: "inside" is the search set to Inside files. Absent: Files. A tab since RB-6.
@@ -125,6 +125,8 @@ export const navOf = {
   inboxView: (view: InboxPlace | InboxList): Nav => ({ tab: "inbox", view: listOfPlace(view), item: null }),
   /** UI-9: the Promises view, late ones only, for one client (#/inbox/promises/late/<client>; null: any client). */
   inboxLate: (client: string | null): Nav => ({ tab: "inbox", view: "promises", item: null, late: { client } }),
+  /** PH-2: the phone's Inbox one at a time, at an item (#/inbox/one/<key>) or at the first (#/inbox/one). */
+  inboxOne: (key: string | null = null): Nav => ({ tab: "inbox", view: key ? listOfKey(key) : null, item: key, one: true }),
   /** IB-4: one row open in place (#/inbox/item/<key>), in its own list. A send opens Week, where To place answers it. */
   inboxItem: (key: string, _view: InboxPlace | InboxList | null = null): Nav => (key.startsWith("s") ? navOf.week() : { tab: "inbox", view: listOfKey(key), item: key }),
   /** Captures (was Captures and drafts). */
@@ -268,6 +270,7 @@ export function hashOf(l: Loc): string {
   if (n.tab === "ahead") return (n.mode === "gantt" ? "#/backlog/gantt" : n.item ? `#/backlog/item/${n.item}` : "#/backlog") + (aheadQuery ? `?${aheadQuery}` : "");
   // RB-1: Code at a client, a repo and a file: #/code/<client>/<repo id>/<path, one encoded part>.
   if (n.tab === "code") return codeHash(n);
+  if (n.one) return n.item ? `#/inbox/one/${n.item}` : "#/inbox/one";
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${n.view}` : "#/inbox";
@@ -500,6 +503,7 @@ export function parseHash(full: string): Loc | null {
       // #/inbox/promise/<id>, #/inbox/<id> (a follow-up, now a promise), and UI-7's modes.
       // LP-1: #/inbox/item/<key>/loop opens a promise with its Close the loop draft (only a promise: c or f).
       if (a === "item" && c === "loop") return b !== undefined && /^[cf][1-9]\d{0,9}$/.test(b) ? plain({ tab: "inbox", view: "promises", item: b, loop: true }) : null;
+      if (a === "one") return c === undefined && (b === undefined || ITEM_KEY.test(b)) ? plain(navOf.inboxOne(b ?? null)) : null;
       if (a === "item") return c === undefined && b !== undefined && ITEM_KEY.test(b) ? plain(navOf.inboxItem(b)) : null;
       if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
       // UI-9: #/inbox/promises/late and #/inbox/promises/late/<client>.

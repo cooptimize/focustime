@@ -4,7 +4,7 @@
 // status dot (More › Everything else › Sources); e2e/phone/now-and-more.test.ts tests those. Here: the computer's tabs
 // unchanged; Ahead's notice and Open anyway; today's to-dos by block; the to-do sheet (Done,
 // Move to tomorrow, Snooze, Add time, each with Undo where it changes my plan; focus kept inside, Esc, focus back);
-// Week rows at 360 with the title on its own line; the status sheet and no source footer on the phone.
+// PH-2: Week's day rows at 360 and a day's sections; the status sheet and no source footer on the phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -77,17 +77,17 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.close();
   }, T);
 
-  it("Day (PH-1): to-dos by block under Today; no urgent strip or Promises due list (the Inbox has them)", async () => {
+  it("Day (PH-1, PH-2): the day's blocks as sections with their to-dos; no urgent strip or Promises due list (the Inbox has them)", async () => {
     const page = await phonePage(h, 390);
     await planMonday(page);
     await at(page, "#/today");
     await page.locator(".pn-card").waitFor();
     expect(await page.locator(".urgent-strip, .ph-urgent-head").count()).toBe(0);
     expect(await page.getByRole("heading", { name: /Promises due/i }).count()).toBe(0);
-    // To-dos by block: the long title keeps two lines, the second line says time, size and client.
-    expect(await page.locator(".ph-block-head").allTextContents()).toEqual([expect.stringMatching(/^Cooptimize/), expect.stringMatching(/^Northwind/)]);
-    const line = page.locator(".ph-todo-line").first();
-    expect(await line.textContent()).toMatch(/M 2h · Cooptimize/);
+    // PH-2: a section per block in time order, its to-dos with their size in words.
+    expect(await page.locator(".dg-block .dg-name").allTextContents()).toEqual(["Cooptimize", "Northwind"]);
+    expect(await page.locator(".dg-todo").count()).toBeGreaterThan(0);
+    expect(await page.locator(".dg-size").first().textContent()).toMatch(/^\d+h/);
     expect(await page.locator(".pn-next-row").count()).toBeGreaterThan(0);
     expect(await noSideways(page)).toBe(0);
     await page.close();
@@ -98,7 +98,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await planMonday(page);
     await at(page, "#/today");
     const title = "Review open pull requests";
-    const row = page.locator(".ph-todo-main", { hasText: title });
+    const row = page.locator(".dg-title", { hasText: title });
     await row.click();
     const sheet = page.getByRole("dialog", { name: `To-do: ${title}` });
     await sheet.waitFor();
@@ -144,21 +144,21 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await page.close();
   }, T);
 
-  it("Week at 360: each row's title on its own line, never squeezed; the agenda folded; ⋯ opens the same sheet", async () => {
+  it("Week at 360 (PH-2): day rows of tiles, each at least 44 px; another day's sections say the meetings line; a title opens the same sheet", async () => {
     const page = await phonePage(h, 360);
     await planMonday(page);
     await at(page, "#/week");
-    const rows = page.locator(".grid.narrow .ph-row");
-    await rows.first().waitFor();
-    const widths = await rows.evaluateAll((els) => els.map((r) => ({ row: r.getBoundingClientRect().width, title: r.querySelector(".pr-title")!.getBoundingClientRect().width })));
-    for (const w of widths) expect(w.title / w.row).toBeGreaterThan(0.6);
-    const fold = page.locator(".card-agenda-fold").first();
-    // WD-1: meetings are one summary line ("3 meetings · 1h 30m · 2h free") that expands to the list.
-    expect(await fold.textContent()).toMatch(/\d+ meetings? · .* free$/);
-    expect(await page.locator(".grid.narrow .card-events").count()).toBe(0);
-    await fold.click();
-    expect(await page.locator(".grid.narrow .card-events").count()).toBe(1);
-    await rows.first().locator(".ph-more").click();
+    const tiles = page.locator(".pw-row .pw-tile");
+    await tiles.first().waitFor();
+    const small = await tiles.evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).length);
+    expect(small).toBe(0);
+    expect(await noSideways(page)).toBe(0);
+    // Monday (today on this file's clock) opens Day, its blocks as sections.
+    await page.locator(".pw-row").first().locator(".pw-day").click();
+    await page.locator(".dg-block").first().waitFor();
+    // WD-1's summary line ("3 meetings · 1h 30m · 2h free"), under each section.
+    expect(await page.locator(".dg-line").first().textContent()).toMatch(/meetings?|No meetings/);
+    await page.locator(".dg-title").first().click();
     await page.getByRole("dialog", { name: /^To-do: / }).waitFor();
     await page.keyboard.press("Escape");
     expect(await noSideways(page)).toBe(0);
@@ -210,7 +210,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
     await big();
     const small = await page.locator(".bottom-bar button, .bottom-bar a").evaluateAll((els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width < 44 || r.height < 44; }).length);
     expect(small).toBe(0);
-    await page.locator(".ph-todo-main").first().click();
+    await page.locator(".dg-title").first().click();
     const sheet = page.getByRole("dialog", { name: /^To-do: / });
     await sheet.waitFor();
     const tiny = await sheet.locator("button").evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).length);

@@ -145,8 +145,8 @@
      and an edge, never a fill; the block under way outlined; an Open half-day dashed; a day that is one thing one tile. */
   .pw { display: grid; gap: 4px; font-size: var(--ph-body); }
   .pw-head { position: sticky; top: var(--ph-top, 0px); z-index: 20; background: var(--bg); padding: 2px 0 6px; display: grid; gap: 2px; box-shadow: 0 1px 0 var(--border); }
-  .pw-head-row { display: flex; align-items: center; gap: 4px; min-height: var(--tap); }
-  .pw-title { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; }
+  .pw-head-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: var(--tap); }
+  .pw-title { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; min-width: 0; }
   .app.phone .pw-step, .app.phone .pd-step-ph button { min-width: var(--tap); min-height: var(--tap); padding: 0; display: inline-grid; place-items: center; border: 0; background: none; color: var(--text); }
   .pw-step svg, .pd-step-ph svg { width: 20px; height: 20px; }
   .app.phone .pw-this { min-height: var(--tap); margin-left: auto; padding: 0 12px; font-size: var(--fs-2); }
@@ -218,9 +218,11 @@
   .dg-size { flex: none; color: var(--text-muted); font-size: var(--fs-2); }
   .dg-none { margin: 2px 0; color: var(--text-muted); font-size: var(--fs-2); }
   .dg-meetings { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px; }
-  .dg-meeting { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; min-height: var(--tap); }
+  /* A wide mark (a call's "Review 11 proposals") wraps under the title rather than squeezing it. */
+  .dg-meeting { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 2px; min-height: var(--tap); padding: 2px 0; }
+  .dg-meeting > :last-child:not(.dg-mtitle) { margin-left: auto; max-width: 100%; }
   .dg-at { color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .dg-mtitle { min-width: 0; overflow-wrap: anywhere; }
+  .dg-mtitle { flex: 1 1 12ch; min-width: 12ch; overflow-wrap: anywhere; }
   .dg-meeting.personal .dg-mtitle { font-style: italic; }
   .dg-meeting .call-mark-btn, .dg-meeting button { min-height: var(--tap); }
   .dg-line { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
@@ -228,9 +230,44 @@
   .ph-today .dg { margin-top: 4px; }
 
   .dg-headbar { position: sticky; top: var(--ph-top, 0px); z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; padding: 2px 0 6px; margin-bottom: 8px; background: var(--bg); box-shadow: 0 1px 0 var(--border); }
-  .dg-date { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; }
+  .dg-date { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; min-width: 0; }
   .pd-step-ph { display: inline-flex; }
   .dg-headacts { margin-left: auto; display: inline-flex; gap: 4px; }
   .app.phone .dg-today, .app.phone .dg-week { min-height: var(--tap); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
   .dg-week svg { width: 16px; height: 16px; }
+
+  /* PH-2: the Inbox one at a time. One card, its actions as full-width buttons (the main one first, the rest under
+     More), Previous and Next, then Up next; the three lists one tap from the top. */
+  .io { display: grid; gap: 12px; padding: 8px 16px 24px; font-size: var(--ph-body); }
+  .io-head { display: flex; align-items: baseline; gap: 10px; }
+  .io-h { margin: 0; font-size: calc(var(--ph-body) + 4px); font-weight: 600; }
+  .io-of { color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+  .io-lists { display: flex; flex-wrap: wrap; gap: 6px; }
+  .app.phone .io-list { min-height: var(--tap); padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 22px; font-size: var(--fs-2); }
+  .io-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .io-card { display: grid; gap: 6px; padding: 14px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--c, var(--border-strong)) 35%, var(--border)); background: color-mix(in srgb, var(--c, var(--border-strong)) 8%, var(--surface)); box-shadow: inset 4px 0 0 var(--c, var(--border-strong)); }
+  .io-card > * { margin: 0; }
+  .io-client { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); font-weight: 500; }
+  .io-client .swatch, .io-nextrow .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+  .io-title { font-size: calc(var(--ph-body) + 2px); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .io-title:focus { outline: none; }
+  .io-who { font-weight: 500; }
+  .io-where { font-size: var(--fs-2); overflow-wrap: anywhere; }
+  .io-card .ib-said, .io-card .ib4-why, .io-card .ib-summary { margin: 0; overflow-wrap: anywhere; }
+  .io-acts { display: grid; gap: 8px; }
+  .io-rest { display: grid; gap: 8px; }
+  .app.phone .io-act { width: 100%; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; font-size: var(--ph-body); font-weight: 500; text-decoration: none; }
+  .app.phone .io-act.primary { font-weight: 600; }
+  .io-more svg { width: 16px; height: 16px; }
+  .io-step { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .app.phone .io-stepbtn { min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--fs-2); }
+  .io-stepbtn svg { width: 16px; height: 16px; }
+  .io-next ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .app.phone .io-nextrow { width: 100%; min-height: var(--tap); display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 4px; border: 0; background: none; color: var(--text); text-align: left; font-size: var(--ph-body); }
+  .io-nextclient { color: var(--text-muted); font-size: var(--fs-2); }
+  .io-nexttitle { min-width: 0; overflow-wrap: anywhere; }
+  .io-end { margin: 0; font-weight: 500; }
+  .ib4-head .io-end { flex-basis: 100%; }
+  .app.phone .io-back { min-height: var(--tap); padding: 0 10px 0 4px; display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--text); font-size: var(--fs-2); }
+  .io-back svg { width: 18px; height: 18px; }
 }

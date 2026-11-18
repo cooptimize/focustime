@@ -116,8 +116,9 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await shot(page, "ph1-now-block");
     // Next: the next meeting and the next block, with its risk, in time order.
     expect(await page.locator(".pn-next-row").allTextContents()).toEqual(["11:00 AMProposal review with Jordan45 min", "12:30 PMNorthwindAt risk · Dentist 12:00"]);
-    // Today, under its own heading, by block.
-    expect(await page.locator(".ph-todos .section-label").textContent()).toBe("Today");
+    // PH-2: the day's blocks as sections under Next and the one thing; the Now card's to-do isn't listed again.
+    await page.locator(".dg-block").first().waitFor();
+    expect(await page.locator(".dg-title", { hasText: "Write the migration notes" }).count()).toBe(0);
     // Off Now: the day's arrows, Cards or Timeline, the Day menu, the suggestions line, the moment card, the urgent strip.
     expect(await page.locator(".day-bar, .day-switch, .pd-step, .sug-day-head, .moment-card, .urgent-strip, .day-chips, .ph-next").count()).toBe(0);
 
@@ -179,7 +180,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await page.close();
   }, T);
 
-  it("the one thing that needs you: the most pressing, 1 of the Inbox's count, opening in the Inbox", async () => {
+  it("the one thing that needs you: the most pressing, 1 of the Inbox's count, opening the Inbox one at a time at it", async () => {
     const page = await phonePage(h, 390);
     await open(page, h, "#/day", at("09:30"));
     const one = page.locator(".pn-one-row");
@@ -188,8 +189,13 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     expect(await one.locator(".pn-one-of").textContent()).toBe(`1 of ${count}`);
     // The demo's late promise comes first.
     expect(await one.locator(".pn-one-why").textContent()).toBe("Late");
+    // PH-2: the heading is the Inbox's own name.
+    expect(await page.getByRole("heading", { name: "Inbox", exact: true }).count()).toBeGreaterThan(0);
     await one.click();
-    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/inbox\/item\//);
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/inbox\/one\//);
+    const key = (await page.evaluate(() => location.hash)).split("/").pop();
+    await expect.poll(() => page.locator(".io-card").getAttribute("data-key"), { timeout: 15_000 }).toBe(key);
+    expect(await page.locator(".io-of").textContent()).toBe(`1 of ${count}`);
     expect(await bar(page).locator('[aria-current="page"]').getAttribute("data-tab")).toBe("inbox");
     await page.close();
   }, T);

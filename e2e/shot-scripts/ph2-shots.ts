@@ -39,9 +39,6 @@ async function plan(page: Page) {
     const r = (await call(page, "pick.add", p)) as unknown as { data?: { pick?: { id: number } } };
     if (done && r.data?.pick) await call(page, "pick.mark_done", { id: r.data.pick.id, done: true });
   };
-  await add({ date: MON, half: "AM", clientKey: "Cooptimize", intention: "Write the release notes", size: "S" }, true);
-  await add({ date: MON, half: "AM", clientKey: "Cooptimize", intention: "Review open pull requests", size: "S" });
-  await add({ date: MON, half: "PM", clientKey: "Northwind", intention: "Prepare the data model review", size: "M" }, true);
   await add({ date: TUE, half: "AM", clientKey: "Cooptimize", intention: "Answer the sizing question", size: "S" });
   await add({ date: TUE, half: "AM", clientKey: "Cooptimize", intention: "Tidy the export notes", size: "M" });
   await add({ date: TUE, half: "PM", clientKey: "Northwind", intention: "Draft the load test plan", size: "L" });

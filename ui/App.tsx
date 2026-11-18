@@ -2344,6 +2344,7 @@ export function App() {
           inbox={inboxToday?.items ?? null}
           needsYou={needsYouCount}
           onItem={(key) => goNav(navOf.inboxItem(key))}
+          onOneThing={(key) => goNav(navOf.inboxOne(key))}
           onNeedsYou={() => goNav(navOf.inboxView("needs_you"))}
           onLate={(client) => goNav(navOf.inboxLate(client))}
           onInbox={() => setView("follow_ups")}
@@ -2434,7 +2435,7 @@ export function App() {
                 <PhoneM.PhoneWeek
                   week={week}
                   title={read ? weekLabel(askedWeek, weekDates(askedWeek)[4]!) : weekLabel(week.days[0]!.date, week.days[4]!.date)}
-                  today={today}
+                  today={localToday}
                   now={nowIso}
                   tz={userZone(data)}
                   colors={data.clients}

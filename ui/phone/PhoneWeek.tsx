@@ -127,7 +127,7 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
     const isToday = day.date === today;
     const past = day.date < today;
     const due = past ? 0 : dueOn(day.date);
-    const dueText = promisesLine(due, dueWords(day.date, today));
+    const dueText = due ? promisesLine(due, dueWords(day.date, today)) : null;
     let tiles: ReactNode;
     if (b.weekend) {
       const r = weekendRows(day, picks, []);

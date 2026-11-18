@@ -70,6 +70,8 @@ type Props = {
   onDay?: (date: IsoDate | null) => void;
   /** PH-2: back to Week, on the week holding this date (the phone's small header). */
   onWeek?: (date: IsoDate) => void;
+  /** PH-2: the one thing opens its item in the Inbox one at a time, at that item. */
+  onOneThing?: (key: string) => void;
   /** RS-2: the day asked for while its week is being read (`viewDate` is then the last day drawn, dimmed); its read state and Retry. */
   asked?: IsoDate | null;
   read?: WeekRead;
@@ -624,7 +626,7 @@ export function Day(props: Props) {
               )}
             />
           )}
-          {nudges && <PhoneM.OneThingLine thing={PhoneM.oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onItem ?? (() => props.onInbox()))(k)} />}
+          {nudges && <PhoneM.OneThingLine thing={PhoneM.oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onOneThing ?? props.onItem ?? (() => props.onInbox()))(k)} />}
         </div>
       )}
       {!phoneToday && aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>

@@ -102,6 +102,9 @@ describe("addresses", () => {
     [loc(navOf.aheadItem(437)), "#/backlog/item/437"],
     [loc(navOf.inbox()), "#/inbox"],
     [loc(navOf.inbox(12)), "#/inbox/item/f12"],
+    // PH-2: the phone's Inbox one at a time, at the first item or at one.
+    [loc(navOf.inboxOne()), "#/inbox/one"],
+    [loc(navOf.inboxOne("c7")), "#/inbox/one/c7"],
     [loc(navOf.conversations()), "#/inbox/chats"],
     [loc(navOf.myPromises()), "#/inbox/promises"],
     [{ nav: navOf.today(), overlay: { kind: "focus" } }, "#/focus"],

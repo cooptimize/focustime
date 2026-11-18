@@ -78,14 +78,22 @@ const ORDER: readonly OneWhy[] = ["late", "due_today", "from_chat", "other"];
  */
 export function oneThing(rows: readonly InboxItemView[], needsYou: number, today: string): OneThing | null {
   if (needsYou <= 0) return null;
-  const all: { key: string; why: OneWhy; title: string; who: string | null }[] = [
-    ...rows.flatMap((r) => {
-      const why = rank(r, today);
-      return why ? [{ key: r.key, why, title: r.title, who: r.who }] : [];
-    }),
-  ];
-  const first = [...all].sort((a, b) => ORDER.indexOf(a.why) - ORDER.indexOf(b.why))[0];
-  return first ? { ...first, of: needsYou } : null;
+  const first = needsQueue(rows, today)[0];
+  return first ? { key: first.key, why: first.why, title: first.title, who: first.who, of: needsYou } : null;
+}
+
+/**
+ * PH-2: everything the Inbox counts as needing me (the bar's number), in the one thing's order: late promises, then
+ * those due today, then suggestions from chats, then the rest; inside one kind, the Inbox's own order. The Inbox one at
+ * a time walks this list, and the one thing is its first.
+ */
+export function needsQueue<R extends InboxItemView>(rows: readonly R[], today: string): (R & { why: OneWhy })[] {
+  const all = rows.flatMap((r) => {
+    const why = rank(r, today);
+    return why ? [{ ...r, why }] : [];
+  });
+  // A stable sort: inside one kind the Inbox's own order stays.
+  return all.map((r, i) => ({ r, i })).sort((a, b) => ORDER.indexOf(a.r.why) - ORDER.indexOf(b.r.why) || a.i - b.i).map((x) => x.r);
 }
 
 /** Every word the phone's bar, Day and More say (PH-1). */
@@ -120,6 +128,21 @@ export const PHONE_TEXT = {
   why: { late: "Late", due_today: "Due today", from_chat: "From a chat", other: "Needs you" } as Record<OneWhy, string>,
   today: "Today",
   more: "More",
+  /** PH-2: the Inbox one at a time. */
+  one: {
+    heading: "Inbox",
+    of: (i: number, n: number) => `${i} of ${n}`,
+    lists: "Lists",
+    previous: "Previous",
+    next: "Next",
+    upNext: "Up next",
+    more: "More",
+    moreFor: (title: string) => `More actions for ${title}`,
+    actionsFor: (title: string) => `Actions for ${title}`,
+    end: "Nothing needs you now.",
+    back: "Back",
+    backLabel: "Back to what needs you, one at a time",
+  },
   rows: {
     backlog: "Backlog",
     status: "Status",
