@@ -144,10 +144,10 @@ export function createDemoOutlook(o: { now: () => string }) {
  * 9:00 to 5:00 Eastern), Sam working 8:00 to 4:00 Pacific, and Taylor's calendar not shared. Only what getSchedule
  * gives: an availability string and working hours, never an event.
  */
-const DEMO_FREEBUSY: Record<string, { busy: [string, string][]; zone: string; graphZone: string; start: string; end: string } | null> = {
-  [DEMO_PEOPLE[0]!.email]: { busy: [["13:00", "14:00"]], zone: DEMO_TZ, graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
-  [DEMO_PEOPLE[1]!.email]: { busy: [["10:00", "11:00"]], zone: DEMO_TZ, graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
-  [DEMO_PEOPLE[2]!.email]: { busy: [], zone: "America/Los_Angeles", graphZone: "Pacific Standard Time", start: "08:00", end: "16:00" },
+const DEMO_FREEBUSY: Record<string, { busy: [string, string][]; graphZone: string; start: string; end: string } | null> = {
+  [DEMO_PEOPLE[0]!.email]: { busy: [["13:00", "14:00"]], graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
+  [DEMO_PEOPLE[1]!.email]: { busy: [["10:00", "11:00"]], graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
+  [DEMO_PEOPLE[2]!.email]: { busy: [], graphZone: "Pacific Standard Time", start: "08:00", end: "16:00" },
   [DEMO_PEOPLE[3]!.email]: null,
 };
 function demoSchedule(b: Record<string, unknown>) {

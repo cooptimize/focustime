@@ -110,6 +110,12 @@ describe("checking one time (CO-1)", () => {
     expect(checkWords(u).people[0]!.text).toBe("Ana: Free (hours not shared, 9:00–5:00 assumed)");
   });
 
+  it("hours that end at midnight in another zone read as midnight, in their zone and in mine", () => {
+    // Ana works 4:00 PM to midnight London (10:00 AM to 6:00 PM Chicago); 8:00 Chicago is 2:00 PM for her.
+    const c = checkTime(base({ start: at("08:00"), end: at("08:30"), people: [ANA], availability: sched({ [ANA.email]: { hours: { tz: "GMT Standard Time", start: "16:00", end: "00:00" } } }) }));
+    expect(c.people[0]).toMatchObject({ state: "outside", hours: { mine: { start: `${D}T10:00:00-06:00`, end: `${D}T18:00:00-06:00` } } });
+  });
+
   it("returns only the fields it names: busy times and working hours, nothing else of a teammate's calendar", () => {
     const c = checkTime(base({ availability: sched({ [ANA.email]: { view: view([["10:00", "11:00"]]) }, [BEN.email]: { hours: { tz: "Pacific Standard Time" } } }) }));
     const keys = (o: object) => Object.keys(o).sort();

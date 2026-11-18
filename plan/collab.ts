@@ -322,9 +322,11 @@ export function checkTime(o: CheckInput): TimeCheck {
     if (!withinWorkingHours(a, b, wh)) {
       const day = Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(wh.zone).toPlainDate();
       const workday = wh.days.includes(DAY_NAMES[day.dayOfWeek]!);
-      const at = (hm: string) => day.toZonedDateTime({ timeZone: wh.zone, plainTime: hm === "24:00" ? "00:00" : hm }).add({ days: hm === "24:00" ? 1 : 0 });
+      // Graph's end of "00:00" (or "24:00") is midnight at the end of their day, as withinWorkingHours reads it.
+      const midnight = (hm: string, isEnd: boolean) => hm === "24:00" || (isEnd && hm === "00:00");
+      const at = (hm: string, isEnd = false) => day.toZonedDateTime({ timeZone: wh.zone, plainTime: midnight(hm, isEnd) ? "00:00" : hm }).add({ days: midnight(hm, isEnd) ? 1 : 0 });
       const sameZone = Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(wh.zone).offsetNanoseconds === Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(tz).offsetNanoseconds;
-      const mine = workday && !sameZone ? { start: isoIn(at(wh.start).epochMilliseconds, tz), end: isoIn(at(wh.end).epochMilliseconds, tz) } : null;
+      const mine = workday && !sameZone ? { start: isoIn(at(wh.start).epochMilliseconds, tz), end: isoIn(at(wh.end, true).epochMilliseconds, tz) } : null;
       return { ...who, state: "outside", hours: { start: wh.start, end: wh.end, zone: wh.zone, workday, mine }, ...unknown };
     }
     const busy = av.busy.filter(([x, y]) => x < b && y > a);
