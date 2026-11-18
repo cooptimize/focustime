@@ -48,7 +48,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Starting…");
     await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running · off at 7:00 PM");
     await page.keyboard.press(",");
-    await settingsSection(page, "activity");
+    await page.evaluate((h) => (location.hash = h), "#/settings/data/azure-log");
     const log = page.locator('[aria-label="Azure write log"]');
     await expect.poll(() => log.textContent(), { timeout: 10_000 }).toMatch(/Started vm-demo-alex.*Confirmed/);
     expect(errors).toEqual([]);

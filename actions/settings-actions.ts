@@ -10,6 +10,7 @@ import { DEFAULT_ASK_SETTINGS } from "../plan/asks.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
 import { DEFAULT_NOTIFY } from "../plan/notify.ts";
+import { appTimesOf, TEAMS_NOTE_MARK, teamsTimeNotes, type TeamsNote } from "../plan/teams-rhythm.ts";
 import { DEFAULT_AZURE } from "../config/schema.ts";
 import { settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
 import type { WriteResult } from "../config/edit.ts";
@@ -22,7 +23,7 @@ import type { ActionResponse, FieldProblem, SettingsClient, SettingsData } from 
 import { userZone } from "../week/zone.ts";
 import { DATAVERSE_UNREACHABLE, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 
-export type SettingsAction = "settings.load" | "settings.save" | "data.export";
+export type SettingsAction = "settings.load" | "settings.save" | "data.export" | "settings.note_seen";
 
 export type SettingsContext = {
   /** The config as written (what a save edits). */
@@ -119,7 +120,19 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     aiRules: cfg.aiRules,
     org: cfg.org,
     guidance: cfg.guidance,
+    teamsNote: await teamsNoteOf(ctx, cfg, tz),
   };
+}
+
+/** SA-3: the Teams time notes still to show (Got it marks one as seen, for good). */
+async function teamsNoteOf(ctx: SettingsContext, cfg: AppConfig, tz: string): Promise<TeamsNote> {
+  const today = ctx.now ? localToday(ctx.now(), tz) : Temporal.Now.plainDateISO(tz).toString();
+  // Only someone FocusTime could message in Teams was getting Teams' own times.
+  if (!cfg.notify.teamsMessages) return { checkin: null, closeout: null };
+  const n = teamsTimeNotes(cfg.week.hours, today, cfg.notify.teams, appTimesOf(cfg));
+  if (!n.checkin && !n.closeout) return n;
+  const seen = ctx.plan ? await ctx.plan.markedDates(TEAMS_NOTE_MARK).catch(() => new Set<string>()) : new Set<string>();
+  return { checkin: seen.has("checkin") ? null : n.checkin, closeout: seen.has("closeout") ? null : n.closeout };
 }
 
 /** parseConfig's field names, plainly. */
@@ -149,6 +162,13 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
         return bad(`Not saved: ${fields.map((f) => `${f.field} ${f.message}`).join("; ")}`, 422, fields);
       }
       return { ok: true, data: { settings: await load(ctx), backup: r.backup.split("/").pop() } };
+    }
+    case "settings.note_seen": {
+      // SA-3: Got it on a Teams time note: never shown again.
+      if (Object.keys(o).some((k) => k !== "kind") || (o.kind !== "checkin" && o.kind !== "closeout")) return bad('input must be { kind: "checkin" | "closeout" }');
+      if (!ctx.plan) return bad("The plan store isn't available", 503);
+      await ctx.plan.markOnce(TEAMS_NOTE_MARK, o.kind);
+      return { ok: true, data: { seen: o.kind } };
     }
     case "data.export": {
       if (Object.keys(o).length) return bad("data.export takes {}");

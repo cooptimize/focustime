@@ -45,29 +45,30 @@ describe.skipIf(!CHROMIUM)("TB-1: Let FocusTime message me in Teams", () => {
     await master.scrollIntoViewIfNeeded();
     if (!(await master.isChecked())) await master.check();
     // SA-2: each In Teams kind is its own row (the app's own notifications have a "Close out" too).
-    const kind = (k: string) => page.locator(`[data-setting="teams-kind-${k}"]`).getByRole("switch");
+    // SA-3: Nudges sits in the closed "Each kind of notice" fold, so its input is found without a role query.
+    const kind = (k: string) => page.locator(`[data-setting="teams-kind-${k}"] input[role="switch"]`);
     for (const k of ["brief", "checkin", "closeout", "nudges"]) await expect(kind(k).isChecked()).resolves.toBe(false);
     await kind("brief").check();
     await kind("checkin").check();
-    // The app's one time field: open it, type the time, Enter.
-    await page.getByRole("button", { name: /^Midday check-in at: / }).click();
-    await page.locator(".tp-pop input").fill("12:30");
-    await page.locator(".tp-pop input").press("Enter");
-    await page.locator(".tp-pop").waitFor({ state: "detached" });
-    await page.getByLabel("Minutes before my day ends").fill("45");
-    await page.getByLabel("Minutes before my day ends").blur();
+    // SA-3: the Midday check-in and Close out go at the app's times; Teams has no time of its own to set.
+    await expect(page.getByRole("button", { name: /^Midday check-in at: / }).count()).resolves.toBe(0);
+    await expect(page.getByLabel("Minutes before my day ends").count()).resolves.toBe(0);
+    // The brief: at the start of my day, or at a set time.
+    await page.getByRole("radio", { name: "At a set time" }).check();
     await kind("friday").check();
     await page.waitForTimeout(1200);
     await page.reload();
     await kind("brief").scrollIntoViewIfNeeded();
     await expect(kind("brief").isChecked()).resolves.toBe(true);
+    await expect(kind("checkin").isChecked()).resolves.toBe(true);
     await expect(kind("nudges").isChecked()).resolves.toBe(false);
-    await page.getByRole("button", { name: "Midday check-in at: 12:30 PM" }).waitFor();
-    await expect(page.getByLabel("Minutes before my day ends").inputValue()).resolves.toBe("45");
+    await expect(page.getByRole("radio", { name: "At a set time" }).isChecked()).resolves.toBe(true);
     await expect(kind("friday").isChecked()).resolves.toBe(true);
-    // The demo has no bot: the status line says so, and a test says why it can't go.
+    // The demo has no bot: the status line says so, and the one test (with a choice of message) says why it can't go.
     await expect(page.getByText("runs in the hosted app", { exact: false }).first().isVisible()).resolves.toBe(true);
-    await page.getByRole("button", { name: "Send me a test now" }).first().click();
+    const test = page.locator('[data-setting="teams-kinds"]');
+    await test.getByRole("combobox").selectOption("closeout");
+    await test.getByRole("button", { name: "Send a test" }).click();
     await expect(page.getByRole("status").filter({ hasText: "isn't set up here" }).first().waitFor({ timeout: 5000 })).resolves.toBeUndefined();
     await shotBoth(page, "tb2-settings-in-teams", page.locator(".ps-body .sp-group", { has: kind("brief") }));
     expect(errors).toEqual([]);

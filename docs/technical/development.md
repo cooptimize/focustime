@@ -183,7 +183,7 @@ Every package in `package.json`, what FocusTime uses it for and its license. A n
 
 ## Adding a Graph permission safely
 
-1. **Code.** The scope in `sources/oauth/oauth.ts` (on its own token kind when it needs its own consent) and its row in `plan/permissions.ts` (why, admin consent or not, `later` when each person consents for themselves). Settings › Accounts and calendars › Microsoft permissions shows it from there.
+1. **Code.** The scope in `sources/oauth/oauth.ts` (on its own token kind when it needs its own consent) and its row in `plan/permissions.ts` (why, admin consent or not, `later` when each person consents for themselves). Settings › Connections › Microsoft permissions shows it from there.
 2. **Setup script.** Add it to `GRAPH_SCOPES` in `infra/scripts/app-registration.sh` only if it should be granted for the tenant. Read [Never do a full run of app-registration.sh](operations.md#never-do-a-full-run-of-app-registrationsh) first: the grant step deletes people's own consents. Admin consent for the tenant is a Cooptimize IT task; say so in the pull request.
 3. **Docs.** Its row in [Integrations](integrations.md#microsoft-entra-id-and-microsoft-graph), and in [Security](security.md) when it changes what FocusTime can reach. `npm run docs:check` fails until Integrations lists it.
 4. **Rules.** A permission that reads something new (another person's data, messages, files) needs the step's authorization and a hard rule in [CLAUDE.md](../../CLAUDE.md) saying what is kept, shown and never logged.

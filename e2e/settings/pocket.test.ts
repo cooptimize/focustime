@@ -1,4 +1,4 @@
-// PK-2: Settings › Accounts and calendars › Pocket recorder, in demo mode, against the demo's pretend Pocket (any pk_
+// PK-2: Settings › Connections › Pocket recorder (Accounts and calendars until SA-3), in demo mode, against the demo's pretend Pocket (any pk_
 // key is accepted; pk_demo_wrong, pk_demo_busy, pk_demo_slow and pk_demo_odd act out Pocket's failures). The main path
 // by keyboard: the guide, a key Pocket refuses (its words, nothing saved), a good key (connected, the count, the time),
 // Check again, Disconnect asks first, then the guide again. Opening the section never asks Pocket; the key never

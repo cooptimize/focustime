@@ -193,7 +193,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
       (end) => {
         setBusy(false);
         // Confirm pressed but nothing came back (a network failure): the offer closes for the day, as it did, so a write
-        // that may have landed isn't offered again; Settings › Activity has it.
+        // that may have landed isn't offered again; Settings › Your data has it.
         if (!end.results.length && !end.refused.length) {
           if (end.attempted) close();
           return void (end.errors[0] && setError(end.errors[0]));
@@ -251,7 +251,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
         ))}
       </ul>
       <p className="db-foot">
-        <span className="muted">Undo is also in Settings › Activity.</span>
+        <span className="muted">Undo is also in Settings › Your data.</span>
         {/* Every row refused: nothing was written, so the offer can still be put away. */}
         {!list.some((r) => r.result) && !gone && (
           <button type="button" className="mini quiet tc-btn" onClick={close}>

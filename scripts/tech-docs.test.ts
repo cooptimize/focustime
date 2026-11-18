@@ -135,7 +135,8 @@ const RETIRED: [string, RegExp][] = [
   ["Delivery chats", /\bDelivery chats?\b|\bDelivery team chat\b|\bCustomer collaboration chat\b/],
   ["Needs help from", /\bNeeds help from\b/],
   ["One level as a list", /\bone level as a list\b/i],
-  ["old Settings sections", /\bSettings › (Connections|Data|Planning|Roadmap|Ahead|AI)\b/],
+  // SA-3: Connections and Planning are sections again; the sections it folded in are the old ones now.
+  ["old Settings sections", /\bSettings › (Data|Roadmap|Ahead|AI|Day and Week|Accounts and calendars|Notifications|Client chats|Activity|Backlog|DevOps)\b/],
   ["the ⋯ menu", /⋯/],
 ];
 /** Top-level folders and files of the repo, for telling a repo path from a word in backticks. */

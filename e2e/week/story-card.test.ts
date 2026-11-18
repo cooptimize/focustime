@@ -143,8 +143,8 @@ describe.skipIf(!CHROMIUM)("FN-1 story card and Wrap it up (browser, demo mode)"
     await hint.waitFor();
     await expect(page.getByRole("dialog", { name: "Wrap it up" }).count()).resolves.toBe(0);
     if (SHOTS) await shotBoth(page, "writes-off-hint", hint);
-    await hint.getByRole("button", { name: "Turn them on in Settings › DevOps" }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toContain("#/settings/devops");
+    await hint.getByRole("button", { name: "Turn them on in Settings › Connections › DevOps" }).click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toContain("#/settings/connections");
     await page.goBack();
     // Once a session: the next tick says nothing.
     await page.getByRole("checkbox", { name: "Done: Utilization chart" }).check();

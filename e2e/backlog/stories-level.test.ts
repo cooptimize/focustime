@@ -129,7 +129,7 @@ describe.skipIf(!CHROMIUM)("Backlog › one level as a list (browser, demo mode)
       // Settings › Backlog: the stale weeks beside the Roadmap thresholds.
       await page.setViewportSize({ width: 1920, height: 1080 });
       await openSettings(page);
-      await settingsSection(page, "ahead");
+      await settingsSection(page, "planning");
       await page.getByLabel("Stale after (weeks)").waitFor();
       await shotBoth(page, "bh1-settings-ahead-light");
       await page.keyboard.press("Escape");

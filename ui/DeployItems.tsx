@@ -1,7 +1,7 @@
 // DP-2: what a deployment moves. The checkboxes (Quick capture, and Deployment details on any to-do), the summary chip
 // on a row, and the data platform and list editor for admins and a client's leads. The lists come from the server
 // (`deploy.items`), never from here.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { call } from "./api.ts";
 import { placePopover } from "./popover-place.ts";
 import type { DeployItemsView } from "../actions/deploy-item-actions.ts";
@@ -160,7 +160,7 @@ type Status = { busy: boolean; note: string | null; error: string | null };
  * A client's data platform and its list, for an admin or that client's lead (nothing shows for anyone else). Every
  * change saves at once. The lists are the client's only: only new deployments follow.
  */
-export function DeploySettings({ clientKey, clientName }: { clientKey: string; clientName: string }) {
+export function DeploySettings({ clientKey, clientName, teamNote, frame = (x) => x }: { clientKey: string; clientName: string; teamNote?: string; /** SA-3: the card around it, drawn only when there is something to show. */ frame?: (inner: ReactNode) => ReactNode }) {
   const [view, setView] = useState<DeployItemsView | null>(null);
   const [status, setStatus] = useState<Status>({ busy: false, note: null, error: null });
   const [adding, setAdding] = useState<Partial<Record<DataPlatform, string>>>({});
@@ -208,8 +208,10 @@ export function DeploySettings({ clientKey, clientName }: { clientKey: string; c
     setAdding({ ...adding, [p]: "" });
     saveList(p, [...items, { key: ownKey(name, items.map((i) => i.key)), name, on: false, hidden: false, own: true }]);
   };
-  return (
+  return frame(
     <div className="set-form dep-settings" ref={anchor} id={`deploy-${clientKey}`}>
+      {/* SA-3: on a client's Settings page, a lead sees that this is the team's value. */}
+      {teamNote && <p className="set-hint dep-team">{teamNote}</p>}
       <div className="set-field">
         <span className="set-label">Data platform</span>
         <span className="set-value">

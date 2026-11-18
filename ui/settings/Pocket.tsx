@@ -1,4 +1,4 @@
-// PK-2: Settings › Accounts and calendars › Pocket recorder. Not connected: one sentence on what connecting does, the
+// PK-2: Settings › Connections › Pocket recorder. Not connected: one sentence on what connecting does, the
 // numbered steps, the key field and Check and save. Connected: when it was last checked and how many recordings Pocket
 // had from the last 7 days, with Check again, Use a new key and Disconnect (which asks first). The key is sent once,
 // to be checked and kept; it never comes back. Loading the section reads only what FocusTime kept (pocket.status):

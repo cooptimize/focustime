@@ -113,16 +113,20 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     expect(errors).toEqual([]);
   }, 60_000);
 
-  it("Connections lists every Microsoft permission, Chat.ReadBasic among them", async () => {
+  it("Connections lists every Microsoft permission, Chat.ReadBasic among them (its name under More about this)", async () => {
     const { page, errors } = await freshPage(h);
     // DM-1: the demo starts with Northwind's two chats registered (its conversations); forget them so this test adds them.
     for (const chatId of ["19:demo-northwind-delivery@thread.v2", "19:demo-northwind-collab@thread.v2"]) expect((await call(page, "chats.remove", { chatId })).ok).toBe(true);
     await page.reload();
     await openSettings(page);
     await settingsSection(page, "connections");
-    const row = page.locator('[data-setting="permissions"] .sp-status li', { hasText: "Chat.ReadBasic" });
+    // SA-3: the permissions sit in the Microsoft card's More; their address opens it, as a link or search result does.
+    await page.evaluate(() => (location.hash = "#/settings/connections/permissions"));
+    // SA-3: each permission says what it is for; its scope name is under More about this.
+    const row = page.locator('[data-setting="permissions"] .sp-status li', { hasText: "Client chats: chat names and members, never messages" });
     await row.waitFor();
-    await expect(row.textContent()).resolves.toContain("never messages");
+    await page.locator('[data-setting="permissions"]').getByText("More about this").first().click();
+    await expect(page.locator('[data-setting="permissions"]').textContent()).resolves.toContain("Chat.ReadBasic");
     await expect(page.locator('[data-setting="permissions"] .sp-status li').count()).resolves.toBeGreaterThanOrEqual(8);
     await shotBoth(page, "connections-permissions", page.locator('[data-setting="permissions"]'));
     expect(errors).toEqual([]);

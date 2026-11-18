@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("VM-2 as production (the demo told it is prod)", () =
 
     // The log: an automatic start and my stop.
     await page.keyboard.press(",");
-    await settingsSection(page, "activity");
+    await page.evaluate((h) => (location.hash = h), "#/settings/data/azure-log");
     const log = page.locator('[aria-label="Azure write log"]');
     await expect.poll(() => log.textContent(), { timeout: 10_000 }).toMatch(/Stopped \(deallocated\) vm-demo-alex · by Alex Rivera.*Confirmed.*Started vm-demo-alex · automatic.*Confirmed/s);
     await log.scrollIntoViewIfNeeded();

@@ -1,5 +1,5 @@
 {
- "source": "ci runs 44346002266",
+ "source": "ci runs 44346002266; e2e/settings/sa3.test.ts from main (measured locally)",
  "files": {
   "e2e/admin/admin-phone-width.test.ts": 6.6,
   "e2e/admin/background-passes.test.ts": 5.8,
@@ -85,6 +85,7 @@
   "e2e/settings/panel-shell.test.ts": 118.6,
   "e2e/settings/pocket.test.ts": 13,
   "e2e/settings/sa2.test.ts": 62.6,
+  "e2e/settings/sa3.test.ts": 38.4,
   "e2e/settings/teams-bot.test.ts": 19.1,
   "e2e/settings/text-size.test.ts": 102.6,
   "e2e/shell/assistant-answers.test.ts": 4.1,

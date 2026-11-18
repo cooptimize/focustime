@@ -47,7 +47,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     await page.locator(".focus-screen").getByRole("button", { name: "Stop", exact: true }).click();
     await page.locator(".today-view").waitFor();
     await openSettings(page);
-    await settingsSection(page, "activity");
+    await page.evaluate((h) => (location.hash = h), "#/settings/data/teams-log");
     const log = page.locator('[aria-label="Teams status log"]');
     await expect.poll(() => log.textContent(), { timeout: 15_000 }).toMatch(/Cleared \(back to automatic\)/);
     await expect(log.textContent()).resolves.toMatch(/Set Do not disturb/);

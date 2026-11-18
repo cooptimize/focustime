@@ -1,5 +1,5 @@
 // ENV-1 screenshots on a throwaway demo server (e2e/harness.ts: fictional data, its own temp folder and port). The demo
-// server isn't production, so Settings › Notifications shows "This test site" with its switch, and Admin › Clients ›
+// server isn't production, so Settings › Reminders and notices shows "This test site" with its switch, and Admin › Clients ›
 // Meetings shows Check now on an Automatic call (the demo's call is switched to Automatic first). At 1920, Default and Larger text, dark and light.
 // Usage: node scripts/screenshot-env1.ts <outDir>
 import { mkdirSync } from "node:fs";

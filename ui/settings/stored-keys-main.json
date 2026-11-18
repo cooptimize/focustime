@@ -1,0 +1,1396 @@
+{
+ "sections": [
+  {
+   "id": "you",
+   "label": "Profile"
+  },
+  {
+   "id": "hours",
+   "label": "Working hours"
+  },
+  {
+   "id": "notifications",
+   "label": "Notifications"
+  },
+  {
+   "id": "display",
+   "label": "Display"
+  },
+  {
+   "id": "planning",
+   "label": "Day and Week"
+  },
+  {
+   "id": "focus",
+   "label": "Focus"
+  },
+  {
+   "id": "ahead",
+   "label": "Backlog"
+  },
+  {
+   "id": "clients",
+   "label": "Clients"
+  },
+  {
+   "id": "client",
+   "label": "Client"
+  },
+  {
+   "id": "chats",
+   "label": "Client chats"
+  },
+  {
+   "id": "connections",
+   "label": "Accounts and calendars"
+  },
+  {
+   "id": "devops",
+   "label": "DevOps"
+  },
+  {
+   "id": "ai",
+   "label": "AI and assistant"
+  },
+  {
+   "id": "activity",
+   "label": "Activity"
+  },
+  {
+   "id": "data",
+   "label": "Your data"
+  },
+  {
+   "id": "about",
+   "label": "About"
+  }
+ ],
+ "settings": [
+  {
+   "id": "signed-in",
+   "section": "you",
+   "label": "Signed in",
+   "stored": null
+  },
+  {
+   "id": "photos",
+   "section": "you",
+   "label": "Profile photos",
+   "stored": null
+  },
+  {
+   "id": "email",
+   "section": "you",
+   "label": "Email",
+   "stored": null
+  },
+  {
+   "id": "dataverse-user",
+   "section": "you",
+   "label": "Dataverse user",
+   "stored": null
+  },
+  {
+   "id": "environment",
+   "section": "you",
+   "label": "Dataverse environment",
+   "stored": null
+  },
+  {
+   "id": "setup",
+   "section": "you",
+   "label": "Setup",
+   "stored": null
+  },
+  {
+   "id": "weekdays",
+   "section": "hours",
+   "label": "Hours per day",
+   "stored": {
+    "key": "[hours] weekdays",
+    "default": "starter"
+   }
+  },
+  {
+   "id": "hours-mon",
+   "section": "hours",
+   "label": "Monday",
+   "stored": null
+  },
+  {
+   "id": "hours-tue",
+   "section": "hours",
+   "label": "Tuesday",
+   "stored": null
+  },
+  {
+   "id": "hours-wed",
+   "section": "hours",
+   "label": "Wednesday",
+   "stored": null
+  },
+  {
+   "id": "hours-thu",
+   "section": "hours",
+   "label": "Thursday",
+   "stored": null
+  },
+  {
+   "id": "hours-fri",
+   "section": "hours",
+   "label": "Friday",
+   "stored": null
+  },
+  {
+   "id": "hours-sat",
+   "section": "hours",
+   "label": "Saturday",
+   "stored": null
+  },
+  {
+   "id": "hours-sun",
+   "section": "hours",
+   "label": "Sunday",
+   "stored": null
+  },
+  {
+   "id": "lunch",
+   "section": "hours",
+   "label": "Lunch",
+   "stored": {
+    "key": "[hours] lunch",
+    "default": "starter"
+   }
+  },
+  {
+   "id": "time-zone",
+   "section": "hours",
+   "label": "Time zone",
+   "stored": {
+    "key": "[hours] time_zone",
+    "default": "host"
+   }
+  },
+  {
+   "id": "one-day-changes",
+   "section": "hours",
+   "label": "One-day changes",
+   "stored": null
+  },
+  {
+   "id": "standing-blocks",
+   "section": "hours",
+   "label": "Standing blocks",
+   "stored": {
+    "key": "[[standing_blocks]]",
+    "default": []
+   }
+  },
+  {
+   "id": "test-site",
+   "section": "notifications",
+   "label": "This test site",
+   "stored": null
+  },
+  {
+   "id": "from-test-site",
+   "section": "notifications",
+   "label": "Send me reminders and Teams messages from this test site",
+   "stored": {
+    "key": "[notify] from_test_site",
+    "default": false
+   }
+  },
+  {
+   "id": "kinds",
+   "section": "notifications",
+   "label": "What to notify me about",
+   "stored": null
+  },
+  {
+   "id": "notify-plan-day",
+   "section": "notifications",
+   "label": "Add work to today",
+   "stored": {
+    "key": "[notify] plan_day",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-checkin",
+   "section": "notifications",
+   "label": "Midday check-in",
+   "stored": {
+    "key": "[notify] checkin",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-closeout",
+   "section": "notifications",
+   "label": "Close out",
+   "stored": {
+    "key": "[notify] closeout",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-plan-week",
+   "section": "notifications",
+   "label": "Add work to the week",
+   "stored": {
+    "key": "[notify] plan_week",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-look-ahead",
+   "section": "notifications",
+   "label": "Look ahead",
+   "stored": {
+    "key": "[notify] look_ahead",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-plan-ahead",
+   "section": "notifications",
+   "label": "Look ahead 4 weeks",
+   "stored": {
+    "key": "[notify] plan_ahead",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-direction",
+   "section": "notifications",
+   "label": "Direction review",
+   "stored": {
+    "key": "[notify] direction",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-timer",
+   "section": "notifications",
+   "label": "Focus timer",
+   "stored": {
+    "key": "[notify] timer",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-meeting",
+   "section": "notifications",
+   "label": "Meeting warnings",
+   "stored": {
+    "key": "[notify] meeting",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-vm",
+   "section": "notifications",
+   "label": "My VM",
+   "stored": {
+    "key": "[notify] vm",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-followups",
+   "section": "notifications",
+   "label": "Promises due",
+   "stored": {
+    "key": "[notify] followups",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-expiry",
+   "section": "notifications",
+   "label": "Expiring secrets",
+   "stored": {
+    "key": "[notify] expiry",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-asks",
+   "section": "notifications",
+   "label": "Urgent requests",
+   "stored": {
+    "key": "[notify] asks",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-status-report",
+   "section": "notifications",
+   "label": "Monday's status report",
+   "stored": {
+    "key": "[notify] status_report",
+    "default": false
+   }
+  },
+  {
+   "id": "notify-meeting-review",
+   "section": "notifications",
+   "label": "Client calls to review",
+   "stored": {
+    "key": "[notify] meeting_review",
+    "default": true
+   }
+  },
+  {
+   "id": "notify-deployments",
+   "section": "notifications",
+   "label": "Deployments you're on",
+   "stored": {
+    "key": "[notify] deployments",
+    "default": true
+   }
+  },
+  {
+   "id": "status-report-times",
+   "section": "notifications",
+   "label": "Status report times",
+   "stored": {
+    "key": "[notify] status_friday_at, status_sunday, status_sunday_at",
+    "default": [
+     "15:00",
+     false,
+     "19:00"
+    ]
+   }
+  },
+  {
+   "id": "urgent-during-focus",
+   "section": "notifications",
+   "label": "Let urgent requests through during focus",
+   "stored": {
+    "key": "[notify] asks_through_focus",
+    "default": false
+   }
+  },
+  {
+   "id": "quiet",
+   "section": "notifications",
+   "label": "Quiet hours",
+   "stored": {
+    "key": "[notify] quiet",
+    "default": "outside_hours"
+   }
+  },
+  {
+   "id": "quiet-pto",
+   "section": "notifications",
+   "label": "Quiet on days off",
+   "stored": {
+    "key": "[notify] quiet_pto",
+    "default": true
+   }
+  },
+  {
+   "id": "test-notification",
+   "section": "notifications",
+   "label": "Send a test notification",
+   "stored": null
+  },
+  {
+   "id": "devices",
+   "section": "notifications",
+   "label": "Devices that get notifications",
+   "stored": null
+  },
+  {
+   "id": "push-details",
+   "section": "notifications",
+   "label": "Show details in notifications",
+   "stored": {
+    "key": "[notify] push_details",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-messages",
+   "section": "notifications",
+   "label": "Let FocusTime message me in Teams",
+   "stored": {
+    "key": "[notify] teams_messages",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kinds",
+   "section": "notifications",
+   "label": "What FocusTime sends in Teams",
+   "stored": null
+  },
+  {
+   "id": "teams-kind-brief",
+   "section": "notifications",
+   "label": "Morning brief",
+   "stored": {
+    "key": "[notify] teams_brief, teams_brief_at",
+    "default": [
+     false,
+     null
+    ]
+   }
+  },
+  {
+   "id": "teams-kind-checkin",
+   "section": "notifications",
+   "label": "Midday check-in",
+   "stored": {
+    "key": "[notify] teams_checkin",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kind-closeout",
+   "section": "notifications",
+   "label": "Close out",
+   "stored": {
+    "key": "[notify] teams_closeout",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kind-nudges",
+   "section": "notifications",
+   "label": "Nudges",
+   "stored": {
+    "key": "[notify] teams_nudges",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kind-status",
+   "section": "notifications",
+   "label": "Status report",
+   "stored": {
+    "key": "[notify] teams_status",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kind-meetings",
+   "section": "notifications",
+   "label": "Client calls to review",
+   "stored": {
+    "key": "[notify] teams_meetings",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-kind-friday",
+   "section": "notifications",
+   "label": "Also on Fridays (catch-up)",
+   "stored": {
+    "key": "[notify] teams_friday",
+    "default": false
+   }
+  },
+  {
+   "id": "theme",
+   "section": "display",
+   "label": "Theme",
+   "stored": {
+    "key": "[ui] theme",
+    "default": "cooptimize-dark"
+   }
+  },
+  {
+   "id": "text-size",
+   "section": "display",
+   "label": "Text size",
+   "stored": {
+    "key": "[ui] text_size",
+    "default": "default"
+   }
+  },
+  {
+   "id": "timelines",
+   "section": "display",
+   "label": "Timelines",
+   "stored": {
+    "key": "[ui] view_range",
+    "default": "business"
+   }
+  },
+  {
+   "id": "personal-events",
+   "section": "display",
+   "label": "Show personal events",
+   "stored": {
+    "key": "[ui] show_personal",
+    "default": true
+   }
+  },
+  {
+   "id": "week-days",
+   "section": "display",
+   "label": "Days on Week",
+   "stored": null
+  },
+  {
+   "id": "show-friday",
+   "section": "display",
+   "label": "Show the catch-up day",
+   "stored": {
+    "key": "[ui] show_catch_up_day",
+    "default": true
+   }
+  },
+  {
+   "id": "show-weekend",
+   "section": "display",
+   "label": "Show the weekend",
+   "stored": {
+    "key": "[ui] show_weekend_days",
+    "default": true
+   }
+  },
+  {
+   "id": "day-timeline",
+   "section": "display",
+   "label": "Show Day as a timeline",
+   "stored": {
+    "key": "[ui] today_timeline_phone",
+    "default": false
+   }
+  },
+  {
+   "id": "reduce-motion",
+   "section": "display",
+   "label": "Reduce motion",
+   "stored": {
+    "key": "[ui] reduce_motion",
+    "default": false
+   }
+  },
+  {
+   "id": "level",
+   "section": "planning",
+   "label": "Your level",
+   "stored": null
+  },
+  {
+   "id": "break-down-offered",
+   "section": "planning",
+   "label": "Offer Break down on features that need stories",
+   "stored": {
+    "key": "[guidance] draft_stories",
+    "default": "level"
+   }
+  },
+  {
+   "id": "readiness-nudges",
+   "section": "planning",
+   "label": "Show Needs attention nudges",
+   "stored": {
+    "key": "[guidance] readiness_nudges",
+    "default": "level"
+   }
+  },
+  {
+   "id": "count-unsized",
+   "section": "planning",
+   "label": "Count unsized work as",
+   "stored": {
+    "key": "[plan] unsized_minutes",
+    "default": 60
+   }
+  },
+  {
+   "id": "shortest-useful-time",
+   "section": "planning",
+   "label": "Shortest useful time per size",
+   "stored": null
+  },
+  {
+   "id": "shortest-s",
+   "section": "planning",
+   "label": "Shortest useful time for S",
+   "stored": {
+    "key": "[plan] min_s",
+    "default": 30
+   }
+  },
+  {
+   "id": "shortest-m",
+   "section": "planning",
+   "label": "Shortest useful time for M",
+   "stored": {
+    "key": "[plan] min_m",
+    "default": 60
+   }
+  },
+  {
+   "id": "shortest-l",
+   "section": "planning",
+   "label": "Shortest useful time for L",
+   "stored": {
+    "key": "[plan] min_l",
+    "default": 90
+   }
+  },
+  {
+   "id": "carry-over",
+   "section": "planning",
+   "label": "Carry over unfinished to-dos from the last",
+   "stored": {
+    "key": "[plan] carry_days",
+    "default": 7
+   }
+  },
+  {
+   "id": "suggest-empty-blocks",
+   "section": "planning",
+   "label": "Suggest work for empty blocks",
+   "stored": {
+    "key": "[plan] suggest_empty_blocks",
+    "default": true
+   }
+  },
+  {
+   "id": "devops-on-done",
+   "section": "planning",
+   "label": "When I tick a story",
+   "stored": {
+    "key": "[plan] devops_on_done",
+    "default": "ask"
+   }
+  },
+  {
+   "id": "progress-offer",
+   "section": "planning",
+   "label": "Offer DevOps updates at the end of the day",
+   "stored": {
+    "key": "[plan] devops_progress_offer",
+    "default": true
+   }
+  },
+  {
+   "id": "plan-reminder",
+   "section": "planning",
+   "label": "Add work reminder",
+   "stored": {
+    "key": "[plan] reminder_offset_minutes",
+    "default": 0
+   }
+  },
+  {
+   "id": "checkin-reminder",
+   "section": "planning",
+   "label": "Midday check-in reminder",
+   "stored": {
+    "key": "[plan] checkin_reminder_minutes",
+    "default": 0
+   }
+  },
+  {
+   "id": "closeout-reminder",
+   "section": "planning",
+   "label": "Close out reminder",
+   "stored": {
+    "key": "[plan] closeout_reminder_minutes",
+    "default": 15
+   }
+  },
+  {
+   "id": "week-nudges",
+   "section": "planning",
+   "label": "Week nudges",
+   "stored": null
+  },
+  {
+   "id": "nudge-thu",
+   "section": "planning",
+   "label": "Thursday nudge at",
+   "stored": {
+    "key": "[plan] week_nudge_thu",
+    "default": "14:00"
+   }
+  },
+  {
+   "id": "nudge-fri",
+   "section": "planning",
+   "label": "Friday nudge at",
+   "stored": {
+    "key": "[plan] week_nudge_fri",
+    "default": "09:00"
+   }
+  },
+  {
+   "id": "nudge-mon",
+   "section": "planning",
+   "label": "Monday nudge at",
+   "stored": {
+    "key": "[plan] week_nudge_mon",
+    "default": "08:30"
+   }
+  },
+  {
+   "id": "rituals",
+   "section": "planning",
+   "label": "Look-ahead rituals",
+   "stored": null
+  },
+  {
+   "id": "timeboxing",
+   "section": "planning",
+   "label": "Use timeboxing",
+   "stored": {
+    "key": "[timebox] enabled",
+    "default": true
+   }
+  },
+  {
+   "id": "outlook-default",
+   "section": "planning",
+   "label": "Put new timeboxes on Outlook",
+   "stored": {
+    "key": "[timebox] outlook_default",
+    "default": false
+   }
+  },
+  {
+   "id": "confirm-own",
+   "section": "planning",
+   "label": "Ask before changing my own timebox events",
+   "stored": {
+    "key": "[timebox] confirm_own",
+    "default": true
+   }
+  },
+  {
+   "id": "help-length",
+   "section": "planning",
+   "label": "Help session length",
+   "stored": {
+    "key": "[collab] meeting_minutes",
+    "default": 30
+   }
+  },
+  {
+   "id": "help-teams",
+   "section": "planning",
+   "label": "Add a Teams meeting to help sessions",
+   "stored": {
+    "key": "[collab] teams",
+    "default": true
+   }
+  },
+  {
+   "id": "help-days",
+   "section": "planning",
+   "label": "Days to search for help",
+   "stored": {
+    "key": "[collab] days_ahead",
+    "default": 3
+   }
+  },
+  {
+   "id": "never-suggested",
+   "section": "planning",
+   "label": "Never suggested, for everyone",
+   "stored": null
+  },
+  {
+   "id": "exclude",
+   "section": "planning",
+   "label": "People I exclude",
+   "stored": {
+    "key": "[collab] exclude",
+    "default": [
+     "Kat 🤖"
+    ]
+   }
+  },
+  {
+   "id": "invite-domains",
+   "section": "planning",
+   "label": "Invites go only to",
+   "stored": null
+  },
+  {
+   "id": "risk-rules",
+   "section": "planning",
+   "label": "At-risk blocks",
+   "stored": null
+  },
+  {
+   "id": "risk-watch",
+   "section": "planning",
+   "label": "Watch at",
+   "stored": {
+    "key": "[risk] meeting_watch_minutes",
+    "default": "starter"
+   }
+  },
+  {
+   "id": "risk-at-risk",
+   "section": "planning",
+   "label": "At risk at",
+   "stored": {
+    "key": "[risk] meeting_at_risk_minutes",
+    "default": "starter"
+   }
+  },
+  {
+   "id": "risk-window",
+   "section": "planning",
+   "label": "Shortest useful focus window",
+   "stored": {
+    "key": "[risk] min_focus_window_minutes",
+    "default": "starter"
+   }
+  },
+  {
+   "id": "focus-length",
+   "section": "focus",
+   "label": "Focus length",
+   "stored": {
+    "key": "[plan] focus_minutes",
+    "default": 50
+   }
+  },
+  {
+   "id": "break-length",
+   "section": "focus",
+   "label": "Break length",
+   "stored": {
+    "key": "[plan] break_minutes",
+    "default": 10
+   }
+  },
+  {
+   "id": "end-sound",
+   "section": "focus",
+   "label": "Play a sound when focus or a break ends",
+   "stored": {
+    "key": "[plan] end_sound",
+    "default": false
+   }
+  },
+  {
+   "id": "teams-status",
+   "section": "focus",
+   "label": "Set my Teams status while I focus",
+   "stored": {
+    "key": "[focus] teams_status",
+    "default": true
+   }
+  },
+  {
+   "id": "plain-focus-status",
+   "section": "focus",
+   "label": "Plain focus sets my status to",
+   "stored": {
+    "key": "[focus] plain_focus_status",
+    "default": "busy"
+   }
+  },
+  {
+   "id": "sound",
+   "section": "focus",
+   "label": "Default sound",
+   "stored": {
+    "key": "[focus] sound",
+    "default": "none"
+   }
+  },
+  {
+   "id": "volume",
+   "section": "focus",
+   "label": "Volume",
+   "stored": {
+    "key": "[focus] volume",
+    "default": 40
+   }
+  },
+  {
+   "id": "fade",
+   "section": "focus",
+   "label": "Fade in and out",
+   "stored": {
+    "key": "[focus] fade_seconds",
+    "default": 5
+   }
+  },
+  {
+   "id": "on-break",
+   "section": "focus",
+   "label": "When a break starts",
+   "stored": {
+    "key": "[focus] on_break",
+    "default": "silence"
+   }
+  },
+  {
+   "id": "pause-media",
+   "section": "focus",
+   "label": "Pause music when focus ends",
+   "stored": {
+    "key": "[focus] pause_media",
+    "default": false
+   }
+  },
+  {
+   "id": "playlists",
+   "section": "focus",
+   "label": "Playlists",
+   "stored": {
+    "key": "[focus] playlists",
+    "default": []
+   }
+  },
+  {
+   "id": "stale-weeks",
+   "section": "ahead",
+   "label": "Stale after",
+   "stored": {
+    "key": "[ahead] stale_weeks",
+    "default": 6
+   }
+  },
+  {
+   "id": "stalled-days",
+   "section": "ahead",
+   "label": "Stalled after",
+   "stored": {
+    "key": "[roadmap] stalled_days",
+    "default": 14
+   }
+  },
+  {
+   "id": "watch-weeks",
+   "section": "ahead",
+   "label": "Watch within",
+   "stored": {
+    "key": "[roadmap] watch_weeks",
+    "default": 1
+   }
+  },
+  {
+   "id": "follow-grace",
+   "section": "clients",
+   "label": "Keep following after focus time ends",
+   "stored": {
+    "key": "[plan] follow_grace_days",
+    "default": 14
+   }
+  },
+  {
+   "id": "client-list",
+   "section": "clients",
+   "label": "Your clients",
+   "stored": null
+  },
+  {
+   "id": "client-nickname",
+   "section": "client",
+   "label": "Dataverse nickname",
+   "stored": null
+  },
+  {
+   "id": "client-identity",
+   "section": "client",
+   "label": "Your DevOps identity",
+   "stored": null
+  },
+  {
+   "id": "client-shown-as",
+   "section": "client",
+   "label": "Shown as",
+   "stored": {
+    "key": "[clients.<key>] name",
+    "default": null
+   }
+  },
+  {
+   "id": "client-color",
+   "section": "client",
+   "label": "Color",
+   "stored": {
+    "key": "[clients.<key>] color",
+    "default": "team"
+   }
+  },
+  {
+   "id": "client-followed",
+   "section": "client",
+   "label": "Keep following",
+   "stored": {
+    "key": "[clients.<key>] follow",
+    "default": false
+   }
+  },
+  {
+   "id": "client-open-states",
+   "section": "client",
+   "label": "States treated as open",
+   "stored": null
+  },
+  {
+   "id": "client-writes",
+   "section": "client",
+   "label": "DevOps writes",
+   "stored": null
+  },
+  {
+   "id": "client-chats",
+   "section": "client",
+   "label": "Client chats",
+   "stored": null
+  },
+  {
+   "id": "client-ai",
+   "section": "client",
+   "label": "AI for this client",
+   "stored": null
+  },
+  {
+   "id": "client-platform",
+   "section": "client",
+   "label": "Data platform",
+   "stored": null
+  },
+  {
+   "id": "client-deploy",
+   "section": "client",
+   "label": "Deployment items",
+   "stored": null
+  },
+  {
+   "id": "client-house-style",
+   "section": "client",
+   "label": "House style for Break down",
+   "stored": null
+  },
+  {
+   "id": "team-phrases",
+   "section": "chats",
+   "label": "Team phrases",
+   "stored": null
+  },
+  {
+   "id": "team-request-phrases",
+   "section": "chats",
+   "label": "Team asking phrases",
+   "stored": null
+  },
+  {
+   "id": "team-ack-phrases",
+   "section": "chats",
+   "label": "Team acknowledgements",
+   "stored": null
+  },
+  {
+   "id": "team-promise-phrases",
+   "section": "chats",
+   "label": "Team promise phrases",
+   "stored": null
+  },
+  {
+   "id": "request-phrases",
+   "section": "chats",
+   "label": "My asking phrases",
+   "stored": {
+    "key": "[asks] request_phrases",
+    "default": [
+     "can you",
+     "could you",
+     "please",
+     "add",
+     "doesn't look right",
+     "not working",
+     "error",
+     "failed",
+     "urgent"
+    ]
+   }
+  },
+  {
+   "id": "ack-phrases",
+   "section": "chats",
+   "label": "My acknowledgements",
+   "stored": {
+    "key": "[asks] ack_phrases",
+    "default": [
+     "thanks",
+     "thank you",
+     "sounds good",
+     "ok",
+     "great"
+    ]
+   }
+  },
+  {
+   "id": "promise-phrases",
+   "section": "chats",
+   "label": "My promise phrases",
+   "stored": {
+    "key": "[asks] promise_phrases",
+    "default": [
+     "i'll",
+     "i will",
+     "let me",
+     "i can",
+     "by friday",
+     "tomorrow",
+     "tonight",
+     "end of day",
+     "next week"
+    ]
+   }
+  },
+  {
+   "id": "chats-read",
+   "section": "chats",
+   "label": "Client chats FocusTime reads",
+   "stored": null
+  },
+  {
+   "id": "sources",
+   "section": "connections",
+   "label": "Sources",
+   "stored": null
+  },
+  {
+   "id": "calendar-links",
+   "section": "connections",
+   "label": "Calendars added by link",
+   "stored": null
+  },
+  {
+   "id": "pocket",
+   "section": "connections",
+   "label": "Pocket recorder",
+   "stored": null
+  },
+  {
+   "id": "outlook-changes",
+   "section": "connections",
+   "label": "Outlook calendar changes",
+   "stored": null
+  },
+  {
+   "id": "permissions",
+   "section": "connections",
+   "label": "Microsoft permissions",
+   "stored": null
+  },
+  {
+   "id": "vm",
+   "section": "connections",
+   "label": "My VM",
+   "stored": {
+    "key": "[azure] vm",
+    "default": null
+   }
+  },
+  {
+   "id": "vm-start",
+   "section": "connections",
+   "label": "Start without a preview",
+   "stored": {
+    "key": "[azure] start_without_asking",
+    "default": true
+   }
+  },
+  {
+   "id": "vm-autostart",
+   "section": "connections",
+   "label": "Start my VM before my day",
+   "stored": {
+    "key": "[azure] auto_start, auto_start_minutes, auto_start_off_days",
+    "default": [
+     false,
+     0,
+     []
+    ]
+   }
+  },
+  {
+   "id": "teams-app",
+   "section": "connections",
+   "label": "FocusTime in Teams",
+   "stored": null
+  },
+  {
+   "id": "feedback",
+   "section": "connections",
+   "label": "Send feedback",
+   "stored": null
+  },
+  {
+   "id": "devops-read",
+   "section": "devops",
+   "label": "DevOps per client",
+   "stored": null
+  },
+  {
+   "id": "devops-write",
+   "section": "devops",
+   "label": "DevOps write access",
+   "stored": null
+  },
+  {
+   "id": "find-item",
+   "section": "devops",
+   "label": "Find an item",
+   "stored": null
+  },
+  {
+   "id": "ai-team",
+   "section": "ai",
+   "label": "AI for FocusTime",
+   "stored": null
+  },
+  {
+   "id": "ai-allowed",
+   "section": "ai",
+   "label": "Allowed for",
+   "stored": null
+  },
+  {
+   "id": "ai-limit",
+   "section": "ai",
+   "label": "Your monthly limit",
+   "stored": null
+  },
+  {
+   "id": "ai-month",
+   "section": "ai",
+   "label": "This month's AI spend",
+   "stored": null
+  },
+  {
+   "id": "draft-months",
+   "section": "ai",
+   "label": "Break down looks back",
+   "stored": {
+    "key": "[ai] draft_months",
+    "default": 12
+   }
+  },
+  {
+   "id": "ai-test",
+   "section": "ai",
+   "label": "Test AI",
+   "stored": null
+  },
+  {
+   "id": "ai-sent",
+   "section": "ai",
+   "label": "What is sent to AI",
+   "stored": null
+  },
+  {
+   "id": "ai-log",
+   "section": "ai",
+   "label": "Last 20 AI requests",
+   "stored": null
+  },
+  {
+   "id": "assistant-history",
+   "section": "ai",
+   "label": "Assistant history",
+   "stored": null
+  },
+  {
+   "id": "write-log",
+   "section": "activity",
+   "label": "Outlook write log",
+   "stored": null
+  },
+  {
+   "id": "devops-log",
+   "section": "activity",
+   "label": "DevOps write log",
+   "stored": null
+  },
+  {
+   "id": "azure-log",
+   "section": "activity",
+   "label": "Azure write log",
+   "stored": null
+  },
+  {
+   "id": "teams-log",
+   "section": "activity",
+   "label": "Teams status log",
+   "stored": null
+  },
+  {
+   "id": "loop-log",
+   "section": "activity",
+   "label": "Close the loop sends",
+   "stored": null
+  },
+  {
+   "id": "export",
+   "section": "data",
+   "label": "Export my data",
+   "stored": null
+  },
+  {
+   "id": "reset-plan",
+   "section": "data",
+   "label": "Reset my plan",
+   "stored": null
+  },
+  {
+   "id": "delete",
+   "section": "data",
+   "label": "Delete my data",
+   "stored": null
+  },
+  {
+   "id": "diagnostics",
+   "section": "data",
+   "label": "Diagnostics",
+   "stored": null
+  },
+  {
+   "id": "demo-mode",
+   "section": "data",
+   "label": "Show demo data",
+   "stored": null
+  },
+  {
+   "id": "demo-reset",
+   "section": "data",
+   "label": "Reset demo",
+   "stored": null
+  },
+  {
+   "id": "demo-be",
+   "section": "data",
+   "label": "Use the demo as",
+   "stored": null
+  },
+  {
+   "id": "version",
+   "section": "about",
+   "label": "Version",
+   "stored": null
+  },
+  {
+   "id": "guide",
+   "section": "about",
+   "label": "Guide",
+   "stored": null
+  },
+  {
+   "id": "style-guide",
+   "section": "about",
+   "label": "Style guide",
+   "stored": null
+  }
+ ]
+}

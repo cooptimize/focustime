@@ -5,7 +5,7 @@
 // like any row.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "../harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "../harness.ts";
 import { levelPressed, pickLevel } from "../backlog-helpers.ts";
 
 let h: Harness;
@@ -181,7 +181,7 @@ describe.skipIf(!CHROMIUM)("BL-2: Backlog in rank order (browser, demo mode)", (
     // Undo, from Settings › Activity's write log: one preview, then it reads back.
     await page.getByRole("dialog", { name: "Review changes" }).getByRole("button", { name: "Close" }).click();
     await openSettings(page);
-    await settingsSection(page, "activity");
+    await page.evaluate((h) => (location.hash = h), "#/settings/data/devops-log");
     const wl = page.getByRole("region", { name: "DevOps write log" });
     await wl.locator("tr", { hasText: "#1113" }).getByRole("button", { name: "Undo" }).first().click();
     await write.getByRole("button", { name: "Undo in DevOps" }).click();
