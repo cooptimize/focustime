@@ -1,10 +1,10 @@
 // NT-1: the one day-off reader every part of a person's background asks (server/days-off.ts).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseConfig, type AppConfig } from "../config/schema.ts";
 import { setValue } from "../config/edit.ts";
 import { starterToml } from "../config/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { daysOffReader, isDayOff, type DaysOffRead } from "./days-off.ts";
+import { DAY_OFF_READ_LIMIT_MS, daysOffReader, isDayOff, type DaysOffRead } from "./days-off.ts";
 
 const NY = "America/New_York";
 const cfg = (() => {
@@ -72,5 +72,37 @@ describe("NT-1: one day-off answer per person per day", () => {
     const x = reader({ pto: null, holidays: null });
     await x.r.day(cfg, "2026-11-02");
     for (const l of x.logs) expect(Object.keys(l).sort()).toEqual(["kind", "op", "source"]);
+  });
+
+  it("a failed read kept for the notices doesn't decide the VM start: the start reads again", async () => {
+    let fail = true;
+    const calls: string[] = [];
+    const read: DaysOffRead = async (_c, from, to) => (calls.push(`${from}..${to}`), fail ? { pto: null, holidays: null } : { pto: new Set(["2026-11-02"]), holidays: new Set() });
+    const r = daysOffReader({ production: true, read: async () => read, now: () => Temporal.Instant.from("2026-11-02T13:40:00Z"), log: () => {} });
+    expect((await r.day(cfg, "2026-11-02")).pto).toBeNull();
+    expect((await r.day(cfg, "2026-11-02")).pto).toBeNull();
+    expect(calls).toHaveLength(1);
+    fail = false;
+    expect((await r.read(cfg, "2026-11-02", "2026-11-02")).pto?.has("2026-11-02")).toBe(true);
+    expect(calls).toHaveLength(2);
+    // And the notices now have that fresh answer.
+    expect((await r.day(cfg, "2026-11-02")).pto).toBe(true);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("a read that never answers is unread after a minute, and the next one tries again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let hang = true;
+      const read: DaysOffRead = async () => (hang ? new Promise(() => {}) : { pto: new Set(), holidays: new Set() });
+      const r = daysOffReader({ production: true, read: async () => read, now: () => Temporal.Instant.from("2026-11-02T13:40:00Z"), log: () => {} });
+      const first = r.read(cfg, "2026-11-02", "2026-11-02");
+      await vi.advanceTimersByTimeAsync(DAY_OFF_READ_LIMIT_MS);
+      expect(await first).toEqual({ pto: null, holidays: null });
+      hang = false;
+      expect(await r.read(cfg, "2026-11-02", "2026-11-02")).toEqual({ pto: new Set(), holidays: new Set() });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

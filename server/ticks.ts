@@ -458,7 +458,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (w.without) await send(notices.statusReport(due.occasion, nudgeLineFor(w.needsYou, w.rest), instantNow().toString(), w.needsYou > 0));
     else log({ source: "plan", op: "status_nudge", kind: "skipped" });
   };
-  // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.
+  // Once a workday from work start: follow-ups due or overdue, and expiring secrets. A day off is the gate's (Quiet on days off).
   const workdayNotices = async () => {
     const c = await configOrNull();
     if (!c) return;

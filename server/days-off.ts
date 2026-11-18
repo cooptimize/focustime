@@ -5,6 +5,8 @@
 // - Budget: one read of PTO and holidays together per person per DAY_OFF_READ_MS, for a window from today
 //   (DAY_OFF_WINDOW_DAYS long, the VM chip's "Next:" range); any range inside it is answered from that read. A range
 //   outside it (the start's pause check looks back) is read on its own, as before.
+//   Exception: when the kept read failed, the VM start and the chip read again (as they did on every pass before), so
+//   a failed read before the start can't decide it. A read that hasn't answered in DAY_OFF_READ_LIMIT_MS is unread.
 // - No Dataverse user (none found for the sign-in yet): not PTO, as before.
 // - PTO that can't be read fresh: the last good read covering the day, if at most PTO_STALE_HOURS old (this reader's own,
 //   or the VM start's stored one), else unknown (null). Each caller decides what unknown means.
@@ -19,6 +21,8 @@ import { userZone } from "../week/zone.ts";
 
 export const DAY_OFF_READ_MS = 30 * 60_000;
 export const DAY_OFF_WINDOW_DAYS = 14;
+/** A shared read that hasn't answered in this long is unread (both kinds), so one stuck read can't hold every caller. */
+export const DAY_OFF_READ_LIMIT_MS = 60_000;
 
 type Sets = { pto: ReadonlySet<string> | null; holidays: ReadonlySet<string> | null };
 export type DaysOffRead = (cfg: AppConfig, from: string, to: string) => Promise<Sets>;
@@ -45,8 +49,8 @@ export function daysOffReader(d: {
   earlier?: () => Promise<PtoRead | null>;
   log: Logger;
 }): DaysOffReader {
-  let window: { at: number; from: string; to: string; sets: Sets } | null = null;
-  let inflight: Promise<Sets> | null = null;
+  let window: { at: number; key: string; sets: Sets } | null = null;
+  let inflight: { key: string; p: Promise<Sets> } | null = null;
   let lastGood: PtoRead | null = null;
   const logged = new Set<string>();
   const logOnce = (date: string, kind: string) => {
@@ -65,19 +69,34 @@ export function daysOffReader(d: {
       return { pto: null, holidays: null };
     }
   };
-  const windowOf = async (cfg: AppConfig, today: string): Promise<Sets> => {
+  const limited = (p: Promise<Sets>): Promise<Sets> =>
+    new Promise<Sets>((resolve) => {
+      const timer = setTimeout(() => resolve({ pto: null, holidays: null }), DAY_OFF_READ_LIMIT_MS);
+      (timer as { unref?: () => void }).unref?.();
+      void p.then((x) => (clearTimeout(timer), resolve(x)));
+    });
+  /**
+   * The window from today, kept per day and Dataverse user. `retryFailed`: the VM start and the chip read again when the
+   * kept read failed (each tried afresh on every pass before NT-1, VM-3), so a blip before the start can't decide it.
+   */
+  const windowOf = async (cfg: AppConfig, today: string, retryFailed = false): Promise<Sets> => {
     const t = d.now().epochMilliseconds;
-    if (window && window.from === today && t - window.at < DAY_OFF_READ_MS) return window.sets;
-    if (inflight) return inflight;
+    const key = `${today}|${cfg.dataverse.mySystemUserId ?? ""}`;
+    const failed = !!window && (!window.sets.pto || !window.sets.holidays);
+    if (window && window.key === key && t - window.at < DAY_OFF_READ_MS && !(retryFailed && failed)) return window.sets;
+    if (inflight?.key === key) return inflight.p;
     const to = Temporal.PlainDate.from(today).add({ days: DAY_OFF_WINDOW_DAYS - 1 }).toString();
-    inflight = raw(cfg, today, to)
+    const p = limited(raw(cfg, today, to))
       .then((sets) => {
-        window = { at: t, from: today, to, sets };
+        window = { at: t, key, sets };
         if (sets.pto) lastGood = { at: Temporal.Instant.fromEpochMilliseconds(t).toString(), from: today, to, days: [...sets.pto].filter((x) => x >= today && x <= to).sort() };
         return sets;
       })
-      .finally(() => (inflight = null));
-    return inflight;
+      .finally(() => {
+        if (inflight?.p === p) inflight = null;
+      });
+    inflight = { key, p };
+    return p;
   };
   const within = (s: ReadonlySet<string> | null, from: string, to: string) => (s ? new Set([...s].filter((x) => x >= from && x <= to)) : null);
   const todayOf = (cfg: AppConfig) => localToday(d.now().toString(), userZone(cfg));
@@ -86,7 +105,7 @@ export function daysOffReader(d: {
       const today = todayOf(cfg);
       const end = Temporal.PlainDate.from(today).add({ days: DAY_OFF_WINDOW_DAYS - 1 }).toString();
       if (from < today || to > end) return raw(cfg, from, to);
-      const s = await windowOf(cfg, today);
+      const s = await windowOf(cfg, today, true);
       return { pto: within(s.pto, from, to), holidays: within(s.holidays, from, to) };
     },
     day: async (cfg, date) => {
