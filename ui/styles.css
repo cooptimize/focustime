@@ -7599,8 +7599,10 @@ body.ah-dragging * { cursor: grabbing !important; }
    Cards); the lines under it scroll away. A block's header stays under it while the block scrolls by, and so do the
    Timebox bar and the to-do column. Focus moved by Tab is kept below both (scroll-padding). The phone (PH-1) is unchanged. */
 .app:not(.phone) .today-view.u2.mode-now { --day-head-h: 56px; --tt-head-h: calc(38px * var(--text-scale)); scroll-padding-top: calc(var(--day-head-h) + var(--tt-head-h) + 8px); }
-.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar { position: sticky; top: calc(-1 * 24px); z-index: 30; margin: -24px -24px 0; padding: 24px 24px 10px; background: var(--bg); }
-.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar:has(+ *) { box-shadow: 0 1px 0 var(--border); }
+/* Its box keeps Day's left edge (the Inbox lines up with it); the page's background behind it, across Day's padding, is
+   drawn by ::before, under the header's own controls. */
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar { position: sticky; top: calc(-1 * 24px); z-index: 16; margin-top: -24px; padding: 24px 0 10px; }
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar::before { content: ""; position: absolute; inset: 0 -24px; z-index: -1; background: var(--bg); box-shadow: 0 1px 0 var(--border); pointer-events: none; }
 /* With Timebox my day's bar up it stays on top (Accept all, Discard), and the block headers and the to-do column stick
    under it. */
 .app:not(.phone) .today-view.u2.mode-now .today-tl { --tt-bar-h: 0px; }
@@ -7617,13 +7619,13 @@ body.ah-dragging * { cursor: grabbing !important; }
 .app:not(.phone) .today-view.u2.mode-now .day-cards .half.card, .app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { overflow: clip; }
 
 /* DY-1: a block on today's Day folds to one line once it has ended; the arrow folds or unfolds it by hand. */
-.day-fold-arrow { flex: none; align-self: center; display: inline-grid; place-items: center; width: calc(28px * var(--text-scale)); height: calc(28px * var(--text-scale)); margin: -4px 0 -4px 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.day-fold-arrow { flex: none; align-self: center; display: inline-grid; place-items: center; width: calc(28px * var(--text-scale)); height: calc(28px * var(--text-scale)); margin: -4px 0 -4px 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-muted); cursor: pointer; }
 .day-fold-arrow:hover { background: var(--raised); color: var(--text); }
 .day-fold-arrow:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
 .tt-head .day-fold-arrow, .card-head .day-fold-arrow { margin-left: auto; }
 .tt-head .status-pill ~ .day-fold-arrow, .card-head .head-chip ~ .day-fold-arrow { margin-left: 4px; }
 .card-head .day-fold-arrow + .card-more { margin-left: 0; }
-.day-fold-sum { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; margin-left: 8px; color: var(--muted); font-size: var(--fs-2); font-weight: 400; }
+.day-fold-sum { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; margin-left: 8px; color: var(--text-muted); font-size: var(--fs-2); font-weight: 400; }
 .day-fold-sum .dfs-left.late { color: var(--watch); font-weight: 600; }
 .day-fold-sum .call-mark { align-self: center; }
 .half.day-folded { cursor: pointer; }
