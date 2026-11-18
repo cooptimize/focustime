@@ -10,6 +10,8 @@ import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useM
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
 import { sendLine, type LoopSendView } from "../plan/loop.ts";
+import { agoText, CHECKING, READ_NEXT } from "../plan/vm.ts";
+import { mergeStatus, onPageClock, unreachable } from "./vm-status.ts";
 import { ActionRefusal, call, endSession, SessionError, setSignInShowing, signInWithMicrosoft, startDemo } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
@@ -245,9 +247,13 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
   const timer = useRef<number | null>(null);
   const refresh = useCallback(async (fresh = false) => {
     try {
-      setStatus(await call<VmStatus>("vm.status", fresh ? { fresh: true } : {}));
+      const next = await call<VmStatus>("vm.status", fresh ? { fresh: true } : {});
+      // VM-4: a server with no state yet (it restarted) answers Checking…: the page keeps what it showed.
+      setStatus((prev) => mergeStatus(prev, onPageClock(next, Date.now())));
     } catch {
-      /* keeps the last status */
+      // VM-4: the request itself failed. Keep the last status, checking, and ask again in about 10 seconds (before,
+      // nothing asked again until the window was hidden and shown).
+      setStatus((prev) => unreachable(prev, Date.now()));
     }
   }, []);
   useEffect(() => {
@@ -275,9 +281,19 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       // VM-2: Stop only while it runs, always through its preview. Nothing touches the auto-shutdown (D475).
       if (s.canStop) items.push({ id: "stop", label: "Stop…", action: "vm.preview", run: () => act("deallocate") });
       const consent = () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true)));
+      // VM-4: a state that couldn't just be read: how old it is, and after 2 minutes the reason and what to do.
+      if (s.checking) {
+        const ago = agoText(s.readAt ?? null, Date.now());
+        const said = s.problem ? s.problem.text : `FocusTime couldn't read your VM's state just now and is asking again.${ago ? ` The state shown was read ${ago}.` : ""}`;
+        // The reason, then what to do (review: the menu said only the reason). A sign-in is one item that signs in.
+        const next = s.problem ? READ_NEXT[s.problem.kind] : null;
+        const head: MenuItem[] = [s.problem?.kind === "sign_in" ? { id: "checking", label: "Sign in to Azure again…", ...(ago ? { hint: `Read ${ago}` } : {}), run: consent } : { id: "checking", label: s.problem?.short ?? CHECKING, ...(ago ? { hint: `Read ${ago}` } : {}), run: () => void notify(said) }];
+        if (next) head.push({ id: "checking-next", label: next, run: () => void notify(said) });
+        items.unshift(...head);
+      }
       // VM-2: today's automatic start couldn't sign in (said once; the chip's ! until this menu was opened).
       if (s.autoStart?.signInProblem) items.push({ id: "auto-signin", label: "Auto-start couldn't sign in to Azure", hint: "Allow Azure access", run: consent });
-      else if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: consent });
+      else if (s.needsConsent && s.problem?.kind !== "sign_in") items.push({ id: "consent", label: "Allow Azure access…", run: consent });
       // VM-3: today's start left the VM off: the reason and what to do (Settings has the same line).
       if (s.autoStart?.leftOff && s.autoStart.leftOff.reason !== "sign_in") items.push({ id: "auto-left", label: s.autoStart.leftOff.short, hint: "Why", run: () => void notify(s.autoStart!.leftOff!.text) });
       // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
@@ -290,7 +306,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       if (s.autoStart?.leftOff && !s.autoStart.leftOff.seen) void call("vm.autostart_seen", { what: "left_off" }).then(() => refresh(), () => undefined);
     }
     items.push({ id: "choose", label: s?.vm ? "Choose another VM…" : "Find my VM…", action: "vm.choose", run: onSettings });
-    open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? "Unknown"}` : "My VM", items });
+    open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? CHECKING}` : "My VM", items });
   }, [status, act, open, onSettings, refresh, signIn]);
   const api = useMemo(() => ({ status, refresh, act, openMenu }), [status, refresh, act, openMenu]);
   // The command menu's VM commands open this menu (top right, under the chip).
@@ -409,17 +425,25 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
 export function VmChip({ dot = false }: { dot?: boolean } = {}) {
   const { status, openMenu } = useContext(VmCtx);
   if (!status?.vm) return null;
-  const chip = status.chip ?? "unknown";
-  const text = status.text ?? status.label ?? "Unknown";
+  // VM-4: no state yet is Checking…, never Unknown (Unknown is only Azure answering with no state).
+  const chip = status.chip;
+  const tone = chip ? TONE[chip] : "off";
+  const ago = status.checking ? agoText(status.readAt ?? null, Date.now()) : null;
+  const state = status.text ?? status.label ?? CHECKING;
+  // Checking: the last state, quietly marked; after 2 minutes the reason in a few words.
+  const mark = status.checking ? (status.problem ? status.problem.short : chip ? "checking" : null) : null;
+  // After 2 minutes the state's one word and the reason, so the bar keeps its room (review: the full state and the
+  // reason pushed the bar off the screen).
+  const text = mark ? (chip ? `${status.problem ? SHORT[chip] : state} · ${mark}` : mark) : state;
   const signInNote = status.autoStart?.signInProblem && !status.autoStart.signInProblem.seen;
   // VM-3: today's start left it off: the reason in the title and a mark until the menu is opened.
   const leftOff = status.autoStart?.leftOff ?? null;
   const leftNote = !!leftOff && !leftOff.seen;
-  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message, leftOff && leftOff.reason !== "sign_in" ? leftOff.text.replace(/\.$/, "") : null].filter(Boolean).join(". ");
+  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.problem ? status.problem.text.replace(/\.$/, "") : status.error?.message, status.checking && ago ? `Last read ${ago}` : null, leftOff && leftOff.reason !== "sign_in" ? leftOff.text.replace(/\.$/, "") : null].filter(Boolean).join(". ");
   return (
     <button
       type="button"
-      className={`vm-chip vm-${TONE[chip]}${dot ? " vm-dot-only" : ""}`}
+      className={`vm-chip vm-${tone}${status.checking ? " vm-checking" : ""}${dot ? " vm-dot-only" : ""}`}
       aria-haspopup="menu"
       aria-label={dot ? `VM ${text}${leftNote ? ". Auto-start left it off today" : ""}. Menu` : leftNote ? `VM ${text}. Auto-start left it off today. Menu` : undefined}
       title={`${status.vm.name} (${status.vm.resourceGroup}): ${text}${extra ? `. ${extra}` : ""}`}
@@ -434,10 +458,11 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
         <>
           <span className="vm-word">VM</span> <span className="vm-label">{text}</span>
           {/* WK-1: under 1280 px the chip is the dot and one word; the full text is in its title and menu. */}
-          <span className="vm-short">{SHORT[chip] ?? "Unknown"}</span>
+          {/* VM-4: the state stays (it is what people glance for); the reason is the ! and the menu. */}
+          <span className="vm-short">{chip ? SHORT[chip] : status.problem ? status.problem.short : "Checking"}</span>
         </>
       )}
-      {(status.needsConsent || signInNote || leftNote) && <span className="vm-attn" aria-hidden="true">!</span>}
+      {(status.needsConsent || signInNote || leftNote || !!status.problem) && <span className="vm-attn" aria-hidden="true">!</span>}
     </button>
   );
 }

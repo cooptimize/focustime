@@ -10,6 +10,7 @@ import { loadStaticFiles, makeStaticFile, sendMissingFile, sendStatic, type Stat
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
+import { errorKind, MALFORMED_WORDS, newRef, unexpectedAnswer } from "./unexpected.ts";
 import { assistantTranscribe, chatImage, dispatch, meetingContext, type ActionContext } from "../actions/dispatch.ts";
 import { uploadTranscript } from "../actions/meeting-actions.ts";
 import { MAX_UPLOAD_BYTES } from "../actions/transcript-file.ts";
@@ -68,7 +69,8 @@ export type AppOptions = {
   /** A4: every finished request, as a fixed route name, status and duration (App Insights in the hosted app). */
   onRequest?: (r: RequestRecord) => void;
   /** HK-1: an error behind a 500, or one an action threw (telemetry's exceptions; never shown to anyone). */
-  onError?: (e: unknown, where: string) => void;
+  /** VM-4: `ref`, the reference the person was shown (also on the exception item, to find it). */
+  onError?: (e: unknown, where: string, ref?: string) => void;
   /** AS-1: push-to-talk to text for this person; by default actions/dispatch.ts's assistantTranscribe. */
   transcribe?: typeof assistantTranscribe;
   /** CV-2: one chat image for this person (the member and client checks); by default actions/dispatch.ts's. */
@@ -372,18 +374,32 @@ export function createApp(opts: AppOptions) {
         let out: Awaited<ReturnType<typeof dispatch>>;
         /** PF-2: the action named, so the writer can tell a large read on the list (compressed) from anything else. */
         let named: unknown;
+        let body: { action?: unknown; input?: unknown } | null = null;
         try {
-          const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
-          named = body.action;
-          // HK-1: the operation names the action (only a registered one) and the client key it names (sent as a ref).
-          if (isActionName(body.action)) {
-            const k = body.input && typeof body.input === "object" ? (body.input as { clientKey?: unknown }).clientKey : undefined;
-            noteCurrent({ name: `POST /api/action ${body.action}`, ...(typeof k === "string" && k.length <= 200 ? { client: k } : {}) });
+          body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
+        } catch {
+          body = null;
+        }
+        if (!body || typeof body !== "object") {
+          // A request that really is malformed (not JSON) keeps its own answer, a 400, in plain words.
+          out = { ok: false, status: 400, code: "malformed", error: MALFORMED_WORDS };
+        } else {
+          try {
+            named = body.action;
+            // HK-1: the operation names the action (only a registered one) and the client key it names (sent as a ref).
+            if (isActionName(body.action)) {
+              const k = body.input && typeof body.input === "object" ? (body.input as { clientKey?: unknown }).clientKey : undefined;
+              noteCurrent({ name: `POST /api/action ${body.action}`, ...(typeof k === "string" && k.length <= 200 ? { client: k } : {}) });
+            }
+            out = await dispatch(await opts.ctx(s), { action: body.action, input: body.input });
+          } catch (e) {
+            // VM-4: a failure the server didn't expect is a server error in plain words with a reference, never a bare
+            // "bad request". The log has the action's name, the error's kind and the same reference; nothing else.
+            const ref = newRef();
+            opts.onError?.(e, "action", ref);
+            opts.log({ source: "server", op: "action_failed", status: 500, kind: errorKind(e), ...(isActionName(body.action) ? { action: body.action } : {}), ref });
+            out = unexpectedAnswer(ref);
           }
-          out = await dispatch(await opts.ctx(s), { action: body.action, input: body.input });
-        } catch (e) {
-          if (!(e instanceof SyntaxError)) opts.onError?.(e, "action");
-          out = { ok: false, status: 400, error: "bad request" };
         }
         const status = out.ok ? 200 : out.status;
         opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
@@ -484,9 +500,13 @@ export function createApp(opts: AppOptions) {
     const tp = req.headers.traceparent;
     const op = newOperation("request", req.method ?? "GET", { traceparent: (Array.isArray(tp) ? tp[0] : tp) ?? null });
     runInOperation(op, () => handler(req, res)).catch((e: unknown) => {
-      runInOperation(op, () => opts.onError?.(e, "request"));
-      opts.log({ source: "server", op: "error", status: 500 });
-      if (!res.headersSent) res.writeHead(500);
+      // VM-4: anywhere else, an /api/ call that fails unexpectedly answers the same plain words and reference.
+      const ref = newRef();
+      runInOperation(op, () => opts.onError?.(e, "request", ref));
+      opts.log({ source: "server", op: "error", status: 500, kind: errorKind(e), ref });
+      if (res.headersSent) return void res.end();
+      if ((req.url ?? "").startsWith("/api/")) return void writeJson(req, res, 500, unexpectedAnswer(ref), []);
+      res.writeHead(500);
       res.end();
     });
   });

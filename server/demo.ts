@@ -79,6 +79,12 @@ export type DemoControl = {
   vmTick?: (advanceMinutes: number) => Promise<string>;
   /** VM-3: verification runs only (set where vmTick is): Admin › Status's pretend slow pass holds (true) or lets go. */
   passStall?: (on: boolean) => void;
+  /** VM-4: verification runs only (set where vmTick is): reads of the demo VM's state fail this way (null: they work). */
+  vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void;
+  /** VM-4: verification runs only: the next call of this action fails in a way the server didn't expect. */
+  failNext?: (action: string) => void;
+  /** VM-4: whether this call is the one to fail (and forgets it). */
+  takeFail?: (action: string) => boolean;
 };
 
 /** DM-1: what the app's real AI lends the demo: its provider, settings and spend, and whether a real call may run now (the team's switch on, the app's cap not reached). */
@@ -258,6 +264,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   };
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
+  /** VM-4: verification runs only: the action whose next call fails unexpectedly. */
+  let failNext: string | null = null;
   // DM-1: the demo's AI. The app's spend gets what real calls cost (its cap counts them); the service reads the app's
   // spend as nothing, so its own cap check never blocks the samples: the demo provider stops real calls itself at the
   // app's cap, the team's switch and the session's cap.
@@ -314,6 +322,13 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     demo: {
       ...opts.demo,
       ...(opts.demo.vmTick ? { passStall: (on: boolean) => void (stalled = on) } : {}),
+      ...(opts.demo.vmTick
+        ? {
+            vmFail: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void (demoAzure.readFails.kind = kind),
+            failNext: (action: string) => void (failNext = action),
+            takeFail: (action: string) => (failNext === action ? ((failNext = null), true) : false),
+          }
+        : {}),
       status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),
       devopsChange: (clientKey, change) => (isDemoClient(clientKey) ? devops.teammate(clientKey, parseTeammate(change)) : { ok: false, error: "That isn't a demo client" }),
     },

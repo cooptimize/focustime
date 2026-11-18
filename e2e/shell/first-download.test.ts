@@ -455,11 +455,14 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect(await a.page.locator("main.ib4").count()).toBe(1);
     // At a phone's width the line wraps inside the screen and Retry can be reached.
     await a.page.setViewportSize({ width: 390, height: 844 });
-    await failed.waitFor();
-    const box = (await failed.boundingBox())!;
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(390);
-    const retry = (await failed.getByRole("button", { name: "Retry" }).boundingBox())!;
+    // The phone's layout draws the line again: wait for its box itself, not only for the line (VM-4: it raced in CI).
+    let box: { x: number; width: number } | null = null;
+    await expect.poll(async () => (box = await failed.boundingBox()) !== null, { timeout: 10_000 }).toBe(true);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    let retry: { x: number; width: number } | null = null;
+    await expect.poll(async () => (retry = await failed.getByRole("button", { name: "Retry" }).boundingBox()) !== null, { timeout: 10_000 }).toBe(true);
+    retry = retry!;
     expect(retry.x + retry.width).toBeLessThanOrEqual(390);
     await a.page.setViewportSize(VIEW);
     await failed.waitFor();
