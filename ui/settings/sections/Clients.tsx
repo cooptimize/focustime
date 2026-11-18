@@ -1,4 +1,4 @@
-// SA-2: Settings › Clients and a client's own page, drawn with the parts (ui/settings/parts.tsx). The client chats
+// SA-2, SA-3: Settings › Clients (with Client chats' phrases and the chats FocusTime reads) and a client's own page, drawn with the parts (ui/settings/parts.tsx). The client chats
 // and the data platform come from components Admin shares (DeliveryChatField, DeploySettings): they keep their own
 // look here until SA-4 redraws Admin with these parts.
 import { useEffect, useState } from "react";
@@ -14,6 +14,7 @@ import { settingsHref } from "../registry.ts";
 import { NumRow } from "./fields.tsx";
 import { labelBy, markOf } from "./shared.ts";
 import type { BodyProps, FormProps } from "./types.ts";
+import { ChatsRead, PhrasesForm } from "./Chats.tsx";
 import { usePlan } from "./usePlan.ts";
 
 const fullDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -33,6 +34,8 @@ export function followText(f: FollowState | null, grace: number): string {
 }
 
 const nameOf = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
+/** SA-3: what a lead sees beside a team value they can change on a client's page. */
+export const teamValueLine = (client: string) => `Team value: a change applies to everyone on ${client}.`;
 
 /** ST-1: Clients › Keep following after focus time ends (a [plan] key; under Planning before). */
 function FollowGraceForm(p: FormProps) {
@@ -57,9 +60,6 @@ export function ClientsSection(p: BodyProps) {
   );
   return (
     <Page>
-      <Group>
-        <FollowGraceForm {...p} />
-      </Group>
       <Group sid="client-list">
         <Row
           id="client-list"
@@ -83,6 +83,12 @@ export function ClientsSection(p: BodyProps) {
           </Fold>
         )}
       </Group>
+      <Group>
+        <FollowGraceForm {...p} />
+      </Group>
+      {/* SA-3: Client chats' two groups, under the list. */}
+      <PhrasesForm {...p} />
+      <ChatsRead />
     </Page>
   );
 }
@@ -115,7 +121,7 @@ export function ClientSection(p: BodyProps) {
               id="client-writes"
               help={c.write ? `As ${c.write.name} on ${c.write.org}${c.write.expires ? `, expires ${shortDate(c.write.expires)}` : ""}.` : "Add your own PAT to write to DevOps."}
               below={
-                <GoLink section="devops" setting="devops-write" go={p.go}>
+                <GoLink section="connections" setting="devops-write" go={p.go}>
                   {c.write ? "Change DevOps write access" : "Turn on DevOps writes"}
                 </GoLink>
               }
@@ -135,7 +141,7 @@ export function ClientSection(p: BodyProps) {
           </Row>
         </Group>
         <Group sid="client-platform">
-          <DeploySettings clientKey={c.key} clientName={name} />
+          <DeploySettings clientKey={c.key} clientName={name} teamNote={teamValueLine(name)} />
         </Group>
         {c.devops && <HouseStyle clientKey={c.key} name={name} />}
       </Page>

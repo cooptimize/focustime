@@ -18,7 +18,6 @@ import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
 import { PlanningSection } from "./settings/sections/Planning.tsx";
 import { FocusSection } from "./settings/sections/Focus.tsx";
-import { ChatsSection } from "./settings/sections/Chats.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
 import { DevOpsSection } from "./settings/sections/DevOps.tsx";
 import { ConnectionsSection } from "./settings/sections/Connections.tsx";
@@ -254,12 +253,7 @@ function SectionBody(p: BodyProps) {
     case "notifications":
       return <NotificationsSection {...p} />;
     case "clients":
-      return (
-        <>
-          <ClientsSection {...p} />
-          <ChatsSection {...p} />
-        </>
-      );
+      return <ClientsSection {...p} />;
     case "client":
       return <ClientSection {...p} />;
     case "ai":

@@ -10,6 +10,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
+import { useReturnFocus } from "../CloseButton.tsx";
 import type { RequestChatStatus } from "../../plan/asks.ts";
 
 /** The chat add waiting for the Chat.Read consent to come back (this tab only): "<clientKey> <chatId>". */
@@ -126,6 +127,7 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false }: {
   const ctx = useContext(Ctx);
   const [saved, setSaved] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [purging, setPurging] = useState(false);
   const addRef = useRef<HTMLButtonElement>(null);
   if (!ctx) return null;
   const mine = (ctx.data?.chats ?? []).filter((c) => c.clientKey === clientKey);
@@ -166,23 +168,25 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false }: {
             : {})}
         />
       ))}
-      {mine.length > 0 && (
-        <button
-          type="button"
-          className="mini quiet dchat-purge"
-          disabled={ctx.loading}
-          onClick={() => {
-            if (!window.confirm(`Delete every chat message FocusTime stored for ${clientName} that didn't become a request? This is for everyone on these chats. Requests and DevOps items made from them stay.`)) return;
-            setSaved(null);
-            void call<{ purged: number }>("requests.purge", { clientKey }).then(
-              (r) => setSaved(r.purged ? `Deleted ${r.purged} stored ${r.purged === 1 ? "message" : "messages"}` : "Nothing stored"),
-              (e: unknown) => setSaved(e instanceof Error ? e.message : "Not deleted"),
-            );
-          }}
-        >
-          Delete stored messages
-        </button>
-      )}
+      {mine.length > 0 &&
+        (purging ? (
+          <ConfirmPurge
+            clientName={clientName}
+            onCancel={() => setPurging(false)}
+            onDelete={() => {
+              setPurging(false);
+              setSaved(null);
+              void call<{ purged: number }>("requests.purge", { clientKey }).then(
+                (r) => setSaved(r.purged ? `Deleted ${r.purged} stored ${r.purged === 1 ? "message" : "messages"}` : "Nothing stored"),
+                (e: unknown) => setSaved(e instanceof Error ? e.message : "Not deleted"),
+              );
+            }}
+          />
+        ) : (
+          <button type="button" className="mini quiet dchat-purge" disabled={ctx.loading} onClick={() => setPurging(true)}>
+            Delete stored messages
+          </button>
+        ))}
       {!admin ? null : picking ? (
         <ChatPicker
           clientName={clientName}
@@ -331,6 +335,22 @@ function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientN
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** SA-3: Delete stored messages asks in the app's own confirm (was the browser's), saying it is for everyone on the chats. */
+function ConfirmPurge({ clientName, onDelete, onCancel }: { clientName: string; onDelete: () => void; onCancel: () => void }) {
+  useReturnFocus();
+  return (
+    <div className="adm-confirm" role="alertdialog" aria-label="Delete stored messages">
+      <p>Delete every chat message FocusTime stored for {clientName} that didn't become a request? This deletes them for everyone on these chats. Requests and DevOps items made from them stay.</p>
+      <button type="button" className="mini danger" onClick={onDelete}>
+        Delete for everyone
+      </button>
+      <button type="button" className="mini quiet" autoFocus onClick={onCancel}>
+        Cancel
+      </button>
     </div>
   );
 }

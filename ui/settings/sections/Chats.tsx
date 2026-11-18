@@ -1,26 +1,17 @@
-// SA-2: Settings › Client chats, drawn with the parts (ui/settings/parts.tsx).
+// SA-3: Clients' two chat groups (was Settings › Client chats): what FocusTime looks for in chats, and the chats it reads.
 import { useEffect, useState } from "react";
 import type { RequestsData } from "../../../plan/asks.ts";
 import { call } from "../../api.ts";
 import { useAutoSave } from "../autosave.tsx";
 import { pollText } from "../DeliveryChats.tsx";
-import { Group, List, ListItem, Page, Row, State, Text, Value } from "../parts.tsx";
+import { Group, List, ListItem, Row, State, Text, Value } from "../parts.tsx";
 import { labelBy, markOf } from "./shared.ts";
 import type { FormProps } from "./types.ts";
 
 /** The phrases the rules use (the chats are read every 5 minutes for everyone, D514). Commas between phrases. */
 const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
-export function ChatsSection(p: FormProps) {
-  return (
-    <Page>
-      <PhrasesForm {...p} />
-      <ChatsRead />
-    </Page>
-  );
-}
-
-function PhrasesForm(p: FormProps) {
+export function PhrasesForm(p: FormProps) {
   const s = p.data.asks;
   // ADM-1: the team's lists are a Default an admin sets; a person adds their own on top and never removes the team's.
   const team = p.data.org?.phrases.team ?? null;
@@ -38,8 +29,8 @@ function PhrasesForm(p: FormProps) {
   );
   return (
     <Group
-      title="Phrases"
-      intro={`Each client chat registered below is read every ${p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client.`}
+      title="What FocusTime looks for in chats"
+      intro={`Each client chat registered on a client's page is read every ${p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client.`}
       more="A new message from someone outside Cooptimize is checked for what it asks when it mentions a Cooptimizer, has a question mark, uses an asking phrase, or has an attachment; one that is only an acknowledgement is never checked. An urgent one can bring an Urgent request notice. The asking phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide."
     >
       {team && (
@@ -64,7 +55,7 @@ function PhrasesForm(p: FormProps) {
 }
 
 /** One line per client chat I see, with how it's read or its problem. One failing chat never hides the others. */
-function ChatsRead() {
+export function ChatsRead() {
   const [d, setD] = useState<RequestsData | null>(null);
   useEffect(() => {
     let live = true;
@@ -72,7 +63,7 @@ function ChatsRead() {
     return () => void (live = false);
   }, []);
   return (
-    <Group>
+    <Group title="Chats FocusTime reads">
       <Row id="chats-read" wide help={d && !d.chats.length ? "None yet." : undefined}>
         {d && d.chats.length > 0 && (
           <List>

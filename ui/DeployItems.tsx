@@ -160,7 +160,7 @@ type Status = { busy: boolean; note: string | null; error: string | null };
  * A client's data platform and its list, for an admin or that client's lead (nothing shows for anyone else). Every
  * change saves at once. The lists are the client's only: only new deployments follow.
  */
-export function DeploySettings({ clientKey, clientName }: { clientKey: string; clientName: string }) {
+export function DeploySettings({ clientKey, clientName, teamNote }: { clientKey: string; clientName: string; teamNote?: string }) {
   const [view, setView] = useState<DeployItemsView | null>(null);
   const [status, setStatus] = useState<Status>({ busy: false, note: null, error: null });
   const [adding, setAdding] = useState<Partial<Record<DataPlatform, string>>>({});
@@ -210,6 +210,8 @@ export function DeploySettings({ clientKey, clientName }: { clientKey: string; c
   };
   return (
     <div className="set-form dep-settings" ref={anchor} id={`deploy-${clientKey}`}>
+      {/* SA-3: on a client's Settings page, a lead sees that this is the team's value. */}
+      {teamNote && <p className="set-hint dep-team">{teamNote}</p>}
       <div className="set-field">
         <span className="set-label">Data platform</span>
         <span className="set-value">
