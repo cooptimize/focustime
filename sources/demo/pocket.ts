@@ -9,6 +9,7 @@
 //   pk_demo_shared  PK-4: the demo person's recordings under their own Pocket address (one FocusTime doesn't know),
 //                   someone else's, two with no recorder and one item that isn't a recording (no length): nothing is
 //                   kept until the person sets their Pocket address (DEMO_POCKET_SOLO)
+//   pk_demo_flaky   PK-4: the count answers (so it connects), the list and one recording say Pocket is busy (503)
 // Any other key starting pk_ is accepted.
 //
 // MC-2b: the list and one recording, from invented recordings placed on the demo week's calls (sources/demo/data.ts,
@@ -20,7 +21,7 @@ import { POCKET_LIST_PATH, POCKET_ORIGIN } from "../pocket/client.ts";
 import { DEMO_TZ } from "./data.ts";
 import { DEMO_PERSON } from "./azure.ts";
 
-export const DEMO_POCKET_KEYS = { wrong: "pk_demo_wrong", busy: "pk_demo_busy", slow: "pk_demo_slow", odd: "pk_demo_odd", solo: "pk_demo_solo", shared: "pk_demo_shared" } as const;
+export const DEMO_POCKET_KEYS = { wrong: "pk_demo_wrong", busy: "pk_demo_busy", slow: "pk_demo_slow", odd: "pk_demo_odd", solo: "pk_demo_solo", shared: "pk_demo_shared", flaky: "pk_demo_flaky" } as const;
 /** PK-4: on pk_demo_shared, the address of an item that isn't a recording (no length). */
 export const DEMO_POCKET_NOT_A_RECORDING = "summaries@pocket.example";
 
@@ -137,6 +138,7 @@ export function createDemoPocketFetch(o: { now: () => number; calls?: PocketCall
         s?.addEventListener("abort", () => reject(s.reason), { once: true });
       });
     if (key === DEMO_POCKET_KEYS.odd) return json(200, { items: [], next: null });
+    if (key === DEMO_POCKET_KEYS.flaky && (one || u.searchParams.get("limit") !== "1")) return json(503, { success: false, data: null, error: "Service unavailable" });
     const solo = key === DEMO_POCKET_KEYS.solo;
     const recs = key === DEMO_POCKET_KEYS.shared ? sharedRecordings(o.now()) : demoPocketRecordings(o.now(), solo ? DEMO_POCKET_SOLO : (o.mine ?? DEMO_PERSON.email)).filter((r) => !solo || r.by === DEMO_POCKET_SOLO);
     if (one) {

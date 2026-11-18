@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM)("PK-2: Connect your Pocket", () => {
     // Disconnect asks first; Keep it keeps it.
     await s.getByRole("button", { name: "Disconnect" }).click();
     const ask = s.getByRole("group", { name: "Disconnect" });
-    await expect(ask.textContent()).resolves.toMatch(/^Disconnect Pocket\? FocusTime forgets your key now\./);
+    await expect(ask.textContent()).resolves.toMatch(/^Disconnect Pocket\? FocusTime forgets your key and your Pocket addresses now\./);
     // The question's Disconnect has the focus, so Enter or Escape is one key away; Keep it is next.
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent)).toBe("Disconnect");
     // One Disconnect on screen while it asks: the question's own.
