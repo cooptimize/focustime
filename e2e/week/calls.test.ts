@@ -29,8 +29,14 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     // The newest first: this Monday's (last Monday's is further down).
     const model = others.filter({ hasText: "Northwind data model review" }).first();
     await expect(model.locator(".mtg-state").textContent()).resolves.toBe("Not reviewed");
+    // Keyboard: the setup opens under its row; Esc closes it and puts focus back on the row's Review.
     await model.getByRole("button", { name: /^Review/ }).click();
-    const setup = page.getByRole("dialog", { name: /^Review Northwind data model review/ });
+    await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
+    await page.keyboard.press("Escape");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label"))).toBe("Review: Northwind data model review");
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/meetings");
+    await page.keyboard.press("Enter");
+    const setup = page.getByRole("region", { name: /^Review Northwind data model review/ });
     await setup.waitFor();
     const client = setup.getByLabel("Which client is this call about?");
     await expect(client.locator("option:checked").textContent()).resolves.toMatch(/Northwind.*\(suggested\)/);
@@ -47,7 +53,7 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     // A call whose organizer turned transcripts off: plain words, pointing to the upload.
     const prop = page.locator(".mtg-other").filter({ hasText: "Proposal review with Jordan" }).first();
     await prop.getByRole("button", { name: /^Review/ }).click();
-    const s2 = page.getByRole("dialog", { name: /^Review Proposal review with Jordan/ });
+    const s2 = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
     await s2.getByLabel("Which client is this call about?").selectOption({ index: 1 });
     await s2.getByRole("button", { name: "Continue" }).click();
     await expect.poll(() => page.getByText(/didn't let your sign-in read this call's transcript/).count(), { timeout: 30_000 }).toBe(1);

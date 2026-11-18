@@ -5462,6 +5462,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .phone .mtg-other { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name act" "when act" "state act"; }
 .phone .mtg-other .mtg-state { text-align: left; }
 .mtg-setup { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-1, none); }
+.mtg-other-setup { list-style: none; padding: 8px 12px 12px; border-top: 1px solid var(--border); }
 .mtg-setup h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; overflow-wrap: anywhere; }
 .mtg-setup h3:focus { outline: none; }
 .mtg-setup p { margin: 0; }

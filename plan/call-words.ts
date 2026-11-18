@@ -138,6 +138,7 @@ export const CALLS_TEXT = {
   notReviewed: "Not reviewed",
   review: "Review",
   open: "Open",
+  upload: "Upload",
   people: (n: number) => `${n} ${n === 1 ? "person" : "people"}`,
   byHand: "Added by you",
   setupTitle: (name: string) => `Review ${name}`,

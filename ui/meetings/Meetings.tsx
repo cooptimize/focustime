@@ -10,7 +10,7 @@
 // skipped and done rows, headers that stay in view, and a way from a transcript line back to its proposals. An
 // attendee who isn't a reviewer can look, not act.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
@@ -101,7 +101,6 @@ function CallsList({ colors, clients, blockClientAt, today, onOpen, onClose, onC
         </span>
       </header>
       {adding && <AddCall clients={clients} today={today} onCancel={() => setAdding(false)} onAdded={(id) => (setAdding(false), onChanged?.(), onOpen(id, { view: "upload" }))} />}
-      {setup && <CallSetup call={setup} clients={clients} suggested={suggestClient(setup.name, clients, blockClientAt(setup.startAt))} onCancel={() => setSetup(null)} onStarted={(id, teams) => { setSetup(null); onChanged?.(); if (teams) requestFetch(id); onOpen(id, teams ? undefined : { view: "upload" }); }} />}
       <section className="mtg-calls" aria-labelledby="mtg-client-calls">
         <header className="mtg-calls-head">
           <h3 id="mtg-client-calls">{CALLS_TEXT.clientCalls}</h3>
@@ -144,12 +143,21 @@ function CallsList({ colors, clients, blockClientAt, today, onOpen, onClose, onC
         {!others && !othersErr && <p className="muted">Loading…</p>}
         {others && others.calls.length === 0 && kept.length === 0 && <p className="muted">{CALLS_TEXT.noOthers(others.days)}</p>}
         <ul className="mtg-others">
-          {kept.map(({ m, o }) => <OtherRow key={`k${o.id}`} name={m.name} when={whenLine(o.startAt, o.endAt)} detail={m.call === "hand" ? CALLS_TEXT.byHand : m.clientName} color={clientColor(m.clientKey, colors)} state={callLabel(o, m.mine.review)} onPress={() => onOpen(o.id)} pressLabel={CALLS_TEXT.open} />)}
+          {kept.map(({ m, o }) => {
+            const up = o.state === "needs_upload" && m.mine.review;
+            return <OtherRow key={`k${o.id}`} name={m.name} when={whenLine(o.startAt, o.endAt)} detail={m.call === "hand" ? CALLS_TEXT.byHand : m.clientName} color={clientColor(m.clientKey, colors)} state={callLabel(o, m.mine.review)} onPress={() => onOpen(o.id, up ? { view: "upload" } : undefined)} pressLabel={up ? CALLS_TEXT.upload : CALLS_TEXT.open} />;
+          })}
           {(others?.calls ?? []).map((c) => {
             const o = occOf(c.occurrenceId);
             const sv = seriesOf(o);
             const st = o && sv ? callLabel(o, sv.mine.review) : null;
-            return <OtherRow key={c.key} name={c.name} when={whenLine(c.startAt, c.endAt)} detail={CALLS_TEXT.people(c.people)} color={sv ? clientColor(sv.clientKey, colors) : null} state={st ?? { label: CALLS_TEXT.notReviewed, needsMe: false }} onPress={() => (o ? onOpen(o.id) : setSetup(c))} pressLabel={o ? CALLS_TEXT.open : CALLS_TEXT.review} />;
+            const press = o && sv ? (o.state === "needs_upload" && sv.mine.review ? CALLS_TEXT.upload : CALLS_TEXT.open) : CALLS_TEXT.review;
+            return (
+              <Fragment key={c.key}>
+                <OtherRow name={c.name} when={whenLine(c.startAt, c.endAt)} detail={CALLS_TEXT.people(c.people)} color={sv ? clientColor(sv.clientKey, colors) : null} state={st ?? { label: CALLS_TEXT.notReviewed, needsMe: false }} onPress={() => (o ? onOpen(o.id, o.state === "needs_upload" && sv?.mine.review ? { view: "upload" } : undefined) : setSetup(c))} pressLabel={press} rowKey={c.key} />
+                {setup?.key === c.key && <li className="mtg-other-setup"><CallSetup call={setup} clients={clients} suggested={suggestClient(setup.name, clients, blockClientAt(setup.startAt))} onCancel={() => { const k = setup.key; setSetup(null); requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-review="${CSS.escape(k)}"]`)?.focus()); }} onStarted={(id, teams) => { setSetup(null); onChanged?.(); if (teams) requestFetch(id); onOpen(id, teams ? undefined : { view: "upload" }); }} /></li>}
+              </Fragment>
+            );
           })}
         </ul>
       </section>
@@ -163,13 +171,13 @@ const whenLine = (startAt: string, endAt: string) => {
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
 };
 
-function OtherRow({ name, when, detail, color, state, onPress, pressLabel }: { name: string; when: string; detail: string; color: string | null; state: { label: string; needsMe: boolean }; onPress: () => void; pressLabel: string }) {
+function OtherRow({ name, when, detail, color, state, onPress, pressLabel, rowKey }: { name: string; when: string; detail: string; color: string | null; state: { label: string; needsMe: boolean }; onPress: () => void; pressLabel: string; rowKey?: string }) {
   return (
     <li className={`mtg-other${state.needsMe ? " needs" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
       <span className="mtg-other-name">{color && <span className="swatch" aria-hidden="true" />}{name}</span>
       <span className="muted mtg-other-when">{when} · {detail}</span>
       <span className="mtg-state">{state.label}</span>
-      <button type="button" className={`mini${state.needsMe || pressLabel === CALLS_TEXT.review ? " primary" : ""}`} onClick={onPress} aria-label={`${pressLabel}: ${name}`}>{pressLabel}</button>
+      <button type="button" className={`mini${state.needsMe || pressLabel === CALLS_TEXT.review ? " primary" : ""}`} onClick={onPress} aria-label={`${pressLabel}: ${name}`} data-review={rowKey}>{pressLabel}</button>
     </li>
   );
 }
@@ -212,7 +220,7 @@ function CallSetup({ call: c, clients, suggested, onCancel, onStarted }: { call:
     }
   };
   return (
-    <div className="mtg-setup" role="dialog" aria-modal="false" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+    <div className="mtg-setup" role="region" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), e.stopPropagation(), onCancel())}>
       <h3 id="mtg-setup-title" tabIndex={-1}>{CALLS_TEXT.setupTitle(c.name)}</h3>
       <p className="muted">{whenLine(c.startAt, c.endAt)} · {CALLS_TEXT.people(c.people)}</p>
       <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
@@ -479,7 +487,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
       )}
       {view !== "transcript" && <p className="muted mtg-intro">
         {r.transcript ? (r.pocket ? `From the transcript (${r.transcript.lines} lines). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
-        {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
+        {editable && r.proposals.length === 0 ? "" : editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
         {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : CALLS_TEXT.whoSees}` : ""}
       </p>}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
@@ -880,14 +888,18 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
   }, [occ.id]);
   const [msg, setMsg] = useState<string | null>(null);
   /** MC-2: one try with my sign-in, for this call only; what came of it in plain words. */
+  const [refused, setRefused] = useState(false);
   const fromTeams = async () => {
     setBusy("teams");
     setMsg(null);
     try {
       const r = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ.id });
       setMsg(r.message);
+      // After a refusal the upload is the way on: Teams is no longer the main button.
+      setRefused(r.outcome !== "found");
       await onDone();
     } catch (e) {
+      setRefused(true);
       setMsg(errText(e));
     } finally {
       setBusy(null);
@@ -919,8 +931,8 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
             {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
           </button>
         )}
-        {series.teams && (
-          <button type="button" className={`mini${!occ.hasTranscript ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void fromTeams()} title={CALLS_TEXT.sourceTeamsHint}>
+        {series.teams && !occ.hasTranscript && (
+          <button type="button" className={`mini${!refused ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void fromTeams()} title={CALLS_TEXT.sourceTeamsHint}>
             {busy === "teams" ? "Asking Teams…" : CALL_ACTIONS.fromTeams}
           </button>
         )}
@@ -952,7 +964,7 @@ function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesVi
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.call ? (series.teams ? "Use Get it from Teams above, or download it from the meeting's recap in Teams." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} {series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} {series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (
