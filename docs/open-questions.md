@@ -1734,3 +1734,21 @@ Readings taken where the brief left room (the one that changes less), for the pr
   - Search Admin's client settings (Allow AI and the like) go to the Clients list unless a client's page is open, since the setting is per client.
   - People, like a client's page, opens on the tab last used this visit while the address says `#/admin/people`.
 - **Taller rows.** With the parts, Team defaults › AI and Planning and new people are about one screen longer at 1440 than A to E's moved rows (`docs/ux/sa4/after.md`). Kept: the row style is SA-2's, one setting per row.
+
+## CO-1: Ask to collaborate: pick your own time and check who is free (Nov 18)
+
+Readings taken where the brief left room (the one that changes less), each open to change:
+
+- **The summary counts me.** "2 of 3 are free" with two people chosen means me and one of them; "Everyone is free" includes me.
+- **Which reason shows when several apply.** Me: a day off, then outside my hours, then what's in the way. A person: away, then a calendar that couldn't be read, then outside their hours, then busy.
+- **Lunch is named in the way** ("You: Lunch 12:00–1:00") rather than called outside my hours; it is my own setting.
+- **A day with no working hours** (a weekend, a day override with none) reads "You: a day off", the same as PTO.
+- **Default day is today** even when the item is pinned to a later day, as decided; Find times' range still starts on the pinned day.
+- **Checking needs someone chosen.** With nobody chosen, Check who is free says "Choose who to ask first". Find times with nobody chosen still lets FocusTime pick, and picking a suggestion sets Who to its person.
+- **Find times uses the length in When** (to the nearest 15 minutes, 15 minutes to 2 hours); its own Length row is gone.
+- **A quarter hour only when no hour or half hour fits anywhere in the range**, not per day.
+- **The preview reads free/busy again** for the chosen people that day (one more getSchedule read); Confirm checks only the time (start not passed, length), not free/busy.
+- **Times.** The answer uses the app's short form ("10:00–11:00", PS-1), in my zone; a teammate's hours show in their zone with the same hours in mine. The time field's button shows the 24 hour time it already showed ("14:00"); one format for both is for the time field's own step.
+- **The half-hour rule landed in commit A**, with the check, because the 10:06 test covers both; C's commit is the Find times words.
+- **From the review passes:** see the pull request.
+
