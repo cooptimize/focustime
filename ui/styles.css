@@ -7769,4 +7769,6 @@ body.ah-dragging * { cursor: grabbing !important; }
 @container (max-width: 480px) {
   .calls-row-one { flex-wrap: wrap; row-gap: 0; }
   .calls-row-one .calls-name { flex-basis: 100%; }
+  .calls-row.series .calls-row-one { flex-wrap: nowrap; }
+  .calls-row.series .calls-row-one .calls-name { flex-basis: auto; }
 }
