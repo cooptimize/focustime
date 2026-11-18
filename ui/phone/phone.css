@@ -139,4 +139,53 @@
   .mr-name { font-weight: 500; }
   .mr-line { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
   .mr-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--risk); }
+
+  /* PH-2: Week as day rows. The header stays in view under the top bar (--ph-top, measured); every day on one screen
+     at 390 by 844 for a week with no evenings. A tile: the client's name, then one line; the client's color as a tint
+     and an edge, never a fill; the block under way outlined; an Open half-day dashed; a day that is one thing one tile. */
+  .pw { display: grid; gap: 4px; font-size: var(--ph-body); }
+  .pw-head { position: sticky; top: var(--ph-top, 0px); z-index: 20; background: var(--bg); padding: 2px 0 6px; display: grid; gap: 2px; box-shadow: 0 1px 0 var(--border); }
+  .pw-head-row { display: flex; align-items: center; gap: 4px; min-height: var(--tap); }
+  .pw-title { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; }
+  .app.phone .pw-step, .app.phone .pd-step-ph button { min-width: var(--tap); min-height: var(--tap); padding: 0; display: inline-grid; place-items: center; border: 0; background: none; color: var(--text); }
+  .pw-step svg, .pd-step-ph svg { width: 20px; height: 20px; }
+  .app.phone .pw-this { min-height: var(--tap); margin-left: auto; padding: 0 12px; font-size: var(--fs-2); }
+  .pw-chips:empty { display: none; }
+  .pw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pw-head .week-subline, .pw-head .next-empty-line { margin: 0; }
+  .pw-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .pw-row { display: grid; grid-template-columns: minmax(3.6em, auto) minmax(0, 1fr); gap: 6px; align-items: stretch; }
+  .app.phone .pw-day {
+    min-height: var(--tap); padding: 6px 4px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+    border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; max-width: 5.6em;
+  }
+  .pw-wd { font-weight: 600; font-size: var(--fs-3); }
+  .pw-date { font-size: var(--fs-2); color: var(--text-muted); }
+  .pw-due { font-size: var(--fs-1); font-weight: 600; color: var(--watch-text, var(--watch)); overflow-wrap: anywhere; }
+  /* Today: marked by its weight and a bar (and aria-current), never by color alone. Past days quieter. */
+  .pw-row.today .pw-day { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; }
+  .pw-row.past .pw-tile, .pw-row.past .pw-day { opacity: .62; }
+  .pw-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+  .app.phone .pw-tile {
+    min-height: 56px; min-width: 0; padding: 7px 10px 7px 12px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
+    border-radius: 10px; border: 1px solid color-mix(in srgb, var(--c, var(--border-strong)) 35%, var(--border));
+    background: color-mix(in srgb, var(--c, var(--border-strong)) 12%, var(--surface)); color: var(--text); text-align: left;
+    box-shadow: inset 4px 0 0 var(--c, var(--border-strong)); font-size: var(--ph-body); line-height: 1.2;
+  }
+  .pw-tile.plain { --c: var(--border-strong); }
+  .app.phone .pw-tile.open { background: none; border: 1.5px dashed var(--border-strong); box-shadow: none; }
+  .app.phone .pw-tile.now { outline: 2px solid var(--text); outline-offset: 1px; }
+  .pw-tile.whole { grid-column: 1 / -1; }
+  .app.phone .pw-tile.whole.pto { background: repeating-linear-gradient(135deg, var(--surface) 0 6px, color-mix(in srgb, var(--text-muted) 10%, var(--surface)) 6px 12px); box-shadow: none; border-color: var(--border); }
+  .app.phone .pw-tile.whole.catchup { background: none; border: 1.5px dashed var(--border-strong); box-shadow: none; }
+  .app.phone .pw-tile.whole.weekend { background: var(--surface); box-shadow: none; border-color: var(--border); }
+  .app.phone .pw-tile.eve { grid-column: 1 / -1; min-height: var(--tap); flex-direction: row; align-items: baseline; gap: 8px; padding: 6px 12px; background: var(--surface); box-shadow: none; border-color: var(--border); }
+  .pw-name { font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+  .pw-tile.eve .pw-name { font-weight: 500; color: var(--text-muted); font-size: var(--fs-2); flex: none; }
+  .pw-line { font-size: var(--fs-2); color: var(--text-muted); max-width: 100%; overflow-wrap: anywhere; }
+  .pw-tile.st-at_risk .pw-line, .pw-tile.now.st-now .pw-line { color: var(--text); }
+  .pw-tile.st-at_risk .pw-line { color: var(--risk-text, var(--risk)); font-weight: 500; }
+  .pw-tile.st-not_done .pw-line { color: var(--watch-text, var(--watch)); }
+  .pw-tile:focus-visible, .pw-day:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
 }
