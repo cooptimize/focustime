@@ -21,6 +21,8 @@ async function go(page: Page, hash: string) {
 const hash = (page: Page) => page.evaluate(() => location.hash);
 type Loaded = { data: { plan: Record<string, { picks: { title: string; status: string }[] }> } };
 const status = async (page: Page, date: string, title: string) => ((await call(page, "week.load", {})) as unknown as Loaded).data.plan[date]?.picks.find((p) => p.title === title)?.status;
+/** Waits on a server round trip: as long as a busy CI runner needs, not the one second expect.poll gives by default. */
+const poll: typeof expect.poll = (fn, o) => expect.poll(fn, { timeout: 15_000, ...(typeof o === "number" ? { timeout: o } : o) });
 const noSideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 async function plan(page: Page) {
@@ -75,7 +77,7 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     // A tile opens its day; nothing on Week edits.
     expect(await page.locator(".pw input, .pw [contenteditable]").count()).toBe(0);
     await row("Wed").locator(".pw-tile").first().click();
-    await expect.poll(() => hash(page)).toBe(`#/day/${WED}`);
+    await poll(() => hash(page)).toBe(`#/day/${WED}`);
     await page.locator(".dg-headbar").waitFor();
     // Week from the day's header, then a swipe to next week and This week back.
     await page.locator(".dg-headbar").getByRole("button", { name: "Back to Week" }).click();
@@ -84,9 +86,9 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     const pw = page.locator(".pw");
     await pw.dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 300, clientY: 400 }] });
     await pw.dispatchEvent("touchend", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 410 }] });
-    await expect.poll(() => page.locator(".pw-title").textContent()).not.toBe(before);
+    await poll(() => page.locator(".pw-title").textContent()).not.toBe(before);
     await page.getByRole("button", { name: "This week", exact: true }).click();
-    await expect.poll(() => page.locator(".pw-title").textContent()).toBe(before);
+    await poll(() => page.locator(".pw-title").textContent()).toBe(before);
     await page.close();
   }, T);
 
@@ -121,15 +123,15 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     // Previous day, then Today.
     await go(page, `#/day/${WED}`);
     await head.getByRole("button", { name: "Next day" }).click();
-    await expect.poll(() => page.locator(".dg-headbar .dg-date").textContent().catch(() => null)).not.toBe("Wed, Nov 4");
+    await poll(() => page.locator(".dg-headbar .dg-date").textContent().catch(() => null)).not.toBe("Wed, Nov 4");
     // Thursday is the demo's holiday: the day says I'm off.
     expect(await page.locator(".day-view").textContent()).toMatch(/off/i);
     // A past day still ticks.
     await go(page, `#/day/${MON}`);
     await page.getByRole("checkbox", { name: "Done: Timesheet summary query" }).click();
-    await expect.poll(() => status(page, MON, "Timesheet summary query")).toBe("done");
+    await poll(() => status(page, MON, "Timesheet summary query")).toBe("done");
     await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
-    await expect.poll(() => status(page, MON, "Timesheet summary query")).toBe("planned");
+    await poll(() => status(page, MON, "Timesheet summary query")).toBe("planned");
     // Nothing planned: one line, and Add still there.
     await go(page, "#/day/2026-11-10");
     await page.locator(".dg-empty-day").waitFor();
@@ -155,17 +157,17 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     const first = await page.locator(".io-card").getAttribute("data-key");
     // Next and Previous move without acting.
     await page.getByRole("button", { name: "Next", exact: true }).click();
-    await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).not.toBe(first);
+    await poll(() => page.locator(".io-card").getAttribute("data-key")).not.toBe(first);
     expect(await page.locator(".io-of").textContent()).toBe(`2 of ${count}`);
     // The address follows the item shown (a reload lands on it).
     const second = await page.locator(".io-card").getAttribute("data-key");
-    await expect.poll(() => hash(page)).toBe(`#/inbox/one/${second}`);
+    await poll(() => hash(page)).toBe(`#/inbox/one/${second}`);
     await page.getByRole("button", { name: "Previous", exact: true }).click();
-    await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).toBe(first);
+    await poll(() => page.locator(".io-card").getAttribute("data-key")).toBe(first);
     // Up next: a tap goes straight to it.
     const lastTitle = (await page.locator(".io-nexttitle").last().textContent())!;
     await page.locator(".io-nextrow").last().click();
-    await expect.poll(() => page.locator(".io-title").textContent()).toBe(lastTitle);
+    await poll(() => page.locator(".io-title").textContent()).toBe(lastTitle);
     expect(await page.locator(".io-of").textContent()).toBe(`${count} of ${count}`);
     // A suggestion's Create item opens its form (then the same preview as the lists).
     await go(page, "#/inbox");
@@ -176,13 +178,13 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     // More holds the rest; Dismiss runs at once, the next item takes its place, and Undo brings it back.
     await page.locator(".io-acts").getByRole("button", { name: /^More actions/ }).click().catch(() => undefined);
     await page.locator(".io-acts").getByRole("button", { name: "Dismiss", exact: true }).click();
-    await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).not.toBe(sug);
-    await expect.poll(() => page.locator(".bottom-bar .pb-count").textContent()).toBe(String(count - 1));
+    await poll(() => page.locator(".io-card").getAttribute("data-key")).not.toBe(sug);
+    await poll(() => page.locator(".bottom-bar .pb-count").textContent()).toBe(String(count - 1));
     await page.getByRole("button", { name: "Undo", exact: true }).click();
-    await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).toBe(sug);
+    await poll(() => page.locator(".io-card").getAttribute("data-key")).toBe(sug);
     // The lists, one tap from the top, and the way back.
     await page.locator(".io-lists").getByRole("button", { name: /^Promises/ }).click();
-    await expect.poll(() => hash(page)).toBe("#/inbox/promises");
+    await poll(() => hash(page)).toBe("#/inbox/promises");
     await page.getByRole("button", { name: "Back to what needs you, one at a time" }).click();
     await page.locator(".io-card").waitFor();
     // The end: each dealt with, then one line and the lists.
@@ -191,7 +193,8 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
       const pick = page.locator(".io-acts").getByRole("button", { name: /^(Dismiss|Not needed)$/ });
       if (!(await pick.count())) await page.locator(".io-acts .io-more").click();
       await pick.first().click();
-      await expect.poll(async () => ((await page.locator(".io-card").count()) ? page.locator(".io-card").getAttribute("data-key") : "gone")).not.toBe(key);
+      // In one read: asking a card for its key after counting it would wait on the last card once it has gone.
+      await poll(() => page.evaluate(() => document.querySelector(".io-card")?.getAttribute("data-key") ?? "gone")).not.toBe(key);
     }
     await page.locator(".io-end").waitFor();
     expect(await page.locator(".io-end").textContent()).toBe("Nothing needs you now.");
