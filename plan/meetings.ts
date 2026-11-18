@@ -14,6 +14,8 @@ export const ROLE_LABEL: Record<MeetingRole, string> = { status: "Weekly status 
 
 export const TRANSCRIPT_SOURCES = ["automatic", "upload"] as const;
 export type TranscriptSource = (typeof TRANSCRIPT_SOURCES)[number];
+/** PK-1: a Teams transcript (.vtt, .docx, or Graph's) or a Pocket export (its PDF, or the zip holding it). */
+export type TranscriptKind = "teams" | "pocket";
 
 /** One registered call of a client: an app table row, shared by its reviewers and attendees. */
 export type MeetingSeries = {
@@ -68,6 +70,11 @@ export type Occurrence = {
   /** Where the stored transcript came from, and when. */
   transcriptFrom: TranscriptSource | null;
   transcriptAt: string | null;
+  /**
+   * PK-1: what kind of transcript it is: "pocket" for a Pocket export a reviewer uploaded (speakers numbered, never
+   * named; no times), "teams" for a Teams one; absent for one stored before PK-1 (Teams) or none yet.
+   */
+  transcriptKind?: TranscriptKind;
   /**
    * The AI pass: done, or why not (an AiErrorKind; "no_ai" when AI is off for the client; MC-1d: "no_context" when
    * FocusTime couldn't read the client's items to send). A call sent in parts keeps which part failed ("timeout@2/3").
@@ -228,7 +235,11 @@ export type CommitmentProposal = {
   who: string;
   /** A Cooptimizer's FocusTime id (an attendee); null for someone from the client. */
   whoId: string | null;
-  side: "cooptimize" | "client";
+  /**
+   * PK-1: "unknown" when the transcript's speakers aren't named (a Pocket export) and the words don't say whose promise
+   * it is (`who` is then empty): noted with the call, never added to anyone's Promises.
+   */
+  side: "cooptimize" | "client" | "unknown";
   what: string;
   toName: string | null;
   due: IsoDate | null;
@@ -352,7 +363,8 @@ export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | 
     const n = r?.kind === "found" ? who(r.by) : null;
     return `Transcript read ${at(o.transcriptAt)}${n ? ` through ${n}'s sign-in` : ""}`;
   }
-  if (o.transcriptAt && o.transcriptFrom === "upload") return `Transcript uploaded ${at(o.transcriptAt)}`;
+  // PK-1: a Pocket export says so, wherever a call's source is shown.
+  if (o.transcriptAt && o.transcriptFrom === "upload") return `${o.transcriptKind === "pocket" ? "Pocket export uploaded by a reviewer" : "Transcript uploaded"} ${at(o.transcriptAt)}`;
   if (o.state === "no_transcript") return `${day}: no transcript this week`;
   // Why nobody's sign-in could read it, for the first person tried; someone no longer in FocusTime can't fix it.
   const tried = r && (r.kind === "no_token" || r.kind === "consent" || r.kind === "missing") ? r : null;

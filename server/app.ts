@@ -140,7 +140,11 @@ function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
 /** AS-1: the panel's push-to-talk endpoint (raw audio body, ?seconds=&client=&item=). */
 export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
 
-/** MC-1: a reviewer's transcript upload (raw .vtt or .docx body, ?series=&date=&name=), 5 MB at most. */
+/**
+ * MC-1: a reviewer's transcript upload (the raw file as the body, ?series=&date=), 5 MB at most. PK-1: a Teams .vtt or
+ * .docx, or a Pocket export (its PDF, or the zip holding it), told apart by content; `dateOk=1` after the page asked
+ * about a recording dated another day. No file name is sent or read.
+ */
 export const MEETING_UPLOAD_PATH = "/api/meetings/upload";
 
 /** AS-1: a raw body as bytes, refused past `limit` (the recording stays in this memory only). */
@@ -436,7 +440,7 @@ export function createApp(opts: AppOptions) {
         }
         const series = Number(q.get("series"));
         const out = Number.isSafeInteger(series) && series > 0
-          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", name: (q.get("name") ?? "").slice(0, 200), bytes: new Uint8Array(bytes) }).catch((e: unknown) => {
+          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1" }).catch((e: unknown) => {
               opts.onError?.(e, "meeting_upload");
               return { ok: false as const, status: 500, error: "The transcript couldn't be saved. Try again" };
             })

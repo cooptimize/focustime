@@ -5,6 +5,7 @@
 // (sources/demo/devops.ts, outlook.ts), so preview, confirm, read back, the audit log and undo are the real ones and
 // nothing leaves FocusTime. Its AI is the app's real provider on this fictional data when the app has one, with stored
 // sample answers when it hasn't or is slow (sources/demo/ai.ts). Its starting data comes from sources/demo/seeds/.
+import { pdfReader } from "./pdf-text.ts";
 import { demoStandards } from "../sources/demo/standards.ts";
 import { createScheduler } from "./scheduler.ts";
 import { backgroundPolicy } from "../config/background-policy.ts";
@@ -307,7 +308,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     plan,
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.

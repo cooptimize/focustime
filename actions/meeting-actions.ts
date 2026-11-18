@@ -12,12 +12,12 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { callWriteWords, CALL_ROW, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
-import { clock, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { atOf, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
@@ -26,7 +26,7 @@ import { PlanError } from "../store/plan-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { capturePass } from "./meeting-capture.ts";
-import { readTranscriptFile } from "./transcript-file.ts";
+import { READS, IntakeError, readTranscriptFile, type ReadPdf, type TranscriptRead } from "./transcript-file.ts";
 import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
@@ -52,6 +52,8 @@ export type MeetingContext = {
   /** My Graph meetings client (my calendar; the meetings token), or null when I'm not signed in with Microsoft. */
   graph: (cfg: AppConfig) => MeetingsClient | null;
   users: () => Promise<MeetingUser[]>;
+  /** PK-1: the PDF reader (server/pdf-text.ts: a worker thread, 500 pages, 10 seconds); absent: a PDF is refused. */
+  readPdf?: ReadPdf;
   /** MC-1d: the meeting job runs here (production), so a failed pass is tried again by itself; the page says so only then. */
   retriesHere?: boolean;
   /** ENV-1: Check now (server/meeting-job.ts): one look, with my sign-in only. Absent: not available here. */
@@ -488,6 +490,8 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter(toReview).length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
+      // PK-1: a Pocket export's speakers are numbered, never named, and its lines have no times (kept past 30 days).
+      pocket: r.o.transcriptKind === "pocket",
       canConfirm: reviewer,
       canWrite,
       // MC-1e: each row's check before any preview (a reviewer's only; an attendee only looks).
@@ -509,7 +513,7 @@ async function transcriptOf(ctx: MeetingContext, store: MeetingStore, me: string
   const lines = await store.transcript(r.o.id);
   ctx.log({ source: "plan", op: "meeting_transcript_read", count: lines?.length ?? 0 });
   if (!lines) return { ok: true, data: { lines: [], gone: !!r.o.transcriptAt, missing: !r.o.transcriptAt } };
-  return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: clock(l.at), sec: l.at, text: l.text })), gone: false, missing: false } };
+  return { ok: true, data: { lines: lines.map((l) => ({ n: l.n, speaker: l.speaker, at: atOf(l), sec: l.at, text: l.text })), gone: false, missing: false } };
 }
 
 /**
@@ -526,10 +530,12 @@ async function keep(ctx: MeetingContext, store: MeetingStore, me: string, input:
   if (!toReview(p)) return bad(p.state === "confirmed" ? "That one is already done" : "Bring it back first", 409);
   if (!ctx.conversations) return bad("Promises aren't available here", 503);
   const k = await ctx.conversations.addCommitment({
-    conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.who, toId: b.side === "client" ? me : null, toName: b.side === "client" ? null : b.toName,
+    // PK-1: a promise a Pocket export didn't say whose it is ("unknown") is noted with the call, like the client's: in
+    // the reviewer's Waiting on as "Someone on the call", never in anyone's Promises.
+    conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.side === "unknown" ? CALL_ROW.someone : b.who, toId: b.side === "cooptimize" ? null : me, toName: b.side === "cooptimize" ? b.toName : null,
     what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
   });
-  const message = b.side === "cooptimize" ? CALL_ROW.keptPromise(b.who) : CALL_ROW.keptNote(b.who);
+  const message = b.side === "cooptimize" ? CALL_ROW.keptPromise(b.who) : b.side === "unknown" ? CALL_ROW.keptNobody : CALL_ROW.keptNote(b.who);
   const next = await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id, message }, decidedBy: me, decidedAt: ctx.now() });
   await settledCall(store, occ.id, me);
   ctx.log({ source: "plan", op: "meeting_kept", count: 1 });
@@ -654,7 +660,8 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
   else {
     const users = await d.users().catch((): MeetingUser[] => []);
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines });
+    // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: occ.transcriptKind !== "pocket" });
     if (r.ok) {
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.
       const fresh = newOnly(r.proposals, await d.store.proposals(occ.id));
@@ -683,8 +690,14 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
  */
 const refusedRequest = (kind: string, status: number | undefined) => kind === "provider" && status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
 
-/** An uploaded transcript for a series' dated occurrence (a reviewer): parsed, stored, then the AI pass. */
-export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; name: string; bytes: Uint8Array }): Promise<ActionResponse> {
+/**
+ * An uploaded transcript for a series' dated occurrence (a reviewer): parsed, stored, then the AI pass. PK-1: the kind
+ * of file comes from its content (a Teams .vtt or .docx, a Pocket export's PDF or the zip holding it; never its name).
+ * A Pocket export dated another day than the call is not stored: the answer asks (`ask`: both dates and the
+ * recording's length), and the page sends the file again with `dateOk` only on a yes. The log has kinds, sizes and
+ * counts, never a word, a title, a label or a file's name.
+ */
+export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; bytes: Uint8Array; dateOk?: boolean }): Promise<ActionResponse> {
   const store = ctx.meetings;
   const me = await ctx.me();
   const cfg = await ctx.config();
@@ -694,17 +707,33 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   const series = await v.seriesById(q.seriesId);
   if (!series) return bad("No such meeting", 404);
   if (!canConfirm(series, me)) return bad("Only this meeting's reviewers can upload its transcript", 403);
-  let lines: TranscriptLine[];
+  let read: TranscriptRead;
   try {
-    lines = readTranscriptFile(q.name, q.bytes).lines;
+    read = await readTranscriptFile(q.bytes, { readPdf: ctx.readPdf });
   } catch (e) {
-    if (e instanceof TranscriptError) return bad(e.message, 422);
-    throw e;
+    if (e instanceof TranscriptError) {
+      ctx.log({ source: "plan", op: "meeting_upload_refused", kind: e instanceof IntakeError ? e.code : "unreadable", count: q.bytes.length });
+      return bad(e.message, 422);
+    }
+    // PK-1 review: anything else (a parser's own error can quote a file's contents) is refused in fixed words, and
+    // only its kind is logged.
+    ctx.log({ source: "plan", op: "meeting_upload_refused", kind: "error", count: q.bytes.length });
+    return bad(`FocusTime couldn't read that file. ${READS}`, 422);
+  }
+  const { lines, facts } = read;
+  const kind: TranscriptKind = read.format === "pocket" ? "pocket" : "teams";
+  // PK-1: the recording's own date, when the export has one and it isn't the call's: ask first, keep nothing.
+  if (read.recorded && read.recorded.date !== q.date && !q.dateOk) {
+    ctx.log({ source: "plan", op: "meeting_upload_ask", kind: facts.kind, count: lines.length });
+    return { ok: true, data: { ask: { recorded: read.recorded.date, length: read.recorded.length, call: q.date } } };
   }
   const start = Temporal.PlainDate.from(q.date).toZonedDateTime({ timeZone: series.zone, plainTime: Temporal.PlainTime.from(series.start) });
   const occ = await v.ensureOccurrence(series.id, q.date, start.toInstant().toString(), start.add({ minutes: series.minutes }).toInstant().toString());
-  await v.saveTranscript(occ.id, lines);
-  ctx.log({ source: "plan", op: "meeting_upload", count: lines.length });
+  await v.saveTranscript(occ.id, lines, kind);
+  ctx.log({ source: "plan", op: "meeting_upload", kind: facts.kind, count: lines.length });
+  ctx.log({ source: "plan", op: "meeting_upload_bytes", kind: facts.kind, count: facts.bytes });
+  if (facts.entries) ctx.log({ source: "plan", op: "meeting_upload_unpacked", kind: `entries:${facts.entries}`, count: facts.unpacked });
+  if (facts.pages) ctx.log({ source: "plan", op: "meeting_upload_pages", kind: facts.kind, count: facts.pages });
   const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, (await store.occurrence(occ.id))!, lines);
-  return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, ...r } };
+  return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, kind, ...r } };
 }

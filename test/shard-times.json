@@ -123,6 +123,7 @@
   "e2e/week/board.test.ts": 95.5,
   "e2e/week/break-down.test.ts": 7.5,
   "e2e/week/call-transcript.test.ts": 6.7,
+  "e2e/week/call-pocket.test.ts": 7.5,
   "e2e/week/card-title-opens-story.test.ts": 5,
   "e2e/week/carry-over.test.ts": 6.2,
   "e2e/week/client-calls.test.ts": 10.6,

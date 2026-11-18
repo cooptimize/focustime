@@ -19,7 +19,11 @@ import { planStoreOn } from "../store/plan-store.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../test/builders/index.ts";
 import { addUsers, sqliteDb } from "../test/db.ts";
-import { transcriptDocx, transcriptVtt } from "../test/docx.ts";
+import { transcriptDocx, transcriptVtt, zipOf } from "../test/docx.ts";
+import { pocketPdf } from "../test/pdf.ts";
+import type { ReadPdf } from "./transcript-file.ts";
+import { pdfReader } from "../server/pdf-text.ts";
+import { CALL_ROW } from "../plan/call-words.ts";
 import type { ActionResponse } from "./types.ts";
 import { meetingAction, meetingWrites, uploadTranscript, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
 
@@ -28,6 +32,7 @@ const LEAD = "22222222-2222-4222-8222-222222222222";
 const MATE = "33333333-3333-4333-8333-333333333333";
 const OUTSIDER = "44444444-4444-4444-8444-444444444444";
 const NOW = "2026-11-10T17:00:00Z";
+const readPdf = pdfReader();
 const JOIN = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_contoso%40thread.v2/0";
 const CLIENT_HOSTED = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_fabrikamhosted%40thread.v2/0";
 
@@ -88,7 +93,7 @@ async function setup() {
   ];
   // MC-1c: the organization's clients (Admin › Clients' list), whatever the admin's own settings hold.
   const orgClients = ["contoso", "fabrikam", "Northwind"];
-  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean } = {}): MeetingContext => ({
+  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean; readPdf?: ReadPdf } = {}): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC"), userId: me }),
     me: async () => me, isAdmin: async () => !!o.admin, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
     graph: () => (o.graph === undefined ? graph : o.graph), users: async () => { if (o.usersFail) throw new Error("db down"); return users; },
@@ -98,6 +103,7 @@ async function setup() {
     ai: async () => ai,
     canWrite: async () => o.write ?? true,
     log: o.log ?? (() => {}),
+    readPdf: o.readPdf ?? readPdf,
   });
   const act = (me: string, action: MeetingAction, input: unknown, o?: Parameters<typeof ctxAs>[1]) => meetingAction(ctxAs(me, o), action, input);
   return { db, meetings, conversations, graphCalls, providerCalls, act, ctxAs, graph, candidate };
@@ -135,24 +141,24 @@ describe("meeting capture actions (MC-1)", () => {
     const { act, ctxAs, meetings, providerCalls } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
     const docx = transcriptDocx(cues);
-    expect(await uploadTranscript(ctxAs(MATE), { seriesId: m.id, date: "2026-11-10", name: "t.docx", bytes: docx })).toMatchObject({ ok: false, status: 403 });
-    expect(await uploadTranscript(ctxAs(OUTSIDER), { seriesId: m.id, date: "2026-11-10", name: "t.docx", bytes: docx })).toMatchObject({ ok: false, status: 404 });
-    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: 999, date: "2026-11-10", name: "t.docx", bytes: docx })).toMatchObject({ ok: false, status: 404 });
-    const a = data<{ occurrenceId: number; outcome: string; proposals: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.docx", bytes: docx }));
+    expect(await uploadTranscript(ctxAs(MATE), { seriesId: m.id, date: "2026-11-10", bytes: docx })).toMatchObject({ ok: false, status: 403 });
+    expect(await uploadTranscript(ctxAs(OUTSIDER), { seriesId: m.id, date: "2026-11-10", bytes: docx })).toMatchObject({ ok: false, status: 404 });
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: 999, date: "2026-11-10", bytes: docx })).toMatchObject({ ok: false, status: 404 });
+    const a = data<{ occurrenceId: number; outcome: string; proposals: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: docx }));
     // MC-1e: the provider's comment on #1201, a Feature, is never a proposal (comments go on stories only).
     expect(a).toMatchObject({ outcome: "done", proposals: 3 });
     const fromDocx = await meetings.transcript(a.occurrenceId);
-    const b = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(LEAD), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    const b = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(LEAD), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     expect(b.occurrenceId).toBe(a.occurrenceId);
     expect(await meetings.transcript(b.occurrenceId)).toEqual(fromDocx);
     expect(providerCalls.every((c) => !/Fabrikam|4410/.test(c.input))).toBe(true);
-    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.pdf", bytes: new TextEncoder().encode("%PDF") })).toMatchObject({ ok: false, status: 422 });
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode("%PDF") })).toMatchObject({ ok: false, status: 422 });
   });
 
   it("keeps a promise from its row at once, sends DevOps changes only through the write framework, and writes nothing for a skipped one (MC-1e)", async () => {
     const { act, ctxAs, conversations, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
-    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     const r = data<{ proposals: { id: number; kind: string; body: { side?: string } }[]; canConfirm: boolean }>(await act(ADMIN, "meeting.review", { occurrenceId }));
     expect(r.canConfirm).toBe(true);
     // The fake process's stories are User Story; the comment the provider proposed on the Feature never became one.
@@ -195,7 +201,7 @@ describe("meeting capture actions (MC-1)", () => {
   it("a failed write is said in plain words on its row, never DevOps's error text (MC-1e)", async () => {
     const { act, ctxAs, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
-    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     const gap = (await meetings.proposals(occurrenceId)).find((p) => p.kind === "gap")!;
     await meetingWrites(meetings, ADMIN, () => NOW, () => {}).written(gap.id, { ok: false, writeId: 7, itemId: null, message: "DevOps refused the change: TF401320: Rule Error for field Cost Center. Error code: Required, HasValues.", type: "User Story" });
     const p = (await meetings.proposals(occurrenceId)).find((x) => x.id === gap.id)!;
@@ -209,7 +215,7 @@ describe("meeting capture actions (MC-1)", () => {
   it("says DevOps is read only without my write PAT, and dismisses with No transcript this week", async () => {
     const { act, ctxAs, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
-    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", name: "t.vtt", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
     expect(data<{ canWrite: boolean }>(await act(ADMIN, "meeting.review", { occurrenceId }, { write: false })).canWrite).toBe(false);
     const o2 = await meetings.ensureOccurrence(m.id, "2026-11-17", "2026-11-17T15:00:00Z", "2026-11-17T16:00:00Z", "needs_upload", null);
     expect(await act(MATE, "meeting.no_transcript", { occurrenceId: o2.id })).toMatchObject({ ok: false, status: 403 });
@@ -335,5 +341,112 @@ describe("meeting registration fixes (MC-1c)", () => {
     const base = { clientKey: "fabrikam", name: "x", role: "status" as const, source: "upload" as const, detected: "upload" as const, organizer: "unknown" as const, joinUrl: CLIENT_HOSTED, eventId: null, registrantId: ADMIN, weekday: 4, start: "14:00", minutes: 30, zone: "UTC", interval: 1, reviewers: [ADMIN], attendees: [] };
     const both = await Promise.allSettled([meetings.addSeries(base), meetings.addSeries({ ...base, registrantId: LEAD, joinUrl: CLIENT_HOSTED.toUpperCase().replace("HTTPS://TEAMS.MICROSOFT.COM", "https://teams.microsoft.com") })]);
     expect(both.map((x) => x.status).sort()).toEqual(["fulfilled", "rejected"]);
+  });
+});
+
+describe("a Pocket export as a call's transcript (PK-1)", () => {
+  // Invented words. Line 3 names Lee in its own words; line 4 names nobody.
+  const turns = [
+    { label: "SPEAKER_00", text: "Rates export is first." },
+    { label: "SPEAKER_01", text: "We also need a holiday calendar import." },
+    { label: "SPEAKER_02", text: "Lee here. I'll send the export spec by Friday." },
+    { label: "SPEAKER_01", text: "Decided: CSV only for now. I'll send sample rates." },
+  ];
+  const register = async (act: Awaited<ReturnType<typeof setup>>["act"]) => data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+
+  it("a recording dated another day asks first and keeps nothing; it is used only on a yes", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = await register(act);
+    const logs: LogRecord[] = [];
+    const zip = zipOf({ "export.pdf": pocketPdf({ date: "Nov 9, 2026 • 31:10", title: "An invented title", turns }) });
+    const asked = data<{ ask: unknown }>(await uploadTranscript(ctxAs(ADMIN, { log: (r) => void logs.push(r) }), { seriesId: m.id, date: "2026-11-10", bytes: zip }));
+    expect(asked.ask).toEqual({ recorded: "2026-11-09", length: "31:10", call: "2026-11-10" });
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
+    const used = data<{ occurrenceId: number; kind: string }>(await uploadTranscript(ctxAs(ADMIN, { log: (r) => void logs.push(r) }), { seriesId: m.id, date: "2026-11-10", bytes: zip, dateOk: true }));
+    expect(used.kind).toBe("pocket");
+    expect((await meetings.occurrence(used.occurrenceId))!.transcriptKind).toBe("pocket");
+    // The log: kinds, sizes and counts; never a word, the title, a label or a name.
+    expect(logs.filter((l) => l.op.startsWith("meeting_upload")).map((l) => [l.op, l.kind])).toEqual([
+      ["meeting_upload_ask", "pocket.zip"],
+      ["meeting_upload", "pocket.zip"],
+      ["meeting_upload_bytes", "pocket.zip"],
+      ["meeting_upload_unpacked", "entries:1"],
+      ["meeting_upload_pages", "pocket.zip"],
+    ]);
+    expect(JSON.stringify(logs)).not.toMatch(/invented|SPEAKER|Speaker|export spec|Rates|Lee|\.pdf/i);
+  });
+
+  it("the same day, or no date at all, doesn't ask", async () => {
+    const { act, ctxAs } = await setup();
+    const m = await register(act);
+    expect(data<{ ask?: unknown; kind: string }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ date: "Nov 10, 2026 • 31:10", turns }) }))).toMatchObject({ kind: "pocket" });
+    const none = data<{ ask?: unknown; kind: string }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ date: null, turns }) }));
+    expect(none.ask).toBeUndefined();
+    expect(none.kind).toBe("pocket");
+  });
+
+  it("no times anywhere, numbered speakers, and promises that are someone's only when the words say so", async () => {
+    const { act, ctxAs, conversations, providerCalls } = await setup();
+    const m = await register(act);
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ date: "Nov 10, 2026 • 31:10", turns }) }));
+    // The AI was told, and got no times.
+    const sent = providerCalls.at(-1)!;
+    expect(sent.instructions).toContain("Labels like Speaker 1 are not people");
+    expect(sent.input).toContain("L3 Speaker 3: Lee here. I'll send the export spec by Friday.");
+    expect(sent.input).not.toMatch(/\[\d+:\d\d\]/);
+    const r = data<{ pocket: boolean; transcript: { lines: number }; proposals: { id: number; body: { kind: string; side?: string; who?: string; whoId?: string | null }; quotes: { at: string }[] }[] }>(await act(ADMIN, "meeting.review", { occurrenceId }));
+    expect(r.pocket).toBe(true);
+    expect(r.proposals.flatMap((p) => p.quotes).every((q) => q.at === "")).toBe(true);
+    const promises = r.proposals.filter((p) => p.body.kind === "commitment");
+    expect(promises.map((p) => [p.body.side, p.body.who, p.body.whoId])).toEqual([["cooptimize", "Lee Mate", MATE.toLowerCase()], ["unknown", "", null]]);
+    // The transcript view: no time on any line.
+    const t = data<{ lines: { speaker: string; at: string; sec: number | null }[] }>(await act(MATE, "meeting.transcript", { occurrenceId }));
+    expect(t.lines.map((l) => [l.speaker, l.at, l.sec])).toEqual([["Speaker 1", "", null], ["Speaker 2", "", null], ["Speaker 3", "", null], ["Speaker 2", "", null]]);
+    // Kept, the one with no owner is noted with the call (Waiting on, "Someone on the call"), in nobody's Promises.
+    const nobody = promises.find((p) => p.body.side === "unknown")!;
+    const kept = data<{ message: string }>(await act(ADMIN, "meeting.keep", { proposalId: nobody.id }));
+    expect(kept.message).toBe(CALL_ROW.keptNobody);
+    const chat = `${MEETING_CHAT}${m.id}`;
+    expect((await conversations.viewer(ADMIN).commitmentsTo([chat])).map((k) => [k.whoId, k.whoName, k.what])).toEqual([[null, CALL_ROW.someone, "Send sample rates"]]);
+    expect(await conversations.viewer(ADMIN).commitmentsBy([chat])).toEqual([]);
+    expect(await conversations.viewer(MATE).commitmentsBy([chat])).toEqual([]);
+    // An attendee sees the note; anyone else gets no such call.
+    expect(data<{ pocket: boolean }>(await act(MATE, "meeting.review", { occurrenceId })).pocket).toBe(true);
+    expect(await act(OUTSIDER, "meeting.review", { occurrenceId })).toMatchObject({ ok: false });
+    expect(await uploadTranscript(ctxAs(MATE), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ turns }) })).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it("a Teams transcript after it is a Teams one again, with its times", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = await register(act);
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ date: null, turns }) }));
+    await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) });
+    expect((await meetings.occurrence(occurrenceId))!.transcriptKind).toBe("teams");
+    expect(data<{ pocket: boolean }>(await act(ADMIN, "meeting.review", { occurrenceId })).pocket).toBe(false);
+    const t = data<{ lines: { at: string }[] }>(await act(ADMIN, "meeting.transcript", { occurrenceId }));
+    expect(t.lines[0]!.at).toBe("0:05");
+  });
+
+  it("a refused file stores nothing and says why in plain words", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = await register(act);
+    const logs: LogRecord[] = [];
+    const r = await uploadTranscript(ctxAs(ADMIN, { log: (x) => void logs.push(x) }), { seriesId: m.id, date: "2026-11-10", bytes: zipOf({ "secret-a.pdf": pocketPdf({ turns }), "secret-b.pdf": pocketPdf({ turns }) }) });
+    expect(r).toMatchObject({ ok: false, status: 422, error: expect.stringContaining("That zip holds 2 PDFs") });
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
+    expect(logs.map((l) => [l.op, l.kind])).toEqual([["meeting_upload_refused", "zip_several"]]);
+  });
+
+  it("an error of any other kind is refused in fixed words: nothing from the file reaches the answer or the log", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = await register(act);
+    const logs: LogRecord[] = [];
+    const readPdf = async () => {
+      throw new RangeError("Invalid code point 99999999 secret-word");
+    };
+    const r = await uploadTranscript(ctxAs(ADMIN, { log: (x) => void logs.push(x), readPdf }), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ turns }) });
+    expect(r).toMatchObject({ ok: false, status: 422, error: "FocusTime couldn't read that file. FocusTime reads a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)" });
+    expect(JSON.stringify([r, logs])).not.toMatch(/secret|99999999/);
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
   });
 });

@@ -5431,6 +5431,21 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .mtg-actions .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-actions .file-button.disabled { opacity: 0.6; cursor: default; }
+/* PK-1: the upload area takes a dropped file: dashed while a file is dragged over the page, filled while it is over the area. */
+.mtg-drop.dropping { outline: 2px dashed var(--accent); outline-offset: 3px; background: var(--wash-accent); }
+.mtg-actions.mtg-drop { border-radius: 8px; }
+.mtg-actions.mtg-drop.dropping { padding: 6px 8px; background: var(--wash-accent); }
+.mtg-drop-hint { font-size: var(--fs-2); font-weight: 500; color: var(--text); }
+.mtg-upload .mtg-drop-or { font-size: var(--fs-2); }
+.phone .mtg-upload .mtg-drop-or { display: none; }
+.mtg-upload .file-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mtg-date-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--watch); border-radius: 10px; background: var(--wash-watch); }
+.mtg-date-ask:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mtg-date-ask p { margin: 0; font-size: var(--fs-3); }
+/* PK-1: a Pocket export's one note, above the proposals and the Transcript; its lines have no time column. */
+.mtg-pocket-note { margin: 0; padding: 6px 10px; border-left: 3px solid var(--border-strong); border-radius: 6px; background: var(--sunken); font-size: var(--fs-2); color: var(--text); }
+.mtg-lines.untimed li { grid-template-columns: minmax(6em, 8em) minmax(0, 1fr) auto; }
+.phone .mtg-lines.untimed li { grid-template-columns: minmax(0, 1fr); }
 /* MC-1d: Proposals and Transcript tabs; the transcript, read only, with the lines a proposal rests on marked. */
 .mtg-view h2[tabindex="-1"]:focus { outline: none; }
 .mtg-transcript { display: grid; gap: 8px; }

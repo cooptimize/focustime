@@ -54,6 +54,11 @@ export const CALL_ROW = {
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
   keptNote: (who: string) => `Noted with this call: ${who}`,
+  /** PK-1: a promise from a Pocket export whose words don't say whose it is. */
+  noOwner: "Pocket didn't say who",
+  keptNobody: "Noted with this call. Pocket didn't say who",
+  /** PK-1: how a promise with no owner is named in Waiting on. */
+  someone: "Someone on the call",
   tryAgain: "Try again",
   /** The folded lines at a section's foot. */
   skipped: (n: number) => `${n} skipped`,
@@ -111,6 +116,28 @@ export const CALL_NOTICE = {
   failedTitle: (client: string) => `${client}'s call: the AI step failed`,
   failedBody: "Nothing was proposed. Open the call to see why, then Propose again.",
   failedButton: CALL_ACTIONS.open,
+} as const;
+
+/** PK-1: a Pocket export as a call's transcript, and the upload area that takes a dropped file. */
+export const POCKET_TEXT = {
+  /** Once, above the proposals and above the Transcript, for a transcript from a Pocket export. */
+  note: "From a Pocket recording. Speakers aren't named, and Pocket can mix them up.",
+  /** What the upload area takes. */
+  takes: "FocusTime takes a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf).",
+  pocketHow: "Recorded it on Pocket? Export the transcript from Pocket and upload the download as it is.",
+  choose: "Choose a file",
+  orDrop: "or drop it here",
+  dropHere: "Drop the file here",
+  dropReplace: "Drop the file here to replace the transcript",
+  oneAtATime: "One file at a time: drop just the transcript.",
+  /** A drop onto a call that already has a transcript: the words the page uses for replacing (Propose again's). */
+  replace: "Replace this call's transcript? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out.",
+  dateAsk: (recorded: string, length: string | null, callDay: string) => `This Pocket recording is from ${recorded}${length ? `, ${length} long` : ""}. This call is ${callDay}. Use it for this call?`,
+  dateYes: "Use it for this call",
+  dateNo: "Don't use it",
+  dateNoLine: "Nothing was kept. Upload the recording from this call's day.",
+  /** Read N lines, in the area's line after an upload. */
+  read: (lines: number, proposals: number) => `Read ${lines} lines. ${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.`,
 } as const;
 
 /** The Transcript view's words. */

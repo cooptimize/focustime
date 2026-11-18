@@ -148,6 +148,7 @@ Every package in `package.json`, what FocusTime uses it for and its license. A n
 | `lucide-react` | The UI's icons, through one module (`ui/icons.tsx`) | ISC |
 | `mssql` | The SQL Server driver for the plan store (`store/sql/sqlserver.ts`) | MIT |
 | `openid-client` | Microsoft sign-in, OpenID Connect (`server/auth/entra.ts`) | MIT |
+| `pdfjs-dist` | Reading the text of a Pocket export's PDF, a call's transcript (PK-1), in a worker thread with no network (`server/pdf-text-worker.ts`). Its optional `@napi-rs/canvas` (a prebuilt binary for drawing pages) comes with it and is never used | Apache-2.0 |
 | `prismjs` | Syntax colors in Code (`ui/code/`) | MIT |
 | `react`, `react-dom` | The UI | MIT |
 | `smol-toml` | Reading the app config and settings in TOML (`config/schema.ts`) | BSD-3-Clause |

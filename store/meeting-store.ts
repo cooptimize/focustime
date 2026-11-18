@@ -4,7 +4,7 @@
 // attend; confirming, uploading and dismissing need a reviewer. The unscoped methods are for the poll job, the admin
 // registration and the retention purge only. Every write runs in a transaction. Nothing here logs; transcript text
 // never leaves through here except to a viewer's own read and the AI pass.
-import { canConfirm, canView, joinKey, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptSource } from "../plan/meetings.ts";
+import { canConfirm, canView, joinKey, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -53,6 +53,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   checks: Number(r.checks ?? 0),
   transcriptFrom: (s(r.transcript_from) as TranscriptSource | null) ?? null,
   transcriptAt: s(r.transcript_at),
+  ...(r.transcript_kind === "pocket" || r.transcript_kind === "teams" ? { transcriptKind: r.transcript_kind } : {}),
   aiOutcome: s(r.ai_outcome),
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
@@ -194,12 +195,13 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     },
 
     // ---- transcripts ----
-    async saveTranscript(occurrenceId: number, lines: readonly TranscriptLine[], source: TranscriptSource, uploadedBy: string | null): Promise<void> {
+    /** PK-1: `kind` says a Pocket export (no names, no times) from a Teams transcript; it outlives the lines. */
+    async saveTranscript(occurrenceId: number, lines: readonly TranscriptLine[], source: TranscriptSource, uploadedBy: string | null, kind: TranscriptKind = "teams"): Promise<void> {
       await db.tx(async () => {
         await db.run("DELETE FROM meeting_transcripts WHERE occurrence_id = ?", [occurrenceId]);
         const t = stamp();
         await db.run("INSERT INTO meeting_transcripts (occurrence_id, lines_json, line_count, source, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?)", [occurrenceId, JSON.stringify(lines), lines.length, source, uploadedBy ? lower(uploadedBy) : null, t]);
-        await db.run("UPDATE meeting_occurrences SET transcript_from = ?, transcript_at = ?, updated_at = ? WHERE id = ?", [source, t, t, occurrenceId]);
+        await db.run("UPDATE meeting_occurrences SET transcript_from = ?, transcript_kind = ?, transcript_at = ?, updated_at = ? WHERE id = ?", [source, kind, t, t, occurrenceId]);
       });
     },
     /** MC-1d: which of these occurrences still have a stored transcript (kept 30 days); ids only, never the text. */
@@ -312,9 +314,9 @@ function viewerOf(store: BaseStore, userId: string) {
       await occ(occurrenceId);
       return store.proposals(occurrenceId);
     },
-    async saveTranscript(occurrenceId: number, lines: readonly TranscriptLine[]): Promise<void> {
+    async saveTranscript(occurrenceId: number, lines: readonly TranscriptLine[], kind: TranscriptKind = "teams"): Promise<void> {
       await reviewer(occurrenceId);
-      await store.saveTranscript(occurrenceId, lines, "upload", userId);
+      await store.saveTranscript(occurrenceId, lines, "upload", userId, kind);
     },
     async updateOccurrence(occurrenceId: number, p: OccurrencePatch): Promise<Occurrence> {
       await reviewer(occurrenceId);

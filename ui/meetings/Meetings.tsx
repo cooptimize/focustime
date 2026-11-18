@@ -7,19 +7,19 @@
 // skipped and done rows, headers that stay in view, and a way from a transcript line back to its proposals. An
 // attendee who isn't a reviewer can look, not act.
 import { TextBox } from "../TextBox.tsx";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
 import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
 import { callFrom, callLabel, rememberCallFrom, takeRerun, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -158,6 +158,8 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
     ro.observe(el);
     return () => ro.disconnect();
   });
+  // PK-1: a file dragged over the call's page shows where it goes; dropped elsewhere it does nothing.
+  const dragging = usePageDrag(!!r?.canConfirm);
 
   if (error) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
   if (!r) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="muted">Loading…</p></>);
@@ -165,6 +167,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   const o = r.occurrence;
   const color = clientColor(m.clientKey, colors);
   const editable = r.canConfirm;
+  const showUpload = editable && (o.state === "needs_upload" || o.state === "waiting" || o.state === "no_transcript");
   const can = !!w?.can(m.clientKey);
   const open = r.proposals.filter(toReview);
   const counts = { all: open.length, gap: 0, commitment: 0, comment: 0 } as Record<CallFilter, number>;
@@ -273,11 +276,12 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
           </div>
         ) : null}
       </div>
+      {r.pocket && <p className="mtg-pocket-note" role="note">{POCKET_TEXT.note}</p>}
       {view !== "transcript" && <p className="muted mtg-intro">
-        {r.transcript ? `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). ` : ""}
+        {r.transcript ? (r.pocket ? `From the transcript (${r.transcript.lines} lines). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
         {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
       </p>}
-      {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} />}
+      {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
           <h3>{CALL_STATE.aiFailed}</h3>
@@ -286,7 +290,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
         </section>
       )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {(o.state === "needs_upload" || o.state === "waiting" || (o.state === "no_transcript" && editable)) && editable && <UploadBox series={m} occ={o} onDone={load} />}
+      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
       {view === "transcript" ? (
         <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
@@ -346,7 +350,8 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   );
 }
 
-type Line = { n: number; speaker: string; at: string; sec: number; text: string };
+/** PK-1: `sec` null (and `at` "") for a line with no time: a Pocket export's. */
+type Line = { n: number; speaker: string; at: string; sec: number | null; text: string };
 
 /**
  * MC-1d: the call's transcript, read only: every line with its speaker and time, the lines a proposal rests on marked,
@@ -393,12 +398,12 @@ function TranscriptView({ occurrenceId, startAt, proposals, line, onProposal }: 
         <span className="muted" role="status">{needle && !shown.length ? TRANSCRIPT_TEXT.none(q.trim()) : TRANSCRIPT_TEXT.count(shown.length, data.lines.length)}</span>
       </div>
       <p className="muted mtg-tr-who">{TRANSCRIPT_TEXT.who}</p>
-      <ol className="mtg-lines">
+      <ol className={`mtg-lines${data.lines.every((l) => l.sec === null) ? " untimed" : ""}`}>
         {shown.map((l) => {
           const on = marks.get(l.n);
           return (
             <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.map((x) => x.what).join("; ")}` } : {})}>
-              <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>
+              {l.sec !== null && <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>}
               <span className="mtg-who">{l.speaker}</span>
               <span className="mtg-line-text">{l.text}</span>
               {on && (
@@ -448,7 +453,7 @@ function Quotes({ qs }: { qs: Quote[] | null }) {
     <div className="mtg-quotes">
       {qs.map((q) => (
         <blockquote key={q.n}>
-          <span className="mtg-who">{q.speaker} · {q.at}</span> {q.text}
+          <span className="mtg-who">{q.speaker}{q.at ? ` · ${q.at}` : ""}</span> {q.text}
         </blockquote>
       ))}
     </div>
@@ -464,14 +469,15 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
   const field = b.kind === "gap" ? "title" : b.kind === "commitment" ? "what" : "text";
   const save = () => text.trim() && text.trim() !== main && onEdit({ [field]: text.trim() });
   const where =
-    b.kind === "commitment" ? `${b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
+    // PK-1: a Pocket export's promise whose words don't say whose it is names nobody.
+    b.kind === "commitment" ? `${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
     : b.kind === "comment" ? `${NOTE[b.note]} on #${b.itemId} ${b.itemTitle} (${b.itemType})`
     : null;
   const needs = check?.needs ?? [];
   const blocked = check?.blocked ?? null;
   const stuck = needs.length > 0 || !!check?.cant || !!blocked;
   const failed = p.state === "failed";
-  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "client" ? "Noted with this call" : "Added to Promises") : "Done")) : p.state === "skipped" ? "Skipped" : null;
+  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "cooptimize" ? "Added to Promises" : "Noted with this call") : "Done")) : p.state === "skipped" ? "Skipped" : null;
   const mainLabel = b.kind === "commitment" ? (b.side === "cooptimize" ? CALL_ROW.promise : CALL_ROW.note) : failed ? CALL_ROW.tryAgain : b.kind === "gap" ? CALL_ROW.create : CALL_ROW.comment;
   return (
     <article id={`mtg-prop-${p.id}`} tabIndex={-1} className={`mtg-prop ${p.state}${ticked ? " ticked" : ""}${stuck ? " stuck" : ""}`} aria-label={main}>
@@ -518,13 +524,146 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
   );
 }
 
+/** The file picker's kinds: a Teams transcript, or (PK-1) a Pocket export. What a file is, the server decides by its content. */
+const ACCEPT = ".vtt,.docx,.zip,.pdf,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,application/pdf";
+
+/**
+ * PK-1: while a file is dragged over the call's page, `dragging` is true (the upload area shows it will take it), and a
+ * file dropped anywhere else on the page does nothing: the browser never leaves the page to open it. Only on a call's
+ * page a reviewer may upload to; nothing else in the app changes.
+ */
+function usePageDrag(on: boolean): boolean {
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    if (!on) return;
+    let depth = 0;
+    const files = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+    const enter = (e: DragEvent) => {
+      if (!files(e)) return;
+      depth++;
+      setDragging(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!files(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth) setDragging(false);
+    };
+    const over = (e: DragEvent) => {
+      if (!files(e)) return;
+      // Outside the upload area: no drop here (the cursor says so), and the browser doesn't open the file.
+      e.preventDefault();
+      if (e.dataTransfer && !(e.target instanceof Element && e.target.closest(".mtg-drop"))) e.dataTransfer.dropEffect = "none";
+    };
+    const drop = (e: DragEvent) => {
+      if (!files(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+    };
+    window.addEventListener("dragenter", enter);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    window.addEventListener("dragend", drop);
+    return () => {
+      window.removeEventListener("dragenter", enter);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+      window.removeEventListener("dragend", drop);
+    };
+  }, [on]);
+  return on && dragging;
+}
+
+type UploadAnswer = { lines?: number; proposals?: number; outcome?: string; ask?: { recorded: string; length: string | null; call: string } };
+
+/**
+ * One upload, by the picker or a drop: the file goes to the server, which decides what it is. PK-1: a Pocket recording
+ * dated another day than the call isn't kept; the area asks (both dates and the recording's length) and sends the same
+ * file again only on a yes. A drop onto a call that already has a transcript asks before replacing it; the picker
+ * works as it always has.
+ */
+function useTranscriptUpload(series: SeriesView, occ: OccurrenceView, onDone: () => Promise<void>) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ask, setAsk] = useState<{ file: File; text: string } | null>(null);
+  const send = async (f: File, dateOk = false) => {
+    setBusy(true);
+    setMsg(null);
+    setAsk(null);
+    try {
+      const r = await uploadMeetingTranscript<UploadAnswer>(series.id, occ.date, f, { dateOk });
+      if (r.ask) setAsk({ file: f, text: POCKET_TEXT.dateAsk(dayLabel(r.ask.recorded), r.ask.length, dayLabel(r.ask.call)) });
+      else {
+        setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines ?? 0} lines. ${CALL_STATE.aiFailed}.` : POCKET_TEXT.read(r.lines ?? 0, r.proposals ?? 0));
+        await onDone();
+      }
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const pick = (f: File | undefined) => f && void send(f);
+  const dropped = (e: ReactDragEvent) => {
+    e.preventDefault();
+    // Not stopped here: the page's own drop handler then clears the dragging look (a browser sends no dragleave after a drop).
+    if (busy) return;
+    const fs = [...e.dataTransfer.files];
+    if (fs.length !== 1) return setMsg(fs.length ? POCKET_TEXT.oneAtATime : null);
+    if (occ.hasTranscript && !window.confirm(POCKET_TEXT.replace)) return;
+    void send(fs[0]!);
+  };
+  const answer = (yes: boolean) => {
+    if (!ask) return;
+    if (yes) void send(ask.file, true);
+    else {
+      setAsk(null);
+      setMsg(POCKET_TEXT.dateNoLine);
+    }
+  };
+  return { busy, msg, ask, pick, dropped, answer };
+}
+
+/** The drop area's own handlers: it takes the file (the cursor shows a copy) and the page's guard leaves it alone. */
+const dropProps = (u: ReturnType<typeof useTranscriptUpload>) => ({
+  onDragOver: (e: ReactDragEvent) => {
+    if (![...e.dataTransfer.types].includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = u.busy ? "none" : "copy";
+  },
+  onDrop: u.dropped,
+});
+
+/** PK-1: the recording's date isn't the call's: asked before anything is kept. */
+function DateAsk({ text, onAnswer }: { text: string; onAnswer: (yes: boolean) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    // On a phone the bottom bar can cover its buttons: bring the whole question into the middle of the screen.
+    ref.current?.scrollIntoView?.({ block: "center" });
+  }, []);
+  return (
+    <div className="mtg-date-ask" role="alertdialog" aria-label="The recording's date" aria-describedby="mtg-date-ask-text" tabIndex={-1} ref={ref}>
+      <p id="mtg-date-ask-text">{text}</p>
+      <span className="mtg-upload-actions">
+        <button type="button" className="mini primary" onClick={() => onAnswer(true)}>{POCKET_TEXT.dateYes}</button>
+        <button type="button" className="mini quiet" onClick={() => onAnswer(false)}>{POCKET_TEXT.dateNo}</button>
+      </span>
+    </div>
+  );
+}
+
 /**
  * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
  * it replaces the open proposals, the done, skipped and failed ones stay; MC-1e: the same thing again is left out) and
- * Upload a transcript (a file in its place).
+ * Upload a transcript (a file in its place). PK-1: when the call's page shows no upload area, this is where a dragged
+ * file is dropped.
  */
-function CallActions({ series, occ, onDone, focusUpload = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean }) {
-  const [busy, setBusy] = useState<"rerun" | "upload" | null>(null);
+function CallActions({ series, occ, onDone, focusUpload = false, dropHere = false, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean; dropHere?: boolean; dragging?: boolean }) {
+  const [busy, setBusy] = useState<"rerun" | null>(null);
+  const up = useTranscriptUpload(series, occ, onDone);
   // MC-1d: "Upload a transcript" from a meeting's menu lands here with the file button focused (the browser opens a
   // file picker only from a press, so the person presses it once more).
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -553,54 +692,31 @@ function CallActions({ series, occ, onDone, focusUpload = false }: { series: Ser
       setBusy(null);
     }
   };
-  const upload = async (f: File | undefined) => {
-    if (!f) return;
-    setBusy("upload");
-    setMsg(null);
-    try {
-      const r = await uploadMeetingTranscript<{ lines: number; proposals: number; outcome?: string }>(series.id, occ.date, f);
-      setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines} lines. ${CALL_STATE.aiFailed}.` : `Read ${r.lines} lines. ${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.`);
-      await onDone();
-    } catch (e) {
-      setMsg(errText(e));
-    } finally {
-      setBusy(null);
-    }
-  };
   const canRerun = occ.hasTranscript && occ.state !== "waiting" && occ.state !== "fetching";
+  const line = up.msg ?? msg;
   return (
-    <div className="mtg-actions" role="group" aria-label="This call">
-      {canRerun && (
-        <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done, skipped or failed stay, and the same thing again is left out.">
-          {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
-        </button>
-      )}
-      <label className={`mini file-button${busy ? " disabled" : ""}`}>
-        {busy === "upload" ? "Reading…" : CALL_ACTIONS.upload}
-        <input ref={fileRef} type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!!busy} onChange={(e) => void upload(e.target.files?.[0])} />
-      </label>
-      {msg && <span className="muted" role="status">{msg}</span>}
-    </div>
+    <>
+      <div className={`mtg-actions${dropHere ? " mtg-drop" : ""}${dropHere && dragging ? " dropping" : ""}`} role="group" aria-label="This call" {...(dropHere ? dropProps(up) : {})}>
+        {canRerun && (
+          <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done, skipped or failed stay, and the same thing again is left out.">
+            {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
+          </button>
+        )}
+        <label className={`mini file-button${busy || up.busy ? " disabled" : ""}`} title={POCKET_TEXT.takes}>
+          {up.busy ? "Reading…" : CALL_ACTIONS.upload}
+          <input ref={fileRef} type="file" accept={ACCEPT} disabled={!!busy || up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
+        </label>
+        {dropHere && dragging && <span className="mtg-drop-hint" aria-hidden="true">{occ.hasTranscript ? POCKET_TEXT.dropReplace : POCKET_TEXT.dropHere}</span>}
+        {line && !up.ask && <span className="muted" role="status">{line}</span>}
+      </div>
+      {up.ask && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
+    </>
   );
 }
 
-function UploadBox({ series, occ, onDone }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
+function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean }) {
+  const up = useTranscriptUpload(series, occ, onDone);
   const [msg, setMsg] = useState<string | null>(null);
-  const upload = async (f: File | undefined) => {
-    if (!f) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await uploadMeetingTranscript<{ lines: number; proposals: number }>(series.id, occ.date, f);
-      setMsg(`Read ${r.lines} lines. ${r.proposals} ${r.proposals === 1 ? "proposal" : "proposals"} to review.`);
-      await onDone();
-    } catch (e) {
-      setMsg(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
   const none = async () => {
     try {
       await call("meeting.no_transcript", { occurrenceId: occ.id });
@@ -609,20 +725,27 @@ function UploadBox({ series, occ, onDone }: { series: SeriesView; occ: Occurrenc
       setMsg(errText(e));
     }
   };
+  const line = up.msg ?? msg;
   return (
-    <section className="mtg-upload" aria-label="Upload the transcript">
+    <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript (.vtt or .docx); if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams (.vtt or .docx)."} It's kept 30 days, for this call's reviewers and attendees only.
+        {series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} It's kept 30 days, for this call's reviewers and attendees only.
       </p>
-      <span className="mtg-upload-actions">
-        <label className="mini primary file-button">
-          {busy ? "Reading…" : "Choose a file"}
-          <input type="file" accept=".vtt,.docx,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={(e) => void upload(e.target.files?.[0])} />
-        </label>
-        {occ.state !== "no_transcript" && <button type="button" className="mini quiet" onClick={() => void none()}>No transcript this week</button>}
-      </span>
-      {msg && <p className="muted" role="status">{msg}</p>}
+      <p className="muted">{POCKET_TEXT.takes}</p>
+      {up.ask ? (
+        <DateAsk text={up.ask.text} onAnswer={up.answer} />
+      ) : (
+        <span className="mtg-upload-actions">
+          <label className={`mini primary file-button${up.busy ? " disabled" : ""}`}>
+            {up.busy ? "Reading…" : POCKET_TEXT.choose}
+            <input type="file" accept={ACCEPT} disabled={up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
+          </label>
+          <span className="muted mtg-drop-or">{dragging ? POCKET_TEXT.dropHere : POCKET_TEXT.orDrop}</span>
+          {occ.state !== "no_transcript" && <button type="button" className="mini quiet" onClick={() => void none()}>No transcript this week</button>}
+        </span>
+      )}
+      {line && !up.ask && <p className="muted" role="status">{line}</p>}
     </section>
   );
 }
