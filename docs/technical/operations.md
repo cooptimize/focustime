@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `2f4c0ea` on Nov 13, 2026.
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `2f4c0ea` on Nov 13, 2026; Telling the sites apart against EV-1 on Nov 17, 2026.
 
 ## Environments
 
@@ -21,6 +21,14 @@ Both run in the same subscription and share the Entra tenant, the "FocusTime" ap
 **Not verified:** how long dev waits before scaling to zero. The Bicep sets no cooldown, so it is Container Apps' default; the runbook says 300 seconds.
 
 The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm-stop-and-autostart.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
+
+### Telling the sites apart (EV-1)
+
+- **Dev** says so: a small "Dev" beside the FocusTime name in the top bar on a computer, and beside the date on a phone; the browser tab's title starts with "Dev · "; the installed app is named "FocusTime Dev". The developer loop says "Local" the same way.
+- **Production** shows none of this: no mark, the title "FocusTime", the installed app "FocusTime".
+- **About** (Settings › About, or More › About) says the site in a word and its address on every site, for example "Site: Dev · " and the address you opened.
+- How: the server rewrites the page and the manifest once when it starts where `FOCUSTIME_ENV` is `dev` (or the developer loop), from the same value `/version` reports (`server/site-env.ts`). Only that marked page asks `/version` for the top bar's mark, so production asks nothing new. One image serves both: no second build.
+- **An app installed from dev before EV-1 may keep the name "FocusTime".** On Android, Chrome checks an installed app's manifest when it is opened (at most about once a day) and updates its name once all its windows are closed, on Android when the phone is charging and on Wi-Fi ([web.dev, How Chrome handles updates to the web app manifest](https://web.dev/articles/manifest-updates)). On an iPhone, Add to Home Screen takes the name once, from the page's `apple-mobile-web-app-title` (Apple's Safari Web Content Guide, "Configuring Web Applications"; the link is in `docs/open-questions.md`, EV-1); nothing found says it is ever updated, so remove the icon and add it again from Safari to get "FocusTime Dev". The person can also rename it while adding it.
 
 Costs and budgets: [runbook, Cost](../azure/runbook.md#cost-hk-2-fixed-price-databases-list-prices-for-central-us-on-2026-11-05) and [Budgets and alerts](../azure/runbook.md#budgets-and-alerts-hk-2). The budget only alerts; it never stops or changes anything (`infra/modules/budget.bicep`).
 
