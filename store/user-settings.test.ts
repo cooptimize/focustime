@@ -7,6 +7,8 @@ import { starterToml } from "../config/starter.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { addUsers, forEachDriver } from "../test/db.ts";
 import type { Conn } from "./sql/conn.ts";
+import type { UserRow } from "./accounts.ts";
+import { exportUser } from "./user-data.ts";
 import { createUserSettings, SETTINGS_PLACE, type AppKeys } from "./user-settings.ts";
 
 const NY = "America/New_York";
@@ -133,6 +135,20 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     const rows = (await t.db.all("SELECT body FROM user_settings WHERE user_id = ?", ["ana"])) as { body: string }[];
     expect(rows.map((r) => r.body).join("\n")).not.toMatch(/^\s*domains\s*=/m);
     expect(personalRows('[collab]\nteams = true\ndomains = ["x.example"]\n').map((r) => r.body).join("")).not.toContain("domains");
+  });
+
+  // SA-3 test 8: "Plan up to" and Keep open went; a person's stored values stay, load, survive a save and export.
+  it("a stored plan_share or keep_open never stops settings loading, a save or Export", async () => {
+    const t = await setup(open);
+    const ana = t.make("ana");
+    await ana.seed(`${STARTER_TOML}\n[guidance]\nplan_share = 60\n\n[keep_open]\nFabrikam = 30\n`);
+    const { parsed } = await ana.load();
+    expect(parsed.ok && parsed.ignored).toEqual(expect.arrayContaining(["guidance.plan_share", "keep_open"]));
+    expect((await ana.write(settingsEdit("guidance", { readinessNudges: false }))).ok).toBe(true);
+    expect(await ana.text()).toContain("plan_share = 60");
+    const user = { id: "ana", tenantId: "t", upn: "ana@cooptimize.example", name: "Ana", email: null, timeZone: null } as unknown as UserRow;
+    const out = await exportUser(t.db, user, now());
+    expect(JSON.stringify((out.tables as Record<string, unknown[]>).user_settings)).toContain("Fabrikam = 30");
   });
 
   it("keeps the time zone on the person: a Settings change is mirrored, and their zone wins on load", async () => {

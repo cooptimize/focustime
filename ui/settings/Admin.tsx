@@ -1182,7 +1182,7 @@ function RemovePerson({ p, onClose, onDone }: { p: Person; onClose: () => void; 
 
 // ---------- Organization ----------
 
-type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number };
+type Guidance = { draftStories: boolean; readinessNudges: boolean };
 type NewPerson = { weekdays: Record<string, string[]>; lunch: string; risk: { watch: number; atRisk: number; minWindow: number } };
 type OrgData = {
   inviteDomains: string[];

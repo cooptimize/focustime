@@ -142,9 +142,9 @@ function BacklogFields(p: FormProps) {
 function GuidanceForm(p: FormProps) {
   const org = p.data.org;
   const mine = p.data.guidance;
-  const a = useAutoSave<{ draftStories: boolean | null; readinessNudges: boolean | null; planShare: number | null }>({
+  const a = useAutoSave<{ draftStories: boolean | null; readinessNudges: boolean | null }>({
     section: "guidance",
-    initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null, planShare: mine.planShare ?? null },
+    initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null },
     payload: (v) => v,
     onSaved: p.onSavedData,
     label: labelBy({ draftStories: "break-down-offered", readinessNudges: "readiness-nudges" }),
@@ -152,7 +152,6 @@ function GuidanceForm(p: FormProps) {
   if (!org) return null;
   const team = org.levelGuidance;
   const onOff = (b: boolean) => (b ? "on" : "off");
-  // QT-1: "Plan up to (% of free time)" is gone from the screen. The stored value stays.
   const teamDefault = (k: "draftStories" | "readinessNudges") => <TeamDefault value={onOff(team[k])} onReset={a.v[k] !== null ? () => a.change(k, null) : null} />;
   return (
     <>

@@ -6,7 +6,7 @@ import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, t
 import { NOTIFY_KINDS } from "../plan/notify.ts";
 import { AUTOSTART_MINUTES, validAutoStartMinutes } from "../plan/vm-autostart.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "ahead", "asks", "ai", "guidance"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -275,32 +275,14 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       }
       return (text) => values.reduce((t, [k, val]) => setValue(t, "ai", k, val), text);
     }
-    case "keep_open": {
-      // PL-1: one client's Keep open share (Commit mode's client card); null goes back to the level's default.
-      only(v, ["key", "percent"], "keep_open");
-      const key = clientKey(v.key);
-      if (v.percent !== null) {
-        const n = int(v.percent, `keep_open.${key}`);
-        if (n < 0 || n > 80) throw new SettingsInputError(`keep_open.${key}`, "Must be from 0 to 80 percent");
-      }
-      const pct = v.percent as number | null;
-      return (text) => (pct === null ? removeValue(text, "keep_open", key) : setValue(text, "keep_open", key, pct, "Keep open (PL-1): % of a client's block hours left unplanned for walk-ins."));
-    }
     case "guidance": {
       // ADM-1: the person's own choices over their level's defaults; null goes back to the team default.
-      only(v, ["draftStories", "readinessNudges", "planShare"], "guidance");
+      only(v, ["draftStories", "readinessNudges"], "guidance");
       const edits: [string, boolean | number | null][] = [];
       for (const [k, key] of [["draftStories", "draft_stories"], ["readinessNudges", "readiness_nudges"]] as const) {
         if (v[k] === undefined) continue;
         if (v[k] !== null && typeof v[k] !== "boolean") throw new SettingsInputError(`guidance.${key}`, "Must be true, false or null");
         edits.push([key, v[k] as boolean | null]);
-      }
-      if (v.planShare !== undefined) {
-        if (v.planShare !== null) {
-          const n = int(v.planShare, "guidance.plan_share");
-          if (n < 50 || n > 100) throw new SettingsInputError("guidance.plan_share", "Must be from 50 to 100 percent");
-        }
-        edits.push(["plan_share", v.planShare as number | null]);
       }
       return (text) => edits.reduce((t, [k, val]) => (val === null ? removeValue(t, "guidance", k) : setValue(t, "guidance", k, val, "Guidance (ADM-1): my own choices over my level's defaults.")), text);
     }
