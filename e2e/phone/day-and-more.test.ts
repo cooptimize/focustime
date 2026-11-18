@@ -252,7 +252,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await go("account", true, () => page.getByRole("menuitem", { name: /Sign out|Settings/ }).first().waitFor());
     await go("docs", true, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/docs/));
     await go("about", true, () => page.getByRole("dialog", { name: /About/ }).waitFor());
-    await go("admin", true, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/settings\/admin/));
+    await go("admin", true, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/admin/));
     expect(errors).toEqual([]);
     await page.close();
   }, T);

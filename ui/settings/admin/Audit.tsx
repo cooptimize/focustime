@@ -11,6 +11,8 @@ import { ADMIN_SETTINGS, auditSettingLabel } from "./settings-list.ts";
 
 type Entry = { id: number; at: string; actorName: string; area: string; target: string; setting: string; oldValue: string | null; newValue: string | null; note: string | null };
 const AREAS = [["", "Everything"], ["clients", "Clients"], ["ai", "AI"], ["conversations", "Client chats"], ["organization", "Planning and standards"], ["levels", "Levels"], ["people", "People"]] as const;
+/** SA-4: stored words an override row carries, as the page says them. */
+const WORDS: Readonly<Record<string, string>> = { lead_add: "added as lead", lead_remove: "removed as lead", d365_dataverse: "D365 Dataverse", d365_fo: "D365 Finance and Operations", consultant: "Consultant", senior: "Senior", lead: "Lead" };
 const shown = (v: string | null) => {
   if (v === null) return "none";
   try {
@@ -18,9 +20,9 @@ const shown = (v: string | null) => {
     if (Array.isArray(x)) return x.join(", ") || "none";
     if (typeof x === "boolean") return x ? "on" : "off";
     if (typeof x === "object" && x) return JSON.stringify(x);
-    return String(x);
+    return WORDS[String(x)] ?? String(x);
   } catch {
-    return v;
+    return WORDS[v] ?? v;
   }
 };
 

@@ -3,12 +3,12 @@
 // them for one click to a client, Search Admin above them and Settings at the foot. Each part is its own file under
 // ui/settings/admin/; this file keeps the shell. Nothing here shows anyone's plan, picks, follow-ups, captures, focus
 // sessions, PATs, AI request text or chat messages: the server's sections carry names, dates, counts and yes or no only.
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { call } from "../api.ts";
 import { PanelShell, useNarrow, type RailGroup } from "../PanelShell.tsx";
 import { usePhone } from "../viewport.ts";
 import { AutoSaveProvider } from "./autosave.tsx";
-import { colorVar } from "./admin/shared.tsx";
+import { colorVar, useAdminChanged } from "./admin/shared.tsx";
 import { ClientsPart } from "./admin/Clients.tsx";
 import { PeoplePart } from "./admin/People.tsx";
 import { AiTab, ChatsTab, PlanningTab, StandardsTab, type AiClient } from "./admin/TeamDefaults.tsx";
@@ -34,12 +34,14 @@ const lastTab: Partial<Record<AdminPart, string>> = {};
 function useRailData() {
   const [clients, setClients] = useState<AiClient[] | null>(null);
   const [people, setPeople] = useState<SearchPerson[] | null>(null);
+  const [tick, setTick] = useState(0);
+  useAdminChanged(useCallback(() => setTick((t) => t + 1), []));
   useEffect(() => {
     let live = true;
     call<{ clients: AiClient[] }>("admin.load", { section: "ai", filter: "customers" }).then((d) => live && setClients(d.clients.filter((c) => c.isClient)), () => live && setClients([]));
     call<{ people: { id: string; name: string }[] }>("admin.load", { section: "setup" }).then((d) => live && setPeople(d.people.map((p) => ({ id: p.id, name: p.name }))), () => live && setPeople([]));
     return () => void (live = false);
-  }, []);
+  }, [tick]);
   return { clients, people };
 }
 

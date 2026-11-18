@@ -2,7 +2,7 @@
 // and a page for each client with seven tabs. Every control is the one Admin › Clients and Admin › AI had, with its
 // stored key, its check and its action unchanged; nothing is set from the list. The registered chats load once for the
 // part (the list's marks and a client's Chats tab share them).
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { call } from "../../api.ts";
 import { SaveMark } from "../autosave.tsx";
 import { DeliveryChatField, DeliveryChatsProvider, useDeliveryChats } from "../DeliveryChats.tsx";
@@ -12,7 +12,7 @@ import { DeploySettings } from "../../DeployItems.tsx";
 import { TextBox } from "../../TextBox.tsx";
 import { StatusRows } from "../StatusRows.tsx";
 import type { StatusGroup } from "../../../actions/status-rows.ts";
-import { AField, ClientFilter, colorVar, Kind, ListInput, useAdminSave, useSection, type ClientFilterValue, type ClientRow, type ClientsData, type Saver } from "./shared.tsx";
+import { AField, ClientFilter, colorVar, Kind, ListInput, useAdminChanged, useAdminSave, useSection, type ClientFilterValue, type ClientRow, type ClientsData, type Saver } from "./shared.tsx";
 import { CodeAccessField, FixGapsField, ProcessView, SourceSystemsField } from "./ClientFields.tsx";
 import { Tabs } from "./Tabs.tsx";
 import { adminHref, CLIENT_TABS, type ClientTab } from "./places.ts";
@@ -84,12 +84,14 @@ function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
 /** How many calls each client has registered (meeting.list, the same read the Calls tab makes), once per visit to Clients. */
 function useCallCounts(keys: readonly string[]): Record<string, number | null> {
   const [counts, setCounts] = useState<Record<string, number | null>>({});
+  const [tick, setTick] = useState(0);
+  useAdminChanged(useCallback(() => setTick((t) => t + 1), []));
   const k = keys.join("\u0000");
   useEffect(() => {
     let live = true;
     void Promise.all(keys.map((key) => call<{ meetings: unknown[] }>("meeting.list", { clientKey: key }).then((d) => [key, d.meetings.length] as const, () => [key, null] as const))).then((all) => live && setCounts(Object.fromEntries(all)));
     return () => void (live = false);
-  }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [k, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   return counts;
 }
 
@@ -222,7 +224,7 @@ function ClientPage({ c, palette, saver, tab, onTab, onRefresh }: { c: ClientRow
         </a>
       </p>
       {!c.isClient && <p className="set-hint">{c.whyText}. Only a client's own controls show for it; treat it as a client under Clients › All accounts.</p>}
-      <Tabs label={`${c.key} tabs`} tabs={tabs} current={tab} onPick={(t) => onTab(t as ClientTab)}>
+      <Tabs key={c.key} label={`${c.key} tabs`} tabs={tabs} current={tab} onPick={(t) => onTab(t as ClientTab)}>
         <ClientTabBody c={c} palette={palette} saver={saver} tab={tab} onRefresh={refresh} refreshing={refreshing} />
       </Tabs>
     </div>

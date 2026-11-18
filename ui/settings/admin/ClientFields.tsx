@@ -7,6 +7,7 @@ import { SOURCE_SYSTEM_LABEL, type SourceSystem } from "../../../plan/standards.
 import { GAP_KINDS, GAP_WORDS, type GapKind } from "../../../plan/fixnext.ts";
 import { TypeIcon } from "../../TypeIcon.tsx";
 import { AField, Kind, ListInput, type ClientRow, type Saver } from "./shared.tsx";
+import { adminHref } from "./places.ts";
 
 /** AH-3: the gaps Ahead's Fix next and Readiness count for this client (all four by default). */
 /** KB-1: which D365 systems the client's data comes from: picks the source-system standards its AI drafts use. */
@@ -52,12 +53,13 @@ export function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
   const words = check === null || check === "checking" ? "Checking…" : check.state === "readable" ? `Code: readable · ${check.repos} repo${check.repos === 1 ? "" : "s"}` : check.text;
   return (
     <div className="set-form adm-code">
-      <AField label="Who can read this client's code" kind="Rule" s={saver.status(scope, "code_access")} retry={() => void saver.save(scope, "code_access", value, `${c.key}: who can read its code`)} hint="Code shows every client's repos, read only, to every Cooptimizer by default. Its team only keeps them to the people on this client. Every file opened is logged in Admin › Audit › Code views.">
+      <AField label="Who can read this client's code" kind="Rule" s={saver.status(scope, "code_access")} retry={() => void saver.save(scope, "code_access", value, `${c.key}: who can read its code`)} hint="Code shows every client's repos, read only, to every Cooptimizer by default. Its team only keeps them to the people on this client. Every file opened is logged in Audit's Code views.">
         <select aria-label={`${c.key}: who can read its code`} value={value} onChange={(e) => void saver.save(scope, "code_access", e.target.value, `${c.key}: who can read its code`)}>
           <option value="company">Whole company</option>
           <option value="team">Its team only</option>
         </select>
       </AField>
+      <a className="link-btn adm-readonly-line" href={adminHref({ part: "audit", tab: "code" })}>See who opened its code</a>
       <div className="set-field">
         <span className="set-label">Can FocusTime read it?</span>
         <span className="set-value" data-code-check={check && check !== "checking" ? check.state : "checking"}>

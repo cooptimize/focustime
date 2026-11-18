@@ -14,6 +14,16 @@ import type { GapKind } from "../../../plan/fixnext.ts";
 
 export type SetResult = { old: unknown; value: unknown; warning: string | null };
 
+/** SA-4: something Admin shows elsewhere changed (a saved setting, a registered call): the rail and the marks read again. */
+const CHANGED = "focustime:admin-changed";
+export const adminChanged = () => window.dispatchEvent(new Event(CHANGED));
+export function useAdminChanged(run: () => void) {
+  useEffect(() => {
+    window.addEventListener(CHANGED, run);
+    return () => window.removeEventListener(CHANGED, run);
+  }, [run]);
+}
+
 /** Saves team settings one field at a time, with Saved, the plain error, Retry and Undo. */
 export function useAdminSave(onSaved: () => unknown) {
   const ctx = useSaveContext();
@@ -36,11 +46,13 @@ export function useAdminSave(onSaved: () => unknown) {
           setWarning(r.warning);
           setTimeout(() => setStatuses((all) => (all[id]?.kind === "saved" ? { ...all, [id]: null } : all)), 2000);
           await onSaved();
+          adminChanged();
           unpend(id);
           ctx?.offerUndo(`${label} saved.`, async () => {
             await send(scope, key, r.old === null ? undefined : r.old);
             setStatus(id, null);
-            onSaved();
+            await onSaved();
+            adminChanged();
           });
         } catch (e) {
           unpend(id);

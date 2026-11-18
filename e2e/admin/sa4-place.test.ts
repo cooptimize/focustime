@@ -86,7 +86,7 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     await page.getByRole("switch", { name: /^Treat .* as a client$/ }).first().waitFor();
     // Every account, client or not, links to its own page (its AI switches are there).
     const accounts = page.locator(".adm-accounts tbody th a");
-    expect(await accounts.count()).toBeGreaterThan(customers);
+    await expect.poll(() => accounts.count()).toBeGreaterThan(customers);
     await page.getByRole("radio", { name: /^Customers/ }).click();
     await expect.poll(() => list.locator(".adm-client-row").count()).toBe(customers);
     expect(errors).toEqual([]);
@@ -105,9 +105,24 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     await expect.poll(async () => (await lastAudit(page, "client:Tailspin/allow_ai"))?.newValue).toBe(false);
     // Overview: Match only as written; Chats: Send attachments to AI; Backlog rules: States treated as open.
     await page.getByRole("tab", { name: "Overview" }).click();
+    // The rail's swatch follows a new team color at once.
+    const swatch = page.locator('.ps-rail [data-settings-section="client:Tailspin"] .adm-rail-swatch');
+    const before = await swatch.evaluate((e) => getComputedStyle(e).backgroundColor);
+    await page.getByRole("radiogroup", { name: "Tailspin: team color" }).getByRole("radio", { name: "violet" }).check();
+    await expect.poll(() => swatch.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe(before);
     await page.getByRole("switch", { name: "Tailspin: match only as written" }).click();
     await expect.poll(async () => (await lastAudit(page, "client:Tailspin/exact_case"))?.setting).toBe("client:Tailspin/exact_case");
     await page.getByRole("tab", { name: "Chats" }).click();
+    // A chat's notice stays with its own client: Refresh on Northwind, then Tailspin shows none.
+    await page.waitForFunction(() => location.hash === "#/admin/clients/Tailspin/chats");
+    await go(page, "#/admin/clients/Northwind/chats");
+    const nw = page.locator(".adm-client-page").getByRole("group", { name: /^Client chats for Northwind/ });
+    await nw.getByRole("region").first().waitFor({ timeout: 30_000 });
+    await nw.locator(".dchat-head button").click();
+    await page.getByText("Members read again").waitFor();
+    await page.locator('.ps-rail [data-settings-section="client:Tailspin"]').click();
+    await page.getByRole("group", { name: /^Client chats for Tailspin/ }).waitFor();
+    expect(await page.getByText("Members read again").count()).toBe(0);
     await page.getByRole("switch", { name: "Send attachments to AI for Tailspin" }).check();
     await expect.poll(async () => (await lastAudit(page, "client:Tailspin/attachments_ai"))?.newValue).toBe(true);
     await page.getByRole("switch", { name: "Send attachments to AI for Tailspin" }).uncheck();
