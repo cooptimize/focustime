@@ -7,7 +7,7 @@ import { uploadTranscript } from "../../../actions/meeting-actions.ts";
 import { DEMO_PEOPLE } from "../data.ts";
 import { DEMO_MEETING, demoMeetingVtt } from "../meetings.ts";
 import type { DemoSeed } from "./types.ts";
-import { clock } from "../../../plan/transcript.ts";
+import { atOf } from "../../../plan/transcript.ts";
 
 const PRIYA = DEMO_PEOPLE.find((p) => p.name === "Priya Shah")!;
 
@@ -27,13 +27,13 @@ export const meetingsSeed: DemoSeed = {
     const r = await run("meeting.register", { clientKey: DEMO_MEETING.clientKey, role: "status", joinUrl: DEMO_MEETING.joinUrl, name: DEMO_MEETING.name, source: "upload", weekday: DEMO_MEETING.weekday, start: DEMO_MEETING.start, minutes: DEMO_MEETING.minutes, reviewers: [me.id, PRIYA.aadId] });
     const seriesId = (r.meeting as { id: number }).id;
     await store.updateSeries(seriesId, { attendees: [me.id.toLowerCase(), PRIYA.aadId.toLowerCase()] });
-    const up = await uploadTranscript(await meetingContext(ctx), { seriesId, date: callDay, name: "Northwind weekly status call.vtt", bytes: new TextEncoder().encode(demoMeetingVtt()) });
+    const up = await uploadTranscript(await meetingContext(ctx), { seriesId, date: callDay, bytes: new TextEncoder().encode(demoMeetingVtt()) });
     if (!up.ok) throw new Error(`demo seed meeting upload: ${up.error}`);
     // MC-1e: one comment as a pass before MC-1e could leave it, on the feature itself. The page says it won't be sent
     // (a call's comments go on stories only) and offers Skip. Fictional words, like the rest of the call.
     const occurrenceId = (up.data as { occurrenceId: number }).occurrenceId;
     const lines = (await store.transcript(occurrenceId)) ?? [];
     const on = lines.find((l) => /on track/i.test(l.text));
-    if (on) await store.addProposals(occurrenceId, [{ body: { kind: "comment", itemId: 1110, itemTitle: "Order history export", itemType: "Feature", note: "status", text: "Order history export is on track with Northwind.", inReport: true, lines: [on.n] }, quotes: [{ n: on.n, speaker: on.speaker, at: clock(on.at), text: on.text }] }]);
+    if (on) await store.addProposals(occurrenceId, [{ body: { kind: "comment", itemId: 1110, itemTitle: "Order history export", itemType: "Feature", note: "status", text: "Order history export is on track with Northwind.", inReport: true, lines: [on.n] }, quotes: [{ n: on.n, speaker: on.speaker, at: atOf(on), text: on.text }] }]);
   },
 };

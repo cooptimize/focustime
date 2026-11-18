@@ -1,5 +1,6 @@
 // The UI's only way to get data or act: named actions on the server (same origin, the session cookie, and the
 // session's CSRF token in X-CSRF on every call; A2).
+import type { NeededField } from "../plan/needed.ts";
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 import { pageActivity, USE_HEADER } from "./activity.ts";
@@ -71,7 +72,7 @@ export async function readResponse<T>(res: Response): Promise<T> {
   }
   if (body && typeof body === "object" && "ok" in body) {
     if (body.ok) return body.data;
-    if (body.code !== "signed_out") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
+    if (body.code !== "signed_out") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code, body.needed);
   } else if (res.status !== 401) {
     throw new ActionRefusal(res.status === 403 ? "FocusTime refused that request" : `FocusTime answered ${res.status}`, res.status);
   }
@@ -88,6 +89,8 @@ export class ActionRefusal extends Error {
     readonly fields: FieldProblem[] = [],
     /** A refusal the UI can answer (step 13.5: "no_hours"). */
     readonly code?: string,
+    /** RQ-1: with "required_field", the fields a new item still needs. */
+    readonly needed?: NeededField[],
   ) {
     super(message);
   }
@@ -226,8 +229,9 @@ export async function takeOpenRequest(): Promise<string | null> {
 }
 
 /** MC-1: a reviewer's transcript upload (.vtt or .docx), raw, for one meeting's dated occurrence. */
-export async function uploadMeetingTranscript<T>(seriesId: number, date: string, file: File): Promise<T> {
-  const q = new URLSearchParams({ series: String(seriesId), date, name: file.name.slice(0, 200) });
+/** MC-1: a transcript file for a call's date. PK-1: `dateOk` after the page asked about a recording dated another day; no file name is sent. */
+export async function uploadMeetingTranscript<T>(seriesId: number, date: string, file: File, o: { dateOk?: boolean } = {}): Promise<T> {
+  const q = new URLSearchParams({ series: String(seriesId), date, ...(o.dateOk ? { dateOk: "1" } : {}) });
   const res = await fetch(`/api/meetings/upload?${q}`, { method: "POST", credentials: "same-origin", headers: { "content-type": file.type || "application/octet-stream", "x-csrf": csrfToken() }, body: file });
   return readResponse<T>(res);
 }

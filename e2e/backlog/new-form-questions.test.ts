@@ -23,6 +23,14 @@ import { SETUP_STEPS } from "../../plan/setup.ts";
 import { aTp1Brief } from "../../test/builders/index.ts";
 import { planWithRaw, TP1_CARRIED } from "../../test/tp1-drafts.ts";
 
+/** RQ-1: the three questions are a story's only, and from here the New form opens on another level: choose the story type. */
+async function pickStory(f: Locator) {
+  const r = f.getByRole("radio", { name: "User Story" });
+  await r.waitFor({ timeout: 30_000 });
+  if (!(await r.isChecked())) await r.click();
+}
+
+
 let h: Harness;
 const T = 240_000;
 const VIEW = { width: 1440, height: 900 };
@@ -72,6 +80,7 @@ async function openNew(page: Page, client: string) {
   const f = form(page);
   await f.waitFor();
   await choose(page, f, "Client", client);
+  await pickStory(f);
   await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
   return f;
 }
@@ -256,6 +265,7 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
         const f = form(page);
         await f.waitFor({ timeout: 30_000 });
         await choose(page, f, "Client", "Northwind");
+        await pickStory(f);
         await expect(boxes(f).count()).resolves.toBe(0);
         await noTp1(f);
         if (size === "default") await shot(page, "tp1b-phone-empty");

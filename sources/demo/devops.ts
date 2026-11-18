@@ -115,9 +115,23 @@ export type DemoDevOps = ReturnType<typeof createDemoDevOps>;
  */
 export const DEMO_REQUIRED: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> = { Northwind: { Epic: [T] } };
 
-export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, string>; now: () => string; /** MC-1e: required fields per client and type (DEMO_REQUIRED by default). */ required?: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> }) {
+/**
+ * RQ-1: fields a process rule requires on a new item (a rule such as "required when created"), which the type's own
+ * field list doesn't mark as always required. DevOps refuses the create without them as it refuses any rule. The demo
+ * has none unless asked (FOCUSTIME_DEMO_DEVOPS_RULES=target: Northwind's features and stories need a target date).
+ */
+export const DEMO_RULES_TARGET: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> = { Northwind: { Feature: [T], "User Story": [T] } };
+
+export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, string>; now: () => string; /** MC-1e: required fields per client and type (DEMO_REQUIRED by default). */ required?: Partial<Record<DemoClientKey, Record<string, readonly string[]>>>; /** RQ-1: fields a process rule requires, per client and type (none by default). */ rules?: Partial<Record<DemoClientKey, Record<string, readonly string[]>>> }) {
   const required = o.required ?? DEMO_REQUIRED;
   const requiredOf = (k: DemoClientKey, type: string): readonly string[] => required[k]?.[type] ?? [];
+  const rulesOf = (k: DemoClientKey, type: string): readonly string[] => o.rules?.[k]?.[type] ?? [];
+  const nameOfField = (ref: string) => FIELDS.find((f) => f.referenceName === ref)?.name ?? ref.split(".").pop()!;
+  /** RQ-1: DevOps's answer to a rule that fails: the first field in its message, every one in RuleValidationErrors. */
+  const ruleError = (refs: readonly string[]) => {
+    const one = (ref: string) => `TF401320: Rule Error for field ${nameOfField(ref)}. Error code: Required, InvalidEmpty.`;
+    return json({ message: one(refs[0]!), typeKey: "RuleValidationException", customProperties: { FieldReferenceName: refs[0], ErrorMessage: one(refs[0]!), RuleValidationErrors: refs.map((r) => ({ fieldReferenceName: r, fieldStatusFlags: "required, invalidEmpty", errorMessage: one(r) })) } }, 400);
+  };
   const items = new Map<number, DemoItem>(o.items.map((i) => [i.id, { ...i, relations: [...i.relations] }]));
   const comments = new Map<number, DemoComment[]>();
   /** SR-1: the demo's change log of story states and comments (seeded), mine or a teammate's; never who beyond that. */
@@ -227,6 +241,23 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
     }
     m = /^_apis\/wit\/workitems\/\$(.+)$/.exec(rest);
     if (m && method === "POST") {
+      // RQ-1: checked without saving (validateOnly): the same checks as a create, then nothing is kept or changed.
+      const checkOnly = url.searchParams.get("validateOnly") === "true";
+      const fieldOps = (body as { op: string; path: string; value: unknown }[]).filter((op) => op.path.startsWith("/fields/"));
+      const sentNow = new Set(fieldOps.filter((op) => op.value !== null && op.value !== "").map((op) => op.path.slice(8)));
+      if (!fieldOps.some((op) => op.path === "/fields/System.Title" && typeof op.value === "string" && op.value.trim())) return json({ message: "TF401320: Rule Error for field Title. Error code: Required" }, 400);
+      const failing = [...requiredOf(clientKey, m[1]!), ...rulesOf(clientKey, m[1]!)].filter((r, i, a) => a.indexOf(r) === i && !sentNow.has(r));
+      if (failing.length) return ruleError(failing);
+      if (checkOnly) {
+        for (const op of body as { path: string; value: unknown }[]) {
+          if (op.path !== "/relations/-") continue;
+          const r = op.value as { rel: string; url: string };
+          if (r.rel !== "System.LinkTypes.Hierarchy-Reverse") continue;
+          const parent = items.get(Number(/workItems\/(\d+)$/i.exec(r.url)?.[1]));
+          if (!parent || parent.clientKey !== clientKey) return json({ message: "TF401232: the parent work item does not exist" }, 400);
+        }
+        return json({ id: 0, rev: 0, fields: Object.fromEntries(fieldOps.map((op) => [op.path.slice(8), op.value])) });
+      }
       const it: DemoItem = { clientKey, id: nextId++, rev: 1, type: m[1]!, state: "New", parent: null, title: "", who: null, whoEmail: null, target: null, start: null, size: null, changedAt: o.now(), order: Math.max(0, ...[...items.values()].filter((i) => i.clientKey === clientKey).map((i) => i.order)) + 1, blocked: false, description: "", acceptance: "", projectOnly: false, createdBy: ME_EMAIL, area: DEMO_CLIENTS.find((c) => c.key === clientKey)!.project, iteration: DEMO_CLIENTS.find((c) => c.key === clientKey)!.project, relations: [] };
       for (const op of body as { op: string; path: string; value: unknown }[]) {
         if (op.path.startsWith("/fields/")) setField(it, op.path.slice(8), op.value);
@@ -245,11 +276,6 @@ export function createDemoDevOps(o: { items: DemoItem[]; people: Record<string, 
           } else it.relations.push(r);
         }
       }
-      if (!it.title.trim()) return json({ message: "TF401320: Rule Error for field Title. Error code: Required" }, 400);
-      // MC-1e: a field the client's process requires on this type, left empty: refused as DevOps refuses it.
-      const sent = new Set((body as { path: string }[]).filter((op) => op.path.startsWith("/fields/")).map((op) => op.path.slice(8)));
-      const missing = requiredOf(clientKey, it.type).find((r) => !sent.has(r));
-      if (missing) return json({ message: `TF401320: Rule Error for field ${FIELDS.find((f) => f.referenceName === missing)?.name ?? missing.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.` }, 400);
       items.set(it.id, it);
       mark(clientKey, it.id);
       return json(view(it));

@@ -14,8 +14,7 @@ import { sizeChipText, validStorySize } from "../plan/estimate.ts";
 import { NO_OTHER_CLIENTS } from "../plan/boundary.ts";
 import {
   COOP_PROPOSALS_V1, draftInput, publishOrder, sentSummary, DRAFT_INSTRUCTIONS, editProblem, exemplarView, houseStyle, houseStyleStale, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal,
-  EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft,
-} from "../plan/stories.ts";
+  EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft, type StoryValues } from "../plan/stories.ts";
 import { GENERATED_LAYER_NOTE, shapeItem, splitOverrides, STANDARDS_BREAKDOWN, type StandardsUsed } from "../plan/standards.ts";
 import type { StandardsLookup } from "./standards.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
@@ -325,7 +324,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const writes = await plan.storyDraftWrites(d.id);
       const seen = new Set<string>();
       const next: Proposal[] = o.cards.map((c) => {
-        const e = fields(c, ["id", "keep", "title", "description", "acceptance", "size"]);
+        const e = fields(c, ["id", "keep", "title", "description", "acceptance", "size"], ["values"]);
         const id = text(e.id, "id", 16);
         const cur = d.proposals.find((p) => p.id === id);
         if (!cur || seen.has(id)) throw new Invalid("cards lists every card of the draft once");
@@ -336,10 +335,12 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
         const edit = { title: text(e.title, "title", 400, true).trim(), description: text(e.description, "description", 8000, true), acceptance: (e.acceptance as string[]).map((a) => a.trim()).filter(Boolean) };
         const problem = editProblem(edit);
         if (problem) throw new Refused(`${cur.title || id}: ${problem}`, 422);
-        const changed = edit.title !== cur.title || edit.description !== cur.description || edit.acceptance.join("\n") !== cur.acceptance.join("\n") || e.size !== cur.size || e.keep !== cur.keep;
+        // RQ-1: the fields the client's process needs on each story (a target date, a start date, a size), written at publish.
+        const values = e.values === undefined ? cur.values : storyValues(e.values);
+        const changed = edit.title !== cur.title || edit.description !== cur.description || edit.acceptance.join("\n") !== cur.acceptance.join("\n") || e.size !== cur.size || e.keep !== cur.keep || JSON.stringify(values ?? {}) !== JSON.stringify(cur.values ?? {});
         // A card already sent keeps what was sent (the audit log has it); only its place in the list can change.
         if (writes.has(id) && changed) throw new Refused(`"${cur.title}" is already in DevOps; change it there`, 409);
-        return { ...cur, ...edit, size: e.size as Proposal["size"], keep: e.keep };
+        return { ...cur, ...edit, size: e.size as Proposal["size"], keep: e.keep, ...(values && Object.keys(values).length ? { values } : {}) };
       });
       return { ok: true, data: await view(await plan.saveStoryDraft(d.id, { ...d, proposals: next })) };
     }
@@ -399,6 +400,28 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       throw new Refused("A client's house style is set by your FocusTime admin, in Admin › Clients", 403, "admin_setting");
     }
   }
+}
+
+/** RQ-1: a card's needed values as Review sends them: a target date and a start date (YYYY-MM-DD) and a size (0 to 10000), each optional. */
+function storyValues(v: unknown): StoryValues {
+  if (!v || typeof v !== "object" || Array.isArray(v)) throw new Invalid("values is an object");
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) if (k !== "date" && k !== "start" && k !== "size") throw new Invalid(`unknown value ${k}`);
+  const day = (x: unknown, name: string) => {
+    if (x === undefined || x === null || x === "") return null;
+    if (typeof x !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(x)) throw new Invalid(`${name} is a date (YYYY-MM-DD)`);
+    return x;
+  };
+  const size = o.size === undefined || o.size === null || o.size === "" ? null : Number(o.size);
+  if (size !== null && (!Number.isFinite(size) || size < 0 || size > 10_000)) throw new Invalid("size is a number from 0 to 10000");
+  const out: StoryValues = {};
+  const date = day(o.date, "date");
+  const start = day(o.start, "start");
+  if (date) out.date = date;
+  if (start) out.start = start;
+  if (size !== null) out.size = size;
+  if (out.date && out.start && out.start > out.date) throw new Invalid("The start date is after the target date");
+  return out;
 }
 
 const workUrl = (e: DevOpsWriteEntry): string | null => (e.itemId ? `https://dev.azure.com/${encodeURIComponent(e.org)}/${encodeURIComponent(e.project)}/_workitems/edit/${e.itemId}` : null);

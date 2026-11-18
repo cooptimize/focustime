@@ -436,6 +436,50 @@ Every word below is in `plan/preview-parts.ts` (`partsLine`, `PREVIEW_WORDS`). T
 - Break down: **"Preview 5 items…"** opens the one preview; afterwards **"Created 5 items under #1120:"**, **"Not created yet (2):"** with each reason, **"Retry the rest"**; **"Every kept story is in DevOps already, or waiting for Retry"**. "Create all" is gone.
 - Send feedback's preview, in the same parts: the head **"Send feedback"**; Where **"DevOps · <org> · <project>"**, Writes as the person (or **"Not set up yet"**); the new item's **Title**, **Description** and **Tags**; Who can see it; **"Send feedback"** (Ctrl+Enter) and **"Not now"** (back to the text); **"Sent once; nothing is retried on its own."**
 
+## PK-1 words (Nov 17)
+
+Every word below is in `plan/call-words.ts` (`POCKET_TEXT`, `CALL_ROW`) or, for refusals, `actions/transcript-file.ts`.
+
+- The upload area: **"Upload the transcript"**, then where to get it, **"Recorded it on Pocket? Export the transcript from Pocket and upload the download as it is."**, and **"FocusTime takes a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)."** Its buttons: **"Choose a file"** **"or drop it here"**, **"No transcript this week"**. The call's **"Upload a transcript"** button says the same in its tip.
+- While a file is dragged over the call's page: **"Drop the file here"** (the upload area), or **"Drop the file here to replace the transcript"** (the call's actions, when there's no upload area). Several files: **"One file at a time: drop just the transcript."**
+- A drop onto a call that already has a transcript asks, in Propose again's words: **"Replace this call's transcript? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out."**
+- The date: **"This Pocket recording is from Sun, Nov 1, 27:02 long. This call is Mon, Nov 2. Use it for this call?"** with **"Use it for this call"** and **"Don't use it"** (then **"Nothing was kept. Upload the recording from this call's day."**).
+- After an upload: **"Read 8 lines. 7 proposals to review."**
+- Once, above the proposals and above the Transcript: **"From a Pocket recording. Speakers aren't named, and Pocket can mix them up."** The page's line says **"From the transcript (8 lines)."** (no count of people). Speakers are **"Speaker 1"**, **"Speaker 2"**; no time on a line or a quote.
+- A promise whose words don't say whose it is: **"Pocket didn't say who · noted with this call"**; kept: **"Noted with this call. Pocket didn't say who"**; in Waiting on it is from **"Someone on the call"**.
+- Where a call's source is shown (Admin › Clients › Meetings): **"Pocket export uploaded by a reviewer Nov 17, 3:05 PM"**.
+- Refusals, by kind and count, never a name: **"That file isn't one FocusTime reads. FocusTime reads a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)"**; **"That zip has no transcript in it (2 other files). …"**; **"That zip holds 2 PDFs. FocusTime reads one transcript at a time: upload a zip with one in it, or the file by itself"**; **"That zip has another archive inside it. FocusTime opens a zip with the transcript file directly in it"**; **"That zip holds 24 files. FocusTime opens a zip of at most 20, with the transcript in it"**; **"That zip is over 20 MB unpacked. …"**; **"That zip can't be opened: it may be damaged or locked with a password"**; **"That PDF has no text in it: it may be a scan. …"**; **"FocusTime found no transcript in that PDF. …"**; **"That PDF has 612 pages. FocusTime reads a PDF of up to 500"**; **"That PDF took over 10 seconds to read, so FocusTime stopped. Nothing was kept"**; **"That PDF is locked with a password. Export it from Pocket again without one"**; **"That PDF can't be opened: it may be damaged"**.
+
+## EV-1 words (Nov 17)
+
+Every word below is in `ui/appenv.ts` (`SITE_MARKS`, `SITE_WORDS`) or, for the page and the manifest, `server/site-env.ts`.
+
+- The top bar's mark: **"Dev"** on the dev site, **"Local"** in the developer loop; nothing on production. Its tip and what a screen reader says: **"This is FocusTime's dev site, not production."** and **"This is FocusTime's developer loop on this computer, not production."**
+- The browser tab: **"Dev · FocusTime"**, **"Local · FocusTime"**; production's stays **"FocusTime"**.
+- The installed app: **"FocusTime Dev"**, **"FocusTime Local"**; production's stays **"FocusTime"**.
+- About (Settings › About and the About dialog): **"Site: Dev · <address>"**, with **"Local"**, **"Production"** or **"Demo"** for the others.
+
+## RQ-1 words (Nov 17)
+
+The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own buttons in `plan/call-words.ts` (`CALL_ROW`).
+
+- A field the client's process needs, as DevOps says when it checks the new item: the mark **"Needed"** beside its label, and **"Required by this client's process"** under it, kept once it's filled. Other fields still say **"Optional"**. An empty needed date reads **"Choose a date"**.
+- A call's row now names the type: **"Target Date is needed: this client's process requires it on a new Feature."** (was "…on a new item of this type.").
+- The line under a form while its preview waits: **"Target Date is needed: this client's process requires it on a new Feature. Fill it in, then preview again."**.
+- A field FocusTime has no control for: **"Northwind's process needs Risk on a new User Story, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft."** (a call's row keeps **"…then skip it here."**).
+- The draft editor, for a field only the New form has: **"Size is needed by this client's process. Create in DevOps opens the New form to fill it in."**.
+- The New form shows **"Start date"** only when the process needs one.
+- Break down's Review: above the cards, **"Target Date"** with **"Needed"**, a date, **"Use for all"** and **"Target Date starts from the feature's. Change any one, or use one for all."** (or **"Required by this client's process"** when the feature has none); on each card the same field with **"Needed"** until it has a value; under the total **"5 stories need a value before the preview"**, and Preview waits.
+- A refusal at Confirm, or one stored from before: **"DevOps says Target Date is needed on a new Feature. Fill it in and try again."**, or **"DevOps refused one of this item's fields. Check the fields and try again."**. Never DevOps's own text (no "TF401320").
+- A call's feature-tier row: **"Create and break down"** beside **"Create in DevOps"**, its tooltip **"Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories."**; a feature created from the call keeps **"Break down"**.
+- The three questions show at story level only. Above it the fold reads **"More: description and size"**.
+
+## NT-1 words (Nov 17)
+
+- Settings › Notifications › Quiet hours, the field **"Days off"** with the switch **"Quiet on days off"** and the hint **"PTO and company holidays from Dataverse."** (`DAYS_OFF_WORDS`, `plan/notify.ts`, the one place the screen and Settings search read). The stored setting is unchanged (`[notify] quiet_pto`); search still finds the old **"Quiet on PTO days"**.
+- A day off, wherever notices are described: **"a day off"**, said once as **"PTO or a company holiday"**. In Messages in Teams' hint: **"never in quiet hours, on days off or weekends"**.
+- Nothing new is shown or told: a day off quiets what it did before, and now holidays count.
+
 ## DY-1 words (Nov 17)
 
 The meeting words are in one place, `MEETING_WORDS` in `plan/call-words.ts`; the folded line's in `foldWords` (`plan/day-fold.ts`).

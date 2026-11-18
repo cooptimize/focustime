@@ -9,8 +9,11 @@ export type TranscriptLine = {
   /** 1-based, stable for the stored transcript: what proposals refer to. */
   n: number;
   speaker: string;
-  /** Seconds from the start of the meeting (0 when the source has no times). */
-  at: number;
+  /**
+   * Seconds from the start of the meeting; PK-1: null when the source has no times (a Pocket export), and then nothing
+   * shows or sends a time for the line, never a made-up one.
+   */
+  at: number | null;
   text: string;
 };
 
@@ -19,14 +22,45 @@ export const MAX_LINES = 4000;
 /** The longest one line may be after merging; longer is split at a sentence end. */
 export const MAX_LINE_CHARS = 1200;
 
+/** A character reference's character; one past Unicode's end is the replacement mark, never an error (PK-1 review). */
+const charOf = (n: number) => (n <= 0x10ffff ? String.fromCodePoint(n) : "\ufffd");
+
+/**
+ * Every `<open ...>...</close>` in order, by plain scans (PK-1 review: a lazy regex over an unclosed tag is quadratic,
+ * so 1 MB of "<w:p " held the server for over a minute). An open tag with no close after it ends the scan: none later
+ * can close either.
+ */
+function blocks(s: string, open: RegExp, close: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(open.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const end = s.indexOf(close, m.index + m[0].length);
+    if (end < 0) break;
+    out.push(s.slice(m.index, end + close.length));
+    re.lastIndex = end + close.length;
+  }
+  return out;
+}
+
+/** A cue's voice tag, `<v Name>` or `<v.class Name>`: the first one, by plain scans. */
+function voiceOf(raw: string): string | null {
+  const i = raw.search(/<v[\s.]/);
+  if (i < 0) return null;
+  const j = raw.indexOf(">", i);
+  if (j < 0) return null;
+  const m = /^(?:\.\S*)?\s+([\s\S]*)$/.exec(raw.slice(i + 2, j));
+  return m ? m[1]! : null;
+}
+
 const decode = (s: string) =>
   s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d{1,8});/g, (_, d: string) => charOf(Number(d)))
+    .replace(/&#x([0-9a-f]{1,8});/gi, (_, h: string) => charOf(parseInt(h, 16)))
     .replace(/&amp;/g, "&");
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -38,7 +72,7 @@ export function timeOf(s: string): number | null {
   return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number((m[4] ?? "0").padEnd(3, "0")) / 1000;
 }
 
-type Cue = { speaker: string; at: number; text: string };
+type Cue = { speaker: string; at: number | null; text: string };
 
 /** Merge consecutive cues of one speaker, split overlong lines, number them. */
 export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
@@ -49,7 +83,7 @@ export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
     const speaker = clean(c.speaker) || "Unknown";
     const last = merged.at(-1);
     if (last && last.speaker === speaker && last.text.length + text.length + 1 <= MAX_LINE_CHARS) last.text = `${last.text} ${text}`;
-    else merged.push({ speaker, at: Math.max(0, Math.floor(c.at)), text });
+    else merged.push({ speaker, at: c.at === null ? null : Math.max(0, Math.floor(c.at)), text });
   }
   const out: TranscriptLine[] = [];
   for (const c of merged) {
@@ -82,8 +116,8 @@ export function parseVtt(text: string): TranscriptLine[] {
     const raw = rows.slice(ti + 1).join(" ");
     let speaker = "";
     let words = raw;
-    const v = /<v(?:\.[^\s>]*)?\s+([^>]*)>/.exec(raw);
-    if (v) speaker = v[1]!;
+    const v = voiceOf(raw);
+    if (v !== null) speaker = v;
     else {
       const named = /^([^:<>]{1,80}):\s+(.*)$/.exec(raw);
       if (named) {
@@ -91,7 +125,7 @@ export function parseVtt(text: string): TranscriptLine[] {
         words = named[2]!;
       }
     }
-    words = decode(words.replace(/<[^>]*>/g, ""));
+    words = decode(words.replace(/<[^<>]*>/g, ""));
     cues.push({ speaker: decode(speaker), at, text: words });
   }
   const lines = linesOf(cues);
@@ -106,9 +140,9 @@ export function parseVtt(text: string): TranscriptLine[] {
  */
 export function parseDocxXml(xml: string): TranscriptLine[] {
   const paras: string[] = [];
-  for (const m of xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) {
-    const p = m[0].replace(/<w:(tab|br)\b[^>]*\/>/g, " ");
-    const runs = [...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map((r) => decode(r[1]!));
+  for (const para of blocks(xml, /<w:p[ >]/, "</w:p>")) {
+    const p = para.replace(/<w:(tab|br)\b[^<>]*\/>/g, " ");
+    const runs = blocks(p, /<w:t(?:\s[^<>]*)?>/, "</w:t>").map((r) => decode(r.slice(r.indexOf(">") + 1, -"</w:t>".length)));
     const t = clean(runs.join(""));
     if (t) paras.push(t);
   }
@@ -147,18 +181,20 @@ export function clock(seconds: number): string {
 /** Quotes for a proposal: at most 2 of the cited lines (in range, in order), each cut to 200 characters. */
 export const QUOTE_LINES = 2;
 export const QUOTE_CHARS = 200;
+/** A quote's time ("4:05"), or "" for a line with none (PK-1: a Pocket export's lines). */
+export const atOf = (l: Pick<TranscriptLine, "at">) => (l.at === null ? "" : clock(l.at));
 export function quotesOf(lines: readonly TranscriptLine[], refs: readonly number[]): { n: number; speaker: string; at: string; text: string }[] {
   const byN = new Map(lines.map((l) => [l.n, l]));
   const picked = [...new Set(refs)].filter((n) => byN.has(n)).sort((a, b) => a - b).slice(0, QUOTE_LINES);
   return picked.map((n) => {
     const l = byN.get(n)!;
-    return { n, speaker: l.speaker, at: clock(l.at), text: l.text.length > QUOTE_CHARS ? `${l.text.slice(0, QUOTE_CHARS - 1)}…` : l.text };
+    return { n, speaker: l.speaker, at: atOf(l), text: l.text.length > QUOTE_CHARS ? `${l.text.slice(0, QUOTE_CHARS - 1)}…` : l.text };
   });
 }
 
-/** The lines as the AI gets them: "L12 [4:05] Name: words". */
+/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time. */
 export function numbered(lines: readonly TranscriptLine[]): string {
-  return lines.map((l) => `L${l.n} [${clock(l.at)}] ${l.speaker}: ${l.text}`).join("\n");
+  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker}: ${l.text}`).join("\n");
 }
 
 /** Rough tokens of a text (4 characters a token), for chunking. */

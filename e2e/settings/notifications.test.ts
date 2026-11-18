@@ -34,6 +34,25 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await page.close();
   }, T);
 
+  it("NT-1: Days off says PTO and company holidays, and saves the same stored value", async () => {
+    const { page, errors } = await freshPage(h);
+    const load = () => page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()).then((j) => j.data.notify.quietPto as boolean));
+    await openSettings(page);
+    await settingsSection(page, "notifications");
+    const field = page.locator('[data-setting="quiet-pto"]');
+    await field.waitFor();
+    await expect(field.textContent()).resolves.toContain("Days off");
+    await expect(field.textContent()).resolves.toContain("PTO and company holidays from Dataverse.");
+    const box = field.getByRole("checkbox", { name: "Quiet on days off" });
+    await expect(box.isChecked()).resolves.toBe(true);
+    await box.uncheck();
+    await expect.poll(load, { timeout: 5000 }).toBe(false);
+    await box.check();
+    await expect.poll(load, { timeout: 5000 }).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("Start without a preview off: the morning box's Start shows the preview instead", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);

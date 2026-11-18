@@ -86,7 +86,7 @@ WP-1's hidden working page wrote these; RM-1 removed the page and its code, and 
 | `chat_calls` | App | Yes | Calls in registered chats, from their started and ended events: the call id, start and end, who started it (a user id and tenant). Never the participants or anything said |
 | `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `conversation_events` | App | Yes | Conversations, their summaries, commitments, drafted suggestions, merges and history. Since RM-1 nothing merges, claims, gives, adds a helper, releases or closes out by hand; the rows are kept, read and still followed (a merged one leads to where it went), and Not work-related and a new message still close and reopen. `conversations.item_needed_json` is the sorting step's judgment that one needs a DevOps item (why, a title, a level) |
 | `requests` | App | Yes | Messages the chat rules picked out as requests; read for the urgent request notice |
-| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) |
+| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) and, since PK-1, whether its transcript is a Pocket export (`transcript_kind`) |
 
 ### Admin and team
 
@@ -125,7 +125,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `devops_takes`, `devops_notes`, `devops_edit_notes` | 14 days |
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
-| `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay |
+| `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
 | `code_views` | 12 months |
 | `job_claims` | 30 days |
 | `admin_audit` | No age limit (not in the purge) |

@@ -3,6 +3,7 @@
 // (http://localhost:<port>) and the hosted app.
 import type { BuildInfo } from "./buildinfo.ts";
 import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
+import { markedEnv, siteManifest, sitePage } from "./site-env.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { posix } from "node:path";
 import { writeJson } from "./compress-data.ts";
@@ -140,7 +141,11 @@ function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
 /** AS-1: the panel's push-to-talk endpoint (raw audio body, ?seconds=&client=&item=). */
 export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
 
-/** MC-1: a reviewer's transcript upload (raw .vtt or .docx body, ?series=&date=&name=), 5 MB at most. */
+/**
+ * MC-1: a reviewer's transcript upload (the raw file as the body, ?series=&date=), 5 MB at most. PK-1: a Teams .vtt or
+ * .docx, or a Pocket export (its PDF, or the zip holding it), told apart by content; `dateOk=1` after the page asked
+ * about a recording dated another day. No file name is sent or read.
+ */
 export const MEETING_UPLOAD_PATH = "/api/meetings/upload";
 
 /** AS-1: a raw body as bytes, refused past `limit` (the recording stays in this memory only). */
@@ -181,6 +186,15 @@ export function createApp(opts: AppOptions) {
    */
   const files: Map<string, StaticFile> | null = opts.distDir && !opts.devMiddleware ? loadStaticFiles(opts.distDir) : null;
   if (files) files.set(SW_PATH, makeStaticFile(SW_PATH, Buffer.from(serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!))), "no-cache"));
+  // EV-1: on dev and local, the page and the manifest say which site this is (server/site-env.ts), made once here like
+  // every other file. Production's files are the build's, untouched.
+  const marked = markedEnv(opts.build?.env);
+  if (files && marked) {
+    const page = files.get("/index.html");
+    if (page) files.set("/index.html", makeStaticFile("/index.html", Buffer.from(sitePage(page.plain.toString("utf8"), marked)), page.cache, true));
+    const manifest = files.get("/manifest.webmanifest");
+    if (manifest) files.set("/manifest.webmanifest", makeStaticFile("/manifest.webmanifest", Buffer.from(siteManifest(manifest.plain.toString("utf8"), marked)), manifest.cache));
+  }
   const https = opts.publicUrl.startsWith("https://");
   const redirect = (res: ServerResponse, to: string, cookies: string[] = []) => {
     res.writeHead(302, { location: to, "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
@@ -436,7 +450,7 @@ export function createApp(opts: AppOptions) {
         }
         const series = Number(q.get("series"));
         const out = Number.isSafeInteger(series) && series > 0
-          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", name: (q.get("name") ?? "").slice(0, 200), bytes: new Uint8Array(bytes) }).catch((e: unknown) => {
+          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1" }).catch((e: unknown) => {
               opts.onError?.(e, "meeting_upload");
               return { ok: false as const, status: 500, error: "The transcript couldn't be saved. Try again" };
             })

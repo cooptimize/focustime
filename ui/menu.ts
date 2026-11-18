@@ -1607,6 +1607,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.find":
       return { run: () => env.openSettings("devops", "find-item") };
     case "devops.states":
+    case "devops.needed":
     case "devops.preview":
       return { run: env.openCaptures };
     case "devops.confirm":
@@ -1699,7 +1700,7 @@ export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
 /** AH-1 (D665): `actions` is the panel's action list for the item, given by the caller (Ahead adds Send to…); more go here. */
 export type PanelAction = { id: string; label: string; hint?: string; run: () => void };
-export type BreakDownTarget = { id: number; title: string; type?: string; actions?: PanelAction[] };
+export type BreakDownTarget = { id: number; title: string; type?: string; actions?: PanelAction[]; /** RQ-1: Create and break down: Run starts as soon as the panel can run. */ autoRun?: boolean };
 export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));
 /** NV-1: the Coop brief opens Break down's side panel, from every entry point; it copies at once. `weekStart` is the week whose plan the feature is on (default next week, as before). */
 export const COOP_BRIEF_EVENT = "focustime:coop-brief";

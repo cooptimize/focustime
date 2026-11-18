@@ -64,6 +64,7 @@ import { holidayLabel } from "../sources/dataverse/holidays.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
+import type { NeededCheck } from "./meeting-actions.ts";
 import { devopsWriteAction, requiredFor, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
 import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
@@ -131,6 +132,7 @@ import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
 import { meetingAction, meetingWrites, type CaptureContext as MeetingCaptureContext, type MeetingAction, type MeetingContext, type MeetingUser, type MeetingWritePort } from "./meeting-actions.ts";
+import type { ReadPdf } from "./transcript-file.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import { MEETING_CHAT } from "../store/conversation-store.ts";
 import type { MeetingSeries } from "../plan/meetings.ts";
@@ -1390,6 +1392,8 @@ export type MeetingsPort = {
   /** MC-1d: the meeting job runs here (production), so a failed AI pass is tried again by itself. */
   retriesHere?: boolean;
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
+  /** PK-1: the PDF reader for a Pocket export (server/pdf-text.ts); absent: a PDF upload is refused in plain words. */
+  readPdf?: ReadPdf;
 };
 
 /**
@@ -1429,6 +1433,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     users: async () => (ctx.meetings ? ctx.meetings.users() : []),
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
+    ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -1450,6 +1455,11 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ai: () => aiFor(ctx, { waiting: true }),
     // MC-1e: the fields a new item needs, read with my write PAT, for the rows' check before any preview.
     required: async (clientKey, types) => requiredFor(await devopsWriteContext(ctx), clientKey, types),
+    // RQ-1: DevOps's own check, without saving, through the write framework's devops.needed.
+    needed: async (clientKey, change) => {
+      const r = await devopsWriteAction(await devopsWriteContext(ctx), "devops.needed", { clientKey, change });
+      return r.ok ? (r.data as NeededCheck) : null;
+    },
     canWrite: async (clientKey) => (await rc.writeClients()).includes(clientKey),
     log: ctx.log ?? (() => {}),
   };
@@ -1853,6 +1863,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.clear_write_pat":
     case "devops.write_status":
     case "devops.states":
+    case "devops.needed":
     case "devops.preview":
     case "devops.confirm":
     case "devops.retry":
