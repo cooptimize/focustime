@@ -7599,3 +7599,17 @@ body.ah-dragging * { cursor: grabbing !important; }
   position: absolute; z-index: 2147483000; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--border-strong);
   background: var(--surface); color: var(--text); font: 600 15px/1 var(--font-ui); box-shadow: var(--shadow-pop); white-space: nowrap;
 }
+
+/* DY-1: on a computer and a tablet, Day's own header row stays at the top of Day while the page scrolls (in Timeline and
+   Cards); the lines under it scroll away. A block's header stays under it while the block scrolls by, and so do the
+   Timebox bar and the to-do column. Focus moved by Tab is kept below both (scroll-padding). The phone (PH-1) is unchanged. */
+.app:not(.phone) .today-view.u2.mode-now { --day-head-h: 56px; --tt-head-h: calc(38px * var(--text-scale)); scroll-padding-top: calc(var(--day-head-h) + var(--tt-head-h) + 8px); }
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar { position: sticky; top: calc(-1 * 24px); z-index: 30; margin: -24px -24px 0; padding: 24px 24px 10px; background: var(--bg); }
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar:has(+ *) { box-shadow: 0 1px 0 var(--border); }
+.app:not(.phone) .today-view.u2.mode-now .tt-head { position: sticky; top: calc(var(--day-head-h) - 24px); z-index: 12; background: inherit; border-radius: inherit; }
+.app:not(.phone) .today-view.u2.mode-now .tt-bar { top: calc(var(--day-head-h) - 24px); }
+.app:not(.phone) .today-view.u2.mode-now .tt-check { top: calc(var(--day-head-h) - 24px + var(--tt-head-h) + 4px); max-height: calc(100vh - var(--day-head-h) - var(--tt-head-h) - 90px * var(--text-scale)); }
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-head { position: sticky; top: calc(var(--day-head-h) - 24px); z-index: 12; background: inherit; }
+/* A card clips its content (overflow: hidden made it the sticky header's scroller); clip draws the same and lets the
+   header stick to Day's scroll. */
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half.card, .app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { overflow: clip; }

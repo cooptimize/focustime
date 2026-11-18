@@ -377,6 +377,18 @@ export function Day(props: Props) {
   useEffect(() => {
     for (const el of mainRef.current?.children ?? []) if (!el.classList.contains("day-bar")) (el as HTMLElement).inert = !!props.read;
   });
+  // DY-1: Day's header stays at the top while the page scrolls; a block's header, the Timebox bar and the to-do column
+  // stick under it, and focus moved by Tab lands below them (scroll-padding). Its height, kept as --day-head-h.
+  useEffect(() => {
+    const main = mainRef.current;
+    const head = main?.querySelector<HTMLElement>(":scope > .day-bar");
+    if (!main || !head || typeof ResizeObserver === "undefined") return;
+    const set = () => main.style.setProperty("--day-head-h", `${Math.ceil(head.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(head);
+    return () => ro.disconnect();
+  }, [phoneToday, timelineShown, mode]);
 
   return (
     <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
