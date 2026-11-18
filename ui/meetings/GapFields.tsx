@@ -4,6 +4,7 @@
 // (new.options: the client's levels and its open parents). A field the client's process requires shows here marked
 // Needed until it has a value; the row can't be sent before then. Every change is saved on the proposal at once
 // (meeting.edit); the write itself goes only through the one DevOps preview.
+import { isStoryLevel } from "../../plan/needed.ts";
 import { useEffect, useMemo, useState } from "react";
 import { aOr, parentTypesOf, type NewOptions } from "../../plan/quick-create.ts";
 import { CALL_ROW, type ProposalCheck } from "../../plan/call-words.ts";
@@ -43,9 +44,12 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
   const types = useMemo(() => opts?.levels.flatMap((l) => l.types) ?? [], [opts]);
   const allowed = useMemo(() => new Set(parentTypesOf(ladder, b.type)), [ladder, b.type]);
   const parents = useMemo(() => (opts?.parents ?? []).filter((p) => allowed.has(p.type)), [opts, allowed]);
-  const [more, setMore] = useState(needs.has("description") || needs.has("size") || needs.has("check"));
+  // RQ-1: the three questions are a story's only, by the client's process levels (never by a type's name).
+  const storyLevel = isStoryLevel(opts?.levels, b.type);
+  const inMore = needs.has("description") || needs.has("size") || (storyLevel && needs.has("check"));
+  const [more, setMore] = useState(inMore);
   useEffect(() => {
-    if (needs.has("description") || needs.has("size") || needs.has("check")) setMore(true);
+    if (inMore) setMore(true);
   }, [check]); // eslint-disable-line react-hooks/exhaustive-deps
   const [description, setDescription] = useState(b.description);
   useEffect(() => setDescription(b.description), [b.description]);
@@ -108,7 +112,7 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
         </span>
       </div>
       <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-        <Icon name={more ? "open" : "closed"} /> More: description, size and details{needs.has("description") || needs.has("size") || needs.has("check") ? ` (${CALL_ROW.needed.toLowerCase()})` : ""}
+        <Icon name={more ? "open" : "closed"} /> {storyLevel ? "More: description, size and details" : "More: description and size"}{inMore ? ` (${CALL_ROW.needed.toLowerCase()})` : ""}
       </button>
       {more && (
         <div className="nf-grid nf-more-body mtg-nf">
@@ -119,9 +123,12 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
             <input id={`mtg-size-${id}`} inputMode="decimal" value={size} placeholder={needs.has("size") ? "Needed" : "None"} onChange={(e) => setSize(e.target.value)} onBlur={() => !sizeProblem && sizeNum !== (b.size ?? null) && onEdit({ size: sizeNum })} />
             <span className="muted nf-why">{sizeProblem ?? "The process's size field (points or effort), if the type has one"}</span>
           </span>
-          <span className="mtg-q" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && JSON.stringify(answers) !== JSON.stringify(b.answers ?? NO_ANSWERS) && onEdit({ answers })}>
-            <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`mtg-q-${id}`} layout="stack" />
-          </span>
+          {/* RQ-1: story level only; each question beside its label in the row's width, as Description is. */}
+          {storyLevel && (
+            <span className="mtg-q" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && JSON.stringify(answers) !== JSON.stringify(b.answers ?? NO_ANSWERS) && onEdit({ answers })}>
+              <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`mtg-q-${id}`} layout="grid" />
+            </span>
+          )}
         </div>
       )}
     </div>
