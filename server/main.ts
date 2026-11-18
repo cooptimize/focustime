@@ -88,7 +88,8 @@ import { localToday } from "../week/dates.ts";
 import { recordUse } from "../actions/vm-autostart.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps } from "../actions/request-poll.ts";
-import { requestContext, aiFor, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
+import { dispatch, audienceRulesOf } from "../actions/dispatch.ts";
+import { meetingJobPerson, pollJobPerson } from "./job-people.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
 import { createTeamsRhythmStore } from "../store/teams-rhythm-store.ts";
@@ -431,12 +432,7 @@ const pollDeps: PollDeps = {
   person: async (uid) => {
     const user = await accounts.users.get(uid);
     if (!user || user.deletedAt) return null;
-    const ctx = await runtimeFor(uid);
-    const loaded = await ctx.loadConfig();
-    const config = loaded.parsed.ok ? loaded.parsed.config : null;
-    const account = config && ctx.account ? ctx.account(config) : null;
-    const rc = await requestContext(ctx);
-    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), pipelineAi: () => aiFor(ctx, { cap: "app" }), plan: ctx.plan ?? null, openItems: rc.openItems, ...(rc.boundary ? { boundary: rc.boundary } : {}) };
+    return pollJobPerson(user.displayName || user.upn, await runtimeFor(uid));
   },
   homeTenant: async () => app.entra?.tenantId ?? null,
   // GD-2: a chat's audience from its members, by the people rule (guests, automation accounts, other domains).
@@ -1357,7 +1353,7 @@ const meetings = meetingJob({
   now: instantNow,
   log,
   users: meetingUsers,
-  person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingPerson(await runtimeFor(uid)) : null),
+  person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingJobPerson(await runtimeFor(uid)) : null),
 });
 const ownershipBackfill = ownershipBackfillJob({ db, convs: conversations, teams, homeTenant: async () => app.entra?.tenantId ?? null, now: instantNow, log });
 const scheduler = createScheduler({

@@ -781,6 +781,22 @@ export function withSignedIn(ctx: ActionContext): ActionContext {
   };
 }
 
+/** ID-1: the contexts `signedContext` made, so applying it again changes nothing. */
+const SIGNED = new WeakSet<ActionContext>();
+
+/**
+ * ID-1: the one way a request or a job knows who the person is. The person's clients only (ADM-2's onlyClients) and
+ * config's "me" and Dataverse user from their sign-in (withSignedIn): what the dispatcher gives every action. Every
+ * route and job under server/ that reaches a person's actions without `dispatch` takes its context from here
+ * (server/identity-guard.test.ts). Applying it twice gives back the same context.
+ */
+export function signedContext(ctx: ActionContext): ActionContext {
+  if (SIGNED.has(ctx)) return ctx;
+  const signed = withSignedIn(onlyClients(ctx));
+  SIGNED.add(signed);
+  return signed;
+}
+
 /** Step 16.3: Teams presence (my status during focus, teammates' presence). */
 export async function presenceContext(ctx: ActionContext): Promise<PresenceContext> {
   return {
@@ -1744,9 +1760,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
   // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
   // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
   // ADM-2: clients only, everywhere a person's clients are listed (actions/client-accounts.ts).
-  ctx = onlyClients(ctx);
-  const raw = ctx;
-  if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
+  // ID-1: the same one function every route and job outside the dispatcher uses (signedContext).
+  const raw = onlyClients(ctx);
+  ctx = action !== "settings.load" && action !== "settings.save" ? signedContext(ctx) : raw;
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
     case "demo.reset": {
