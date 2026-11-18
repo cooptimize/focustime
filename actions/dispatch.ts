@@ -3,7 +3,7 @@
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
-import { afterHours } from "../plan/deploy.ts";
+import { afterHours, windowHalf } from "../plan/deploy.ts";
 import { deployItemAction, type DeployItemAction } from "./deploy-item-actions.ts";
 import { sharedDeployAction, type PeopleResolver, type SharedDeployAction } from "./shared-deploy-actions.ts";
 import { pickNeed } from "../plan/types.ts";
@@ -580,6 +580,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const unavailable = (await ctx.plan?.unavailableBetween(weekStart, sunday)) ?? [];
   const flex = (await ctx.plan?.flexBetween(weekStart, sunday)) ?? [];
+  // DP-3: a deployment someone else made or moved sits in my own AM, PM or evening, by my own hours.
+  await ctx.plan?.deployPlaceHalves(weekStart, sunday, (d, w) => windowHalf(hoursOn(model, d), w));
   const weekendPicks = (await ctx.plan?.picksBetween(weekDates7(weekStart)[5]!, sunday)) ?? [];
   // WK-3: a weekend day shows when something lands on it: a to-do (a Deployment too), a timebox, a promise due (one
   // I added or one from a chat), or always with Show weekend on. Calendar events count inside buildWeek.
@@ -663,6 +665,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     weekStart,
     week,
     afterHours: after,
+    leftHolds: (await ctx.plan?.deployLeftHolds()) ?? [],
     today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
     plan: weekPlans,
     planClients,

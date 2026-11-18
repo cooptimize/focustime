@@ -2257,6 +2257,31 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     deployNotes: (since: string) => shared.notes(since),
     /** Who I am on a shared deployment. */
     deployPerson: () => personId,
+    /** DP-3: my holds left on my Outlook for deployments I'm no longer on: removed here, their event still live. */
+    async deployLeftHolds(): Promise<{ uid: string; title: string; date: IsoDate }[]> {
+      const rows = (await db.all("SELECT * FROM timeboxes WHERE removed_at IS NOT NULL AND outlook_note = ?", LEFT_NOTE)) as Row[];
+      const out: { uid: string; title: string; date: IsoDate }[] = [];
+      for (const t of rows.map(toTimebox)) {
+        const own = await ownEventOf(t.uid);
+        if (own && !own.deletedAt) out.push({ uid: t.uid, title: t.title, date: t.date });
+      }
+      return out;
+    },
+    /**
+     * DP-3: a shared deployment's half on my own days (my working hours decide AM, PM or the evening), for the ones my
+     * session placed with a guess (made or moved by someone else). Only my own to-dos.
+     */
+    async deployPlaceHalves(from: IsoDate, to: IsoDate, halfOf: (date: IsoDate, w: TodoWindow) => Half): Promise<number> {
+      await refresh();
+      const rows = await db.all(`SELECT id, date, half, window_start, window_end FROM picks WHERE deployment_id IS NOT NULL AND status <> 'dropped' AND date >= ? AND date <= ?`, from, to);
+      let n = 0;
+      for (const r of rows) {
+        if (!r.window_start || !r.window_end) continue;
+        const h = halfOf(r.date as IsoDate, { start: r.window_start as string, end: r.window_end as string });
+        if (h !== r.half) n += (await db.run("UPDATE picks SET half = ?, updated_at = ? WHERE id = ?", h, stamp(), r.id as number), 1);
+      }
+      return n;
+    },
     async setDone(id: number, done: boolean): Promise<Pick> {
       return tx(async () => {
         const p = (await mustPick(id));

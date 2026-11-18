@@ -143,7 +143,7 @@ Kept elsewhere:
 
 ## Export
 
-Settings › Your data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 42, `store/user-data.ts`), without their user id. Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
+Settings › Your data › Export my data gives a person every user table's rows as JSON (`focustime-export-1`, schema version 43, `store/user-data.ts`), without their user id, and the deployments they are on (DP-3: who is on each by name, never anyone's Outlook state). Not in Export: `user_secrets`, `push_devices`, the Teams bot's four tables, `calendar_links` and `calendar_link_events` (`NOT_EXPORTED`). `focustime import` loads an export of version 26 or later.
 
 ## What is never stored
 
