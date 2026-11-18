@@ -22,7 +22,7 @@ export const SECTIONS = [
   { id: "assistant", name: "The assistant", group: "more" },
   { id: "ask", name: "Ask", group: "more" },
   { id: "teams", name: "FocusTime in Teams", group: "more" },
-  { id: "calls", name: "Client calls", group: "more" },
+  { id: "calls", name: "Calls", group: "more" },
   { id: "settings", name: "Settings, phone and keys", group: "more" },
   { id: "renamed", name: "Renamed", group: "more" },
 ] as const;

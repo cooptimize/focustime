@@ -274,7 +274,7 @@ function AddCall({ clients, today, onCancel, onAdded }: { clients: CaptureClient
             {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{lengthLabel(m)}</option>)}
           </select>
         </label>
-        <label>{CALLS_TEXT.addClient}<ClientPick id="mtg-add-client" clients={clients} value={client} suggested={null} onChange={setClient} /></label>
+        <span className="mtg-add-field"><label htmlFor="mtg-add-client">{CALLS_TEXT.addClient}</label><ClientPick id="mtg-add-client" clients={clients} value={client} suggested={null} onChange={setClient} /></span>
       </div>
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">

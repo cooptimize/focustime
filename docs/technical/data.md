@@ -86,7 +86,7 @@ WP-1's hidden working page wrote these; RM-1 removed the page and its code, and 
 | `chat_calls` | App | Yes | Calls in registered chats, from their started and ended events: the call id, start and end, who started it (a user id and tenant). Never the participants or anything said |
 | `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `conversation_events` | App | Yes | Conversations, their summaries, commitments, drafted suggestions, merges and history. Since RM-1 nothing merges, claims, gives, adds a helper, releases or closes out by hand; the rows are kept, read and still followed (a merged one leads to where it went), and Not work-related and a new message still close and reopen. `conversations.item_needed_json` is the sorting step's judgment that one needs a DevOps item (why, a title, a level) |
 | `requests` | App | Yes | Messages the chat rules picked out as requests; read for the urgent request notice |
-| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) and, since PK-1, whether its transcript is a Pocket export (`transcript_kind`) |
+| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) and, since PK-1, whether its transcript is a Pocket export (`transcript_kind`); since MC-2 also the calls a Cooptimizer on them asked to review (`meeting_series.call_kind`: calendar or hand, null for a registered call; the presser its one reviewer, the Cooptimizers on the invite its attendees, a hand-added call no one else) and a call's summary of at most 5 lines beside its transcript (`meeting_transcripts.summary_json`) |
 
 ### Admin and team
 
@@ -125,7 +125,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `devops_takes`, `devops_notes`, `devops_edit_notes` | 14 days |
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
-| `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
+| `meeting_transcripts` | 30 days (MC-2: the summary with it); the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
 | `code_views` | 12 months |
 | `job_claims` | 30 days |
 | `admin_audit` | No age limit (not in the purge) |
@@ -163,7 +163,7 @@ Settings › Your data › Export my data gives a person every user table's rows
 
 - **A person** sees their own plan: every user table, through `store/scope.ts`, and all of it in Export.
 - **Chat messages, conversations and commitments** show only to FocusTime users who are members of that chat now and follow its client (`viewer(userId)` in the store; following alone is never enough), and never outside that client's views. A person sees them as From chats' suggestions (with their messages) and their own promises; the rest stays stored and unshown.
-- **Meeting transcripts and proposals** show only to the call's reviewers and attendees (`store/meeting-store.ts`).
+- **Meeting transcripts and proposals** show only to the call's reviewers and attendees (`store/meeting-store.ts`). For a call that isn't registered (MC-2): the presser and the Cooptimizers on the invite see it and only the presser acts; a hand-added call is its adder's only. Your other calls (the calendar list) are never stored.
 - **Team views** (sends, priorities, the status report's committed features) show a snapshot to people on the same client: no hours, to-dos, notes or focus.
 - **Admins** set team values and see health and counts. They never see anyone's plan, to-dos, promises, captures, focus sessions, PATs, AI request text, assistant history or chats they aren't in. Details in [Security](security.md#admins-guests-and-automation-accounts).
 - **Code** shows any client's code to every Cooptimizer, except a client an admin set to its team only; Code views shows admins who opened what, never the code.

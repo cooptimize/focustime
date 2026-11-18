@@ -1562,3 +1562,14 @@ From the IT review (TD-1):
 - **Where a noted promise lives** (consultant review): "Noted with this call" goes to the reviewer's Waiting on from "Someone on the call" and folds into the call's done count; the row doesn't say so. Should its words say "in Waiting on"?
 - **The two questions look different** (consultant review): replacing a transcript asks with the browser's dialog, the recording's date in the page. See the question above about the replace confirm.
 - **Uploads not limited per person.** PDFs are read 2 at a time server-wide with 8 waiting; one reviewer uploading many could make others wait. Enough for a team, worth watching.
+
+## MC-2: Calls, review any call you were on (Nov 17)
+
+- **What needs the real tenant.** A non-organizer's read: the docs say an attendee on the invite can read `onlineMeetings` by join link and its transcripts with the permissions FocusTime has, but only the demo and tests have shown it. The product owner will press Get it from Teams on a call someone else organized. If it refuses, the words already point to the upload.
+- **A call about two clients.** One client per call (as decided). A call that covers two would need two reviews or a split transcript; for now the person picks the main one, and the other client's names are kept out of the summary and proposals.
+- **Should other invitees confirm?** Only the presser acts; the Cooptimizers on the invite look. A second presser gets the same call as a viewer, not their own. Should the presser be able to hand it over, or anyone on it take it over (like a conversation)?
+- **Should a hand-added call be shareable?** It is its adder's only, and can't be removed from the list. Adding people to it (by name, from the client's Cooptimizers) would let a teammates' huddle be reviewed together.
+- **Is 14 days right?** Long enough for a week back plus a weekend; a call older than that can still be added by hand only within the same 14 days. Transcripts in Teams last longer.
+- **Removing a call.** A call once reviewed stays in Calls (its proposals and results are kept like a client call's). There's no Remove; a reviewed call nobody needs just sits as Reviewed.
+- **The notification group.** Settings › Notifications still says "Client calls to review" and a call that isn't registered never notifies (it is reviewed on the press). Should calls left half reviewed nudge their presser?
+- **What the next two steps need.** Pocket recordings in Calls: the Pocket connection (PK-2) can list recordings by day and length, so matching one to a call in Your other calls by start and length would let the upload pick it. Calls noticed in chats: the co-working calls (`chat_calls`) give a call's start and length but no transcript or invite; those would come in as a hand-added call with its start filled in.
