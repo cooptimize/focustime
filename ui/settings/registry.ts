@@ -237,6 +237,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "chats-read", section: "clients", label: "Client chats FocusTime reads", old: ["Client chats read for requests"], group: "Chats FocusTime reads", kind: "status", keywords: ["polling", "reconnect"] },
   // Connections (SA-3: was Accounts and calendars, with DevOps)
   { id: "sources", section: "connections", label: "Microsoft and Outlook", old: ["Sources"], group: "Microsoft and Outlook", kind: "status", keywords: ["dataverse", "outlook", "google", "calendar", "connect", "reconnect", "disconnect", "retry", "pto"] },
+  { id: "google", section: "connections", label: "Google", group: "Google", kind: "status", keywords: ["google calendar", "personal", "connect google"] },
   { id: "outlook-changes", section: "connections", label: "Outlook calendar changes", group: "Outlook calendar changes", kind: "status", keywords: ["calendars.readwrite", "write"] },
   { id: "permissions", section: "connections", label: "Microsoft permissions", group: "Microsoft and Outlook", kind: "status", keywords: ["consent", "scopes", "chat.read"] },
   { id: "calendar-links", section: "connections", label: "Calendars added by link", old: ["Add a calendar by link"], group: "Calendars added by link", kind: "list", keywords: ["ics", "ical", "webcal", "subscribe", "icloud", "apple", "school", "busy only", "replace link"] },

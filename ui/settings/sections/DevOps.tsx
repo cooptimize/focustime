@@ -1,24 +1,33 @@
-// SA-2: Settings › DevOps, drawn with the parts. A write PAT keeps its Check and save: it must be checked first
-// (whose PAT it is), and it is never shown again once saved.
+// SA-3: Connections › DevOps (was its own section): each client's read state, my write access per client, Find an
+// item. A write PAT keeps its Check and save: it must be checked first (whose PAT it is), and it is never shown again
+// once saved.
 import { useRef, useState } from "react";
 import type { SettingsData } from "../../../actions/types.ts";
 import type { FindAnswer } from "../../../plan/devops-fresh-types.ts";
 import type { ClientWork } from "../../../week/types.ts";
 import { call } from "../../api.ts";
 import { shortDate } from "../../labels.ts";
-import { Button, Buttons, DateInput, Form, Group, Note, Page, Result, Row, Secret, Select, State, StatusItem, StatusList, Sub, Text } from "../parts.tsx";
+import { Button, Buttons, DateInput, Fold, Form, Group, Note, Result, Row, Secret, Select, State, StatusItem, StatusList, Sub, Subhead, Text } from "../parts.tsx";
 import type { BodyProps } from "./types.ts";
 
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
-/** ST-1: DevOps: each client's read status (from the week's fetch) and my own write access per client. */
-export function DevOpsSection(p: BodyProps) {
+/** SA-3: the DevOps card: a state line, Retry, each client's read state; write access and Find an item under More. */
+export function DevOpsCard(p: BodyProps) {
   const d = p.data;
   const withDevOps = d.clients.filter((c) => c.devops);
+  const read = p.devops ?? [];
+  const live = read.filter((c) => c.status === "ok").length;
+  const writes = withDevOps.filter((c) => c.write).length;
   return (
-    <Page>
-      <Group sid="devops-read">
-        <Row id="devops-read" noSid wide help="FocusTime reads with the company PAT from Dataverse, only when fetching; it is never shown.">
+    <Group title="DevOps" intro="Your clients' work items: read for everyone with the company PAT from Dataverse; written only with your own PAT, per client.">
+      <Buttons>
+        <State tone={read.length && live === read.length ? "live" : read.length ? "error" : "muted"}>{read.length ? `${live} of ${read.length} clients read · writes on for ${writes}` : "No DevOps yet"}</State>
+        <Button disabled={p.loading} onClick={p.onRefresh}>
+          {p.loading ? "Retrying…" : "Retry"}
+        </Button>
+      </Buttons>
+        <Row id="devops-read" wide help="FocusTime reads with the company PAT from Dataverse, only when fetching; it is never shown.">
           {p.devops && p.devops.length > 0 ? (
             <StatusList>
               {p.devops.map((c) => {
@@ -44,15 +53,13 @@ export function DevOpsSection(p: BodyProps) {
             <Note>No DevOps yet. It comes from each followed client's record in Dataverse.</Note>
           )}
         </Row>
-      </Group>
-      <Group sid="devops-write">
-        <Row id="devops-write" noSid help="Your own PAT per client, with Work Items (Read & write)." more="FocusTime checks it is yours, keeps it sealed and never shows it again." />
+      <Fold label="More">
+        <Subhead sid="devops-write">DevOps write access</Subhead>
+        <Note>Your own PAT per client, with Work Items (Read & write). FocusTime checks it is yours, keeps it sealed and never shows it again.</Note>
         {withDevOps.length === 0 ? <Note>No client has DevOps set up in Dataverse.</Note> : withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)}
-      </Group>
-      <Group sid="find-item">
         <FindItem clients={withDevOps.map((c) => ({ key: c.key, name: c.setting.name ?? c.dataverseName ?? c.key }))} />
-      </Group>
-    </Page>
+      </Fold>
+    </Group>
   );
 }
 
@@ -151,7 +158,7 @@ function FindItem({ clients }: { clients: { key: string; name: string }[] }) {
   const [error, setError] = useState<string | null>(null);
   const help = "Why an item isn't showing: whether FocusTime's last check of DevOps found it, the scope, and where it shows.";
   const more = "It answers from what FocusTime already read; Refresh checks DevOps now.";
-  if (!clients.length) return <Row id="find-item" noSid help={help} more={more} below={<Note>No client has DevOps set up for you yet.</Note>} />;
+  if (!clients.length) return <Row id="find-item" help={help} more={more} below={<Note>No client has DevOps set up for you yet.</Note>} />;
   const submit = async () => {
     const n = id.trim().replace(/^#/, "");
     if (!/^\d{1,9}$/.test(n)) return setError("Type an item number, like 4417");
@@ -169,7 +176,6 @@ function FindItem({ clients }: { clients: { key: string; name: string }[] }) {
   return (
     <Row
       id="find-item"
-      noSid
       wide
       help={help}
       more={more}
