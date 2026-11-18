@@ -2,19 +2,14 @@
 // account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
-import { AzureWriteLog, LoopSendsLog, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
+import { AzureWriteLog, LoopSendsLog, TeamsStatusLog } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
-import { MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
-import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
-import { CalendarLinks } from "./settings/CalendarLinks.tsx";
-import { PocketRecorder } from "./settings/Pocket.tsx";
-import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -23,7 +18,6 @@ import { Lockup } from "./brand/Brand.tsx";
 import { usePhone } from "./viewport.ts";
 import { PhoneReadOnly } from "./Phone.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
-import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { siteLine, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
@@ -40,6 +34,7 @@ import { BacklogSection } from "./settings/sections/Backlog.tsx";
 import { ChatsSection } from "./settings/sections/Chats.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
 import { DevOpsSection } from "./settings/sections/DevOps.tsx";
+import { ConnectionsSection } from "./settings/sections/Connections.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -322,7 +317,7 @@ function SectionBody(p: BodyProps) {
         </>
       );
     case "connections":
-      return <Connections {...p} />;
+      return <ConnectionsSection {...p} />;
     case "devops":
       return <DevOpsSection {...p} />;
     case "display":
@@ -388,18 +383,6 @@ function AutoField<V>({ a, k, label, hint, children, sid }: { a: AutoSave<V>; k:
 
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
-type TeamsStatus = { available: boolean; chat: boolean; blocked: boolean };
-
-/** TB-2: whether FocusTime can reach me in Teams: the hosted app only, after my first message, unless Teams refused it. */
-function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
-  const [st, setSt] = useState<TeamsStatus | null>(null);
-  useEffect(() => void call<TeamsStatus>("teams.status", {}).then(setSt, () => setSt(null)), []);
-  if (!st) return always ? <p className="muted">Checking…</p> : null;
-  if (!st.available) return <p className="muted">FocusTime in Teams runs in the hosted app. Here it can't send anything.</p>;
-  if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
-  if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
-  return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
-}
 
 type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
 
@@ -506,75 +489,6 @@ function AiForm(p: FormProps) {
 /** Names for the task names the log keeps. */
 const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI", "asks.classify": "Sort an ask", "promises.extract": "Read a promise", "stories.draft": "Break down", "meeting.capture": "Read a client call" };
 const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
-
-function Connections(p: BodyProps) {
-  return (
-    <div className="set-form">
-      <Group title="Sources" sid="sources">
-      <ul className="set-list sources">
-        {p.sources.map((s) => {
-          const st = stateOf(s);
-          const acts = sourceActions(s);
-          const cal = s.source === "outlook" || s.source === "google" ? s.source : null;
-          return (
-            <li key={sourceKey(s)} className={`source ${st.cls}`}>
-              <span className="dot" aria-hidden="true" />
-              <strong>{sourceLabel(s)}</strong>
-              <span className={`state ${st.cls}`}>{st.label}</span>
-              <span className="muted">{s.message ?? (s.sample || notConnected(s) ? "" : `${s.itemCount} ${s.itemCount === 1 ? "item" : "items"}`)}</span>
-              <span className="row-actions">
-                <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
-                  {p.loading ? "Retrying…" : "Retry"}
-                </button>
-                {cal && (acts.includes("connect") || acts.includes("reconnect")) && (
-                  <button type="button" className="mini primary" disabled={p.busy !== null} onClick={() => p.onConnect(cal)}>
-                    {p.busy === cal ? "Waiting for sign-in…" : acts.includes("connect") ? "Connect" : "Reconnect"}
-                  </button>
-                )}
-                {cal && acts.includes("disconnect") && (
-                  <button type="button" className="mini quiet" disabled={p.busy !== null} onClick={() => p.onDisconnect(cal)}>
-                    Disconnect
-                  </button>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {p.reconnected && (
-        <p className="reconnect-line" role="status">
-          {SOURCE_NAMES[p.reconnected]} is connected again.
-        </p>
-      )}
-      </Group>
-      <Group title="Calendars added by link" sid="calendar-links">
-        <CalendarLinks timeZone={Temporal.Now.timeZoneId()} onChanged={p.onRefresh} />
-      </Group>
-      <Group title={POCKET_WORDS.title} sid="pocket">
-        <PocketRecorder timeZone={Temporal.Now.timeZoneId()} />
-      </Group>
-      <div data-setting="outlook-changes"><OutlookWriteRow /></div>
-      <div data-setting="permissions"><MicrosoftPermissions /></div>
-      <Group title="My VM">
-        <YouAccount part="vm" />
-        <VmStartForm />
-      </Group>
-      <Group title="FocusTime in Teams" sid="teams-app">
-        <TeamsStatusLine always />
-        <p className="set-fix">
-          <a href={settingsHref("notifications", "teams-messages")} onClick={(e) => (e.preventDefault(), p.go("notifications", "teams-messages"))}>
-            What FocusTime may send you in Teams
-          </a>
-          {" · "}
-          <a href={settingsHref("focus", "teams-status")} onClick={(e) => (e.preventDefault(), p.go("focus", "teams-status"))}>
-            Your Teams status while you focus
-          </a>
-        </p>
-      </Group>
-      <div data-setting="feedback"><FeedbackRow go={p.go} /></div>
-    </div>
-  );
-}
 
 /** EV-1: which site this is, in a word, and its address ("Site: Dev · focustime-dev.example.com"); nothing until /version answers, nothing when it fails. */
 function SiteLine() {
@@ -817,52 +731,6 @@ function DemoPerson() {
 }
 
 /** F1, FB-1: Send feedback's setup for me: my own write PAT for the feedback project's client, and the parent there. */
-function FeedbackRow({ go }: { go: (section: string, setting?: string | null) => void }) {
-  const [st, setSt] = useState<FeedbackStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const load = (fresh: boolean) => call<FeedbackStatus>("feedback.status", fresh ? { fresh: true } : {}).then((r) => (setSt(r), setError(null)), (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check"));
-  useEffect(() => void load(false), []);
-  return (
-    <div className="set-write feedback-setup">
-      <h3>Send feedback</h3>
-      <p>{error ?? (st ? st.line : "Checking…")}</p>
-      {st?.setup.state === "no_pat" && (
-        <a className="mini primary" href={WRITES_HREF} onClick={(e) => (e.preventDefault(), go("devops", "devops-write"))}>
-          Turn on DevOps writes
-        </a>
-      )}
-      {st && (
-        <button type="button" className="mini" onClick={() => void load(true)}>
-          Check again
-        </button>
-      )}
-      <p className="set-hint">{st ? `${st.destination}. ${st.sentToday} of ${st.limit} sent today.` : ""}</p>
-    </div>
-  );
-}
-
-/** Settings > Connections (step 12): whether FocusTime may change its own Outlook events, and how to allow it. */
-function OutlookWriteRow() {
-  const env = useTimeboxes();
-  useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!env) return null;
-  const a = env.access;
-  return (
-    <div className="set-write">
-      <h3>Outlook calendar changes</h3>
-      <p>
-        {!a ? "Checking…" : a.access === "write" ? "Allowed: FocusTime can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event." : a.message}
-      </p>
-      {a && a.access !== "write" && a.access !== "not_set_up" && (
-        <button type="button" className="mini primary" onClick={env.connectWrite}>
-          Reconnect Outlook with calendar changes
-        </button>
-      )}
-      <p className="set-hint">Asks for Calendars.ReadWrite only when you reconnect here.</p>
-    </div>
-  );
-}
-
 const OPS: Record<WriteEntry["op"], string> = { create: "Created", update: "Changed", delete: "Removed" };
 const KINDS: Record<WriteEntry["kind"], string | null> = { timebox: null, event: "Your event", invite: "Help invite", sync: "From Outlook", rsvp: "Response" };
 const STATUS: Record<WriteEntry["status"], string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
