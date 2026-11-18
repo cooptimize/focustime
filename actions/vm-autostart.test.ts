@@ -374,6 +374,27 @@ describe("from the review", () => {
   });
 });
 
+describe("VM-5: a Stop before the day", () => {
+  async function stopAt(w: Awaited<ReturnType<ReturnType<typeof world>["init"]>>, extra: Record<string, unknown> = {}) {
+    w.arm.vms.get(VM.toLowerCase())!.power = "running";
+    const p = await vmAction(w.vm(), "vm.preview", { op: "deallocate" });
+    expect(p.ok).toBe(true);
+    const c = await vmAction(w.vm(), "vm.confirm", { previewId: (p as { data: { previewId: string } }).data.previewId, ...extra });
+    expect(c.ok).toBe(true);
+    await settled();
+    return c;
+  }
+
+  it("Nov 18: a Stop confirmed at 2:51 AM leaves the day's start alone; the VM is started at the planned time", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt("02:51") }).init();
+    await stopAt(w);
+    w.clock.set(nyAt(minus(ws, 5)));
+    expect(await autoStartTick(w.deps("prod"))).toBe("started");
+    expect(w.starts()).toBe(1);
+  });
+});
+
 describe("the status's auto-start part", () => {
   it("outside production: the form's line says so and the chip's menu gets no time", async () => {
     const w = await world({ start: nyAt("06:00") }).init();
