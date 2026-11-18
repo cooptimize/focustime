@@ -19,6 +19,8 @@ describe.skipIf(!CHROMIUM)("PTO on Week, and About (S1)", () => {
     // WD-1: Plan the week's grid is gone; the old address opens Week with Add work on that week.
     await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
     await page.locator("aside.block-panel").waitFor({ timeout: 30_000 });
+    // The week of Nov 9 is drawn (not this week, whose Thursday is the demo's holiday) before its Thursday is read.
+    await page.locator('section.day [data-drop^="2026-11-12:"]').first().waitFor({ timeout: 30_000 });
     const thu = page.locator("section.day").nth(3);
     // One cell over both halves, no + Add on it.
     await expect(thu.locator(".half.whole.pto").count()).resolves.toBe(1);
