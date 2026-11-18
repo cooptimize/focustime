@@ -10,7 +10,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
-import type { RequestChatStatus, RequestsData } from "../../plan/asks.ts";
+import type { RequestChatStatus } from "../../plan/asks.ts";
 
 /** The chat add waiting for the Chat.Read consent to come back (this tab only): "<clientKey> <chatId>". */
 const CONSENT_KEY = "focustime.chatAddConsent";
@@ -381,31 +381,5 @@ export function MicrosoftPermissions() {
       )}
       <button type="button" className="mini perms-again" onClick={load}>Check again</button>
     </>
-  );
-}
-
-/** Settings > Connections: one line per client chat I see, with how it's read or its problem. One failing chat never hides the others. */
-export function AsksConnections() {
-  const [d, setD] = useState<RequestsData | null>(null);
-  useEffect(() => {
-    let live = true;
-    void call<RequestsData>("requests.list", {}).then((x) => live && setD(x), () => undefined);
-    return () => void (live = false);
-  }, []);
-  if (!d || !d.chats.length) return null;
-  return (
-    <section className="set-asks-conn" aria-label="Client chats FocusTime reads">
-      <h3>Client chats FocusTime reads</h3>
-      <ul className="set-sources">
-        {d.chats.map((c) => {
-          const problem = c.state === "reconnect" || c.state === "retry";
-          return (
-            <li key={c.chatId} className={problem ? "problem" : ""}>
-              <strong>{c.clientName}</strong> · {c.chatName} <span className={problem ? "field-problem" : "muted"}>{pollText(c, null)}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }

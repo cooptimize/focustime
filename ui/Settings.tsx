@@ -8,7 +8,7 @@ import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
-import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
+import { DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
@@ -42,6 +42,8 @@ import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
 import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
 import { FocusSection } from "./settings/sections/Focus.tsx";
+import { BacklogSection } from "./settings/sections/Backlog.tsx";
+import { ChatsSection } from "./settings/sections/Chats.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -307,7 +309,7 @@ function SectionBody(p: BodyProps) {
     case "notifications":
       return <NotificationsSection {...p} />;
     case "ahead":
-      return <RoadmapForm {...p} />;
+      return <BacklogSection {...p} />;
     case "clients":
       return <ClientList {...p} />;
     case "client":
@@ -317,14 +319,7 @@ function SectionBody(p: BodyProps) {
         </DeliveryChatsProvider>
       ) : <p className="muted">This client isn't one of yours. <a href={settingsHref("clients")} onClick={(e) => (e.preventDefault(), p.go("clients"))}>See your clients</a>.</p>;
     case "chats":
-      return (
-        <DeliveryChatsProvider>
-          <AsksForm {...p} />
-          <div data-setting="chats-read">
-            <AsksConnections />
-          </div>
-        </DeliveryChatsProvider>
-      );
+      return <ChatsSection {...p} />;
     case "ai":
       return (
         <>
@@ -444,68 +439,6 @@ function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: s
 function FollowGraceForm(p: FormProps) {
   const a = usePlan(p, ["followGraceDays"] as const);
   return <div className="set-grid">{numField(a, "followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after their focus time ends.", 1, 90)}</div>;
-}
-
-/** Settings > Backlog (was Ahead, was Roadmap; step 17, BL-1): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */
-function RoadmapForm(p: FormProps) {
-  const r = p.data.roadmap;
-  const a = useAutoSave({ section: "roadmap", initial: { stalledDays: r.stalledDays, watchWeeks: r.watchWeeks }, payload: (v) => v, onSaved: p.onSavedData, label: (k) => (k === "stalledDays" ? "Stalled after" : "Watch within") });
-  const b = useAutoSave({ section: "ahead", initial: { staleWeeks: p.data.ahead?.staleWeeks ?? 6 }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Stale after" });
-  return (
-    <div className="set-form">
-      <div className="set-grid">
-        <AutoField a={b} k="staleWeeks" label="Stale after (weeks)" hint="Open items with no change in DevOps for this long. 1 to 26.">
-          <input type="number" min={1} max={26} step={1} value={b.v.staleWeeks} onChange={(e) => b.set("staleWeeks", Math.round(Number(e.target.value)))} {...b.text("staleWeeks")} />
-        </AutoField>
-        <AutoField a={a} k="stalledDays" label="Stalled after (days)" hint="Days with no story change. 3 to 60.">
-          <input type="number" min={3} max={60} step={1} value={a.v.stalledDays} onChange={(e) => a.set("stalledDays", Math.round(Number(e.target.value)))} {...a.text("stalledDays")} />
-        </AutoField>
-        <AutoField a={a} k="watchWeeks" label="Watch within (weeks)" hint="Forecast this close to the target. 0 to 4; 0 is never.">
-          <input type="number" min={0} max={4} step={1} value={a.v.watchWeeks} onChange={(e) => a.set("watchWeeks", Math.round(Number(e.target.value)))} {...a.text("watchWeeks")} />
-        </AutoField>
-      </div>
-    </div>
-  );
-}
-
-/** The phrases the Requests rules use (the chats are read every 5 minutes for everyone, D514). Commas between phrases. */
-const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
-function AsksForm(p: FormProps) {
-  const s = p.data.asks;
-  // ADM-1: the team's lists are a Default an admin sets; a person adds their own on top and never removes the team's.
-  const team = p.data.org?.phrases.team ?? null;
-  const a = useAutoSave({
-    section: "asks",
-    initial: { requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
-    payload: (v) => ({ requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
-    onSaved: p.onSavedData,
-    label: (k) => (k === "requestPhrases" ? "Asking phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
-  });
-  return (
-    <Group title="Phrases">
-      <p className="muted set-intro">
-        Each client chat registered below is read every {p.data.org?.rules.pollMinutes ?? 5} minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize is checked for what it asks when it mentions a Cooptimizer, has a question mark, uses an asking phrase, or has an attachment; one that is only an acknowledgement is never checked. An urgent one can bring an Urgent request notice. The asking phrases used are the team's plus those of the person whose sign-in read the chat. Your own messages with one of the promise phrases become your promises. When a FocusTime admin allows AI for a client, AI sorts these; otherwise the rules alone decide.
-      </p>
-      {team && (
-        <div className="set-grid" data-setting="team-phrases">
-          <ReadOnly label="Team asking phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
-          <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={ADMIN} />
-          <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={ADMIN} />
-        </div>
-      )}
-      <div className="set-grid">
-        <AutoField a={a} k="requestPhrases" label={team ? "My asking phrases" : "Asking phrases"} hint={team ? "Added on top of the team's. Commas between them." : "Commas between them. Whole words, any case."}>
-          <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
-        </AutoField>
-        <AutoField a={a} k="ackPhrases" label={team ? "My acknowledgements" : "Acknowledgements"} hint="A message that is only these (and emoji) is never checked.">
-          <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
-        </AutoField>
-        <AutoField a={a} k="promisePhrases" label={team ? "My promise phrases" : "Promise phrases"} hint="In your own messages: commas between them. Inbox › Promises.">
-          <input type="text" value={a.v.promisePhrases} onChange={(e) => a.set("promisePhrases", e.target.value)} {...a.text("promisePhrases")} />
-        </AutoField>
-      </div>
-    </Group>
-  );
 }
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */

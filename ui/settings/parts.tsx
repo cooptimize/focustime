@@ -36,12 +36,13 @@ export function Page({ children }: { children: ReactNode }) {
 }
 
 /** A card of rows, with an optional heading and one intro line. `sid` is the group's own registry id, for deep links. */
-export function Group({ title, intro, sid, children, label }: { title?: string | undefined; intro?: ReactNode | undefined; sid?: string | undefined; children: ReactNode; label?: string | undefined }) {
+export function Group({ title, intro, more, sid, children, label }: { more?: ReactNode; title?: string | undefined; intro?: ReactNode | undefined; sid?: string | undefined; children: ReactNode; label?: string | undefined }) {
   const name = title ?? label;
   return (
     <section className="sp-group" data-setting={sid} aria-label={name}>
       {title && <h3 className="sp-group-h">{title}</h3>}
       {intro && <p className="sp-intro">{intro}</p>}
+      {more && <More>{more}</More>}
       {children}
     </section>
   );
