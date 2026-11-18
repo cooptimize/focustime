@@ -490,7 +490,8 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
       .then((r) => {
         setStates(r.states);
         setCurrent(r.state);
-        setState(r.completed ?? r.states[0]?.name ?? "");
+        // A late answer never undoes a state already picked.
+        setState((cur) => cur || (r.completed ?? r.states[0]?.name ?? ""));
       })
       .catch((e: unknown) => setError(errText(e)));
   }, [ask]);

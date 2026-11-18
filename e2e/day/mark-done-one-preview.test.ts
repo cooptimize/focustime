@@ -30,7 +30,10 @@ async function ask(page: Page, state?: string) {
   await page.getByRole("button", { name: "Mark done in DevOps" }).first().click();
   const d = page.getByRole("dialog", { name: /^Mark done in DevOps/ });
   await d.locator("select").waitFor({ timeout: 20_000 });
-  if (state) await d.locator("select").selectOption(state);
+  if (state) {
+    await d.locator("select").selectOption(state);
+    await expect.poll(() => d.locator("select").inputValue()).toBe(state);
+  }
   await d.getByRole("button", { name: "Preview" }).click();
   const p = preview(page);
   await p.waitFor({ timeout: 20_000 });
@@ -44,7 +47,7 @@ describe.skipIf(!CHROMIUM)("OP-1: Mark done in DevOps through the one preview", 
   }, T);
   afterAll(async () => h?.stop());
 
-  it("the state picked is the state set, the follow-up closes, Not now sends nothing", async () => {
+  it("Not now sends nothing; the completed state is set and the follow-up closes", async () => {
     const { page, errors } = await freshPage(h);
     await owed(page);
     const before = (await log(page)).length;
@@ -56,17 +59,24 @@ describe.skipIf(!CHROMIUM)("OP-1: Mark done in DevOps through the one preview", 
     await p.getByRole("button", { name: "Not now" }).click();
     await p.waitFor({ state: "detached" });
     expect((await log(page)).length).toBe(before);
-    p = await ask(page, "Resolved");
-    await expect.poll(() => p.locator(".wd-fields").textContent()).toContain("Resolved");
+    // The client's completed state, picked for me; Confirm sets it and closes the follow-up it carries.
+    p = await ask(page);
+    await expect.poll(() => p.locator(".wd-fields").textContent()).toContain("Closed");
     await p.getByRole("button", { name: "Change state in DevOps" }).click();
     await p.waitFor({ state: "detached", timeout: 30_000 });
     const e = (await log(page))[0]!;
-    expect([e.op, e.itemId, e.status, e.after.State]).toEqual(["state", 4411, "confirmed", "Resolved"]);
+    expect([e.op, e.itemId, e.status, e.after.State]).toEqual(["state", 4411, "confirmed", "Closed"]);
     expect(e.followUpId).not.toBeNull();
-    // The follow-up it carried is closed: Close out no longer lists the item as owed.
-    await go(page, "#/today/closeout");
-    await page.locator(".closeout-panel").waitFor();
-    await expect.poll(() => page.locator(".cp-owed").filter({ hasText: "#4411" }).count(), { timeout: 20_000 }).toBe(0);
+    // Closed in DevOps: Close out no longer lists the item as owed.
+    // DevOps is read again in the background; under load that can take a moment, so look again until it has.
+    await expect
+      .poll(async () => {
+        await go(page, "#/today/closeout");
+        await page.locator(".closeout-panel").waitFor();
+        await page.waitForTimeout(500);
+        return page.locator(".cp-owed").filter({ hasText: "#4411" }).count();
+      }, { timeout: 60_000, interval: 2_000 })
+      .toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -96,12 +106,14 @@ describe.skipIf(!CHROMIUM)("OP-1: Mark done in DevOps through the one preview", 
     await page.close();
   }, T);
 
-  it("Undo from Settings › Activity goes through the same preview", async () => {
+  it("the state I pick is the state set; Undo from Settings › Activity goes through the same preview", async () => {
     const { page } = await freshPage(h);
     await owed(page);
-    const p = await ask(page);
+    const p = await ask(page, "Resolved");
+    await expect.poll(() => p.locator(".wd-fields").textContent()).toContain("Resolved");
     await p.getByRole("button", { name: "Change state in DevOps" }).click();
     await p.waitFor({ state: "detached", timeout: 30_000 });
+    expect((await log(page))[0]!.after.State).toBe("Resolved");
     await go(page, "#/settings/activity");
     await page.locator(".dw-log").getByRole("button", { name: "Undo" }).first().click();
     const u = preview(page);

@@ -127,6 +127,7 @@ describe.skipIf(!CHROMIUM)("OP-1: the same writes reach DevOps (STEP 0.5)", () =
       await r.getByRole("button", { name: "1h", exact: true }).click();
       await r.locator(".tc-said").waitFor();
     }
+    await page.locator(".tc-offer", { hasText: "on 2 stories" }).waitFor({ timeout: 30_000 });
     await page.locator(".tc-offer").getByRole("button", { name: "Review" }).click();
     if (RECORD) {
       // Main's own list with its Confirm.

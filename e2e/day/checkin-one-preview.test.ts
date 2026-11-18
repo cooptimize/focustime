@@ -34,7 +34,8 @@ async function offer(page: Page) {
     await r.getByRole("button", { name: "1h", exact: true }).click();
     await r.locator(".tc-said").waitFor();
   }
-  await page.locator(".tc-offer").waitFor();
+  // Both answers counted before Review (the offer reloads after each).
+  await page.locator(".tc-offer", { hasText: "on 2 stories" }).waitFor({ timeout: 30_000 });
 }
 
 describe.skipIf(!CHROMIUM)("OP-1: the check-in's time to DevOps through the one preview", () => {
