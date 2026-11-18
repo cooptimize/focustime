@@ -213,6 +213,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         {/* UI-B, PS-1: with no rail (the phone, a card too narrow for one), "now" is a marker in the block under way's header. */}
         {compact && !rail && railNow?.at != null && <NowMark label={railNow.label} onClick={railNow.onClick} />}
         {dFolded && <FoldSummary slot={slot} picks={plan.week?.[slot.date]?.picks ?? []} ended={Date.parse(now) >= Date.parse(slot.end)} tabIndex={selected ? 0 : -1} />}
+        {dFolded && lateChip}
         {status.kind !== "none" && !folded && !dFolded && (
           <span className={`status-pill head-chip ${status.kind}`} id={reasonsId} title={chipTip}>
             {pill}

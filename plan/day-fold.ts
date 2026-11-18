@@ -88,8 +88,10 @@ export const writeHandFolds = (today: string, folds: Record<string, boolean>): s
 export function arrivalScroll(m: { top: number; bottom: number; target: number; firstRows: number; now: number | null; blockHead: number }): number {
   const fits = (d: number) => m.target - d >= m.top && m.target - d + m.firstRows <= m.bottom && (m.now === null || (m.now - d >= m.top + m.blockHead && m.now - d <= m.bottom - 24));
   if (fits(0)) return 0;
-  let d = m.target - m.top - 8;
-  // A long block: its header stays at the top as it scrolls by, so the now line can be brought up under it.
-  if (m.now !== null && m.now - d > m.bottom - 24) d = m.now - (m.top + (m.bottom - m.top) * 0.45);
-  return Math.round(d);
+  // As little as it takes (what is above, like Close out's card, stays in view where it can): the block's first lines
+  // and the now line up into view. Past the block's top its header stays under Day's (sticky), so it is still seen.
+  const rows = m.target + m.firstRows - m.bottom;
+  const now = m.now === null ? 0 : m.now - (m.bottom - 24) + 40;
+  const above = m.target - m.top;
+  return Math.round(above < 0 ? above - 8 : Math.max(0, rows, now));
 }

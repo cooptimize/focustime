@@ -64,8 +64,8 @@ describe("DY-1: arrival", () => {
     expect(arrivalScroll({ ...m, target: 300, now: 500 })).toBe(0);
     expect(arrivalScroll({ ...m, target: 300, now: null })).toBe(0);
   });
-  it("brings the block's header to the top when it starts below the screen", () => {
-    expect(arrivalScroll({ ...m, target: 800, now: null })).toBe(800 - 120 - 8);
+  it("scrolls as little as it takes to bring a block below the screen into view", () => {
+    expect(arrivalScroll({ ...m, target: 800, now: null })).toBe(800 + 160 - 720);
   });
   it("in a long block, brings the now line into view under the block's header", () => {
     const d = arrivalScroll({ ...m, target: 746, now: 1113 });
