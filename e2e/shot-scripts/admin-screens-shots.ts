@@ -2,8 +2,8 @@
 // here with the other screenshot scripts: its one check (nothing wider than the phone) runs in CI now, in
 // e2e/admin/admin-phone-width.test.ts. Usage: FOCUSTIME_SHOTS=screenshots/adm2 npm run shots -- e2e/shot-scripts/admin-screens-shots.ts.
 // ADM-2: the screenshots for the report (demo data only), when FOCUSTIME_SHOTS names a folder: Admin › Clients
-// (Customers and All accounts), Admin › AI, Admin › People (the rows, the Not Cooptimizers fold, the mapping table),
-// Admin › Status, the side menu scrolled to the bottom with Admin folded and unfolded, and the phone picker; at
+// (Customers and All accounts), Admin › Team defaults › AI, Admin › People (the rows, the Not Cooptimizers fold, the mapping table),
+// Admin › Health, the side menu scrolled to the bottom with Admin folded and unfolded, and the phone picker; at
 // 1920×1080, 1366×768, Text size Larger and a phone (390×844, a 17px root font as on iPhone).
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -50,16 +50,16 @@ describe.skipIf(!CHROMIUM || !SHOTS)("ADM-2 screenshots", () => {
       await page.waitForTimeout(400);
       await snap("clients-all");
       await openAdmin(page, "AI");
-      await page.locator(".adm-table, table").first().scrollIntoViewIfNeeded().catch(() => {});
+      await page.locator("table").first().scrollIntoViewIfNeeded().catch(() => {});
       await snap("ai");
       await openAdmin(page, "People");
       await page.locator("h3", { hasText: "People" }).scrollIntoViewIfNeeded();
       await snap("people");
-      const fold = page.getByRole("button", { name: /Not Cooptimizers/ });
+      const fold = page.locator(".sp-fold > summary", { hasText: "Not Cooptimizers" });
       await fold.click();
       await fold.scrollIntoViewIfNeeded();
       await snap("people-fold");
-      await page.locator(".adm-positions").scrollIntoViewIfNeeded();
+      await page.getByRole("table", { name: "Positions to levels" }).scrollIntoViewIfNeeded();
       await snap("people-positions");
       await openAdmin(page, "Status");
       await snap("status");

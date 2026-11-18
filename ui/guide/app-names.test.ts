@@ -73,7 +73,8 @@ describe("names", () => {
       expect(retiredIn(now), `${was} → ${now}`).toEqual([]);
     }
     // NM-2 adds three rows (Delivery chats, Admin › Conversations, Request phrases): 9 words over the 260 NM-1 left.
-    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(270);
+    // SA-4 adds two (Admin › Status, Admin › Organization) and lengthens Admin › Conversations' new place: 20 words more.
+    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(290);
   });
 });
 

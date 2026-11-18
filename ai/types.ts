@@ -56,8 +56,8 @@ export class AiError extends Error {
 
 /** Plain words for each kind (no em dashes; never carries the input or the answer). */
 export const AI_MESSAGES: Record<AiErrorKind, string> = {
-  off: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.",
-  client_off: "AI isn't allowed for this client. A FocusTime admin allows it in Admin › AI.",
+  off: "AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI.",
+  client_off: "AI isn't allowed for this client. A FocusTime admin allows it on the client's page in Admin › Clients.",
   not_set_up: "AI isn't set up",
   refused_client: "Not sent: it mentions another client",
   refused_secret: "Not sent: it contains something that looks like a key, token or secret",

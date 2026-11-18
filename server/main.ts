@@ -11,6 +11,7 @@ import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { createPocketClient } from "../sources/pocket/client.ts";
 import { pocketPort } from "../actions/pocket-actions.ts";
+import { createPocketHold } from "../actions/meeting-pocket.ts";
 import { createPushDevices } from "../store/push-devices.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
@@ -336,6 +337,8 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
 };
 /** PK-2: the Pocket client (one list call and no other); each call takes the person's own key from their secrets. */
 const pocketClient = createPocketClient({ fetch, log });
+/** MC-2b: each person's last list of Pocket recordings, 5 minutes, in this server's memory only. */
+const pocketHold = createPocketHold(() => Date.now());
 const azureFor = (token: () => Promise<string>) => createAzureClient({ fetch, token, log });
 const googleFor = (who: Person) => (cfg: GoogleConfig, timeZone: string) =>
   memo(who, "google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(who, timeZone), config: cfg, web: { login: () => "/auth/google/login", redirectUri: urls.google } }));
@@ -363,7 +366,7 @@ let devopsPoller: DevOpsPoller | null = null;
 let devopsStoreRef: ReturnType<typeof createDevOpsStore> | null = null;
 /** TB-2: the bot's rhythm in Teams, once the bot is up (hosted app only). */
 let rhythm: Rhythm | null = null;
-/** DV-1: Admin › Status's rows registry (actions/status-rows.ts). */
+/** DV-1: Admin › Health's rows registry (actions/status-rows.ts). */
 const statusRows = createStatusRegistry();
 /**
  * AP-2: the AI guard's map of DevOps item id to client, per person (devops_item_clients). Each read's ids go to the
@@ -706,7 +709,7 @@ const build = buildInfo(process.env, () => {
   }
 });
 
-// F1, FB-1: Send feedback goes to the org.feedback Rule (Admin › Organization; the app config's [feedback] bootstraps
+// F1, FB-1: Send feedback goes to the org.feedback Rule (Admin › Team defaults › Planning and new people; the app config's [feedback] bootstraps
 // it). Each person's story is created through the write framework with their own DevOps write PAT (actions/dispatch.ts);
 // there is no app identity for DevOps.
 const feedbackTarget = async () => {
@@ -989,7 +992,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
-    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
+    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), pocketHold, ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
     account: accountFor(who),
     photoCache: host.photos,
     push,
@@ -1244,7 +1247,7 @@ devopsPoller = devopsApp && directorySource
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 // CV-3b: whether account types are read (the client rule fails closed until they are), with Refresh.
 statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
-// HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
+// HK-1: telemetry's own health in Admin › Health: one row, a warning once anything was dropped or refused.
 if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
 // ENV-1: on a test site, what runs only on a button, and a declared chat watch period (production: nothing added).
 const backgroundRows = backgroundStatusSource(background);

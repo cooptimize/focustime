@@ -1,10 +1,12 @@
-// DV-1: the generic render of the status rows registry (actions/status-rows.ts) in Admin › Status: one table per
+// DV-1: the generic render of the status rows registry (actions/status-rows.ts) in Admin › Health: one table per
 // source, each row with its state, one plain line, its last check and its action (Check now). A source registered on
-// the server shows here with no change to this screen.
+// the server shows here with no change to this screen. SA-4 F: a group and the one table style (SA-2's parts).
 import { useState } from "react";
 import { call } from "../api.ts";
 import type { StatusGroup } from "../../actions/status-rows.ts";
+import { Button, Group, Note, State, Table } from "./parts.tsx";
 
+const TONE = { ok: "live", warn: "cached", error: "error", idle: "muted" } as const;
 const WORD = { ok: "OK", warn: "Slowed down", error: "Problem", idle: "Not checked yet" } as const;
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
 
@@ -26,48 +28,34 @@ export function StatusRows({ groups: initial }: { groups: readonly StatusGroup[]
   return (
     <>
       {groups.map((g) => (
-        <section key={g.id} className="adm-status-group">
-          <h3>{g.title}</h3>
-          {g.note ? <p className="muted">{g.note}</p> : null}
+        <Group key={g.id} title={g.title} label={g.title} intro={g.note || undefined}>
           {g.rows.length === 0 ? (
-            <p className="muted">Nothing to show yet.</p>
+            <Note>Nothing to show yet.</Note>
           ) : (
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Details</th>
-                  <th scope="col">Last check</th>
-                  <th scope="col">
-                    <span className="sr-only">Action</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {g.rows.map((r) => (
-                  <tr key={r.id}>
-                    <th scope="row">{r.label}</th>
-                    <td>
-                      <span className={`adm-state adm-state-${r.state}`}>{WORD[r.state]}</span>
-                    </td>
-                    <td>{r.detail}</td>
-                    <td>{when(r.lastCheck)}</td>
-                    <td>
-                      {r.action ? (
-                        <button type="button" className="mini quiet" disabled={busy === `${g.id}/${r.id}`} onClick={() => void act(g.id, r.id, r.action!.id)}>
-                          {busy === `${g.id}/${r.id}` ? "Checking…" : r.action.label}
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table rowHeads
+              label={g.title}
+              head={["Name", "State", "Details", "Last check", <State key="a" sr>Action</State>]}
+              rowKey={(i) => g.rows[i]!.id}
+              rows={g.rows.map((r) => [
+                r.label,
+                <State key="s" tone={TONE[r.state]}>
+                  {WORD[r.state]}
+                </State>,
+                r.detail,
+                when(r.lastCheck),
+                r.action ? (
+                  <Button key="a" kind="quiet" disabled={busy === `${g.id}/${r.id}`} onClick={() => void act(g.id, r.id, r.action!.id)}>
+                    {busy === `${g.id}/${r.id}` ? "Checking…" : r.action.label}
+                  </Button>
+                ) : (
+                  ""
+                ),
+              ])}
+            />
           )}
-        </section>
+        </Group>
       ))}
-      {problem ? <p className="field-problem">{problem}</p> : null}
+      {problem ? <Note tone="problem">{problem}</Note> : null}
     </>
   );
 }

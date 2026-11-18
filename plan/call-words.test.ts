@@ -37,7 +37,7 @@ describe("MC-1d: a call's state in words", () => {
     expect(aiFailedLine("not_set_up")).toBe("The AI step failed: AI isn't set up.");
     expect(aiFailedLine("no_context")).not.toContain("AI service");
     expect(aiFailedLine("provider_refused")).toBe(aiFailedLine("provider"));
-    expect(aiFailedLine("no_ai")).toContain("Admin › AI");
+    expect(aiFailedLine("no_ai")).toContain("Admin › Clients");
     expect(aiFailedLine("provider@2/3")).toContain("The call was sent in 3 parts and part 2 failed, so nothing was proposed");
     for (const k of Object.keys(AI_MESSAGES)) expect(aiFailedLine(k)).not.toMatch(/Nothing to propose/);
   });

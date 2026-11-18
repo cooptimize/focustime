@@ -49,7 +49,10 @@ export const RETIRED: readonly Retired[] = [
   { was: "Needs you (the Inbox's view)", now: "Inbox › From chats", match: /\bNeeds you\b/ },
   // NM-2: a client's chats are Client chats everywhere a person reads it; the kinds Delivery team and Customer collaboration keep their names.
   { was: "Delivery chats", now: "Client chats", match: /\bDelivery chats\b/i },
-  { was: "Admin › Conversations", now: "Admin › Client chats" },
+  { was: "Admin › Conversations", now: "Admin › Team defaults › Client chats" },
+  // SA-4: Admin is its own place in five parts; the two sections whose names went.
+  { was: "Admin › Status", now: "Admin › Health", match: /Admin › Status\b/ },
+  { was: "Admin › Organization", now: "Admin › Team defaults › Planning and new people", match: /Admin › Organization\b/ },
   { was: "Request phrases", now: "Asking phrases", match: /\b[Rr]equest phrases\b/ },
   { was: "Waiting on", now: "Gone: a teammate's promise is in their own Inbox", match: /\bWaiting on\b/ },
   { was: "In progress (the Inbox)", now: "Inbox › Promises" },

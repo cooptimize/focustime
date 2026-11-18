@@ -27,7 +27,7 @@ export const isFlexTask = (name: string): name is FlexTask => (FLEX_TASKS as rea
 
 /**
  * The tier a request asks for: standard unless the task is declared flex, an admin hasn't switched it back
- * (`standardTasks`, Admin › AI), and the caller isn't a person waiting (a button such as Sort again).
+ * (`standardTasks`, Admin › Team defaults › AI), and the caller isn't a person waiting (a button such as Sort again).
  */
 export function tierFor(task: string, o: { standardTasks?: readonly string[]; waiting?: boolean } = {}): AiTier {
   if (o.waiting || !isFlexTask(task)) return "standard";

@@ -8,6 +8,7 @@ import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
+import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./settings/admin/paths.ts";
 import { LIST_FILTERS, type ListFilter } from "../plan/call-list.ts";
 
 export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;
@@ -229,6 +230,9 @@ const HALF = /^(AM|PM|EVE)$/;
 /** A Settings or Admin section: letters, with one hyphen between words (CV-2: "admin-audit", Q-ADM2-4). */
 const SECTION = /^[a-z]{2,20}(-[a-z]{2,20})?$/;
 const ID = /^[1-9]\d{0,9}$/;
+/** SA-4: Admin's place rides Settings' overlay: this section, with Admin's path as its setting. */
+export const ADMIN_SECTION = "admin";
+const adminLoc = (path: string): Loc => ({ nav: navOf.today(), overlay: { kind: "settings", section: ADMIN_SECTION, setting: path || null } });
 /** FN-1: a client key in a story card's address. */
 const CLIENT_KEY = /^[\p{L}\p{N} ._&'()@-]{1,100}$/u;
 /** A setting id, or a client key (Dataverse nicknames: letters, digits, spaces and a little punctuation). */
@@ -252,6 +256,11 @@ const FILTER_WORD = { gap: "new", commitment: "promises", comment: "comments" } 
 
 export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
+  // SA-4: Admin is its own place, #/admin…; it rides Settings' overlay (section "admin", the path as its setting).
+  if (l.overlay?.kind === "settings" && l.overlay.section === ADMIN_SECTION) {
+    const at = parseAdminPath(l.overlay.setting ?? "");
+    return at ? adminHref(at) : "#/admin";
+  }
   if (l.overlay?.kind === "settings") return l.overlay.section ? `#/settings/${l.overlay.section}${l.overlay.setting ? `/${encodeURIComponent(l.overlay.setting)}` : ""}` : "#/settings";
   if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
   if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
@@ -461,10 +470,24 @@ export function parseHash(full: string): Loc | null {
       return HOME;
     case "focus":
       return a === undefined ? { nav: navOf.today(), overlay: { kind: "focus" } } : null;
-    case "settings":
+    case "admin": {
+      // SA-4: #/admin, #/admin/<part>, #/admin/<part>/<tab>, #/admin/clients/<client>[/<tab>].
+      let path: string;
+      try {
+        path = [a, b, c].filter((x) => x !== undefined).map((x) => decodeURIComponent(x!)).join("/");
+      } catch {
+        return null;
+      }
+      const at = parseAdminPath(path);
+      return at ? adminLoc(adminPath(at)) : null;
+    }
+    case "settings": {
       // ST-1: #/settings (the rail; on a big screen, Profile), #/settings/<section> and #/settings/<section>/<setting>
       // (a setting in it, or a client's own page: #/settings/client/<key>).
       if (a === undefined) return { nav: navOf.today(), overlay: { kind: "settings", section: "" } };
+      // SA-4: Admin's old Settings addresses land on its new places (App writes the new address in place).
+      const old = c === undefined ? oldAdminAt(a, b === undefined ? null : b) : null;
+      if (old) return adminLoc(adminPath(old));
       if (!SECTION.test(a) || c !== undefined) return null;
       if (b === undefined) return { nav: navOf.today(), overlay: { kind: "settings", section: a } };
       try {
@@ -473,6 +496,7 @@ export function parseHash(full: string): Loc | null {
       } catch {
         return null;
       }
+    }
     case "guide":
       // UI-5: #/guide/tour/<id> opens the tour's screen with the tour over it.
       if (a === "tour") {
@@ -611,7 +635,11 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "status_needs": return plain(navOf.statusNeeds());
     case "planweek": return plain(navOf.weekAdd(r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
-    case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
+    case "settings": {
+      // SA-4: a stored route to an old Admin section lands on its new place.
+      const old = oldAdminAt(r.section, null);
+      return { loc: old ? adminLoc(adminPath(old)) : { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
+    }
     // MC-3: one call's review, on the Calls tab.
     case "meeting": return plain(navOf.calls(r.id));
   }
@@ -680,5 +708,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "calls" ? TAB_NAMES.calls
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? (o.section === ADMIN_SECTION ? `Admin${o.setting ? `: ${PART_NAME[parseAdminPath(o.setting)?.part ?? "clients"]}` : ""}` : `Settings: ${o.section}`) : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

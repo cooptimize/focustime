@@ -126,8 +126,8 @@ async function aiState(ctx: StoryContext, cfg: AppConfig, clientKey: string | nu
 }
 
 const AI_WORDS: Record<Exclude<AiState, "on">, (client: string) => string> = {
-  off: () => "AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.",
-  client_off: (c) => `AI is off for ${c}. A FocusTime admin allows it in Admin › AI.`,
+  off: () => "AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI.",
+  client_off: (c) => `AI is off for ${c}. A FocusTime admin allows it on the client's page in Admin › Clients.`,
   not_set_up: () => "AI isn't set up for this FocusTime yet. The Coop brief still works.",
 };
 const NO_PAT = (c: string) => `Add DevOps write access for ${c} in Settings`;

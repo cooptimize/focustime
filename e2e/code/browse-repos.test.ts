@@ -290,33 +290,36 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await page.evaluate(() => (location.hash = `#/code/Northwind/a1b2c3d4-0001-4000-8000-00000000a001/${encodeURIComponent("/README.md")}`));
     await file(page).waitFor();
 
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    // SA-4: Northwind's page in Admin › Clients, its Code tab.
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/code"));
     const field = page.getByLabel("Northwind: who can read its code");
     await field.waitFor({ timeout: 60_000 });
-    const card = page.locator(".adm-client", { has: field });
+    const card = page.locator(".adm-client-page");
     await expect.poll(() => card.locator("[data-code-check]").getAttribute("data-code-check")).toBe("readable");
     expect(await card.locator("[data-code-check]").textContent()).toMatch(/^Code: readable · 3 repos/);
     await field.selectOption("team");
     await page.waitForTimeout(600);
-    await card.locator(".adm-code").scrollIntoViewIfNeeded();
+    await card.getByRole("region", { name: "Code" }).scrollIntoViewIfNeeded();
     await shotThemes(page, "14-admin-rule");
     // Harbor's token can't read code yet.
-    const harbor = page.locator(".adm-client", { has: page.getByLabel("Harbor: who can read its code") });
+    await page.evaluate(() => (location.hash = "#/admin/clients/Harbor/code"));
+    const harbor = page.locator(".adm-client-page", { has: page.getByLabel("Harbor: who can read its code") });
+    await harbor.waitFor({ timeout: 30_000 });
     if (await harbor.count()) await expect.poll(() => harbor.locator("[data-code-check]").getAttribute("data-code-check")).toBe("needs_code_read");
 
-    await page.evaluate(() => (location.hash = "#/settings/admin-audit/code-views"));
+    await page.evaluate(() => (location.hash = "#/admin/audit/code"));
     const views = page.locator("[data-setting=code-views]");
     await views.locator("tbody tr").first().waitFor();
     const first = await views.locator("tbody tr").first().locator("td").allTextContents();
     expect(first.slice(2)).toEqual(["Northwind", "sales-analytics", "Opened a file", "/README.md"]);
-    expect(await views.locator(".adm-code-counts").textContent()).toMatch(/Northwind \d+/);
+    expect(await views.locator("[data-code-counts]").textContent()).toMatch(/Northwind \d+/);
     await shotThemes(page, "15-admin-code-views");
 
     // The person is on Northwind's team in the demo, so it still opens for them.
     await page.evaluate(() => (location.hash = "#/code/Northwind"));
     await panel(page).getByLabel("Repo").waitFor();
     // Back to the whole company.
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/code"));
     await page.getByLabel("Northwind: who can read its code").selectOption("company");
     await page.waitForTimeout(600);
     expect(errors).toEqual([]);

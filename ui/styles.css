@@ -4009,40 +4009,7 @@ button.ask-label { cursor: pointer; }
 .set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; }
 .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
-/* ADM-1: the Admin part of Settings (ui/settings/Admin.tsx): its own nav under the Settings nav, one sticky sidebar. */
-.adm-kind { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); vertical-align: 1px; }
-.adm-mark { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--raised); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
-.adm-ok { color: var(--ok); font-weight: 500; }
-.adm-table { border-collapse: collapse; font-size: var(--fs-2); width: 100%; }
-.adm-table th, .adm-table td { text-align: left; vertical-align: top; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--border); }
-.adm-table thead th { font-weight: 500; color: var(--text-faint); white-space: nowrap; }
-/* CV-3: Admin › AI's client table has three switch columns; on a phone its headings wrap. */
-@media (max-width: 599.98px) { .adm-ai-clients thead th { white-space: normal; } .adm-ai-clients th, .adm-ai-clients td { padding-right: 8px; } }
-.adm-table tbody th { font-weight: 500; }
-.adm-table input[type="number"] { width: 6em; }
-/* position: a screen-reader label inside (absolute) stays in the scroll box instead of widening the page. */
-.adm-scroll { overflow-x: auto; max-width: 100%; position: relative; }
-.adm-email { display: block; font-weight: 400; }
-.adm-leads { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.adm-val { max-width: 22em; overflow-wrap: anywhere; }
-.adm-confirm { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--risk); border-radius: 8px; background: var(--surface); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.adm-confirm p { flex-basis: 100%; margin: 0; }
-.adm-confirm .set-field { flex-basis: 100%; }
-.adm-filter { margin-bottom: 10px; }
-/* RB-1: Admin › Clients' Code access and Admin › Audit › Code views. */
-.adm-code select { width: auto; max-width: 100%; }
-.adm-code-views { margin-top: 24px; }
-.adm-code-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
-.adm-code-filter select { max-width: 100%; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); }
-.adm-code-counts { color: var(--text-muted); font-size: var(--fs-2); }
-.adm-process h4, .adm-scope h4, .adm-client h4 { margin: 8px 0 4px; font-size: var(--fs-3); font-weight: 600; }
-.adm-admins li { padding: 6px 10px; }
-/* IN-1: Admin › People › Who's set up and the invite sheet. */
-.adm-setup { margin: 6px 0 18px; }
-.adm-setup-counts { margin: 0 0 4px; font-size: var(--fs-3); font-weight: 500; }
-.adm-setup-bar { margin-bottom: 10px; gap: 8px 12px; }
-.adm-setup-bar .adm-filter { margin-bottom: 0; }
-.adm-setup-table td:first-child, .adm-setup-table th:first-child { width: 1.5em; }
+/* IN-1: the invite sheet (Admin › People › Who's set up). */
 .invite-note { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--raised); font-size: var(--fs-3); }
 .invite-message { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
 .invite-sheet .set-field input { width: 100%; box-sizing: border-box; }
@@ -4184,16 +4151,6 @@ button.ask-label { cursor: pointer; }
 .ev-list .promise-row .ev-title, .today-rows > li.promise-row .ev-title { flex: 0 1 auto; }
 .promise-row .promise-open .muted { white-space: nowrap; }
 .conv-summary > span { display: block; }
-/* ADM-1, WT-1: a client's process in Admin › Clients, one row per type. */
-.adm-types .type-icon { margin-right: 4px; vertical-align: -2px; }
-.adm-switch { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.adm-process h4 .mini { margin-left: 8px; }
-/* ADM-1: every part of an Admin › Clients card sits inside the card's colored edge, the last one rounding it off. */
-.adm-client > .adm-process, .adm-client > .adm-scope, .adm-client > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0; background: var(--surface); }
-.adm-client > :not(:last-child):not(:first-child) { border-radius: 0; border-bottom: 0; }
-.adm-client > :last-child:not(:first-child) { border-radius: 0 0 10px 10px; }
-.adm-client > .set-client:not(:last-child) { border-bottom: 0; border-radius: 10px 10px 0 0; }
-.adm-table select, .adm-table input, .adm-table button { font: inherit; }
 /* ADM-1: the read-only house style inside a person's client card too; whatever comes last rounds the card off. */
 .set-client-wrap > .set-house-style { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); background: var(--surface); }
 .set-client-wrap > :not(:first-child):not(:last-child) { border-radius: 0; border-bottom: 0; }
@@ -4257,25 +4214,10 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
 .card-feat .cf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-row.dens-week[draggable="true"] { cursor: grab; }
 
-/* ADM-2: Customers | All accounts on Admin › Clients and AI. */
-.adm-filter { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
-.adm-filter button { padding: 4px 12px; border: 0; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); cursor: pointer; }
-.adm-filter button + button { border-left: 1px solid var(--border-strong); }
-.adm-filter button[aria-checked="true"] { background: var(--text); color: var(--surface); font-weight: 600; }
-.adm-filter button[aria-checked="true"] .muted { color: inherit; opacity: 0.75; }
-.adm-accounts .set-hint { display: block; }
 
 /* ADM-2: the Settings and Admin side menu (ui/settings/SideMenu.tsx). Beside the body it fills the height between the
    top bar and the status bar and scrolls on its own; the body scrolls beside it. Narrow windows and phones: a picker. */
-.adm-block { display: block; }
 
-/* DV-1: the status rows registry's states in Admin › Status. */
-.adm-status-group + .adm-status-group { margin-top: 12px; }
-.adm-state { font-weight: 500; }
-.adm-state-ok { color: var(--ok); }
-.adm-state-warn { color: var(--watch); }
-.adm-state-error { color: var(--risk); }
-.adm-state-idle { color: var(--text-faint); }
 
 /* PL-1: From last week (the proposal), Watching rows, check-ins and Keep open. Tokens only; no literal font sizes. */
 .carry { display: grid; gap: 8px; }
@@ -4707,13 +4649,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
   .cap-toast .link-btn { min-height: var(--tap); }
 }
 
-/* AH-2: Admin › Clients' scope picker. */
-.adm-scope { gap: 8px; }
-.adm-scope > p { margin: 0; }
-.adm-scope-modes { display: flex; flex-wrap: wrap; gap: 6px 20px; }
-.adm-scope-mode { display: inline-flex; align-items: center; gap: 6px; }
-.adm-scope-list { max-height: 360px; overflow-y: auto; }
-.adm-scope .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 /* AH-2: in Ahead the pace's ghost past a target is the one muted amber, not red. */
 .ahead .pa-ghost { border: 1.5px dashed var(--ah-attention); border-left: 0; background: none; }
 
@@ -4728,14 +4663,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .dw-attach-gone { padding: 8px; font-size: var(--fs-1); }
 .dw-attach-who { grid-column: 1 / -1; font-size: var(--fs-1); overflow-wrap: anywhere; }
 
-/* AH-3: Admin › People's client DevOps identities. */
-.adm-identities .adm-id-client { margin-top: 12px; }
-.adm-identities h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
-.adm-identities .adm-id-line { margin: 2px 0 6px; }
-.adm-id-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
-.adm-id-row .adm-id-name { font-weight: 500; overflow-wrap: anywhere; }
-.adm-id-link { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.adm-id-link select { max-width: 100%; }
 
 /* ---- UI-7: a planning mode's state beside its Done ---- */
 .mode-area .ma-note { font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
@@ -5348,7 +5275,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
   .bl-bulk .mini { min-height: var(--tap); }
 }
 
-/* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › Meetings) ---------- */
+/* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › <client> › Calls) ---------- */
 .mtg-view { flex: 1; overflow: auto; overflow-x: hidden; padding: 8px 24px 32px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
 .mtg-view .page-head { flex-wrap: wrap; row-gap: 4px; }
 .mtg-view > * { max-width: 1100px; }
@@ -5481,7 +5408,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 [data-call-title]:hover { text-decoration-color: currentColor; }
 .event.is-call .ev-line { flex-wrap: wrap; row-gap: 2px; }
 .card-events li.is-call, .grid.no-timeline .card-events li.is-call { grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: center; }
-/* Admin › Clients › Meetings. */
+/* Admin › Clients › <client> › Calls. */
 .mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
 .mtg-card-grid label, .mtg-link label { display: grid; gap: 2px; align-content: start; }
@@ -6158,10 +6085,6 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .standards-used { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
 .standards-used a { color: inherit; text-decoration: underline; }
 .standards-used p { margin: 4px 0 0; }
-.adm-standards-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); }
-.adm-standards-table th { text-align: left; font-weight: 500; color: var(--text-muted); }
-.adm-standards-table th, .adm-standards-table td { padding: 4px 8px 4px 0; vertical-align: top; }
-.adm-standards-path { color: var(--text-muted); overflow-wrap: anywhere; }
 .names-removed { margin: 6px 0; font-size: var(--fs-2); color: var(--text-muted); }
 .names-removed::before {
   content: ""; display: inline-block; width: var(--icon); height: var(--icon); margin-right: 4px; vertical-align: calc(-3px * var(--text-scale)); background: currentColor;
@@ -7234,7 +7157,7 @@ button:disabled { cursor: default; }
 
 /* ---- A5. Pills -------------------------------------------------------------------------------------------------
    A status has no line: a wash, with color only for a state that needs it. The transparent line keeps its size. */
-:root :is(.status-pill, .due-badge, .today-pill, .status-chip, .bd-chip, .mtg-chip, .st-badge, .cal-tag, .adm-mark, .soon-tag, .state:not(.state-link)) {
+:root :is(.status-pill, .due-badge, .today-pill, .status-chip, .bd-chip, .mtg-chip, .st-badge, .cal-tag, .soon-tag, .state:not(.state-link)) {
   border: 1px solid transparent; background: var(--wash-2); color: var(--text-muted); font-weight: 500;
 }
 :root :is(.status-pill.at_risk, .due-badge.overdue, .due-badge.today) { background: var(--wash-risk); color: var(--risk); }
@@ -7375,9 +7298,6 @@ button:disabled { cursor: default; }
 :root .ps-item { min-height: var(--h-control); align-items: center; padding: 0 10px; border-radius: var(--radius-input); }
 :root .ps-item:hover { background: var(--wash-1); color: var(--text); }
 :root .ps-item[aria-current="page"] { background: var(--wash-accent); color: var(--text); font-weight: 500; box-shadow: none; }
-:root .adm-table th, :root .adm-table td { border-bottom-color: transparent; }
-:root .adm-table thead th { border-bottom-color: var(--line); }
-:root .adm-table tbody tr:hover > * { background: var(--wash-1); }
 
 /* ---- RS-1: fits and exceptions ------------------------------------------------------------------------------- */
 /* "+ time" on a to-do's row is a quiet link with a small plus: the row's title keeps its room. */
@@ -7415,12 +7335,6 @@ button:disabled { cursor: default; }
 :root :is(.ah-row, .pa-row, .bl-row) .ah-new-under { margin-block: -5px; }
 :root .ah-chev { align-self: center; margin-block: -5px; }
 :root .pa-label .ah-chev, :root .cv-tree-row .ah-chev { margin-block: 0; min-height: 0; }
-/* Admin: Customers | All accounts is a switch; Rule and Default are statuses. */
-:root .adm-filter { display: inline-flex; gap: 2px; padding: 2px; border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); }
-:root .adm-filter button { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; }
-:root .adm-filter button:hover { background: transparent; color: var(--text); }
-:root .adm-filter button[aria-checked="true"] { background: var(--lift); color: var(--text); box-shadow: var(--shadow-1); }
-:root .adm-kind { border: 0; background: var(--wash-2); color: var(--text-muted); }
 /* Status: My features | <Client> report is a switch too (the client's side is a list to choose from). */
 :root .st-scope { border: 0; border-radius: calc(var(--radius-input) + 2px); background: var(--track); padding: 2px; gap: 2px; }
 :root .st-scope .ms-btn, :root .st-scope .st-scope-pick { min-height: var(--h-small); padding: 0 12px; border: 0; border-radius: var(--radius-input); background-color: transparent; color: var(--text-muted); font-size: var(--fs-3); font-weight: 500; box-shadow: none; }
@@ -7539,7 +7453,7 @@ button:disabled { cursor: default; }
 :root .app.phone .day-bar .mode-area { position: relative; padding-right: calc(36px * var(--text-scale, 1) + 8px); box-sizing: border-box; }
 :root .app.phone .day-bar .mode-area > .more-btn:last-child { position: absolute; top: 0; right: 0; }
 
-/* RS-2 D6: Admin › Clients › Meetings' "Register a meeting" is a normal button, not the field's full width. */
+/* RS-2 D6: Admin › Clients › <client> › Calls' "Register a meeting" is a normal button, not the field's full width. */
 :root .mtg-admin > .mtg-register { justify-self: start; align-self: start; width: auto; }
 
 /* RS-2 D8 (style guide section 10): a pill that doesn't fit is never cut mid-word. A client call's mark wraps its words,
@@ -7754,6 +7668,19 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-meta { min-width: 0; overflow-wrap: anywhere; }
 .calls-weekly { grid-column: 2; display: inline-flex; align-items: center; gap: 4px; }
 .calls-note { margin: 8px 0; font-size: var(--fs-2); }
+/* MC-2b: Get my Pocket recordings, its last-run line, or the line to connect Pocket. */
+.calls-pocket { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 0 16px 8px 24px; font-size: var(--fs-2); }
+.calls-pocket .mini { min-height: 32px; }
+.app.phone .calls-pocket { padding: 0 16px 8px; }
+.app.phone .calls-pocket .mini { min-height: 44px; }
+.mtg-pocket-pick { display: grid; gap: 6px; }
+.mtg-pocket-ask { padding: 6px 8px; border-radius: 8px; background: var(--sunken); }
+.mtg-pocket-who { font-size: var(--fs-2); }
+.mtg-pocket-box { margin: 8px 0; }
+.app.phone .mtg-setup-source label { min-height: 44px; align-items: center; }
+/* MC-2b: on the phone a row's state goes under its name, so long states don't squeeze the name. */
+.app.phone .calls-row-one { flex-wrap: wrap; }
+.app.phone .calls-row-one .calls-state { flex-basis: 100%; max-width: none; text-align: left; }
 .calls-privacy { margin: 12px 0 0; font-size: var(--fs-1); }
 .calls-fold { display: grid; margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 .calls-fold > .link-btn { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); min-height: var(--target, 28px); }

@@ -59,7 +59,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   checks: Number(r.checks ?? 0),
   transcriptFrom: (s(r.transcript_from) as TranscriptSource | null) ?? null,
   transcriptAt: s(r.transcript_at),
-  ...(r.transcript_kind === "pocket" || r.transcript_kind === "teams" ? { transcriptKind: r.transcript_kind } : {}),
+  ...(r.transcript_kind === "pocket" || r.transcript_kind === "teams" || r.transcript_kind === "pocket_api" ? { transcriptKind: r.transcript_kind } : {}),
   aiOutcome: s(r.ai_outcome),
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
@@ -278,6 +278,11 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async transcript(occurrenceId: number): Promise<TranscriptLine[] | null> {
       const r = await db.get("SELECT lines_json FROM meeting_transcripts WHERE occurrence_id = ?", [occurrenceId]);
       return r ? json<TranscriptLine[]>(r.lines_json, []) : null;
+    },
+    /** MC-2b: who uploaded or brought in the stored transcript (a user id), or null; gone with the transcript. */
+    async transcriptBy(occurrenceId: number): Promise<string | null> {
+      const r = await db.get("SELECT uploaded_by FROM meeting_transcripts WHERE occurrence_id = ?", [occurrenceId]);
+      return typeof r?.uploaded_by === "string" ? r.uploaded_by : null;
     },
     /** MC-2: the AI's summary (at most 5 lines), kept beside the transcript and gone with it. Nothing without one. */
     async saveSummary(occurrenceId: number, lines: readonly string[]): Promise<void> {

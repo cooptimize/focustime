@@ -144,6 +144,7 @@ import { inviteDomains } from "../config/schema.ts";
 import type { LinkCalendars } from "../sources/ics/source.ts";
 import { calendarLinkAction } from "./calendar-link-actions.ts";
 import { pocketAction, type PocketPort } from "./pocket-actions.ts";
+import type { PocketHold } from "./meeting-pocket.ts";
 
 /** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
 const TOUR_MARK = "tour_offer";
@@ -236,7 +237,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Health's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -1420,6 +1421,8 @@ export type MeetingsPort = {
   press?: PressGrants;
   /** MC-2: a Cooptimizer by the people rule (not a guest, not an automation account, inside the domains). */
   cooptimizer?: (userId: string) => Promise<boolean>;
+  /** MC-2b: each person's last Pocket list, 5 minutes, in this server's memory (actions/meeting-pocket.ts). */
+  pocketHold?: PocketHold;
 };
 
 /**
@@ -1462,6 +1465,10 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
+    ...(ctx.pocket && ctx.meetings?.pocketHold
+      ? { pocket: { port: ctx.pocket, hold: ctx.meetings.pocketHold, myEmails: async () => { const me = await rc.me(); const users = ctx.meetings ? await ctx.meetings.users() : []; return users.find((u) => me && u.id.toLowerCase() === me.toLowerCase())?.emails ?? []; } } }
+      : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -1819,7 +1826,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return { ok: true, data: { outcome: await ctx.demo.vmTick(m), now: ctx.now() } };
     }
     case "demo.pass_stall": {
-      // VM-3: only in a demo session started with --clock (the e2e tests): Admin › Status's pretend slow pass holds or
+      // VM-3: only in a demo session started with --clock (the e2e tests): Admin › Health's pretend slow pass holds or
       // lets go, so its warning can be seen once the demo's clock moves past the limit (demo.vm_tick).
       if (!ctx.demo?.on || !ctx.demo.passStall) return { ok: false, status: 403, error: "Only in a demo verification run" };
       const i = req.input as Record<string, unknown> | null;
@@ -2404,6 +2411,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           },
           // IN-2: the same sends and consent probes as Close the loop (LP-1), as this admin.
           send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
+          // SA-4: the clients chats.add would let this admin register a chat under (the same check, read only).
+          chatTargets: async () => (await chatContext(ctx)).clientKeys(),
         },
         action as AdminAction,
         req.input,
@@ -2727,6 +2736,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.call_start":
     case "meeting.call_fetch":
     case "meeting.call_add":
+    case "meeting.pocket_list":
+    case "meeting.pocket_bring":
+    case "meeting.pocket_add":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

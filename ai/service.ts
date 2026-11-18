@@ -241,7 +241,7 @@ export function createAi(d: AiDeps) {
 
     const { from, to } = monthBounds(monthOf(d.now()));
     // CV-1: the app's pipeline counts only against the app's cap; a person's own request against theirs and the app's.
-    // ADM-1: both caps are the team's (Admin › AI). A cap of $0 says so ("AI budget is set to $0"), not that it was reached.
+    // ADM-1: both caps are the team's (Admin › Team defaults › AI). A cap of $0 says so ("AI budget is set to $0"), not that it was reached.
     const personCap = scope === "app" ? null : micros(me.personCapUsd);
     const appMicros = micros(appCap);
     if (appMicros <= 0 || personCap === 0) {

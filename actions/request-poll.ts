@@ -66,7 +66,7 @@ export type PollDeps = {
   homeTenant: () => Promise<string | null>;
   now: () => string;
   log: (r: LogRecord) => void;
-  /** The team's Rules (Admin › Conversations); absent: the built-in values. */
+  /** The team's Rules (Admin › Team defaults › Client chats); absent: the built-in values. */
   rules?: () => Promise<PollRules>;
   /** GD-2: the Cooptimizer rule a chat's members are read against (absent: tenant and guests only). */
   audienceRules?: (homeTenant: string | null) => Promise<AudienceRules>;

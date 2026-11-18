@@ -87,7 +87,7 @@ WP-1's hidden working page wrote these; RM-1 removed the page and its code, and 
 | `chat_calls` | App | Yes | Calls in registered chats, from their started and ended events: the call id, start and end, who started it (a user id and tenant). Never the participants or anything said |
 | `conversations`, `conversation_messages`, `commitments`, `conversation_suggestions`, `conversation_merges`, `conversation_events` | App | Yes | Conversations, their summaries, commitments, drafted suggestions, merges and history. Since RM-1 nothing merges, claims, gives, adds a helper, releases or closes out by hand; the rows are kept, read and still followed (a merged one leads to where it went), and Not work-related and a new message still close and reopen. `conversations.item_needed_json` is the sorting step's judgment that one needs a DevOps item (why, a title, a level) |
 | `requests` | App | Yes | Messages the chat rules picked out as requests; read for the urgent request notice |
-| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) and, since PK-1, whether its transcript is a Pocket export (`transcript_kind`); since MC-2 also the calls a Cooptimizer on them asked to review (`meeting_series.call_kind`: calendar or hand, null for a registered call; the presser its one reviewer, the Cooptimizers on the invite its attendees, a hand-added call no one else) and a call's summary of at most 5 lines beside its transcript (`meeting_transcripts.summary_json`); since WK-6 each occurrence's Graph `iCalUId` (`meeting_occurrences.event_key`, an id only), which ties a call to its meeting on Week and Day |
+| `meeting_series`, `meeting_occurrences`, `meeting_transcripts`, `meeting_proposals` | App | Yes | Registered client calls, transcripts (30 days), proposals; each occurrence's last look for its transcript (what was found and through whose sign-in) and, since PK-1, whether its transcript is a Pocket export (`transcript_kind`; MC-2b: `pocket_api` for one brought in from a person's own Pocket on their press, with `meeting_transcripts.uploaded_by` saying who); since MC-2 also the calls a Cooptimizer on them asked to review (`meeting_series.call_kind`: calendar or hand, null for a registered call; the presser its one reviewer, the Cooptimizers on the invite its attendees, a hand-added call no one else) and a call's summary of at most 5 lines beside its transcript (`meeting_transcripts.summary_json`); since WK-6 each occurrence's Graph `iCalUId` (`meeting_occurrences.event_key`, an id only), which ties a call to its meeting on Week and Day |
 
 ### Admin and team
 
@@ -128,14 +128,14 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
 | `meeting_series` calls (MC-2) | A call pressed for review that never got a transcript (Teams refused and nobody uploaded): its occurrence and row go after 14 days. One that got a transcript is kept like a client call |
-| `meeting_transcripts` | 30 days (MC-2: the summary with it); the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
+| `meeting_transcripts` | 30 days (MC-2: the summary with it); the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket", "pocket_api" (MC-2b) or "teams" and stays. MC-2b's list of a person's recordings is never stored: 5 minutes in the server's memory and the page's while Calls is open |
 | `code_views` | 12 months |
 | `job_claims` | 30 days |
 | `admin_audit` | No age limit (not in the purge) |
 
 Kept elsewhere:
 
-- **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Client chats, 14 days by default, 1 to 90; `config/org.ts`).
+- **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Team defaults › Client chats, 14 days by default, 1 to 90; `config/org.ts`).
 - **Co-working calls** (`chat_calls`): 48 hours after the call started, at the next poll (`actions/request-poll.ts`); with their chat when it is removed or its messages purged.
 - **Sessions** end after 12 hours idle or 7 days at most (`store/accounts.ts`); the hourly maintenance sweeps them.
 - **Delete my data** (Settings › Your data): a soft delete now, everything removed 30 days later (`HARD_DELETE_AFTER_DAYS` in `store/user-data.ts`). The Teams bot's rows go at once. Clear (the assistant history, for example) deletes at once.

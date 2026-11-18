@@ -1,4 +1,4 @@
-// HK-1: telemetry's own health for Admin › Status, and the Teams poll's counts for its job operation.
+// HK-1: telemetry's own health for Admin › Health, and the Teams poll's counts for its job operation.
 import type { CycleResult } from "../actions/request-poll.ts";
 import type { StatusSource } from "../actions/status-rows.ts";
 import type { Telemetry } from "../log/appinsights.ts";

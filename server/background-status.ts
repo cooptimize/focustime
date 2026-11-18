@@ -1,6 +1,6 @@
-// ENV-1: Admin › Status on a test site. One row, "This is a test site", listing what runs here only when someone
+// ENV-1: Admin › Health on a test site. One row, "This is a test site", listing what runs here only when someone
 // presses a button; and, while FOCUSTIME_REQUESTS_POLL declares a watch period, one row saying chat reading is on.
-// Registered only outside production (production's Admin › Status is unchanged). Plain words only: no ids or names.
+// Registered only outside production (production's Admin › Health is unchanged). Plain words only: no ids or names.
 import type { StatusRow, StatusSource } from "../actions/status-rows.ts";
 import type { BackgroundPolicy } from "../config/background-policy.ts";
 

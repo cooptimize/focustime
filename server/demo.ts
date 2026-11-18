@@ -40,6 +40,7 @@ import { createUserSecrets, fakeKeyProvider } from "../store/user-secrets.ts";
 import { createPocketClient } from "../sources/pocket/client.ts";
 import { createDemoPocketFetch } from "../sources/demo/pocket.ts";
 import { pocketPort } from "../actions/pocket-actions.ts";
+import { createPocketHold } from "../actions/meeting-pocket.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
 import { createDemoIcsGet } from "../sources/demo/links.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
@@ -78,7 +79,7 @@ export type DemoControl = {
   reset?: () => Promise<void>;
   /** VM-2: verification runs only. */
   vmTick?: (advanceMinutes: number) => Promise<string>;
-  /** VM-3: verification runs only (set where vmTick is): Admin › Status's pretend slow pass holds (true) or lets go. */
+  /** VM-3: verification runs only (set where vmTick is): Admin › Health's pretend slow pass holds (true) or lets go. */
   passStall?: (on: boolean) => void;
   /** VM-4: verification runs only (set where vmTick is): reads of the demo VM's state fail this way (null: they work). */
   vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void;
@@ -189,7 +190,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     // IN-1: the helper bot is flagged as an automation account (ADM-2 meant it as one), so it is never a Cooptimizer.
     await adminStore.setOrg({ scope: `person:${DEMO_BOT.personId}`, key: "automation", value: true, actor: FOCUSTIME, area: "people", target: DEMO_BOT.name, note: "demo" });
   })();
-  // DV-1: Admin › Status's DevOps rows, pretend (the demo reads no DevOps): one fine, one with a bad token, one slowed.
+  // DV-1: Admin › Health's DevOps rows, pretend (the demo reads no DevOps): one fine, one with a bad token, one slowed.
   const checked = new Map<string, string>();
   const demoPoll = {
     status: async () =>
@@ -199,7 +200,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       }),
     checkNow: async (k: string) => void checked.set(k, opts.now()),
   };
-  // VM-3: Admin › Status's passes, from the real scheduler over one pretend person who does nothing (never started on a
+  // VM-3: Admin › Health's passes, from the real scheduler over one pretend person who does nothing (never started on a
   // timer: a pass runs only when Status is opened). A verification run (--clock) can make its slow pass hold, so the
   // warning shows once the demo's clock moves past the limit.
   let release: (() => void) | null = null;
@@ -338,7 +339,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     },
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, readPdf: pdfReader(), press, cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), press, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.

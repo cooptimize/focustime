@@ -22,9 +22,9 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls(\/|$)/);
     const rows = page.locator("[data-calls-list] [data-call-row]");
     await rows.first().waitFor({ timeout: 30_000 });
-    // The registered call is listed once, with its weekly mark.
-    await expect(rows.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(1);
-    await expect(rows.filter({ hasText: "Northwind weekly status" }).textContent()).resolves.toContain("Weekly");
+    // The registered call is listed once a week, with its weekly mark (MC-2b: last week's ended with no transcript).
+    await expect(rows.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(2);
+    await expect(rows.filter({ hasText: "Northwind weekly status" }).first().textContent()).resolves.toContain("Weekly");
 
     // Review a call on my calendar: the setup opens beside the list, suggests Northwind from its title; Teams is the
     // source. The newest first: this Monday's (last Monday's is further down).

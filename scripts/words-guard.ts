@@ -10,6 +10,7 @@
 // controls written as characters, in every string a person reads. See `namesHits` at the foot of this file.
 import { RETIRED } from "../ui/guide/retired.ts";
 import { PLACES } from "../ui/places.ts";
+import { ADMIN_POINTER_TABS } from "../ui/settings/admin/places.ts";
 
 /** Where people read text: the app's code (not tests or fakes), the demo docs and the public pages. */
 export const wordsScanned = (f: string) =>
@@ -275,7 +276,9 @@ export const POINTERS_ALLOWED: readonly Allowed[] = [
   { re: /^(Calendar › Shared calendars|the calendar › Integrate calendar)\b/, file: /^(ui\/settings\/CalendarLinks\.tsx|docs\/technical\/integrations\.md)$/, why: "Outlook's and Google's own Settings, where a person publishes a calendar: not FocusTime's" },
 ];
 
-const POINTER = /\b(Settings|Admin|More|Inbox|Backlog) (?:›|>|&gt;) (?=([^›>]*))/g;
+const POINTER = /\b(Settings|Admin|More|Inbox|Backlog) (?:›|>|&gt;) (?=([^›>]*(?: (?:›|>|&gt;) [^›>]*)?))/g;
+/** SA-4: Admin's parts whose second segment is checked: every name after them is a tab (People's may be a button). */
+const TAB_CHECKED: Readonly<Record<string, readonly string[]>> = { "Team defaults": ADMIN_POINTER_TABS["Team defaults"]!, Audit: ADMIN_POINTER_TABS.Audit! };
 /** A place's name in a sentence may be shortened to these, each standing for one place. */
 const SHORT: Readonly<Record<string, string>> = { Accounts: "Accounts and calendars", AI: "AI and assistant" };
 /** The name, then anything but more of a word: "Activity's rows" and "Clients' scope" are the place's. */
@@ -293,6 +296,15 @@ export function badPointers(text: string, f = "", places: Readonly<Record<string
     if (!rest || /^[$<{\[*`]/.test(rest)) continue;
     if (!/^[A-Za-z]/.test(rest)) continue;
     const list = places[where]!;
+    // SA-4: after Admin's Team defaults or Audit, a second segment is a tab of that part and must be one.
+    const part = where === "Admin" ? list.find((p) => startsWithName(rest, p)) : undefined;
+    const tabs = part && part in TAB_CHECKED ? TAB_CHECKED[part]! : null;
+    if (tabs) {
+      const after = /^ (?:›|>|&gt;) (?=([A-Za-z][^›>]*))/.exec(rest.slice(part!.length));
+      if (!after || tabs.some((t) => startsWithName(after[1]!, t))) continue;
+      out.push(`Admin › ${part} › ${after[1]!.split(/[.,;:()"]/)[0]!.trim()}`);
+      continue;
+    }
     if (list.some((p) => startsWithName(rest, p)) || Object.entries(SHORT).some(([s, p]) => list.includes(p) && startsWithName(rest, s))) continue;
     const tail = text.slice(m.index).replace(/^\S+ (?:›|>|&gt;) /, "");
     if (POINTERS_ALLOWED.some((a) => (!a.file || a.file.test(f)) && a.re.test(tail))) continue;

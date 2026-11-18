@@ -1,6 +1,6 @@
 // Was e2e/kb1-shots.test.ts (KB-1) until BT-1.
 // KB-1: Cooptimize's standards in the demo (fictional articles, no network): Break down a data feature, Standards used and
-// the linked acceptance criteria, Ask's standards answer and "Not in the standards", Admin › Standards with Sync now, and
+// the linked acceptance criteria, Ask's standards answer and "Not in the standards", Admin › Team defaults › Standards with Sync now, and
 // the client's Source systems. With FOCUSTIME_SHOTS naming a folder, the screenshots at 1920 and Text size Larger.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -55,20 +55,21 @@ describe.skipIf(!CHROMIUM)("KB-1 standards", () => {
     await ask.getByText("Not in the standards").waitFor({ timeout: 30_000 });
     await page.keyboard.press("Escape");
 
-    // Admin › Standards: the sync's status, a duplicate warning, the articles, Sync now.
+    // Admin › Team defaults › Standards: the sync's status, a duplicate warning, the articles, Sync now.
     await page.getByRole("button", { name: /^More: the Guide/ }).click();
     await page.getByRole("menuitem", { name: "Admin" }).click();
-    await page.locator('.ps-rail [data-settings-section="admin-standards"]').click();
-    await page.locator(".ps-head h2", { hasText: "Admin › Standards" }).waitFor();
+    await page.locator('.ps-rail [data-settings-section="defaults"]').click();
+    await page.getByRole("tab", { name: "Standards" }).click();
+    await page.waitForFunction(() => location.hash === "#/admin/defaults/standards");
     await page.getByText("Gold Fact Tables").first().waitFor();
     await page.getByText("powerbi_semantic_model_fact_tables").first().waitFor();
     await page.getByRole("button", { name: "Sync now" }).click();
     await page.getByRole("status").filter({ hasText: "Checked: nothing new." }).waitFor({ timeout: 15_000 });
     await shotBoth(page, "kb1-admin-standards");
 
-    // Admin › Clients: Source systems beside Data platform.
-    await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
-    await page.locator(".ps-head h2", { hasText: "Admin › Clients" }).waitFor();
+    // A client's page, its AI tab: Source systems.
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/ai"));
+    await page.locator(".ps-head h2", { hasText: "Northwind" }).waitFor();
     const field = page.getByLabel(/: source systems$/).first();
     await field.waitFor({ timeout: 15_000 });
     await expect(field.locator("option").allTextContents()).resolves.toEqual(expect.arrayContaining(["Both D365 systems (default)", "D365 Finance and Operations", "D365 Dataverse (CE / Project Operations)", "None"]));

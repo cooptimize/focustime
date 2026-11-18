@@ -308,7 +308,7 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     await box.press("Enter");
     await panel(page).locator('[data-code-hit="usp_SetWatermark.sql"]').click();
     await panel(page).locator(".cv-file-view").waitFor();
-    await page.evaluate(() => (location.hash = "#/settings/admin-audit/code-views"));
+    await page.evaluate(() => (location.hash = "#/admin/audit/code"));
     const table = page.locator('[data-setting="code-views"] table');
     await table.waitFor();
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].slice(2).map((td) => td.textContent)));
