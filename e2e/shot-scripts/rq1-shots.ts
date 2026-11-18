@@ -188,6 +188,7 @@ describe.skipIf(!CHROMIUM || !DIR)("RQ-1 screenshots", () => {
         // Before RQ-1 DevOps refuses each story at Confirm: that dialog is the picture.
         await page.waitForTimeout(3000);
         if (await panel.getByText(/^Created \d+ items? under/).count()) return panel.getByText(/^Created \d+ items? under/);
+        return undefined;
       });
       await page.close();
     }
