@@ -2243,6 +2243,8 @@ export function App() {
           weekDays={weekDays}
           setWeekDays={(v) => void saveWeekDays(v)}
           catchUpName={catchUpWord(data.week.days)}
+          everyWeekendDay={showWeekend}
+          setEveryWeekendDay={saveShowWeekend}
           textSize={textSize}
           setTextSize={(s) => void saveTextSize(s)}
           demo={data.demo}

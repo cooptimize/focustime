@@ -45,6 +45,9 @@ export type Props = {
   weekDays: { catchUp: boolean; weekend: boolean };
   setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;
   catchUpName: string;
+  /** SA-3: Week's View options' "Every weekend day" (this browser's), so Days on Week offers the same three choices. */
+  everyWeekendDay?: boolean;
+  setEveryWeekendDay?: (on: boolean) => void;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
