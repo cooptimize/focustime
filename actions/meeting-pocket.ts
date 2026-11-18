@@ -1,7 +1,7 @@
 // MC-2b, PK-4: my own Pocket recordings in Calls. Pocket is asked only from these, each with my own key from my own
 // sealed secrets, for me alone:
 //   meeting.pocket_list    when I open Calls, press Refresh or press Check Pocket again (PK-4): my recordings of Calls'
-//                          last 14 days (whose they are by plan/pocket-recordings.ts `whoseKept`; the rest only
+//                          last 14 days (whose they are by plan/pocket-recordings.ts `whoseKept, colleagueOf`; the rest only
 //                          counted), held 5 minutes in this server's memory for me (and the page's while Calls is
 //                          open). At most one list in 5 minutes, unless my Pocket addresses changed since. Never stored
 //                          or logged.
@@ -20,7 +20,7 @@ import { POCKET_ADDRESS_MAX, type PocketPort } from "./pocket-actions.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import { canConfirm, type MeetingSeries, type Occurrence } from "../plan/meetings.ts";
 import { otherCallsWindow } from "../plan/calls.ts";
-import { goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, POCKET_HOLD_MS, whoseKept, type ListCounts } from "../plan/pocket-recordings.ts";
+import { goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, POCKET_HOLD_MS, whoseKept, colleagueOf, type ListCounts } from "../plan/pocket-recordings.ts";
 import { POCKET_CALL_WORDS } from "../plan/pocket-words.ts";
 
 import type { PocketListView, PocketRecordingView } from "./pocket-types.ts";
@@ -128,13 +128,14 @@ export async function pocketList(ctx: PocketCallContext, me: string, zone: strin
   }
   const w = otherCallsWindow(ctx.now(), zone);
   const utc = (iso: string) => iso.slice(0, 10);
-  const mine = [...(await p.myEmails()), ...addresses];
+  const work = await p.myEmails();
+  const mine = [...work, ...addresses];
   // Fails closed: when who else FocusTime knows can't be read, no one-recorder list is kept as mine.
   let others = true;
   const theirs = p.theirEmails ? await p.theirEmails().catch(() => ((others = false), [] as string[])) : [];
   let list;
   try {
-    list = await p.port.client.listRecordings(keyOf(p.port), utc(w.fromIso), utc(Temporal.Instant.from(w.toIso).toString()), (rs, isRecording) => whoseKept(rs, { mine, theirs, others }, isRecording));
+    list = await p.port.client.listRecordings(keyOf(p.port), utc(w.fromIso), utc(Temporal.Instant.from(w.toIso).toString()), (rs, isRecording) => whoseKept(rs, { mine, theirs, others, work }, isRecording));
   } catch (e) {
     return failed(ctx, e, "meeting_pocket_list");
   }
@@ -168,7 +169,8 @@ export async function pocketAddressAdd(ctx: PocketCallContext, me: string, input
   const a = lower(typed);
   const list = await p.port.addresses.get();
   if (list.includes(a)) return { ok: true, data: { addresses: list } };
-  if ((await p.myEmails()).map(lower).includes(a)) return bad(POCKET_CALL_WORDS.addressKnown, 409, "pocket_address_known");
+  const work = await p.myEmails();
+  if (work.map(lower).includes(a)) return bad(POCKET_CALL_WORDS.addressKnown, 409, "pocket_address_known");
   if (list.length >= POCKET_ADDRESS_MAX) return bad(POCKET_CALL_WORDS.addressMax, 409, "pocket_address_max");
   const held = p.hold.list(me);
   if (!held) return bad(POCKET_CALL_WORDS.addressListFirst, 409, "pocket_get_again");
@@ -181,7 +183,8 @@ export async function pocketAddressAdd(ctx: PocketCallContext, me: string, input
     ctx.log({ source: "plan", op: "meeting_pocket_address", kind: "unchecked" });
     return bad(POCKET_CALL_WORDS.addressUnchecked, 503, "pocket_address_unchecked");
   }
-  if (theirs.includes(a) || !held.recorders.has(recorderHash(a))) {
+  // Another FocusTime person's address, or another address on my work domain, is a colleague's: refused alike.
+  if (colleagueOf(work, theirs)(a) || !held.recorders.has(recorderHash(a))) {
     p.hold.refuse(me);
     ctx.log({ source: "plan", op: "meeting_pocket_address", kind: "refused" });
     return bad(POCKET_CALL_WORDS.addressRefused, 422, "pocket_address_refused");

@@ -1,7 +1,7 @@
 // MC-2b, PK-4: the pure rules for Pocket recordings in Calls: whose are kept, which call a recording goes with, the part
 // during a long call, the time unit and the speaker labels. Invented times and words only.
 import { describe, expect, it } from "vitest";
-import { forCall, goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, whoseKept, withNoCall, countWhy, type Segment } from "./pocket-recordings.ts";
+import { colleagueOf, forCall, goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, whoseKept, withNoCall, countWhy, type Segment } from "./pocket-recordings.ts";
 
 const rec = (id: string, startAt: string, minutes: number) => ({ id, startAt, seconds: minutes * 60 });
 const call = (startAt: string, minutes: number) => ({ startAt, endAt: Temporal.Instant.from(startAt).add({ minutes }).toString() });
@@ -63,6 +63,15 @@ describe("PK-4: whose listed items are kept", () => {
     const why = whoseKept(["lee@cooptimize.example", "lee@cooptimize.example"], { ...ME, theirs: ["lee@cooptimize.example"] }, a.isRecording);
     expect(why).toEqual(["address", "address"]);
     expect(a.asked).toEqual([]);
+  });
+
+  it("another address on my work domain is a colleague's: never kept as the one recorder", () => {
+    const work = ["you@example.com"];
+    expect(whoseKept(["sam@example.com", "sam@example.com"], { mine: work, work }, asking().isRecording)).toEqual(["address", "address"]);
+    expect(whoseKept(["me@personal.example", "me@personal.example"], { mine: work, work }, asking().isRecording)).toEqual(["one", "one"]);
+    expect(colleagueOf(work, [])("sam@example.com")).toBe(true);
+    expect(colleagueOf(work, [])("you@example.com")).toBe(false);
+    expect(colleagueOf(work, ["lee@other.example"])("lee@other.example")).toBe(true);
   });
 
   it("fails closed: when who else FocusTime knows can't be read, one recorder isn't kept", () => {

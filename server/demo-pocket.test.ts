@@ -6,7 +6,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { dispatch, DEMO_REFUSED } from "../actions/dispatch.ts";
-import { DEMO_POCKET_KEYS, DEMO_POCKET_SOLO } from "../sources/demo/pocket.ts";
+import { DEMO_POCKET_KEYS, DEMO_POCKET_SOLO, DEMO_POCKET_OTHER } from "../sources/demo/pocket.ts";
 import { createDemoContext, seedDemo } from "./demo.ts";
 
 const NOW = "2026-11-17T15:00:00Z";
@@ -46,9 +46,11 @@ describe("PK-4: Settings' counts on the demo", () => {
     await dispatch(ctx, { action: "pocket.connect", input: { key: DEMO_POCKET_KEYS.shared } });
     const before = (await dispatch(ctx, { action: "meeting.pocket_list", input: {} })) as { data: { recordings: unknown[]; counts: Counts; canSetAddress: boolean } };
     expect(before.data.recordings).toEqual([]);
-    expect(before.data.counts).toMatchObject({ kept: 0, noRecorder: 2, notRecordings: 1 });
+    expect(before.data.counts).toMatchObject({ kept: 0, noRecorder: 2, notRecordings: 0, address: 6 });
     expect(before.data.canSetAddress).toBe(true);
     expect(await dispatch(ctx, { action: "meeting.pocket_address_add", input: { address: "nobody@example.com" } })).toMatchObject({ ok: false, code: "pocket_address_refused" });
+    // A colleague's address on my work domain is refused in the same words, though it recorded under my key.
+    expect(await dispatch(ctx, { action: "meeting.pocket_address_add", input: { address: DEMO_POCKET_OTHER } })).toMatchObject({ ok: false, code: "pocket_address_refused" });
     expect(await dispatch(ctx, { action: "meeting.pocket_address_add", input: { address: DEMO_POCKET_SOLO } })).toMatchObject({ ok: true });
     const after = (await dispatch(ctx, { action: "meeting.pocket_list", input: {} })) as { data: { recordings: { id: string }[]; counts: Counts } };
     expect(after.data.recordings.map((r) => r.id).sort()).toEqual(["rec-demo-carrier", "rec-demo-long", "rec-demo-prop", "rec-demo-weekly"]);

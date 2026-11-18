@@ -22,6 +22,20 @@ export const keptWhy = (w: ListedWhy) => w === "mine" || w === "one";
 
 const norm = (e: string | null) => (e === null ? null : e.trim().toLowerCase() || null);
 
+/** An address's domain, lower case ("" when it has none). */
+export const domainOf = (e: string) => e.slice(e.lastIndexOf("@") + 1).trim().toLowerCase();
+
+/**
+ * PK-4: whether `r` is a colleague's address: one another FocusTime person is known by, or any other address on the
+ * domain of my work address (mine there would already be known, so another one there is someone else's).
+ */
+export function colleagueOf(work: readonly string[], theirs: readonly string[]) {
+  const domains = new Set(work.map(domainOf).filter(Boolean));
+  const mine = new Set(work.map((e) => e.trim().toLowerCase()));
+  const them = new Set(theirs.map((e) => e.trim().toLowerCase()));
+  return (r: string) => !mine.has(r) && (them.has(r) || domains.has(domainOf(r)));
+}
+
 /**
  * PK-4: whose listed items are kept, from their recorders' addresses and, only where the addresses don't settle it, by
  * asking `isRecording` (its length and when it was recorded). Asked of an item under an address FocusTime doesn't know
@@ -32,11 +46,17 @@ const norm = (e: string | null) => (e === null ? null : e.trim().toLowerCase() |
  */
 export function whoseKept(
   recorders: readonly (string | null)[],
-  o: { mine: readonly string[]; /** Addresses other FocusTime people are known by. */ theirs?: readonly string[]; /** False: `theirs` couldn't be read. */ others?: boolean },
+  o: {
+    mine: readonly string[];
+    /** Addresses other FocusTime people are known by. */ theirs?: readonly string[];
+    /** False: `theirs` couldn't be read. */ others?: boolean;
+    /** My sign-in addresses: another address on their domain is a colleague's. */ work?: readonly string[];
+  },
   isRecording: (i: number) => boolean,
 ): ListedWhy[] {
   const me = new Set(o.mine.map(norm).filter((e): e is string => !!e));
-  const them = new Set((o.theirs ?? []).map(norm).filter((e): e is string => !!e && !me.has(e)));
+  const colleague = colleagueOf(o.work ?? [], o.theirs ?? []);
+  const them = { has: (r: string) => !me.has(r) && colleague(r) };
   const rs = recorders.map(norm);
   const asked = new Map<number, boolean>();
   const rec = (i: number) => {

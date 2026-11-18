@@ -62,7 +62,7 @@ describe.skipIf(!CHROMIUM)("PK-4: my Pocket recordings found by themselves (brow
   it("left out as someone else's until I set my Pocket address; then mine appear", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page, DEMO_POCKET_KEYS.shared);
-    await expect.poll(() => line(page).textContent(), { timeout: W }).toBe("8 listed. 5 are under an address FocusTime doesn't know you by. 2 have no recorder. 1 isn't a recording. Pocket checked at 10:00 AM.");
+    await expect.poll(() => line(page).textContent(), { timeout: W }).toBe("8 listed. 6 are under an address FocusTime doesn't know you by. 2 have no recorder. Pocket checked at 10:00 AM.");
     await expect(page.locator("[data-call-mark='pocket']").count()).resolves.toBe(0);
     await setAddress(page);
     // Settings shows my address and the counts, numbers only.
