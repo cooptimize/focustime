@@ -7912,3 +7912,9 @@ a.sp-btn:hover { background: var(--wash-1); }
 .sp-group > .write-log { margin: 0; padding: 0; border: 0; }
 .sp-group .write-log > p { margin: 0 0 6px; }
 .sp-group .write-log > h3 + p { margin-top: 2px; font-size: var(--fs-2); color: var(--text-muted); }
+/* SA-2: on the phone the Undo sits above the bottom bar (and its Capture), inside the 16 px gutters, and Undo is a full tap target. */
+@media (max-width: 599.98px) {
+  .set-undo { bottom: calc(var(--bb-h, 0px) + 12px); z-index: 70; width: calc(100vw - 32px); display: flex; justify-content: center; }
+  .set-undo-box { max-width: 100%; box-sizing: border-box; }
+  .set-undo-box .link-btn { min-height: var(--tap, 44px); min-width: var(--tap, 44px); }
+}
