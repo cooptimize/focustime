@@ -1657,3 +1657,9 @@ From the IT review (TD-1):
 - **The window's times read three ways** (19:00 on cards, 7:00 PM in the form, 7:00 on the phone's sheet with no AM or PM) and none names a zone. Before DP-3; with people in other zones a zone name might help.
 - **Saves to the hold timebox after someone else's change reach my Outlook without a question when I turned off previews for my own events** (my confirm_own rule, as the brief asks). Whether a shared deployment's hold should always ask is open.
 - **A removed person's notice names the deployment as it is when the notice is sent**, not when they were removed (a rename in between shows the new title). Keeping the title on the note needs a column.
+
+## DD-1: The dev deploy's check looks for the dev site's title (Nov 18)
+
+- **Should the deploy's smoke test run against a local server in CI?** A change like EV-1's (what the page says on dev) passed every pull request check and only failed after the merge, in deploy-dev. `scripts/deploy-title.test.ts` now catches the title, but not the rest of the step (the sign-in redirect, the security headers). The step could move into a script that CI also runs against the image it already starts (with `FOCUSTIME_ENV=dev`), so it fails in the pull request. Not in this step: no new smoke test was in scope.
+- **`docs/technical/operations.md` names the wrong smoke test.** It says deploy-dev's smoke test is `infra/scripts/smoke.sh`; the workflow runs its own inline Smoke test step (health, the commit served, the title, sign-in, headers) and smoke.sh is a by-hand check after a deploy. Not the title's cause, so not changed here.
+- **The style guide's light `--risk` reads #C0311F; the stylesheet's is #B42F1D** (`--p-co-red-700`). DD-1's row gives the stylesheet's value. Which one should the table show?

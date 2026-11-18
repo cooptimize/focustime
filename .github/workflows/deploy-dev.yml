@@ -133,7 +133,7 @@ jobs:
           done
           echo "served: $served, deployed: dev ${BUILD_SHA}"
           [[ $served == "dev ${BUILD_SHA}" ]]
-          curl -fsS "$APP_URL/" | grep -q "<title>FocusTime</title>"
+          curl -fsS "$APP_URL/" | grep -q "<title>Dev · FocusTime</title>"
           code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/auth/microsoft/login")
           loc=$(curl -s -o /dev/null -w '%{redirect_url}' "$APP_URL/auth/microsoft/login")
           [[ $code == 302 && $loc == https://login.microsoftonline.com/* ]] || { echo "sign-in: $code ${loc%%\?*}"; exit 1; }

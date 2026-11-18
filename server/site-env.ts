@@ -14,6 +14,15 @@ export function markedEnv(env: BuildEnv | string | null | undefined): MarkedEnv 
   return env === "dev" || env === "local" ? env : null;
 }
 
+/** The build's own title (index.html), the one production and the demo keep. */
+export const BUILD_TITLE = "FocusTime";
+
+/** The tab's title the server sends for this environment: "Dev · FocusTime" on dev, the build's own elsewhere. */
+export function siteTitle(env: BuildEnv | string | null | undefined): string {
+  const m = markedEnv(env);
+  return m ? `${SITE_WORD[m]} · ${BUILD_TITLE}` : BUILD_TITLE;
+}
+
 /** The page for this environment: unchanged unless marked. Each rewrite must find its target, or the page is left as built. */
 export function sitePage(html: string, env: BuildEnv | string | null | undefined): string {
   const m = markedEnv(env);
@@ -21,7 +30,7 @@ export function sitePage(html: string, env: BuildEnv | string | null | undefined
   const word = SITE_WORD[m];
   const swaps: [RegExp, string][] = [
     [/<html lang="en">/, `<html lang="en" data-site="test">`],
-    [/<title>FocusTime<\/title>/, `<title>${word} · FocusTime</title>`],
+    [new RegExp(`<title>${BUILD_TITLE}</title>`), `<title>${siteTitle(m)}</title>`],
     [/<meta name="apple-mobile-web-app-title" content="FocusTime" \/>/, `<meta name="apple-mobile-web-app-title" content="FocusTime ${word}" />`],
   ];
   let out = html;
