@@ -147,6 +147,8 @@ export function Settings(props: Props) {
       const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(setting)}"]`);
       if (!el) return;
       jumpDue.current = false;
+      // SA-3: a setting inside a fold (Fine tuning, Each kind of notice) opens it first.
+      for (let d = el.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
       el.scrollIntoView?.({ block: "start" });
       el.classList.remove("ps-flash");
       void el.offsetWidth;
@@ -204,7 +206,7 @@ export function Settings(props: Props) {
             {current !== null && (
               <>
                 {error && <p className="field-problem">{error}</p>}
-                {data && !inAdmin && data.problems.length > 0 && current !== "connections" && current !== "devops" && current !== "data" && current !== "activity" && (
+                {data && !inAdmin && data.problems.length > 0 && current !== "connections" && current !== "data" && (
                   <div className="config-banner" role="alert">
                     <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
                     <ul>
@@ -247,31 +249,43 @@ function SectionBody(p: BodyProps) {
     case "hours":
       return <HoursSection {...p} />;
     case "planning":
-      return <DayWeekSection {...p} />;
+      return (
+        <>
+          <DayWeekSection {...p} />
+          <BacklogSection {...p} />
+        </>
+      );
     case "focus":
       return <FocusSection {...p} />;
     case "notifications":
       return <NotificationsSection {...p} />;
-    case "ahead":
-      return <BacklogSection {...p} />;
     case "clients":
-      return <ClientsSection {...p} />;
+      return (
+        <>
+          <ClientsSection {...p} />
+          <ChatsSection {...p} />
+        </>
+      );
     case "client":
       return <ClientSection {...p} />;
-    case "chats":
-      return <ChatsSection {...p} />;
     case "ai":
       return <AiSection {...p} />;
     case "connections":
-      return <ConnectionsSection {...p} />;
-    case "devops":
-      return <DevOpsSection {...p} />;
+      return (
+        <>
+          <ConnectionsSection {...p} />
+          <DevOpsSection {...p} />
+        </>
+      );
     case "display":
       return <DisplaySection {...p} />;
-    case "activity":
-      return <ActivitySection {...p} />;
     case "data":
-      return <DataSection {...p} />;
+      return (
+        <>
+          <DataSection {...p} />
+          <ActivitySection {...p} />
+        </>
+      );
     case "about":
       return <AboutSection onGuide={p.onGuide} />;
   }
