@@ -144,6 +144,7 @@ import { inviteDomains } from "../config/schema.ts";
 import type { LinkCalendars } from "../sources/ics/source.ts";
 import { calendarLinkAction } from "./calendar-link-actions.ts";
 import { pocketAction, type PocketPort } from "./pocket-actions.ts";
+import type { PocketHold } from "./meeting-pocket.ts";
 
 /** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
 const TOUR_MARK = "tour_offer";
@@ -1420,6 +1421,8 @@ export type MeetingsPort = {
   press?: PressGrants;
   /** MC-2: a Cooptimizer by the people rule (not a guest, not an automation account, inside the domains). */
   cooptimizer?: (userId: string) => Promise<boolean>;
+  /** MC-2b: each person's last Pocket list, 5 minutes, in this server's memory (actions/meeting-pocket.ts). */
+  pocketHold?: PocketHold;
 };
 
 /**
@@ -1462,6 +1465,10 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
+    ...(ctx.pocket && ctx.meetings?.pocketHold
+      ? { pocket: { port: ctx.pocket, hold: ctx.meetings.pocketHold, myEmails: async () => { const me = await rc.me(); const users = ctx.meetings ? await ctx.meetings.users() : []; return users.find((u) => me && u.id.toLowerCase() === me.toLowerCase())?.emails ?? []; } } }
+      : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -2727,6 +2734,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.call_start":
     case "meeting.call_fetch":
     case "meeting.call_add":
+    case "meeting.pocket_list":
+    case "meeting.pocket_bring":
+    case "meeting.pocket_add":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

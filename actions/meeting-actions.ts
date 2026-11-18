@@ -18,12 +18,13 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
+import { pocketAdd, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
 
 /** RQ-1: devops.needed's answer as a row reads it. */
 export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
@@ -44,7 +45,7 @@ import type { OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -101,6 +102,8 @@ export type MeetingContext = {
   press?: PressGrants;
   /** MC-2: a Cooptimizer by the people rule (never a guest or an automation account); absent: nobody is. */
   cooptimizer?: (userId: string) => Promise<boolean>;
+  /** MC-2b: my own Pocket (my key, the one client), the shared 5 minute hold and my addresses; absent: not here. */
+  pocket?: MeetingPocket;
 };
 
 class Invalid extends Error {}
@@ -361,6 +364,23 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         return await fetchFromTeams(ctx, store, cfg, me, series, occ);
       }
       case "meeting.call_add": return await addCall(ctx, store, cfg, me, input);
+      // MC-2b: only from the person's two presses in Calls (Get my Pocket recordings; Continue on a setup).
+      case "meeting.pocket_list": {
+        obj(input, []);
+        return await pocketList(ctx, me, userZone(cfg));
+      }
+      case "meeting.pocket_bring": {
+        const o = obj(input, ["recordingId", "occurrenceId"], ["part", "replace"]);
+        const pass = (series: MeetingSeries, occ: Occurrence, lines: TranscriptLine[]) => runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, occ, lines);
+        return await pocketBring(ctx, store, me, { recordingId: o.recordingId, occurrenceId: id(o.occurrenceId, "occurrenceId"), part: o.part, replace: o.replace }, pass);
+      }
+      case "meeting.pocket_add": {
+        const o = obj(input, ["recordingId", "name", "clientKey"]);
+        const name = text(o.name, "name", 200)!;
+        const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+        if (isRefusal(client)) return client;
+        return await pocketAdd(ctx, store, me, userZone(cfg), { recordingId: o.recordingId, name, clientKey: client.key });
+      }
     }
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
@@ -535,7 +555,10 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       // MC-2: what was discussed and decided (at most 5 lines), on every call; null for one reviewed before MC-2.
       summary: lines ? await store.summary(r.o.id) : null,
       // PK-1: a Pocket export's speakers are numbered, never named, and its lines have no times (kept past 30 days).
-      pocket: r.o.transcriptKind === "pocket",
+      // MC-2b: a Pocket recording brought in from Pocket is numbered too, with times.
+      pocket: unnamedSpeakers(r.o.transcriptKind),
+      // MC-2b: whose Pocket recording it was, said only as mine or a reviewer's (never a name); null otherwise.
+      pocketFrom: r.o.transcriptKind === "pocket_api" && lines ? ((await store.transcriptBy(r.o.id))?.toLowerCase() === me.toLowerCase() ? "mine" : "reviewer") : null,
       canConfirm: reviewer,
       canWrite,
       // MC-1e: each row's check before any preview (a reviewer's only; an attendee only looks).
@@ -725,7 +748,7 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
     // MC-2: a call that isn't registered has no role (it isn't a weekly status or planning call): none is said.
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: occ.transcriptKind !== "pocket" });
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: !unnamedSpeakers(occ.transcriptKind) });
     if (r.ok) {
       await d.store.saveSummary(occ.id, r.summary);
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.

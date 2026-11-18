@@ -64,3 +64,39 @@ export function checkedAgo(at: string, nowMs: number, timeZone: string): string 
   if (mins < 24 * 60) return `checked ${Math.floor(mins / 60)} h ago`;
   return `checked ${i.toZonedDateTimeISO(timeZone).toPlainDate().toLocaleString("en-US", { month: "short", day: "numeric" })}`;
 }
+
+/**
+ * MC-2b: the words for Pocket recordings in Calls (wording.md, "MC-2b words"). Titles are the person's own and shown
+ * only to them; nothing here names who else recorded anything.
+ */
+export const POCKET_CALL_WORDS = {
+  get: "Get my Pocket recordings",
+  getting: "Asking Pocket…",
+  /** For someone without Pocket connected: one quiet line and its link, no button. */
+  connectLine: "Record calls on a Pocket? Connect it in Settings.",
+  connectLink: "Connect it in Settings",
+  notConnected: "Pocket isn't connected. Connect it in Settings › Accounts and calendars › Pocket recorder",
+  getAgain: "Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes",
+  notThisCall: "That recording doesn't go with this call: they overlap for less than half the call",
+  noWords: "Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file",
+  found: "Pocket recording found",
+  rowKind: "Pocket recording",
+  source: "Use my Pocket recording",
+  part: "Only the part during the call (5 minutes either side)",
+  all: "Bring in all of it",
+  whole: (length: string) => `Pocket gave this recording's lines no times, so all of it comes in: ${length}.`,
+  seeCall: "The Cooptimizers on this call's invite will be able to read it.",
+  seeClient: "This call's reviewers and the Cooptimizers on its invite will be able to read it.",
+  seeMe: "Only you will see it.",
+  fromMine: "From your Pocket recording.",
+  fromReviewer: "From a reviewer's Pocket recording.",
+  unnamed: "Speakers aren't named, and Pocket can mix them up.",
+  more: "Pocket has more recordings than FocusTime reads at once (300). The newest are here.",
+} as const;
+
+/** "3 recordings by other people were left out." */
+export const othersLeftOut = (n: number) => `${n} ${n === 1 ? "recording" : "recordings"} by other people ${n === 1 ? "was" : "were"} left out.`;
+/** "Got 4 recordings at 10:42 AM." */
+export const gotLine = (n: number, time: string) => (n ? `Got ${n} ${n === 1 ? "recording" : "recordings"} at ${time}.` : `No recordings of yours in the last 14 days, at ${time}.`);
+/** A recording's start and length on the setup: "Mon 10:58 AM · 47 min". */
+export const recordingLine = (when: string, length: string) => `${when} · ${length}`;
