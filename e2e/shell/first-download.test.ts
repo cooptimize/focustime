@@ -44,7 +44,8 @@ const SCREENS: { name: string; shown: string; ways: Way[]; focus: Record<string,
   { name: "Backlog's Gantt", shown: "main.ahead-gantt", ways: [address("#/backlog/gantt")], focus: { address: "h2" } },
   { name: "Status", shown: "main.status-view", ways: [key("4"), click(tab("Status")), address("#/status")], focus: { key: "body", click: "button.view-tab", address: "body" } },
   { name: "Inbox", shown: "main.ib4", ways: [key("5"), click(tab("Inbox")), address("#/inbox")], focus: { key: "body", click: "button.view-tab", address: "body" } },
-  { name: "Code", shown: "main.code-page", ways: [key("6"), click(tab("Code")), address("#/code")], focus: { key: "body", click: "button.view-tab", address: "body" } },
+  { name: "Calls", shown: "main.calls-page", ways: [key("6"), click(tab("Calls")), address("#/calls")], focus: { key: "body", click: "button.view-tab", address: "body" } },
+  { name: "Code", shown: "main.code-page", ways: [key("7"), click(tab("Code")), address("#/code")], focus: { key: "body", click: "button.view-tab", address: "body" } },
   { name: "Settings", shown: "main.panel-shell.settings", ways: [key(","), click(".demo-tag"), address("#/settings")], focus: { key: "h2", click: "button.sp-btn.main", address: "h2" } },
   { name: "Admin", shown: "main.panel-shell.settings", ways: [address("#/settings/admin-clients")], focus: { address: "h2" } },
   { name: "the story card", shown: '[role="dialog"][aria-labelledby="sc-title"]', ways: [click("main.ahead a[data-card]"), address("#/item/Cooptimize/4411")], focus: { click: "h2", address: "h2" }, before: async (p) => void (await p.keyboard.press("3"), await p.waitForSelector("main.ahead a[data-card]")) },
@@ -137,7 +138,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
   }, 600_000);
 
   it("the first screen asks for no other screen's file; the others are fetched in the background, or on a data-saving connection only on hover, focus or the key", async () => {
-    const lazy = /\/assets\/(Ahead|Status|InboxPage|Code|StoryCard|Capture|Assistant|Checkin|CloseOut|FocusScreen|NewItem|DraftEditor|Settings|Guide|Tour|TechDocs|shared|guide-text)-[^/]+\.js$/;
+    const lazy = /\/assets\/(Ahead|Status|InboxPage|Meetings|Code|StoryCard|Capture|Assistant|Checkin|CloseOut|FocusScreen|NewItem|DraftEditor|Settings|Guide|Tour|TechDocs|shared|guide-text)-[^/]+\.js$/;
     // An ordinary connection: nothing before the first screen is usable, then the tabs' files without being asked.
     const a = await session(h);
     const asked: string[] = [];
@@ -151,7 +152,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     a.page.on("request", (r) => lazy.test(r.url()) && asked.push(r.url().replace(/.*\/assets\//, "").replace(/-.*/, "")));
     await a.page.goto(h.url + "#/day");
     await usable(a.page);
-    await expect.poll(() => ["Ahead", "Status", "InboxPage", "Code", "Capture", "Settings"].every((n) => asked.includes(n)), { timeout: 30_000 }).toBe(true);
+    await expect.poll(() => ["Ahead", "Status", "InboxPage", "Meetings", "Code", "Capture", "Settings"].every((n) => asked.includes(n)), { timeout: 30_000 }).toBe(true);
     const early = await a.page.evaluate(() => {
       const day = (window as unknown as { pf1Day?: number }).pf1Day ?? 0;
       return { day, before: performance.getEntriesByType("resource").filter((r) => /\/assets\/(?!main-|index-|boot-|rolldown-runtime-)[^/]+\.js$/.test(r.name) && r.startTime < day).map((r) => r.name.replace(/.*\/assets\//, "")) };
@@ -159,7 +160,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     expect(early.day).toBeGreaterThan(0);
     expect(early.before, "asked for before Day was drawn").toEqual([]);
     // In the tabs' order.
-    expect(asked.filter((n) => ["Ahead", "Status", "InboxPage", "Code"].includes(n))).toEqual(["Ahead", "Status", "InboxPage", "Code"]);
+    expect(asked.filter((n) => ["Ahead", "Status", "InboxPage", "Meetings", "Code"].includes(n))).toEqual(["Ahead", "Status", "InboxPage", "Meetings", "Code"]);
     expect(asked, "the Guide and the Technical docs wait to be opened").not.toContain("TechDocs");
     // Each file once.
     expect(asked.filter((n, i) => asked.indexOf(n) !== i), "asked for twice").toEqual([]);
@@ -481,7 +482,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     const caches1 = await kept();
     expect(Object.keys(caches1).length, "one cache, one release").toBe(1);
     const files = Object.values(caches1)[0]!;
-    for (const n of ["main", "shared", "Ahead", "Status", "InboxPage", "Code", "StoryCard", "Capture", "Assistant", "Checkin", "CloseOut", "FocusScreen", "NewItem", "DraftEditor", "Settings", "Guide", "TechDocs"])
+    for (const n of ["main", "shared", "Ahead", "Status", "InboxPage", "Meetings", "Code", "StoryCard", "Capture", "Assistant", "Checkin", "CloseOut", "FocusScreen", "NewItem", "DraftEditor", "Settings", "Guide", "TechDocs"])
       expect(files.some((f) => new RegExp(`^/assets/${n}-[^/]+\\.js$`).test(f)), `${n}'s file is kept`).toBe(true);
     // Never anything but the app's own files.
     expect(files.filter((f) => /^\/(api|auth|media)\//.test(f))).toEqual([]);

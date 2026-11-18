@@ -50,17 +50,17 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     expect(scroll.inner).toEqual([]);
     expect(scroll.behind).toBeLessThanOrEqual(0);
 
-    // Week: one day at a time; every control that showed on hover is there without one.
+    // PH-2: Week is the whole week in day rows, with nothing that shows only on hover.
     await open(page, "#/week");
-    await page.waitForSelector(".grid.narrow .half");
-    const hidden = await page.locator(".grid.narrow .card-more, .grid.narrow .day-head .more-btn").evaluateAll((els) => els.filter((e) => getComputedStyle(e).opacity !== "1" || getComputedStyle(e).visibility === "hidden").length);
+    await page.waitForSelector(".pw-row .pw-tile");
+    const hidden = await page.locator(".pw button").evaluateAll((els) => els.filter((e) => getComputedStyle(e).opacity === "0" || getComputedStyle(e).visibility === "hidden").length);
     expect(hidden).toBe(0);
-    // A sideways swipe changes the day.
-    const before = await page.locator(".day-tab.current").textContent();
-    const grid = page.locator(".grid.narrow");
-    await grid.dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 300, clientY: 400 }] });
-    await grid.dispatchEvent("touchend", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 410 }] });
-    await expect.poll(() => page.locator(".day-tab.current").textContent()).not.toBe(before);
+    // A sideways swipe changes the week.
+    const before = await page.locator(".pw-title").textContent();
+    const pw = page.locator(".pw");
+    await pw.dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 300, clientY: 400 }] });
+    await pw.dispatchEvent("touchend", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 410 }] });
+    await expect.poll(() => page.locator(".pw-title").textContent()).not.toBe(before);
 
     // WD-1: Add work works on the phone as a bottom sheet (the old Plan today and Commit addresses open it), no read-only line.
     for (const hash of ["#/week/day", "#/week/commit"]) {

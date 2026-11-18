@@ -10,6 +10,10 @@ import type { NowCard as NowState } from "../../plan/phonenow.ts";
 import { blockGone, blockLine, PHONE_TEXT as W, type NextLine, type OneThing } from "../../plan/phone-now.ts";
 // Day reads these through this file, so the phone's words and rules stay out of the computer's first download.
 export { nextLines, oneThing, PHONE_TEXT } from "../../plan/phone-now.ts";
+// PH-2: the phone's Week, a day at a glance and the Inbox one at a time, in this same file's chunk.
+export { PhoneWeek } from "./PhoneWeek.tsx";
+export { DaySections, DayGlanceHead } from "./PhoneDayGlance.tsx";
+export { InboxOne, InboxEnd, InboxBack } from "./InboxOne.tsx";
 import { clientColor, startClock } from "../labels.ts";
 import { formatDuration } from "../../week/format.ts";
 import { countdown, timerLeft } from "../NowStrip.tsx";
@@ -319,9 +323,10 @@ export function PhoneMore({ statusNeeds, calls, code, health, unread, focusing, 
   const to = (where: MoreWhere) => (e: React.MouseEvent<HTMLButtonElement>) => go(where, at(e));
   const vmText = vm.status?.vm ? (vm.status.text ?? vm.status.label ?? null) : W.rows.vmNone;
   const rows: MoreRow[] = [
+    // MC-3: Calls first (a tab on the computer; the phone's bar is unchanged), with how many need me.
+    { id: "calls", icon: "calls", label: W.rows.calls, line: calls > 0 ? W.rows.callsLine(calls) : null, run: to("calls") },
     { id: "backlog", icon: "backlog", label: W.rows.backlog, run: to("backlog") },
     { id: "status", icon: "status", label: W.rows.status, line: statusNeeds > 0 ? W.rows.statusLine(statusNeeds) : null, run: to("status") },
-    { id: "calls", icon: "meeting", label: W.rows.calls, line: calls > 0 ? W.rows.callsLine(calls) : null, run: to("calls") },
     ...(code ? [{ id: "code", icon: "code" as const, label: W.rows.code, run: to("code") }] : []),
     // The VM's own menu (Start, Allow Azure access, Refresh, Choose), or Settings › You to find one.
     { id: "vm", icon: "vm", label: W.rows.vm, line: vmText, run: (e) => (vm.status?.vm ? (onClose(), vm.openMenu(at(e))) : go("vm", at(e))) },

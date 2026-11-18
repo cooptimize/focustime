@@ -3,7 +3,7 @@
 // unfinished to-do). The step's scenarios: + Add and the Add box (a match, no match), a click on a block and moving to
 // another, Take off the plan by drag and by ⋯ (and Undo), the panel opening as the drop area, the trimmed block menu,
 // Day on tomorrow, on today (the wrap-up sheet), on yesterday, without the old chips and line, Timeline's + Add, a day
-// header opening Day, one panel however it is opened, and the phone's sheet. Edge cases are unit tests
+// header opening Day, one panel however it is opened, and the phone's sheet (PH-2: from a day's sections). Edge cases are unit tests
 // (plan/blockpanel.test.ts, plan/dayview.test.ts, actions/plan-actions.test.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
@@ -527,11 +527,11 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("phone (390×844): + Add on a block opens the sheet; a story added from it is on the block, on Week and on Day", async () => {
+  it("phone (390×844): Add under a block opens the sheet; a story added from it is on the block; Week opens a day with the same Add (PH-2)", async () => {
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });
     // Day today: + Add under a block.
-    await page.locator(".ph-todos .ph-add").last().click();
+    await page.locator(".dg-block[data-half] .dg-add").last().click();
     const sheet = page.locator("aside.block-panel.sheet");
     await sheet.waitFor();
     await expect.poll(() => sheet.getAttribute("data-block-panel")).toBe(`${MON}|PM`);
@@ -543,10 +543,12 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await sheet.getByRole("button", { name: /Close/ }).first().click();
     await sheet.waitFor({ state: "detached" });
-    await page.locator(".ph-todos .ph-todo-title", { hasText: title }).waitFor();
-    // Week: the same sheet from a block's + Add.
+    // On Day: in its section, or on the Now card when it is the next to-do (never both).
+    await page.locator(".today-view", { hasText: title }).waitFor();
+    // Week (PH-2: day rows): a day opens, and its block's Add opens the same sheet.
     await page.evaluate(() => (location.hash = "#/week"));
-    const card = page.locator(".half.card .add-work.add-row").first();
+    await page.locator(".pw-row.today .pw-day").click({ timeout: 30_000 });
+    const card = page.locator(".dg-block .dg-add").first();
     await card.waitFor({ timeout: 30_000 });
     await card.click();
     await sheet.waitFor();

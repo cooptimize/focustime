@@ -7689,159 +7689,6 @@ body.ah-dragging * { cursor: grabbing !important; }
 .wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
 .bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }
 
-/* ---- SA-2: one way to draw a setting (ui/settings/parts.tsx; style guide section 12). One column of cards, about
-   760 px at most; a row is the label and its help on the left, the control on the right, under the label when the
-   column is narrow. The saved mark sits out of the flow, so a save moves nothing. Only the four type sizes and the
-   style guide's control heights. ---- */
-.sp-page { container-type: inline-size; max-width: 760px; display: flex; flex-direction: column; gap: var(--space-card); padding-top: 4px; }
-.ps-body > .sp-page { max-width: 760px; }
-.sp-group { margin: 0; padding: 4px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-width: 0; }
-.ps-body .sp-group-h { margin: 12px 0 2px; font-size: var(--fs-3); font-weight: 600; color: var(--text); display: block; }
-.sp-intro { margin: 0 0 8px; font-size: var(--fs-2); color: var(--text-muted); }
-.sp-group > .sp-intro:first-child { margin-top: 12px; }
-.sp-group-h + .sp-row, .sp-intro + .sp-row { border-top: 0; }
-.sp-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; row-gap: 8px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); min-width: 0; }
-.sp-group > .sp-row:first-child, .sp-group > :is(.sp-group-h, .sp-intro) + .sp-row { border-top: 0; }
-.sp-row.sp-bare, .sp-row.sp-wide { grid-template-columns: minmax(0, 1fr); }
-.sp-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sp-label-line { position: relative; display: block; }
-.sp-label { font-size: var(--fs-3); font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
-.sp-help { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
-.sp-team { color: var(--text-muted); }
-.sp-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); justify-self: end; min-width: 0; max-width: 100%; }
-.sp-row.sp-wide > .sp-control { justify-self: stretch; }
-.sp-error, .sp-below { grid-column: 1 / -1; margin: 0; min-width: 0; }
-.sp-error { color: var(--risk); font-size: var(--fs-2); }
-.sp-value { font-size: var(--fs-3); color: var(--text); overflow-wrap: anywhere; text-align: right; }
-.sp-row.sp-wide .sp-value { text-align: left; }
-.sp-faint { color: var(--text-faint); }
-.sp-pre { white-space: pre-wrap; text-align: left; display: block; }
-/* The mark: at the label's end, out of the flow (an absolute box at its own place moves nothing). */
-.sp-mark { position: absolute; margin-inline-start: 10px; white-space: nowrap; font-size: var(--fs-2); font-weight: 500; }
-.sp-mark:empty { display: none; }
-.sp-saved { color: var(--ok); }
-.sp-saving { color: var(--text-faint); }
-.sp-retry { color: var(--risk); }
-.sp-link { border: 0; background: none; padding: 0; min-height: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.sp-more { font-size: var(--fs-2); color: var(--text-muted); }
-.sp-more > summary { cursor: pointer; width: fit-content; color: var(--text-muted); list-style: none; display: inline-flex; align-items: center; min-height: var(--target, 28px); }
-.sp-more-text { display: block; padding: 2px 0 4px; }
-.sp-note { margin: 8px 0; font-size: var(--fs-2); color: var(--text-muted); }
-.sp-note.problem { color: var(--risk); }
-.sp-note.warn { color: var(--watch); }
-.sp-note.ok { color: var(--ok); }
-.sp-fold { margin: 4px 0 8px; }
-.sp-fold > summary { cursor: pointer; width: fit-content; font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); min-height: var(--target, 28px); display: inline-flex; align-items: center; }
-.sp-fold-body { padding-top: 4px; }
-/* Buttons: the small button (28, scaled), 44 on the phone; the row's main action outlined in the accent. */
-.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--h-small); padding: 0 12px; margin: 0; font-size: var(--fs-2); font-weight: 500; line-height: 1.2; text-decoration: none; color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-control); background: transparent; box-sizing: border-box; cursor: pointer; white-space: nowrap; }
-.sp-btn.main { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); color: var(--accent); }
-.sp-btn.quiet { border-color: transparent; color: var(--text-muted); }
-.sp-btn.quiet:hover { color: var(--text); }
-.sp-btn.danger { color: var(--risk); border-color: color-mix(in oklab, var(--risk) 45%, var(--border)); }
-.sp-btn:disabled { opacity: 0.55; cursor: default; }
-a.sp-btn:hover { background: var(--wash-1); }
-.sp-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
-.sp-result { font-size: var(--fs-2); color: var(--text-muted); }
-.sp-result.problem { color: var(--risk); }
-.sp-result.ok { color: var(--ok); }
-.sp-go { color: var(--accent); text-underline-offset: 2px; }
-/* Controls. */
-.sp-switch-box { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target, 28px); min-width: var(--target, 28px); justify-content: flex-start; cursor: pointer; font-size: var(--fs-3); }
-.sp-switch-box.with-text { justify-content: flex-start; }
-.sp-switch { appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: calc(34px * var(--text-scale)); height: calc(20px * var(--text-scale)); border-radius: 999px; background: var(--track); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background 120ms ease-out; }
-.sp-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(14px * var(--text-scale)); height: calc(14px * var(--text-scale)); border-radius: 50%; background: var(--text-muted); transition: transform 120ms ease-out; }
-.sp-switch:checked { background: var(--action); border-color: var(--action); }
-.sp-switch:checked::after { background: var(--on-action); transform: translateX(calc(14px * var(--text-scale))); }
-.sp-switch:disabled { opacity: 0.5; cursor: default; }
-.sp-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .sp-switch, .sp-switch::after { transition: none; } }
-.sp-choice { flex-wrap: wrap; }
-.sp-choice .seg-btn { min-height: var(--h-small); padding: 0 12px; font-size: var(--fs-2); }
-.sp-choice .seg-btn:disabled { opacity: 0.55; cursor: default; }
-.sp-select, .sp-text-input, .sp-num input, .sp-date { min-height: var(--h-control); box-sizing: border-box; padding: 0 10px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-input); max-width: 100%; }
-.sp-select { padding-right: 28px; }
-.sp-text-input { width: 240px; }
-.sp-text-input.wide { width: 100%; }
-.sp-num { display: inline-flex; align-items: center; gap: 8px; }
-.sp-num input[type="number"] { width: calc(5.5em * var(--text-scale)); text-align: right; }
-.sp-range { width: 160px; }
-.sp-unit { font-size: var(--fs-2); color: var(--text-muted); }
-:is(.sp-select, .sp-text-input, .sp-num input, .sp-date):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--accent); }
-:is(.sp-text-input, .sp-num input)[aria-invalid="true"] { border-color: var(--risk); }
-.sp-time { min-height: var(--h-control); }
-.sp-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
-.sp-sub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); }
-.sp-swatches { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.sp-swatch { position: relative; display: inline-grid; place-items: center; min-width: var(--target, 28px); min-height: var(--target, 28px); cursor: pointer; }
-.sp-swatch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.sp-swatch-fill { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--border-strong); }
-.sp-swatch input:checked + .sp-swatch-fill { border-color: var(--surface); box-shadow: 0 0 0 2px var(--text); }
-.sp-swatch input:focus-visible + .sp-swatch-fill { outline: 2px solid var(--focus); outline-offset: 2px; }
-.sp-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); min-width: 0; }
-/* Lists: one row per entry with Remove at its end, one Add at the foot. */
-.sp-list-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.sp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
-.sp-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); min-height: var(--h-control); padding: 2px 8px; border-radius: var(--radius-input); background: var(--wash-1); min-width: 0; }
-.sp-item-main { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); flex: 1; min-width: 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
-.sp-item-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
-.sp-item > .sp-below, .sp-status-item > .sp-below { flex-basis: 100%; }
-.sp-list-add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
-/* Status lists: a dot, a name, a state, a line, actions. */
-.sp-status { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
-.sp-status-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: var(--h-control); padding: 4px 8px; border-radius: var(--radius-input); min-width: 0; }
-.sp-status-item:hover { background: var(--wash-1); }
-.sp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex: none; }
-.sp-status-item.live .sp-dot { background: var(--ok); }
-.sp-status-item.cached .sp-dot { background: var(--watch); }
-.sp-status-item:is(.error, .signin) .sp-dot { background: var(--risk); }
-.sp-status-item.sample .sp-dot { background: var(--sample); }
-.sp-status-name { font-size: var(--fs-3); font-weight: 600; }
-.sp-status-detail { font-size: var(--fs-2); color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
-.sp-status-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
-/* One table style. */
-.sp-table-wrap { max-width: 100%; overflow-x: auto; }
-.ps-body .sp-table, .sp-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); display: table; }
-.sp-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.sp-table td { padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--border); overflow-wrap: normal; }
-.sp-table tr:first-child td { border-top: 0; }
-.sp-table .failed td:first-child, .sp-table .refused td:first-child { box-shadow: inset 2px 0 0 var(--risk); }
-/* A narrow column (the phone, a narrow window, the largest text): the control under its label, full width. */
-@container (max-width: 560px) {
-  .sp-row { grid-template-columns: minmax(0, 1fr); }
-  .sp-control { justify-self: start; }
-  .sp-value { text-align: left; }
-  .sp-text-input { width: 100%; }
-  .sp-status-actions, .sp-item-actions { margin-left: 0; }
-}
-.app.phone .sp-group { padding: 4px 12px; }
-.app.phone .sp-btn, .app.phone .sp-choice .seg-btn, .app.phone .sp-go { min-height: var(--target); }
-.app.phone .sp-go { display: inline-flex; align-items: center; }
-.app.phone .sp-help .sp-go, .app.phone .sp-more-text .sp-go { display: inline; min-height: 0; }
-.ps-body .sp-subhead { margin: 14px 0 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
-.sp-subhead + .sp-row { border-top: 0; }
-.sp-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
-.sp-link-item { display: flex; align-items: center; gap: 10px; min-height: var(--h-control); padding: 6px 8px; border-radius: var(--radius-input); color: var(--text); text-decoration: none; }
-.app.phone .sp-link-item { min-height: var(--target); }
-.sp-link-item:hover { background: var(--wash-1); }
-.sp-link-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.sp-link-item .sp-help { flex: 1; min-width: 0; }
-.sp-swatch-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
-.sp-chev { color: var(--text-faint); display: inline-flex; }
-.sp-control > :is(.sp-status, .sp-list-wrap, .sp-links, .sp-form, .sp-text-input.wide) { flex: 1 1 100%; min-width: 0; }
-.sp-below > :is(.sp-status, .sp-list-wrap) { width: 100%; }
-.sp-buttons > .sp-text-input.wide { flex: 1 1 260px; width: auto; }
-.sp-group > .sp-status { margin-bottom: 8px; }
-.sp-group > .sp-status + .sp-status { margin-top: 6px; }
-/* SA-2: the shared logs (DevOps, Azure, Teams status, Close the loop) in Settings take the parts' one table style. */
-.sp-group .write-log > h3 { margin: 0 0 2px; font-size: var(--fs-3); font-weight: 600; }
-.sp-group .write-log > p.muted { margin: 0 0 8px; font-size: var(--fs-2); }
-.sp-group .wl-table th { font-weight: 600; color: var(--text-muted); font-size: var(--fs-3); padding: 6px 8px; border-bottom: 1px solid var(--border); }
-.sp-group .wl-table td { padding: 6px 8px; border-bottom: 0; border-top: 1px solid var(--border); }
-.sp-group .wl-table tbody tr:first-child td { border-top: 0; }
-.sp-group > .write-log { margin: 0; padding: 0; border: 0; }
-.sp-group .write-log > p { margin: 0 0 6px; }
-.sp-group .write-log > h3 + p { margin-top: 2px; font-size: var(--fs-2); color: var(--text-muted); }
 /* SA-2: on the phone the Undo sits above the bottom bar (and its Capture), inside the 16 px gutters, and Undo is a full tap target. */
 @media (max-width: 599.98px) {
   /* SA-2: clear of the Capture button too, which stands 18 px above the bar (with its 3 px ring). */
@@ -7849,7 +7696,89 @@ a.sp-btn:hover { background: var(--wash-1); }
   .set-undo-box { max-width: 100%; box-sizing: border-box; }
   .set-undo-box .link-btn { min-height: var(--tap, 44px); min-width: var(--tap, 44px); }
 }
-/* SA-2: on the phone every switch has a full tap box (the label around it takes the tap). */
-@media (max-width: 599.98px) {
-  .sp-switch-box { min-height: var(--tap, 44px); }
+
+/* ---- MC-3: Calls is a tab, one list by day, the call beside it -------------------------------------------------- */
+/* The top bar with seven tabs (Calls for everyone, Code for the people who may read code). It never wraps and a tab's
+   name is never hidden or cut. RB-6's order of giving way goes further: the VM's state in one word up to 1500 px, then
+   its dot alone up to 1400 px (1800 px at Larger text; its state stays for screen readers, in its title and its menu).
+   The words on Focus, Capture and Ask go as RB-6 has them (Large up to 1500 px, Larger up to 1800 px), and the tabs'
+   icons never had to: measured at 1280, 1366 and 1440, at each text size, with and without the Dev mark
+   (e2e/week/calls-tab.test.ts; docs/decisions.md, MC-3). A person without Code keeps RB-6's six-tab bar. */
+.app.medium > .topbar.seven-tabs { flex-wrap: nowrap; }
+/* Six tabs (no Code) with Calls' count: RB-6's one-word VM goes on to 1400 px (it squeezed the bar at 1366 before). */
+@media (max-width: 1400px) {
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
 }
+@media (max-width: 1500px) {
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+@media (max-width: 1400px) {
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 1800px) {
+  :root[data-text-size="larger"] .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* The Calls tab: the list by day on the left, the open call beside it; each scrolls on its own. */
+.app > .calls-page { flex: 1; min-height: 0; }
+.calls-page { display: grid; grid-template-columns: clamp(340px, 30vw, 460px) minmax(0, 1fr); min-height: 0; min-width: 0; background: var(--bg); color: var(--text); }
+.calls-page.folded, .calls-page.two-step { grid-template-columns: minmax(0, 1fr); }
+.calls-list { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--border); }
+.calls-page.two-step .calls-list { border-right: 0; }
+.calls-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 16px 8px 24px; }
+.calls-title { display: grid; gap: 2px; min-width: 0; }
+.calls-title h1 { margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.calls-title .muted { font-size: var(--fs-2); }
+.calls-head-actions { display: inline-flex; gap: 6px; flex: none; }
+.calls-filters { flex: none; align-self: flex-start; flex-wrap: wrap; margin: 0 16px 8px 24px; }
+.calls-filters .seg-count { margin-left: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.calls-filters .seg-btn.on .seg-count { color: inherit; }
+.calls-chips { flex: none; padding: 0 16px 8px 24px; }
+.calls-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 24px 24px; }
+.calls-day-head { position: sticky; top: 0; z-index: 2; margin: 0; padding: 8px 0 4px; background: var(--bg); font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.calls-rows { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.calls-row { width: 100%; display: grid; gap: 2px; padding: 6px 10px; border: 1px solid transparent; border-left: 3px solid var(--c, var(--border)); border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.calls-row:hover { background: var(--wash-1); }
+.calls-row.open { background: var(--surface); border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
+.calls-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.calls-row-one { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.calls-time { flex: none; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.calls-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.calls-state { flex: 0 1 auto; max-width: 48%; color: var(--text-muted); font-size: var(--fs-2); text-align: right; }
+.calls-state.needs { color: var(--text); font-weight: 600; }
+.calls-row-two { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px; min-width: 0; color: var(--text-muted); font-size: var(--fs-2); }
+.calls-row-two .swatch { background: var(--c, var(--border-strong)); }
+.calls-row-two .swatch.none { background: none; border: 1px dashed var(--border-strong); }
+.calls-meta { min-width: 0; overflow-wrap: anywhere; }
+.calls-weekly { grid-column: 2; display: inline-flex; align-items: center; gap: 4px; }
+.calls-note { margin: 8px 0; font-size: var(--fs-2); }
+.calls-privacy { margin: 12px 0 0; font-size: var(--fs-1); }
+.calls-fold { display: grid; margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+.calls-fold > .link-btn { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); min-height: var(--target, 28px); }
+.calls-fold-body { display: grid; gap: 6px; padding: 4px 0; }
+.calls-fold-body > p { margin: 0; font-size: var(--fs-2); }
+.calls-series { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.calls-series li { display: grid; gap: 2px; padding: 6px 10px; border-left: 3px solid var(--c, var(--border-strong)); border-radius: 8px; background: var(--surface); font-size: var(--fs-2); }
+.calls-series-name { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: var(--fs-3); font-weight: 500; }
+.calls-series-name .swatch { background: var(--c, var(--border-strong)); }
+.calls-page > .calls-beside { min-height: 0; min-width: 0; }
+.calls-beside-pad { display: grid; gap: 12px; align-content: start; }
+.calls-empty p { margin: 24px 0 0; max-width: 40em; color: var(--text-muted); }
+.calls-empty .mini { justify-self: start; }
+.calls-show-list { justify-self: start; display: inline-flex; align-items: center; gap: 4px; }
+.calls-page .mtg-setup { max-width: 760px; }
+/* The phone: the page scrolls (under its sticky top bar), so the day's heading sticks under the bar; rows and controls
+   are a finger's size. */
+.app.phone > .calls-page { display: block; }
+.app.phone .calls-list { min-height: auto; }
+.app.phone .calls-scroll { overflow: visible; padding: 0 16px 24px; }
+.app.phone .calls-head { padding: 12px 16px 8px; }
+.app.phone .calls-filters { margin: 0 16px 8px; }
+.app.phone .calls-chips { padding: 0 16px 8px; }
+.app.phone .calls-day-head { top: var(--mtg-top, 0px); }
+.app.phone .calls-row { min-height: var(--tap, 44px); }
+.app.phone .calls-page :is(.seg-btn, .ib4-chip, .mini, .link-btn) { min-height: var(--tap, 44px); }
+/* MC-3: on the phone the four filters sit two by two rather than leaving one alone on a second row. */
+.app.phone .calls-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -333,7 +333,9 @@ export function railItems(rows: readonly InboxItemView[]): RailItem[] {
 export type InboxTodayData = { today: IsoDate; needsYou: number; items: InboxItemView[] };
 
 /** The rows `inbox.today` sends (IB-4): suggestions (Day's "From chats" chip), promises the strip and rail can show, sends waiting. */
-export const forToday = (r: InboxItemView) => (r.kind === "conversation" && r.views.includes("needs_you")) || (r.kind === "promise" && !r.done && r.views.length > 0 && (r.views.includes("needs_you") || !!r.dueAt || r.late)) || (r.kind === "send" && r.sendState === "waiting" && r.views.length > 0);
+/** PH-2: a promise with a due day too, so the phone's Week can say on each day's row what is due that day; every reader
+ * filters these rows again (the rail, the strip, the one thing), so nothing else shows more. */
+export const forToday = (r: InboxItemView) => (r.kind === "conversation" && r.views.includes("needs_you")) || (r.kind === "promise" && !r.done && r.views.length > 0 && (r.views.includes("needs_you") || !!r.dueAt || !!r.due || r.late)) || (r.kind === "send" && r.sendState === "waiting" && r.views.length > 0);
 
 // ---- Slice 3: snooze ----
 

@@ -36,7 +36,8 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     const { page, errors } = await freshPage(h);
     const missing: string[] = [];
     for (const s of SECTIONS.filter((x) => !x.parent)) {
-      const defs = SETTINGS.filter((d) => d.section === s.id);
+      // PH-2: a phone-only row (Show Day as a timeline) is in its section on the phone only.
+      const defs = SETTINGS.filter((d) => d.section === s.id && !d.phoneOnly);
       await go(page, `#/settings/${s.id}`);
       await head(page).waitFor();
       await page.waitForTimeout(600);

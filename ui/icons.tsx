@@ -6,7 +6,7 @@
 import {
   Activity, Archive, Box, Calendar, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Bell, Bold, BookOpen, CalendarClock, CalendarDays, CalendarOff, CalendarPlus,
   ChartColumn, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleHelp, Clock, Code, Columns4, Command, Copy, CornerDownLeft, Database, Download,
-  Ellipsis, ExternalLink, Eye, EyeOff, File, FileCode, FileText, Flag, Folder, FolderGit2, GanttChart, GripVertical, Handshake, History, Image, Inbox, Info, Italic,
+  Ellipsis, ExternalLink, Eye, EyeOff, File, FileCode, FileText, Flag, Folder, FolderGit2, GanttChart, GripVertical, Handshake, Headset, History, Image, Inbox, Info, Italic,
   Keyboard, Layers, LayoutGrid, Link, List, ListFilter, ListOrdered, ListTree, LogOut, MessageCircle, MessageSquareText, MessagesSquare, Mic, Minus, Monitor, Move, NotebookText,
   Palette, Paperclip, Pause, Pencil, Phone, Pin, Play, Plug, Plus, RefreshCw, Repeat, Ruler, Search, Send, Shield, SlidersHorizontal, Smartphone, Sparkles, Split,
   Square, SquarePlus, Star, StickyNote, Sun, Table2, Target, Timer, Trash2, TreePalm, TriangleAlert, Type, Undo2, Upload, User, UserPlus, Users, Video, Volume2, Waves, Workflow, WrapText, X,
@@ -16,7 +16,7 @@ import {
 /** The family, by FocusTime's own names (what the thing is, never the drawing). */
 const ICONS = {
   // Tabs
-  day: CalendarDays, week: Columns4, backlog: ListTree, status: ChartNoAxesColumn, inbox: Inbox,
+  day: CalendarDays, week: Columns4, backlog: ListTree, status: ChartNoAxesColumn, inbox: Inbox, calls: Headset,
   // Top bar
   focus: Target, capture: SquarePlus, ask: MessageCircle, more: Ellipsis, vm: Monitor, code: Code, settings: SlidersHorizontal,
   // Actions

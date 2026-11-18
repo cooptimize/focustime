@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM)("DY-1: Day at the time it is (browser, demo mode, 3:5
     const mark = page.locator(`${PM} .day-fold-sum .call-mark`);
     await mark.waitFor();
     await mark.click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/meetings\/\d+/);
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

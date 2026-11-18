@@ -416,12 +416,12 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     const id = await addPick(page, "Send the export note", "S");
     await addPick(page, "Close out the mapping", "M");
     await open(page);
-    await page.locator(".ph-todos").waitFor();
-    // MB-1's layout by default; the switch is in another day's ⋯ (PH-1: today's Day has no header), and today follows.
+    await page.locator(".dg").waitFor();
+    // MB-1's layout by default; PH-2: the switch is Settings › Display › Show Day as a timeline, on the phone only.
     expect(await page.locator(".today-tl").count()).toBe(0);
-    await open(page, "#/day/2026-11-03");
-    await page.getByRole("button", { name: "View options for Day" }).click();
-    await page.getByRole("menuitem", { name: /Timeline/ }).click();
+    await open(page, "#/settings/display");
+    await page.getByRole("switch", { name: "Show Day as a timeline" }).check();
+    await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(true);
     await open(page);
     await page.locator(".today-tl").waitFor();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(true);

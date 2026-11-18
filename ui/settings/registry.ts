@@ -84,6 +84,8 @@ export type SettingDef = {
   kind?: SettingKind;
   /** SA-2: a row of a page that search doesn't list on its own (a day of the week, one notice kind). */
   part?: boolean;
+  /** PH-2: shown only on a phone. */
+  phoneOnly?: boolean;
 };
 /** SA-2: the kinds of choice; each has one control. */
 export type SettingKind = "switch" | "choice" | "select" | "number" | "time" | "text" | "list" | "action" | "status";
@@ -129,6 +131,8 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "week-days", section: "display", label: "Days on Week", kind: "switch", keywords: ["friday", "weekend", "saturday", "sunday"] },
   { id: "show-friday", section: "display", label: "Show the catch-up day", old: ["Show Friday"], group: "Days on Week", kind: "switch", part: true },
   { id: "show-weekend", section: "display", label: "Show the weekend", old: ["Show weekend"], group: "Days on Week", kind: "switch", part: true },
+  // PH-2: only on a phone (the computer's Day switch is Cards or Timeline in Day's header).
+  { id: "day-timeline", section: "display", label: "Show Day as a timeline", kind: "switch", phoneOnly: true, keywords: ["timeline", "phone", "cards", "timebox"] },
   { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], kind: "switch", keywords: ["animation", "loader"] },
   // Day and Week
   { id: "level", section: "planning", label: "Your level", group: "Guidance", kind: "status", keywords: ["guidance", "consultant", "senior", "lead"] },
@@ -277,7 +281,7 @@ const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p
  * Settings and sections whose label, old label or keywords contain every word typed, best first: a label match before
  * an old label, before a keyword. `matched` names the old label when that is what matched.
  */
-export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; limit?: number } = {}): SearchHit[] {
+export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; phone?: boolean; limit?: number } = {}): SearchHit[] {
   const words = norm(q).split(" ").filter(Boolean);
   if (!words.length) return [];
   const has = (s: string) => {
@@ -293,7 +297,7 @@ export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean;
   }
   for (const d of SETTINGS) {
     const s = sectionOf(d.section);
-    if (!shown(s) || s!.parent || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo)) continue;
+    if (!shown(s) || s!.parent || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo) || (d.phoneOnly && !opts.phone)) continue;
     const old = d.old?.find(has);
     const score = has(d.label) ? 0 : old ? 1 : d.keywords?.some(has) || has(`${d.label} ${s!.label} ${(d.keywords ?? []).join(" ")}`) ? 2 : -1;
     if (score < 0) continue;

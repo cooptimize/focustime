@@ -170,7 +170,7 @@ export function Settings(props: Props) {
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
   const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
-  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
+  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop, phone }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
       id: g,

@@ -38,6 +38,9 @@ export type Props = {
   /** U5.1 (D408): personal events shown on Week and Today. */
   showPersonal: boolean;
   setShowPersonal: (show: boolean) => void;
+  /** PH-2: Day's timeline on this phone (TY-1's phone setting): its home on the phone now that another day has no ⋯. */
+  dayTimeline?: boolean;
+  setDayTimeline?: (show: boolean) => void;
   /** WK-5: the days Week shows, and the catch-up day's name in the loaded week ("Friday"). */
   weekDays: { catchUp: boolean; weekend: boolean };
   setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;

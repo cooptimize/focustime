@@ -7,6 +7,7 @@ import { TEXT_SIZE_NAMES } from "../../textsize.ts";
 import { SAVED_MS } from "../autosave.tsx";
 import { Choice, Group, Page, Row, Switch } from "../parts.tsx";
 import { firstLine, rest } from "./shared.ts";
+import { usePhone } from "../../viewport.ts";
 import type { Props } from "./types.ts";
 
 /** The row that just changed, for 2 seconds. */
@@ -27,6 +28,7 @@ const WEEK_DAYS_HELP = "With Show weekend on, weekend days show when something i
 
 export function DisplaySection(p: Props) {
   const { saved, mark } = useSavedRow();
+  const phone = usePhone();
   const on = <T,>(id: string, f: (v: T) => void) => (v: T) => (f(v), saved(id));
   return (
     <Page>
@@ -43,6 +45,11 @@ export function DisplaySection(p: Props) {
         <Row id="personal-events" help="On Week and Day. Hidden ones still count in risk and free time. G switches it." mark={mark("personal-events")}>
           <Switch checked={p.showPersonal} onChange={on("personal-events", p.setShowPersonal)} />
         </Row>
+        {phone && p.setDayTimeline && (
+          <Row id="day-timeline" help="The hours beside each block, with Timebox my day. Only this phone; your computer keeps its own." mark={mark("day-timeline")}>
+            <Switch checked={!!p.dayTimeline} onChange={on("day-timeline", p.setDayTimeline)} />
+          </Row>
+        )}
       </Group>
       <Group sid="week-days">
         <Row id="week-days" noSid help={firstLine(WEEK_DAYS_HELP)} more={rest(WEEK_DAYS_HELP)} />

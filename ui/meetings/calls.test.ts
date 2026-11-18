@@ -47,7 +47,9 @@ describe("MC-1d: which drawn meeting is a call", () => {
   });
   it("the call's page, its Transcript view (at a line) and its upload are addresses that round-trip", () => {
     for (const h of [callHref(7), callHref(7, "transcript"), callHref(7, "transcript", 12), callHref(7, "upload")]) expect(hashOf(parseHash(h)!), h).toBe(h);
-    expect(parseHash("#/meetings/7/transcript/12")?.overlay).toEqual({ kind: "meeting", occurrence: 7, view: "transcript", line: 12 });
-    for (const bad of ["#/meetings/7/nope", "#/meetings/7/transcript/x", "#/meetings/7/upload/3", "#/meetings/7/transcript/1/2"]) expect(parseHash(bad), bad).toBeNull();
+    expect(callHref(7, "transcript", 12)).toBe("#/calls/7/transcript/12");
+    // MC-3: the address before Calls was a tab lands on the same call, view and line, on the Calls tab.
+    expect(parseHash("#/meetings/7/transcript/12")).toEqual({ nav: { tab: "calls", occurrence: 7, view: "transcript", line: 12 }, overlay: null });
+    for (const bad of ["#/meetings/7/nope", "#/meetings/7/transcript/x", "#/meetings/7/upload/3", "#/meetings/7/transcript/1/2", "#/calls/7/nope", "#/calls/x"]) expect(parseHash(bad), bad).toBeNull();
   });
 });

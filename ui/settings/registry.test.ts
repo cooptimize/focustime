@@ -101,3 +101,10 @@ describe("SA-2: one name per setting", () => {
     expect(searchSettings("check-in").find((h) => h.setting === "notify-checkin")).toMatchObject({ label: "Midday check-in" });
   });
 });
+
+describe("PH-2: a phone-only setting", () => {
+  it("is found on a phone only", () => {
+    expect(searchSettings("timeline", { phone: true }).some((h) => h.setting === "day-timeline")).toBe(true);
+    expect(searchSettings("timeline").some((h) => h.setting === "day-timeline")).toBe(false);
+  });
+});

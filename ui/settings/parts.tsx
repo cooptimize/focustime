@@ -12,6 +12,7 @@ import type { FieldStatus } from "./autosave.tsx";
 import { settingOf, settingsHref, type SettingDef } from "./registry.ts";
 import { TimeField } from "../TimeField.tsx";
 import { Icon } from "../icons.tsx";
+import "./parts.css";
 
 /** The words the team line says, the same everywhere. */
 export const TEAM_LINE = "Set by your FocusTime admin";

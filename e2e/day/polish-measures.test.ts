@@ -107,9 +107,8 @@ describe.skipIf(!CHROMIUM)("PS-1: polish sweep on Day and Week", () => {
     await expect.poll(() => phone.page.locator("main").textContent()).toContain(HOLIDAY_NAME);
     expect(await phone.page.locator("main .add-work.add-row, main .sug-list").count()).toBe(0);
     await go(phone.page, "#/week");
-    await phone.page.locator(".ph-week button", { hasText: /^Thu/ }).first().click().catch(() => {});
-    await phone.page.waitForTimeout(500);
-    expect(await phone.page.locator("main").textContent()).toContain(HOLIDAY_NAME);
+    // PH-2: the holiday's row is one tile with its name.
+    await expect.poll(() => phone.page.locator(".pw-tile.holiday").first().textContent()).toContain(HOLIDAY_NAME);
     expect(phone.errors).toEqual([]);
     await phone.page.close();
   }, T);
@@ -128,11 +127,13 @@ describe.skipIf(!CHROMIUM)("PS-1: polish sweep on Day and Week", () => {
           expect(await chipTouchesMore(page), where).toEqual([]);
           for (const row of await headTops(page, "main")) expect(new Set(row).size, `${where}: first lines ${row}`).toBe(1);
           const add = await addIsTheOneFill(page);
-          // PH-1: the phone's Day has no header; Add is on each of today's blocks (docs/ux/ph1/reach.md).
+          // PH-1: the phone's Day has no header; Add is on each of today's blocks (docs/ux/ph1/reach.md). PH-2: the
+          // phone's Week opens a day and has no Add of its own (docs/ux/ph2/reach.md).
           if (phone && hash === "#/day") {
             expect(add, where).toEqual({ shown: false, filled: 0 });
-            expect(await page.locator(".ph-todos").getByRole("button", { name: /Add/ }).count(), where).toBeGreaterThan(0);
-          } else expect(add, where).toEqual({ shown: true, filled: 1 });
+            expect(await page.locator(".dg").getByRole("button", { name: /Add/ }).count(), where).toBeGreaterThan(0);
+          } else if (phone) expect(add, where).toEqual({ shown: false, filled: 0 });
+          else expect(add, where).toEqual({ shown: true, filled: 1 });
           if (phone) {
             await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
             await page.waitForTimeout(300);
