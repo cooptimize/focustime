@@ -1,6 +1,6 @@
 // ENV-1: what a test site already holds stays. A non-production start runs only the allowed jobs (the retention purge,
 // the ownership backfill, the people refresh and the rest of the "always" list) over a database holding chat messages,
-// conversations and a transcript: every row is still there afterwards. And Admin › Status says it is a test site, and
+// conversations and a transcript: every row is still there afterwards. And Admin › Health says it is a test site, and
 // says when FOCUSTIME_REQUESTS_POLL has turned the chat poll on for a watch period.
 import { describe, expect, it } from "vitest";
 import { ownershipBackfillJob } from "../actions/ownership-backfill.ts";
@@ -60,7 +60,7 @@ describe("ENV-1: a test site's start deletes nothing", () => {
   });
 });
 
-describe("ENV-1: Admin › Status on a test site", () => {
+describe("ENV-1: Admin › Health on a test site", () => {
   it("production adds nothing", () => {
     expect(backgroundStatusSource(backgroundPolicy({ FOCUSTIME_ENV: "prod" }))).toBeNull();
     expect(backgroundStatusSource(backgroundPolicy({ FOCUSTIME_ENV: "prod", FOCUSTIME_REQUESTS_POLL: "on" }))).toBeNull();

@@ -286,7 +286,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await box.fill("zzzz-nothing");
     await box.press("Enter");
     await page.waitForFunction(() => document.querySelector("[data-code-progress]")?.textContent === "No name matches.");
-    await page.evaluate(() => (location.hash = "#/settings/admin-audit/code-views"));
+    await page.evaluate(() => (location.hash = "#/admin/audit/code"));
     const table = page.locator('[data-setting="code-views"] table');
     await table.waitFor();
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].slice(2).map((td) => td.textContent)));

@@ -11,7 +11,7 @@ import { createConversationStore } from "../store/conversation-store.ts";
 import { hardDeleteUser } from "../store/user-data.ts";
 import { createAdminOps } from "../server/admin-ops.ts";
 import { createAdminCheck } from "./admin.ts";
-import { ADMIN_ACTIONS, ADMIN_SECTIONS, adminAction, type AdminContext } from "./admin-actions.ts";
+import { ADMIN_ACTIONS, ADMIN_SECTIONS, adminAction, chatRefusal, type AdminContext } from "./admin-actions.ts";
 import { createOrgRuntime } from "./org.ts";
 import { buildProcessModel, type ProcessOverrides } from "../plan/process.ts";
 import { aStandardsArticle, STD_COMMIT, STD_REPO } from "../test/builders/standards.ts";
@@ -85,6 +85,34 @@ async function setup() {
 }
 
 describe("admin actions", () => {
+  it("SA-4: the admin actions are the ones main had, each still refused for a non-admin", () => {
+    // SA-4 moved screens only: no action added, removed or renamed (the refusal test below runs each of them).
+    expect([...ADMIN_ACTIONS].sort()).toEqual(["admin.audit", "admin.code_check", "admin.code_views", "admin.identity", "admin.invite_access", "admin.invite_preview", "admin.invite_retry", "admin.invite_send", "admin.invited", "admin.load", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.set", "admin.standards_sync", "admin.status", "admin.status_action"]);
+    expect([...ADMIN_SECTIONS]).toEqual(["clients", "ai", "conversations", "people", "setup", "organization", "standards", "status", "audit"]);
+  });
+
+  it("SA-4: a client row says why chats.add would refuse a chat under it for this admin, read only", async () => {
+    expect(chatRefusal("fabrikam", undefined)).toBeNull();
+    expect(chatRefusal("fabrikam", new Set(["fabrikam"]))).toBeNull();
+    expect(chatRefusal("northwind", new Set(["fabrikam"]))).toMatch(/^northwind isn't one of your clients/);
+    expect(chatRefusal("northwind", null)).toMatch(/Dataverse couldn't be read/);
+    const s = await setup();
+    const withTargets: AdminContext = { ...s.admin, chatTargets: async () => new Set(["fabrikam"]) };
+    const r = (await adminAction(withTargets, "admin.load", { section: "clients", filter: "all" })) as { ok: true; data: { clients: { key: string; chatRefusal: string | null }[] } };
+    expect(r.ok).toBe(true);
+    expect(r.data.clients.find((c) => c.key === "fabrikam")?.chatRefusal).toBeNull();
+    // Loading writes no setting (main already records FocusTime's suggested colors on load; nothing else).
+    expect((await s.store.auditList({})).filter((e) => !e.setting.endsWith("/color"))).toEqual([]);
+  });
+
+  it("SA-4: Admins lists the signed-in admin even before anyone has been seen", async () => {
+    const s = await setup();
+    const r = (await s.run(s.admin, "admin.load", { section: "people" })) as { ok: true; data: { admins: { id: string; name: string | null }[] } };
+    expect(r.data.admins.map((a) => a.id.toLowerCase())).toContain(ADMIN.toLowerCase());
+    // A break-glass admin FocusTime has no name for: their own row has their name from the session.
+    expect(r.data.admins.find((a) => a.id.toLowerCase() === ADMIN.toLowerCase())?.name).toBe("Ada Admin");
+  });
+
   it("the server refuses every admin action for a non-admin (and admin.status says no)", async () => {
     const s = await setup();
     const inputs: Record<string, unknown> = {
@@ -131,7 +159,7 @@ describe("admin actions", () => {
     expect((await s.store.auditList({})).map((e) => [e.actorName, e.setting, e.oldValue, e.newValue])[0]).toEqual(["Ada Admin", "client:fabrikam/attachments_ai", null, "true"]);
   });
 
-  it("AI-F1: Admin › AI shows each task's tier; an admin puts a background task back on standard, audited", async () => {
+  it("AI-F1: Admin › Team defaults › AI shows each task's tier; an admin puts a background task back on standard, audited", async () => {
     const s = await setup();
     type Row = { name: string; background: boolean; tier: string };
     const tasks = async () => ((await s.run(s.admin, "admin.load", { section: "ai" })) as { data: { tasks: Row[] } }).data.tasks;
@@ -288,7 +316,7 @@ describe("Code (RB-1)", () => {
   });
 });
 
-describe("Admin › Standards (KB-1)", () => {
+describe("Admin › Team defaults › Standards (KB-1)", () => {
   it("shows the repo, the sync, the article list (never its text) and the warnings", async () => {
     const s = await setup();
     const r = (await s.run(s.admin, "admin.load", { section: "standards" })) as { ok: true; data: Record<string, unknown> & { articles: { title: string; url: string }[] } };

@@ -1,4 +1,4 @@
-// CV-3b: Admin › Status warns while account types aren't read (the fallback is in use), and Refresh reads them.
+// CV-3b: Admin › Health warns while account types aren't read (the fallback is in use), and Refresh reads them.
 import { describe, expect, it } from "vitest";
 import { clientAccounts } from "../plan/client-accounts.ts";
 import { anAccount } from "../test/builders/index.ts";

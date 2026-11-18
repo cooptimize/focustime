@@ -2,8 +2,8 @@
 // here with the other screenshot scripts: its one check (nothing wider than the phone) runs in CI now, in
 // e2e/admin/admin-phone-width.test.ts. Usage: FOCUSTIME_SHOTS=screenshots/adm2 npm run shots -- e2e/shot-scripts/admin-screens-shots.ts.
 // ADM-2: the screenshots for the report (demo data only), when FOCUSTIME_SHOTS names a folder: Admin › Clients
-// (Customers and All accounts), Admin › AI, Admin › People (the rows, the Not Cooptimizers fold, the mapping table),
-// Admin › Status, the side menu scrolled to the bottom with Admin folded and unfolded, and the phone picker; at
+// (Customers and All accounts), Admin › Team defaults › AI, Admin › People (the rows, the Not Cooptimizers fold, the mapping table),
+// Admin › Health, the side menu scrolled to the bottom with Admin folded and unfolded, and the phone picker; at
 // 1920×1080, 1366×768, Text size Larger and a phone (390×844, a 17px root font as on iPhone).
 import { afterAll, beforeAll, describe, it } from "vitest";
 import type { Page } from "playwright-core";

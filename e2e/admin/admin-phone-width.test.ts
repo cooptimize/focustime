@@ -7,9 +7,10 @@ import { CHROMIUM, startDemo, type Harness } from "../harness.ts";
 const T = 120_000;
 /** Each section, and what shows once its data is in (the screenshots' own marks). */
 const SECTIONS = [
-  ["admin-clients", '[role="radio"]'],
-  ["admin-people", ".adm-positions"],
-  ["admin-status", 'h3:has-text("Jobs")'],
+  ["clients", ".adm-client-row"],
+  ["clients/Atlas/overview", '[role="radiogroup"]'],
+  ["people/levels", ".adm-positions"],
+  ["health", 'h3:has-text("Jobs")'],
 ] as const;
 
 describe.skipIf(!CHROMIUM)("ADM-2: Admin on the phone is no wider than the screen", () => {
@@ -17,7 +18,7 @@ describe.skipIf(!CHROMIUM)("ADM-2: Admin on the phone is no wider than the scree
   beforeAll(async () => void (h = await startDemo()), T);
   afterAll(async () => h?.stop());
 
-  it("Clients, People and Status at 390 px with a 17 px root font", async () => {
+  it("Clients, a client's page, People and Health at 390 px with a 17 px root font", async () => {
     // bypassCSP: the 17 px root font is a style tag the page's own policy would refuse.
     const page = await h.browser.newPage({ viewport: { width: 390, height: 844 }, bypassCSP: true });
     const errors: string[] = [];
@@ -35,10 +36,10 @@ describe.skipIf(!CHROMIUM)("ADM-2: Admin on the phone is no wider than the scree
     await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
     await page.getByRole("button", { name: /Everything else/ }).click();
     await page.locator('.mr-row[data-row="admin"]').click();
-    await page.locator(".ps-head h2", { hasText: "Admin › Clients" }).waitFor();
+    await page.waitForFunction(() => location.hash === "#/admin");
     for (const [id, ready] of SECTIONS) {
-      await page.evaluate((x) => (location.hash = `#/settings/${x}`), id);
-      await page.locator(`.ps-rail [data-settings-section="${id}"][aria-current="page"], .ps-head h2`).first().waitFor();
+      await page.evaluate((x) => (location.hash = `#/admin/${x}`), id);
+      await page.locator(".ps-head h2").first().waitFor();
       await page.locator(ready).first().waitFor({ timeout: 30_000 });
       const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(over, `${id} is wider than the phone`).toBeLessThanOrEqual(0);

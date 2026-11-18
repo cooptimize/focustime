@@ -1,4 +1,4 @@
-// VM-3: Admin › Status's background passes on the demo (its person is an admin of their own demo): when the fast and
+// VM-3: Admin › Health's background passes on the demo (its person is an admin of their own demo): when the fast and
 // slow passes last finished, how long they took and their limit; with the demo's slow pass held (demo.pass_stall,
 // verification runs only) and the demo's clock moved past its limit, a plain warning in the table and in "To look at",
 // gone once it lets go. Dark screenshots when VM3_SHOTS names a folder.
@@ -29,15 +29,15 @@ async function shot(page: Page, name: string) {
 }
 async function openStatus(page: Page) {
   // Away and back: Status is read when it opens.
-  await page.evaluate(() => (location.hash = "#/settings/admin-audit"));
-  await page.locator('.ps-rail [data-settings-section="admin-audit"][aria-current="page"]').waitFor();
-  await page.evaluate(() => (location.hash = "#/settings/admin-status"));
+  await page.evaluate(() => (location.hash = "#/admin/audit"));
+  await page.locator('.ps-rail [data-settings-section="audit"][aria-current="page"]').waitFor();
+  await page.evaluate(() => (location.hash = "#/admin/health"));
   const table = page.locator('table[data-status="passes"]');
   await table.waitFor({ timeout: 15_000 });
   return table;
 }
 
-describe.skipIf(!CHROMIUM)("VM-3: Admin › Status's background passes", () => {
+describe.skipIf(!CHROMIUM)("VM-3: Admin › Health's background passes", () => {
   let h: Harness;
   beforeAll(async () => {
     h = await startDemo("chromium", { FOCUSTIME_DEMO_AUTOSTART_ENV: "dev" }, EARLY);

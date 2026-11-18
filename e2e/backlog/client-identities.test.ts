@@ -1,7 +1,7 @@
 // Was e2e/identities.test.ts until BT-1.
 // AH-3: client DevOps identities in demo mode. Harbor's demo project has two client logins: Priya's ("Ext-Priya Shah")
 // comes from her Account Worker row in the demo Dataverse, so Ahead shows her FocusTime name; Sam's ("Ext-Sam Ortiz")
-// is only a suggestion in Admin › People, shown as DevOps has it until an admin confirms it.
+// is only a suggestion in Admin › People, its Client logins tab, shown as DevOps has it until an admin confirms it.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -10,11 +10,13 @@ import { oldTree } from "../backlog-helpers.ts";
 let h: Harness;
 const T = 120_000;
 
-async function openAdmin(page: Page, item: string) {
+async function openAdmin(page: Page, item: string, tab?: string) {
   await page.getByRole("button", { name: /^More: the Guide/ }).click();
   await page.getByRole("menuitem", { name: "Admin" }).click();
-  await page.locator(`.ps-rail [data-settings-section="admin-${item.toLowerCase()}"]`).click();
-  await page.locator(".ps-head h2", { hasText: `Admin › ${item}` }).waitFor();
+  await page.locator(`.ps-rail [data-settings-section="${item.toLowerCase()}"]`).click();
+  await page.locator(".ps-head h2", { hasText: item }).waitFor();
+  // SA-4: client logins are their own tab of People.
+  if (tab) await page.getByRole("tab", { name: tab }).click();
 }
 
 describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () => {
@@ -40,7 +42,7 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
     await expect(who("Referral tracking").locator(".ah-who").getAttribute("title")).resolves.not.toContain("Ext-");
     await expect(who("Referral source field").locator(".ah-who").getAttribute("title")).resolves.toContain("Ext-Sam Ortiz");
 
-    await openAdmin(page, "People");
+    await openAdmin(page, "People", "Client logins");
     const ids = page.getByRole("region", { name: "Client DevOps identities" });
     await expect(ids.locator(".adm-id-line").first().textContent()).resolves.toBe("2 identities on Harbor look like client logins, 1 linked");
     const harbor = ids.getByRole("list", { name: "Harbor identities" });
@@ -58,7 +60,7 @@ describe.skipIf(!CHROMIUM)("client DevOps identities (browser, demo mode)", () =
     await expect(who("Referral source field").locator(".ah-who").getAttribute("title")).resolves.not.toContain("Ext-");
 
     // Remove puts it back to a suggestion-free unmatched login (an admin said it isn't him).
-    await openAdmin(page, "People");
+    await openAdmin(page, "People", "Client logins");
     await harbor.getByRole("button", { name: "Remove Ext-Sam Ortiz from Sam Ortiz" }).click();
     await expect.poll(() => ids.locator(".adm-id-line").first().textContent()).toBe("2 identities on Harbor look like client logins, 1 linked");
     await expect(harbor.locator(".adm-id-row.unmatched").textContent()).resolves.toContain("Ext-Sam Ortiz");

@@ -37,7 +37,7 @@ describe.skipIf(!CHROMIUM)("Who's set up and Invite", () => {
     await page.keyboard.press("Control+k");
     await page.keyboard.type("who's set up");
     await page.keyboard.press("Enter");
-    await page.waitForFunction(() => location.hash === "#/settings/admin-people/whos-set-up");
+    await page.waitForFunction(() => location.hash === "#/admin/people/setup");
     const table = page.getByRole("table", { name: "Who's set up" });
     await table.waitFor();
     await expect(page.locator(".adm-setup-counts").textContent()).resolves.toBe("4 of 5 signed in · 2 set up partly");
