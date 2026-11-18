@@ -89,6 +89,8 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
   useTopOffset();
   const picksOn = (date: string) => (pv.week?.[date]?.picks ?? []).filter((p) => p.date === date);
   const clock = (iso: string) => startClock(iso, tz);
+  // The Guide's "A block" step points at the first block of the week's first working day shown.
+  const tourDay = week.days.find((d, i) => shown[i] && !dayBlocks(d).weekend && !dayBlocks(d).whole)?.date ?? null;
   const dueOn = (date: string) => promises.filter((r) => r.kind === "promise" && !r.done && r.views.length > 0 && r.due === date).length;
 
   const tile = (day: Day, s: Slot) => {
@@ -105,6 +107,7 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
         key={s.half}
         type="button"
         className={`pw-tile${open ? " open" : ""}${client ? "" : " plain"}${nowHere ? " now" : ""} st-${line.state}`}
+        data-tour={day.date === tourDay && s.half === "AM" ? "wk-block" : undefined}
         style={{ "--c": clientColor(client, colors) } as CSSProperties}
         aria-label={`${dayLong(day.date)}, ${s.half === "AM" ? "morning" : s.half === "PM" ? "afternoon" : "evening"}: ${name}. ${line.text}. ${W.openDay(dayShort(day.date))}`}
         onClick={() => onOpenDay(day.date)}

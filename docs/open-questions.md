@@ -1610,3 +1610,14 @@ From the IT review (TD-1):
 - **Focus under a tall card header.** Tab's scroll-padding takes a block header as one line (38 px at the Text size); a card header that wraps to two lines can cover focus by a few pixels. Measuring every header would need an observer per block.
 - **The call's mark in a 30-minute event on the Timeline** sits on the event's second line (Outlook) and covers it, as before DY-1; with the type it is wider.
 - **The Dentist band.** An event that crosses into the next block draws there as an unlabeled band once the first block folds; its name is still in the block's risk. Unchanged by DY-1, but more noticeable.
+
+## PH-2
+
+- **Should the phone place or move work on Week?** Not in this step: Week on the phone only opens a day. Placing is a day's Add (the block's sheet) and moving is the to-do's sheet. A long-press on a tile could open the block's sheet later.
+- **Should Day's timeline on the phone go, or move under More?** It stays as PH-1 left it, with its switch now in Settings › Display ("Show Day as a timeline", phone only). Few will find it there; if nobody uses it, it could go, with Timebox my day left to the computer.
+- **Should the phone's Day point at a call that needs me?** Not here (calls are PH-3's or MC-2's). The meeting's call mark in a section opens the call, and More › Client calls lists them.
+- **Should a tile say its free time?** No: the tile says one line, and free time is the day's section line ("3 meetings · 2h 30m · 1h 45m free"). A tile with nothing planned might say "2h free" instead of "Nothing planned" later.
+- **What can PH-3 and PH-4 reuse?** The day's sections (`DaySections`) for Close out's per-block review (PH-4), the small sticky header (`DayGlanceHead`, `useTopOffset`) for any phone screen with Previous and Next, `InboxOne`'s frame (one card, full-width actions, More, Previous, Next, Up next) for a quick Backlog or Status queue (PH-3), and `needsQueue` for anything that walks what needs me.
+- **Promises due on a day's row are that day's only.** Late ones go to the Inbox; a row never says "Late". The reading that changes less.
+- **The catch-up day's whole cell and a weekend day** keep their own bodies (the grid cell, WK-3's list) under the small header, not sections. The reading that changes less; the catch-up day with hours draws as sections.
+- **More expands in place** under the main button rather than opening a sheet: the literal reading of "the rest under More", and one less layer on a small screen.

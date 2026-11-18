@@ -22,27 +22,29 @@ Phone only. At 768 and wider nothing here changes.
 | + Add (the header) | Tap a day (or a tile), then that block's Add |
 | Cards or Timeline (the switch) | Desktop version (Week's rails need a computer's width) |
 | ⋯ View options: Timelines (hours shown) | Desktop version (no rails on the phone) |
-| ⋯ View options: Personal events | Settings › Display (Personal events), More › Everything else › Sources (the "N personal hidden" switch) |
+| ⋯ View options: Personal events | Settings › Display (Personal events) |
 | ⋯ View options: Suggestions | Settings › Planning ("Suggest work for empty blocks") |
 | ⋯ View options: Timeline | Desktop version |
-| ⋯ View options: Show catch-up day, Show weekend, Every weekend day | Settings › Display (the days Week shows) |
+| ⋯ View options: Show catch-up day, Show weekend | Settings › Display (Days on Week) |
+| ⋯ View options: Every weekend day | Desktop version (Week's View options) |
 | The day strip (Mon to Sat) and Previous day / Next day | Every day is a row on one screen; a row's name opens that day |
 | A sideways swipe changed the day | A sideways swipe changes the week |
 | A day's ⋯ (Week's day menu): Add work to this day | The day (tap its row), then a block's Add |
 | A day's ⋯: Open AM, Open PM, Open the evening | The day, then the block's name (opens the block's sheet) |
-| A day's ⋯: Timebox my day | Desktop version; today's Day with the phone's timeline on (its header, as PH-1 left it) |
+| A day's ⋯: Timebox my day | Day with the phone's timeline on (Settings › Display › Show Day as a timeline; its header, as PH-1 left it); Desktop version |
 | A day's ⋯: Plan a deployment… | Desktop version |
 | A day's ⋯: the day's hours, unavailable time, flex sessions | Settings › Your day (hours); Desktop version (unavailable time, flex) |
 | A block card's ⋯: Open | The day, then the block's name |
 | A block card's ⋯: Start or Join a call in a client chat (CW-1) | The day, then the block's sheet; the Now card's live call on today |
 | A block card: name, hours, status pill and its reason | The tile: name, and its line ("At risk · Dentist 12:00"); the day's section in full |
 | A block card: Now marker on the block under way | The tile says "Now" and has an outline |
-| A block card: late chip and due badges | The row's promise line ("Due today", "2 due tomorrow"); the Inbox's Promises |
+| A block card: late chip and due badges | The row's promise line in the due badge's words ("Due today", "Due tomorrow · 2"); late ones are the Inbox's (one at a time, and Promises) |
 | A block card: a client call's mark (MC-1) | The day: the meeting's call mark (opens the call); More › Client calls |
 | A block card: live call in the client's chat (CW-1) | Today's Now card; the block's sheet |
 | A block card: flex sessions | Desktop version |
 | A block card: "3 meetings · 2h 30m · 1h 45m free", opening the meetings | The day: the block's meetings in time order, then the same line |
-| A block card: a meeting's RSVP mark (Accept, Tentative, Decline) | The day: the meeting's mark, as on the card |
+| A block card: a meeting's repeat mark (DY-1) and a call's mark | The day: the same marks on the meeting's row |
+| A meeting's Accept, Tentative and Decline (step 16) | Desktop version, as before PH-2 (the phone's Week cards had no RSVP of their own) |
 | A block card: to-dos with + time, size letter and ⋯ | The day: tick box and title (the to-do's sheet holds time, moves and the rest) |
 | A block card: a to-do's ⋯ (the to-do's sheet on the phone) | The day: tap the title (the same sheet) |
 | A block card: placed features line | The block's sheet (Your stories) |
@@ -66,12 +68,12 @@ Phone only. At 768 and wider nothing here changes.
 | The date, "Today" (back to today) | The small header: the day and date, Today when it isn't today |
 | PTO or Holiday pill | "You're off <day>." or the holiday's name, as before |
 | (no way back to Week but the bar) | The small header's Week button, and the bar |
-| Cards or Timeline | Settings › Display (Day's timeline on the phone, TY-1's phone setting); Desktop version |
-| Timebox my day | Desktop version; today's Day with the phone's timeline on |
+| Cards or Timeline (another day's ⋯, where PH-1 left it) | Settings › Display › Show Day as a timeline: a new phone-only row for TY-1's phone setting (no new stored value); with it on, Day keeps its header and ⋯ as PH-1 left them |
+| Timebox my day | Day with the phone's timeline on (its header); Desktop version |
 | + Add (the header) | Each block's Add (the same sheet) |
 | ⋯ Day: Personal events | Settings › Display |
 | ⋯ Day: Suggestions | Settings › Planning |
-| ⋯ Day: Timeline | Settings › Display; Desktop version |
+| ⋯ Day: Timeline | Settings › Display › Show Day as a timeline |
 | ⋯ Day: Close out <day> (a past day) | "A past day: … Close out <day>" under the day, as before; More › Everything else › Close out |
 | The day's suggestions line (SG-1) | The empty block's suggestions in its section |
 | Block cards (as Week's, one day) | A section per block (B), described above |

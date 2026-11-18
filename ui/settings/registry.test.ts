@@ -82,3 +82,10 @@ describe("Settings registry", () => {
     expect(searchSettings("show demo data", { demo: true }).some((h) => h.setting === "demo-mode")).toBe(false);
   });
 });
+
+describe("PH-2: a phone-only setting", () => {
+  it("is found on a phone only", () => {
+    expect(searchSettings("timeline", { phone: true }).some((h) => h.setting === "day-timeline")).toBe(true);
+    expect(searchSettings("timeline").some((h) => h.setting === "day-timeline")).toBe(false);
+  });
+});

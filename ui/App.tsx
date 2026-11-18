@@ -2220,6 +2220,8 @@ export function App() {
           setReduceMotion={(on) => void saveReduceMotion(on)}
           showPersonal={showPersonal}
           setShowPersonal={(show) => void saveShowPersonal(show)}
+          dayTimeline={dayTimeline}
+          setDayTimeline={(show) => void saveDayTimeline(show)}
           weekDays={weekDays}
           setWeekDays={(v) => void saveWeekDays(v)}
           catchUpName={catchUpWord(data.week.days)}
