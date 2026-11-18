@@ -7,7 +7,7 @@
 // Screenshots to screenshots/ed1 when FOCUSTIME_SHOTS is set (dark and light, 1440×900 and the phone).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "../harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
 
 let h: Harness;

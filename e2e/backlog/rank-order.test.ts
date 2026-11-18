@@ -5,7 +5,7 @@
 // like any row.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openSettings, settingsSection, startDemo, type Harness } from "../harness.ts";
+import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "../harness.ts";
 import { levelPressed, pickLevel } from "../backlog-helpers.ts";
 
 let h: Harness;
