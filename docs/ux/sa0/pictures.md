@@ -138,3 +138,18 @@ As someone who isn't an admin: the demo person is always an admin, so these pict
 | `larger/20-admin-people-desk-admin-larger.png` | Admin › People at Text size Larger, 1440: the people table is wider than the panel and scrolls sideways |
 | `larger/03-notifications-phone-admin-larger.png` | Settings › Notifications at Larger on the phone: 7.4 screens |
 | `larger/13-ai-phone-admin-larger.png` | Settings › AI and assistant at Larger on the phone: the request log table wider than the screen |
+
+## The walkthrough's own pictures
+
+From the agent in [walkthrough.md](walkthrough.md), 1440 by 900.
+
+| File | What |
+|---|---|
+| `walkthrough/31-outlook-changes.png` | Accounts › Outlook calendar changes: "Allowed", no control |
+| `walkthrough/33-put-on-outlook.png` | Day and Week › Timeboxes › Put on Outlook, where the switch is |
+| `walkthrough/63-day-larger.png` | Day at Larger: Focus, Capture and Ask become icons with no words |
+| `walkthrough/72-export.png` | Your data after Download JSON in the demo: "Export isn't available here" |
+| `walkthrough/81-admin-chats.png` | Admin › Client chats: phrase lists and polling rules, no way to add a chat |
+| `walkthrough/84-addchat-picked.png` | Admin › Clients › Fabrikam after picking an offered chat: "That isn't one of your clients" |
+| `walkthrough/120-admin-audit.png` | Admin › Audit: settings by their code names |
+| `walkthrough/125-codeviews.png` | Admin › Audit › Code views with two rows, after opening a file in Code |

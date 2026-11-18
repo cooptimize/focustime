@@ -210,7 +210,7 @@ Screens are the page's full height divided by one screen (900 px or 844 px). Set
 - Timelines: Display sets the default, and V changes the screen for the session only, so the two can disagree until a reload (`#47`).
 - Days on Week: Display has "Show Friday" and "Show weekend". "Every weekend day" exists only under Week's View options (`#49`).
 - Send feedback is shown three ways in the demo. Accounts says "Feature #496 (FocusTime (demo feature))". Admin › Organization has organization and project empty and parent feature 0. Admin › Status says "A pretend backlog in the demo" (`#122`, `#186–188`).
-- New people's lunch reads "12:00-12:00" in the demo (`#189–198`). That is a zero-length lunch.
+- Zero-length lunches in the demo: the person's Lunch read "12:30-12:30" in the walkthrough, and New people's lunch reads "12:00-12:00" (`#189–198`). That is a zero-length lunch.
 - Admin › Clients has no Allow AI. It is only in Admin › AI's per-client table (`#168`), while every other per-client Rule is on the client's card.
 
 **Values that can't differ from the default:**
@@ -256,6 +256,8 @@ What search can't reach at all:
 - Admin isn't in search (no registry entries).
 - Four controls on the page have `data-setting` ids the registry doesn't list (`test-site`, `from-test-site`, `week-days`, `progress-offer`).
 - A client's page has no ids.
+
+Settings itself: the top bar's ⋯ menu lists Notifications, Calls, Commands, Guide, Technical docs, Keyboard shortcuts, Send feedback, Admin and About, but not Settings, which is only in the avatar's menu (the walkthrough's first guess, task 1). Admin › Client chats has no way to register a chat; that is on each client's card in Admin › Clients (task 8).
 
 Settings a person would look for elsewhere first:
 - Time zone: under Working hours, and Profile has a line pointing there.
