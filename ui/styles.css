@@ -7903,3 +7903,12 @@ a.sp-btn:hover { background: var(--wash-1); }
 .sp-buttons > .sp-text-input.wide { flex: 1 1 260px; width: auto; }
 .sp-group > .sp-status { margin-bottom: 8px; }
 .sp-group > .sp-status + .sp-status { margin-top: 6px; }
+/* SA-2: the shared logs (DevOps, Azure, Teams status, Close the loop) in Settings take the parts' one table style. */
+.sp-group .write-log > h3 { margin: 0 0 2px; font-size: var(--fs-3); font-weight: 600; }
+.sp-group .write-log > p.muted { margin: 0 0 8px; font-size: var(--fs-2); }
+.sp-group .wl-table th { font-weight: 600; color: var(--text-muted); font-size: var(--fs-3); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.sp-group .wl-table td { padding: 6px 8px; border-bottom: 0; border-top: 1px solid var(--border); }
+.sp-group .wl-table tbody tr:first-child td { border-top: 0; }
+.sp-group > .write-log { margin: 0; padding: 0; border: 0; }
+.sp-group .write-log > p { margin: 0 0 6px; }
+.sp-group .write-log > h3 + p { margin-top: 2px; font-size: var(--fs-2); color: var(--text-muted); }
