@@ -44,3 +44,8 @@ export function useSiteMark(): SiteMark | null {
   return siteMarkOf(env);
 }
 
+/** EV-1: About's line: the environment in a word and the site's address ("Dev · focustime-dev.example.com"). */
+export const SITE_WORDS: Record<string, string> = { dev: "Dev", local: "Local", prod: "Production", demo: "Demo" };
+export function siteLine(env: string, host: string): string {
+  return `${SITE_WORDS[env] ?? env} · ${host}`;
+}

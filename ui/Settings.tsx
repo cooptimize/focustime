@@ -43,7 +43,7 @@ import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
-import { useAppEnv, useDeveloperLoop } from "./appenv.ts";
+import { siteLine, useAppEnv, useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
@@ -513,6 +513,7 @@ function SectionBody(p: BodyProps) {
         <div className="brand-about">
           <Lockup />
           <p data-setting="version">Version {APP_VERSION}</p>
+          <SiteLine />
           <p className="set-hint">FocusTime is made by Cooptimize, for planning a week of client work.</p>
           <div className="set-grid">
             <div className="set-field" data-setting="guide">
@@ -1941,6 +1942,13 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
       )}
     </form>
   );
+}
+
+/** EV-1: which site this is, in a word, and its address ("Site: Dev · focustime-dev.example.com"); nothing until /version answers. */
+function SiteLine() {
+  const env = useAppEnv();
+  if (!env) return null;
+  return <p className="set-hint" data-site-line>Site: {siteLine(env, location.host)}</p>;
 }
 
 /**

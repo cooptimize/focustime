@@ -3495,6 +3495,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 /* S1 (D452): ⋯ › About: one line, Copy and the Guide. */
 .about-dialog { width: min(560px, calc(100vw - 32px)); }
 .about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
+.about-site { margin: 4px 14px 0; font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
 .about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
 /* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives). */
 .owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
