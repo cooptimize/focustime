@@ -377,6 +377,20 @@ From `plan/call-words.ts` (`CALLS_TEXT`, `FETCH_WORDS`).
 - Who sees: **"You and the Cooptimizers on the invite can see this call. Only you act on it."**; a hand-added one **"Only you can see this call."**; another viewer **"Only <name>, who asked FocusTime to review this call, can act on it. You can look."**
 - A meeting's menu: **"Review this call"** (hint **"choose its client first"**), under **"Call"**.
 
+## MC-3 words (Nov 17)
+
+From `plan/call-words.ts` (`CALL_LIST`). A row's state keeps MC-1d's and MC-2's words (`CALL_STATE`, `CALLS_TEXT.notReviewed`); nothing was reworded.
+
+- The tab: **"Calls"**, between Inbox and Code, its title **"Calls: review the calls you were on (6)"**, its count read as **"1 needs you"** / **"3 need you"**. The command menu says **"Calls"** (still found by "my calls" and "client calls"). Key 6 is **"Calls: the calls you were on, by day, with the one you choose beside the list"**; 7 is Code.
+- The list's head: **"Calls"**, **"The calls you were on, newest first"**, **"Add a call"**, **"Hide the list"** (and **"Show the list"** beside the call when it is hidden).
+- Filters: **"All"**, **"To review"**, **"Not reviewed"**, **"Done"**, each with its count; their titles **"Every call in the list"**, **"Calls waiting for you: proposals to review, a transcript to upload or a step that failed"**, **"Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer"**, **"Calls that were reviewed, had nothing to propose or had no transcript"**. Client chips: **"All clients"**, each client, **"No client yet"**.
+- Day headings: **"Today"**, **"Yesterday"**, then **"Mon, Nov 2"**.
+- A row's second line: the client or **"No client yet"**, **"45 min"**, **"6 people"**, and where the transcript comes from: **"Transcript from Teams"**, **"Transcript uploaded"**, **"Read from Teams after the call"**, **"Uploaded by a reviewer"**, **"From Teams or a file"**, **"Upload only"**; a registered call adds **"Weekly · Weekly status call"** with the repeat mark.
+- Folds at the foot: **"Earlier calls (2)"** (**"Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call."**) and **"Client calls (1)"** (**"Weekly calls a FocusTime admin registered. Their calls from the last 14 days are in the list above."**), each **"Reviewed by Priya, Alex"**.
+- States of the list: **"Loading calls…"**, a failure's own words with **"Try again"**, **"No calls in the last 14 days. A call on your calendar shows here once it has started."**, **"No calls here. Choose All to see every call."**; under the list **"Only you see the calls from your calendar, and FocusTime keeps nothing about one until you review it."**
+- Beside the list with no call at all: **"Calls turns what was said on a call into DevOps items, promises and comments you confirm. Review any call you were on, or add one that isn't on your calendar."** with **"Add a call"**.
+- Two steps (narrow and the phone): **"Calls"** as the Back button, read as **"Back to Calls"**.
+
 ## PH-1 words (Nov 17)
 
 - The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** or **"More: new notifications"** with its dot). The VM: **"VM Stopped"**, **"VM Running"**. The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).

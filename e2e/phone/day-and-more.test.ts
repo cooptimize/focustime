@@ -214,7 +214,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await screen.waitFor();
     expect(await bar(page).locator('[aria-current="page"]').getAttribute("data-tab")).toBe("more");
     const rows = await screen.locator(".mr-row").evaluateAll((els) => els.map((e) => [e.querySelector(".mr-name")?.textContent, e.querySelector(".mr-line")?.textContent ?? null, Math.round(e.getBoundingClientRect().height)] as const));
-    expect(rows.map((r) => r[0])).toEqual(["Backlog", "Status", "Calls", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
+    expect(rows.map((r) => r[0])).toEqual(["Calls", "Backlog", "Status", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
     for (const r of rows) expect(r[2], r[0]!).toBeGreaterThanOrEqual(56);
     expect(Object.fromEntries(rows.map((r) => [r[0], r[1]]))).toMatchObject({ Status: "2 features need your update", Calls: "1 call to review", "My VM": "Stopped (deallocated)" });
     await shot(page, "ph1-more");
@@ -245,7 +245,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     };
     await go("backlog", false, () => page.getByRole("heading", { name: "Backlog is made for a bigger screen" }).waitFor());
     await go("status", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/status/));
-    await go("calls", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/meetings/));
+    await go("calls", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/calls/));
     await go("code", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/code/));
     await go("vm", false, () => page.getByRole("menu").waitFor());
     await go("settings", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/settings/));
@@ -299,7 +299,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     // Focus starts on More's heading; Tab walks the rows.
     expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("H1");
     await page.keyboard.press("Tab");
-    expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("backlog");
+    expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("calls");
     for (let i = 0; i < 7; i++) await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("else");
     await page.keyboard.press("Enter");

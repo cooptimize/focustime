@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await open(page, `#/meetings/${id}`);
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/transcript`);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/transcript`);
     const lines = page.locator(".mtg-lines li");
     // The transcript loads when the view opens.
     await lines.first().waitFor({ timeout: 30_000 });
@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await filter.fill("reporting area");
     const toProposal = page.locator(".mtg-lines li.marked").first().getByRole("button", { name: /^Go to the proposal/ });
     await toProposal.click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/meetings/${id}/proposal/\\d+$`));
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/calls/${id}/proposal/\\d+$`));
     await expect.poll(() => page.evaluate(() => document.activeElement?.querySelector<HTMLInputElement>("input:not([type=checkbox])")?.value)).toBe("Accountant reporting area");
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     await lines.first().waitFor({ timeout: 30_000 });
@@ -67,7 +67,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     await page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).click();
     const jump = page.locator(".mtg-prop").first().getByRole("button", { name: /^Show in transcript/ });
     await jump.click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/meetings/${id}/transcript/\\d+$`));
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/calls/${id}/transcript/\\d+$`));
     const n = Number((await page.evaluate(() => location.hash)).split("/").pop());
     await page.locator(`#mtg-line-${n}`).waitFor({ timeout: 30_000 });
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe(`mtg-line-${n}`);
@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     const priya = s.reviewers.find((r: { name: string }) => r.name === "Priya Shah").id as string;
     expect((await call(page, "meeting.update", { seriesId: s.id, reviewers: [priya] })).ok).toBe(true);
     const id = mine.occurrences[0].id as number;
-    await open(page, `#/meetings/${id}/transcript`);
+    await open(page, `#/calls/${id}/transcript`);
     await page.locator(".mtg-lines li").first().waitFor({ timeout: 30_000 });
     await expect.poll(() => page.locator(".mtg-lines li").count()).toBe(12);
     await page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).click();

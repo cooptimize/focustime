@@ -205,7 +205,7 @@ export type Allowed = { re: RegExp; file?: RegExp; why: string };
  * Keep it short: a new entry needs a reason a reader of the screen would accept.
  */
 export const NAMES_ALLOWED: readonly Allowed[] = [
-  { re: /^Today ?$/, file: /^(ui\/(Day|WeekGrid|PhoneDay|StyleGuide|dateinput|stamp|inbox\/Detail|phone\/PhoneScreens)\.tsx?|plan\/phone-(now|week)\.ts)$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM), the phone's Today button on another day's header and a row's today (PH-2): the day that is today" },
+  { re: /^Today ?$/, file: /^(ui\/(Day|WeekGrid|PhoneDay|StyleGuide|dateinput|stamp|inbox\/Detail|phone\/PhoneScreens)\.tsx?|plan\/(phone-now|phone-week|call-words)\.ts)$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM), the phone's Today button on another day's header and a row's today (PH-2), Calls' heading over today's calls (MC-3): the day that is today" },
   { re: /\bToday(?='s\b| is\b| isn't\b| \(| \d)/g, why: "today the day, starting a sentence: Today's blocks, Today is Sat, Today isn't planned yet, Today (Fri) is hidden" },
   { re: /\bToday(?= onboarding| it's)/g, file: /^sources\/demo\//, why: "the demo's example text: today as in these days" },
   { re: /\bLoop (closed|updates sent)\b/g, why: "Close the loop is the action's name today; these are its results" },

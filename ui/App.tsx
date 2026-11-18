@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callMarks, callsNeedingMe, CallsProvider, useMine } from "./meetings/calls.ts";
+import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -115,6 +115,7 @@ import { drawnLoc, fetchAhead, prefetchScreens, screen, screenArriving, screenFa
 import { ScreenLine } from "./ScreenLine.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
+import { CALL_LIST } from "../plan/call-words.ts";
 import { CoworkCtx, openChat, useCowork } from "./cowork.tsx";
 import { Icon, type IconName } from "./icons.tsx";
 
@@ -143,12 +144,13 @@ function storedLoc(): Loc | null {
 }
 
 /** RS-1: each tab's icon says what it is for: one day, the week in columns, the backlog's indented list, bars, a tray. */
-const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", code: "code" };
+const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", calls: "calls", code: "code" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
   week: "Week: the week's blocks, with a block's panel beside them",
   ahead: "Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention",
   inbox: "Inbox: From chats, Promises and Captures",
+  calls: CALL_LIST.tabTitle,
   status: "Status: this week's feature updates for Monday's status report",
   code: "Code: every client's repos, read only: search for something, or look around a client's repos",
 };
@@ -274,7 +276,10 @@ export function App() {
     const n = typeof next === "function" ? next(l) : next;
     return sameLoc(n, l) ? l : n;
   }), []);
-  const goNav = useCallback((nav: Nav) => go({ nav, overlay: null }), [go]);
+  // MC-3: Calls opened from its tab, key or the command menu carries the list's remembered filter and client.
+  /** MC-3: an address a step Calls took by itself replaces, rather than adding a Back step. */
+  const replaceNext = useRef<string | null>(null);
+  const goNav = useCallback((nav: Nav) => go({ nav: nav.tab === "calls" && nav.occurrence === null && nav.show === undefined && nav.client === undefined ? { ...nav, ...rememberedCallsList() } : nav, overlay: null }), [go]);
   useEffect(() => {
     // PF-1: not before the place's screen is drawn. A screen reads what its address carries as it opens (Backlog's
     // level and filters); written here first, while its file was still arriving, the address had already lost them.
@@ -282,7 +287,9 @@ export function App() {
     const h = hashOf(loc);
     // NV-1: an older address that lands on the same place (a redirect) is replaced, so Back doesn't loop on it.
     const was = parseHash(location.hash);
-    if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
+    const replacing = replaceNext.current === h;
+    replaceNext.current = null;
+    if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc)) || replacing) history.replaceState(null, "", h);
     else if (location.hash !== h) history.pushState(null, "", h);
     try {
       localStorage.setItem(LOC_KEY, placeToKeep(loc));
@@ -347,8 +354,8 @@ export function App() {
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // PF-1: the tour's own file is asked for when a tour starts and its card appears once it is in; the screen under it is drawn at once.
   const Tour = useScreen("tour", !!tourAt)?.default;
-  // MC-1, MC-2: Calls over the place (#/meetings and #/meetings/<occurrence>).
-  const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
+  // MC-3: Calls is a tab (#/calls…; was More › Calls over Week, #/meetings…).
+  const callsAt = nav.tab === "calls" ? nav : null;
   // MC-1d: the registered calls I review or attend, once for the app: Day, Week, the block panel, the phone and the
   // More menu's count all read them, so a call's meeting is its door everywhere it is drawn.
   const mine = useMine();
@@ -1593,7 +1600,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       // WD-2: the block keys work on Week and on Day (the day's own blocks; [ and ] step Day's days in its own handler).
       const onDay = nav.tab === "today" && !nav.flow;
-      if (!(onDay || nav.tab === "week") || focusOpen || guideAt || docsAt || codeAt || meetingAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (!(onDay || nav.tab === "week") || focusOpen || guideAt || docsAt || codeAt || callsAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || captureOpen || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       // WD-2 review: never from inside the block panel, a link, a checkbox or a menu (Space ticks, Enter follows).
@@ -1656,7 +1663,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, codeAt, meetingAt, base, captureOpen, layout, nav, weekDays, revealDays]);
+  }, [sel, panelAt, openBlock, data, goToday, changeWeek, auto, cmdOpen, keysOpen, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, focusOpen, guideAt, docsAt, codeAt, callsAt, base, captureOpen, layout, nav, weekDays, revealDays]);
 
   // DV-2: R refreshes on every tab (Today, Week, Ahead, Status, Inbox, Settings), never while typing or in a dialog.
   useEffect(() => {
@@ -1924,7 +1931,7 @@ export function App() {
   const CodePanel = screen("code")?.default;
   const Guide = screen("guide")?.default;
   const TechDocs = screen("docs")?.default;
-  const Meetings = screen("meetings")?.Meetings;
+  const CallsPage = screen("meetings")?.CallsPage;
   // WD-2: the one block panel, on Week and on Day: where the address (or Day's remembered state) puts it, or, while a
   // to-do is dragged out of its block with the panel closed, on that block as the drop area for Take off the plan.
   const panelScreen = dayOn || (nav.tab === "week" && nav.mode === "board" && underTour);
@@ -1992,6 +1999,7 @@ export function App() {
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
     inbox: null,
     status: null,
+    calls: null,
     code: null,
   };
   const leavePlanning = () => goNav(afterDone(nav));
@@ -2075,7 +2083,8 @@ export function App() {
     >
     <TodoSheetCtx.Provider value={phone ? openTodoSheet : null}>
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
-      <header className={`topbar${codeShown && !phone ? " six-tabs" : ""}${phone ? " ph1-top" : ""}`}>
+      {/* MC-3: six tabs for everyone (Calls), seven with Code; each gives way a little more (ui/styles.css). */}
+      <header className={`topbar${!phone ? ` six-tabs${codeShown ? " seven-tabs" : ""}` : ""}${phone ? " ph1-top" : ""}`}>
         {/* PH-1: on the phone the top bar starts with today's date; Now is the bar's first item. */}
         {phone && <p className="ph1-date">{Temporal.PlainDate.from(data.planDay.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>}
         <div className="brand">
@@ -2097,6 +2106,8 @@ export function App() {
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
+              {/* MC-3: the calls that need me, as More counted them: proposals to review, a transcript to upload, a failed step. */}
+              {t === "calls" && callsNeed > 0 && <span className="count" aria-label={`${callsNeed} ${callsNeed === 1 ? "needs" : "need"} you`}>{callsNeed}</span>}
               {t === "status" && <StatusMark tone={statusTone} text={statusText} />}
             </button>
           ))}
@@ -2258,8 +2269,6 @@ export function App() {
             onClose={() => go((l) => ({ nav: l.nav, overlay: null }))}
             access={docsAccess}
           />
-      ) : meetingAt && Meetings ? (
-        <Meetings clients={captureClients(data)} blockClientAt={(iso) => blockClientAt(data.week, iso)} occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} filter={meetingAt.filter ?? null} proposal={meetingAt.proposal ?? null} colors={data.clients} today={data.planDay.date} undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })} onOpen={(id, at) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(at?.view ? { view: at.view } : {}), ...(at?.line ? { line: at.line } : {}), ...(at?.filter ? { filter: at.filter } : {}), ...(at?.proposal ? { proposal: at.proposal } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
       ) : focusOpen && FocusM ? (
         <FocusM.FocusScreen
           t={data.timer}
@@ -2307,6 +2316,30 @@ export function App() {
               go(to);
             }}
           />
+      ) : callsAt && CallsPage ? (
+        // MC-3: Calls is a tab: the list by day with the call beside it; no Close (the other tabs' keys work from it).
+        <CallsPage
+          at={callsAt}
+          phone={phone}
+          clients={captureClients(data)}
+          blockClientAt={(iso) => blockClientAt(data.week, iso)}
+          colors={data.clients}
+          today={data.planDay.date}
+          zone={userZone(data)}
+          undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })}
+          onGo={(next, opts) => {
+            // A step Calls takes by itself (opening the newest call, remembering a filter) never lands after the person
+            // has left Calls: Back to Week a moment before it would otherwise put Calls back in Week's place.
+            // A step Calls takes by itself also never overrides a tab chosen a moment before (7 just after 6): it applies
+            // only while the place is still Calls, and its address replaces Calls' own.
+            if (opts?.replace && parseHash(location.hash)?.nav.tab !== "calls") return;
+            const to = { nav: navOf.calls(next.occurrence, next), overlay: null };
+            if (!opts?.replace) return go(to);
+            replaceNext.current = hashOf(to);
+            go((l) => (l.nav.tab === "calls" ? to : l));
+          }}
+          onChanged={mine.reload}
+        />
       ) : followUpsOpen ? (
         <div className="inbox-page">
           {nav.tab === "inbox" && InboxM && <InboxM.InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} onFeedback={() => setFeedbackOpen(true)} />}
@@ -2596,7 +2629,7 @@ export function App() {
 
       {phone && PhoneM && (
         <PhoneM.PhoneBar
-          current={moreOpen || settingsAt !== null || guideAt || docsAt || meetingAt || nav.tab === "status" || nav.tab === "code" || nav.tab === "ahead" ? "more" : focusOpen ? null : nav.tab === "today" ? "day" : nav.tab === "week" ? "week" : nav.tab === "inbox" ? "inbox" : null}
+          current={moreOpen || settingsAt !== null || guideAt || docsAt || nav.tab === "calls" || nav.tab === "status" || nav.tab === "code" || nav.tab === "ahead" ? "more" : focusOpen ? null : nav.tab === "today" ? "day" : nav.tab === "week" ? "week" : nav.tab === "inbox" ? "inbox" : null}
           needsYou={inboxCount}
           moreDot={sourceHealth(data.sources, data.devops) === "trouble" ? "trouble" : notices.unread > 0 ? "new" : null}
           captureOpen={captureOpen}
@@ -2632,7 +2665,7 @@ export function App() {
             setMoreOpen(false);
             if (where === "backlog") openTab("ahead");
             else if (where === "status") openTab("status");
-            else if (where === "calls") go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } }));
+            else if (where === "calls") openTab("calls");
             else if (where === "code") openCode();
             else if (where === "settings") setSettingsAt("");
             else if (where === "guide") openGuide();
@@ -2693,8 +2726,7 @@ export function App() {
             title: "More",
             items: [
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
-              // MC-1d, MC-2: Calls (my client calls and other calls), with how many need me (proposals to review, a transcript to upload, a failed step).
-              { id: "calls", label: "Calls", ...(callsNeed > 0 ? { hint: `${callsNeed} need you` } : {}), run: () => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } })) },
+              // MC-3: Calls is a tab on the computer, so it isn't here (the phone's More keeps it, first).
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },

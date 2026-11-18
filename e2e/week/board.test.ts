@@ -209,7 +209,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     await expect(page.locator("nav.views .view-tab").allInnerTexts()).resolves.toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Status/)]));
     const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-    expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Code"]); // RB-6: Code is the sixth tab.
+    expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]); // RB-6: Code is a tab; MC-3: Calls before it.
     // RF-1: no number on Status (its dot is e2e/shell/tab-order.test.ts's).
     expect(await page.locator("nav.views .view-tab", { hasText: "Status" }).locator(".count").count()).toBe(0);
     // The command menu: nothing named Team.

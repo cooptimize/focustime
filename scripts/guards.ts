@@ -93,6 +93,7 @@ export const LARGE_BYTES = 300 * 1024;
 /** Files (or folders, ending in "/") that may be over 300 KB, and why. */
 export const LARGE_OK: Record<string, string> = {
   "docs/decisions.md": "the decision log, read by scripts/decisions.test.ts and scripts/tech-docs.test.ts; it grows with every step",
+  "docs/open-questions.md": "the open questions list, which grows with every step like the decision log (it passed 300 KB with PH-2)",
   "ui/styles.css": "the app's one stylesheet",
   "docs/demo/": "the demo walkthrough's pictures (scripts/demo-walkthrough.mjs writes them, docs/demo.md shows them)",
 };
