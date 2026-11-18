@@ -12,7 +12,7 @@ import { dispatch, type ActionContext } from "./dispatch.ts";
 import { clearPreviews } from "./timebox-actions.ts";
 import { clearSyncMemo, syncWeek } from "./outlook-sync.ts";
 import { eventEdit } from "../plan/caltier.ts";
-import type { CandidatesData, SuggestData, WriteLogView, WritePreview, WriteResult } from "./types.ts";
+import type { CandidatesData, CheckData, SuggestData, WriteLogView, WritePreview, WriteResult } from "./types.ts";
 
 const NOW = "2026-11-06T15:00:00Z"; // Fri Nov 6, 9:00 Chicago
 const WEEK = "2026-11-09";
@@ -24,7 +24,8 @@ const toml = STARTER_TOML
   .replace('my_systemuserid = ""', `my_systemuserid = "${ME_ID}"`)
   .replace(/time_zone = "[^"]*"/, 'time_zone = "America/Chicago"');
 
-function setup() {
+function setup(at: string = NOW) {
+  let clock = at;
   clearPreviews();
   clearSyncMemo();
   const g = fakeGraph({ owner: "avery@cooptimize.example" });
@@ -33,7 +34,7 @@ function setup() {
   const access: WriteAccess = { status: "write" };
   const writer = createGraphWriter({ fetch: g.fetch, token: async () => FAKE_WRITE_TOKEN, invalidate: () => {}, log });
   const schedule = createScheduleReader({ fetch: g.fetch, token: async () => "FAKE-READ-TOKEN", invalidate: () => {}, log });
-  const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/Chicago") });
+  const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("America/Chicago") });
   const parsed = parseConfig(toml);
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
   const team = [
@@ -56,7 +57,7 @@ function setup() {
     makeGoogle: () => { throw new Error("n/a"); },
     makeDevOps: () => { throw new Error("n/a"); },
     saveSystemUserId: async () => {},
-    now: () => NOW,
+    now: () => clock,
     plan,
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
@@ -77,7 +78,7 @@ function setup() {
     expect((await confirm(p)).confirmed).toBe(true);
     return r.timebox;
   };
-  return { g, plan, run, fail, confirm, sync, box, logs };
+  return { g, plan, run, fail, confirm, sync, box, logs, setNow: (t: string) => void (clock = t) };
 }
 
 describe("editing tier: my own events with nobody else on them", () => {
@@ -353,5 +354,95 @@ describe("the collaboration finder", () => {
     expect((await t.plan.getFollowUp(inv.followUpId!))!.closedAt).not.toBeNull();
     // A cancelled invite isn't sent again by another undo.
     expect((await t.run<WriteLogView>("write.log", {})).entries.every((e) => !e.undoable)).toBe(true);
+  });
+});
+
+describe("CO-1: a time I set, checked, then the invite", () => {
+  const AT_1006 = "2026-11-10T16:06:00Z"; // Tue Nov 10, 10:06 Chicago
+  const ANA = "ana@cooptimize.example", BEN = "ben@cooptimize.example";
+  const T = (hm: string) => `${D}T${hm}:00-06:00`;
+  /** Free/busy for my whole day (Chicago midnight to midnight, 15 minute steps), with details FocusTime must never keep. */
+  const day = (busy: Record<string, [string, string][]> = {}) => ({
+    value: [ANA, BEN].map((id) => {
+      let v = "";
+      for (let i = 0; i < 96; i++) {
+        const m = i * 15, hm = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+        v += (busy[id] ?? []).some(([a, b]) => hm >= a && hm < b) ? "2" : "0";
+      }
+      return {
+        scheduleId: id, availabilityView: v,
+        scheduleItems: [{ status: "busy", subject: "SECRET-SUBJECT pay review", location: "SECRET-ROOM", isPrivate: false, start: { dateTime: `${D}T16:30:00`, timeZone: "UTC" }, end: { dateTime: `${D}T17:00:00`, timeZone: "UTC" } }],
+        workingHours: { daysOfWeek: ["monday", "tuesday", "wednesday", "thursday"], startTime: "08:00:00.0000000", endTime: "17:00:00.0000000", timeZone: { name: "Central Standard Time" } },
+      };
+    }),
+  });
+
+  it("the 10:06 case: 10:30 to 11:30 is set, checked and sent; suggestions start on the half hour, never 10:15", async () => {
+    const t = setup(AT_1006);
+    t.g.sw.schedule = day();
+    const s = await t.run<SuggestData>("collab.suggest", { clientKey: "T&W", from: D, to: D, minutes: 60, people: [ANA] });
+    expect(s.slots.map((x) => x.start.slice(11, 16))).not.toContain("10:15");
+    expect(s.slots.every((x) => Number(x.start.slice(14, 16)) % 30 === 0)).toBe(true);
+    const c = await t.run<CheckData>("collab.check", { clientKey: "T&W", start: T("10:30"), end: T("11:30"), people: [ANA] });
+    expect(c).toMatchObject({ me: { state: "free" }, people: [{ name: "Ana", state: "free" }], free: 2, of: 2 });
+    const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "T&W", title: "#4512 Import mapping", start: T("10:30"), end: T("11:30"), people: [ANA] })).preview;
+    expect(p.notFree).toEqual([]);
+    expect((await t.confirm(p)).confirmed).toBe(true);
+    const post = t.g.calls.find((x) => x.method === "POST" && x.path === "/v1.0/me/events")!.body as { start: { dateTime: string }; end: { dateTime: string } };
+    expect([post.start.dateTime.slice(0, 16), post.end.dateTime.slice(0, 16)]).toEqual(["2026-11-10T16:30", "2026-11-10T17:30"]);
+  });
+
+  it("a busy person doesn't block: the preview opens and names who isn't free (busy time, no subject); the invite is the same as before", async () => {
+    const t = setup(AT_1006);
+    t.g.sw.schedule = day({ [BEN]: [["10:30", "11:00"]] });
+    const c = await t.run<CheckData>("collab.check", { clientKey: "T&W", start: T("10:30"), end: T("11:00"), people: [ANA, BEN] });
+    expect(c.people.map((x) => x.state)).toEqual(["free", "busy"]);
+    const input = { clientKey: "T&W", title: "#4512 Import mapping", itemId: 4512, url: "https://dev.azure.com/tw/p/_workitems/edit/4512", start: T("10:30"), end: T("11:00"), people: [ANA, BEN], note: "Stuck on the lookup" };
+    const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", input)).preview;
+    expect(p.notFree).toEqual(["Ben: Busy 10:30–11:00 AM"]);
+    expect(JSON.stringify(p)).not.toMatch(/SECRET/);
+    expect(p.attendees).toEqual([{ name: "Ana", email: ANA }, { name: "Ben", email: BEN }]);
+    await t.confirm(p);
+    const post = t.g.calls.find((x) => x.method === "POST" && x.path === "/v1.0/me/events")!.body as Record<string, unknown>;
+    expect(post).toMatchObject({ subject: "T&W: help on #4512 Import mapping", isOnlineMeeting: true, attendees: [{ emailAddress: { address: ANA, name: "Ana" }, type: "required" }, { emailAddress: { address: BEN, name: "Ben" }, type: "required" }] });
+    expect(JSON.stringify(post)).not.toMatch(/notFree|Busy 10/);
+  });
+
+  it("the server checks the time again at the check, the preview and Confirm: a past start or a length outside 15 minutes to 2 hours is refused", async () => {
+    const t = setup(AT_1006);
+    t.g.sw.schedule = day();
+    const base = { clientKey: "T&W", people: [ANA] };
+    for (const action of ["collab.check", "collab.preview_invite"]) {
+      const extra = action === "collab.preview_invite" ? { title: "x" } : {};
+      expect((await t.fail(action, { ...base, ...extra, start: T("10:00"), end: T("10:30") })).error).toBe("That start has passed. Pick a later start");
+      expect((await t.fail(action, { ...base, ...extra, start: T("10:30"), end: T("10:40") })).error).toMatch(/^A help session is 15 minutes to 2 hours/);
+      expect((await t.fail(action, { ...base, ...extra, start: T("10:30"), end: T("12:45") })).error).toMatch(/^A help session is 15 minutes to 2 hours/);
+      expect((await t.fail(action, { ...base, ...extra, start: T("11:30"), end: T("10:30") })).error).toBe("The end is before the start. Pick a later end");
+    }
+    // To the minute: 10:37 to 11:22 is fine.
+    expect((await t.run<CheckData>("collab.check", { ...base, start: T("10:37"), end: T("11:22") })).people[0]!.state).toBe("free");
+    // Confirm after the start has passed: refused, nothing sent.
+    const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", { ...base, title: "x", start: T("10:30"), end: T("11:00") })).preview;
+    t.setNow("2026-11-10T16:31:00Z");
+    expect((await t.fail("write.confirm", { previewId: p.previewId })).error).toBe("That start has passed. Pick a later start and preview again");
+    expect(t.g.calls.some((x) => x.method === "POST" && x.path === "/v1.0/me/events")).toBe(false);
+  });
+
+  it("nothing of a teammate's event but busy times and working hours reaches the answer or a log", async () => {
+    const t = setup(AT_1006);
+    t.g.sw.schedule = day({ [ANA]: [["10:30", "11:00"]] });
+    const c = await t.run<CheckData>("collab.check", { clientKey: "T&W", start: T("10:30"), end: T("11:00"), people: [ANA, BEN] });
+    expect(Object.keys(c).sort()).toEqual(["end", "free", "me", "of", "people", "problems", "start"]);
+    expect(c.people[0]).toEqual({ email: ANA, name: "Ana", state: "busy", busy: [{ start: T("10:30"), end: T("11:00") }] });
+    expect(c.people[1]).toEqual({ email: BEN, name: "Ben", state: "free" });
+    expect(JSON.stringify(c)).not.toMatch(/SECRET/);
+    expect(JSON.stringify(t.logs)).not.toMatch(/SECRET|ana@|ben@/);
+    expect(JSON.stringify(await t.plan.exportJson())).not.toMatch(/SECRET|Busy/);
+    // Only the chosen people are asked, for my one day.
+    const req = t.g.calls.filter((x) => x.path.includes("getSchedule")).at(-1)!.body as { schedules: string[]; startTime: { dateTime: string }; endTime: { dateTime: string } };
+    expect(req.schedules).toEqual([ANA, BEN]);
+    expect([req.startTime.dateTime, req.endTime.dateTime]).toEqual(["2026-11-10T06:00:00", "2026-11-11T06:00:00"]);
+    // Someone not on the list is refused before anything is read.
+    expect((await t.fail("collab.check", { clientKey: "T&W", start: T("10:30"), end: T("11:00"), people: ["pat@client.example"] })).status).toBe(422);
   });
 });

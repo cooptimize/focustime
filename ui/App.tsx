@@ -22,7 +22,6 @@ import { DoneOfferCtx } from "./DoneOffer.tsx";
 import { useWrapUpFlow } from "./WrapUp.tsx";
 import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
-import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost } from "./Team.tsx";
 import { useStatusNeeds } from "./status-needs.ts";
 import { StatusMark } from "./StatusMark.tsx";
@@ -480,7 +479,9 @@ export function App() {
   const NewItemDialog = useScreen("newItem", !!newAt)?.NewItemDialog;
   const DraftEditor = useScreen("draft", !!draftEdit)?.DraftEditor;
   /** A dialog asked for whose file hasn't arrived (or failed): Esc takes the ask back. */
-  const dialogWaiting = (captureWanted && !CaptureDialog) || (!!assistantAt && !AssistantPanel) || (!!newAt && !NewItemDialog) || (!!draftEdit && !DraftEditor);
+  const [helpTarget, setHelpTarget] = useState<HelpTarget | null>(null);
+  const HelpFinder = useScreen("help", !!helpTarget)?.HelpFinder;
+  const dialogWaiting = (captureWanted && !CaptureDialog) || (!!assistantAt && !AssistantPanel) || (!!newAt && !NewItemDialog) || (!!draftEdit && !DraftEditor) || (!!helpTarget && !HelpFinder);
   const openDraftForm = useCallback((draftId: number) => openNew({ from: "draft", clientKey: null, draftId }), [openNew]);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -892,7 +893,6 @@ export function App() {
   // Timeboxes (step 12): the Timebox… dialog, Outlook write access (read when first needed), and the write flow.
   const [tbTarget, setTbTarget] = useState<TimeboxTarget | null>(null);
   // Step 13: the collaboration finder's target, and the timebox env for menus built before render.
-  const [helpTarget, setHelpTarget] = useState<HelpTarget | null>(null);
   const tbEnvRef = useRef<TimeboxEnv | null>(null);
   // DP-3: my holds that fell behind after someone else's change, brought in step on a visit by my own confirm_own rule.
   useHoldsInStep(data, data ? tbEnvRef.current : null);
@@ -1541,6 +1541,7 @@ export function App() {
         if (assistantAt && !AssistantPanel) setAssistantAt(null);
         if (newAt && !NewItemDialog) setNewAt(null);
         if (draftEdit && !DraftEditor) setDraftEdit(null);
+        if (helpTarget && !HelpFinder) setHelpTarget(null);
       } else if (loc.overlay && k === "Escape" && !captureOpen) {
         // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running). Settings' own
         // shell takes Esc first (ST-1), so its unsaved fields are saved on the way out.
@@ -1604,7 +1605,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt, tabShown, dialogWaiting, captureWanted, CaptureDialog, assistantAt, AssistantPanel, newAt, NewItemDialog, draftEdit, DraftEditor]);
+  }, [loc, nav, addAt, settingsAt, closeOutAt, checkInOpen, captureOpen, cmdOpen, keysOpen, go, goNav, openTab, togglePlanning, setSettingsAt, tabShown, dialogWaiting, captureWanted, CaptureDialog, assistantAt, AssistantPanel, newAt, NewItemDialog, draftEdit, DraftEditor, helpTarget, HelpFinder]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2793,12 +2794,13 @@ export function App() {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).find((p) => p.id === tbTarget.pickId) : null;
         return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? pickNeed(pick, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
       })()}
-      {helpTarget && (
+      {helpTarget && HelpFinder && (
         <HelpFinder
           target={helpTarget}
           clientName={data.planClients.find((c) => c.clientKey === helpTarget.clientKey)?.clientName ?? helpTarget.clientKey}
           settings={data.collab}
           tz={userZone(week)}
+          now={() => zonedNow(userZone(week))}
           onPreview={(p) => writes.show(p)}
           onClose={() => setHelpTarget(null)}
         />
