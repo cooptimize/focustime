@@ -48,5 +48,9 @@ describe("the suggested client (MC-2)", () => {
     expect(suggestClient("Design review", clients, "northwind")).toBe("northwind");
     expect(suggestClient("Design review", clients, "elsewhere")).toBeNull();
     expect(suggestClient("Design review", clients)).toBeNull();
+    // MC-4: everyone at Cooptimize and no client named: nothing from the focus block ("Which client?"); a named client still wins.
+    expect(suggestClient("Design review", clients, "northwind", true)).toBeNull();
+    expect(suggestClient("Contoso data review", clients, "northwind", true)).toBe("contoso");
+    expect(suggestClient("Design review", clients, "northwind", false)).toBe("northwind");
   });
 });

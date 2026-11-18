@@ -61,16 +61,18 @@ const wordsOf = (s: string) => ` ${flat(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim
 /**
  * The client a call is likely about, or null. Only ever a suggestion: the setup shows it chosen and the person can
  * change it. A client whose key or name is a whole word (or words) of the title wins when only one is; otherwise the
- * focus block's client for the half-day the call starts in, when there is one; otherwise nothing.
+ * focus block's client for the half-day the call starts in, when there is one; otherwise nothing. MC-4: never the focus
+ * block's when everyone on the call is at Cooptimize (an internal call in a client's block is rarely about that client):
+ * the row says "Which client?".
  */
-export function suggestClient(title: string, clients: readonly CaptureClient[], blockClient: string | null = null): string | null {
+export function suggestClient(title: string, clients: readonly CaptureClient[], blockClient: string | null = null, allHome = false): string | null {
   const t = wordsOf(title);
   const named = clients.filter((c) => [c.clientKey, c.clientName].some((n) => {
     const w = wordsOf(n).trim();
     return w.length >= 3 && t.includes(` ${w} `);
   }));
   if (named.length === 1) return named[0]!.clientKey;
-  if (blockClient && clients.some((c) => c.clientKey === blockClient)) return blockClient;
+  if (!allHome && blockClient && clients.some((c) => c.clientKey === blockClient)) return blockClient;
   return null;
 }
 

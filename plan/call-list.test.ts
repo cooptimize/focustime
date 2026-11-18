@@ -1,98 +1,135 @@
-// MC-3: Calls as one list by day. Every call once, newest first, a registered call and another on the same day in time
-// order, a state and a filter for each, counts that add up, older calls only while they need me, the chips' clients.
-// Fictional data only (builders).
+// MC-3, MC-4: Calls' list. Every call once, newest first; MC-4: Open, Closed and Hidden with counts, Needs you first,
+// then This week, Last week and Earlier with their closed and still-open counts, a repeat as one row, calls with no
+// transcript in the fold, the marks, and the tab's count equal to Needs you. Fictional data only (builders).
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen } from "./call-list.ts";
+import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, openList, outcomeOfCall, weekOf } from "./call-list.ts";
 
+// Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
 const TODAY = "2026-11-05";
 const weekly = aSeriesView({ id: 1, name: "Contoso weekly status call", clientKey: "Contoso", clientName: "Contoso" });
 const pressed = aSeriesView({ id: 2, name: "Fabrikam design review", clientKey: "Fabrikam", clientName: "Fabrikam", call: "calendar", roleLabel: "Weekly status call" });
 const look = aSeriesView({ id: 3, name: "Adatum planning", clientKey: "Adatum", clientName: "Adatum", mine: { review: false, attend: true } });
+const done = { created: 2, promises: 1, comments: 0, skipped: 5 };
 
-describe("MC-3: one list by day", () => {
+describe("MC-4: Calls' list", () => {
   const occs = [
     anOccurrenceView({ id: 10, seriesId: 1, startAt: "2026-11-02T18:00:00Z", endAt: "2026-11-02T18:30:00Z", state: "ready", open: 4, proposals: 6 }),
     anOccurrenceView({ id: 11, seriesId: 2, startAt: "2026-11-04T15:00:00Z", endAt: "2026-11-04T16:00:00Z", state: "failed", open: 0, retryAt: null }),
-    anOccurrenceView({ id: 12, seriesId: 3, startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z", state: "ready", open: 2 }),
-    anOccurrenceView({ id: 13, seriesId: 1, startAt: "2026-10-26T18:00:00Z", endAt: "2026-10-26T18:30:00Z", state: "reviewed", open: 0, proposals: 3 }),
-    // Older than 14 days and still needing me (proposals open, the transcript not dropped): listed.
-    anOccurrenceView({ id: 14, seriesId: 1, startAt: "2026-10-19T18:00:00Z", endAt: "2026-10-19T18:30:00Z", state: "ready", open: 1 }),
-    // Older than 14 days and done: not listed (the fold has it).
-    anOccurrenceView({ id: 15, seriesId: 1, startAt: "2026-10-12T18:00:00Z", endAt: "2026-10-12T18:30:00Z", state: "reviewed", open: 0 }),
+    // I look, not review: open, but not Needs you.
+    anOccurrenceView({ id: 12, seriesId: 3, startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z", state: "ready", open: 2, proposals: 2 }),
+    // Closed last week, with what came of it.
+    anOccurrenceView({ id: 13, seriesId: 1, startAt: "2026-10-26T18:00:00Z", endAt: "2026-10-26T18:30:00Z", state: "reviewed", open: 0, proposals: 8, done, closedAt: "2026-10-27T15:00:00Z" }),
+    // Last week and still open (needs me): the week says "1 still open".
+    anOccurrenceView({ id: 14, seriesId: 1, startAt: "2026-10-27T18:00:00Z", endAt: "2026-10-27T18:30:00Z", state: "ready", open: 1, proposals: 3 }),
+    // Closed and older than 14 days: off the list (reachable from its meeting and its address).
+    anOccurrenceView({ id: 15, seriesId: 1, startAt: "2026-10-12T18:00:00Z", endAt: "2026-10-12T18:30:00Z", state: "reviewed", open: 0, proposals: 1, done: { created: 0, promises: 0, comments: 0, skipped: 1 } }),
   ];
+  const standup = (n: number, day: string) => anOtherCall({ key: `standup-${n}`, name: "Team standup", startAt: `${day}T14:00:00Z`, endAt: `${day}T14:15:00Z`, minutes: 15, seriesKey: "series-standup", allHome: true });
   const others = [
-    anOtherCall({ name: "Team standup", startAt: "2026-11-02T14:00:00Z", endAt: "2026-11-02T14:15:00Z", minutes: 15, people: 4 }),
-    // The pressed call, from my calendar too: listed once, as the call FocusTime keeps, with its people.
-    anOtherCall({ name: "Fabrikam design review", startAt: "2026-11-04T15:00:00Z", endAt: "2026-11-04T16:00:00Z", occurrenceId: 11, people: 6 }),
-    anOtherCall({ name: "Lunch and learn", startAt: "2026-11-02T19:00:00Z", endAt: "2026-11-02T20:00:00Z", teams: false, outside: false }),
+    standup(1, "2026-11-02"), standup(2, "2026-11-03"), standup(3, "2026-11-04"),
+    anOtherCall({ key: "pressed", name: "Fabrikam design review", startAt: "2026-11-04T15:00:00Z", endAt: "2026-11-04T16:00:00Z", occurrenceId: 11, people: 6 }),
+    anOtherCall({ key: "model", name: "Northwind model review", startAt: "2026-11-03T19:00:00Z", endAt: "2026-11-03T20:00:00Z" }),
+    anOtherCall({ key: "lunch", name: "Lunch and learn", startAt: "2026-11-02T19:00:00Z", endAt: "2026-11-02T20:00:00Z", teams: false }),
+    anOtherCall({ key: "sync", name: "Fabrikam sync", startAt: "2026-10-28T15:00:00Z", endAt: "2026-10-28T16:00:00Z" }),
+    anOtherCall({ key: "hid", name: "Hidden one", startAt: "2026-11-03T16:00:00Z", endAt: "2026-11-03T16:30:00Z" }),
   ];
-  const { rows, older } = callRows({ meetings: [weekly, pressed, look], occurrences: occs, others, today: TODAY, zone: ZONE });
+  const check = { "standup-1": "no", "standup-2": "no", "standup-3": "no", model: "yes", sync: "unchecked", hid: "yes" } as const;
+  const hides = { keys: new Set(["hid", "gone-long-ago"]), series: new Set<string>() };
+  const suggest = (c: { name: string }) => (c.name.startsWith("Northwind") ? "Northwind" : null);
+  const rows = callRows({ meetings: [weekly, pressed, look], occurrences: occs, others, today: TODAY, zone: ZONE, check, hides, suggest });
+  const at = (k: string) => rows.find((r) => r.key === k)!;
 
-  it("every call once, newest first; a registered call and another on the same day in time order", () => {
-    expect(rows.map((r) => r.name)).toEqual(["Fabrikam design review", "Adatum planning", "Lunch and learn", "Contoso weekly status call", "Team standup", "Contoso weekly status call", "Contoso weekly status call"]);
-    expect(rows.map((r) => r.occurrenceId)).toEqual([11, 12, null, 10, null, 13, 14]);
+  it("every call once, newest first; a closed call older than the list's days drops off", () => {
     expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
-    expect(rows.find((r) => r.occurrenceId === 11)!.people).toBe(6);
-    expect(older.map((r) => r.occurrenceId)).toEqual([15]);
+    expect(rows.some((r) => r.occurrenceId === 15)).toBe(false);
+    expect(at("o11").people).toBe(6);
+    expect(rows.filter((r) => r.key === "cpressed")).toEqual([]);
+    const starts = rows.map((r) => Date.parse(r.startAt));
+    expect([...starts].sort((a, b) => b - a)).toEqual(starts);
   });
 
-  it("a state in words on every row, and the weekly mark on a registered call only", () => {
-    const at = (id: number | null, name?: string) => rows.find((r) => (id ? r.occurrenceId === id : r.name === name))!;
-    expect(at(10).state).toEqual({ label: "Review 4 proposals", needsMe: true });
-    expect(at(11).state.label).toBe("The AI step failed");
-    expect(at(12).state).toEqual({ label: "2 proposals to review", needsMe: false });
-    expect(at(13).state.label).toBe("Reviewed");
-    expect(at(null, "Team standup").state.label).toBe("Not reviewed");
-    expect(at(10).weekly).toBe("Weekly status call");
-    expect(at(11).weekly).toBeNull();
-    expect(at(null, "Team standup").weekly).toBeNull();
-    expect(at(null, "Lunch and learn").source).toBe("Upload only");
-    expect(at(null, "Team standup").source).toBe("From Teams or a file");
-    expect(at(10).source).toBe("Transcript from Teams");
-    expect(at(null, "Team standup").clientKey).toBeNull();
+  it("Open, Closed and Hidden with counts that add up; a hidden meeting with nothing in the window is counted in Hidden", () => {
+    const gone = hiddenMissing(rows, hides);
+    expect(gone).toEqual({ keys: ["gone-long-ago"], series: [] });
+    const c = filterCounts(rows, null, gone.keys.length);
+    expect(c.closed).toBe(1);
+    expect(c.hidden).toBe(2);
+    expect(c.open + c.closed + c.hidden - gone.keys.length).toBe(rows.length);
+    expect(closedList(rows, null).map((r) => r.occurrenceId)).toEqual([13]);
+    expect(hiddenList(rows, null).map((r) => r.key)).toEqual(["chid"]);
   });
 
-  it("the filters' counts add up, and each shows exactly its calls; the client chips filter", () => {
-    const c = filterCounts(rows, null);
-    expect(c.all).toBe(rows.length);
-    expect(c.review + c.open + c.done).toBe(c.all);
-    expect(filterRows(rows, "review", null).map((r) => r.occurrenceId)).toEqual([11, 10, 14]);
-    expect(filterRows(rows, "done", null).map((r) => r.occurrenceId)).toEqual([13]);
-    expect(filterRows(rows, "open", null).map((r) => r.name)).toEqual(["Adatum planning", "Lunch and learn", "Team standup"]);
-    expect(filterRows(rows, "all", "Contoso").every((r) => r.clientKey === "Contoso")).toBe(true);
-    expect(filterRows(rows, "all", "").map((r) => r.name)).toEqual(["Lunch and learn", "Team standup"]);
-    expect(filterCounts(rows, "Contoso")).toEqual({ all: 3, review: 2, open: 0, done: 1 });
-    expect(chipClients(rows).map((x) => x.name)).toEqual(["Adatum", "Contoso", "Fabrikam", "No client yet"]);
+  it("Needs you first, then the weeks with closed and still-open counts; a repeat is one row; no transcript goes in the fold", () => {
+    const l = openList(rows, null, TODAY);
+    expect(l.needs.map((r) => r.occurrenceId)).toEqual([11, 10, 14]);
+    expect(l.weeks.map((w) => [w.label, w.closed, w.stillOpen])).toEqual([["This week", 0, 0], ["Last week", 1, 1]]);
+    const thisWeek = l.weeks[0]!.entries.map((e) => (e.kind === "one" ? e.row.key : `series:${e.name}:${e.rows.length}`));
+    // The model review (a transcript in Teams) and the call I only look at; the hidden one never shows as reviewable.
+    expect(thisWeek).toEqual(["cmodel", "o12"]);
+    expect(l.weeks[1]!.entries.map((e) => (e.kind === "one" ? e.row.key : e.name))).toEqual(["csync"]);
+    // The standups (no transcript in Teams) are one row in the fold; Lunch and learn isn't a Teams meeting.
+    expect(l.foldCount).toBe(4);
+    expect(l.fold.map((e) => (e.kind === "one" ? e.row.name : `${e.name} · ${e.rows.length}`))).toEqual(["Team standup · 3", "Lunch and learn"]);
   });
 
-  it("days under a heading, Today and Yesterday by name", () => {
-    expect(byDay(rows).map((d) => d.day)).toEqual(["2026-11-04", "2026-11-03", "2026-11-02", "2026-10-26", "2026-10-19"]);
+  it("the marks: Transcript in Teams, Not checked, checking while the answer is on its way", () => {
+    expect(at("cmodel").mark).toBe("teams");
+    expect(at("csync").mark).toBeNull();
+    expect(at("csync").check).toBe("unchecked");
+    expect(at("clunch").check).toBe("no");
+    const before = callRows({ meetings: [], occurrences: [], others: [others[4]!], today: TODAY, zone: ZONE });
+    expect(before[0]!.check).toBe("checking");
+    expect(before[0]!.place).toBe("week");
+  });
+
+  it("a Pocket recording and a Teams transcript on one call is both", () => {
+    const rec = { id: "r1", startAt: "2026-11-03T19:00:00Z", endAt: "2026-11-03T20:00:00Z", minutes: 60, title: "Model review" };
+    const r = callRows({ meetings: [], occurrences: [], others: [others[4]!], today: TODAY, zone: ZONE, check, addPocket: pocketRows([rec], ZONE) });
+    expect(r[0]!.mark).toBe("both");
+  });
+
+  it("the client: FocusTime's suggestion, or Which client? (none)", () => {
+    expect(at("cmodel").suggested).toBe("Northwind");
+    expect(at("cstandup-1").suggested).toBeNull();
+    expect(chipClients(rows, (k) => k).map((x) => x.name)).toContain("Northwind");
+  });
+
+  it("a closed call says what came of it, or Nothing taken", () => {
+    expect(closedLine(at("o13").closed!)).toBe("2 created · 1 promise · 5 skipped");
+    expect(closedLine({ at: null, done: { created: 0, promises: 0, comments: 0, skipped: 3 }, noTranscript: false })).toBe("Nothing taken");
+    expect(closedLine({ at: null, done: null, noTranscript: true })).toBe("No transcript");
+  });
+
+  it("what came of a call and when it closed, from its proposals alone", () => {
+    const p = (kind: "gap" | "commitment" | "comment", state: "open" | "skipped" | "confirmed" | "failed", decidedAt: string | null = null) => ({ kind, state, decidedAt });
+    expect(outcomeOfCall([p("gap", "confirmed"), p("commitment", "confirmed"), p("comment", "skipped"), p("gap", "open")])).toEqual({ created: 1, promises: 1, comments: 0, skipped: 1 });
+    expect(closedAtOf([p("gap", "confirmed", "2026-11-02T10:00:00Z"), p("gap", "open")])).toBeNull();
+    expect(closedAtOf([p("gap", "confirmed", "2026-11-02T10:00:00Z"), p("gap", "skipped", "2026-11-03T10:00:00Z")])).toBe("2026-11-03T10:00:00Z");
+    expect(closedAtOf([p("gap", "failed", "2026-11-02T10:00:00Z")])).toBeNull();
+    expect(closedAtOf([])).toBeNull();
+  });
+
+  it("weeks start on Monday; headings say Today and Yesterday by name", () => {
+    expect(weekOf("2026-11-02", TODAY)).toBe("this");
+    expect(weekOf("2026-11-01", TODAY)).toBe("last");
+    expect(weekOf("2026-10-25", TODAY)).toBe("earlier");
     expect(dayHeading("2026-11-05", TODAY)).toBe("Today");
     expect(dayHeading("2026-11-04", TODAY)).toBe("Yesterday");
-    expect(dayHeading("2026-11-02", TODAY)).toBe("Mon, Nov 2");
   });
 
-  it("with no call named, the newest call that needs me opens; with none, the newest call", () => {
+  it("with no call named, the newest call that needs me opens", () => {
     expect(firstToOpen(rows)?.occurrenceId).toBe(11);
-    expect(firstToOpen(rows.filter((r) => !r.state.needsMe))?.occurrenceId).toBe(12);
     expect(firstToOpen([])).toBeNull();
   });
 
-  it("an older call that needs me is listed for as long as the server returns it, so To review is the tab's count", () => {
-    const old = anOccurrenceView({ id: 20, seriesId: 1, startAt: "2026-10-01T18:00:00Z", endAt: "2026-10-01T18:30:00Z", state: "ready", open: 2 });
-    const r = callRows({ meetings: [weekly], occurrences: [old], others: [], today: TODAY, zone: ZONE });
-    expect(r.rows.map((x) => x.occurrenceId)).toEqual([20]);
-    expect(r.older).toEqual([]);
-    expect(filterCounts(r.rows, null).review).toBe(1);
-  });
   it("a calendar call is keyed by its own calendar key, so a refetch in another order keeps the same row", () => {
-    const a = anOtherCall({ key: "ical-a", name: "Team standup", startAt: "2026-11-02T14:00:00Z", endAt: "2026-11-02T14:15:00Z" });
-    const b = anOtherCall({ key: "ical-b", name: "Design review", startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z" });
-    const one = callRows({ meetings: [], occurrences: [], others: [a, b], today: TODAY, zone: ZONE }).rows;
-    const two = callRows({ meetings: [], occurrences: [], others: [b, a], today: TODAY, zone: ZONE }).rows;
-    expect(one.map((r) => [r.key, r.name])).toEqual(two.map((r) => [r.key, r.name]));
+    const a = anOtherCall({ key: "ical-a", startAt: "2026-11-02T14:00:00Z", endAt: "2026-11-02T14:15:00Z" });
+    const b = anOtherCall({ key: "ical-b", startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z" });
+    const one = callRows({ meetings: [], occurrences: [], others: [a, b], today: TODAY, zone: ZONE });
+    const two = callRows({ meetings: [], occurrences: [], others: [b, a], today: TODAY, zone: ZONE });
+    expect(one.map((r) => r.key)).toEqual(two.map((r) => r.key));
   });
 });
 
@@ -114,7 +151,7 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     rec("no-call", "2026-11-01T20:00:00Z", 25, "Call with the carrier"),
     rec("untitled", "2026-11-04T20:00:00Z", 10),
   ];
-  const { rows } = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, addPocket: pocketRows(pocket, ZONE) });
+  const rows = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, addPocket: pocketRows(pocket, ZONE) });
   const at = (k: string) => rows.find((r) => r.key === k)!;
 
   it("a call it goes with says Pocket recording found, with both recordings, the longer overlap first", () => {
@@ -134,8 +171,16 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
   });
 
+  it("MC-4: a call that closed with no transcript opens again when my recording goes with it", () => {
+    const gone = anOccurrenceView({ id: 30, seriesId: 4, startAt: "2026-10-27T15:00:00Z", endAt: "2026-10-27T16:00:00Z", state: "no_transcript", open: 0, hasTranscript: false });
+    const plain = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE });
+    expect(plain[0]!.bucket).toBe("closed");
+    const withRec = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE, addPocket: pocketRows([rec("r", "2026-10-27T15:00:00Z", 60)], ZONE) });
+    expect([withRec[0]!.bucket, withRec[0]!.mark, withRec[0]!.closed]).toEqual(["open", "pocket", null]);
+  });
+
   it("without a press, nothing changes", () => {
     const plain = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE });
-    expect(plain.rows.every((r) => !r.pocket.length && !r.recording)).toBe(true);
+    expect(plain.every((r) => !r.pocket.length && !r.recording)).toBe(true);
   });
 });

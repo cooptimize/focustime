@@ -17,6 +17,9 @@ const call = (page: Page, action: string, input: unknown) =>
 const go = (page: Page, x: string) => page.evaluate((v) => (location.hash = v), x);
 /** This week's row by its name (the demo's calendar repeats some calls a week earlier). */
 const row = (page: Page, name: string | RegExp) => page.locator("[data-calls-list] [data-call-row]").filter({ has: page.locator(".calls-name", { hasText: name }) }).first();
+/** MC-4: the row's whole line (its mark is beside the button that opens it). */
+const item = (page: Page, name: string | RegExp) => page.locator("[data-calls-list] li").filter({ has: page.locator(".calls-name", { hasText: name }) }).first();
+const pocketMark = (page: Page, name: string | RegExp) => item(page, name).locator("[data-call-mark='pocket']");
 const storage = (page: Page) => page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }));
 
 /** Calls, with my Pocket connected first unless asked not to (a demo key; each demo session is its own). */
@@ -47,13 +50,13 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await page.reload();
     await page.locator("[data-pocket-get]").waitFor({ timeout: 30_000 });
     // Nothing is listed until the press.
-    await expect(page.getByText("Pocket recording found").count()).resolves.toBe(0);
+    await expect(page.locator("[data-call-mark='pocket']").count()).resolves.toBe(0);
     await page.locator("[data-pocket-get]").click();
     await expect.poll(() => bar.locator('[role="status"]').textContent(), { timeout: 30_000 }).toMatch(/^Got 4 recordings at \d+:\d\d [AP]M\. 1 recording by other people was left out\.$/);
-    await expect(row(page, "Proposal review with Jordan").locator(".calls-state").textContent()).resolves.toBe("Pocket recording found");
-    await expect(row(page, "Harbor sprint planning").locator(".calls-state").textContent()).resolves.toBe("Pocket recording found");
-    await expect(row(page, "Call with the carrier").locator(".calls-state").textContent()).resolves.toBe("Not reviewed");
-    await expect(row(page, "Call with the carrier").locator(".calls-meta").textContent()).resolves.toMatch(/Your Pocket recording$/);
+    // MC-4: the Pocket mark, drawn like Teams' (these calls had no transcript in Teams, so they leave the fold).
+    await expect(pocketMark(page, "Proposal review with Jordan").textContent()).resolves.toBe("Pocket recording");
+    await expect(pocketMark(page, "Harbor sprint planning").textContent()).resolves.toBe("Pocket recording");
+    await expect(pocketMark(page, "Call with the carrier").textContent()).resolves.toBe("Pocket recording");
     await expect(page.getByText("Someone else's recording").count()).resolves.toBe(0);
     expect(await storage(page)).not.toMatch(/rec-demo|carrier|Sprint planning|Proposal review"/);
     expect(errors).toEqual([]);
@@ -68,7 +71,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     expect((await get.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await get.click();
     const harbor = row(page, "Harbor sprint planning");
-    await harbor.locator(".calls-state", { hasText: "Pocket recording found" }).waitFor({ timeout: 30_000 });
+    await pocketMark(page, "Harbor sprint planning").waitFor({ timeout: 30_000 });
     await harbor.click();
     await page.locator("[data-pocket-part]").waitFor({ timeout: 30_000 });
     for (const l of await page.locator(".mtg-setup-source label").all()) expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -78,7 +81,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page);
     await page.locator("[data-pocket-get]").click();
-    await row(page, "Proposal review with Jordan").locator(".calls-state", { hasText: "Pocket recording found" }).waitFor({ timeout: 30_000 });
+    await pocketMark(page, "Proposal review with Jordan").waitFor({ timeout: 30_000 });
     await row(page, "Proposal review with Jordan").click();
     const setup = page.locator(".mtg-setup");
     await expect(setup.locator('[data-source="pocket"]').isChecked()).resolves.toBe(true);
@@ -95,7 +98,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page);
     await page.locator("[data-pocket-get]").click();
-    await row(page, "Harbor sprint planning").locator(".calls-state", { hasText: "Pocket recording found" }).waitFor({ timeout: 30_000 });
+    await pocketMark(page, "Harbor sprint planning").waitFor({ timeout: 30_000 });
     await row(page, "Harbor sprint planning").click();
     const part = page.locator("[data-pocket-part]");
     await expect(part.locator("legend").textContent()).resolves.toBe("This recording is 2 h 15 min; the call was 1 h. Which part comes in?");

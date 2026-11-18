@@ -2744,6 +2744,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.pocket_bring":
     case "meeting.pocket_add":
     case "meeting.calls_check":
+    case "meeting.call_hides":
+    case "meeting.call_hide":
+    case "meeting.call_unhide":
+    case "meeting.skip_all":
+    case "meeting.unskip_all":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

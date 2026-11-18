@@ -63,7 +63,14 @@ export type OccurrenceView = {
   hasTranscript: boolean;
   /** MC-1d: the transcript was found but couldn't be read (needs_upload, "Couldn't read the transcript"). */
   readFailed: boolean;
+  /** MC-4: what came of its proposals, counted from them (nothing more is stored): created in DevOps, kept as promises, comments added, skipped. */
+  done?: CallOutcome;
+  /** MC-4: when its last undecided proposal was decided (the latest decision), while nothing is undecided; else null. */
+  closedAt?: string | null;
 };
+
+/** MC-4: what came of a call, counted from its proposals. */
+export type CallOutcome = { created: number; promises: number; comments: number; skipped: number };
 
 /** meeting.mine's nudges, with the client's name and the date in words. */
 export type MeetingNudgeView = MeetingNudge & { clientName: string; dateLabel: string };

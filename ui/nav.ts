@@ -9,7 +9,7 @@ import { tourById } from "./guide/tours.ts";
 import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./settings/admin/paths.ts";
-import { LIST_FILTERS, type ListFilter } from "../plan/call-list.ts";
+import { LIST_FILTERS, OLD_FILTERS, type ListFilter } from "../plan/call-filters.ts";
 
 export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;
 export type Tab = (typeof TABS)[number];
@@ -338,7 +338,7 @@ export function placeToKeep(l: Loc): string {
  */
 export function callsHash(o: CallsAt): string {
   const q = new URLSearchParams();
-  if (o.show && o.show !== "all") q.set("show", o.show);
+  if (o.show && o.show !== "open") q.set("show", o.show);
   if (o.client !== undefined) q.set("client", o.client);
   const query = q.size ? `?${q}` : "";
   if (!o.occurrence) return `#/calls${query}`;
@@ -365,8 +365,11 @@ function parseCalls(full: string): Loc | null {
     for (const k of q.keys()) if (k !== "show" && k !== "client") return null;
     const show = q.get("show");
     if (show !== null) {
-      if (!(LIST_FILTERS as readonly string[]).includes(show)) return null;
-      if (show !== "all") list.show = show as ListFilter;
+      // MC-4: Open is the list's own; MC-3's filters in a kept address open as Open or Closed.
+      const f = (LIST_FILTERS as readonly string[]).includes(show) ? (show as ListFilter) : show in OLD_FILTERS ? OLD_FILTERS[show] : undefined;
+      if (f === undefined) return null;
+      // An explicit show=open (Week's "N calls to close") is kept, so it wins over the filter this browser remembered.
+      if (f) list.show = f;
     }
     const client = q.get("client");
     if (client !== null) {

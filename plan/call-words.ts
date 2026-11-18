@@ -183,9 +183,9 @@ export const CALL_LIST = {
   /** The tab's title (and its number key's line). */
   tabTitle: "Calls: review the calls you were on",
   sub: "The calls you were on, newest first",
-  /** The filters: All, then each bucket. */
-  filters: { all: "All", review: "To review", open: CALLS_TEXT.notReviewed, done: "Done" },
-  filterHint: { all: "Every call in the list", review: "Calls waiting for you: proposals to review, a transcript to upload or a step that failed", open: "Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer", done: "Calls that were reviewed, had nothing to propose or had no transcript" },
+  /** MC-4: the filters: what is still to do, what is finished, what I put out of the way. */
+  filters: { open: "Open", closed: "Closed", hidden: "Hidden" },
+  filterHint: { open: "Calls that need you first, then each week's calls that can be reviewed", closed: "Calls with nothing left to decide, and what came of each", hidden: "Meetings you hid. Only you see this list" },
   allClients: "All clients",
   noClient: "No client yet",
   today: "Today",
@@ -208,9 +208,6 @@ export const CALL_LIST = {
   clientCalls: (n: number) => `Client calls (${n})`,
   clientCallsSub: "Weekly calls a FocusTime admin registered. Their calls from the last 14 days are in the list above.",
   reviewers: (names: readonly string[]) => `Reviewed by ${names.join(", ")}`,
-  /** Calls older than the list's days that don't need me, until their transcript is dropped. */
-  older: (n: number) => `Earlier calls (${n})`,
-  olderSub: "Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call.",
   /** A registered call with no occurrence in the weeks FocusTime looks at. */
   noneLately: "Nothing in the last five weeks.",
   hideList: "Hide the list",
@@ -218,6 +215,12 @@ export const CALL_LIST = {
   back: "Back to Calls",
   loading: "Loading calls…",
   tryAgain: "Try again",
+  /** MC-4: a row's buttons, and the client choice's label. */
+  reviewButton: "Review",
+  uploadButton: "Upload",
+  openButton: "Open",
+  uploadState: CALL_STATE.upload,
+  aboutLabel: "Which client is this call about?",
   /** The calls FocusTime keeps couldn't be read: no list rather than one missing the calls that need me. */
   failedMine: "FocusTime couldn't read your calls just now, so the list isn't shown: it would leave out the calls waiting for you.",
   /** Only my calendar's calls couldn't be read: the rest of the list is shown. */
@@ -341,6 +344,75 @@ export function aiNextLine(o: { retryAt: string | null; tries: number; retryable
   if (o.tries >= AI_RETRIES) return `FocusTime tried again ${AI_RETRIES} times and stopped. A reviewer can Propose again.`;
   return "A reviewer can Propose again.";
 }
+
+/** MC-4: a row's mark: where its transcript is. */
+export const MARK_TEXT = { teams: "Transcript in Teams", pocket: "Pocket recording", both: "Teams and Pocket", none: "No transcript", unchecked: "Not checked", checking: "Checking…" } as const;
+
+/** MC-4: Calls' Open list, Hide, closing a call, and Review from the row. */
+export const CLOSE_TEXT = {
+  needs: "Needs you",
+  week: { this: "This week", last: "Last week", earlier: "Earlier" },
+  closedCount: (n: number) => `${n} closed`,
+  stillOpen: (n: number) => `${n} still open`,
+  left: (open: number, all: number) => `${open} left of ${all}`,
+  fold: (n: number) => `${n} ${n === 1 ? "call" : "calls"} with no transcript`,
+  foldSub: "Teams has no transcript for these, or FocusTime can't ask (not a Teams meeting, or organized outside Cooptimize). Each can still be reviewed from a file, or hidden.",
+  series: (n: number, week: string) => `${n} ${week === "This week" ? "this week" : week === "Last week" ? "last week" : week === "Earlier" ? "earlier" : n === 1 ? "call" : "calls"}`,
+  /** The check's quiet line at the list's head. */
+  checkFailed: "FocusTime couldn't check which calls have a transcript just now. The list is still here.",
+  checkAgain: "Check again",
+  checkMore: (n: number) => `Check ${n} more`,
+  notChecked: (n: number) => `${n} ${n === 1 ? "call wasn't" : "calls weren't"} checked yet.`,
+  tenantOff: "Your organization's Microsoft settings don't let apps read Teams transcripts (the organization's setting, not an organizer's choice), so no call shows Transcript in Teams.",
+  refresh: "Refresh",
+  /** Hide (a meeting), with Undo; the repeating row's menu. */
+  hide: "Hide",
+  hideEvery: "Hide every one",
+  hideEveryHint: "This meeting, from now on",
+  hideWeek: "Hide only this week's",
+  showEach: "Show each one",
+  hideSeveral: (n: number) => `Hide ${n}`,
+  hidden: (n: number) => `${n} ${n === 1 ? "meeting" : "meetings"} hidden`,
+  hiddenEvery: (name: string) => `Every ${name} hidden`,
+  putBack: "Put back",
+  putBackAll: "Put back all",
+  hiddenGone: (n: number) => `${n} hidden ${n === 1 ? "meeting has" : "meetings have"} no call in the last 14 days.`,
+  hiddenWhy: "Only you see what you hid. Hiding never changes the meeting in Outlook or what anyone else sees.",
+  hiddenEveryLine: "Every one, from now on",
+  /** Closing a call. */
+  skipAllClose: "Skip all and close",
+  skipLastClose: (n: number) => `Skip the last ${n} and close`,
+  skipSeveral: (n: number) => `Skip all and close ${n}`,
+  closedCall: "Closed",
+  closedAt: (when: string) => `Closed ${when}`,
+  closedOne: "Call closed",
+  closedMany: (n: number) => `${n} calls closed`,
+  skippedNone: "Skipping writes nothing to DevOps and keeps no promise.",
+  seeSkipped: (n: number) => `See what was skipped (${n})`,
+  hideSkipped: "Hide what was skipped",
+  putBackOne: "Put back",
+  putBackOpens: "Putting one back opens the call again.",
+  goesIn: (when: string) => `Still open. Its transcript goes ${when} (30 days after the call).`,
+  created: (n: number) => `${n} created`,
+  promises: (n: number) => `${n} ${n === 1 ? "promise" : "promises"}`,
+  comments: (n: number) => `${n} ${n === 1 ? "comment" : "comments"}`,
+  skipped: (n: number) => `${n} skipped`,
+  nothingTaken: "Nothing taken",
+  noTranscript: "No transcript",
+  /** Close out's list, and Week's header from Thursday. */
+  closeOutHead: (day: string | null) => (day ? `Calls from ${day} still open` : "Calls still open today"),
+  closeOutOpen: "Open",
+  weekLine: (n: number) => `${n} ${n === 1 ? "call" : "calls"} to close this week`,
+  /** Review from the row. */
+  about: (client: string) => `About ${client}`,
+  whichClient: "Which client?",
+  aboutHint: "FocusTime suggests the client. Pressing Review with it shown is you saying the call is about it.",
+  reviewing: "Getting the transcript from Teams…",
+  uploadFile: "Upload a file",
+  tick: (name: string) => `Choose ${name}`,
+  ticked: (n: number) => `${n} chosen`,
+  clearTicks: "Clear",
+} as const;
 
 /** MC-2b: a call my Pocket recording goes with, and a recording's own row (plan/pocket-words.ts has the rest). */
 export const POCKET_ROW = { found: "Pocket recording found", kind: "Pocket recording", source: "Your Pocket recording" } as const;

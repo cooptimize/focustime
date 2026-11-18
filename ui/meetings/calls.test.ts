@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 import type { CalEvent } from "../../week/types.ts";
 import { hashOf, parseHash } from "../nav.ts";
 import { callForEvent, callHref, callMarks, callsNeedingMe, type MineData } from "./calls.ts";
+import { anOccurrenceView, aSeriesView, ZONE } from "../../test/builders/index.ts";
+import { callRows, openList } from "../../plan/call-list.ts";
+import { callsToClose, weekCallsToClose } from "./CallsToClose.tsx";
 
 const mine = (state: string, open: number, review: boolean): MineData => ({
   meetings: [{ id: 1, clientKey: "contoso", clientName: "Contoso", name: "Contoso weekly status call", roleLabel: "Weekly status call", mine: { review } } as never],
@@ -51,5 +54,53 @@ describe("MC-1d: which drawn meeting is a call", () => {
     // MC-3: the address before Calls was a tab lands on the same call, view and line, on the Calls tab.
     expect(parseHash("#/meetings/7/transcript/12")).toEqual({ nav: { tab: "calls", occurrence: 7, view: "transcript", line: 12 }, overlay: null });
     for (const bad of ["#/meetings/7/nope", "#/meetings/7/transcript/x", "#/meetings/7/upload/3", "#/meetings/7/transcript/1/2", "#/calls/7/nope", "#/calls/x"]) expect(parseHash(bad), bad).toBeNull();
+  });
+});
+
+// MC-4: the tab's count is the calls in Calls' Needs you, for any mix of calls (TEST 9).
+describe("MC-4: the tab's count", () => {
+  const TODAY = "2026-11-05";
+  const weekly = aSeriesView({ id: 1, name: "Contoso weekly status call", clientKey: "Contoso", clientName: "Contoso" });
+  const pressed = aSeriesView({ id: 2, name: "Fabrikam design review", clientKey: "Fabrikam", clientName: "Fabrikam", call: "calendar" });
+  const look = aSeriesView({ id: 3, name: "Adatum planning", clientKey: "Adatum", clientName: "Adatum", mine: { review: false, attend: true } });
+  const occs = [
+    anOccurrenceView({ id: 10, seriesId: 1, startAt: "2026-11-02T18:00:00Z", endAt: "2026-11-02T18:30:00Z", state: "ready", open: 4, proposals: 6 }),
+    anOccurrenceView({ id: 11, seriesId: 2, startAt: "2026-11-04T15:00:00Z", endAt: "2026-11-04T16:00:00Z", state: "failed", open: 0, retryAt: null }),
+    anOccurrenceView({ id: 12, seriesId: 3, startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z", state: "ready", open: 2, proposals: 2 }),
+    anOccurrenceView({ id: 13, seriesId: 1, startAt: "2026-10-26T18:00:00Z", endAt: "2026-10-26T18:30:00Z", state: "reviewed", open: 0, proposals: 8 }),
+    anOccurrenceView({ id: 14, seriesId: 2, startAt: "2026-10-27T18:00:00Z", endAt: "2026-10-27T18:30:00Z", state: "needs_upload", open: 0, hasTranscript: false }),
+    anOccurrenceView({ id: 20, seriesId: 1, startAt: "2026-10-01T18:00:00Z", endAt: "2026-10-01T18:30:00Z", state: "ready", open: 2, proposals: 2 }),
+  ];
+  it("equals Needs you, old calls included", () => {
+    const mine = { meetings: [weekly, pressed, look], occurrences: occs, nudges: [] } as unknown as MineData;
+    const needs = openList(callRows({ meetings: [weekly, pressed, look], occurrences: occs, others: [], today: TODAY, zone: ZONE }), null, TODAY).needs;
+    expect(needs.map((r) => r.occurrenceId).sort()).toEqual([10, 11, 14, 20]);
+    expect(callsNeedingMe(callMarks(mine))).toBe(needs.length);
+  });
+});
+
+// MC-4 (TEST 8): Close out lists the day's calls still open (mine to review, something undecided); from Thursday,
+// Week's header counts this week's.
+describe("MC-4: calls to close", () => {
+  const NY = "America/New_York";
+  const mark = (id: number, startAt: string, open: number, review = true) => ({ occurrenceId: id, name: `Call ${id}`, role: "status", clientKey: "contoso", startAt, endAt: startAt, label: "", needsMe: open > 0, review, state: "ready", open, hasTranscript: true, kind: null }) as never;
+  const marks = [
+    mark(1, "2026-11-02T18:00:00Z", 3),
+    mark(2, "2026-11-05T15:00:00Z", 1),
+    mark(3, "2026-11-05T16:00:00Z", 0),
+    mark(4, "2026-11-05T17:00:00Z", 2, false),
+    // Thursday 11:30 PM in New York is Friday in UTC: still Thursday's.
+    mark(5, "2026-11-06T04:30:00Z", 1),
+    mark(6, "2026-10-29T18:00:00Z", 4),
+  ];
+  it("Close out: the day's calls I review with something undecided, by my zone's day", () => {
+    expect(callsToClose(marks, NY, "2026-11-05", "2026-11-05").map((m: { occurrenceId: number }) => m.occurrenceId)).toEqual([2, 5]);
+    expect(callsToClose(marks, NY, "2026-11-04", "2026-11-04")).toEqual([]);
+  });
+  it("Week: from Thursday, this week only, up to today", () => {
+    expect(weekCallsToClose(marks, NY, "2026-11-05", "2026-11-02")).toBe(3);
+    expect(weekCallsToClose(marks, NY, "2026-11-06", "2026-11-02")).toBe(3);
+    expect(weekCallsToClose(marks, NY, "2026-11-04", "2026-11-02")).toBe(0);
+    expect(weekCallsToClose(marks, NY, "2026-11-05", "2026-10-26")).toBe(0);
   });
 });

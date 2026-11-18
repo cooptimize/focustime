@@ -211,6 +211,7 @@ export const NAMES_ALLOWED: readonly Allowed[] = [
   { re: /\bToday(?= onboarding| it's)/g, file: /^sources\/demo\//, why: "the demo's example text: today as in these days" },
   { re: /\bLoop (closed|updates sent)\b/g, why: "Close the loop is the action's name today; these are its results" },
   { re: /\bWaiting on $/g, file: /^plan\/conversations\.ts$/, why: "waiting on a person, by name: a sentence, not the Inbox's old view" },
+  { re: /^Needs you$/, file: /^plan\/call-words\.ts$/, why: "Calls' own first section (MC-4): the calls waiting for me, not the Inbox's old view" },
   { re: /\bNeeds you\b/g, file: /^(ui\/Day\.tsx|plan\/phone-now\.ts)$/, why: "the one thing's reason when it is none of late, due today or from a chat (PH-2: its heading says Inbox): plain words, not the Inbox's old view" },
   { re: /\bRequests (go to|and DevOps items)\b/g, file: /^(public\/legal\.html|ui\/settings\/DeliveryChats\.tsx)$/, why: "requests the plural noun, starting a sentence" },
   { re: /\b[Rr]equest types?\b|\bReadiness (as written|by request type)\b|^Readiness$/g, file: /^(ui|plan|actions)\/patterns[./]|^actions\/registry\.ts$/, why: "DevOps patterns' own words (WP-1): its list of request types and how ready an item reads as written" },

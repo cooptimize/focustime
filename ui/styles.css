@@ -7653,10 +7653,60 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 24px 24px; }
 .calls-day-head { position: sticky; top: 0; z-index: 2; margin: 0; padding: 8px 0 4px; background: var(--bg); font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
 .calls-rows { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
-.calls-row { width: 100%; display: grid; gap: 2px; padding: 6px 10px; border: 1px solid transparent; border-left: 3px solid var(--c, var(--border)); border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+/* MC-4: a row is a tick, its main button (opens the call), then its own controls; a second line under them for Review's progress. */
+.calls-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 6px; padding: 4px 6px 4px 4px; border: 1px solid transparent; border-left: 3px solid var(--c, var(--border)); border-radius: 8px; color: var(--text); }
 .calls-row:hover { background: var(--wash-1); }
 .calls-row.open { background: var(--surface); border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
-.calls-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.calls-row-main { min-width: 0; display: grid; gap: 2px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.calls-row-main.as-text { cursor: default; }
+.calls-row-main:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.calls-row-acts { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; padding: 0 4px 2px; }
+.calls-row-acts:empty { display: none; }
+.calls-scroll { container-type: inline-size; }
+/* A wide list (folded beside nothing, or the phone's whole width at a tablet): the controls sit at the row's end. */
+@container (min-width: 640px) {
+  .calls-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .calls-row-acts { grid-column: 3; justify-content: flex-end; padding: 0; }
+}
+.calls-row-acts .mini { min-height: 28px; }
+.calls-row-status { grid-column: 2 / -1; margin: 0; padding: 0 4px 2px; font-size: var(--fs-2); }
+.calls-tick { display: inline-flex; align-items: center; justify-content: center; width: 24px; min-height: 28px; }
+.calls-tick input { margin: 0; }
+.calls-row.one .calls-row-one { align-items: center; }
+.calls-row.series .calls-time { flex: none; }
+.calls-row.series > .calls-series-days { grid-column: 1 / -1; margin: 2px 0 2px 28px; }
+.calls-row.in-series { border-left-style: dashed; }
+.calls-mark { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: var(--fs-1); color: var(--text); white-space: nowrap; }
+.calls-mark.quiet { border-style: dashed; color: var(--text-muted); }
+.calls-mark .icon { width: 12px; height: 12px; }
+.calls-about select { max-width: 13em; min-height: 28px; padding: 0 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-2); }
+.calls-about.none select { border-style: dashed; color: var(--text-muted); }
+.calls-left { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.calls-left-bar { display: inline-block; width: 48px; height: 4px; border-radius: 2px; background: var(--wash-2, var(--border)); overflow: hidden; }
+.calls-left-bar > span { display: block; height: 100%; background: var(--c, var(--accent)); }
+.calls-row.needs .calls-row-two { grid-template-columns: auto minmax(0, 1fr) auto; }
+.calls-head-count { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.calls-head-note { margin-left: 8px; font-size: var(--fs-1); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
+.calls-head-note.link-btn { min-height: 0; padding: 0; }
+.calls-head-note.amber { color: var(--watch); }
+.calls-check-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.calls-menu { position: relative; }
+.calls-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2, 0 6px 20px rgb(0 0 0 / 0.25)); }
+.calls-menu-pop > button { display: grid; gap: 1px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.calls-menu-pop > button:hover, .calls-menu-pop > button:focus-visible { background: var(--wash-1); }
+.calls-menu-pop .muted { font-size: var(--fs-1); }
+.calls-tickbar { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); font-size: var(--fs-2); }
+.calls-row.hidden-row .calls-name { color: var(--text-muted); }
+.mtg-closed { display: grid; gap: 4px; margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--border-strong); border-radius: 6px; background: var(--sunken); font-size: var(--fs-2); }
+.mtg-closed p { margin: 0; }
+.mtg-closed h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.mtg-closed .link-btn { justify-self: start; }
+.mtg-open-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; font-size: var(--fs-2); }
+.app.phone .calls-row { grid-template-columns: auto minmax(0, 1fr); }
+.app.phone .calls-row-acts .mini, .app.phone .calls-about select, .app.phone .calls-tick, .app.phone .calls-menu-pop > button, .app.phone .calls-row-main { min-height: var(--tap, 44px); }
+.app.phone .calls-tick { width: var(--tap, 44px); }
+.app.phone .calls-tickbar .mini { min-height: var(--tap, 44px); }
+.app.phone .calls-row.series > .calls-series-days { margin-left: 0; }
 .calls-row-one { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .calls-time { flex: none; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
 .calls-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
@@ -7705,7 +7755,12 @@ body.ah-dragging * { cursor: grabbing !important; }
 .app.phone .calls-filters { margin: 0 16px 8px; }
 .app.phone .calls-chips { padding: 0 16px 8px; }
 .app.phone .calls-day-head { top: var(--mtg-top, 0px); }
-.app.phone .calls-row { min-height: var(--tap, 44px); }
 .app.phone .calls-page :is(.seg-btn, .ib4-chip, .mini, .link-btn) { min-height: var(--tap, 44px); }
 /* MC-3: on the phone the four filters sit two by two rather than leaving one alone on a second row. */
-.app.phone .calls-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app.phone .calls-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* MC-4: Week's line from Thursday, and Close out's open calls. */
+.week-calls-line { display: inline-flex; align-items: center; text-decoration: none; color: var(--text); font-size: var(--fs-2); }
+.week-calls-line:hover { text-decoration: underline; }
+.cp-calls-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.app.phone .week-calls-line, .app.phone .cp-calls-acts .mini { min-height: var(--tap, 44px); }

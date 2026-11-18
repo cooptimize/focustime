@@ -20,7 +20,8 @@ export function pocketRows(recs: readonly ListedRecording[] | null, zone: string
       all.push({
         key: `p${rec.id}`, occurrenceId: null, other: null, name: rec.title || POCKET_ROW.kind, startAt: rec.startAt, endAt: rec.endAt,
         day: dayOf(rec.startAt, zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_ROW.source, weekly: null,
-        state: { label: CALLS_TEXT.notReviewed, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
+        state: { label: CALLS_TEXT.notReviewed, needsMe: false }, bucket: "open", place: "week", review: true, pocket: [], recording: rec,
+        mark: "pocket", check: null, left: null, closed: null, seriesKey: null, suggested: null,
       });
     }
   };

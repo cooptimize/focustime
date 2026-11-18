@@ -3,7 +3,9 @@
 // organized at Cooptimize that nobody asked FocusTime to read, at most CHECK_CAP at a time, in batches of 20; its
 // answers are held in memory 15 minutes and are each call's key and yes, no, off or unchecked, nothing else; nothing
 // is stored and the log has counts only.
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { BACKGROUND } from "../config/background-policy.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
@@ -193,5 +195,38 @@ describe("MC-4: meeting.calls_check", () => {
     const said = JSON.stringify(t.logs);
     for (const s of ["Secret", "ical-1", "call-1", "om-", "teams.microsoft.com"]) expect(said).not.toContain(s);
     expect(t.logs.find((l) => l.op === "meeting_calls_check")).toMatchObject({ count: 1, kind: "ok" });
+  });
+});
+
+// TEST 2: the check runs only from Calls' own opening and Refresh: a source read. No job, tick, assistant, Teams bot or
+// background-policy entry starts it, and the page is the only caller.
+describe("MC-4: who can start the check", () => {
+  const files = (dir: string): string[] => readdirSync(dir).flatMap((f) => {
+    const p = `${dir}/${f}`;
+    return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f) ? [p] : [];
+  });
+  const all = ["actions", "assistant", "server", "ui", "plan", "sources", "config", "store", "host"].flatMap(files);
+  const uses = all.filter((f) => readFileSync(f, "utf8").includes("calls_check"));
+
+  it("is named only by its action, its registry and menu lines, the dispatcher and Calls' page", () => {
+    expect(uses.sort()).toEqual(["actions/dispatch.ts", "actions/meeting-actions.ts", "actions/registry.ts", "plan/call-list.ts", "ui/meetings/Meetings.tsx", "ui/menu.ts"]);
+    // plan/call-list.ts only mentions it in a comment.
+    expect(readFileSync("plan/call-list.ts", "utf8").split("\n").filter((l) => l.includes("calls_check")).every((l) => l.trim().startsWith("//"))).toBe(true);
+  });
+
+  it("the page asks only once my calendar's calls are read, on Refresh, Check again and Check more", () => {
+    const page = readFileSync("ui/meetings/Meetings.tsx", "utf8");
+    expect(page.match(/"meeting\.calls_check"/g)).toHaveLength(1);
+    const callers = [...page.matchAll(/runCheck\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(callers.sort()).toEqual(["", "{ more: true }", "{ refresh: true }", "{ refresh: true }"]);
+    // The command menu only opens Calls.
+    expect(readFileSync("ui/menu.ts", "utf8")).toMatch(/case "meeting\.calls_check":[\s\S]*?setView\("meetings"\)/);
+  });
+
+  it("isn't background work, isn't the assistant's and isn't the bot's", () => {
+    expect(JSON.stringify(BACKGROUND)).not.toMatch(/transcript.*exist|calls_check|call_exists/i);
+    for (const f of all.filter((x) => /^(assistant|server\/teams|server\/scheduler|server\/jobs)/.test(x))) expect(readFileSync(f, "utf8"), f).not.toMatch(/calls_check|transcriptsExist|createExistsGrants\(\)\.open/);
+    // transcriptsExist is called only by the check itself.
+    expect(all.filter((f) => readFileSync(f, "utf8").includes("transcriptsExist(")).sort()).toEqual(["actions/meeting-actions.ts", "sources/graph/meetings.ts"]);
   });
 });

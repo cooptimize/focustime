@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
+import { WeekCallsLine } from "./meetings/CallsToClose.tsx";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -2512,6 +2513,8 @@ export function App() {
                 </button>
               )}
               {weekendNote && <span className="weekend-note">{weekendNote}</span>}
+              {/* MC-4: from Thursday, this week's calls still to close. */}
+              <WeekCallsLine today={zonedNow(userZone(data)).toPlainDate().toString()} weekStart={askedWeek} zone={userZone(data)} />
               {weekChips}
             </div>
             <ModeArea>

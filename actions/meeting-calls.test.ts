@@ -331,3 +331,33 @@ describe("no transcript words outside the call (MC-2)", () => {
     expect(JSON.stringify(refused)).not.toMatch(/Contoso data review|holiday/);
   });
 });
+
+// MC-4: Hide is only for a call nobody asked FocusTime to read; and the check skips a hidden meeting.
+describe("MC-4: a call someone asked to review can't be hidden", () => {
+  it("refuses, and the meeting stays", async () => {
+    const t = await setup();
+    t.data(await t.start());
+    expect(await t.act(ME, "meeting.call_hide", { keys: ["ical-1"] })).toMatchObject({ ok: false, status: 409 });
+    expect(t.data(await t.act(ME, "meeting.call_hides", {}))).toEqual({ keys: [], series: [] });
+  });
+});
+
+// MC-4 (TEST 7): Review from a row with a client on it and a transcript in Teams is call_start with that client, then
+// call_fetch: nothing reaches the AI before the fetch, and the one request carries only that client.
+describe("MC-4: Review from the row", () => {
+  it("sends only the row's client, and only on Review", async () => {
+    const t = await setup();
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.start(ME, "ical-1", "contoso"));
+    expect(t.providerCalls).toEqual([]);
+    t.data(await t.act(ME, "meeting.call_fetch", { occurrenceId }));
+    expect(t.providerCalls).toHaveLength(1);
+    expect(t.providerCalls[0]!.input).toMatch(/^Client: Contoso\n/);
+    expect(t.providerCalls[0]!.input).not.toMatch(/Fabrikam|4410/);
+  });
+
+  it("with no client said, the call isn't started (the row opens the client choice first)", async () => {
+    const t = await setup();
+    expect(await t.start(ME, "ical-1", null)).toMatchObject({ ok: false });
+    expect(t.providerCalls).toEqual([]);
+  });
+});
