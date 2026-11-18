@@ -1,5 +1,5 @@
 {
- "source": "ci runs 44172691925, 44161039703; VM-4's and DY-1's new files measured locally",
+ "source": "ci runs 44172691925, 44161039703; VM-4's and DY-1's new files measured locally; SA-3's new file measured locally",
  "files": {
   "e2e/admin/admin-phone-width.test.ts": 6.3,
   "e2e/admin/background-passes.test.ts": 5.4,
@@ -78,6 +78,7 @@
   "e2e/settings/first-run-setup.test.ts": 7.4,
   "e2e/settings/notifications.test.ts": 10.3,
   "e2e/settings/panel-shell.test.ts": 90.4,
+  "e2e/settings/sa3.test.ts": 38.4,
   "e2e/settings/teams-bot.test.ts": 11.5,
   "e2e/settings/text-size.test.ts": 97.7,
   "e2e/shell/assistant-answers.test.ts": 5.3,

@@ -16,15 +16,11 @@ import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
-import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
+import { PlanningSection } from "./settings/sections/Planning.tsx";
 import { FocusSection } from "./settings/sections/Focus.tsx";
-import { BacklogSection } from "./settings/sections/Backlog.tsx";
-import { ChatsSection } from "./settings/sections/Chats.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
-import { DevOpsSection } from "./settings/sections/DevOps.tsx";
 import { ConnectionsSection } from "./settings/sections/Connections.tsx";
 import { AiSection } from "./settings/sections/Ai.tsx";
-import { ActivitySection } from "./settings/sections/Activity.tsx";
 import { DataSection } from "./settings/sections/Data.tsx";
 import { AboutSection } from "./settings/sections/About.tsx";
 import type { BodyProps, Props } from "./settings/sections/types.ts";
@@ -163,6 +159,8 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
       const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(setting)}"]`);
       if (!el) return;
       jumpDue.current = false;
+      // SA-3: a setting inside a fold (Fine tuning, Each kind of notice) opens it first.
+      for (let d = el.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
       el.scrollIntoView?.({ block: "start" });
       el.classList.remove("ps-flash");
       void el.offsetWidth;
@@ -229,7 +227,7 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
             {current !== null && (
               <>
                 {error && <p className="field-problem">{error}</p>}
-                {data && !inAdmin && data.problems.length > 0 && current !== "connections" && current !== "devops" && current !== "data" && current !== "activity" && (
+                {data && !inAdmin && data.problems.length > 0 && current !== "connections" && current !== "data" && (
                   <div className="config-banner" role="alert">
                     <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
                     <ul>
@@ -272,33 +270,25 @@ function SectionBody(p: BodyProps) {
     case "hours":
       return <HoursSection {...p} />;
     case "planning":
-      return <DayWeekSection {...p} />;
+      return <PlanningSection {...p} />;
     case "focus":
       return <FocusSection {...p} />;
     case "notifications":
       return <NotificationsSection {...p} />;
-    case "ahead":
-      return <BacklogSection {...p} />;
     case "clients":
       return <ClientsSection {...p} />;
     case "client":
       return <ClientSection {...p} />;
-    case "chats":
-      return <ChatsSection {...p} />;
     case "ai":
       return <AiSection {...p} />;
     case "connections":
       return <ConnectionsSection {...p} />;
-    case "devops":
-      return <DevOpsSection {...p} />;
     case "display":
       return <DisplaySection {...p} />;
-    case "activity":
-      return <ActivitySection {...p} />;
     case "data":
       return <DataSection {...p} />;
     case "about":
-      return <AboutSection onGuide={p.onGuide} />;
+      return <AboutSection onGuide={p.onGuide} go={p.go} />;
   }
 }
 

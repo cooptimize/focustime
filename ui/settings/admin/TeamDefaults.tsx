@@ -120,7 +120,7 @@ export function ChatsTab() {
   );
   return (
     <Page>
-      <Group title="Phrases" label="Phrases" intro="The team's phrase lists, for every client. Each person may add their own on top in Settings › Client chats, never removing the team's.">
+      <Group title="Phrases" label="Phrases" intro="The team's phrase lists, for every client. Each person may add their own on top in Settings › Clients, never removing the team's.">
         {list("conv.request_phrases", "Asking phrases", data.requestPhrases, "A client's message with one of these is checked for what it asks. Commas between them.")}
         {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never checked.")}
         {list("conv.promise_phrases", "Promise phrases", data.promisePhrases, "In a person's own messages: a promise to keep.")}
@@ -137,7 +137,7 @@ export function ChatsTab() {
 
 // ---------- Planning and new people ----------
 
-type Guidance = { draftStories: boolean; readinessNudges: boolean; planShare: number };
+type Guidance = { draftStories: boolean; readinessNudges: boolean };
 type NewPerson = { weekdays: Record<string, string[]>; lunch: string; risk: { watch: number; atRisk: number; minWindow: number } };
 type OrgData = {
   inviteDomains: string[];
@@ -217,7 +217,7 @@ export function PlanningTab() {
           <NumInput label="New people: shortest focus window" unit="minutes" value={np.risk.minWindow} min={1} max={600} onSave={(v) => saveNp({ risk: { ...np.risk, minWindow: v } })} />
         </AField>
       </Group>
-      <Group title="By level" label="By level" intro="Each level's defaults; a person may change any of these for themselves (Settings › Day and Week, Reset to team default). They never block anything.">
+      <Group title="By level" label="By level" intro="Each level's defaults; a person may change any of these for themselves (Settings › Planning, Reset to team default). They never block anything.">
         {Object.entries(data.levels).map(([lv, g]) => {
           const scope = `level:${lv}`;
           const name = data.levelNames[lv] ?? lv;

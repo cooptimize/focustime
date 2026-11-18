@@ -41,9 +41,16 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
       await go(page, `#/settings/${s.id}`);
       await head(page).waitFor();
       await page.waitForTimeout(600);
+      const later: string[] = [];
       for (const d of defs) {
         const n = await page.locator(`.ps-body [data-setting="${d.id}"]`).count();
-        if (!n) missing.push(`${s.id}/${d.id}`);
+        if (!n) later.push(d.id);
+      }
+      // SA-3: a log behind a tab (Your data) is drawn when its address opens it.
+      for (const id of later) {
+        await go(page, `#/settings/${s.id}/${id}`);
+        const n = await page.locator(`.ps-body [data-setting="${id}"]`).first().waitFor({ timeout: 5_000 }).then(() => 1, () => 0);
+        if (!n) missing.push(`${s.id}/${id}`);
       }
     }
     expect(missing).toEqual([]);
@@ -67,7 +74,7 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
       await head(page).waitFor();
       await page.waitForTimeout(600);
       // An autosaved field (it has a save mark), not a button-run switch like Teams or a push subscription.
-      const sw = page.locator('.ps-body [data-setting]:has(:is(.sp-mark, .set-mark)) input[type="checkbox"]:not([disabled])').first();
+      const sw = page.locator('.ps-body [data-setting]:has(:is(.sp-mark, .set-mark)) input[type="checkbox"]:not([disabled]):visible').first();
       if (!(await sw.count())) continue;
       const setting = await sw.evaluate((el) => el.closest("[data-setting]")!.getAttribute("data-setting"));
       const before = await sw.isChecked();
@@ -119,9 +126,9 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     const box = page.getByLabel("Search settings");
     const results = page.locator("#settings-search-results");
     await box.fill("roadmap");
-    await results.locator(".ps-hit", { hasText: "Backlog" }).filter({ hasText: "was “Roadmap”" }).waitFor();
+    await results.locator(".ps-hit", { hasText: "Planning" }).filter({ hasText: "was “Roadmap”" }).waitFor();
     await box.press("Enter");
-    await expect.poll(() => hash(page)).toBe("#/settings/ahead");
+    await expect.poll(() => hash(page)).toBe("#/settings/planning");
     await box.fill("time zone");
     await results.locator(".ps-hit", { hasText: "Time zone" }).first().click();
     await expect.poll(() => hash(page)).toBe("#/settings/hours/time-zone");
@@ -139,7 +146,8 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await page.keyboard.press("Escape");
     await expect.poll(() => hash(page)).toBe("#/week");
     // Old ids from before ST-1 open their new place (bookmarks, notifications, the Guide).
-    for (const [old, title, setting] of [["risk", "Day and Week", "risk-rules"], ["standing", "Working hours", "standing-blocks"], ["roadmap", "Backlog", null], ["setup", "Profile", "setup"], ["demo", "Your data", "demo-reset"]] as const) {
+    // SA-3: and the four sections that went into others.
+    for (const [old, title, setting] of [["risk", "Planning", "risk-rules"], ["standing", "Working hours", "standing-blocks"], ["roadmap", "Planning", "stale-weeks"], ["setup", "Profile", "setup"], ["demo", "Your data", "demo-reset"], ["ahead", "Planning", "stale-weeks"], ["chats", "Clients", "request-phrases"], ["devops", "Connections", "devops-read"], ["activity", "Your data", "write-log"]] as const) {
       await openAt(page, "#/week", `#/settings/${old}`);
       await head(page).filter({ hasText: title }).waitFor();
       if (setting) await page.locator(`.ps-body [data-setting="${setting}"]`).first().waitFor();
@@ -242,7 +250,7 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     const fake = "fakepat" + "x".repeat(45);
     const bodies: string[] = [];
     page.on("response", (r) => void (r.url().includes("/api/") ? r.text().then((t) => bodies.push(t), () => {}) : undefined));
-    await openAt(page, "#/week", "#/settings/devops");
+    await openAt(page, "#/week", "#/settings/devops/devops-write");
     const form = page.locator('form[aria-label^="DevOps write access for"]').first();
     await form.waitFor({ timeout: 20_000 });
     await form.locator('input[type="password"]').fill(fake);

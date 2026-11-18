@@ -412,7 +412,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
-        <p className="set-hint">Logged in Settings › Activity. FocusTime never changes your VM's auto-shutdown.</p>
+        <p className="set-hint">Logged in Settings › Your data. FocusTime never changes your VM's auto-shutdown.</p>
       </div>
     </div>
   );
@@ -521,7 +521,7 @@ export function VmToday() {
 type Found = { tag: string; value: string; vms: { id: string; name: string; resourceGroup: string; location: string; power: string }[]; chosen: string | null };
 
 /** ST-1: Profile shows the account part (who is signed in, photos), Accounts and calendars the VM part. */
-/** My VM (Settings › Accounts and calendars, and Setup). SA-2: Profile's Signed in is drawn in ui/settings/sections/Profile.tsx. */
+/** My VM (Settings › Connections, and Setup). SA-2: Profile's Signed in is drawn in ui/settings/sections/Profile.tsx. */
 export function YouAccount({ part }: { part: "vm" }) {
   const dev = useDeveloperLoop();
   const { status, signIn } = useContext(AuthCtx);
@@ -819,7 +819,7 @@ const DAY_NAMES: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", 
 const AUTO_MINUTES = [0, 5, 10, 15, 30] as const;
 
 /**
- * Settings › Accounts and calendars › My VM, and setup's Your VM: "Start without a preview" (Q87, renamed in VM-2)
+ * Settings › Connections › My VM, and setup's Your VM: "Start without a preview" (Q87, renamed in VM-2)
  * and the auto-start (off by default; production only). Saves each change at once through settings.save.
  */
 export function VmStartForm() {

@@ -479,7 +479,7 @@ function CalendarsStep({ connected, onConnect, onDone, onSkip, onBack }: { conne
 }
 
 /**
- * VM-2: Your VM (optional, last): Allow Azure access and Find my VM, with the same controls as Settings › Accounts and
+ * VM-2: Your VM (optional, last): Allow Azure access and Find my VM, with the same controls as Settings › Connections and
  * connections › My VM (start without a preview, start before my day).
  */
 function VmStep({ onDone, onSkip, onBack }: { onDone: () => Promise<void>; onSkip: () => void; onBack: () => void }) {

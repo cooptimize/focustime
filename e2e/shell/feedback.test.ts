@@ -94,12 +94,12 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     await page.close();
   }, T);
 
-  it("without a write PAT says Turn on DevOps writes, offers Copy text, and shows the same in Settings > Connections", async () => {
+  it("without a write PAT says Turn on DevOps writes, offers Copy text, and shows the same in Settings > About", async () => {
     const { page, errors } = await freshPage(noPat);
     const dialog = await open(page);
     const note = dialog.locator(".feedback-note");
     await expect(note.textContent()).resolves.toContain("Turn on DevOps writes for Internal");
-    await expect(note.getByRole("link", { name: "Open Settings › DevOps" }).getAttribute("href")).resolves.toBe("#/settings/devops/devops-write");
+    await expect(note.getByRole("link", { name: "Open Settings › Connections › DevOps" }).getAttribute("href")).resolves.toBe("#/settings/connections/devops-write");
     await dialog.getByRole("textbox", { name: "Your feedback" }).fill("The plan didn't save");
     await expect(dialog.getByRole("button", { name: "Copy text" }).isEnabled()).resolves.toBe(true);
     await expect(dialog.getByRole("button", { name: /^Preview/ }).count()).resolves.toBe(0);
@@ -109,14 +109,15 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     }
     await page.keyboard.press("Escape");
 
-    await page.evaluate(() => (location.hash = "#/settings/connections"));
+    // SA-3: Send feedback's line is in Settings › About.
+    await page.evaluate(() => (location.hash = "#/settings/about"));
     const row = page.locator('[data-setting="feedback"]');
     await row.waitFor({ timeout: 30_000 });
     await row.getByText(/^Turn on DevOps writes for Internal: feedback is sent with your own DevOps write PAT\.$/).waitFor();
     await expect(row.getByRole("link", { name: "Turn on DevOps writes" }).count()).resolves.toBe(1);
     for (const theme of ["light", "dark"] as const) {
       await themed(page, theme);
-      await shotBoth(page, `feedback-connections-not-set-up-${theme}`, row);
+      await shotBoth(page, `feedback-about-not-set-up-${theme}`, row);
     }
     expect(errors).toEqual([]);
     await page.close();

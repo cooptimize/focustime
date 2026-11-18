@@ -79,8 +79,12 @@ type RowProps = {
 };
 
 /** A small heading inside a group, over the rows it names (Notifications' kinds). */
-export function Subhead({ children }: { children: ReactNode }) {
-  return <h4 className="sp-subhead">{children}</h4>;
+export function Subhead({ children, sid }: { children: ReactNode; sid?: string | undefined }) {
+  return (
+    <h4 className="sp-subhead" data-setting={sid}>
+      {children}
+    </h4>
+  );
 }
 
 /**
@@ -222,11 +226,15 @@ export function Note({ children, tone, live, sid, site }: { children: ReactNode;
   );
 }
 
-/** A closed fold that says how many it holds. */
-export function Fold({ label, count, children, sid }: { label: string; count?: number | undefined; children: ReactNode; sid?: string | undefined }) {
+/**
+ * A closed fold that says how many it holds. SA-3: a fold of settings says "Fine tuning · 14 more", and "· 2 changed"
+ * when the person changed some inside; a link or a search result for one inside opens it (ui/Settings.tsx).
+ */
+export function Fold({ label, count, children, sid, more, changed }: { label: string; count?: number | undefined; children: ReactNode; sid?: string | undefined; more?: boolean | undefined; changed?: number | undefined }) {
+  const said = count === undefined ? label : `${label} · ${count}${more ? " more" : ""}${changed ? ` · ${changed} changed` : ""}`;
   return (
     <details className="sp-fold" data-setting={sid}>
-      <summary>{count === undefined ? label : `${label} · ${count}`}</summary>
+      <summary>{said}</summary>
       <div className="sp-fold-body">{children}</div>
     </details>
   );
@@ -390,14 +398,18 @@ export function ListItem({ children, onRemove, removeLabel, removeText = "Remove
 }
 
 /** Several controls in one row's control slot. */
-export function Controls({ children }: { children: ReactNode }) {
-  return <span className="sp-controls">{children}</span>;
+export function Controls({ children, sid }: { children: ReactNode; sid?: string | undefined }) {
+  return (
+    <span className="sp-controls" data-setting={sid}>
+      {children}
+    </span>
+  );
 }
 
 /** A labelled control inside a row (Friday at, Expires): its words beside it. */
-export function Sub({ text, children }: { text: string; children: ReactNode }) {
+export function Sub({ text, children, sid }: { text: string; children: ReactNode; sid?: string | undefined }) {
   return (
-    <label className="sp-sub">
+    <label className="sp-sub" data-setting={sid}>
       <span>{text}</span>
       {children}
     </label>
@@ -419,10 +431,10 @@ export function Check({ checked, onChange, label, disabled }: { checked: boolean
 }
 
 /** On or off. Its row's label says what on means; the switch has no words of its own. */
-export function Switch({ checked, onChange, disabled, label, text }: { checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; text?: string | undefined }) {
+export function Switch({ checked, onChange, disabled, label, text, sid }: { checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; text?: string | undefined; sid?: string | undefined }) {
   const r = useRow();
   return (
-    <label className={`sp-switch-box${text ? " with-text" : ""}`}>
+    <label className={`sp-switch-box${text ? " with-text" : ""}`} data-setting={sid}>
       <input type="checkbox" role="switch" className="sp-switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} {...named(r, text ?? label)} />
       {text && <span>{text}</span>}
     </label>

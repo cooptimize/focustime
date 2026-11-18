@@ -80,7 +80,7 @@ export async function setupAction(ctx: SetupContext, action: SetupAction, input:
         data: {
           ...view,
           clients: clients ?? [],
-          clientsProblem: clients ? null : "FocusTime couldn't read your clients from Dataverse just now. You can skip this and add DevOps write access later in Settings › DevOps.",
+          clientsProblem: clients ? null : "FocusTime couldn't read your clients from Dataverse just now. You can skip this and add DevOps write access later in Settings › Connections › DevOps.",
         },
       };
     }

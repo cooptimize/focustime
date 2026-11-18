@@ -2,7 +2,7 @@
 // each pass (the timer in kv, once-a-day marks in markers, held notices, Teams status), so a restart loses nothing: a
 // timer that ended while the server was down ends on the first pass after it starts, and a reminder still in its
 // window fires then, once. Notifications (step 15.5): every reminder, the timer, my VM, follow-ups due and expiring
-// secrets go through one notifier, which applies Settings > Notifications (switches, quiet hours, holding during
+// secrets go through one notifier, which applies Settings > Reminders and notices (switches, quiet hours, holding during
 // focus) and routes clicks. The slow pass is every 30 s (so day rollover is handled while running for days), the fast
 // one every 5 s.
 import type { ActionContext } from "../actions/dispatch.ts";
@@ -327,7 +327,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     log: (op, kind) => log({ source: "plan", op, kind }),
   });
 
-  // Settings > Notifications > Send a test notification, and one sample per kind for the live check.
+  // Settings > Reminders and notices > Send a test notification, and one sample per kind for the live check.
   const samples = async (c: AppConfig, live: boolean): Promise<Record<string, Notice | null>> => {
     const at = instantNow().toString();
     const today = todayOf(c);
@@ -356,7 +356,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       const c = await configOrNull();
       const n = c ? (await samples(c, live))[kind] : null;
       if (!n) return false;
-      // Gated: through Settings > Notifications like a real one (switch, quiet hours, held during focus).
+      // Gated: through Settings > Reminders and notices like a real one (switch, quiet hours, held during focus).
       if (gated) {
         await notifier.refresh();
         log({ source: "plan", op: "notify_sample", kind: await notifier.offer(n) });

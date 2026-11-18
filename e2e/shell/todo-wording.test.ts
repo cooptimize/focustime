@@ -42,7 +42,8 @@ describe.skipIf(!CHROMIUM)("TD-1 to-do, not pick (browser, demo mode)", () => {
     await shotBoth(page, "td1-today");
 
     await page.evaluate(() => (location.hash = "#/settings/planning"));
-    await page.getByRole("heading", { name: "To-dos" }).waitFor();
+    await page.locator(".ps-head h2", { hasText: "Planning" }).waitFor();
+    await page.locator('.ps-body [data-setting="carry-over"]').first().waitFor({ state: "attached" });
     expect(await pickLines(page)).toEqual([]);
 
     await page.evaluate(() => (location.hash = "#/today"));

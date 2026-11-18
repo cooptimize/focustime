@@ -4,7 +4,7 @@
 //   about a client I can't see. The page rereads a screen's data only when a version it shows moves.
 // - devops.refresh: R and Refresh on every tab. A check now for the clients on screen (30 s apart per client, shared by
 //   everyone, D592), waited for up to 8 s, and what it found in plain words.
-// - devops.find: Settings › DevOps › Find an item. For one client I can see and one item number: whether DevOps has
+// - devops.find: Settings › Connections › DevOps › Find an item. For one client I can see and one item number: whether DevOps has
 //   it (one read by id through the client's limiter), whether FocusTime has it, the scope, and whether Day, Week,
 //   Ahead and Status show it, and why not. At most 10 a minute per person, so it can't be used to sweep numbers.
 import type { AppConfig } from "../config/schema.ts";

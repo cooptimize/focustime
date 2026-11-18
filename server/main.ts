@@ -1008,7 +1008,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
       remove: async () => deleteData(userId),
     },
   };
-  // TB-2: the rhythm in Teams for this person (only where the bot runs), and Settings › Notifications › In Teams.
+  // TB-2: the rhythm in Teams for this person (only where the bot runs), and Settings › Reminders and notices › In Teams.
   // Read at call time: a runtime may be built before the bot finishes starting.
   const botHere = host.kind === "azure" && !!botAppId;
   const teams = botHere

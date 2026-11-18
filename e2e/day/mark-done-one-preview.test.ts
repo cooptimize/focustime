@@ -114,7 +114,7 @@ describe.skipIf(!CHROMIUM)("OP-1: Mark done in DevOps through the one preview", 
     await p.getByRole("button", { name: "Change state in DevOps" }).click();
     await p.waitFor({ state: "detached", timeout: 30_000 });
     expect((await log(page))[0]!.after.State).toBe("Resolved");
-    await go(page, "#/settings/activity");
+    await go(page, "#/settings/data/devops-log");
     await page.locator(".dw-log").getByRole("button", { name: "Undo" }).first().click();
     const u = preview(page);
     await u.waitFor({ timeout: 20_000 });

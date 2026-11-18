@@ -46,7 +46,7 @@ describe("namesIn", () => {
     for (const t of ["Actions (⋯) for what has focus", "also in Week's ⋯", "‹", "Close ×", "✕", "+ Add on a block", "Open ›"]) expect(namesIn(t), t).toEqual(["a control as a character"]);
   });
   it("today's names, paths, keys, sums and code are fine", () => {
-    for (const t of ["Back to Day", "Day and Week", "Needs attention nudges", "Settings › Activity", "More › Keyboard shortcuts", "Ctrl +", "9:00 to 12:00 + 1:00 to 5:00", "look 8 to 12 weeks ahead", "what needs you", "UPDATE x SET version = version + 1 WHERE id = ?", "./ahead/Ahead.tsx", "calc(6px + 2px)", "A follow-up question", "Close the loop"]) expect(namesIn(t), t).toEqual([]);
+    for (const t of ["Back to Day", "Planning", "Needs attention nudges", "Settings › Your data", "More › Keyboard shortcuts", "Ctrl +", "9:00 to 12:00 + 1:00 to 5:00", "look 8 to 12 weeks ahead", "what needs you", "UPDATE x SET version = version + 1 WHERE id = ?", "./ahead/Ahead.tsx", "calc(6px + 2px)", "A follow-up question", "Close the loop"]) expect(namesIn(t), t).toEqual([]);
   });
   it("the allow list: ordinary words that are also old names, each with a reason", () => {
     for (const t of ["Today's blocks and to-dos", "Today is Sat, Nov 7 · showing next week", "Today (Fri) is hidden", "Loop closed"]) expect(namesIn(t), t).toEqual([]);
@@ -57,7 +57,7 @@ describe("namesIn", () => {
     expect(namesIn("In your Waiting on ", "ui/meetings/Meetings.tsx")).toEqual(["Waiting on"]);
     // A size or a keyword in a sentence doesn't make it code.
     expect(namesIn("Width is 440px; see Settings › Data")).not.toEqual([]);
-    expect(namesIn("Set the value in Settings › Planning")).not.toEqual([]);
+    expect(namesIn("Set the value in Settings › Day and Week")).not.toEqual([]);
     expect(namesIn("Needs you", "ui/Day.tsx")).toEqual([]);
     expect(namesIn("Needs you", "ui/App.tsx")).toEqual(["Needs you (the Inbox's view)"]);
     expect(namesIn("on Week and Today's timeline")).toEqual([]); // "Today's" reads as the day
@@ -76,7 +76,7 @@ describe("namesHits", () => {
     expect(namesHits("ui/x.tsx", src).map((h) => h.line)).toEqual([1, 3, 6]);
   });
   it("old names stay where people search for them: old, aka and keywords", () => {
-    const src = '{ id: "planning", label: "Day and Week", old: ["Today and Week", "Planning"] },\n{ id: "v", label: "Day", aka: ["Today"] },\n{ id: "r", label: "Needs attention nudges", keywords: ["Readiness nudges"] },\n{ id: "bad", label: "Today and Week" },\n';
+    const src = '{ id: "planning", label: "Planning", old: ["Today and Week", "Day and Week"] },\n{ id: "v", label: "Day", aka: ["Today"] },\n{ id: "r", label: "Needs attention nudges", keywords: ["Readiness nudges"] },\n{ id: "bad", label: "Today and Week" },\n';
     expect(namesHits("ui/settings/registry.ts", src).map((h) => h.line)).toEqual([4]);
   });
   it("only the strings inside old, aka and keywords are let through, not a label beside them", () => {
@@ -89,7 +89,7 @@ describe("namesHits", () => {
     expect(namesHits("ui/x.tsx", src)).toEqual([{ line: 2, says: ["Today (the tab)"] }, { line: 5, says: ["a control as a character"] }]);
   });
   it("reads an entity as its character", () => {
-    expect(namesHits("ui/x.tsx", '<span className="muted">Logged in Settings &gt; Data, with Undo.</span>\n<p>Undo &amp; Retry are in Settings › Data.</p>\n<p>Undo &amp; Retry are in Settings › Activity.</p>\n').map((h) => h.line)).toEqual([1, 2]);
+    expect(namesHits("ui/x.tsx", '<span className="muted">Logged in Settings &gt; Data, with Undo.</span>\n<p>Undo &amp; Retry are in Settings › Data.</p>\n<p>Undo &amp; Retry are in Settings › Your data.</p>\n').map((h) => h.line)).toEqual([1, 2]);
   });
   it("reads the sources' own messages too, but not the demo docs or the Guide", () => {
     for (const f of ["sources/not-set-up.ts", "sources/oauth/oauth.ts", "ui/keys.ts", "ui/menu.ts", "ui/settings/registry.ts", "config/org.ts", "plan/notify.ts", "server/teams/cards.ts", "public/legal.html"]) expect(namesScanned(f), f).toBe(true);
@@ -106,8 +106,8 @@ describe("namesHits", () => {
 describe("pointers (NM-2)", () => {
   it("a pointer names a place the screens draw, by its first word", () => {
     expect(badPointers("Set it in Settings › Display.")).toEqual([]);
-    expect(badPointers("Connect in Settings › Accounts, then try again.")).toEqual([]); // Accounts and calendars
-    expect(badPointers("Logged in Settings &gt; Activity")).toEqual([]);
+    expect(badPointers("Turn it on in Settings › AI, then try again.")).toEqual([]); // AI and assistant
+    expect(badPointers("Logged in Settings &gt; Your data")).toEqual([]);
     expect(badPointers("It opens again in Inbox › Conversations.")).toEqual(["Inbox › Conversations"]);
     expect(badPointers("Choose your VM first (Settings > You)")).toEqual(["Settings › You"]);
     expect(badPointers("Ask in Admin › Clients › <client> › Meetings")).toEqual([]);
@@ -115,13 +115,13 @@ describe("pointers (NM-2)", () => {
     expect(badPointers("Backlog › Gantt and Backlog › Roadmap")).toEqual(["Backlog › Roadmap"]);
   });
   it("needs the whole name, checks lowercase, and reads a nested segment as part of its path (review)", () => {
-    expect(badPointers("Settings › Backlog › Stale after")).toEqual([]);
+    expect(badPointers("Settings › Planning › Fine tuning › Stale after")).toEqual([]);
     expect(badPointers("More › Settings › Display")).toEqual([]);
     expect(badPointers("Inbox › From your team")).toEqual(["Inbox › From your team"]);
     expect(badPointers("Settings › Your clients")).toEqual(["Settings › Your clients"]);
     expect(badPointers("Settings > data")).toEqual(["Settings › data"]);
-    expect(badPointers("Settings › Activity's rows and Admin › Clients' scope")).toEqual([]);
-    expect(badPointers("Settings › AI, then Settings › Accounts.")).toEqual([]);
+    expect(badPointers("Settings › Your data's rows and Admin › Clients' scope")).toEqual([]);
+    expect(badPointers("Settings › AI, then Settings › Reminders.")).toEqual([]);
   });
   it("leaves pointers built from code alone", () => {
     expect(badPointers("Settings › ${label}")).toEqual([]);

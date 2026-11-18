@@ -54,7 +54,7 @@ export type AppConfig = {
   collab: CollabSettings;
   /** My VM (step 15.4): the tag that marks a VM as mine. The chosen VM itself is per signed-in person, in the plan store. */
   azure: AzureSettings;
-  /** Settings > Notifications (step 15.5): a switch per kind, quiet hours. */
+  /** Settings > Reminders and notices (step 15.5): a switch per kind, quiet hours. */
   notify: NotifySettings;
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
@@ -68,8 +68,6 @@ export type AppConfig = {
   aiRules: AiRules;
   /** ADM-1: the person's own choices over their level's defaults ([guidance]); unset keys follow the level. */
   guidance: Partial<Guidance>;
-  /** PL-1: the person's own Keep open share per client ([keep_open], client key = percent 0 to 80); unset: the level's. */
-  keepOpen: Record<string, number>;
   /** ADM-1: what the person's own rows say, before built-in defaults fill in: their phrases and excludes (null: none set). */
   mine: { requestPhrases: string[] | null; ackPhrases: string[] | null; promisePhrases: string[] | null; exclude: string[] | null };
   /** ADM-1: the team's settings as they apply to this person (null until applied, config/org-apply.ts). */
@@ -251,7 +249,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "ahead", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "ahead", "asks", "ai", "guidance"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -438,6 +436,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       const v = t?.[toml];
       if (v === undefined) continue;
       if (typeof v !== "string" || (v !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v))) err(`plan.${toml}`, 'Must be a time like "14:00", or "" for off');
+      // "" is that day's nudge off, as before SA-3 (Reminders and notices says so on the row).
       else planOpts[key] = v;
     }
     if (t?.end_sound !== undefined) {
@@ -721,7 +720,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
           if (typeof t.asks_through_focus !== "boolean") err("notify.asks_through_focus", "Must be true or false");
           else notify.asksThroughFocus = t.asks_through_focus;
         } else if (TEAMS_SWITCH[k]) {
-          // TB-2: Settings › Notifications › In Teams.
+          // TB-2: Settings › Reminders and notices › In Teams.
           if (typeof t[k] !== "boolean") err(`notify.${k}`, "Must be true or false");
           else notify.teams[TEAMS_SWITCH[k]] = t[k] as boolean;
         } else if (k === "teams_brief_at") {
@@ -828,36 +827,21 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
-  // [guidance] (optional, ADM-1): draft_stories and readiness_nudges (true or false), plan_share (50 to 100, percent).
+  // [guidance] (optional, ADM-1): draft_stories and readiness_nudges (true or false). SA-3: a stored plan_share is skipped.
   // Each is the person's own override of their level's default; left out, the level's default applies.
   const guidance: Partial<Guidance> = {};
   if (raw.guidance !== undefined) {
     const t = isTable(raw.guidance) ? raw.guidance : (err("guidance", "Must be a [guidance] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["draft_stories", "readiness_nudges", "plan_share"].includes(k)) err(`guidance.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["draft_stories", "readiness_nudges"].includes(k)) err(`guidance.${k}`, "Unknown field");
       for (const [k, key] of [["draft_stories", "draftStories"], ["readiness_nudges", "readinessNudges"]] as const) {
         if (t[k] === undefined) continue;
         if (typeof t[k] !== "boolean") err(`guidance.${k}`, "Must be true or false");
         else guidance[key] = t[k] as boolean;
       }
-      if (t.plan_share !== undefined) {
-        const v = t.plan_share;
-        if (typeof v !== "number" || !Number.isInteger(v) || v < 50 || v > 100) err("guidance.plan_share", "Must be a whole number of percent from 50 to 100");
-        else guidance.planShare = v;
-      }
     }
   }
 
-  // [keep_open] (optional, PL-1): "<client key>" = percent of that client's block hours left open for walk-ins, 0 to 80.
-  const keepOpen: Record<string, number> = {};
-  if (raw.keep_open !== undefined) {
-    const t = isTable(raw.keep_open) ? raw.keep_open : (err("keep_open", "Must be a [keep_open] table"), null);
-    if (t)
-      for (const [k, v] of Object.entries(t)) {
-        if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 80) err(`keep_open.${k}`, "Must be a whole number of percent from 0 to 80");
-        else keepOpen[k] = v;
-      }
-  }
 
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
@@ -915,7 +899,6 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       ai,
       aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] },
       guidance,
-      keepOpen,
       mine,
       org: null,
     },

@@ -71,6 +71,8 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "planning");
+    // SA-3: the at-risk numbers are in Fine tuning, folded.
+    await page.locator(".ps-body .sp-fold > summary", { hasText: "Fine tuning" }).click();
     const atRisk = page.locator('[data-setting="risk-at-risk"]');
     const input = atRisk.locator("input");
     await input.waitFor();
@@ -89,7 +91,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     // Leaving with that field still wrong doesn't drop it silently: Settings stays and the field is focused.
     await settingsSection(page, "focus").catch(() => undefined);
     await page.waitForTimeout(400);
-    await expect(page.locator(".ps-head h2").textContent()).resolves.toBe("Day and Week");
+    await expect(page.locator(".ps-head h2").textContent()).resolves.toBe("Planning");
 
     // A network error: "Couldn't save. Retry", and Retry saves once the network is back.
     await page.route("**/api/action", async (route) => ((route.request().postData() ?? "").includes('"settings.save"') ? route.abort() : route.continue()));
@@ -107,7 +109,8 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
   it("an edited field saves when Settings closes with it focused", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await settingsSection(page, "ahead");
+    // SA-3: Backlog's numbers are in Planning › Fine tuning; their address opens the fold.
+    await page.evaluate(() => (location.hash = "#/settings/planning/stalled-days"));
     const input = page.locator('[data-setting="stalled-days"]').locator("input");
     await input.waitFor();
     const before = (await load(page)).roadmap.stalledDays;
@@ -123,6 +126,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "planning");
+    await page.locator(".ps-body .sp-fold > summary", { hasText: "Fine tuning" }).click();
     await page.locator('[data-setting="carry-over"]').waitFor();
     const layout = await page.evaluate(() => {
       const body = document.querySelector<HTMLElement>(".ps-body")!;
@@ -133,14 +137,15 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     expect(layout).toMatchObject({ inner: "auto", scrolled: true, page: 0 });
     expect(layout.navTop).toBeGreaterThanOrEqual(0);
     expect(layout.width).toBeLessThanOrEqual(1100);
-    await expect(page.locator('.ps-rail [aria-current="page"] span').first().textContent()).resolves.toBe("Day and Week");
+    await expect(page.locator('.ps-rail [aria-current="page"] span').first().textContent()).resolves.toBe("Planning");
     await page.close();
   }, T);
 
   it("a DevOps write PAT keeps its one explicit button, Check and save", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
-    await settingsSection(page, "devops");
+    // SA-3: write access is in Connections › DevOps › More; its address opens it.
+    await page.evaluate(() => (location.hash = "#/settings/connections/devops-write"));
     const pat = page.locator('form[aria-label^="DevOps write access for"]').first();
     await pat.waitFor({ timeout: 20_000 });
     await expect(pat.getByRole("button", { name: "Check and save" }).count()).resolves.toBe(1);

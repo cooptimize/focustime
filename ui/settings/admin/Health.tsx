@@ -59,7 +59,7 @@ export function HealthPart() {
         <ARead label="OpenAI key">{ok(data.ai.keyConfigured, `Configured (${data.ai.provider})`, "Not configured")}</ARead>
         <ARead label="Send feedback">{ok(data.feedback.ok, data.feedback.message, data.feedback.message)}</ARead>
         <ARead label="Dataverse people and leads">{ok(data.dataverse.ok, data.dataverse.refreshedAt ? `Read ${when(data.dataverse.refreshedAt)}` : "Not read yet", data.dataverse.message ?? "Not read")}</ARead>
-        <ARead label="Teams and DevOps permissions" help="Per person: Microsoft permissions in Settings › Accounts and calendars, DevOps write access in Settings › DevOps." >
+        <ARead label="Teams and DevOps permissions" help="Per person: Microsoft permissions in Settings › Connections, DevOps write access in Settings › Connections › DevOps." >
           {null}
         </ARead>
       </Group>

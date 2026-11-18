@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { applyOrg } from "./org-apply.ts";
 import { BRAND_COLORS, colorProblem, contrast, distance, guidanceFor, onlyMine, readableEverywhere, resolve, resolveRules, specFor, suggestColor, themeValues, THEME_BACKGROUNDS, withMine, type OrgBootstrap, type OrgRow } from "./org.ts";
 import { parseConfig, type AppConfig } from "./schema.ts";
-import { settingsEdit } from "./settings.ts";
+import { settingsEdit, SETTINGS_SECTIONS } from "./settings.ts";
 import { starterToml } from "./starter.ts";
 import { setValue } from "./edit.ts";
 
@@ -29,30 +29,40 @@ describe("resolve: personal, then level, then org, then built-in", () => {
 
 describe("Defaults by level", () => {
   const rules = resolveRules([], BOOT);
-  it("Consultants plan up to 80% with Draft stories and readiness nudges on; Senior and Lead as before", () => {
-    expect(guidanceFor(rules, "consultant", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80, keepOpen: 0 });
-    expect(guidanceFor(rules, "senior", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100, keepOpen: 0 });
-    expect(guidanceFor(rules, "lead", {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 100, keepOpen: 0 });
-    // ADM-2 (D605): no level (an unmapped position, or none read) uses the Consultant defaults.
-    expect(guidanceFor(rules, null, {})).toEqual({ draftStories: true, readinessNudges: true, planShare: 80, keepOpen: 0 });
+  it("Draft stories and readiness nudges on for every level, and with no level", () => {
+    for (const l of ["consultant", "senior", "lead", null] as const) expect(guidanceFor(rules, l, {})).toEqual({ draftStories: true, readinessNudges: true });
   });
-  it("an admin's level default, then the person's own choice over it", () => {
-    const r = resolveRules([row("level:senior", "plan_share", 90)], BOOT);
-    expect(guidanceFor(r, "senior", {}).planShare).toBe(90);
-    expect(guidanceFor(r, "senior", { planShare: 70 }).planShare).toBe(70);
+  it("an admin's level default, then the person's own choice over it; Reset goes back to the level's", () => {
+    const r = resolveRules([row("level:senior", "readiness_nudges", false)], BOOT);
+    expect(guidanceFor(r, "senior", {}).readinessNudges).toBe(false);
+    expect(guidanceFor(r, "senior", { readinessNudges: true }).readinessNudges).toBe(true);
+    let t = settingsEdit("guidance", { draftStories: false })(starter());
+    expect(applyOrg(cfgOf(t), r, { level: "consultant", levelSource: "dataverse" }).org!.guidance.draftStories).toBe(false);
+    t = settingsEdit("guidance", { draftStories: null })(t);
+    expect(applyOrg(cfgOf(t), r, { level: "consultant", levelSource: "dataverse" }).org!.guidance.draftStories).toBe(true);
   });
-  it("Reset to team default: removing the person's value goes back to their level's", () => {
-    let t = settingsEdit("guidance", { planShare: 60 })(starter());
-    const r = resolveRules([], BOOT);
-    expect(applyOrg(cfgOf(t), r, { level: "consultant", levelSource: "dataverse" }).org!.guidance.planShare).toBe(60);
-    t = settingsEdit("guidance", { planShare: null })(t);
-    const back = applyOrg(cfgOf(t), r, { level: "consultant", levelSource: "dataverse" }).org!;
-    expect(back.guidance.planShare).toBe(80);
-    expect(back.levelGuidance.planShare).toBe(80);
+});
+
+// SA-3 test 8: "Plan up to" (plan_share) and Keep open (keep_open) are gone. A stored value is left in place and
+// never makes loading fail: the person's [guidance] plan_share and [keep_open], and an admin's level rows.
+describe("SA-3: a stored plan_share or keep_open is skipped", () => {
+  it("in a person's settings: loads, listed as ignored, kept through a save", () => {
+    const text = `${starter()}\n[guidance]\nplan_share = 60\n\n[keep_open]\nFabrikam = 30\n`;
+    const r = parseConfig(text);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.ignored).toEqual(expect.arrayContaining(["guidance.plan_share", "keep_open"]));
+    const saved = settingsEdit("guidance", { readinessNudges: false })(text);
+    expect(saved).toContain("plan_share = 60");
+    expect(saved).toContain("Fabrikam = 30");
+    expect(parseConfig(saved).ok).toBe(true);
+    expect(() => settingsEdit("guidance", { planShare: 70 })).toThrow();
+    expect((SETTINGS_SECTIONS as readonly string[]).includes("keep_open")).toBe(false);
   });
-  it("plan share stays between 50 and 100", () => {
-    expect(() => specFor("level:consultant", "plan_share")!.parse(40)).toThrow();
-    expect(specFor("level:consultant", "plan_share")!.parse(75)).toBe(75);
+  it("in the team's level rows: resolves without them, and nobody can set them", () => {
+    const r = resolveRules([row("level:consultant", "plan_share", 70), row("level:lead", "keep_open", 30)], BOOT);
+    expect(guidanceFor(r, "consultant", {})).toEqual({ draftStories: true, readinessNudges: true });
+    expect(specFor("level:consultant", "plan_share")).toBeNull();
+    expect(specFor("level:lead", "keep_open")).toBeNull();
   });
 });
 
@@ -136,16 +146,3 @@ describe("client colors: a team Default, a person's own color over it", () => {
   });
 });
 
-describe("Keep open (PL-1): a Default by level with a per-client personal value", () => {
-  it("defaults to 0%, takes the level's default, and a client's own share over it; Reset goes back", () => {
-    expect(guidanceFor(resolveRules([], BOOT), null, {}).keepOpen).toBe(0);
-    expect(specFor("level:lead", "keep_open")!.parse(30)).toBe(30);
-    expect(() => specFor("level:lead", "keep_open")!.parse(90)).toThrow();
-    let t = settingsEdit("keep_open", { key: "Fabrikam", percent: 30 })(starter());
-    expect(cfgOf(t).keepOpen).toEqual({ Fabrikam: 30 });
-    t = settingsEdit("keep_open", { key: "Fabrikam", percent: null })(t);
-    expect(cfgOf(t).keepOpen).toEqual({});
-    expect(() => settingsEdit("keep_open", { key: "Fabrikam", percent: 81 })).toThrow("Must be from 0 to 80 percent");
-    expect(() => settingsEdit("keep_open", { key: "Fabrikam", percent: 20, extra: 1 })).toThrow();
-  });
-});

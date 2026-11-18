@@ -89,7 +89,7 @@ export async function itemCardAction(ctx: ItemCardContext, action: ItemCardActio
     todos,
     promises,
     canWrite,
-    writeNote: canWrite ? null : `Turn on DevOps writes for ${ref?.clientName ?? clientKey} in Settings › DevOps to change it from here.`,
+    writeNote: canWrite ? null : `Turn on DevOps writes for ${ref?.clientName ?? clientKey} in Settings › Connections › DevOps to change it from here.`,
     readAt: new Date(at).toISOString(),
   };
   return { ok: true, data: { access: true, card } };

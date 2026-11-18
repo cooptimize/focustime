@@ -106,7 +106,7 @@ Dev scales to zero, and there is no scheduled wake-up for it, so a morning brief
 only if the app happens to be awake inside that kind's window. To see each one:
 
 1. In Teams, send FocusTime (dev) any message once, so it knows where your chat is.
-2. In dev's FocusTime: Settings › Notifications › In Teams. The line at the top should not say "Message FocusTime in
+2. In dev's FocusTime: Settings › Reminders and notices › In Teams. The line at the top should not say "Message FocusTime in
    Teams once…" (it does until step 1 reaches it).
 3. Turn on Let FocusTime message me in Teams, then Send me a test now beside a kind. The card comes at once, marked
    "(test)", whatever the switches, the time, quiet hours or focus say. Nudges use a sample when nothing is due.
