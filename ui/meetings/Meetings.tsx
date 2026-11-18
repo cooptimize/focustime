@@ -142,7 +142,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     remember(f, c ?? undefined);
     onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
   };
-  const { rows, older } = useMemo(() => callRows({ meetings: data?.meetings ?? [], occurrences: data?.occurrences ?? [], others: others?.calls ?? null, today, zone }), [data, others, today, zone]);
+  // Without the calls FocusTime keeps there is no list: my calendar's calls alone would read as nothing to review.
+  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone }) : { rows: [], older: [] }), [data, others, today, zone]);
   const shown = useMemo(() => filterRows(rows, show, client), [rows, show, client]);
   const counts = useMemo(() => filterCounts(rows, client), [rows, client]);
   const chips = useMemo(() => chipClients(rows), [rows]);
@@ -152,6 +153,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const loaded = !!data && (!!others || !!othersErr);
   // After I close a call or a setup myself (Cancel, Esc, Back), nothing else opens in its place.
   const closedByMe = useRef(false);
+  const focusRow = useRef<string | null>(null);
+  const [, setFocusTick] = useState(0);
   // The call Calls opened by itself: its page leaves the focus where the person put it (the tab, the list).
   const openedByItself = useRef<number | null>(null);
   // In two steps, a call opened from the list: its Back is the browser's, so history doesn't gain a step each way.
@@ -191,7 +194,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     if (atRef.current.occurrence && fromList.current) history.back();
     else if (atRef.current.occurrence) go({ occurrence: null }, true);
     fromList.current = false;
-    requestAnimationFrame(() => (k ? document.querySelector<HTMLElement>(`[data-call-row="${k}"]`) : null)?.focus());
+    focusRow.current = k;
+    setFocusTick((n) => n + 1);
   }, [go]);
   const openKeyRef = useRef(openKey);
   openKeyRef.current = openKey;
@@ -244,6 +248,12 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     if (el && bar) el.style.setProperty("--mtg-top", `${bar.getBoundingClientRect().height}px`);
   });
   const showList = twoStep ? !besideOpen : !folded;
+  // Back to the list puts focus on the row it came from once that row is drawn (the browser's Back lands a moment later).
+  useEffect(() => {
+    const k = focusRow.current;
+    const el = k ? document.querySelector<HTMLElement>(`[data-call-row="${k}"]`) : null;
+    if (el) (focusRow.current = null), el.focus();
+  });
   const showBeside = twoStep ? besideOpen : true;
   const registered = data?.meetings.filter((m) => !m.call) ?? [];
 
@@ -263,14 +273,16 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           )}
         </span>
       </header>
-      <div className="seg calls-filters" role="group" aria-label="Show">
+      {data && (
+        <div className="seg calls-filters" role="group" aria-label="Show">
         {LIST_FILTERS.map((f) => (
           <button key={f} type="button" className={`seg-btn${show === f ? " on" : ""}`} aria-pressed={show === f} title={CALL_LIST.filterHint[f]} onClick={() => setList(f, client)} data-calls-filter={f}>
             {CALL_LIST.filters[f]} <span className="seg-count">{counts[f]}</span>
           </button>
         ))}
       </div>
-      {chips.length > 1 && (
+      )}
+      {data && chips.length > 1 && (
         <div className="ib4-chips calls-chips" role="group" aria-label="Clients">
           <button type="button" className={`ib4-chip${client === null ? " on" : ""}`} aria-pressed={client === null} onClick={() => setList(show, null)}>
             {CALL_LIST.allClients}
@@ -287,7 +299,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
         {missing && <p className="muted calls-note" role="status">{CALLS_TEXT.notFound}</p>}
         {(error || othersErr) && (
           <p className="error-line calls-note" role="alert">
-            {error ?? othersErr}{" "}
+            {error ? (data ? error : CALL_LIST.failedMine) : CALL_LIST.failedOthers}{" "}
             <button type="button" className="link-btn" onClick={tryAgain}>{CALL_LIST.tryAgain}</button>
           </p>
         )}
@@ -375,6 +387,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
             <p>{CALL_LIST.emptyBeside}</p>
             <button type="button" className="mini primary" onClick={() => setAdding(true)}>{CALLS_TEXT.add}</button>
           </>
+        ) : error && !data ? (
+          <p className="muted">{CALL_LIST.failedMine}</p>
         ) : !loaded ? (
           <p className="muted" role="status">{CALL_LIST.loading}</p>
         ) : null}

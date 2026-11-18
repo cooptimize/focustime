@@ -218,6 +218,10 @@ export const CALL_LIST = {
   back: "Back to Calls",
   loading: "Loading calls…",
   tryAgain: "Try again",
+  /** The calls FocusTime keeps couldn't be read: no list rather than one missing the calls that need me. */
+  failedMine: "FocusTime couldn't read your calls just now, so the list isn't shown: it would leave out the calls waiting for you.",
+  /** Only my calendar's calls couldn't be read: the rest of the list is shown. */
+  failedOthers: "FocusTime couldn't read your calendar's calls just now. The calls it keeps are listed.",
 } as const;
 
 /** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */

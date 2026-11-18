@@ -336,6 +336,10 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     const alert = page.locator("[data-calls-list] [role=alert]");
     await alert.waitFor({ timeout: 30_000 });
     await expect(alert.textContent()).resolves.toContain("couldn't read your calls");
+    // No list at all rather than one without the calls that need me: no rows, no filters saying To review 0.
+    await expect(rows(page).count()).resolves.toBe(0);
+    await expect(page.locator("[data-calls-filter]").count()).resolves.toBe(0);
+    await expect(page.locator(".calls-beside").textContent()).resolves.toContain("couldn't read your calls");
     mode = "slow";
     await alert.getByRole("button", { name: "Try again" }).click();
     await expect.poll(() => page.locator("[data-calls-list] [role=status]").filter({ hasText: "Loading" }).count()).toBeGreaterThan(0);

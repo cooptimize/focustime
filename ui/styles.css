@@ -7833,3 +7833,5 @@ body.ah-dragging * { cursor: grabbing !important; }
 .app.phone .calls-day-head { top: var(--mtg-top, 0px); }
 .app.phone .calls-row { min-height: var(--tap, 44px); }
 .app.phone .calls-page :is(.seg-btn, .ib4-chip, .mini, .link-btn) { min-height: var(--tap, 44px); }
+/* MC-3: on the phone the four filters sit two by two rather than leaving one alone on a second row. */
+.app.phone .calls-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

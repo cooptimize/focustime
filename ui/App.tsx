@@ -277,6 +277,8 @@ export function App() {
     return sameLoc(n, l) ? l : n;
   }), []);
   // MC-3: Calls opened from its tab, key or the command menu carries the list's remembered filter and client.
+  /** MC-3: an address a step Calls took by itself replaces, rather than adding a Back step. */
+  const replaceNext = useRef<string | null>(null);
   const goNav = useCallback((nav: Nav) => go({ nav: nav.tab === "calls" && nav.occurrence === null && nav.show === undefined && nav.client === undefined ? { ...nav, ...rememberedCallsList() } : nav, overlay: null }), [go]);
   useEffect(() => {
     // PF-1: not before the place's screen is drawn. A screen reads what its address carries as it opens (Backlog's
@@ -285,7 +287,9 @@ export function App() {
     const h = hashOf(loc);
     // NV-1: an older address that lands on the same place (a redirect) is replaced, so Back doesn't loop on it.
     const was = parseHash(location.hash);
-    if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc))) history.replaceState(null, "", h);
+    const replacing = replaceNext.current === h;
+    replaceNext.current = null;
+    if (location.hash === CAPTURE_HASH || askTurnOf(location.hash) !== null || (was && sameLoc(was, loc)) || replacing) history.replaceState(null, "", h);
     else if (location.hash !== h) history.pushState(null, "", h);
     try {
       localStorage.setItem(LOC_KEY, placeToKeep(loc));
@@ -2324,10 +2328,13 @@ export function App() {
           onGo={(next, opts) => {
             // A step Calls takes by itself (opening the newest call, remembering a filter) never lands after the person
             // has left Calls: Back to Week a moment before it would otherwise put Calls back in Week's place.
+            // A step Calls takes by itself also never overrides a tab chosen a moment before (7 just after 6): it applies
+            // only while the place is still Calls, and its address replaces Calls' own.
             if (opts?.replace && parseHash(location.hash)?.nav.tab !== "calls") return;
             const to = { nav: navOf.calls(next.occurrence, next), overlay: null };
-            if (opts?.replace) history.replaceState(null, "", hashOf(to));
-            go(to);
+            if (!opts?.replace) return go(to);
+            replaceNext.current = hashOf(to);
+            go((l) => (l.nav.tab === "calls" ? to : l));
           }}
           onChanged={mine.reload}
         />

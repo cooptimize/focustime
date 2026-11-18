@@ -36,12 +36,12 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
   }, T);
   afterAll(async () => h?.stop());
 
-  it("six tabs, Code last; 6 opens it; it is a page with no Close; Esc stays; the other keys work; not in More", { timeout: T }, async () => {
+  it("seven tabs, Code last (MC-3: Calls before it); 7 opens it; it is a page with no Close; Esc stays; the other keys work; not in More", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await page.locator(".topbar .view-tab").first().waitFor();
-    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Code"]);
+    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]);
     await page.locator("body").click({ position: { x: 5, y: 300 } });
-    await page.keyboard.press("6");
+    await page.keyboard.press("7");
     await page$(page).waitFor();
     expect(await hash(page)).toBe("#/code");
     expect(await page.locator('.topbar .view-tab[aria-current="page"]').textContent()).toContain("Code");
@@ -53,7 +53,7 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     // The other tabs' keys work from it (not while typing in the box).
     await page.keyboard.press("2");
     await page.waitForFunction(() => location.hash.startsWith("#/week"));
-    await page.keyboard.press("6");
+    await page.keyboard.press("7");
     await page$(page).waitFor();
     // The desktop More menu has no Code any more.
     await page.locator('.topbar button[aria-label^="More"]').first().click();
@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     await page.close();
   });
 
-  it("no Code tab, and 6 does nothing, for someone who may not read code (the same test More used)", { timeout: T }, async () => {
+  it("no Code tab, and 7 does nothing, for someone who may not read code (the same test More used)", { timeout: T }, async () => {
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     // As for an automation account: the list of clients Code can open comes back empty.
     await page.route("**/api/action", async (route) => {
@@ -77,10 +77,10 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     });
     await page.evaluate(() => (location.hash = "#/week"));
     await page.locator(".topbar .view-tab").first().waitFor();
-    await page.waitForFunction(() => document.querySelectorAll(".topbar .view-tab").length === 5, null, { timeout: 15_000 });
-    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox"]);
+    await page.waitForFunction(() => document.querySelectorAll(".topbar .view-tab").length === 6, null, { timeout: 15_000 });
+    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls"]);
     await page.locator("body").click({ position: { x: 5, y: 300 } });
-    await page.keyboard.press("6");
+    await page.keyboard.press("7");
     await page.waitForTimeout(300);
     expect(await hash(page)).not.toMatch(/^#\/code/);
     await page.close();
@@ -257,7 +257,7 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
           return { height: bar.getBoundingClientRect().height, spread: Math.max(...mids) - Math.min(...mids), sideways: bar.scrollWidth - bar.clientWidth, tabs: tabsEl.length, hiddenTabs: tabsEl.filter((t) => t.getBoundingClientRect().width === 0).length, page: document.documentElement.scrollWidth - innerWidth };
         });
         const at = `${where} ${width} ${size ?? "default"}`;
-        expect(m.tabs, at).toBe(6);
+        expect(m.tabs, at).toBe(7); // MC-3: Calls and Code.
         expect(m.hiddenTabs, at).toBe(0);
         expect(m.spread, at).toBeLessThanOrEqual(4);
         expect(m.height, at).toBeLessThan(80);
