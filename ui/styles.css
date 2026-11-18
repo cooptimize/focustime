@@ -7691,7 +7691,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-head-note.amber { color: var(--watch); }
 .calls-check-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .calls-menu { position: relative; }
-.calls-menu-pop { position: absolute; left: 0; max-width: calc(100vw - 32px); top: calc(100% + 4px); z-index: 5; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2, 0 6px 20px rgb(0 0 0 / 0.25)); }
+.calls-menu-pop { position: absolute; left: 0; max-width: calc(100vw - 32px); top: calc(100% + 4px); z-index: 5; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-menu); }
 .calls-menu-pop > button { display: grid; gap: 1px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .calls-menu-pop > button:hover, .calls-menu-pop > button:focus-visible { background: var(--wash-1); }
 .calls-menu-pop .muted { font-size: var(--fs-1); }
