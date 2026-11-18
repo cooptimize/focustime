@@ -27,7 +27,7 @@ import { rememberCallsList as remember, rememberedCallsList as remembered, reque
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListedRecording, type ListFilter } from "../../plan/call-list.ts";
 import { gotLine, othersLeftOut, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
-import { lengthWords, longerThanCall } from "../../plan/pocket-recordings.ts";
+import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
 import type { PocketView } from "../../actions/pocket-types.ts";
 import type { CallsAt } from "../nav.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";

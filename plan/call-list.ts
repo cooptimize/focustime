@@ -5,9 +5,8 @@
 // it only arranges what meeting.mine and meeting.calls already returned.
 import type { OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
-import { CALL_LIST, callLabel, CALLS_TEXT } from "./call-words.ts";
-import { forCall, withNoCall } from "./pocket-recordings.ts";
-import { POCKET_CALL_WORDS } from "./pocket-words.ts";
+import { CALL_LIST, callLabel, CALLS_TEXT, POCKET_ROW } from "./call-words.ts";
+import { forCall, withNoCall } from "./pocket-match.ts";
 
 /**
  * MC-2b: one of my own Pocket recordings as the page holds it (meeting.pocket_list's answer, in the page's memory only
@@ -155,14 +154,14 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
     for (const row of all) {
       if (!takes.has(row)) continue;
       row.pocket = forCall(spans, row).map(({ seconds: _s, ...r }) => r);
-      if (row.pocket.length) row.state = { ...row.state, label: POCKET_CALL_WORDS.found };
+      if (row.pocket.length) row.state = { ...row.state, label: POCKET_ROW.found };
     }
     for (const r of withNoCall(spans, all)) {
       const { seconds: _s, ...rec } = r;
       all.push({
-        key: `p${rec.id}`, occurrenceId: null, other: null, name: rec.title || POCKET_CALL_WORDS.rowKind, startAt: rec.startAt, endAt: rec.endAt,
-        day: dayOf(rec.startAt, x.zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_CALL_WORDS.rowKind, weekly: null,
-        state: { label: POCKET_CALL_WORDS.rowKind, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
+        key: `p${rec.id}`, occurrenceId: null, other: null, name: rec.title || POCKET_ROW.kind, startAt: rec.startAt, endAt: rec.endAt,
+        day: dayOf(rec.startAt, x.zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_ROW.kind, weekly: null,
+        state: { label: POCKET_ROW.kind, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
       });
     }
   }

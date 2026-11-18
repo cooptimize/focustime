@@ -339,3 +339,6 @@ export function aiNextLine(o: { retryAt: string | null; tries: number; retryable
   if (o.tries >= AI_RETRIES) return `FocusTime tried again ${AI_RETRIES} times and stopped. A reviewer can Propose again.`;
   return "A reviewer can Propose again.";
 }
+
+/** MC-2b: a call my Pocket recording goes with, and a recording's own row (plan/pocket-words.ts has the rest). */
+export const POCKET_ROW = { found: "Pocket recording found", kind: "Pocket recording" } as const;

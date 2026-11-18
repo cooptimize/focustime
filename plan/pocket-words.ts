@@ -1,6 +1,7 @@
 // PK-2: every word of Settings › Accounts and calendars › Pocket recorder, in one place (docs/design/wording.md,
 // "PK-2 words"), the failures' too: the client (sources/pocket/client.ts) throws these, so the server and the page say
 // the same thing.
+import { POCKET_ROW } from "./call-words.ts";
 
 /** Where a person reads how Pocket's API keys work (Pocket's own page; the guide links it). */
 export const POCKET_KEYS_DOC = "https://docs.heypocketai.com/docs/api";
@@ -21,7 +22,7 @@ export const POCKET_WORDS = {
   title: "Pocket recorder",
   /** What connecting does, in one sentence. */
   intro:
-    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. It never reads a recording's title, words or audio. Bringing in a recording for a client call comes later.",
+    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works; it reads nothing else here. To bring a recording in as a call's transcript, press Get my Pocket recordings in Calls.",
   stepsLabel: "How to connect",
   steps: [
     "In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team.",
@@ -79,8 +80,8 @@ export const POCKET_CALL_WORDS = {
   getAgain: "Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes",
   notThisCall: "That recording doesn't go with this call: they overlap for less than half the call",
   noWords: "Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file",
-  found: "Pocket recording found",
-  rowKind: "Pocket recording",
+  found: POCKET_ROW.found,
+  rowKind: POCKET_ROW.kind,
   source: "Use my Pocket recording",
   part: "Only the part during the call (5 minutes either side)",
   all: "Bring in all of it",
