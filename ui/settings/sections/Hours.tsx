@@ -4,6 +4,7 @@ import { userZone } from "../../../week/zone.ts";
 import { shortDate } from "../../labels.ts";
 import { useAutoSave } from "../autosave.tsx";
 import { Button, Choice, Group, List, ListItem, Page, Row, Select, Suggestions, Text } from "../parts.tsx";
+import { readDay, readLunch } from "../hours-text.ts";
 import { labelBy, markOf, ZONES } from "./shared.ts";
 import type { BodyProps, FormProps } from "./types.ts";
 
@@ -32,6 +33,8 @@ function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
     payload: (v) => ({ timeZone: v.tz, lunch: v.lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(v[k] ?? "")])) }),
     onSaved: p.onSavedData,
     label: labelBy(HOURS_IDS),
+    // SA-2: "9:00 to 13:00", "9:00-13:00" and "09:00–13:00" save as 09:00-13:00; anything else is refused with an example.
+    read: (k, x) => (k === "lunch" ? readLunch(String(x), h.lunch ? spanText(h.lunch) : "") : k === "tz" ? null : readDay(String(x))),
   });
   return (
     <>
