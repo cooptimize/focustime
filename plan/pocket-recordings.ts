@@ -11,16 +11,81 @@ export const POCKET_HOLD_MS = 5 * 60_000;
 export const AROUND_S = 5 * 60;
 
 /**
- * Which listed recordings are kept, from their recorders' addresses alone: one whose recorder is me (any address
- * FocusTime knows me by), or every one when the whole list has one and the same recorder (a key someone made for
- * themselves under an address FocusTime doesn't know). Everything else is dropped unread and only counted.
+ * PK-4: why each listed item is kept or left out. "mine": its recorder is an address FocusTime knows me by or one I set
+ * as my Pocket address; "one": no recording is mine by address, and every recording that names a recorder names the
+ * same one, an address no other FocusTime person has (a key someone made for themselves, MC-2b); "address": under an
+ * address FocusTime doesn't know me by; "no_recorder": no recorder, beside someone else's recordings; "not_recording":
+ * no length or no time it was recorded (Pocket's docs give `state` no values, so it isn't read).
  */
-export function whoseKept(recorders: readonly (string | null)[], mine: readonly string[]): boolean[] {
-  const me = new Set(mine.map((e) => e.trim().toLowerCase()).filter(Boolean));
-  const rs = recorders.map((r) => (r === null ? null : r.trim().toLowerCase() || null));
-  const first = rs[0] ?? null;
-  const oneRecorder = first !== null && rs.every((r) => r === first);
-  return rs.map((r) => r !== null && (me.has(r) || oneRecorder));
+export type ListedWhy = "mine" | "one" | "address" | "no_recorder" | "not_recording";
+export const keptWhy = (w: ListedWhy) => w === "mine" || w === "one";
+
+const norm = (e: string | null) => (e === null ? null : e.trim().toLowerCase() || null);
+
+/** An address's domain, lower case ("" when it has none). */
+export const domainOf = (e: string) => e.slice(e.lastIndexOf("@") + 1).trim().toLowerCase();
+
+/**
+ * PK-4: whether `r` is a colleague's address: one another FocusTime person is known by, or any other address on the
+ * domain of my work address (mine there would already be known, so another one there is someone else's).
+ */
+export function colleagueOf(work: readonly string[], theirs: readonly string[]) {
+  const domains = new Set(work.map(domainOf).filter(Boolean));
+  const mine = new Set(work.map((e) => e.trim().toLowerCase()));
+  const them = new Set(theirs.map((e) => e.trim().toLowerCase()));
+  return (r: string) => !mine.has(r) && (them.has(r) || domains.has(domainOf(r)));
+}
+
+/**
+ * PK-4: whose listed items are kept, from their recorders' addresses and, only where the addresses don't settle it, by
+ * asking `isRecording` (its length and when it was recorded). Asked of an item under an address FocusTime doesn't know
+ * anyone by only while no recording is mine by address and no other FocusTime person is listed (it may be mine); never
+ * of an item under another FocusTime person's address, nor of anyone else's once mine are found by address. Replaced
+ * MC-2b's rule, a guess that kept nothing when one item had no recorder (Nov 18). With `others` false (who else
+ * FocusTime knows couldn't be read) the one-recorder rule doesn't apply: it fails closed.
+ */
+export function whoseKept(
+  recorders: readonly (string | null)[],
+  o: {
+    mine: readonly string[];
+    /** Addresses other FocusTime people are known by. */ theirs?: readonly string[];
+    /** False: `theirs` couldn't be read. */ others?: boolean;
+    /** My sign-in addresses: another address on their domain is a colleague's. */ work?: readonly string[];
+  },
+  isRecording: (i: number) => boolean,
+): ListedWhy[] {
+  const me = new Set(o.mine.map(norm).filter((e): e is string => !!e));
+  const colleague = colleagueOf(o.work ?? [], o.theirs ?? []);
+  const them = { has: (r: string) => !me.has(r) && colleague(r) };
+  const rs = recorders.map(norm);
+  const asked = new Map<number, boolean>();
+  const rec = (i: number) => {
+    if (!asked.has(i)) asked.set(i, isRecording(i));
+    return asked.get(i)!;
+  };
+  const known = (r: string | null): r is string => r !== null && me.has(r);
+  // 1. Mine by address: those of mine that are recordings, and those with no recorder when nobody else is under the key.
+  const mineAt = rs.map((r, i) => (known(r) ? i : -1)).filter((i) => i >= 0);
+  if (mineAt.some((i) => rec(i))) {
+    const someoneElse = rs.some((r) => r !== null && !me.has(r));
+    return rs.map((r, i): ListedWhy => (known(r) ? (rec(i) ? "mine" : "not_recording") : r !== null ? "address" : someoneElse ? "no_recorder" : rec(i) ? "mine" : "not_recording"));
+  }
+  // 2. One recorder: every recording that names a recorder names the same one, and nobody FocusTime knows as someone else.
+  const theirsListed = o.others === false || rs.some((r) => r !== null && them.has(r));
+  const named = new Set<string>();
+  if (!theirsListed) rs.forEach((r, i) => r !== null && !known(r) && rec(i) && named.add(r));
+  if (!theirsListed && named.size <= 1) return rs.map((r, i): ListedWhy => (known(r) || !rec(i) ? "not_recording" : "one"));
+  // 3. Otherwise nothing more is kept; only counted.
+  return rs.map((r, i): ListedWhy => (r === null ? "no_recorder" : them.has(r) || !asked.has(i) || asked.get(i) ? "address" : "not_recording"));
+}
+
+/** PK-4: what one list found, in numbers only (Settings › Connections › Pocket shows them; never a title or a name). */
+export type ListCounts = { listed: number; notRecordings: number; kept: number; address: number; noRecorder: number; outside: number };
+
+/** PK-4: the counts from each item's why. `outside` (not in Calls' last 14 days, or not ended) is added by the caller. */
+export function countWhy(why: readonly ListedWhy[]): Omit<ListCounts, "outside"> {
+  const n = (w: ListedWhy) => why.filter((x) => x === w).length;
+  return { listed: why.length, notRecordings: n("not_recording"), kept: n("mine") + n("one"), address: n("address"), noRecorder: n("no_recorder") };
 }
 
 export type Segment = { start: number | null; end: number | null; speaker: string; text: string };

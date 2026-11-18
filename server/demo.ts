@@ -99,7 +99,7 @@ const sessions = new WeakMap<ActionContext, DemoSession>();
 /** The demo session a context belongs to (null for any other context). */
 export const demoSessionOf = (ctx: ActionContext): DemoSession | null => sessions.get(ctx) ?? null;
 
-export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null; /** IN-1: the app's address, for the invite's link. */ publicUrl?: string; /** MC-1e tests: the fields a client's process requires on a new item (the demo's own by default). */ devopsRequired?: Parameters<typeof createDemoDevOps>[0]["required"]; /** RQ-1: fields a client's process rule requires on a new item (none by default). */ devopsRules?: Parameters<typeof createDemoDevOps>[0]["rules"] | "target" }): ActionContext {
+export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null; /** IN-1: the app's address, for the invite's link. */ publicUrl?: string; /** MC-1e tests: the fields a client's process requires on a new item (the demo's own by default). */ devopsRequired?: Parameters<typeof createDemoDevOps>[0]["required"]; /** RQ-1: fields a client's process rule requires on a new item (none by default). */ devopsRules?: Parameters<typeof createDemoDevOps>[0]["rules"] | "target"; /** PK-4 checks (e2e, pictures): "long" adds 30 one-off calendar calls to the last two weeks. */ calls?: "long" }): ActionContext {
   let text = followTeamColors(DEMO_CONFIG);
   // The demo team's process Rules (Admin › Clients in the demo) apply to the demo's process models.
   let rulesOf: (k: string) => Promise<ProcessOverrides> = async () => ({});
@@ -295,7 +295,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const press = createPressGrants();
   // MC-4: whether a call has a transcript (never its text), only for my own check while Calls opens.
   const checks = createExistsGrants();
-  const demoAzure = createDemoAzure({ meetingsGate: { allowed: async (q) => (q.purpose === "exists" ? checks.allowed(DEMO_PERSON.oid, q) : press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false))) } });
+  const demoAzure = createDemoAzure({ ...(opts.calls ? { calls: opts.calls } : {}), meetingsGate: { allowed: async (q) => (q.purpose === "exists" ? checks.allowed(DEMO_PERSON.oid, q) : press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false))) } });
   /** VM-4: verification runs only: the action whose next call fails unexpectedly. */
   let failNext: string | null = null;
   // DM-1: the demo's AI. The app's spend gets what real calls cost (its cap counts them); the service reads the app's

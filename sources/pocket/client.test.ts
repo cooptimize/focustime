@@ -1,11 +1,12 @@
 // PK-2: the Pocket client makes one call (list recordings between two dates) and refuses everything else before the
 // key is read or the network is used; one try with a time limit; each failure in its own words; the log lines hold
 // the call's kind, status and time only; nothing of a recording comes out. Pretend Pocket only: no real key.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { whoseKept, type ListedWhy } from "../../plan/pocket-recordings.ts";
 import { inspect } from "node:util";
 import type { LogRecord } from "../../log/logger.ts";
 import { createDemoPocketFetch, DEMO_POCKET_KEYS, DEMO_POCKET_OTHER, type PocketCall } from "../demo/pocket.ts";
-import { allowedPocketCall, createPocketClient, POCKET_MAX_PAGES, POCKET_RECORDING_MAX_BYTES, keyProblem, POCKET_FAILURE_TEXT, POCKET_LIST_PATH, POCKET_ORIGIN, PocketError, PocketKey } from "./client.ts";
+import { allowedPocketCall, createPocketClient, recorderHash, POCKET_MAX_PAGES, POCKET_RECORDING_MAX_BYTES, keyProblem, POCKET_FAILURE_TEXT, POCKET_LIST_PATH, POCKET_ORIGIN, PocketError, PocketKey } from "./client.ts";
 
 const KEY = "pk_test_0123456789abcdef";
 const NOW = Date.parse("2026-11-17T15:00:00Z");
@@ -152,7 +153,7 @@ describe("PK-2: the Pocket client", () => {
 
 describe("MC-2b: the list of my recordings and one recording", () => {
   const LATER = Date.parse("2026-11-19T22:00:00Z");
-  const mineOnly = (rs: readonly (string | null)[]) => rs.map((r) => r === "you@example.com");
+  const mineOnly = (rs: readonly (string | null)[]): ListedWhy[] => rs.map((r) => (r === "you@example.com" ? "mine" : "address"));
   function later(o: { fetch?: typeof fetch } = {}) {
     const calls: PocketCall[] = [];
     const logs: LogRecord[] = [];
@@ -164,7 +165,7 @@ describe("MC-2b: the list of my recordings and one recording", () => {
     const t = later();
     const r = await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", mineOnly);
     expect(t.calls.map((c) => c.url)).toEqual([`${LIST}?start_date=2026-11-05&end_date=2026-11-19&page=1&limit=100`]);
-    expect(r.others).toBe(1);
+    expect(r.counts).toEqual({ listed: 5, notRecordings: 0, kept: 4, address: 1, noRecorder: 0 });
     expect(r.more).toBe(false);
     for (const x of r.recordings) expect(Object.keys(x).sort()).toEqual(["id", "seconds", "startAt", "title"]);
     expect(r.recordings.map((x) => x.id)).toEqual(["rec-demo-carrier", "rec-demo-long", "rec-demo-prop", "rec-demo-weekly"]);
@@ -190,7 +191,7 @@ describe("MC-2b: the list of my recordings and one recording", () => {
     const t = later({ fetch: (async () => page(++n)) as typeof fetch });
     const r = await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", mineOnly);
     expect(n).toBe(POCKET_MAX_PAGES);
-    expect(r).toMatchObject({ more: true, others: 0 });
+    expect(r).toMatchObject({ more: true, counts: { address: 0 } });
     expect(r.recordings).toHaveLength(3);
   });
 
@@ -198,13 +199,13 @@ describe("MC-2b: the list of my recordings and one recording", () => {
     const odd = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 })) as typeof fetch });
     await expect(odd.client.listRecordings(odd.key, "2026-11-05", "2026-11-19", mineOnly)).rejects.toMatchObject({ kind: "unexpected" });
     const part = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: [{ id: "a/b", recording_at: "x", duration: 1, recorded_by: { email: "you@example.com" } }], pagination: { has_more: false } }), { status: 200 })) as typeof fetch });
-    expect(await part.client.listRecordings(part.key, "2026-11-05", "2026-11-19", mineOnly)).toEqual({ recordings: [], others: 0, more: false });
+    expect(await part.client.listRecordings(part.key, "2026-11-05", "2026-11-19", mineOnly)).toMatchObject({ recordings: [], counts: { listed: 1, notRecordings: 1, kept: 0 }, more: false });
   });
 
   it("the keep rule sees only the recorders' addresses", async () => {
     const t = later();
     let seen: readonly (string | null)[] = [];
-    await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", (rs) => ((seen = rs), rs.map(() => false)));
+    await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", (rs) => ((seen = rs), rs.map((): ListedWhy => "address")));
     expect([...new Set(seen)].sort()).toEqual([DEMO_POCKET_OTHER, "you@example.com"]);
   });
 
@@ -233,5 +234,49 @@ describe("MC-2b: the list of my recordings and one recording", () => {
     await expect(t.client.recording(t.key, "rec-gone")).rejects.toMatchObject({ kind: "unexpected", status: 404 });
     const odd = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: { transcript: "one text" } }), { status: 200 })) as typeof fetch });
     await expect(odd.client.recording(odd.key, "rec-1")).rejects.toMatchObject({ kind: "unexpected" });
+  });
+});
+
+describe("PK-4: what is read of the list", () => {
+  const item = (id: string, by: string | null) => ({ id, title: `Invented ${id}`, recording_at: "2026-11-10T15:00:00Z", duration: 1800, state: "completed", recorded_by: by === null ? null : { email: by, display_name: "Invented", user_id: "u" }, transcript: { segments: [] }, summarizations: null });
+
+  it("with my Pocket address set and two recorders, only mine are kept, and of the other's only its recorder is read", async () => {
+    const body = JSON.stringify({ success: true, data: [item("r-mine", "me@personal.example"), item("r-theirs", "sam@example.com"), item("r-none", null)], pagination: { has_more: false } });
+    // Every property read of each listed item, by its id: JSON.parse hands the client watched items.
+    const reads: Record<string, Set<string>> = {};
+    const parse = JSON.parse;
+    const spy = vi.spyOn(JSON, "parse").mockImplementation((text: string) => {
+      const j = parse(text) as { data?: unknown[] };
+      if (Array.isArray(j?.data))
+        j.data = j.data.map((x) => {
+          const o = x as Record<string, unknown>;
+          const id = String(o.id);
+          return new Proxy(o, { get: (t, k) => ((reads[id] ??= new Set()).add(String(k)), t[k as string]) });
+        });
+      return j;
+    });
+    try {
+      const client = createPocketClient({ fetch: (async () => new Response(body, { status: 200 })) as typeof fetch, log: () => {}, timeoutMs: 200 });
+      const r = await client.listRecordings(async () => new PocketKey(KEY), "2026-11-05", "2026-11-19", (rs, isRec) => whoseKept(rs, { mine: ["you@example.com", "me@personal.example"] }, isRec));
+      expect(r.recordings.map((x) => x.id)).toEqual(["r-mine"]);
+      expect(r.counts).toEqual({ listed: 3, notRecordings: 0, kept: 1, address: 1, noRecorder: 1 });
+      expect([...reads["r-theirs"]!].sort()).toEqual(["recorded_by"]);
+      expect([...reads["r-none"]!].sort()).toEqual(["recorded_by"]);
+      expect([...reads["r-mine"]!].sort()).toEqual(["duration", "id", "recorded_by", "recording_at", "title"]);
+      // The recorders are held only as hashes, never as addresses.
+      expect(r.recorders.has(recorderHash("SAM@example.com"))).toBe(true);
+      expect(JSON.stringify([...r.recorders])).not.toMatch(/@/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("an item with no length is never kept and never someone else's", async () => {
+    const odd = { ...item("r-sum", "pocket@example.com"), duration: 0 };
+    const body = JSON.stringify({ success: true, data: [item("r-1", "me@personal.example"), odd, item("r-2", "me@personal.example")], pagination: { has_more: false } });
+    const client = createPocketClient({ fetch: (async () => new Response(body, { status: 200 })) as typeof fetch, log: () => {}, timeoutMs: 200 });
+    const r = await client.listRecordings(async () => new PocketKey(KEY), "2026-11-05", "2026-11-19", (rs, isRec) => whoseKept(rs, { mine: ["you@example.com"] }, isRec));
+    expect(r.recordings.map((x) => x.id)).toEqual(["r-1", "r-2"]);
+    expect(r.counts).toEqual({ listed: 3, notRecordings: 1, kept: 2, address: 0, noRecorder: 0 });
   });
 });

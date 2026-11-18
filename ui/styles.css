@@ -7688,7 +7688,9 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-row-main:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .calls-row-acts { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; padding: 0 4px 2px; }
 .calls-row-acts:empty { display: none; }
-.calls-scroll { container-type: inline-size; }
+/* PK-4: the list's scroller is its rows' positioned ancestor, so a row's screen-reader-only label (an absolute box)
+   stays inside the list instead of lengthening the page: only the list and the open call scroll, never the page. */
+.calls-scroll { container-type: inline-size; position: relative; }
 /* A wide list (folded beside nothing, or the phone's whole width at a tablet): the controls sit at the row's end. */
 @container (min-width: 640px) {
   .calls-row { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -7710,7 +7712,12 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-left { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
 .calls-left-bar { display: inline-block; width: 48px; height: 4px; border-radius: 2px; background: var(--wash-2, var(--border)); overflow: hidden; }
 .calls-left-bar > span { display: block; height: 100%; background: var(--c, var(--accent)); }
-.calls-row.need-row .calls-row-two { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* PK-4: a Needs you row's second line: the client, then its state or progress on one line at the end; when the two don't
+   fit, the whole state goes under the client (it wraps as one piece, never a word a line). */
+.calls-row.need-row .calls-row-two { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; }
+.calls-row.need-row .calls-row-two .calls-meta { flex: 1 1 auto; }
+.calls-row.need-row .calls-row-two > :is(.calls-state, .calls-left) { flex: 0 1 auto; max-width: 100%; margin-left: auto; text-align: right; }
+.calls-row.need-row .calls-row-two > .calls-left { white-space: nowrap; }
 .calls-head-count { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .calls-head-note { margin-left: 8px; font-size: var(--fs-1); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
 .calls-head-note.link-btn { min-height: 0; padding: 0; }
@@ -7749,6 +7756,23 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-pocket .mini { min-height: 32px; }
 .app.phone .calls-pocket { padding: 0 16px 8px; }
 .app.phone .calls-pocket .mini { min-height: 44px; }
+/* PK-4: Set my Pocket address, inline under the Pocket line. */
+.pocket-address { flex-basis: 100%; display: grid; gap: 6px; max-width: 520px; margin-top: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pocket-address label { display: grid; gap: 4px; font-weight: 500; }
+.pocket-address input { min-height: 32px; padding: 4px 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.pocket-address p { margin: 0; }
+.pocket-address-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.app.phone .pocket-address input, .app.phone .pocket-address .mini, .app.phone [data-pocket-failed] .link-btn { min-height: 44px; }
+/* PK-4: Settings › Pocket recorder: the last list's counts and my Pocket addresses. */
+.pocket-last, .pocket-addresses { margin-top: 12px; }
+.pocket-last > p, .pocket-addresses > p { margin: 4px 0; }
+.pocket-counts { display: grid; grid-template-columns: max-content auto; gap: 2px 16px; margin: 6px 0; }
+.pocket-counts > div { display: contents; }
+.pocket-counts dt { color: var(--text-muted); }
+.pocket-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.pocket-addresses ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.pocket-addresses li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app.phone .pocket-addresses .mini { min-height: 44px; }
 .mtg-pocket-pick { display: grid; gap: 6px; }
 .mtg-pocket-ask { padding: 6px 8px; border-radius: 8px; background: var(--sunken); }
 .mtg-pocket-who { font-size: var(--fs-2); }

@@ -1652,6 +1652,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.pocket_list":
     case "meeting.pocket_bring":
     case "meeting.pocket_add":
+    case "meeting.pocket_address_add":
+    case "meeting.pocket_address_remove":
     case "meeting.calls_check":
     case "meeting.call_hides":
     case "meeting.call_hide":

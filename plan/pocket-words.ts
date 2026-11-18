@@ -2,6 +2,7 @@
 // "PK-2 words"), the failures' too: the client (sources/pocket/client.ts) throws these, so the server and the page say
 // the same thing.
 import { POCKET_ROW } from "./call-words.ts";
+import type { ListCounts } from "./pocket-recordings.ts";
 
 /** Where a person reads how Pocket's API keys work (Pocket's own page; the guide links it). */
 export const POCKET_KEYS_DOC = "https://docs.heypocketai.com/docs/api";
@@ -22,7 +23,7 @@ export const POCKET_WORDS = {
   title: "Pocket recorder",
   /** What connecting does, in one sentence. */
   intro:
-    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works; it reads nothing else here. To bring a recording in as a call's transcript, press Get my Pocket recordings in Calls.",
+    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. When you open Calls, FocusTime lists your own recordings of the last 14 days to show which calls have one; a recording's words are read only when you bring it in.",
   stepsLabel: "How to connect",
   steps: [
     "In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team.",
@@ -43,10 +44,10 @@ export const POCKET_WORDS = {
   replaceHint: "The new key replaces this one only if Pocket accepts it.",
   disconnect: "Disconnect",
   /** Disconnect asks first. */
-  disconnectAsk: "Disconnect Pocket? FocusTime forgets your key now. Your recordings stay in Pocket; you can also delete the key there.",
+  disconnectAsk: "Disconnect Pocket? FocusTime forgets your key and your Pocket addresses now. Your recordings stay in Pocket; you can also delete the key there.",
   keep: "Keep it",
   cancel: "Cancel",
-  kept: "FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here.",
+  kept: "FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket when you press a button here, and for your list of recordings when you open Calls.",
   notChecked: "Not checked yet",
   replaced: "New key checked and saved.",
   checkedNow: "Checked. Pocket answered.",
@@ -71,13 +72,16 @@ export function checkedAgo(at: string, nowMs: number, timeZone: string): string 
  * only to them; nothing here names who else recorded anything.
  */
 export const POCKET_CALL_WORDS = {
-  get: "Get my Pocket recordings",
-  getting: "Asking Pocket…",
+  /** PK-4: Pocket is asked when Calls opens; the button asks again (at most once in 5 minutes, like opening). */
+  get: "Check Pocket again",
+  getting: "Checking Pocket…",
+  /** PK-4: one quiet line at the list's head when the list couldn't be read; the list and Teams' marks still show. */
+  failedQuiet: "Pocket couldn't be checked just now.",
   /** For someone without Pocket connected: one quiet line and its link, no button. */
   connectLine: "Record calls on a Pocket? Connect it in Settings.",
   connectLink: "Connect it in Settings",
   notConnected: "Pocket isn't connected. Connect it in Settings › Connections › Pocket recorder",
-  getAgain: "Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes",
+  getAgain: "Check Pocket again first: FocusTime keeps the list for 5 minutes",
   notThisCall: "That recording doesn't go with this call: they overlap for less than half the call",
   noWords: "Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file",
   found: POCKET_ROW.found,
@@ -111,11 +115,60 @@ export const POCKET_CALL_WORDS = {
   partAsk: (rec: string, call: string) => `This recording is ${rec}; the call was ${call}. Which part comes in?`,
   /** A row's source when a recording of mine goes with it. */
   rowSource: "Your Pocket recording",
+  /** PK-4: Set my Pocket address, from the left-out line. */
+  setAddress: "Set my Pocket address",
+  addressLabel: "The address your Pocket account uses",
+  addressHint: "It must be the recorder on at least one recording Pocket just listed for your key. Only you see it.",
+  addressSave: "Use this address",
+  addressCancel: "Cancel",
+  addressSaved: "Pocket address saved. Your recordings under it are listed now.",
+  /** The same words whether the address is someone else's or on nothing at all: never whose the others are. */
+  addressRefused: "That address isn't the recorder on any recording Pocket just listed for your key. Type the address your Pocket account uses",
+  addressShape: "Type an email address, like name@example.com",
+  addressListFirst: "Check Pocket again first: FocusTime checks the address against the list it just read",
+  addressKnown: "FocusTime already knows you by that address",
+  addressMax: "You can set up to 3 Pocket addresses. Remove one in Settings › Connections › Pocket recorder first",
+  addressTries: "That's too many tries for now. Check Pocket again in a few minutes",
+  addressGone: "Pocket address removed.",
+  addressUnchecked: "FocusTime couldn't check that address just now. Try again in a few minutes",
 } as const;
 
-/** "3 recordings by other people were left out." */
-export const othersLeftOut = (n: number) => `${n} ${n === 1 ? "recording" : "recordings"} by other people ${n === 1 ? "was" : "were"} left out.`;
-/** "Got 4 recordings at 10:42 AM." */
-export const gotLine = (n: number, time: string) => (n ? `Got ${n} ${n === 1 ? "recording" : "recordings"} at ${time}.` : `No recordings of yours in the last 14 days, at ${time}.`);
+/** PK-4: "Pocket checked at 10:42 AM." */
+export const checkedLine = (time: string) => `Pocket checked at ${time}.`;
+
+/**
+ * PK-4: what was left out, in counts only, never a name or an address. With nothing kept it starts with how many were
+ * listed: "18 listed. 16 are under an address FocusTime doesn't know you by. 2 have no recorder."
+ */
+export function leftOutLine(c: Pick<ListCounts, "listed" | "kept" | "address" | "noRecorder" | "notRecordings">): string {
+  const parts: string[] = [];
+  if (c.address) parts.push(`${c.address} ${c.address === 1 ? "is" : "are"} under an address FocusTime doesn't know you by.`);
+  if (c.noRecorder) parts.push(`${c.noRecorder} ${c.noRecorder === 1 ? "has" : "have"} no recorder.`);
+  if (c.notRecordings) parts.push(`${c.notRecordings} ${c.notRecordings === 1 ? "isn't a recording" : "aren't recordings"}.`);
+  if (!parts.length) return "";
+  return c.kept ? parts.join(" ") : `${c.listed} listed. ${parts.join(" ")}`;
+}
+
+/** PK-4: Settings › Connections › Pocket recorder: the last check and my Pocket addresses. Numbers only. */
+export const POCKET_COUNT_WORDS = {
+  head: "Last check from Calls",
+  none: "Not checked in the last 5 minutes. Pocket is checked when you open Calls.",
+  at: (time: string) => `Pocket checked at ${time}`,
+  listed: "Listed by Pocket",
+  recordings: "Recordings",
+  kept: "Kept as yours",
+  address: "Under an address FocusTime doesn't know you by",
+  noRecorder: "With no recorder",
+  outside: "Not in the last 14 days",
+  notRecordings: "Not recordings",
+  note: "Numbers only: FocusTime never shows whose the others are.",
+  addressesHead: "Your Pocket addresses",
+  addressesNone: "None set. FocusTime knows you by your work address. If your recordings are left out in Calls, set the address your Pocket account uses there.",
+  remove: "Remove",
+  removeLabel: (a: string) => `Remove ${a}`,
+} as const;
+
+/** PK-4: "4 of your recordings in the last 14 days." */
+export const yoursLine = (n: number) => (n ? (n === 1 ? "1 of your recordings in the last 14 days." : `${n} of your recordings in the last 14 days.`) : "No recordings of yours in the last 14 days.");
 /** A recording's start and length on the setup: "Mon 10:58 AM · 47 min". */
 export const recordingLine = (when: string, length: string) => `${when} · ${length}`;

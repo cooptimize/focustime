@@ -95,7 +95,7 @@ export function ConnectionsSection(p: BodyProps) {
         <CalendarLinks timeZone={Temporal.Now.timeZoneId()} onChanged={p.onRefresh} />
       </Card>
       <DevOpsCard {...p} />
-      <Card id="pocket" name={POCKET_WORDS.title} forWhat="Recordings from your Pocket, offered as captures.">
+      <Card id="pocket" name={POCKET_WORDS.title} forWhat="Your own recordings, marked on the calls they go with in Calls.">
         <PocketRecorder timeZone={Temporal.Now.timeZoneId()} />
       </Card>
       <TeamsApp go={p.go} />

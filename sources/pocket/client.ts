@@ -1,21 +1,24 @@
 // PK-2: a person's own Pocket recorder (Pocket's public API, docs.heypocketai.com/docs/api), read with their own key.
 // Three calls and no other (MC-2b added the last two):
 //   count       the list between two dates asked for one item, so that only Pocket's total is read (PK-2's check);
-//   list        the list between two dates, 100 a page, pages 1 to 3, for "Get my Pocket recordings": of each listed
-//               recording only who recorded it is read first, then, for the ones kept (plan/pocket-recordings.ts:
-//               mine, or one recorder for the whole list), its id, when it was recorded, its length and its title;
-//               every other field (the transcript, summaries, speakers, tags, translation) and every recording by
-//               someone else are dropped unread;
+//   list        the list between two dates, 100 a page, pages 1 to 3, when Calls opens, on Refresh and on Check
+//               Pocket again (PK-4): of each listed item only who recorded it is read first; where the addresses
+//               don't settle whose it is, whether it is a recording (its length and when it was recorded); then, for
+//               the ones kept (plan/pocket-recordings.ts `whoseKept`), its id, when, its length and its title. Every
+//               other field (the transcript, summaries, speakers, tags, translation) and everything of an item under
+//               someone else's address but that address are dropped unread;
 //   recording   one recording by an id from that list, with its transcript and without its summaries, on Continue;
 //               of the answer only the transcript's segments (start, end, speaker label, text) and the length are read.
 // Nothing of an answer is kept here, returned beyond that, or logged. Every other method,
 // host, path or parameter is refused before the key is read or the network is touched, as the Azure client refuses
 // what it wasn't built for (sources/azure/client.ts). One try, with a time limit; never in the background: only a
-// person's press (Check and save, Check again) calls it. Log lines carry the call's kind, its status and its time,
+// person's press (Check and save, Check again) or their opening Calls calls it. Log lines carry the call's kind, its status and its time,
 // never the key, a count or any of Pocket's answer.
+import { createHash } from "node:crypto";
 import { inspect } from "node:util";
 import type { Logger } from "../../log/logger.ts";
 import { POCKET_FAILURE_TEXT } from "../../plan/pocket-words.ts";
+import { countWhy, keptWhy, type ListCounts, type ListedWhy } from "../../plan/pocket-recordings.ts";
 
 export { POCKET_FAILURE_TEXT };
 
@@ -121,8 +124,13 @@ export type PocketDeps = { fetch: typeof fetch; log: Logger; timeoutMs?: number 
 export type PocketCount = { recordings: number };
 /** MC-2b: what FocusTime reads of a listed recording it keeps: never its words, speakers, summaries or tags. */
 export type PocketRecording = { id: string; startAt: string; seconds: number; title: string };
-/** MC-2b: the list for one press: my recordings, how many by others were dropped, and whether pages were left. */
-export type PocketList = { recordings: PocketRecording[]; others: number; more: boolean };
+/**
+ * PK-4: one list: my recordings, what was found in numbers, whether pages were left, and the recorders of what may be
+ * a recording, as hashes only (`recorderHash`), so that Set my Pocket address can be checked against them.
+ */
+export type PocketList = { recordings: PocketRecording[]; counts: Omit<ListCounts, "outside">; more: boolean; recorders: ReadonlySet<string> };
+/** PK-4: an address as the list's recorders are held: a hash of it, never the address. */
+export const recorderHash = (email: string) => createHash("sha256").update(`pocket-recorder:${email.trim().toLowerCase()}`).digest("hex");
 /** MC-2b: one transcript segment as Pocket gives it; times in Pocket's unit (not documented; see plan/pocket-recordings.ts). */
 export type PocketSegment = { start: number | null; end: number | null; speaker: string; text: string };
 export type PocketTranscript = { segments: PocketSegment[]; seconds: number | null };
@@ -142,6 +150,14 @@ function recorderOf(r: unknown): string | null {
   const by = r && typeof r === "object" ? (r as { recorded_by?: unknown }).recorded_by : null;
   const email = by && typeof by === "object" ? (by as { email?: unknown }).email : null;
   return typeof email === "string" && email.includes("@") && email.length <= 320 ? email.trim().toLowerCase() : null;
+}
+
+/** PK-4: whether a listed item is a recording: a length and a time it was recorded. Nothing else of it is touched. */
+function isRecordingItem(r: unknown): boolean {
+  if (!r || typeof r !== "object") return false;
+  const o = r as { duration?: unknown; recording_at?: unknown };
+  const n = length(o.duration);
+  return n !== null && n > 0 && typeof o.recording_at === "string" && !!o.recording_at.trim() && o.recording_at.length <= 40;
 }
 
 /** A kept recording's four fields; null when one of them isn't in the shape the docs show. */
@@ -236,11 +252,12 @@ export function createPocketClient(d: PocketDeps) {
   }
 
   /**
-   * MC-2b: my recordings between two UTC dates (inclusive), page by page, 3 pages at most. `keep` decides from the
-   * recorders' addresses alone (plan/pocket-recordings.ts `whoseKept`); only a kept recording's id, time, length and
-   * title are then read. Every other field, and every dropped recording, is never read; the answers go out of scope here.
+   * MC-2b, PK-4: my recordings between two UTC dates (inclusive), page by page, 3 pages at most. `keep` decides from
+   * the recorders' addresses (plan/pocket-recordings.ts `whoseKept`), asking whether an item is a recording only where
+   * it must; only a kept recording's id, time, length and title are then read. Every other field, and everything of an
+   * item under someone else's address but that address, is never read; the answers go out of scope here.
    */
-  async function listRecordings(key: () => Promise<PocketKey>, from: string, to: string, keep: (recorders: readonly (string | null)[]) => boolean[]): Promise<PocketList> {
+  async function listRecordings(key: () => Promise<PocketKey>, from: string, to: string, keep: (recorders: readonly (string | null)[], isRecording: (i: number) => boolean) => ListedWhy[]): Promise<PocketList> {
     if (!DATE.test(from) || !DATE.test(to)) throw fail("refused");
     const listed: unknown[] = [];
     let more = false;
@@ -263,18 +280,20 @@ export function createPocketClient(d: PocketDeps) {
       if (page === POCKET_MAX_PAGES) more = true;
     }
     const recorders = listed.map((r) => recorderOf(r));
-    const kept = keep(recorders);
+    const why = keep(recorders, (i) => isRecordingItem(listed[i]));
+    if (why.length !== listed.length) throw fail("refused");
     const out: PocketRecording[] = [];
-    let others = 0;
     let unreadable = 0;
     listed.forEach((r, i) => {
-      if (!kept[i]) return void others++;
+      if (!keptWhy(why[i]!)) return;
       const x = readListed(r);
       if (x) out.push(x);
-      else unreadable++;
+      else (unreadable++, (why[i] = "not_recording"));
     });
     if (unreadable) d.log({ source: "pocket", op: "list", kind: "unreadable" });
-    return { recordings: out, others, more };
+    const seen = new Set<string>();
+    recorders.forEach((r, i) => r !== null && why[i] !== "not_recording" && seen.add(recorderHash(r)));
+    return { recordings: out, counts: countWhy(why), more, recorders: seen };
   }
 
   /** MC-2b: one recording's transcript, by an id the caller took from this person's own list. */

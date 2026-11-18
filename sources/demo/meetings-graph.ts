@@ -12,7 +12,7 @@
 import { HttpError } from "../calendar/http.ts";
 import { MeetingRefused, type ExistsAnswer, type MeetingGate, type MeetingsClient, type SeriesCandidate } from "../graph/meetings.ts";
 import type { CalendarMeeting } from "../../plan/calls.ts";
-import { DEMO_PEOPLE, demoOutlook } from "./data.ts";
+import { DEMO_PEOPLE, DEMO_TZ, demoOutlook } from "./data.ts";
 import { DEMO_MEETING } from "./meetings.ts";
 
 const person = (name: string) => DEMO_PEOPLE.find((p) => p.name === name)!;
@@ -54,7 +54,36 @@ function demoCalls(fromIso: string, toIso: string): CalendarMeeting[] {
   return out;
 }
 
-export function demoMeetings(gate: MeetingGate = { allowed: async () => false }): MeetingsClient {
+/**
+ * PK-4 checks (FOCUSTIME_DEMO_CALLS=long): three one-off Teams calls on every weekday, organized inside Cooptimize, so
+ * Calls' last two weeks hold about 30 more and its list is longer than any window. Teams says each has a transcript,
+ * so none folds into "calls with no transcript". Each is known by its date and hour
+ * alone. Fictional names only.
+ */
+function longCalls(fromIso: string, toIso: string): CalendarMeeting[] {
+  const a = Temporal.Instant.from(fromIso);
+  const b = Temporal.Instant.from(toIso);
+  const out: CalendarMeeting[] = [];
+  const zone = DEMO_TZ;
+  for (let day = a.toZonedDateTimeISO(zone).toPlainDate(); Temporal.PlainDate.compare(day, b.toZonedDateTimeISO(zone).toPlainDate()) <= 0; day = day.add({ days: 1 })) {
+    if (day.dayOfWeek > 5) continue;
+    for (const hour of [8, 12, 16]) {
+      const start = day.toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from({ hour }) }).toInstant();
+      const end = start.add({ minutes: 30 });
+      if (Temporal.Instant.compare(start, a) < 0 || Temporal.Instant.compare(end, b) > 0) continue;
+      const id = `long-${day.toString()}-${hour}`;
+      out.push({
+        key: callKey(id), subject: `Working session at ${hour > 12 ? hour - 12 : hour} ${hour < 12 ? "AM" : "PM"}`, startAt: start.toString(), endAt: end.toString(), isAllDay: false, isCancelled: false, isOrganizer: false,
+        response: "accepted", others: 2, joinUrl: link(`call-${id}`), organizerEmail: "jordan.lee@example.com",
+        homeAttendees: ["you@example.com", "jordan.lee@example.com"], seriesKey: null, allHome: true,
+      });
+    }
+  }
+  return out;
+}
+
+export function demoMeetings(gate: MeetingGate = { allowed: async () => false }, calls?: "long"): MeetingsClient {
+  const recent = (fromIso: string, toIso: string) => [...demoCalls(fromIso, toIso), ...(calls === "long" ? longCalls(fromIso, toIso) : [])];
   const priya = person("Priya Shah");
   const jordan = person("Jordan Lee");
   const series = (zone: string): SeriesCandidate[] => [
@@ -69,8 +98,8 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false })
       return series(zone).find((s) => s.joinUrl === joinUrl) ?? null;
     },
     instances: async () => [],
-    recentCalls: async (fromIso, toIso) => demoCalls(fromIso, toIso),
-    callAt: async (key, startAt, endAt) => demoCalls(Temporal.Instant.from(startAt).subtract({ minutes: 1 }).toString(), Temporal.Instant.from(endAt).add({ minutes: 1 }).toString()).find((c) => c.key === key) ?? null,
+    recentCalls: async (fromIso, toIso) => recent(fromIso, toIso),
+    callAt: async (key, startAt, endAt) => recent(Temporal.Instant.from(startAt).subtract({ minutes: 1 }).toString(), Temporal.Instant.from(endAt).add({ minutes: 1 }).toString()).find((c) => c.key === key) ?? null,
     // MC-2: the online meeting is the call's own id in the demo; the gate is asked first, as the real client does.
     onlineMeetingId: async (joinUrl) => {
       if (!(await gate.allowed({ joinUrl }))) throw new MeetingRefused();
@@ -85,10 +114,11 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false })
       return [{ id: "t-1", createdAt: `${date}T20:02:00Z`, endAt: null }];
     },
     // MC-4: whether a call has a transcript, asked of the gate like the real client (the purpose "exists"): the data model
-    // review has one, the proposal review's organizer turned them off (no), the rest have none.
+    // review has one, the proposal review's organizer turned them off (no), the rest have none. PK-4: the long list's
+    // calls have one, so they stay in the week's list (a "no" folds a call away) before and after the check.
     transcriptsExist: async (asks) => {
       for (const a of asks) if (!(await gate.allowed({ joinUrl: a.joinUrl, purpose: "exists" }))) throw new MeetingRefused();
-      return new Map(asks.map((a): [string, ExistsAnswer] => [a.key, /call-demo-nwmodel-/.test(a.joinUrl) ? "yes" : "no"]));
+      return new Map(asks.map((a): [string, ExistsAnswer] => [a.key, /call-demo-nwmodel-|call-long-/.test(a.joinUrl) ? "yes" : "no"]));
     },
     transcriptVtt: async (onlineMeetingId) => {
       if (!(await gate.allowed({ onlineMeetingId }))) throw new MeetingRefused();

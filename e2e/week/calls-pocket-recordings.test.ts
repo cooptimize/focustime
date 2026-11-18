@@ -1,6 +1,6 @@
 // MC-2b: my own Pocket recordings in Calls, in demo mode (a fictional person, invented recordings on a pretend Pocket).
-// Without Pocket connected, one quiet line with its link and no button. Connected: Pocket is asked only on the press;
-// the last-run line and the count of others' recordings left out; a call a recording goes with says Pocket recording
+// Without Pocket connected, one quiet line with its link and no button. Connected: PK-4: Pocket is asked as Calls
+// opens; the last-checked line and the count left out; a call a recording goes with says Pocket recording
 // found and its setup has Use my Pocket recording preselected with who will see it; a recording much longer than its
 // call asks which part; a recording with no call is its own row whose setup makes a call only I see; a client call with
 // no transcript offers it on its page; the call's page says whose recording it was. Nothing of a recording is kept in
@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await h?.stop();
   });
 
-  it("not connected: one line with its link, no button; connected: listed only on the press, matched, others counted", async () => {
+  it("not connected: one line with its link, no button; connected: listed as Calls opens, matched, the rest counted", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page, false);
     const bar = page.locator("[data-calls-pocket]");
@@ -49,10 +49,9 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     expect((await call(page, "pocket.connect", { key: "pk_demo_fine" })).ok).toBe(true);
     await page.reload();
     await page.locator("[data-pocket-get]").waitFor({ timeout: 30_000 });
-    // Nothing is listed until the press.
-    await expect(page.locator("[data-call-mark='pocket']").count()).resolves.toBe(0);
-    await page.locator("[data-pocket-get]").click();
-    await expect.poll(() => bar.locator('[role="status"]').textContent(), { timeout: 30_000 }).toMatch(/^Got 4 recordings at \d+:\d\d [AP]M\. 1 recording by other people was left out\.$/);
+    // PK-4: listed as Calls opens, without a press; the button asks again.
+    await expect.poll(() => bar.locator('[role="status"]').textContent(), { timeout: 30_000 }).toMatch(/^4 of your recordings in the last 14 days\. 1 is under an address FocusTime doesn't know you by\. Pocket checked at \d+:\d\d [AP]M\.$/);
+    await expect(page.locator("[data-pocket-get]").textContent()).resolves.toBe("Check Pocket again");
     // MC-4: the Pocket mark, drawn like Teams' (these calls had no transcript in Teams, so they leave the fold).
     await expect(pocketMark(page, "Proposal review with Jordan").textContent()).resolves.toBe("Pocket recording");
     await expect(pocketMark(page, "Harbor sprint planning").textContent()).resolves.toBe("Pocket recording");

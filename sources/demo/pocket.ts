@@ -6,6 +6,10 @@
 //   pk_demo_slow    Pocket never answers (the client's time limit ends it)
 //   pk_demo_odd     Pocket answers in a shape FocusTime doesn't know
 //   pk_demo_solo    every recording on the key is one person's, under an address FocusTime doesn't know
+//   pk_demo_shared  PK-4: the demo person's recordings under their own Pocket address (one FocusTime doesn't know),
+//                   someone else's, two with no recorder and one item that isn't a recording (no length): nothing is
+//                   kept until the person sets their Pocket address (DEMO_POCKET_SOLO)
+//   pk_demo_flaky   PK-4: the count answers (so it connects), the list and one recording say Pocket is busy (503)
 // Any other key starting pk_ is accepted.
 //
 // MC-2b: the list and one recording, from invented recordings placed on the demo week's calls (sources/demo/data.ts,
@@ -17,7 +21,9 @@ import { POCKET_LIST_PATH, POCKET_ORIGIN } from "../pocket/client.ts";
 import { DEMO_TZ } from "./data.ts";
 import { DEMO_PERSON } from "./azure.ts";
 
-export const DEMO_POCKET_KEYS = { wrong: "pk_demo_wrong", busy: "pk_demo_busy", slow: "pk_demo_slow", odd: "pk_demo_odd", solo: "pk_demo_solo" } as const;
+export const DEMO_POCKET_KEYS = { wrong: "pk_demo_wrong", busy: "pk_demo_busy", slow: "pk_demo_slow", odd: "pk_demo_odd", solo: "pk_demo_solo", shared: "pk_demo_shared", flaky: "pk_demo_flaky" } as const;
+/** PK-4: on pk_demo_shared, the address of an item that isn't a recording (no length). */
+export const DEMO_POCKET_NOT_A_RECORDING = "summaries@pocket.example";
 
 /** MC-2b: someone else's address on the same pretend key (an organization's key may list everyone's). */
 export const DEMO_POCKET_OTHER = "sam.taylor@example.com";
@@ -25,7 +31,7 @@ export const DEMO_POCKET_OTHER = "sam.taylor@example.com";
 export const DEMO_POCKET_SOLO = "alex.rivera@personal.example";
 
 type Segment = { start: number; end: number; speaker: string; speakerName: string; text: string };
-type Rec = { id: string; title: string; recording_at: string; duration: number; by: string; segments: Segment[] };
+type Rec = { id: string; title: string; recording_at: string; duration: number; by: string | null; segments: Segment[] };
 
 /** Turns into Pocket's segments: each line's start and end in seconds from the recording's start. */
 function segments(turns: readonly [number, string, string][]): Segment[] {
@@ -82,12 +88,25 @@ export function demoPocketRecordings(nowMs: number, mine: string = DEMO_PERSON.e
   return all.filter((r) => Date.parse(r.recording_at) + r.duration * 1000 <= nowMs).sort((a, b) => b.recording_at.localeCompare(a.recording_at));
 }
 
+/**
+ * PK-4: pk_demo_shared's list: the demo person's own recordings under DEMO_POCKET_SOLO, someone else's, two with no
+ * recorder (invented, on no call) and one item with no length (not a recording), newest first.
+ */
+function sharedRecordings(nowMs: number): Rec[] {
+  const nobody: Rec[] = [
+    { id: "rec-demo-nobody-1", title: "Untitled", recording_at: at(nowMs, -1, 3, "15:00"), duration: 600, by: null, segments: OTHER },
+    { id: "rec-demo-nobody-2", title: "Untitled", recording_at: at(nowMs, -1, 4, "09:00"), duration: 420, by: null, segments: OTHER },
+    { id: "rec-demo-summary", title: "Weekly digest", recording_at: at(nowMs, -1, 4, "17:00"), duration: 0, by: DEMO_POCKET_NOT_A_RECORDING, segments: [] },
+  ];
+  return [...demoPocketRecordings(nowMs, DEMO_POCKET_SOLO), ...nobody.filter((r) => Date.parse(r.recording_at) + r.duration * 1000 <= nowMs)].sort((a, b) => b.recording_at.localeCompare(a.recording_at));
+}
+
 /** A recording as Pocket's list shows one: every field, its transcript and summaries too (FocusTime drops them). */
 function listed(r: Rec) {
   return {
     id: r.id, title: r.title, recording_at: r.recording_at, duration: r.duration, language: "en", state: "completed", folder_id: null,
     created_at: r.recording_at, updated_at: r.recording_at,
-    recorded_by: { user_id: `usr-${r.by.split("@")[0]}`, display_name: r.by.split("@")[0], email: r.by },
+    recorded_by: r.by === null ? null : { user_id: `usr-${r.by.split("@")[0]}`, display_name: r.by.split("@")[0], email: r.by },
     speakers: { SPEAKER_0: { name: "Dana", speakerId: "SPEAKER_0" } },
     tags: [{ id: "tag-demo", name: "Invented tag", color: "#888888" }],
     transcript: { segments: r.segments },
@@ -119,8 +138,9 @@ export function createDemoPocketFetch(o: { now: () => number; calls?: PocketCall
         s?.addEventListener("abort", () => reject(s.reason), { once: true });
       });
     if (key === DEMO_POCKET_KEYS.odd) return json(200, { items: [], next: null });
+    if (key === DEMO_POCKET_KEYS.flaky && (one || u.searchParams.get("limit") !== "1")) return json(503, { success: false, data: null, error: "Service unavailable" });
     const solo = key === DEMO_POCKET_KEYS.solo;
-    const recs = demoPocketRecordings(o.now(), solo ? DEMO_POCKET_SOLO : (o.mine ?? DEMO_PERSON.email)).filter((r) => !solo || r.by === DEMO_POCKET_SOLO);
+    const recs = key === DEMO_POCKET_KEYS.shared ? sharedRecordings(o.now()) : demoPocketRecordings(o.now(), solo ? DEMO_POCKET_SOLO : (o.mine ?? DEMO_PERSON.email)).filter((r) => !solo || r.by === DEMO_POCKET_SOLO);
     if (one) {
       const r = recs.find((x) => x.id === one);
       if (!r) return json(404, { success: false, data: null, error: "Recording not found", error_code: "not_found" });

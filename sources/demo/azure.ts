@@ -45,7 +45,7 @@ export const DEMO_VM_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/r
 export const DEMO_VM_NO_SHUTDOWN_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-spare";
 
 /** MC-2: `meetingsGate`, the same gate the hosted app puts before every transcript read (the press, in the demo). */
-export function createDemoAzure(o: { meetingsGate?: MeetingGate } = {}) {
+export function createDemoAzure(o: { meetingsGate?: MeetingGate; /** PK-4: "long" adds 30 one-off calendar calls. */ calls?: "long" } = {}) {
   // VM-4: verification runs only (demo.vm_fail): reads of the demo VM's state fail in the way asked, to see the chip.
   const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
   const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000, readFails });
@@ -60,7 +60,7 @@ export function createDemoAzure(o: { meetingsGate?: MeetingGate } = {}) {
     photos: demoPhotos(),
     chats: demoChats(),
     // MC-1c: a fictional calendar for registering a client call (sources/demo/meetings-graph.ts).
-    meetings: demoMeetings(o.meetingsGate),
+    meetings: demoMeetings(o.meetingsGate, o.calls),
     // LP-1: Teams posts and Outlook drafts are pretended (sources/demo/send.ts); Send now isn't allowed, to show the fallback.
     sender: demoSender(),
     probe: async (kind) => (kind === "mail_send" ? { kind, state: "consent", granted: [] } : { kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : kind === "send" ? ["ChatMessage.Send", "Chat.Create"] : kind === "mail" ? ["Mail.ReadWrite"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic"] }),

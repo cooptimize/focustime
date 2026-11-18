@@ -25,8 +25,8 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | `deletions` | App | No | Accounts waiting for their hard delete (a hash of the user id) |
 | `user_settings`, `setup_state`, `account_state` | User | No | Settings rows, first-run progress, the signed-in identity (name, UPN, email, ids) |
 | `kv` | User | No | Small per-person values (below) |
-| `call_hides` | User | Yes | MC-4: the meetings a person hid from Calls: the kind (one, or every one of a series), the meeting's calendar key or the series' key, and when; never a name, time, person or link |
-| `user_secrets` | User | No | A person's refresh tokens, DevOps write PATs and (PK-2) Pocket key with its last check (a time and a count of recordings, never which), sealed with the app data key |
+| `call_hides` | User | Yes | MC-4: the meetings a person hid from Calls: the kind (one, or every one of a series), the meeting's calendar key or the series' key (PK-4: or `pocket:<id>` for one of the person's Pocket recordings with no call), and when; never a name, time, person or link |
+| `user_secrets` | User | No | A person's refresh tokens, DevOps write PATs and (PK-2) Pocket key with its last check (a time and a count of recordings, never which) and (PK-4) their Pocket addresses, sealed with the app data key |
 | `push_devices` | User | No | Web Push subscriptions for "Notify this device" |
 | `notices` | User | No | In-app notifications |
 | `app_keys` | App | No | The app data key, wrapped by Key Vault's `ft-data-key` |

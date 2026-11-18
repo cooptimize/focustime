@@ -2,10 +2,11 @@
 // numbered steps, the key field and Check and save. Connected: when it was last checked and how many recordings Pocket
 // had from the last 7 days, with Check again, Use a new key and Disconnect (which asks first). The key is sent once,
 // to be checked and kept; it never comes back. Loading the section reads only what FocusTime kept (pocket.status):
-// Pocket is asked only when a button here is pressed.
+// Pocket is asked only when a button here is pressed. PK-4: the last list Calls asked for, in numbers only (held in
+// memory with that list, 5 minutes), and my Pocket addresses, each with Remove.
 import { useEffect, useId, useRef, useState } from "react";
 import type { PocketView } from "../../actions/pocket-types.ts";
-import { checkedAgo, POCKET_KEYS_DOC, POCKET_WORDS as W, recordingsLine } from "../../plan/pocket-words.ts";
+import { checkedAgo, POCKET_CALL_WORDS as PW, POCKET_COUNT_WORDS as CW, POCKET_KEYS_DOC, POCKET_WORDS as W, recordingsLine } from "../../plan/pocket-words.ts";
 import { call } from "../api.ts";
 
 const err = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -44,6 +45,22 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
     }
   };
 
+  /** PK-4: one of my Pocket addresses forgotten; Pocket isn't asked. */
+  const removeAddress = async (address: string) => {
+    setBusy("check");
+    setProblem(null);
+    setSaid(null);
+    try {
+      await call("meeting.pocket_address_remove", { address });
+      setV((await call("pocket.status", {})) as PocketView);
+      setSaid(PW.addressGone);
+    } catch (e) {
+      setProblem(err(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (!v) return problem ? <p className="field-problem" role="status">{problem}</p> : <p className="muted">Loading…</p>;
   return (
     <div className="pocket">
@@ -60,6 +77,12 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
             <span className="muted">{[v.checkedAt ? checkedAgo(v.checkedAt, clock, timeZone) : W.notChecked, v.recordings === null ? null : recordingsLine(v.recordings)].filter(Boolean).join(" · ")}</span>
           </p>
           <p className="muted set-intro">{W.kept}</p>
+          <LastList v={v} timeZone={timeZone} />
+          <Addresses
+            list={v.addresses ?? []}
+            busy={busy !== null}
+            onRemove={(address) => void removeAddress(address)}
+          />
           {mode !== "ask" && <div className="pocket-actions">
             <button type="button" className="mini primary" disabled={busy !== null} onClick={() => void run("check", "pocket.check", {}, W.checkedNow)}>
               {busy === "check" ? W.checking : W.checkAgain}
@@ -92,6 +115,61 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** PK-4: the last list Calls asked for: when, and what was found, in numbers only. */
+function LastList({ v, timeZone }: { v: PocketView; timeZone: string }) {
+  const id = useId();
+  const l = v.last;
+  if (!l) return <p className="muted pocket-last" data-pocket-last="none">{CW.none}</p>;
+  const c = l.counts;
+  const time = Temporal.Instant.from(l.at).toZonedDateTimeISO(timeZone).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  const rows: [string, number][] = [
+    [CW.listed, c.listed],
+    [CW.recordings, c.listed - c.notRecordings],
+    [CW.kept, c.kept],
+    [CW.address, c.address],
+    [CW.noRecorder, c.noRecorder],
+    [CW.outside, c.outside],
+    [CW.notRecordings, c.notRecordings],
+  ];
+  return (
+    <section className="pocket-last" aria-labelledby={id} data-pocket-last="">
+      <h4 id={id} className="pocket-steps-label">{CW.head}</h4>
+      <p className="muted">{CW.at(time)}</p>
+      <dl className="pocket-counts">
+        {rows.map(([k, n]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{n}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted">{CW.note}</p>
+    </section>
+  );
+}
+
+/** PK-4: my Pocket addresses (only mine, on my own page), each with Remove. Set from Calls. */
+function Addresses({ list, busy, onRemove }: { list: readonly string[]; busy: boolean; onRemove: (a: string) => void }) {
+  const id = useId();
+  return (
+    <section className="pocket-addresses" aria-labelledby={id} data-pocket-addresses="">
+      <h4 id={id} className="pocket-steps-label">{CW.addressesHead}</h4>
+      {list.length ? (
+        <ul>
+          {list.map((a) => (
+            <li key={a}>
+              <span>{a}</span>
+              <button type="button" className="mini quiet" disabled={busy} aria-label={CW.removeLabel(a)} onClick={() => onRemove(a)}>{CW.remove}</button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{CW.addressesNone}</p>
+      )}
+    </section>
   );
 }
 

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, openList, outcomeOfCall, weekOf } from "./call-list.ts";
+import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, openList, outcomeOfCall, weekOf } from "./call-list.ts";
 
 // Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
 const TODAY = "2026-11-05";
@@ -183,6 +183,20 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     expect(plain[0]!.bucket).toBe("closed");
     const withRec = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE, addPocket: pocketRows([rec("r", "2026-10-27T15:00:00Z", 60)], ZONE) });
     expect([withRec[0]!.bucket, withRec[0]!.mark, withRec[0]!.closed]).toEqual(["open", "pocket", null]);
+  });
+
+  it("PK-4: a recording with no call has its mark and hides by its id alone; Put back brings it back", () => {
+    expect(at("pno-call").mark).toBe("pocket");
+    expect(hideKeyOf(at("pno-call"))).toBe("pocket:no-call");
+    const hides = { keys: new Set(["pocket:no-call"]), series: new Set<string>() };
+    const hidden = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, hides, addPocket: pocketRows(pocket, ZONE) });
+    expect(hidden.find((r) => r.key === "pno-call")!.bucket).toBe("hidden");
+    expect(hiddenList(hidden, null).map((r) => r.key)).toEqual(["pno-call"]);
+    // Its hide is never counted as a meeting gone from the list, with or without my list from Pocket.
+    expect(hiddenMissing(hidden, hides)).toEqual({ keys: [], series: [] });
+    expect(hiddenMissing(callRows({ meetings: [], occurrences: [], others: [], today: TODAY, zone: ZONE, hides }), hides)).toEqual({ keys: [], series: [] });
+    const back = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, hides: { keys: new Set(), series: new Set() }, addPocket: pocketRows(pocket, ZONE) });
+    expect(back.find((r) => r.key === "pno-call")!.bucket).toBe("open");
   });
 
   it("without a press, nothing changes", () => {

@@ -25,7 +25,7 @@ import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type Calendar
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
-import { pocketAdd, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
+import { pocketAdd, pocketAddressAdd, pocketAddressRemove, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
 
 /** RQ-1: devops.needed's answer as a row reads it. */
 export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
@@ -47,7 +47,7 @@ import { closedAtOf, outcomeOfCall } from "../plan/call-list.ts";
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.pocket_address_add", "meeting.pocket_address_remove", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -398,7 +398,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       // MC-4: Skip all and close (one call or several I review), and its Undo. Nothing is written to DevOps or kept as a promise.
       case "meeting.skip_all": return await skipAll(store, me, input, ctx);
       case "meeting.unskip_all": return await unskipAll(store, me, input, ctx);
-      // MC-2b: only from the person's two presses in Calls (Get my Pocket recordings; Continue on a setup).
+      // MC-2b, PK-4: only from Calls' opening, its Refresh, Check Pocket again, and Continue on a setup.
       case "meeting.pocket_list": {
         obj(input, []);
         return await pocketList(ctx, me, userZone(cfg));
@@ -414,6 +414,15 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
         if (isRefusal(client)) return client;
         return await pocketAdd(ctx, store, me, userZone(cfg), { recordingId: o.recordingId, name, clientKey: client.key });
+      }
+      // PK-4: Set my Pocket address (Calls) and remove one (Calls, Settings). Pocket isn't asked.
+      case "meeting.pocket_address_add": {
+        const o = obj(input, ["address"]);
+        return await pocketAddressAdd(ctx, me, { address: o.address });
+      }
+      case "meeting.pocket_address_remove": {
+        const o = obj(input, ["address"]);
+        return await pocketAddressRemove(ctx, { address: o.address });
       }
     }
   } catch (e) {
