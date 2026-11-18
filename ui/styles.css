@@ -5275,7 +5275,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
   .bl-bulk .mini { min-height: var(--tap); }
 }
 
-/* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › Meetings) ---------- */
+/* ---------- MC-1: client calls (the review over the page, Week's call marker, Admin › Clients › <client> › Calls) ---------- */
 .mtg-view { flex: 1; overflow: auto; overflow-x: hidden; padding: 8px 24px 32px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
 .mtg-view .page-head { flex-wrap: wrap; row-gap: 4px; }
 .mtg-view > * { max-width: 1100px; }
@@ -5408,7 +5408,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 [data-call-title]:hover { text-decoration-color: currentColor; }
 .event.is-call .ev-line { flex-wrap: wrap; row-gap: 2px; }
 .card-events li.is-call, .grid.no-timeline .card-events li.is-call { grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: center; }
-/* Admin › Clients › Meetings. */
+/* Admin › Clients › <client> › Calls. */
 .mtg-card-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .mtg-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
 .mtg-card-grid label, .mtg-link label { display: grid; gap: 2px; align-content: start; }
@@ -7453,7 +7453,7 @@ button:disabled { cursor: default; }
 :root .app.phone .day-bar .mode-area { position: relative; padding-right: calc(36px * var(--text-scale, 1) + 8px); box-sizing: border-box; }
 :root .app.phone .day-bar .mode-area > .more-btn:last-child { position: absolute; top: 0; right: 0; }
 
-/* RS-2 D6: Admin › Clients › Meetings' "Register a meeting" is a normal button, not the field's full width. */
+/* RS-2 D6: Admin › Clients › <client> › Calls' "Register a meeting" is a normal button, not the field's full width. */
 :root .mtg-admin > .mtg-register { justify-self: start; align-self: start; width: auto; }
 
 /* RS-2 D8 (style guide section 10): a pill that doesn't fit is never cut mid-word. A client call's mark wraps its words,

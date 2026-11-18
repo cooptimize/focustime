@@ -53,3 +53,4 @@
 .panel-shell.phone.admin .ps-body :is(button, .mini, .link-btn) { min-height: var(--tap, 44px); box-sizing: border-box; }
 .panel-shell.phone.admin .ps-body label:has(> input[type="checkbox"]) { min-height: var(--tap, 44px); display: inline-flex; align-items: center; gap: 6px; }
 .panel-shell.phone.admin .ps-body .dchat-members summary { min-height: var(--tap, 44px); display: inline-flex; align-items: center; }
+.panel-shell.phone.admin .sp-table .sp-select { max-width: none; }

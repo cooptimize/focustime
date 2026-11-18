@@ -1,4 +1,4 @@
-// MC-1: Admin › Clients › <client> › Meetings. The client's registered weekly calls (only these, and meetings
+// MC-1: Admin › Clients › <client> › Calls. The client's registered weekly calls (only these, and meetings
 // FocusTime scheduled, are ever read): Register a meeting from a recurring series on my calendar or a pasted Teams join
 // link, with a name, a role (Weekly status call or Planning) and its reviewers (me and the client's leads by default).
 // Automatic when Cooptimize organizes it, Upload when the client does (detected from the organizer; Upload is always

@@ -126,8 +126,8 @@ export function ChatsTab() {
         {list("conv.promise_phrases", "Promise phrases", data.promisePhrases, "In a person's own messages: a promise to keep.")}
       </Group>
       <Group title="Reading client chats" label="Reading client chats" intro={<>A chat is registered on its client's page: <Link href={adminHref({ part: "clients" })}>Clients</Link>, then the client's Chats tab.</>}>
-        {num("conv.poll_minutes", "Read client chats every (minutes)", "minutes", data.pollMinutes, 1, 30, "1 to 30, in followers' working hours only. Applies from the next poll.")}
-        {num("conv.retention_days", "Keep chat messages nothing was found in (days)", "days", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
+        {num("conv.poll_minutes", "Read client chats every", "minutes", data.pollMinutes, 1, 30, "1 to 30, in followers' working hours only. Applies from the next poll.")}
+        {num("conv.retention_days", "Keep chat messages nothing was found in", "days", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
         {/* NM-2: Closed conversations stay shown (conv.closed_shown_days) is hidden: no list shows closed ones since IB-4. Its value is kept and still read. */}
         {num("conv.chat_ai_daily_cap", "AI requests per chat per day", undefined, data.chatAiDailyCap, 0, 5000, "At most, for each chat.")}
       </Group>
@@ -180,8 +180,8 @@ export function PlanningTab() {
           <ListInput label="Never suggested, for everyone" value={data.neverSuggest} onSave={(v) => void saver.save(o, "org.never_suggest", v, "Never suggested")} />
         </AField>
         {/* SA-4: "Keep people's data (years)" (org.retention_years) left the screen: nothing enforces it. Its value is kept; Health's Jobs row says it isn't enforced. */}
-        <AField label="Counts as in use (minutes)" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
-          <NumInput label="Counts as in use (minutes)" unit="minutes" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
+        <AField label="Counts as in use" kind="Rule" s={saver.status(o, "org.idle_minutes")} retry={() => void saver.save(o, "org.idle_minutes", data.idleMinutes, "In use")} hint="5 to 60. An open page counts as someone using FocusTime only this long after their last key, click or scroll. Background work waits otherwise.">
+          <NumInput label="Counts as in use" unit="minutes" value={data.idleMinutes} min={5} max={60} onSave={(v) => void saver.save(o, "org.idle_minutes", v, "In use")} />
         </AField>
         <AField label="Needs attention looks at the top N of each backlog" kind="Rule" s={saver.status(o, "ahead.fix_top_n")} retry={() => void saver.save(o, "ahead.fix_top_n", data.fixTopN ?? 30, "Needs attention top N")} hint="10 to 100, for epics, features and stories each. Backlog's Needs attention also shows what's dated in the next 4 weeks and the features and epics each person owns.">
           <NumInput label="Needs attention looks at the top N of each backlog" value={data.fixTopN ?? 30} min={10} max={100} onSave={(v) => void saver.save(o, "ahead.fix_top_n", v, "Needs attention top N")} />

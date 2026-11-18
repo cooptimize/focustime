@@ -5,7 +5,7 @@
 // list of places to open (Clients in Settings is the same), a tab's settings are groups of rows.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { call } from "../../api.ts";
-import { Button, Group, LinkItem, Links, Note, Page, Row, State, Swatches, Table, Text, Value } from "../parts.tsx";
+import { Button, Group, LinkItem, Links, Mark, Note, Page, Row, State, Swatches, Table, Text, Value } from "../parts.tsx";
 import { DeliveryChatField, DeliveryChatsProvider, useDeliveryChats } from "../DeliveryChats.tsx";
 import { MeetingsField } from "../AdminMeetings.tsx";
 import { ScopeField } from "../AdminScope.tsx";
@@ -53,8 +53,18 @@ function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
             </Value>,
             c.types.length ? c.types.map((t) => TYPE_WORDS[t] ?? t).join(", ") : "No type",
             `${c.isClient ? "Client" : "Not a client"}: ${c.whyText}${c.hasSettings ? ". Has settings, not a client" : ""}`,
-            internal ? "" : <ASwitch key="t" checked={saver.shown(scope, "treat_as_client", c.treatAsClient)} label={`Treat ${c.key} as a client`} onChange={(v) => void saver.save(scope, "treat_as_client", v ? true : undefined, `${c.key}: treat as a client`)} />,
-            internal ? "Always a client" : <ASwitch key="h" checked={saver.shown(scope, "hidden", c.hidden)} label={`Hide ${c.key} from FocusTime`} onChange={(v) => void saver.save(scope, "hidden", v ? true : undefined, `${c.key}: hide from FocusTime`)} />,
+            internal ? "" : (
+              <span key="t">
+                <ASwitch checked={saver.shown(scope, "treat_as_client", c.treatAsClient)} label={`Treat ${c.key} as a client`} onChange={(v) => void saver.save(scope, "treat_as_client", v ? true : undefined, `${c.key}: treat as a client`)} />
+                <Mark s={saver.status(scope, "treat_as_client")} retry={() => void saver.save(scope, "treat_as_client", c.treatAsClient, `${c.key}: treat as a client`)} />
+              </span>
+            ),
+            internal ? "Always a client" : (
+              <span key="h">
+                <ASwitch checked={saver.shown(scope, "hidden", c.hidden)} label={`Hide ${c.key} from FocusTime`} onChange={(v) => void saver.save(scope, "hidden", v ? true : undefined, `${c.key}: hide from FocusTime`)} />
+                <Mark s={saver.status(scope, "hidden")} retry={() => void saver.save(scope, "hidden", c.hidden, `${c.key}: hide from FocusTime`)} />
+              </span>
+            ),
           ];
         })}
       />
