@@ -20,6 +20,7 @@ import { useLayout } from "./viewport.ts";
 import { WeekGrid } from "./WeekGrid.tsx";
 import { Lockup, WeekLoader, WeekMark } from "./brand/Brand.tsx";
 import { bootReady } from "./brand/boot.ts";
+import { PartsGuide } from "./settings/PartsGuide.tsx";
 
 const NY = "America/New_York";
 const NOW = "2026-11-02T10:10:00-05:00";
@@ -431,6 +432,12 @@ export function StyleGuide() {
           <span className="pto-pill full">PTO · Sample day off</span>
           <span className="weekend-note">Today is Sat, Nov 7 · showing next week</span>
         </div>
+      </section>
+
+      <section className="sg-section" data-sg="settings">
+        <h2>Settings parts (SA-2)</h2>
+        <p className="muted">Style guide section 12: the one way to draw a setting. A page, a group, a row, a fold, a table, a button row, the saved mark and the team line; one control per kind of choice.</p>
+        <PartsGuide />
       </section>
 
       <section className="sg-section">

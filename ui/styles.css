@@ -7758,3 +7758,135 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* RQ-1: a held create looks held (the reason sits beside it). */
 .wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
 .bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }
+
+/* ---- SA-2: one way to draw a setting (ui/settings/parts.tsx; style guide section 12). One column of cards, about
+   760 px at most; a row is the label and its help on the left, the control on the right, under the label when the
+   column is narrow. The saved mark sits out of the flow, so a save moves nothing. Only the four type sizes and the
+   style guide's control heights. ---- */
+.sp-page { container-type: inline-size; max-width: 760px; display: flex; flex-direction: column; gap: var(--space-card); padding-top: 4px; }
+.ps-body > .sp-page { max-width: 760px; }
+.sp-group { margin: 0; padding: 4px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-width: 0; }
+.ps-body .sp-group-h { margin: 12px 0 2px; font-size: var(--fs-3); font-weight: 600; color: var(--text); display: block; }
+.sp-intro { margin: 0 0 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.sp-group-h + .sp-row, .sp-intro + .sp-row { border-top: 0; }
+.sp-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; row-gap: 8px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); min-width: 0; }
+.sp-group > .sp-row:first-child, .sp-group > :is(.sp-group-h, .sp-intro) + .sp-row { border-top: 0; }
+.sp-row.sp-bare, .sp-row.sp-wide { grid-template-columns: minmax(0, 1fr); }
+.sp-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sp-label-line { position: relative; display: block; }
+.sp-label { font-size: var(--fs-3); font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+.sp-help { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.sp-team { color: var(--text-muted); }
+.sp-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); justify-self: end; min-width: 0; max-width: 100%; }
+.sp-row.sp-wide > .sp-control { justify-self: stretch; }
+.sp-error, .sp-below { grid-column: 1 / -1; margin: 0; min-width: 0; }
+.sp-error { color: var(--risk); font-size: var(--fs-2); }
+.sp-value { font-size: var(--fs-3); color: var(--text); overflow-wrap: anywhere; text-align: right; }
+.sp-row.sp-wide .sp-value { text-align: left; }
+.sp-faint { color: var(--text-faint); }
+.sp-pre { white-space: pre-wrap; text-align: left; display: block; }
+/* The mark: at the label's end, out of the flow (an absolute box at its own place moves nothing). */
+.sp-mark { position: absolute; margin-inline-start: 10px; white-space: nowrap; font-size: var(--fs-2); font-weight: 500; }
+.sp-mark:empty { display: none; }
+.sp-saved { color: var(--ok); }
+.sp-saving { color: var(--text-faint); }
+.sp-retry { color: var(--risk); }
+.sp-link { border: 0; background: none; padding: 0; min-height: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sp-more { font-size: var(--fs-2); color: var(--text-muted); }
+.sp-more > summary { cursor: pointer; width: fit-content; color: var(--text-muted); list-style: none; display: inline-flex; align-items: center; min-height: var(--target, 28px); }
+.sp-more > summary::-webkit-details-marker { display: none; }
+.sp-more > summary::after { content: ""; display: inline-block; margin-left: 6px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.sp-more[open] > summary::after { transform: rotate(225deg) translateY(-1px); }
+.sp-more-text { display: block; padding: 2px 0 4px; }
+.sp-note { margin: 8px 0; font-size: var(--fs-2); color: var(--text-muted); }
+.sp-note.problem { color: var(--risk); }
+.sp-note.warn { color: var(--watch); }
+.sp-note.ok { color: var(--ok); }
+.sp-fold { margin: 4px 0 8px; }
+.sp-fold > summary { cursor: pointer; width: fit-content; font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); min-height: var(--target, 28px); display: inline-flex; align-items: center; }
+.sp-fold-body { padding-top: 4px; }
+/* Buttons: the small button (28, scaled), 44 on the phone; the row's main action outlined in the accent. */
+.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--h-small); padding: 0 12px; margin: 0; font-size: var(--fs-2); font-weight: 500; line-height: 1.2; text-decoration: none; color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-control); background: transparent; box-sizing: border-box; cursor: pointer; white-space: nowrap; }
+.sp-btn.main { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); color: var(--accent); }
+.sp-btn.quiet { border-color: transparent; color: var(--text-muted); }
+.sp-btn.quiet:hover { color: var(--text); }
+.sp-btn.danger { color: var(--risk); border-color: color-mix(in oklab, var(--risk) 45%, var(--border)); }
+.sp-btn:disabled { opacity: 0.55; cursor: default; }
+a.sp-btn:hover { background: var(--wash-1); }
+.sp-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
+.sp-result { font-size: var(--fs-2); color: var(--text-muted); }
+.sp-result.problem { color: var(--risk); }
+.sp-result.ok { color: var(--ok); }
+.sp-go { color: var(--accent); text-underline-offset: 2px; }
+/* Controls. */
+.sp-switch-box { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target, 28px); min-width: var(--target, 28px); justify-content: flex-start; cursor: pointer; font-size: var(--fs-3); }
+.sp-switch-box.with-text { justify-content: flex-start; }
+.sp-switch { appearance: none; -webkit-appearance: none; flex: none; margin: 0; width: calc(34px * var(--text-scale)); height: calc(20px * var(--text-scale)); border-radius: 999px; background: var(--track); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background 120ms ease-out; }
+.sp-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(14px * var(--text-scale)); height: calc(14px * var(--text-scale)); border-radius: 50%; background: var(--text-muted); transition: transform 120ms ease-out; }
+.sp-switch:checked { background: var(--action); border-color: var(--action); }
+.sp-switch:checked::after { background: var(--on-action, #fff); transform: translateX(calc(14px * var(--text-scale))); }
+.sp-switch:disabled { opacity: 0.5; cursor: default; }
+.sp-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .sp-switch, .sp-switch::after { transition: none; } }
+.sp-choice { flex-wrap: wrap; }
+.sp-choice .seg-btn { min-height: var(--h-small); padding: 0 12px; font-size: var(--fs-2); }
+.sp-choice .seg-btn:disabled { opacity: 0.55; cursor: default; }
+.sp-select, .sp-text-input, .sp-num input, .sp-date { min-height: var(--h-control); box-sizing: border-box; padding: 0 10px; font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-input); max-width: 100%; }
+.sp-select { padding-right: 28px; }
+.sp-text-input { width: 240px; }
+.sp-text-input.wide { width: 100%; }
+.sp-num { display: inline-flex; align-items: center; gap: 8px; }
+.sp-num input[type="number"] { width: calc(5.5em * var(--text-scale)); text-align: right; }
+.sp-range { width: 160px; }
+.sp-unit { font-size: var(--fs-2); color: var(--text-muted); }
+:is(.sp-select, .sp-text-input, .sp-num input, .sp-date):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--accent); }
+:is(.sp-text-input, .sp-num input)[aria-invalid="true"] { border-color: var(--risk); }
+.sp-time { min-height: var(--h-control); }
+.sp-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
+.sp-sub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.sp-swatches { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.sp-swatch { position: relative; display: inline-grid; place-items: center; min-width: var(--target, 28px); min-height: var(--target, 28px); cursor: pointer; }
+.sp-swatch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.sp-swatch-fill { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--border-strong); }
+.sp-swatch input:checked + .sp-swatch-fill { border-color: var(--surface); box-shadow: 0 0 0 2px var(--text); }
+.sp-swatch input:focus-visible + .sp-swatch-fill { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sp-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); min-width: 0; }
+/* Lists: one row per entry with Remove at its end, one Add at the foot. */
+.sp-list-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
+.sp-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); min-height: var(--h-control); padding: 2px 8px; border-radius: var(--radius-input); background: var(--wash-1); min-width: 0; }
+.sp-item-main { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); flex: 1; min-width: 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
+.sp-item-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.sp-item > .sp-below, .sp-status-item > .sp-below { flex-basis: 100%; }
+.sp-list-add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); }
+/* Status lists: a dot, a name, a state, a line, actions. */
+.sp-status { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-row); }
+.sp-status-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: var(--h-control); padding: 4px 8px; border-radius: var(--radius-input); min-width: 0; }
+.sp-status-item:hover { background: var(--wash-1); }
+.sp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.sp-status-item.live .sp-dot { background: var(--ok); }
+.sp-status-item.cached .sp-dot { background: var(--watch); }
+.sp-status-item:is(.error, .signin) .sp-dot { background: var(--risk); }
+.sp-status-item.sample .sp-dot { background: var(--sample); }
+.sp-status-name { font-size: var(--fs-3); font-weight: 600; }
+.sp-status-detail { font-size: var(--fs-2); color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+.sp-status-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+/* One table style. */
+.sp-table-wrap { max-width: 100%; overflow-x: auto; }
+.ps-body .sp-table, .sp-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); display: table; }
+.sp-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sp-table td { padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--border); overflow-wrap: normal; }
+.sp-table tr:first-child td { border-top: 0; }
+.sp-table .failed td:first-child, .sp-table .refused td:first-child { box-shadow: inset 2px 0 0 var(--risk); }
+/* A narrow column (the phone, a narrow window, the largest text): the control under its label, full width. */
+@container (max-width: 560px) {
+  .sp-row { grid-template-columns: minmax(0, 1fr); }
+  .sp-control { justify-self: start; }
+  .sp-value { text-align: left; }
+  .sp-text-input { width: 100%; }
+  .sp-status-actions, .sp-item-actions { margin-left: 0; }
+}
+.app.phone .sp-group { padding: 4px 12px; }
+.app.phone .sp-btn, .app.phone .sp-choice .seg-btn, .app.phone .sp-go { min-height: var(--target); }
+.app.phone .sp-go { display: inline-flex; align-items: center; }
+.app.phone .sp-help .sp-go, .app.phone .sp-more-text .sp-go { display: inline; min-height: 0; }

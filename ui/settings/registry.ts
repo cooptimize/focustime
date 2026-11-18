@@ -61,7 +61,21 @@ export type SettingDef = {
   devOnly?: boolean;
   /** Shown only in a demo session. */
   demoOnly?: boolean;
+  /** SA-2: the group it sits in on its page (search shows it beside the label when the label needs it). */
+  group?: string;
+  /** SA-2: its one help line, said on the row (what it does first). */
+  help?: string;
+  /** SA-2: what didn't fit in the one line, word for word, behind "More about this". */
+  more?: string;
+  /** SA-2: the unit beside a number ("minutes", "days"). */
+  unit?: string;
+  /** SA-2: the kind of choice, which decides its control (style guide section 12). */
+  kind?: SettingKind;
+  /** SA-2: a row of a page that search doesn't list on its own (a day of the week, one notice kind). */
+  part?: boolean;
 };
+/** SA-2: the kinds of choice; each has one control. */
+export type SettingKind = "switch" | "choice" | "select" | "number" | "time" | "text" | "list" | "action" | "status";
 
 // One row per setting or status a person looks for. `id` is unique across Settings (it is the deep link's last part).
 export const SETTINGS: readonly SettingDef[] = [
