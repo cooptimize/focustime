@@ -296,6 +296,12 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       else if (s.needsConsent && s.problem?.kind !== "sign_in") items.push({ id: "consent", label: "Allow Azure access…", run: consent });
       // VM-3: today's start left the VM off: the reason and what to do (Settings has the same line).
       if (s.autoStart?.leftOff && s.autoStart.leftOff.reason !== "sign_in") items.push({ id: "auto-left", label: s.autoStart.leftOff.short, hint: "Why", run: () => void notify(s.autoStart!.leftOff!.text) });
+      // VM-5: today's start skipped: why, and Don't skip while its time is still ahead.
+      const sk = s.autoStart?.skippedToday;
+      if (sk) {
+        items.push({ id: "auto-skipped", label: sk.text, run: onSettings });
+        if (sk.undo) items.push({ id: "auto-unskip", label: "Don't skip", action: "vm.autostart_unskip", run: () => void call("vm.autostart_unskip", {}).then(() => refresh(true), (e: unknown) => notify(errText(e))) });
+      }
       // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
       if (s.autoStart?.next) {
         items.push({ id: "auto-next", label: `Auto-start: ${s.autoStart.next.short}`, run: onSettings });
@@ -367,6 +373,8 @@ const DONE: Record<VmPreviewOp, string> = {
 function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => void; onDone: (msg: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // VM-5: "Skip today's start too", unticked.
+  const [skipToday, setSkipToday] = useState(false);
   const first = useRef<HTMLButtonElement>(null);
   useReturnFocus();
   useEffect(() => first.current?.focus(), []);
@@ -388,6 +396,14 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           ))}
         </dl>
         <ul className="vm-notes">{p.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        {p.startAgain && (
+          <div className="vm-again">
+            <p>{p.startAgain.text}</p>
+            <label className="set-check">
+              <input type="checkbox" checked={skipToday} disabled={busy} onChange={(e) => setSkipToday(e.target.checked)} /> {p.startAgain.box}
+            </label>
+          </div>
+        )}
         {error && <p className="set-problem" role="alert">{error}</p>}
         <div className="wd-actions">
           <button
@@ -399,8 +415,8 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
               setBusy(true);
               setError(null);
               try {
-                await call("vm.confirm", { previewId: p.previewId });
-                onDone(DONE[p.op]);
+                const r = await call<{ said?: string }>("vm.confirm", { previewId: p.previewId, skipToday });
+                onDone(r?.said ?? DONE[p.op]);
               } catch (e) {
                 setError(errText(e));
               } finally {
@@ -908,6 +924,7 @@ export function VmStartForm() {
             <p className={`vm-next${a.paused ? " paused" : ""}`} aria-live="polite">
               {a.prodOnly ? "Next: never here. It runs only on the production FocusTime." : a.line}
               {a.paused && <button type="button" className="mini" disabled={busy} onClick={() => void call("vm.autostart_resume", {}).then(() => vm.refresh(true), (e: unknown) => setError(errText(e)))}>Resume</button>}
+              {a.skippedToday?.undo && <button type="button" className="mini" disabled={busy} onClick={() => void call("vm.autostart_unskip", {}).then(() => vm.refresh(true), (e: unknown) => setError(errText(e)))}>Don't skip</button>}
             </p>
             <span className="set-hint">Only on days your working hours cover, not on PTO or holidays, and only when the VM is stopped. It never stops your VM: only Stop does, when you confirm.</span>
           </>
