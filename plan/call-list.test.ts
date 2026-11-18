@@ -94,3 +94,46 @@ describe("MC-3: one list by day", () => {
     expect(one.map((r) => [r.key, r.name])).toEqual(two.map((r) => [r.key, r.name]));
   });
 });
+
+describe("MC-2b: my Pocket recordings in the list", () => {
+  const waiting = aSeriesView({ id: 4, name: "Contoso intake", clientKey: "Contoso", clientName: "Contoso", call: "calendar" });
+  const occs = [
+    // A kept call waiting for its transcript (no transcript): a recording may go on it.
+    anOccurrenceView({ id: 20, seriesId: 4, startAt: "2026-11-03T15:00:00Z", endAt: "2026-11-03T16:00:00Z", state: "needs_upload", open: 0, hasTranscript: false }),
+    // A call that has its transcript: never marked, and a recording on it isn't a row of its own either.
+    anOccurrenceView({ id: 21, seriesId: 1, startAt: "2026-11-02T18:00:00Z", endAt: "2026-11-02T18:30:00Z", state: "ready", open: 2, hasTranscript: true }),
+  ];
+  const others = [anOtherCall({ key: "standup", name: "Team standup", startAt: "2026-11-04T14:00:00Z", endAt: "2026-11-04T14:15:00Z", minutes: 15 })];
+  const rec = (id: string, startAt: string, minutes: number, title = "") => ({ id, startAt, endAt: Temporal.Instant.from(startAt).add({ minutes }).toString(), minutes, title });
+  const pocket = [
+    rec("on-intake", "2026-11-03T14:58:00Z", 65, "Intake"),
+    rec("short-on-intake", "2026-11-03T15:30:00Z", 31, "Intake part 2"),
+    rec("on-standup", "2026-11-04T14:00:00Z", 15, "Standup"),
+    rec("on-done", "2026-11-02T18:00:00Z", 30, "Weekly"),
+    rec("no-call", "2026-11-01T20:00:00Z", 25, "Call with the carrier"),
+    rec("untitled", "2026-11-04T20:00:00Z", 10),
+  ];
+  const { rows } = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, pocket });
+  const at = (k: string) => rows.find((r) => r.key === k)!;
+
+  it("a call it goes with says Pocket recording found, with both recordings, the longer overlap first", () => {
+    expect(at("o20").pocket.map((r) => r.id)).toEqual(["on-intake", "short-on-intake"]);
+    expect(at("o20").state.label).toBe("Pocket recording found");
+    expect(at("cstandup").pocket.map((r) => r.id)).toEqual(["on-standup"]);
+    expect(at("o21").pocket).toEqual([]);
+    expect(at("o21").state.label).not.toBe("Pocket recording found");
+  });
+
+  it("a recording with no call is its own row on its day, under Not reviewed; its title or the kind as its name", () => {
+    expect(rows.filter((r) => r.recording).map((r) => [r.key, r.name, r.day, r.bucket, r.state.label])).toEqual([
+      ["puntitled", "Pocket recording", "2026-11-04", "open", "Pocket recording"],
+      ["pno-call", "Call with the carrier", "2026-11-01", "open", "Pocket recording"],
+    ]);
+    expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
+  });
+
+  it("without a press, nothing changes", () => {
+    const plain = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE });
+    expect(plain.rows.every((r) => !r.pocket.length && !r.recording)).toBe(true);
+  });
+});

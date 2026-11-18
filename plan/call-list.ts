@@ -6,6 +6,14 @@
 import type { OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
 import { CALL_LIST, callLabel, CALLS_TEXT } from "./call-words.ts";
+import { forCall, withNoCall } from "./pocket-recordings.ts";
+import { POCKET_CALL_WORDS } from "./pocket-words.ts";
+
+/**
+ * MC-2b: one of my own Pocket recordings as the page holds it (meeting.pocket_list's answer, in the page's memory only
+ * while Calls is open): never who recorded it or any of its words.
+ */
+export type ListedRecording = { id: string; startAt: string; endAt: string; minutes: number; title: string };
 
 /** The list's filters, in order. Their counts add up to All: every row is in exactly one of the other three. */
 export const LIST_FILTERS = ["all", "review", "open", "done"] as const;
@@ -37,6 +45,10 @@ export type CallRow = {
   bucket: Bucket;
   /** I review it (I can act on it), else I look. */
   review: boolean;
+  /** MC-2b: my Pocket recordings that go with this call, the longer overlap first (only while it has no transcript). */
+  pocket: ListedRecording[];
+  /** MC-2b: a recording that goes with no call is its own row (no occurrence, no calendar call). */
+  recording: ListedRecording | null;
 };
 
 export type CallListInput = {
@@ -47,6 +59,8 @@ export type CallListInput = {
   /** Today in my zone, and the zone (for each call's own day). */
   today: string;
   zone: string;
+  /** MC-2b: my Pocket recordings from my last press (null: not asked on this visit). */
+  pocket?: readonly ListedRecording[] | null;
 };
 
 const dayOf = (iso: string, zone: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDate().toString();
@@ -78,11 +92,13 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
   const peopleOf = new Map<number, number>();
   for (const c of x.others ?? []) if (c.occurrenceId) peopleOf.set(c.occurrenceId, c.people);
   const all: CallRow[] = [];
+  /** MC-2b: the rows a recording may go on: no transcript yet and I can act on it. */
+  const takes = new Set<CallRow>();
   for (const o of x.occurrences) {
     const s = x.meetings.find((m) => m.id === o.seriesId);
     if (!s) continue;
     const state = callLabel(o, s.mine.review);
-    all.push({
+    const row: CallRow = {
       key: `o${o.id}`,
       occurrenceId: o.id,
       other: null,
@@ -99,12 +115,16 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
       state,
       bucket: bucketOf(o, state.needsMe),
       review: s.mine.review,
-    });
+      pocket: [],
+      recording: null,
+    };
+    all.push(row);
+    if (s.mine.review && !o.hasTranscript && o.state !== "reviewed") takes.add(row);
   }
   const kept = new Set(all.map((r) => r.occurrenceId));
   (x.others ?? []).forEach((c) => {
     if (c.occurrenceId && kept.has(c.occurrenceId)) return;
-    all.push({
+    const row: CallRow = {
       key: otherRowKey(c),
       occurrenceId: c.occurrenceId,
       other: c,
@@ -121,8 +141,31 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
       state: { label: CALLS_TEXT.notReviewed, needsMe: false },
       bucket: "open",
       review: true,
-    });
+      pocket: [],
+      recording: null,
+    };
+    all.push(row);
+    takes.add(row);
   });
+  // MC-2b: each of my recordings goes on the calls it overlaps for at least half their length; one that goes with none
+  // is a row of its own, counted under Not reviewed.
+  const recs = x.pocket ?? [];
+  if (recs.length) {
+    const spans = recs.map((r) => ({ ...r, seconds: (Date.parse(r.endAt) - Date.parse(r.startAt)) / 1000 }));
+    for (const row of all) {
+      if (!takes.has(row)) continue;
+      row.pocket = forCall(spans, row).map(({ seconds: _s, ...r }) => r);
+      if (row.pocket.length) row.state = { ...row.state, label: POCKET_CALL_WORDS.found };
+    }
+    for (const r of withNoCall(spans, all)) {
+      const { seconds: _s, ...rec } = r;
+      all.push({
+        key: `p${rec.id}`, occurrenceId: null, other: null, name: rec.title || POCKET_CALL_WORDS.rowKind, startAt: rec.startAt, endAt: rec.endAt,
+        day: dayOf(rec.startAt, x.zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_CALL_WORDS.rowKind, weekly: null,
+        state: { label: POCKET_CALL_WORDS.rowKind, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
+      });
+    }
+  }
   all.sort((a, b) => Date.parse(b.startAt) - Date.parse(a.startAt) || a.name.localeCompare(b.name));
   const rows: CallRow[] = [];
   const older: CallRow[] = [];
