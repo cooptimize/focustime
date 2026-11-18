@@ -218,12 +218,14 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "find-item", section: "devops", label: "Find an item", kind: "action", keywords: ["missing item", "why isn't it showing", "not showing", "item number", "scope", "area"] },
   // AI and assistant
   { id: "ai-team", section: "ai", label: "AI for FocusTime", kind: "status", keywords: ["allowed for", "monthly limit", "admin"] },
+  { id: "ai-allowed", section: "ai", label: "Allowed for", group: "AI for FocusTime", kind: "status", part: true },
+  { id: "ai-limit", section: "ai", label: "Your monthly limit", group: "AI for FocusTime", kind: "status", part: true },
   { id: "ai-month", section: "ai", label: "This month's AI spend", old: ["This month"], kind: "status", keywords: ["cost", "budget", "cap"] },
   { id: "draft-months", section: "ai", label: "Break down looks back", old: ["Break down looks back (months)"], kind: "number", unit: "months" },
   { id: "ai-test", section: "ai", label: "Test AI", kind: "action" },
   { id: "ai-sent", section: "ai", label: "What is sent to AI", old: ["What is sent"], kind: "status" },
   { id: "ai-log", section: "ai", label: "Last 20 AI requests", old: ["Last 20 requests"], kind: "status" },
-  { id: "assistant-history", section: "ai", label: "Assistant history", group: "Assistant", kind: "action", keywords: ["clear", "ask", "voice", "push-to-talk"] },
+  { id: "assistant-history", section: "ai", label: "Assistant history", kind: "action", keywords: ["clear", "ask", "voice", "push-to-talk"] },
   // Activity
   { id: "write-log", section: "activity", label: "Outlook write log", old: ["Write log"], kind: "status", keywords: ["undo", "retry", "timebox"] },
   { id: "devops-log", section: "activity", label: "DevOps write log", kind: "status" },
