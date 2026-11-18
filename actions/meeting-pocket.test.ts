@@ -26,7 +26,7 @@ import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { POCKET_CALL_WORDS, POCKET_FAILURE_TEXT } from "../plan/pocket-words.ts";
 import { createPocketHold } from "./meeting-pocket.ts";
-import { pocketPort } from "./pocket-actions.ts";
+import { pocketAction, pocketPort } from "./pocket-actions.ts";
 import { meetingAction, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
 
 const ME = "11111111-1111-4111-8111-111111111111";
@@ -103,8 +103,9 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]
   const keyReads: Record<string, number> = { [ME]: 0, [MATE]: 0, [OUTSIDER]: 0 };
   const hold = createPocketHold(() => nowMs);
   const connected = new Set([ME, MATE]);
+  const secretsOf: Record<string, Map<string, string>> = {};
   const portOf = (who: string) => {
-    const secrets = new Map<string, string>(connected.has(who) ? [["pocket-key", `pk_test_${who.slice(0, 4)}`]] : []);
+    const secrets = (secretsOf[who] = new Map<string, string>(connected.has(who) ? [["pocket-key", `pk_test_${who.slice(0, 4)}`]] : []));
     return pocketPort({
       secrets: { get: async (a) => (keyReads[who]!++, secrets.get(a)!), set: async (a, v) => void secrets.set(a, v), delete: async (a) => void secrets.delete(a), has: async (a) => secrets.has(a) },
       client: createPocketClient({ fetch: o.pocketStatus ? ((async (u: string) => (reqs[who]!.push(String(u)), new Response("{}", { status: o.pocketStatus ?? 500 }))) as unknown as typeof fetch) : fakePocket(reqs[who]!, o.recs), log: (r) => logs.push(r), timeoutMs: 500 }),
@@ -123,7 +124,7 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]
     canWrite: async () => true,
     log: (r) => logs.push(r),
     cooptimizer: async (uid) => uid !== OUTSIDER,
-    pocket: { port: ports[me]!, hold, myEmails: async () => users.find((u) => u.id === me)!.emails },
+    pocket: { port: ports[me]!, hold, myEmails: async () => users.find((u) => u.id === me)!.emails, theirEmails: async () => users.filter((u) => u.id !== me).flatMap((u) => u.emails) },
   });
   const act = (me: string, action: MeetingAction, input: unknown) => meetingAction(ctxAs(me), action, input);
   const data = <T,>(r: Awaited<ReturnType<typeof act>>) => {
@@ -131,10 +132,10 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]
     return r.data as T;
   };
   const keep = async () => data<{ occurrenceId: number }>(await act(ME, "meeting.call_start", { key: "ical-1", startAt: calendar[0]!.startAt, endAt: calendar[0]!.endAt, clientKey: "contoso" })).occurrenceId;
-  return { db, meetings, act, data, keep, logs, reqs, keyReads, providerCalls, hold, advance: (ms: number) => (nowMs += ms), connected };
+  return { db, meetings, act, data, keep, logs, reqs, keyReads, providerCalls, hold, advance: (ms: number) => (nowMs += ms), connected, ports, secretsOf };
 }
 
-type List = { recordings: { id: string; startAt: string; endAt: string; minutes: number; title: string }[]; others: number; more: boolean; days: number };
+type List = { recordings: { id: string; startAt: string; endAt: string; minutes: number; title: string }[]; counts: { listed: number; kept: number; address: number; noRecorder: number; notRecordings: number; outside: number }; more: boolean; days: number; canSetAddress: boolean };
 const recCalls = (urls: string[]) => urls.filter((u) => new URL(u).pathname !== POCKET_LIST_PATH);
 
 describe("Get my Pocket recordings (MC-2b)", () => {
@@ -142,7 +143,7 @@ describe("Get my Pocket recordings (MC-2b)", () => {
     const t = await setup();
     const l = t.data<List>(await t.act(ME, "meeting.pocket_list", {}));
     expect(l.recordings.map((r) => r.id).sort()).toEqual(["r-lone", "r-long", "r-mine", "r-notimes"]);
-    expect(l.others).toBe(1);
+    expect(l.counts).toMatchObject({ kept: 4, address: 1, noRecorder: 0 });
     expect(l.days).toBe(14);
     for (const r of l.recordings) expect(Object.keys(r).sort()).toEqual(["endAt", "id", "minutes", "startAt", "title"]);
     // Nothing of the transcript, summaries, speakers or the other person's recording comes out.
@@ -292,10 +293,94 @@ describe("PK-4: the case of Nov 18", () => {
     id: `r-${i}`, title: `Invented call ${i}`, at: `2026-11-0${2 + (i % 8)}T1${i % 6}:00:00Z`, minutes: 30, by: i < 16 ? SOLO : null, segs: [seg(5, "SPEAKER_0", "Invented words.")],
   }));
 
-  it.fails("keeps all eighteen: sixteen under one address nobody else records under, and two with no recorder", async () => {
+  it("keeps all eighteen: sixteen under one address nobody else records under, and two with no recorder", async () => {
     const t = await setup({ recs: eighteen });
     const l = t.data<List>(await t.act(ME, "meeting.pocket_list", {}));
     expect(l.recordings).toHaveLength(18);
-    expect(l.others).toBe(0);
+    expect(l.counts).toMatchObject({ listed: 18, kept: 18, address: 0, noRecorder: 0 });
+  });
+});
+
+describe("PK-4: Set my Pocket address", () => {
+  // My own Pocket account uses a personal address; a teammate (a FocusTime person) records under the same key.
+  const MINE = "sam.personal@example.com";
+  const recs: Rec[] = [
+    { id: "p-1", title: "Invented one", at: "2026-11-09T14:58:00Z", minutes: 40, by: MINE, segs: [seg(5, "SPEAKER_0", "Invented.")] },
+    { id: "p-2", title: "Invented two", at: "2026-11-06T16:00:00Z", minutes: 25, by: MINE, segs: [seg(5, "SPEAKER_0", "Invented.")] },
+    { id: "p-lee", title: "Lee's private chat", at: "2026-11-07T16:00:00Z", minutes: 30, by: "lee@cooptimize.example", segs: [seg(0, "SPEAKER_0", "Lee's own words.")] },
+  ];
+  const add = (t: Awaited<ReturnType<typeof setup>>, address: string, who = ME) => t.act(who, "meeting.pocket_address_add", { address });
+
+  it("nothing is kept while a teammate records under the key; my Pocket address, once set, lists mine and only mine", async () => {
+    const t = await setup({ recs });
+    const before = t.data<List>(await t.act(ME, "meeting.pocket_list", {}));
+    expect(before.recordings).toEqual([]);
+    expect(before.counts).toMatchObject({ listed: 3, kept: 0, address: 3 });
+    expect(before.canSetAddress).toBe(true);
+    expect(t.data<{ addresses: string[] }>(await add(t, "  Sam.Personal@Example.com "))).toEqual({ addresses: [MINE] });
+    const after = t.data<List>(await t.act(ME, "meeting.pocket_list", {}));
+    expect(after.recordings.map((r) => r.id)).toEqual(["p-1", "p-2"]);
+    expect(after.counts).toMatchObject({ kept: 2, address: 1 });
+    // The new address asked for one more list; nothing of the teammate's recording came out.
+    expect(t.reqs[ME]).toHaveLength(2);
+    expect(JSON.stringify(after)).not.toMatch(/p-lee|Lee's|lee@/);
+  });
+
+  it("a wrong address is refused in the same words whether it is a teammate's on the list or on nothing", async () => {
+    const t = await setup({ recs });
+    await t.act(ME, "meeting.pocket_list", {});
+    const theirs = await add(t, "lee@cooptimize.example");
+    const nobody = await add(t, "nobody@example.com");
+    expect(theirs).toEqual({ ok: false, status: 422, error: POCKET_CALL_WORDS.addressRefused, code: "pocket_address_refused" });
+    expect(nobody).toEqual(theirs);
+    expect(await t.ports[ME]!.addresses.get()).toEqual([]);
+  });
+
+  it("only against the list just read, in the shape of an address, three at most, five tries a list", async () => {
+    const t = await setup({ recs: [...recs, ...["a", "b", "c"].map((x, i) => ({ ...recs[0]!, id: `x-${x}`, by: `${x}@personal.example`, at: `2026-11-0${3 + i}T15:00:00Z` }))] });
+    expect(await add(t, MINE)).toMatchObject({ ok: false, status: 409, code: "pocket_get_again", error: POCKET_CALL_WORDS.addressListFirst });
+    await t.act(ME, "meeting.pocket_list", {});
+    expect(await add(t, "not an address")).toMatchObject({ ok: false, code: "pocket_address_shape" });
+    expect(await add(t, "sam@cooptimize.example")).toMatchObject({ ok: false, code: "pocket_address_known" });
+    for (const a of [MINE, "a@personal.example", "b@personal.example"]) t.data(await add(t, a));
+    expect(await add(t, "c@personal.example")).toMatchObject({ ok: false, code: "pocket_address_max" });
+    t.data(await t.act(ME, "meeting.pocket_address_remove", { address: "B@personal.example" }));
+    expect(await t.ports[ME]!.addresses.get()).toEqual([MINE, "a@personal.example"]);
+    // The list after 5 minutes is gone: an address can't be checked against an old one.
+    t.advance(5 * 60_000 + 1);
+    expect(await add(t, "c@personal.example")).toMatchObject({ code: "pocket_get_again" });
+    await t.act(ME, "meeting.pocket_list", {});
+    for (let i = 0; i < 5; i++) expect(await add(t, `wrong${i}@example.com`)).toMatchObject({ code: "pocket_address_refused" });
+    expect(await add(t, "c@personal.example")).toMatchObject({ ok: false, status: 429, code: "pocket_address_tries" });
+  });
+
+  it("is mine alone, never logged, and Disconnect forgets it with the held list", async () => {
+    const t = await setup({ recs });
+    await t.act(ME, "meeting.pocket_list", {});
+    t.data(await add(t, MINE));
+    expect(JSON.parse(t.secretsOf[ME]!.get("pocket-addresses")!)).toEqual([MINE]);
+    // My teammate's Pocket, list and status carry nothing of mine.
+    await t.act(MATE, "meeting.pocket_list", {});
+    expect(t.secretsOf[MATE]!.has("pocket-addresses")).toBe(false);
+    expect(JSON.stringify(await pocketAction(t.ports[MATE], "pocket.status", {}))).not.toMatch(/personal/);
+    expect(JSON.stringify(t.logs)).not.toMatch(/@|personal/);
+    const r = await pocketAction(t.ports[ME], "pocket.disconnect", {}, { forget: () => t.hold.drop(ME) });
+    expect(r).toMatchObject({ ok: true, data: { connected: false, addresses: [] } });
+    expect(t.secretsOf[ME]!.has("pocket-addresses")).toBe(false);
+    expect(t.hold.list(ME)).toBeNull();
+  });
+});
+
+describe("PK-4: at most one list in 5 minutes", () => {
+  it("opening Calls again, Refresh or Check Pocket again within 5 minutes answers from the held list", async () => {
+    const t = await setup();
+    const a = t.data<List & { at: string }>(await t.act(ME, "meeting.pocket_list", {}));
+    t.advance(4 * 60_000);
+    const b = t.data<List & { at: string }>(await t.act(ME, "meeting.pocket_list", {}));
+    expect(b).toEqual(a);
+    expect(t.reqs[ME]).toHaveLength(1);
+    t.advance(60_001);
+    t.data(await t.act(ME, "meeting.pocket_list", {}));
+    expect(t.reqs[ME]).toHaveLength(2);
   });
 });

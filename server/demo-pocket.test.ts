@@ -15,8 +15,8 @@ describe("PK-2: the demo's Pocket", () => {
     const ctx = createDemoContext({ now: () => NOW, demo: { on: true, set: async () => {} } });
     await seedDemo(ctx);
     for (const a of ["pocket.status", "pocket.connect", "pocket.check", "pocket.disconnect"]) expect(DEMO_REFUSED).not.toContain(a);
-    expect(await dispatch(ctx, { action: "pocket.status", input: {} })).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null } });
-    expect(await dispatch(ctx, { action: "pocket.connect", input: { key: "pk_demo_mine" } })).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 1 } });
+    expect(await dispatch(ctx, { action: "pocket.status", input: {} })).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null, addresses: [], last: null } });
+    expect(await dispatch(ctx, { action: "pocket.connect", input: { key: "pk_demo_mine" } })).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 1, addresses: [], last: null } });
     expect(await dispatch(ctx, { action: "pocket.connect", input: { key: DEMO_POCKET_KEYS.busy } })).toMatchObject({ ok: false, code: "pocket_busy" });
     expect(await dispatch(ctx, { action: "pocket.disconnect", input: {} })).toMatchObject({ ok: true, data: { connected: false } });
   });

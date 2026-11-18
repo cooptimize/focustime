@@ -16,7 +16,7 @@ export type { KeyProvider };
 export const fakeKeyProvider = (key: Uint8Array = randomBytes(32)): KeyProvider => ({ dataKey: async () => key });
 
 /** What a person's secret can be. */
-export type UserSecretAccount = "outlook-refresh-token" | "google-refresh-token" | `devops-write-pat:${string}` | "pocket-key" | "pocket-check";
+export type UserSecretAccount = "outlook-refresh-token" | "google-refresh-token" | `devops-write-pat:${string}` | "pocket-key" | "pocket-check" | "pocket-addresses";
 
 const VERSION = "v1";
 
@@ -59,7 +59,7 @@ export function createUserSecrets(o: { db: Conn; userId: string; keys: KeyProvid
     return key;
   };
   const check = (account: string) => {
-    if (!/^(outlook-refresh-token|google-refresh-token|devops-write-pat:[\w.-]{1,100}|pocket-key|pocket-check)$/.test(account)) throw new Error("Not a personal secret account");
+    if (!/^(outlook-refresh-token|google-refresh-token|devops-write-pat:[\w.-]{1,100}|pocket-key|pocket-check|pocket-addresses)$/.test(account)) throw new Error("Not a personal secret account");
   };
   return {
     async get(account: UserSecretAccount): Promise<string> {

@@ -28,8 +28,9 @@ import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, 
 import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
-import { gotLine, othersLeftOut, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
+import { gotLine, leftOutLine, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
 import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
+import type { ListCounts } from "../../plan/pocket-recordings.ts";
 import type { PocketView } from "../../actions/pocket-types.ts";
 import type { CallsAt } from "../nav.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
@@ -93,7 +94,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   // MC-2b: whether my Pocket is connected (what FocusTime kept; Pocket isn't asked), and my last press's list, in this
   // page's memory only while Calls is open.
   const [pocketOn, setPocketOn] = useState<boolean | null>(null);
-  const [pocket, setPocket] = useState<{ recordings: ListedRecording[]; others: number; more: boolean; at: string } | null>(null);
+  const [pocket, setPocket] = useState<{ recordings: ListedRecording[]; counts: ListCounts; more: boolean; at: string; canSetAddress: boolean } | null>(null);
   const [pocketBusy, setPocketBusy] = useState(false);
   const [pocketErr, setPocketErr] = useState<string | null>(null);
   // MC-4: which of my calendar's calls have a transcript in Teams (this page's memory only, while Calls is open), my
@@ -126,7 +127,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     setPocketBusy(true);
     setPocketErr(null);
     try {
-      setPocket(await call<{ recordings: ListedRecording[]; others: number; more: boolean; at: string }>("meeting.pocket_list", {}));
+      setPocket(await call<{ recordings: ListedRecording[]; counts: ListCounts; more: boolean; at: string; canSetAddress: boolean }>("meeting.pocket_list", {}));
     } catch (e) {
       setPocketErr(errText(e));
     } finally {
@@ -475,7 +476,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
               <button type="button" className="mini" disabled={pocketBusy} onClick={() => void getPocket()} data-pocket-get="">{pocketBusy ? PW.getting : PW.get}</button>
               <span className="muted" role="status">
                 {pocket ? gotLine(pocket.recordings.length, timeOf(pocket.at, zone)) : ""}
-                {pocket?.others ? ` ${othersLeftOut(pocket.others)}` : ""}
+                {pocket && leftOutLine(pocket.counts) ? ` ${leftOutLine(pocket.counts)}` : ""}
                 {pocket?.more ? ` ${PW.more}` : ""}
               </span>
               {pocketErr && <span className="error-line" role="alert">{pocketErr}</span>}

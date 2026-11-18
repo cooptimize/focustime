@@ -1471,7 +1471,23 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
     // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
     ...(ctx.pocket && ctx.meetings?.pocketHold
-      ? { pocket: { port: ctx.pocket, hold: ctx.meetings.pocketHold, myEmails: async () => { const me = await rc.me(); const users = ctx.meetings ? await ctx.meetings.users() : []; return users.find((u) => me && u.id.toLowerCase() === me.toLowerCase())?.emails ?? []; } } }
+      ? {
+          pocket: {
+            port: ctx.pocket,
+            hold: ctx.meetings.pocketHold,
+            myEmails: async () => {
+              const me = await rc.me();
+              const users = ctx.meetings ? await ctx.meetings.users() : [];
+              return users.find((u) => me && u.id.toLowerCase() === me.toLowerCase())?.emails ?? [];
+            },
+            // PK-4: everyone else FocusTime knows, by address only: never one recorder's, never accepted as mine.
+            theirEmails: async () => {
+              const me = (await rc.me())?.toLowerCase();
+              const users = ctx.meetings ? await ctx.meetings.users() : [];
+              return users.filter((u) => u.id.toLowerCase() !== me).flatMap((u) => u.emails);
+            },
+          },
+        }
       : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
@@ -2097,8 +2113,12 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pocket.status":
     case "pocket.connect":
     case "pocket.check":
-    case "pocket.disconnect":
-      return pocketAction(ctx.pocket, action, req.input);
+    case "pocket.disconnect": {
+      // PK-4: Settings' counts of my last list from Calls (memory only, 5 minutes), and Disconnect forgetting that list.
+      const me = ctx.pocket && ctx.meetings?.pocketHold ? await (await requestContext(ctx)).me() : null;
+      const hold = ctx.meetings?.pocketHold;
+      return pocketAction(ctx.pocket, action, req.input, me && hold ? { last: () => { const h = hold.list(me); return h ? { at: h.view.at, counts: h.view.counts } : null; }, forget: () => hold.drop(me) } : {});
+    }
     case "notices.list":
     case "notices.read":
     case "push.status":
@@ -2746,6 +2766,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.pocket_list":
     case "meeting.pocket_bring":
     case "meeting.pocket_add":
+    case "meeting.pocket_address_add":
+    case "meeting.pocket_address_remove":
     case "meeting.calls_check":
     case "meeting.call_hides":
     case "meeting.call_hide":

@@ -1,20 +1,74 @@
-// MC-2b: the pure rules for Pocket recordings in Calls: whose are kept, which call a recording goes with, the part
+// MC-2b, PK-4: the pure rules for Pocket recordings in Calls: whose are kept, which call a recording goes with, the part
 // during a long call, the time unit and the speaker labels. Invented times and words only.
 import { describe, expect, it } from "vitest";
-import { forCall, goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, whoseKept, withNoCall, type Segment } from "./pocket-recordings.ts";
+import { forCall, goesWith, hasTimes, inSeconds, lengthWords, longerThanCall, partDuring, pocketLines, whoseKept, withNoCall, countWhy, type Segment } from "./pocket-recordings.ts";
 
 const rec = (id: string, startAt: string, minutes: number) => ({ id, startAt, seconds: minutes * 60 });
 const call = (startAt: string, minutes: number) => ({ startAt, endAt: Temporal.Instant.from(startAt).add({ minutes }).toString() });
 
-describe("whose recordings are kept", () => {
-  it("mine by any address FocusTime knows me by, case aside; another person's dropped", () => {
-    expect(whoseKept(["you@example.com", "sam@example.com", "YOU2@example.com", null], ["you@example.com", "you2@example.com"])).toEqual([true, false, true, false]);
+describe("PK-4: whose listed items are kept", () => {
+  const ME = { mine: ["you@example.com", "you2@example.com"] };
+  /** Every item a recording unless named in `not`; records which items were asked about. */
+  const asking = (not: number[] = []) => {
+    const asked: number[] = [];
+    return { asked, isRecording: (i: number) => (asked.push(i), !not.includes(i)) };
+  };
+
+  it("mine by any address FocusTime knows me by, case aside; another person's left out and never asked about", () => {
+    const a = asking();
+    const why = whoseKept(["you@example.com", "sam@example.com", "YOU2@example.com", null], ME, a.isRecording);
+    expect(why).toEqual(["mine", "address", "mine", "no_recorder"]);
+    expect(a.asked).not.toContain(1);
+    expect(a.asked).not.toContain(3);
+    expect(countWhy(why)).toEqual({ listed: 4, notRecordings: 0, kept: 2, address: 1, noRecorder: 1 });
   });
-  it("every recording when the whole list has one recorder, under an address FocusTime doesn't know", () => {
-    expect(whoseKept(["me@personal.example", "me@personal.example"], ["you@example.com"])).toEqual([true, true]);
-    expect(whoseKept(["me@personal.example", "sam@example.com"], ["you@example.com"])).toEqual([false, false]);
-    expect(whoseKept([null, null], ["you@example.com"])).toEqual([false, false]);
-    expect(whoseKept([], ["you@example.com"])).toEqual([]);
+
+  it("mine by a Pocket address I set", () => {
+    const why = whoseKept(["me@personal.example", "sam@example.com"], { mine: [...ME.mine, "Me@Personal.example"] }, asking().isRecording);
+    expect(why).toEqual(["mine", "address"]);
+  });
+
+  it("one recorder among the recordings that name one keeps them all, with those that name none", () => {
+    const why = whoseKept(["me@personal.example", null, "me@personal.example"], ME, asking().isRecording);
+    expect(why).toEqual(["one", "one", "one"]);
+    expect(countWhy(why)).toEqual({ listed: 3, notRecordings: 0, kept: 3, address: 0, noRecorder: 0 });
+    // Only items with no recorder: nothing decides against them.
+    expect(whoseKept([null, null], ME, asking().isRecording)).toEqual(["one", "one"]);
+    expect(whoseKept([], ME, asking().isRecording)).toEqual([]);
+  });
+
+  it("two recorders and none mine keeps nothing, and says why in counts", () => {
+    const why = whoseKept(["me@personal.example", "sam@example.com", null], ME, asking().isRecording);
+    expect(why).toEqual(["address", "address", "no_recorder"]);
+    expect(countWhy(why)).toEqual({ listed: 3, notRecordings: 0, kept: 0, address: 2, noRecorder: 1 });
+  });
+
+  it("an item with no length or time is never a recording and never someone else's: it doesn't break one recorder", () => {
+    // Item 1 isn't a recording (a summary, an upload not yet done) under another address.
+    const why = whoseKept(["me@personal.example", "pocket-bot@example.com", "me@personal.example"], ME, asking([1]).isRecording);
+    expect(why).toEqual(["one", "not_recording", "one"]);
+    expect(countWhy(why)).toMatchObject({ kept: 2, notRecordings: 1, address: 0 });
+    // Mine by address, but not a recording: counted apart, never kept.
+    expect(whoseKept(["you@example.com", "you@example.com"], ME, asking([1]).isRecording)).toEqual(["mine", "not_recording"]);
+  });
+
+  it("a record with no recorder beside another person's recordings is left out, and so is anything not asked about", () => {
+    const a = asking();
+    expect(whoseKept(["you@example.com", "sam@example.com", null], ME, a.isRecording)).toEqual(["mine", "address", "no_recorder"]);
+    expect(a.asked).toEqual([0]);
+  });
+
+  it("one recorder who is another FocusTime person is never kept as mine, and is never asked about", () => {
+    const a = asking();
+    const why = whoseKept(["lee@cooptimize.example", "lee@cooptimize.example"], { ...ME, theirs: ["lee@cooptimize.example"] }, a.isRecording);
+    expect(why).toEqual(["address", "address"]);
+    expect(a.asked).toEqual([]);
+  });
+
+  it("the case of Nov 18: sixteen under one unknown address and two with no recorder are all kept", () => {
+    const rs = [...Array.from({ length: 16 }, () => "me@personal.example"), null, null];
+    const why = whoseKept(rs, ME, asking().isRecording);
+    expect(countWhy(why)).toEqual({ listed: 18, notRecordings: 0, kept: 18, address: 0, noRecorder: 0 });
   });
 });
 

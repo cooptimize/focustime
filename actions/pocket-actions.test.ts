@@ -33,14 +33,14 @@ async function setup() {
 describe("PK-2: Check and save, Check again, Disconnect", () => {
   it("not connected: the status says so, and reading it never calls Pocket", async () => {
     const t = await setup();
-    expect(await t.act(ADA, "pocket.status")).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null } });
+    expect(await t.act(ADA, "pocket.status")).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null, addresses: [], last: null } });
     expect(t.calls).toHaveLength(0);
   });
 
   it("a good key connects: the count from the last 7 days and when it was checked; the key is in the person's sealed secrets", async () => {
     const t = await setup();
     const r = await t.act(ADA, "pocket.connect", { key: ` ${GOOD} ` });
-    expect(r).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 1 } });
+    expect(r).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 1, addresses: [], last: null } });
     expect(t.calls).toHaveLength(1);
     expect(await t.secretsOf(ADA).get("pocket-key")).toBe(GOOD);
     // Stored sealed, never as is.
@@ -109,7 +109,7 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
     const t = await setup();
     await t.act(ADA, "pocket.connect", { key: GOOD });
     await t.act(BEN, "pocket.connect", { key: BENS });
-    expect(await t.act(ADA, "pocket.disconnect")).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null } });
+    expect(await t.act(ADA, "pocket.disconnect")).toEqual({ ok: true, data: { connected: false, checkedAt: null, recordings: null, addresses: [], last: null } });
     expect(await t.secretsOf(ADA).has("pocket-key")).toBe(false);
     expect(await t.secretsOf(BEN).get("pocket-key")).toBe(BENS);
     expect(await t.act(BEN, "pocket.status")).toMatchObject({ data: { connected: true } });
@@ -143,5 +143,19 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
     await t.act(ADA, "pocket.status");
     await t.act(ADA, "pocket.disconnect");
     expect(t.calls).toHaveLength(0);
+  });
+});
+
+describe("PK-4: my Pocket addresses at rest", () => {
+  it("are sealed beside the key, read back only as mine, and gone with Disconnect", async () => {
+    const t = await setup();
+    await t.act(ADA, "pocket.connect", { key: GOOD });
+    await pocketPort({ secrets: t.secretsOf(ADA), client: createPocketClient({ fetch: createDemoPocketFetch({ now: () => NOW }), log: () => {} }), now: () => NOW }).addresses.set(["ada.personal@example.com"]);
+    const raw = JSON.stringify(await t.db.conn.all("SELECT * FROM user_secrets"));
+    expect(raw).not.toMatch(/ada\.personal|@example/);
+    expect(await t.act(ADA, "pocket.status")).toMatchObject({ ok: true, data: { addresses: ["ada.personal@example.com"] } });
+    expect(JSON.stringify(await t.act(BEN, "pocket.status"))).not.toMatch(/ada/);
+    await t.act(ADA, "pocket.disconnect");
+    expect(await t.secretsOf(ADA).has("pocket-addresses")).toBe(false);
   });
 });
