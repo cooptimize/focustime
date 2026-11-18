@@ -91,7 +91,7 @@ export function reviewableMeeting(e: DrawnMeeting & { responseStatus?: string },
 let reviewWanted: { start: string; end: string } | null = null;
 export const requestReviewCall = (e: { start: string; end: string }) => {
   reviewWanted = { start: e.start, end: e.end };
-  location.hash = "#/meetings";
+  location.hash = "#/calls";
 };
 export const takeReviewCall = (): { start: string; end: string } | null => {
   const x = reviewWanted;
@@ -107,23 +107,12 @@ export const takeFetch = (occurrenceId: number): boolean => {
   return true;
 };
 
-/** "#/meetings/<occurrence>", or its Transcript view, or a line in it. */
-export const callHref = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => `#/meetings/${occurrenceId}${view ? `/${view}` : ""}${view === "transcript" && line ? `/${line}` : ""}`;
 /**
- * MC-1e: where a call was opened from (Day, Week, Calls), so its Back returns there rather than always to Week.
- * Kept in memory only, for this page; after a reload Back goes to Calls.
+ * "#/calls/<occurrence>", or its Transcript view, or a line in it. MC-3: Calls is a tab, so a call opens there beside
+ * the list, and the browser's Back returns to where it was opened from (MC-1e's remembered place is no longer needed).
  */
-let cameFrom: { occurrenceId: number; hash: string } | null = null;
-export const rememberCallFrom = (occurrenceId: number, hash: string) => void (cameFrom = { occurrenceId, hash });
-export const callFrom = (occurrenceId: number): string | null => (cameFrom?.occurrenceId === occurrenceId ? cameFrom.hash : null);
+export const callHref = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => `#/calls/${occurrenceId}${view ? `/${view}` : ""}${view === "transcript" && line ? `/${line}` : ""}`;
 export const openCall = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => void (location.hash = callHref(occurrenceId, view, line));
-// Any way in (a mark's link, a button, a typed address) passes through a hash change: the place before it is kept.
-if (typeof window !== "undefined")
-  window.addEventListener("hashchange", (e) => {
-    const to = /^#\/meetings\/(\d+)(\/|$)/.exec(new URL(e.newURL).hash);
-    const from = new URL(e.oldURL).hash;
-    if (to && !new RegExp(`^#/meetings/${to[1]}(/|$)`).test(from)) rememberCallFrom(Number(to[1]), from || "#/today");
-  });
 
 /**
  * MC-1d: Propose again from a meeting's menu opens the call's page, which runs it there (so the person sees it run and

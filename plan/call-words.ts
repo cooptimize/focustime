@@ -130,7 +130,7 @@ export const CALL_ACTIONS = {
   fromTeams: "Get it from Teams",
 } as const;
 
-/** MC-2: Calls (#/meetings): its two lists, Add a call, and the setup a call that isn't registered opens with. */
+/** MC-2: Calls (#/calls since MC-3; #/meetings before): its lists, Add a call, and the setup a call that isn't registered opens with. */
 export const CALLS_TEXT = {
   heading: "Calls",
   sub: "Your client calls and the other calls you were on",
