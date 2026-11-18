@@ -15,6 +15,8 @@ const kinds = (f: RhythmFacts, sent: string[] = []) => rhythmDue(f, new Set(sent
 describe("rhythm times (TB-2)", () => {
   it("brief at the day's start until the morning ends; check-in and close out at the app's times (SA-3)", () => {
     expect(rhythmTimes(hours, "2026-11-02", ALL, APP)).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "12:30", until: "15:00" }, closeout: { at: "16:45", until: "17:00" } });
+    // SA-3 review: the app's close out at 0 (or under 5) minutes still leaves Teams a window, 5 minutes before the end.
+    expect(rhythmTimes(hours, "2026-11-02", ALL, { ...APP, closeoutMinutes: 0 }).closeout).toEqual({ at: "16:55", until: "17:00" });
     expect(rhythmTimes(hours, "2026-11-02", ALL, { checkinMinutes: 30, closeoutMinutes: 60 })).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "13:00", until: "15:00" }, closeout: { at: "16:00", until: "17:00" } });
   });
   // SA-3 test 4: Teams' own stored times are never read, whether they differ from the app's or match them.

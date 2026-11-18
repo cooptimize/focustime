@@ -41,7 +41,7 @@ no root font of 17 px, which SA-2's iPhone checks added, so those rows read long
 |---|---|---|
 | 1 | Close out time: the app's 15 minutes against Teams' 30 | **Gone.** One row, one time; Teams uses the app's. A person whose Teams time differed sees a one-time note. |
 | 2 | Midday check-in: 0 minutes after lunch against Teams' 12:00 PM | **Gone.** One row, one time, as 1. |
-| 3 | Reminder times in Day and Week, their switches in Notifications; an empty time with the switch on | **Gone.** Each reminder is one row in Reminders and notices with its switch and time; an empty stored time reads as the default. |
+| 3 | Reminder times in Day and Week, their switches in Notifications; an empty time with the switch on | **Gone.** Each reminder is one row in Reminders and notices with its switch and time; a week nudge's empty time is still that day off, and the row says so. |
 | 4 | Status report in three places (the in-app kind, the Teams kind, the times) | **Gone.** One Status report row with both switches and its times. |
 | 5 | Timelines: Display's default against V for the session | **Still there.** Unchanged on purpose: V is for the session. |
 | 6 | Days on Week: Show weekend in Display, Every weekend day only in Week's View options | **Gone.** Display's Show weekend is one choice (Never, When something's on them, Always). Always stays per browser (open questions). |

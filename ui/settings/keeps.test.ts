@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HISTORY_DAYS } from "../../assistant/types.ts";
-import { UNMATCHED_DAYS } from "../../plan/asks.ts";
+import { ORG_SPECS } from "../../config/org.ts";
 import { TRANSCRIPT_DAYS } from "../../plan/meetings.ts";
 import { HARD_DELETE_AFTER_DAYS as STORE_DAYS } from "../../store/user-data.ts";
 import { KEEP_LINES, KEEP_NUMBERS } from "./keeps.ts";
@@ -13,7 +13,8 @@ describe("SA-3: What FocusTime keeps about you", () => {
     const line = (id: string) => KEEP_LINES.find((l) => l.id === id)!.kept;
     expect(KEEP_NUMBERS.HARD_DELETE_AFTER_DAYS).toBe(STORE_DAYS);
     expect(line("plan")).toContain(`${STORE_DAYS} days`);
-    expect(line("chats")).toContain(`${UNMATCHED_DAYS} days`);
+    // The chat messages' days are the admin's Rule (conv.retention_days, what the poll deletes by); the line names it.
+    expect(line("chats")).toContain(`(${ORG_SPECS["conv.retention_days"].builtin} unless they changed it)`);
     expect(line("transcripts")).toContain(`${TRANSCRIPT_DAYS} days`);
     expect(line("assistant")).toContain(`${HISTORY_DAYS} days`);
   });

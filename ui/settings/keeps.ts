@@ -1,7 +1,7 @@
 // SA-3: Settings › Your data › What FocusTime keeps about you. Every line and number comes from docs/technical/ (Data,
 // "Retention" and "Who sees what") and the code's own constants, never typed a second time (ui/settings/keeps.test.ts).
 import { HISTORY_DAYS } from "../../assistant/types.ts";
-import { UNMATCHED_DAYS } from "../../plan/asks.ts";
+import { ORG_SPECS } from "../../config/org.ts";
 import { TRANSCRIPT_DAYS } from "../../plan/meetings.ts";
 import { HARD_DELETE_AFTER_DAYS } from "../../plan/retention-days.ts";
 
@@ -9,7 +9,9 @@ import { HARD_DELETE_AFTER_DAYS } from "../../plan/retention-days.ts";
 export type KeepLink = { label: string; section?: string; setting?: string; href?: string };
 export type KeepLine = { id: string; what: string; kept: string; link: KeepLink };
 
-export const KEEP_NUMBERS = { HARD_DELETE_AFTER_DAYS, UNMATCHED_DAYS, TRANSCRIPT_DAYS, HISTORY_DAYS } as const;
+/** The chat messages' days are a team Rule (Admin › Client chats); this is its starting value. */
+const CHAT_DAYS = ORG_SPECS["conv.retention_days"].builtin;
+export const KEEP_NUMBERS = { HARD_DELETE_AFTER_DAYS, CHAT_DAYS, TRANSCRIPT_DAYS, HISTORY_DAYS } as const;
 
 export const KEEP_LINES: readonly KeepLine[] = [
   {
@@ -21,7 +23,7 @@ export const KEEP_LINES: readonly KeepLine[] = [
   {
     id: "chats",
     what: "Messages from your clients' registered chats, shown only to people in that chat who follow its client.",
-    kept: `A message that didn't become a request is deleted after ${UNMATCHED_DAYS} days. Images are never stored.`,
+    kept: `A message that didn't become a request is deleted after the days your FocusTime admin sets (${CHAT_DAYS} unless they changed it). Images are never stored.`,
     link: { label: "Chats FocusTime reads", section: "clients", setting: "chats-read" },
   },
   {

@@ -77,13 +77,13 @@ describe.skipIf(!OUT || !CHROMIUM)("SA-3 screenshots", () => {
     await full(page, "fold/3-open.png", 1440, 900);
     await call(page, "settings.save", { section: "planning", values: { carryDays: carry } });
     // The one-time note: Teams' close out was 30 minutes before the day ends, the app's is 15.
-    await call(page, "settings.save", { section: "notify", values: { teams: { closeout: true } } });
+    await call(page, "settings.save", { section: "notify", values: { teamsMessages: true, teams: { closeout: true } } });
     await page.reload();
     await open(page, "#/settings/notifications/notify-closeout");
     const row = page.locator('.ps-body [data-setting="notify-closeout"]').first();
     await row.getByText(/It now uses this time/).waitFor();
     await row.screenshot({ path: join(OUT, "states/teams-note.png") });
-    await call(page, "settings.save", { section: "notify", values: { teams: { closeout: false } } });
+    await call(page, "settings.save", { section: "notify", values: { teamsMessages: false, teams: { closeout: false } } });
     // A client's page as a lead (the demo person leads), then as someone who can't change the data platform.
     await open(page, "#/settings/clients");
     await page.locator(".ps-body .sp-links a").first().click();

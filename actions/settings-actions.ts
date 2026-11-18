@@ -127,6 +127,8 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
 /** SA-3: the Teams time notes still to show (Got it marks one as seen, for good). */
 async function teamsNoteOf(ctx: SettingsContext, cfg: AppConfig, tz: string): Promise<TeamsNote> {
   const today = ctx.now ? localToday(ctx.now(), tz) : Temporal.Now.plainDateISO(tz).toString();
+  // Only someone FocusTime could message in Teams was getting Teams' own times.
+  if (!cfg.notify.teamsMessages) return { checkin: null, closeout: null };
   const n = teamsTimeNotes(cfg.week.hours, today, cfg.notify.teams, appTimesOf(cfg));
   if (!n.checkin && !n.closeout) return n;
   const seen = ctx.plan ? await ctx.plan.markedDates(TEAMS_NOTE_MARK).catch(() => new Set<string>()) : new Set<string>();

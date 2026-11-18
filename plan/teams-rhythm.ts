@@ -86,6 +86,9 @@ export function teamsTimeNotes(model: TimeModel, today: IsoDate, s: TeamsRhythm,
   return { checkin, closeout };
 }
 
+/** The fewest minutes before the day ends a Teams close out goes (Teams' own setting's minimum before SA-3). */
+export const TEAMS_CLOSEOUT_MIN = 5;
+
 /** The midday a day without a lunch split uses for the check-in (the old Teams default). */
 const MIDDAY = 12 * 60;
 
@@ -114,7 +117,9 @@ export function rhythmTimes(model: TimeModel, date: IsoDate, s: TeamsRhythm, app
   const amEnd = h.am ? toMin(h.am.end) : end;
   // SA-3: the app's times, not the Teams ones (checkinAt and closeoutMinutes are kept, unread).
   const checkin = toMin(checkinAt(model, date, app)!);
-  const closeout = end - app.closeoutMinutes;
+  // The app's close out may be 0 minutes before the end; a Teams message needs a window inside the day, and Teams' own
+  // minutes were never under 5, so it goes at least 5 minutes before the end.
+  const closeout = end - Math.max(app.closeoutMinutes, TEAMS_CLOSEOUT_MIN);
   return {
     brief: win(brief, Math.max(amEnd, brief + 60)),
     checkin: win(checkin, Math.max(end - 120, checkin + 60)),

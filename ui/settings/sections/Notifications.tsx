@@ -158,7 +158,7 @@ export function NotificationsSection(p: FormProps) {
             {also("closeout")}
           </Controls>
         </Row>
-        <Row id="week-nudges" wide help="While that week has nothing on it yet." mark={kindMark("look_ahead") ?? kindMark("plan_week") ?? markOf(pl, "weekNudgeThu")}>
+        <Row id="week-nudges" wide help={[pl.v.weekNudgeThu, pl.v.weekNudgeFri, pl.v.weekNudgeMon].includes("") ? "While that week has nothing on it yet. A day with no time is off; pick a time to turn it on." : "While that week has nothing on it yet."} mark={kindMark("look_ahead") ?? kindMark("plan_week") ?? markOf(pl, "weekNudgeThu")}>
           <Controls>
             <Switch sid="notify-look-ahead" text="Thursday and Friday, for next week" checked={a.v.kinds.look_ahead} onChange={(on) => setKind("look_ahead", on)} />
             <Sub text="Thursday at" sid="nudge-thu">
