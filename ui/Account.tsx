@@ -300,7 +300,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       const sk = s.autoStart?.skippedToday;
       if (sk) {
         items.push({ id: "auto-skipped", label: sk.text, run: onSettings });
-        if (sk.undo) items.push({ id: "auto-unskip", label: "Don't skip", action: "vm.autostart_unskip", run: () => void call("vm.autostart_unskip", {}).then(() => (notify("Today's auto-start is back on"), void refresh(true)), (e: unknown) => notify(errText(e))) });
+        if (sk.undo) items.push({ id: "auto-unskip", label: "Don't skip", action: "vm.autostart_unskip", run: () => void call("vm.autostart_unskip", {}).then(() => refresh(true), (e: unknown) => notify(errText(e))) });
       }
       // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
       if (s.autoStart?.next) {
@@ -415,8 +415,8 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
               setBusy(true);
               setError(null);
               try {
-                const r = await call<{ startsAgain?: string }>("vm.confirm", { previewId: p.previewId, ...(p.startAgain ? { skipToday } : {}) });
-                onDone(r?.startsAgain ? `Stopped. It will start again at ${r.startsAgain}.` : DONE[p.op]);
+                const r = await call<{ said?: string }>("vm.confirm", { previewId: p.previewId, skipToday });
+                onDone(r?.said ?? DONE[p.op]);
               } catch (e) {
                 setError(errText(e));
               } finally {

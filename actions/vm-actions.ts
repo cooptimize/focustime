@@ -214,7 +214,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
         if (days.length) await writeAutoStart(ctx.plan, (s) => days.reduce((x, d) => withSkip(x, d, "stop"), s));
         // The message after says when it starts again, when it still does today.
         const again = await startLaterToday(ctx, cfg, today);
-        if (again) return { ...r, data: { ...(r.data as object), startsAgainAt: again.toString(), startsAgain: clock(again, tz) } };
+        if (again) return { ...r, data: { ...(r.data as object), startsAgainAt: again.toString(), startsAgain: clock(again, tz), said: `Stopped. It will start again at ${clock(again, tz)}.` } };
       }
       return r;
     }

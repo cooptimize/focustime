@@ -1,15 +1,15 @@
 {
  "limit": {
-  "script": 348500,
+  "script": 348700,
   "styles": 88000
  },
  "measured": {
-  "script": 348206,
-  "styles": 86000
+  "script": 348597,
+  "styles": 86145
  },
  "modules": {
   "actions/feedback-types.ts": 81,
-  "actions/registry.ts": 79798,
+  "actions/registry.ts": 80657,
   "ai/tiers.ts": 120,
   "ai/types.ts": 926,
   "assets/brand/wordmark.svg": 4889,
@@ -167,8 +167,8 @@
   "plan/boardsuggest.ts": 5682,
   "plan/borrow.ts": 331,
   "plan/breakdown.ts": 672,
-  "plan/call-list.ts": 3884,
-  "plan/call-words.ts": 10853,
+  "plan/call-list.ts": 4163,
+  "plan/call-words.ts": 10969,
   "plan/calls.ts": 733,
   "plan/caltier.ts": 4313,
   "plan/capture-prepare.ts": 1912,
@@ -244,7 +244,7 @@
   "plan/wrapup.ts": 754,
   "rolldown/runtime.js": 1419,
   "ui/About.tsx": 4266,
-  "ui/Account.tsx": 51064,
+  "ui/Account.tsx": 52482,
   "ui/Agenda.tsx": 4609,
   "ui/App.tsx": 140842,
   "ui/BlockCard.tsx": 31412,
@@ -350,7 +350,7 @@
   "ui/meetings/CallMark.tsx": 1669,
   "ui/meetings/calls.ts": 4192,
   "ui/menu-icons.ts": 5026,
-  "ui/menu.ts": 98537,
+  "ui/menu.ts": 98657,
   "ui/nav.ts": 24566,
   "ui/needed.ts": 2298,
   "ui/new-types.ts": 227,
