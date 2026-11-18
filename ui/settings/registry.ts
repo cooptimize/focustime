@@ -127,7 +127,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "timelines", section: "display", label: "Timelines", kind: "choice", keywords: ["business hours", "12 hours", "24 hours", "view range"] },
   { id: "personal-events", section: "display", label: "Show personal events", old: ["Personal events"], kind: "switch", keywords: ["google"] },
   { id: "week-days", section: "display", label: "Days on Week", kind: "switch", keywords: ["friday", "weekend", "saturday", "sunday"] },
-  { id: "show-friday", section: "display", label: "Show Friday", group: "Days on Week", kind: "switch", part: true },
+  { id: "show-friday", section: "display", label: "Show the catch-up day", old: ["Show Friday"], group: "Days on Week", kind: "switch", part: true },
   { id: "show-weekend", section: "display", label: "Show the weekend", old: ["Show weekend"], group: "Days on Week", kind: "switch", part: true },
   { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], kind: "switch", keywords: ["animation", "loader"] },
   // Day and Week

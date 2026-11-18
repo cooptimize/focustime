@@ -11,11 +11,9 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
 import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
-import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES } from "../config/schema.ts";
-import { TEXT_SIZE_NAMES } from "./textsize.ts";
+import { COLLAB_LENGTHS } from "../config/schema.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
-import { VIEW_RANGE_NAMES, VIEW_RANGES } from "../week/hours.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
@@ -46,6 +44,7 @@ import { Icon } from "./icons.tsx";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
+import { DisplaySection } from "./settings/sections/Display.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -358,61 +357,7 @@ function SectionBody(p: BodyProps) {
     case "devops":
       return <DevOpsSection {...p} />;
     case "display":
-      return (
-        <div className="set-grid">
-          <fieldset className="set-choice" data-setting="theme">
-            <legend>Theme</legend>
-            {THEMES.map((t) => (
-              <label key={t}>
-                <input type="radio" name="theme" checked={p.theme === t} onChange={() => p.setTheme(t)} /> {THEME_NAMES[t]}
-              </label>
-            ))}
-            <span className="set-hint">Applies at once.</span>
-          </fieldset>
-          <fieldset className="set-choice" data-setting="text-size">
-            <legend>Text size</legend>
-            {TEXT_SIZES.map((s) => (
-              <label key={s}>
-                <input type="radio" name="text-size" checked={p.textSize === s} onChange={() => p.setTextSize(s)} /> {TEXT_SIZE_NAMES[s]}
-              </label>
-            ))}
-            <span className="set-hint">Ctrl + and Ctrl − change it; Ctrl 0 resets.</span>
-          </fieldset>
-          <fieldset className="set-choice" data-setting="timelines">
-            <legend>Timelines</legend>
-            {VIEW_RANGES.map((r) => (
-              <label key={r}>
-                <input type="radio" name="range" checked={p.viewRange === r} onChange={() => p.setViewRange(r)} /> {VIEW_RANGE_NAMES[r]}
-              </label>
-            ))}
-            <span className="set-hint">The default. V on Week changes it until you close FocusTime.</span>
-          </fieldset>
-          <fieldset className="set-choice" data-setting="personal-events">
-            <legend>Personal events</legend>
-            <label>
-              <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Day
-            </label>
-            <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
-          </fieldset>
-          <fieldset className="set-choice" data-setting="week-days">
-            <legend>Days on Week</legend>
-            <label>
-              <input type="checkbox" checked={p.weekDays.catchUp} onChange={(e) => p.setWeekDays({ catchUp: e.target.checked })} /> Show {p.catchUpName}
-            </label>
-            <label>
-              <input type="checkbox" checked={p.weekDays.weekend} onChange={(e) => p.setWeekDays({ weekend: e.target.checked })} /> Show weekend
-            </label>
-            <span className="set-hint">With Show weekend on, weekend days show when something is on them (or always, with Every weekend day under Week's View options). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.</span>
-          </fieldset>
-          <fieldset className="set-choice" data-setting="reduce-motion">
-            <legend>Motion</legend>
-            <label>
-              <input type="checkbox" checked={p.reduceMotion} onChange={(e) => p.setReduceMotion(e.target.checked)} /> Reduce motion
-            </label>
-            <span className="set-hint">No opening animation; the loader's mark holds still.</span>
-          </fieldset>
-        </div>
-      );
+      return <DisplaySection {...p} />;
     case "activity":
       return <ActivitySection {...p} />;
     case "data":
