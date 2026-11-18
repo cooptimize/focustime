@@ -118,8 +118,9 @@ a.sp-btn:hover { background: var(--wash-1); }
 .ps-body .sp-table, .sp-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); display: table; }
 .sp-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .sp-table td { padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--border); overflow-wrap: normal; }
-.sp-table tr:first-child td { border-top: 0; }
-.sp-table .failed td:first-child, .sp-table .refused td:first-child { box-shadow: inset 2px 0 0 var(--risk); }
+.sp-table tbody th { font-weight: 500; color: var(--text); white-space: normal; vertical-align: top; border-bottom: 0; border-top: 1px solid var(--border); }
+.sp-table tr:first-child :is(td, th) { border-top: 0; }
+.sp-table .failed :is(td, th):first-child, .sp-table .refused :is(td, th):first-child { box-shadow: inset 2px 0 0 var(--risk); }
 /* A narrow column (the phone, a narrow window, the largest text): the control under its label, full width. */
 @container (max-width: 560px) {
   .sp-row { grid-template-columns: minmax(0, 1fr); }

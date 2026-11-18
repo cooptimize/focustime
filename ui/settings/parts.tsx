@@ -233,7 +233,7 @@ export function Fold({ label, count, children, sid }: { label: string; count?: n
 }
 
 /** One table style: a head row, rows of cells, its own sideways scroll on a narrow screen. */
-export function Table({ label, head, rows, rowKey, rowTone, after }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string | undefined) | undefined; /** SA-4: a full-width line under a row (a confirm at that row), or nothing. */ after?: ((i: number) => ReactNode) | undefined }) {
+export function Table({ label, head, rows, rowKey, rowTone, after, rowHeads }: { /** SA-4: the first cell names its row (a row header for screen readers). */ rowHeads?: boolean | undefined; label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string | undefined) | undefined; /** SA-4: a full-width line under a row (a confirm at that row), or nothing. */ after?: ((i: number) => ReactNode) | undefined }) {
   return (
     <div className="sp-table-wrap">
       <table className="sp-table" aria-label={label}>
@@ -252,9 +252,15 @@ export function Table({ label, head, rows, rowKey, rowTone, after }: { label: st
             return (
               <Fragment key={rowKey ? rowKey(i) : i}>
                 <tr className={rowTone?.(i)}>
-                  {r.map((c, j) => (
-                    <td key={j}>{c}</td>
-                  ))}
+                  {r.map((c, j) =>
+                    rowHeads && j === 0 ? (
+                      <th key={j} scope="row">
+                        {c}
+                      </th>
+                    ) : (
+                      <td key={j}>{c}</td>
+                    ),
+                  )}
                 </tr>
                 {more && (
                   <tr className="sp-after">
@@ -444,7 +450,11 @@ export function Choice<T extends string | number>({ options, value, onChange, di
             if (n === null) return;
             e.preventDefault();
             e.stopPropagation();
-            const k = (n + options.length) % options.length;
+            // Skip a side that isn't offered now.
+            let k = (n + options.length) % options.length;
+            const step = n > i ? 1 : -1;
+            for (let tries = 0; options[k]!.disabled && tries < options.length; tries++) k = (k + step + options.length) % options.length;
+            if (options[k]!.disabled) return;
             onChange(options[k]!.value);
             (e.currentTarget.parentElement?.children[k] as HTMLElement | undefined)?.focus();
           }}
@@ -471,12 +481,12 @@ export function Select<T extends string | number>({ options, value, onChange, di
 }
 
 /** A number with its unit beside it (the row's unit from the registry unless given). */
-export function Num({ value, onChange, min, max, step = 1, unit, bind, disabled, label }: { value: number; onChange: (n: number) => void; min?: number | undefined; max?: number | undefined; step?: number | undefined; unit?: string | undefined; bind?: TextBind | undefined; disabled?: boolean | undefined; label?: string | undefined }) {
+export function Num({ value, onChange, min, max, step = 1, unit, bind, disabled, label, onText }: { value: number; onChange: (n: number) => void; /** SA-4: the box's text as typed, so an emptied box isn't read as 0 (Admin saves on blur). */ onText?: ((s: string) => void) | undefined; min?: number | undefined; max?: number | undefined; step?: number | undefined; unit?: string | undefined; bind?: TextBind | undefined; disabled?: boolean | undefined; label?: string | undefined }) {
   const r = useRow();
   const u = unit ?? r?.unit;
   return (
     <span className="sp-num">
-      <input type="number" inputMode="numeric" min={min} max={max} step={step} value={Number.isFinite(value) ? value : ""} disabled={disabled} onChange={(e) => onChange(Number(e.target.value))} {...named(r, label)} {...bind} />
+      <input type="number" inputMode="numeric" min={min} max={max} step={step} value={Number.isFinite(value) ? value : ""} disabled={disabled} onChange={(e) => (onText ? onText(e.target.value) : onChange(Number(e.target.value)))} {...named(r, label)} {...bind} />
       {u && <span className="sp-unit">{u}</span>}
     </span>
   );

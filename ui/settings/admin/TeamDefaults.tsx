@@ -6,8 +6,8 @@ import { useState } from "react";
 import { call } from "../../api.ts";
 import { Stamp } from "../../Stamp.tsx";
 import { plain } from "../autosave.tsx";
-import { Button, Buttons, Controls, Group, Note, OutLink, Page, Row, Sub, Table, Value } from "../parts.tsx";
-import { AdminConfirm, AField, ARead, ASwitch, Kind, ListInput, NumInput, Problem, TextInput, useAdminSave, useSection, type ClientCounts, type ClientFilterValue, type Saver } from "./shared.tsx";
+import { Button, Buttons, Controls, Group, Note, OutLink, Page, Row, State, Sub, Table, Value } from "../parts.tsx";
+import { AdminConfirm, AField, ARead, ASwitch, CellMark, Kind, ListInput, NumInput, Problem, TextInput, useAdminSave, useSection, type ClientCounts, type ClientFilterValue, type Saver } from "./shared.tsx";
 import { adminHref } from "./places.ts";
 
 const Loading = () => <Note>Loading…</Note>;
@@ -86,10 +86,10 @@ export function AiTab() {
         <AField label="Model" kind="Rule" s={saver.status(o, "ai.model")} retry={() => void saver.save(o, "ai.model", data.model, "Model")} hint="The OpenAI model every AI request uses, by its name in OpenAI, like gpt-5-mini.">
           <TextInput label="Model" value={data.model} maxLength={60} onSave={(v) => void saver.save(o, "ai.model", v, "Model")} />
         </AField>
-        <AField label="Monthly cap per person" kind="Rule" s={saver.status(o, "ai.person_cap_usd")} retry={() => void saver.save(o, "ai.person_cap_usd", data.personCapUsd, "Cap per person")} hint={data.zero.person ? "AI budget is set to $0" : "AI stops for a person at this, until next month."}>
+        <AField label="Monthly cap per person" kind="Rule" s={saver.status(o, "ai.person_cap_usd")} retry={() => void saver.save(o, "ai.person_cap_usd", data.personCapUsd, "Cap per person")} hint={data.zero.person ? <State tone="error">AI budget is set to $0</State> : "AI stops for a person at this, until next month."}>
           <NumInput label="Monthly cap per person" unit="US dollars" value={data.personCapUsd} min={0} max={10000} onSave={(v) => void saver.save(o, "ai.person_cap_usd", v, "Cap per person")} />
         </AField>
-        <AField label="Monthly cap for everyone" kind="Rule" s={saver.status(o, "ai.app_cap_usd")} retry={() => void saver.save(o, "ai.app_cap_usd", data.appCapUsd, "Cap for everyone")} hint={data.zero.app ? "AI budget is set to $0" : `This month so far: $${(data.appSpentMicros / 1e6).toFixed(2)}.`}>
+        <AField label="Monthly cap for everyone" kind="Rule" s={saver.status(o, "ai.app_cap_usd")} retry={() => void saver.save(o, "ai.app_cap_usd", data.appCapUsd, "Cap for everyone")} hint={data.zero.app ? <State tone="error">AI budget is set to $0</State> : `This month so far: $${(data.appSpentMicros / 1e6).toFixed(2)}.`}>
           <NumInput label="Monthly cap for everyone" unit="US dollars" value={data.appCapUsd} min={0} max={10000} onSave={(v) => void saver.save(o, "ai.app_cap_usd", v, "Cap for everyone")} />
         </AField>
       </Group>
@@ -223,15 +223,16 @@ export function PlanningTab() {
           const name = data.levelNames[lv] ?? lv;
           const ds = saver.shown(scope, "draft_stories", g.draftStories);
           const rn = saver.shown(scope, "readiness_nudges", g.readinessNudges);
-          const s = saver.status(scope, "draft_stories") ?? saver.status(scope, "readiness_nudges");
           return (
-            <Row key={lv} id={lv} def={{ label: name }} noSid badge={<Kind kind="Default by level" />} mark={{ s, retry: () => (void saver.save(scope, "draft_stories", g.draftStories, "Break down"), void saver.save(scope, "readiness_nudges", g.readinessNudges, "Needs attention nudges")) }}>
+            <Row key={lv} id={lv} def={{ label: name }} noSid badge={<Kind kind="Default by level" />}>
               <Controls>
                 <Sub text="Break down offered">
                   <ASwitch label={`${name}: Break down offered`} checked={ds} onChange={(v) => void saver.save(scope, "draft_stories", v, `${name}: Break down`)} />
+                  <CellMark s={saver.status(scope, "draft_stories")} retry={() => void saver.save(scope, "draft_stories", g.draftStories, "Break down")} />
                 </Sub>
                 <Sub text="Needs attention nudges">
                   <ASwitch label={`${name}: Needs attention nudges`} checked={rn} onChange={(v) => void saver.save(scope, "readiness_nudges", v, `${name}: readiness nudges`)} />
+                  <CellMark s={saver.status(scope, "readiness_nudges")} retry={() => void saver.save(scope, "readiness_nudges", g.readinessNudges, "Needs attention nudges")} />
                 </Sub>
               </Controls>
             </Row>
@@ -304,7 +305,7 @@ export function StandardsTab() {
         {data.articles.length === 0 ? (
           <Note>None yet.</Note>
         ) : (
-          <Table label="Active articles" head={["Title", "Domain", "Layer", "Artifact", "Technology", "Path"]} rowKey={(i) => data.articles[i]!.path} rows={data.articles.map((a) => [<OutLink key="t" href={a.url}>{a.title}</OutLink>, a.domain, a.layer, a.artifact, a.technology, a.path])} />
+          <Table rowHeads label="Active articles" head={["Title", "Domain", "Layer", "Artifact", "Technology", "Path"]} rowKey={(i) => data.articles[i]!.path} rows={data.articles.map((a) => [<OutLink key="t" href={a.url}>{a.title}</OutLink>, a.domain, a.layer, a.artifact, a.technology, a.path])} />
         )}
       </Group>
     </Page>

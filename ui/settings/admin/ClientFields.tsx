@@ -119,7 +119,7 @@ export function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow;
           help={`Needs breakdown and Background apply to everyone's plans for ${c.key}.`}
           mark={{ s: saver.status(scope, "no_breakdown") ?? saver.status(scope, "background"), retry: () => (saver.status(scope, "no_breakdown") ? saveNb(noBreakdown) : saveBg(background)) }}
         >
-          <Table
+          <Table rowHeads
             label={`${c.key}: types`}
             head={["Type", "Level", "Needs breakdown", "Background", "Last 12 months"]}
             rowKey={(i) => p.types[i]!.name}

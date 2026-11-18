@@ -77,7 +77,7 @@ export function ScopeField({ clientKey, project, s, save, status, retry }: { cli
         <>
           {s.facts?.teamsProblem && <Note>{s.facts.teamsProblem}.</Note>}
           {counts.teams && counts.teams.length > 0 && (
-            <Table
+            <Table rowHeads
               label={`${clientKey}: teams`}
               head={["Team", "Its area paths", "Open items", "Cooptimize's"]}
               rowKey={(i) => counts.teams![i]!.name}
@@ -96,7 +96,7 @@ export function ScopeField({ clientKey, project, s, save, status, retry }: { cli
       {mode === "areas" && counts && (
         <>
           {s.facts?.areasProblem && <Note>{s.facts.areasProblem}.</Note>}
-          <Table
+          <Table rowHeads
             label={`${clientKey}: area paths`}
             head={["Area path", "Include sub-areas", "Open items", "Cooptimize's"]}
             rowKey={(i) => counts.areas[i]!.path}

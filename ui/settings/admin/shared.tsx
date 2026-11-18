@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { call } from "../../api.ts";
 import { useReturnFocus } from "../../CloseButton.tsx";
 import { plain, useSaveContext, type FieldStatus } from "../autosave.tsx";
-import { Badge, Button, Buttons, Choice, Note, Num, Row, Switch, Text } from "../parts.tsx";
+import { Badge, Button, Buttons, Choice, Mark, Note, Num, Row, Switch, Text } from "../parts.tsx";
 import type { SourceSystem } from "../../../plan/standards.ts";
 import type { ClientProcess } from "../../../actions/types.ts";
 import type { ClientScopeRow } from "../AdminScope.tsx";
@@ -151,11 +151,23 @@ export function ListInput({ value, onSave, label, placeholder }: { value: readon
 export function NumInput({ value, onSave, label, min, max, step = 1, unit }: { value: number; onSave: (v: number) => void; label: string; min: number; max: number; step?: number; unit?: string | undefined }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
+  // An emptied or half-typed box saves nothing and goes back to the stored value, as before the parts.
   const commit = () => {
     const n = Number(text);
-    if (text.trim() !== "" && n !== value) onSave(n);
+    if (text.trim() === "" || !Number.isFinite(n)) return setText(String(value));
+    if (n !== value) onSave(n);
   };
-  return <Num label={label} value={text.trim() === "" ? Number.NaN : Number(text)} min={min} max={max} step={step} unit={unit} onChange={(n) => setText(Number.isFinite(n) ? String(n) : "")} bind={{ onBlur: commit, onKeyDown: enter(commit) }} />;
+  return <Num label={label} value={text.trim() === "" ? Number.NaN : Number(text)} min={min} max={max} step={step} unit={unit} onChange={(n) => setText(String(n))} onText={setText} bind={{ onBlur: commit, onKeyDown: enter(commit) }} />;
+}
+
+/** A saved mark inside a table cell or beside one switch of several: the mark, and a refusal's own words under it. */
+export function CellMark({ s, retry }: { s: FieldStatus; retry: () => void }) {
+  return (
+    <>
+      <Mark s={s} retry={retry} />
+      {s?.kind === "error" && <Note tone="problem">{s.messages.join("; ")}</Note>}
+    </>
+  );
 }
 
 /** A line of text saved on blur or Enter. */

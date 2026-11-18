@@ -5,7 +5,7 @@
 // list of places to open (Clients in Settings is the same), a tab's settings are groups of rows.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { call } from "../../api.ts";
-import { Button, Group, LinkItem, Links, Mark, Note, Page, Row, State, Swatches, Table, Text, Value } from "../parts.tsx";
+import { Button, Group, LinkItem, Links, Note, Page, Row, State, Swatches, Table, Text, Value } from "../parts.tsx";
 import { DeliveryChatField, DeliveryChatsProvider, useDeliveryChats } from "../DeliveryChats.tsx";
 import { MeetingsField } from "../AdminMeetings.tsx";
 import { ScopeField } from "../AdminScope.tsx";
@@ -13,7 +13,7 @@ import { DeploySettings } from "../../DeployItems.tsx";
 import { TextBox } from "../../TextBox.tsx";
 import { StatusRows } from "../StatusRows.tsx";
 import type { StatusGroup } from "../../../actions/status-rows.ts";
-import { AField, ARead, ASwitch, ClientFilter, Kind, ListInput, Problem, useAdminChanged, useAdminSave, useSection, type ClientFilterValue, type ClientRow, type ClientsData, type Saver } from "./shared.tsx";
+import { AField, ARead, ASwitch, CellMark, ClientFilter, Kind, ListInput, Problem, useAdminChanged, useAdminSave, useSection, type ClientFilterValue, type ClientRow, type ClientsData, type Saver } from "./shared.tsx";
 import { CodeAccessField, FixGapsField, ProcessView, SourceSystemsField } from "./ClientFields.tsx";
 import { Tabs } from "./Tabs.tsx";
 import { adminHref, CLIENT_TABS, type ClientTab } from "./places.ts";
@@ -24,8 +24,6 @@ const TYPE_WORDS: Record<string, string> = { customer: "Customer", prospect: "Pr
 
 /** ADM-2: every account with why it is or isn't a client, and the admins' two overrides (each audited). */
 function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
-  // The saved mark of the last override changed, said on the table's row.
-  const changed = rows.map((c) => `client:${c.key}`).flatMap((scope) => (["treat_as_client", "hidden"] as const).map((k) => ({ scope, k, s: saver.status(scope, k) }))).find((x) => x.s);
   return (
     <Row
       id="all-accounts"
@@ -34,9 +32,8 @@ function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
       wide
       badge={<Kind kind="Rule" />}
       help="Every account, with why it is or isn't a client. Treat as a client and Hide from FocusTime are the team's."
-      mark={changed ? { s: changed.s, retry: () => undefined } : undefined}
     >
-      <Table
+      <Table rowHeads
         label="All accounts"
         head={["Account", "In Dataverse", "Client?", "Treat as a client", "Hide from FocusTime"]}
         rowKey={(i) => rows[i]!.key}
@@ -56,13 +53,13 @@ function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
             internal ? "" : (
               <span key="t">
                 <ASwitch checked={saver.shown(scope, "treat_as_client", c.treatAsClient)} label={`Treat ${c.key} as a client`} onChange={(v) => void saver.save(scope, "treat_as_client", v ? true : undefined, `${c.key}: treat as a client`)} />
-                <Mark s={saver.status(scope, "treat_as_client")} retry={() => void saver.save(scope, "treat_as_client", c.treatAsClient, `${c.key}: treat as a client`)} />
+                <CellMark s={saver.status(scope, "treat_as_client")} retry={() => void saver.save(scope, "treat_as_client", c.treatAsClient, `${c.key}: treat as a client`)} />
               </span>
             ),
             internal ? "Always a client" : (
               <span key="h">
                 <ASwitch checked={saver.shown(scope, "hidden", c.hidden)} label={`Hide ${c.key} from FocusTime`} onChange={(v) => void saver.save(scope, "hidden", v ? true : undefined, `${c.key}: hide from FocusTime`)} />
-                <Mark s={saver.status(scope, "hidden")} retry={() => void saver.save(scope, "hidden", c.hidden, `${c.key}: hide from FocusTime`)} />
+                <CellMark s={saver.status(scope, "hidden")} retry={() => void saver.save(scope, "hidden", c.hidden, `${c.key}: hide from FocusTime`)} />
               </span>
             ),
           ];
@@ -286,11 +283,11 @@ function ClientTabBody({ c, palette, saver, tab, onRefresh, refreshing }: { c: C
 }
 
 /** A client's switch: its row says what on means; the help says what it does. */
-function SwitchField({ c, saver, k, label, hint, more, value, aria }: { c: ClientRow; saver: Saver; k: string; label: string; hint: ReactNode; more?: ReactNode; value: boolean; aria?: string }) {
+function SwitchField({ c, saver, k, label, on, off, hint, more, value, aria }: { c: ClientRow; saver: Saver; k: string; label: string; on: string; off: string; hint: ReactNode; more?: ReactNode; value: boolean; aria?: string }) {
   const scope = `client:${c.key}`;
   const shown = saver.shown(scope, k, value);
   return (
-    <AField label={label} kind="Rule" s={saver.status(scope, k)} retry={() => void saver.save(scope, k, value, `${c.key}: ${label}`)} hint={hint} more={more}>
+    <AField label={label} kind="Rule" s={saver.status(scope, k)} retry={() => void saver.save(scope, k, value, `${c.key}: ${label}`)} hint={<><span className="sp-block">{shown ? on : off}</span>{hint}</>} more={more}>
       <ASwitch checked={shown} label={aria ?? `${label} for ${c.key}`} onChange={(v) => void saver.save(scope, k, v, `${c.key}: ${label}`)} />
     </AField>
   );
@@ -319,7 +316,7 @@ function OverviewTab({ c, palette, saver }: { c: ClientRow; palette: string[]; s
               <ListInput label={`${c.key}: other names`} value={saver.shown(scope, "aliases", c.aliases ?? [])} onSave={(v) => void saver.save(scope, "aliases", v, `${c.key}: other names`)} />
             </AField>
             {/* HK-7 (Q-GD2-4): a name that is an ordinary word ("Atlas", "Summit") matches only with its casing. */}
-            <SwitchField c={c} saver={saver} k="exact_case" label="Match only as written" aria={`${c.key}: match only as written`} value={c.exactCase ?? false} hint={`So "${c.key}" counts and "${c.key.toLowerCase()}" doesn't. ${c.exactCaseDefault ? "On by default for this name." : "Off by default for this name."}`} />
+            <SwitchField c={c} saver={saver} k="exact_case" label="Match only as written" aria={`${c.key}: match only as written`} value={c.exactCase ?? false} on="On: only with these capitals" off="Off: any capitals" hint={`Matches the name and other names only with the capitals as written, so "${c.key}" counts and "${c.key.toLowerCase()}" doesn't. For a name that is also an ordinary word. ${c.exactCaseDefault ? "On by default for this name." : "Off by default for this name."}`} />
           </>
         )}
       </Group>
@@ -347,9 +344,9 @@ function ChatsTab({ c, saver }: { c: ClientRow; saver: Saver }) {
       </Group>
       <Group title="Reading its chats" label="Reading its chats">
         {/* CV-3: rules-only grouping while AI is off for this client (or not set up). */}
-        <SwitchField c={c} saver={saver} k="group_without_ai" label="Group messages without AI" value={c.groupWithoutAi} hint="While AI is off for the client, or not set up: replies, mentions and the same person within 45 minutes join a conversation." />
+        <SwitchField c={c} saver={saver} k="group_without_ai" label="Group messages without AI" value={c.groupWithoutAi} on="On: replies, mentions and one person's run of messages join a conversation" off="Off: each message on its own" hint="While AI is off for the client, or not set up: replies, mentions and the same person within 45 minutes join a conversation." />
         {/* CV-4: images from this client's chats go to the AI to be described; the safety check can't inspect images. */}
-        <SwitchField c={c} saver={saver} k="attachments_ai" label="Send attachments to AI" value={c.attachmentsAi} hint="Images pasted into the client's chats go to the AI to be described, with Allow AI on." more="The AI safety check reads text only and can't inspect images, so turning this on is the consent. Images are never kept in FocusTime." />
+        <SwitchField c={c} saver={saver} k="attachments_ai" label="Send attachments to AI" value={c.attachmentsAi} on="On: chat images go to the AI" off="Off: images stay out of AI" hint="Images pasted into the client's chats go to the AI to be described, with Allow AI on." more="The AI safety check reads text only and can't inspect images, so turning this on is the consent. Images are never kept in FocusTime." />
         <ARead label="AI requests per chat per day" help={<>The team's, for every client. <a className="sp-go" href={adminHref({ part: "defaults", tab: "chats" })}>Change it in Team defaults › Client chats</a></>}>
           <Value>{cap === null ? "" : `At most ${cap}`}</Value>
         </ARead>
@@ -365,7 +362,7 @@ function AiTab({ c, saver }: { c: ClientRow; saver: Saver }) {
   return (
     <Page>
       <Group label="AI">
-        <SwitchField c={c} saver={saver} k="allow_ai" label={settingLabel("client", "allow_ai")} value={c.allowAi} hint="With AI for FocusTime on (Team defaults › AI), AI may sort this client's chats, break down its items and answer about it. Off: nothing about it goes to AI." />
+        <SwitchField c={c} saver={saver} k="allow_ai" label={settingLabel("client", "allow_ai")} value={c.allowAi} on="Allowed: AI may work on this client" off="Off: no AI for this client" hint="With AI for FocusTime on (Team defaults › AI), AI may sort this client's chats, break down its items and answer about it. Off: nothing about it goes to AI." />
         {c.isClient && <SourceSystemsField c={c} saver={saver} />}
         <AField label="House style for Break down" kind="Rule" wide s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Break down request for this client. Empty goes back to the style learned from its own features.">
           <TextBox

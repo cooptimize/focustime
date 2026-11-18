@@ -41,7 +41,9 @@ export function HealthPart() {
         <Group title={`To look at (${warnings.length})`} label="To look at">
           <List label="To look at">
             {warnings.map((w, i) => (
-              <ListItem key={i}>{w.text}</ListItem>
+              <ListItem key={i}>
+                <State tone="error">{w.text}</State>
+              </ListItem>
             ))}
           </List>
         </Group>
@@ -63,12 +65,12 @@ export function HealthPart() {
       </Group>
       {data.jobs && data.jobs.length > 0 && (
         <Group title="Jobs" label="Jobs">
-          <Table label="Jobs" head={["Job", "When", "Last run"]} rowKey={(i) => data.jobs![i]!.name} rows={data.jobs.map((j) => [j.name, j.every, j.note ?? when(j.lastRun)])} />
+          <Table rowHeads label="Jobs" head={["Job", "When", "Last run"]} rowKey={(i) => data.jobs![i]!.name} rows={data.jobs.map((j) => [j.name, j.every, j.note ?? when(j.lastRun)])} />
         </Group>
       )}
       {data.passes && data.passes.length > 0 && (
         <Group title="Background passes" label="Background passes" intro="Each piece of work in a pass has a time limit; work over it is named in the log and left behind, and the next pass runs anyway.">
-          <Table
+          <Table rowHeads
             label="Background passes"
             head={["Pass", "Last finished", "Took", "Limit"]}
             rowKey={(i) => data.passes![i]!.kind}
@@ -82,7 +84,7 @@ export function HealthPart() {
         {data.chats.length === 0 ? (
           <Note>No chats registered.</Note>
         ) : (
-          <Table
+          <Table rowHeads
             label="Client chats"
             head={["Chat", "Client", "Reading", "Last poll", "State", "AI calls today"]}
             rowKey={(i) => data.chats[i]!.chatId}

@@ -32,9 +32,9 @@ export function StatusRows({ groups: initial }: { groups: readonly StatusGroup[]
           {g.rows.length === 0 ? (
             <Note>Nothing to show yet.</Note>
           ) : (
-            <Table
+            <Table rowHeads
               label={g.title}
-              head={["Name", "State", "Details", "Last check", ""]}
+              head={["Name", "State", "Details", "Last check", <State key="a" sr>Action</State>]}
               rowKey={(i) => g.rows[i]!.id}
               rows={g.rows.map((r) => [
                 r.label,

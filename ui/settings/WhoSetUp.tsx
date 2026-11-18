@@ -75,7 +75,9 @@ export function WhoSetUp() {
     "DevOps connected",
     "Calendar connected",
     ...(data.teamsKnown ? ["Teams app added"] : []),
-    "",
+    <State key="i" sr>
+      Invite
+    </State>,
   ];
   return (
     <section data-setting="whos-set-up" aria-label="Who's set up">

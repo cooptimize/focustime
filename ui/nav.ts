@@ -8,7 +8,7 @@ import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
-import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./settings/admin/places.ts";
+import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./settings/admin/paths.ts";
 import { LIST_FILTERS, type ListFilter } from "../plan/call-list.ts";
 
 export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;

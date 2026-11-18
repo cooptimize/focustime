@@ -5,10 +5,10 @@
 import { useState } from "react";
 import { call } from "../../api.ts";
 import { useSaveContext } from "../autosave.tsx";
-import { Badge, Button, Buttons, Faint, Fold, Group, List, ListItem, Mark, Note, OutLink, Page, Select, State, Table, Text } from "../parts.tsx";
+import { Badge, Button, Buttons, Faint, Fold, Group, List, ListItem, Note, OutLink, Page, Select, State, Table, Text } from "../parts.tsx";
 import { shortDate } from "../../labels.ts";
 import { WhoSetUp } from "../WhoSetUp.tsx";
-import { AdminConfirm, ASwitch, Kind, Problem, useAdminSave, useSection, type Saver } from "./shared.tsx";
+import { AdminConfirm, ASwitch, CellMark, Kind, Problem, useAdminSave, useSection, type Saver } from "./shared.tsx";
 import { Tabs } from "./Tabs.tsx";
 import { adminHref, PART_TABS } from "./places.ts";
 
@@ -104,7 +104,7 @@ export function PeoplePart({ tab, onTab }: { tab: string; onTab: (t: string) => 
         return (
           <Page>
             <Group label="People" intro="Cooptimizers only. Levels change suggestions and emphasis only, never what anyone can see or do.">
-              <Buttons result={msg ?? (data!.refreshedAt ? `Levels and leads read ${shortDate(data!.refreshedAt.slice(0, 10))}; again each day.` : "Not read from Dataverse yet.")}>
+              <Buttons result={<>{msg && <>{msg} </>}{data!.refreshedAt ? `Levels and leads read ${shortDate(data!.refreshedAt.slice(0, 10))}; again each day.` : "Not read from Dataverse yet."}</>}>
                 <Button disabled={busy} onClick={() => void refresh()}>
                   {busy ? "Reading…" : "Refresh from Dataverse"}
                 </Button>
@@ -233,9 +233,9 @@ export function PositionMap({ positions, unmapped, levels, saver }: { positions:
     <Page>
       <Group title="Positions to levels" label="Positions to levels" intro="Each Cooptimizer's level comes from their Dataverse position. A position that isn't mapped gives no level: those people show Level not set and use the Consultant defaults.">
         <Note>
-          <Kind kind="Rule" /> {unmapped > 0 && <Badge>{unmapped} not mapped</Badge>} <Mark s={saver.status("org", "org.position_levels")} retry={() => void saver.save("org", "org.position_levels", shown, "Positions")} />
+          <Kind kind="Rule" /> {unmapped > 0 && <Badge>{unmapped} not mapped</Badge>} <CellMark s={saver.status("org", "org.position_levels")} retry={() => void saver.save("org", "org.position_levels", shown, "Positions")} />
         </Note>
-        <Table
+        <Table rowHeads
           label="Positions to levels"
           head={["Position in Dataverse", "Level", "People"]}
           rowKey={(i) => positions[i]!.name}
@@ -253,9 +253,9 @@ type OnOverride = (input: Record<string, unknown>, what: string, undo?: Record<s
 
 function PeopleTable({ people, levels, leadsShown, saver, onOverride, onRemove, removing, onRemoved, label, others = false }: { people: Person[]; levels: PeopleData["levels"]; leadsShown: number; saver: Saver; onOverride: OnOverride; onRemove: (p: Person | null) => void; removing: Person | null; onRemoved: (m: string) => Promise<void>; label: string; others?: boolean }) {
   // SA-4 F: Last sign-in, Setup, Dataverse and Sources are one column, a line each, so the table fits the page.
-  const head = others ? ["Name", "Why not", "Signed in and set up", "Automation", ""] : ["Name", "Level", "Client lead", "Signed in and set up", "Clients", "Automation", ""];
+  const head = others ? ["Name", "Why not", "Signed in and set up", "Automation", <State key="r" sr>Remove</State>] : ["Name", "Level", "Client lead", "Signed in and set up", "Clients", "Automation", <State key="r" sr>Remove</State>];
   return (
-    <Table
+    <Table rowHeads
       label={label}
       head={head}
       rowKey={(i) => people[i]!.id}
@@ -313,7 +313,7 @@ function personCells({ p, levels, leadsShown, saver, onOverride, onRemove, other
   const scope = `person:${p.id}`;
   const automation = (
     <span key="auto">
-      <ASwitch checked={saver.shown(scope, "automation", p.automation)} label={`${p.name}: automation account`} onChange={(v) => void saver.save(scope, "automation", v ? true : undefined, `${p.name}: automation account`)} /> <Mark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
+      <ASwitch checked={saver.shown(scope, "automation", p.automation)} label={`${p.name}: automation account`} onChange={(v) => void saver.save(scope, "automation", v ? true : undefined, `${p.name}: automation account`)} /> <CellMark s={saver.status(scope, "automation")} retry={() => void saver.save(scope, "automation", p.automation ? true : undefined, `${p.name}: automation account`)} />
     </span>
   );
   // The word, then the how on its own line (matched by which key, or why there's no sign-in to match yet).

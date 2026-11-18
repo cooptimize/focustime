@@ -39,10 +39,10 @@
 .panel-shell.phone.admin .sp-table :is(tbody, tr) { display: block; }
 .panel-shell.phone.admin .sp-table tbody tr { padding: 8px 0; border-top: 1px solid var(--border); }
 .panel-shell.phone.admin .sp-table tbody tr:first-child, .panel-shell.phone.admin .sp-table tr.sp-after { border-top: 0; }
-.panel-shell.phone.admin .sp-table td { display: block; min-width: 0; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
-.panel-shell.phone.admin .sp-table td[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); }
-.panel-shell.phone.admin .sp-table td[data-label=""]::before { content: none; }
-.panel-shell.phone.admin .sp-table td:empty { display: none; }
+.panel-shell.phone.admin .sp-table :is(td, th) { display: block; min-width: 0; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
+.panel-shell.phone.admin .sp-table :is(td, th)[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); }
+.panel-shell.phone.admin .sp-table :is(td, th)[data-label=""]::before { content: none; }
+.panel-shell.phone.admin .sp-table :is(td, th):empty { display: none; }
 /* The phone: every control a full target (the parts already make buttons, switches and checks 44 px). */
 .panel-shell.phone.admin .ps-body :is(select, input:not([type="checkbox"]):not([type="radio"])) { min-height: var(--tap, 44px); }
 .panel-shell.phone.admin .ps-body .sp-swatch { min-width: var(--tap, 44px); min-height: var(--tap, 44px); }
