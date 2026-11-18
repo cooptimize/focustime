@@ -53,11 +53,7 @@ export function WhoSetUp() {
     }
   };
   useEffect(() => void load(), []);
-  // A deep link (#/settings/admin-people/whos-set-up, or the command menu) lands here once the list is in.
-  useEffect(() => {
-    if (!data || !/\/whos-set-up$/.test(location.hash)) return;
-    document.querySelector<HTMLElement>('[data-setting="whos-set-up"]')?.scrollIntoView?.({ block: "start" });
-  }, [data]);
+  // SA-4: Who's set up is a tab of Admin › People (#/admin/people/setup); a deep link opens the tab itself.
   const shown = useMemo(() => (data ? data.people.filter((p) => matchesFilter(p, filter)) : []), [data, filter]);
   if (error) return <p className="field-problem">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;

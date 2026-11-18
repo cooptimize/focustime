@@ -11,6 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
 import type { RequestChatStatus, RequestsData } from "../../plan/asks.ts";
+import { AdminConfirm } from "./admin/shared.tsx";
 
 /** The chat add waiting for the Chat.Read consent to come back (this tab only): "<clientKey> <chatId>". */
 const CONSENT_KEY = "focustime.chatAddConsent";
@@ -41,6 +42,8 @@ type Chats = {
   add: (clientKey: string, chatId: string, name: string) => Promise<string | null>;
 };
 const Ctx = createContext<Chats | null>(null);
+/** SA-4: the registered chats, for Admin › Clients' marks (null outside the provider). */
+export const useDeliveryChats = () => useContext(Ctx);
 
 /** One load for the whole Clients section: the registered chats, their members read again from Teams. */
 export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
@@ -122,10 +125,12 @@ const dayOf = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("e
 
 /** A client's Delivery chats: every Teams chat registered for it, each labelled with its kind, and Add a chat. */
 /** ADM-1: `readOnly` in Settings › Clients (registering and relabelling are in Admin › Clients). */
-export function DeliveryChatField({ clientKey, clientName, readOnly = false }: { clientKey: string; clientName: string; readOnly?: boolean }) {
+/** SA-4: `refusal`: why registering a chat under this client would be refused for me (shown before any press), or null. */
+export function DeliveryChatField({ clientKey, clientName, readOnly = false, refusal = null }: { clientKey: string; clientName: string; readOnly?: boolean; refusal?: string | null }) {
   const ctx = useContext(Ctx);
   const [saved, setSaved] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [purging, setPurging] = useState(false);
   const addRef = useRef<HTMLButtonElement>(null);
   if (!ctx) return null;
   const mine = (ctx.data?.chats ?? []).filter((c) => c.clientKey === clientKey);
@@ -152,6 +157,7 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false }: {
         <span className="set-mark" role="status" aria-live="polite">{saved}</span>
       </div>
       {mine.length === 0 && !picking && <p className="muted dchat-none">{admin ? "No chats yet." : "No chats yet. A FocusTime admin adds them in Admin › Clients."}</p>}
+      {admin && refusal && <p className="set-hint dchat-refusal" role="note">{refusal}</p>}
       {mine.map((c) => (
         <ChatCard
           key={c.chatId}
@@ -166,26 +172,32 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false }: {
             : {})}
         />
       ))}
-      {mine.length > 0 && (
-        <button
-          type="button"
-          className="mini quiet dchat-purge"
-          disabled={ctx.loading}
-          onClick={() => {
-            if (!window.confirm(`Delete every chat message FocusTime stored for ${clientName} that didn't become a request? This is for everyone on these chats. Requests and DevOps items made from them stay.`)) return;
+      {mine.length > 0 && !purging && (
+        <button type="button" className="mini quiet dchat-purge" disabled={ctx.loading} onClick={() => setPurging(true)}>
+          Delete stored messages
+        </button>
+      )}
+      {purging && (
+        // SA-4: the app's own confirm (was the browser's), saying what is deleted and for whom.
+        <AdminConfirm
+          label={`Delete stored messages for ${clientName}`}
+          text={`Delete every chat message FocusTime stored for ${clientName} that didn't become a request? This is for everyone on ${clientName}'s chats, not only you. Requests and DevOps items made from them stay.`}
+          confirm="Delete stored messages"
+          onCancel={() => setPurging(false)}
+          onConfirm={() => {
+            setPurging(false);
             setSaved(null);
             void call<{ purged: number }>("requests.purge", { clientKey }).then(
               (r) => setSaved(r.purged ? `Deleted ${r.purged} stored ${r.purged === 1 ? "message" : "messages"}` : "Nothing stored"),
               (e: unknown) => setSaved(e instanceof Error ? e.message : "Not deleted"),
             );
           }}
-        >
-          Delete stored messages
-        </button>
+        />
       )}
       {!admin ? null : picking ? (
         <ChatPicker
           clientName={clientName}
+          refusal={refusal}
           registered={(ctx.data?.chats ?? []).map((c) => c.chatId)}
           load={ctx.picker}
           onPick={async (c) => {
@@ -276,7 +288,8 @@ function ChatCard({ c, busy, onKind, onRemove, onReading }: { c: DeliveryChatVie
 }
 
 /** My group chats: type to search, arrows to move, Enter to add, Esc to close. Most recently active first. */
-function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientName: string; registered: string[]; load: () => Promise<ChatPickerData>; onPick: (c: ChatSummary) => void; onClose: () => void }) {
+/** SA-4: with `refusal`, every chat is listed with why it can't be registered here and can't be picked. */
+function ChatPicker({ clientName, refusal = null, registered, load, onPick, onClose }: { clientName: string; refusal?: string | null; registered: string[]; load: () => Promise<ChatPickerData>; onPick: (c: ChatSummary) => void; onClose: () => void }) {
   const [data, setData] = useState<ChatPickerData | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -291,7 +304,7 @@ function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientN
   // A chat already registered (for any client) isn't offered again.
   const list = useMemo(() => (data ? filterChats(data.chats, q, new Set(registered)) : []), [data, q, registered]);
   useEffect(() => setAt(0), [q]);
-  const pick = (i: number) => list[i] && onPick(list[i]);
+  const pick = (i: number) => !refusal && list[i] && onPick(list[i]);
   return (
     <div className="dchat-picker" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onClose())}>
       <input
@@ -319,7 +332,7 @@ function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientN
         <ul id={listId} role="listbox" className="dchat-options" aria-label="Your Teams group chats">
           {list.length === 0 && <li className="muted">{q ? "No group chat matches." : "No group chats left to add."}</li>}
           {list.slice(0, 50).map((c, i) => (
-            <li key={c.id} id={`${listId}-${i}`} role="option" aria-selected={i === at} className={i === at ? "on" : undefined} onMouseEnter={() => setAt(i)} onMouseDown={(e) => (e.preventDefault(), pick(i))}>
+            <li key={c.id} id={`${listId}-${i}`} role="option" aria-selected={i === at} aria-disabled={refusal ? true : undefined} className={[i === at ? "on" : "", refusal ? "refused" : ""].filter(Boolean).join(" ") || undefined} onMouseEnter={() => setAt(i)} onMouseDown={(e) => (e.preventDefault(), pick(i))}>
               <strong>
                 {chatName(c)} {home && <span className={`dchat-fit${suggestKind(c.members, home) === "customer" ? " fits" : ""}`}>{suggestKind(c.members, home) === "delivery" ? "Internal" : "With the client"}</span>}
               </strong>
@@ -327,6 +340,7 @@ function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientN
                 {home ? memberLine(c.members, home, c.moreMembers) : `${c.members.length} members`}
                 {activityOf(c) && ` · active ${dayOf(activityOf(c))}`}
               </span>
+              {refusal && <span className="set-hint dchat-why">Can't be added here: {refusal}</span>}
             </li>
           ))}
         </ul>

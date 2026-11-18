@@ -11,7 +11,7 @@
 // request or job that made them. Never a path with ids, a query, a header, a body, a token, a person's id, message
 // text or a client's key or name: there is no field for them, and a client key becomes its one-way ref.
 // Nothing is sent when nothing happened (an idle server makes no calls). A failed send is dropped, never retried in a
-// loop; a 206 with refused items counts those as refused. Both show in Admin › Status (status()).
+// loop; a 206 with refused items counts those as refused. Both show in Admin › Health (status()).
 import { randomUUID } from "node:crypto";
 import type { LogRecord, Logger } from "./logger.ts";
 import { clientRef, currentOperation, type Operation } from "./operation.ts";

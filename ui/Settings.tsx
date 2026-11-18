@@ -41,7 +41,7 @@ import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
-import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
+import { AdminPlace, NOT_ADMIN_TEXT, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { siteLine, useAppEnv, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
@@ -50,8 +50,11 @@ import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 import { DeploySettings } from "./DeployItems.tsx";
 import { Icon } from "./icons.tsx";
 
-/** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
-export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
+/** ST-1: every section id Settings opens (the registry's). SA-4: Admin is its own place (#/admin), not a section. */
+export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = SECTIONS.map((s) => [s.id, s.label] as const);
+/** SA-4: the section Admin's place rides on (ui/nav.ts ADMIN_SECTION), and where someone who isn't an admin lands. */
+const ADMIN = "admin";
+const NOT_ADMIN = "admin-only";
 export type SettingsSectionId = string;
 
 type Props = {
@@ -104,7 +107,7 @@ type Props = {
 };
 
 /** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
-const ADMIN = "Set by your FocusTime admin";
+const SET_BY_ADMIN = "Set by your FocusTime admin";
 
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
@@ -213,15 +216,28 @@ function SearchResults({ q, hits, onGo }: { q: string; hits: SearchHit[]; onGo: 
 /** The section and setting an address opens: old ids mapped; "" is the rail (a list on the phone, Profile otherwise). */
 function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean, admin: boolean | null): { current: string | null; setting: string | null } {
   if (section === "") return { current: list ? null : "you", setting: null };
-  // TP-1b: a retired Admin page: Admin's first page, or Profile for someone who isn't an admin.
-  if (RETIRED_ADMIN_SECTIONS.includes(section)) return { current: admin === false ? "you" : ADMIN_UI_SECTIONS[0][0], setting: null };
-  if (isAdminSection(section)) return { current: section, setting: null };
+  // TP-1b: a retired Admin page: Admin (its first page), or Profile for someone who isn't an admin.
+  if (RETIRED_ADMIN_SECTIONS.includes(section)) return { current: admin === false ? "you" : null, setting: null };
+  // SA-4: someone who isn't an admin, at an Admin address, gets the one line they always got.
+  if (section === ADMIN) return { current: NOT_ADMIN, setting: null };
   const r = resolveSettings(section, setting);
   if (!r || (sectionOf(r.section)?.demoOnly && !demo)) return { current: "you", setting: null };
   return { current: r.section, setting: r.setting };
 }
 
+/** SA-4: #/admin is Admin's own place (for admins); every other address is Settings. */
 export function Settings(props: Props) {
+  const admin = useAdmin();
+  const retired = RETIRED_ADMIN_SECTIONS.includes(props.section);
+  // TP-1b: a retired Admin page lands on Admin for an admin.
+  useEffect(() => {
+    if (retired && admin) props.onSection(ADMIN, null);
+  }, [retired, admin]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (props.section === ADMIN && admin === true) return <AdminPlace path={props.setting ?? null} admin={admin} onGo={(path) => props.onSection(ADMIN, path)} onClose={props.onClose} onSettings={() => props.onSection("")} {...(props.onNotice ? { onNotice: props.onNotice } : {})} />;
+  return <SettingsPanel {...props} admin={admin} />;
+}
+
+function SettingsPanel(props: Props & { admin: boolean | null }) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -229,7 +245,7 @@ export function Settings(props: Props) {
   const jumpDue = useRef(false);
   const phone = usePhone();
   const list = useNarrow() || phone;
-  const admin = useAdmin();
+  const admin = props.admin;
   const devLoop = useDeveloperLoop();
   const { current, setting } = placeOf(props.section, props.setting, list, props.demo, admin);
   const reload = useCallback(async () => {
@@ -281,12 +297,12 @@ export function Settings(props: Props) {
     [props.onSaved], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const inAdmin = current !== null && isAdminSection(current);
+  const inAdmin = current === NOT_ADMIN;
   const def = current ? sectionOf(current) : undefined;
   const client = current === "client" ? (data?.clients.find((c) => c.key === setting) ?? null) : null;
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
-  const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
-  const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
+  const title = inAdmin ? "Admin" : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
+  const description = inAdmin ? undefined : def?.description;
   const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
@@ -294,7 +310,6 @@ export function Settings(props: Props) {
       label,
       items: SECTIONS.filter((s) => s.group === g && !s.parent && (!s.demoOnly || props.demo)).map((s) => ({ id: s.id, label: s.label, href: settingsHref(s.id) })),
     })),
-    ...(admin ? [{ id: "admin", label: "Admin", items: ADMIN_UI_SECTIONS.map(([id, label]) => ({ id, label, href: settingsHref(id) })) }] : []),
   ];
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
@@ -315,6 +330,16 @@ export function Settings(props: Props) {
             description={description}
             railTop={<SettingsSearch q={q} setQ={setQ} hits={hits} onGo={(h) => go(h.section, h.setting)} />}
             railOverride={q.trim() ? <SearchResults q={q} hits={hits} onGo={(h) => go(h.section, h.setting)} /> : undefined}
+            railFoot={
+              // SA-4: Admin is its own place; Settings' rail has one line for it, for admins only.
+              admin ? (
+                <div className="ps-group ps-foot" role="group" aria-label="Admin">
+                  <a href="#/admin" className="ps-item" data-settings-section="admin" onClick={(e) => (e.preventDefault(), go(ADMIN))}>
+                    <span>Admin</span>
+                  </a>
+                </div>
+              ) : undefined
+            }
             phone={list}
             pageKey={`${current}/${current === "client" ? setting : ""}`}
           >
@@ -334,7 +359,7 @@ export function Settings(props: Props) {
                   </div>
                 )}
                 {inAdmin ? (
-                  <AdminSection id={current as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
+                  admin === null ? <p className="muted">Loading…</p> : <p className="muted">{NOT_ADMIN_TEXT}</p>
                 ) : (
                   data &&
                   (phone && def?.phoneReadOnly ? (
@@ -370,7 +395,7 @@ function SectionBody(p: BodyProps) {
             <div className="set-grid">
               <ReadOnly sid="email" label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
               <ReadOnly sid="dataverse-user" label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
-              <ReadOnly sid="environment" label="Dataverse environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
+              <ReadOnly sid="environment" label="Dataverse environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : SET_BY_ADMIN} />
             </div>
           )}
           <p className="muted set-intro">
@@ -801,7 +826,7 @@ function FollowGraceForm(p: FormProps) {
 }
 
 /**
- * ADM-1: guidance with a team default by level (Admin › Organization): your own choice over it, and Reset to team
+ * ADM-1: guidance with a team default by level (Admin › Team defaults › Planning and new people): your own choice over it, and Reset to team
  * default. Levels change emphasis only: none of these ever blocks anything.
  */
 function GuidanceForm(p: FormProps) {
@@ -929,7 +954,7 @@ function CollabForm(p: FormProps) {
         <AutoField a={a} k="daysAhead" label="Days to search" hint="Workdays from today, for items not pinned to a day.">
           <input type="number" min={1} max={10} step={1} value={a.v.daysAhead} onChange={(e) => a.set("daysAhead", Number(e.target.value))} {...a.text("daysAhead")} />
         </AutoField>
-        {p.data.org && <ReadOnly sid="never-suggested" label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={ADMIN} />}
+        {p.data.org && <ReadOnly sid="never-suggested" label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={SET_BY_ADMIN} />}
         <AutoField a={a} k="exclude" label={p.data.org ? "People I exclude" : "People to exclude"} hint="Never suggested as helpers or as Who. By name or email.">
           <ul className="set-list">
             {a.v.exclude.map((x, i) => (
@@ -950,7 +975,7 @@ function CollabForm(p: FormProps) {
             <button type="button" className="mini" disabled={!adding.trim()} onClick={add}>Add</button>
           </span>
         </AutoField>
-        <ReadOnly sid="invite-domains" label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
+        <ReadOnly sid="invite-domains" label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : SET_BY_ADMIN} />
       </div>
     </Group>
   );
@@ -1131,9 +1156,9 @@ function AsksForm(p: FormProps) {
       </p>
       {team && (
         <div className="set-grid" data-setting="team-phrases">
-          <ReadOnly label="Team asking phrases" value={team.request.join(", ") || "None"} where={ADMIN} />
-          <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={ADMIN} />
-          <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={ADMIN} />
+          <ReadOnly label="Team asking phrases" value={team.request.join(", ") || "None"} where={SET_BY_ADMIN} />
+          <ReadOnly label="Team acknowledgements" value={team.ack.join(", ") || "None"} where={SET_BY_ADMIN} />
+          <ReadOnly label="Team promise phrases" value={team.promise.join(", ") || "None"} where={SET_BY_ADMIN} />
         </div>
       )}
       <div className="set-grid">
@@ -1602,13 +1627,13 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
   );
 }
 
-/** ADM-1: whether AI may be used for this client: an admin's Rule (Admin › AI), shown read-only. */
+/** ADM-1: whether AI may be used for this client: an admin's Rule (the client's page in Admin › Clients), shown read-only. */
 function AllowAi({ c, d }: { c: SettingsClient; d: SettingsData }) {
   const name = c.setting.name ?? c.dataverseName ?? c.key;
   const allowed = d.aiRules.allowedClients.includes(c.key);
   return (
     <div className="set-form set-allow-ai">
-      <ReadOnly label="AI for this client" value={!d.aiRules.on ? "Off for FocusTime" : allowed ? `Allowed for ${name}` : `Not allowed for ${name}`} where={ADMIN} />
+      <ReadOnly label="AI for this client" value={!d.aiRules.on ? "Off for FocusTime" : allowed ? `Allowed for ${name}` : `Not allowed for ${name}`} where={SET_BY_ADMIN} />
     </div>
   );
 }
@@ -1620,7 +1645,7 @@ function HouseStyleField({ clientKey, name }: { clientKey: string; name: string 
   const [h, setH] = useState<HouseStyleData | null>(null);
   useEffect(() => void call<HouseStyleData>("stories.house_style", { clientKey }).then(setH, () => setH(null)), [clientKey]);
   if (!h) return null;
-  const where = h.team ? ADMIN : h.learned ? `Learned from ${name}'s own features each week. A FocusTime admin can set the team's in Admin › Clients.` : "The default: too few features with stories to learn from yet.";
+  const where = h.team ? SET_BY_ADMIN : h.learned ? `Learned from ${name}'s own features each week. A FocusTime admin can set the team's in Admin › Clients.` : "The default: too few features with stories to learn from yet.";
   return (
     <div className="set-form set-house-style">
       <ReadOnly label="House style for Break down" value={<span className="set-pre">{h.text}</span>} where={where} />
@@ -1630,7 +1655,7 @@ function HouseStyleField({ clientKey, name }: { clientKey: string; name: string 
 
 type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
 
-/** AI-0, ADM-1: Settings › AI: the team's AI values read-only (Admin › AI sets them), this month's spend, Test AI, what is sent, and the last 20 requests. */
+/** AI-0, ADM-1: Settings › AI: the team's AI values read-only (Admin › Team defaults › AI sets them), this month's spend, Test AI, what is sent, and the last 20 requests. */
 function AiForm(p: FormProps) {
   const s = p.data.ai;
   const a = useAutoSave({
@@ -1663,13 +1688,13 @@ function AiForm(p: FormProps) {
   return (
     <div className="set-form set-ai">
       <div className="set-grid" data-setting="ai-team">
-        <ReadOnly label="AI for FocusTime" value={rules.on ? "On" : "Off"} where={ADMIN} />
+        <ReadOnly label="AI for FocusTime" value={rules.on ? "On" : "Off"} where={SET_BY_ADMIN} />
         <ReadOnly
           label="Allowed for"
           value={rules.allowedClients.length ? rules.allowedClients.map((k) => nameOf(k)).join(", ") : "No clients yet"}
-          where={ADMIN}
+          where={SET_BY_ADMIN}
         />
-        <ReadOnly label="Your monthly limit" value={rules.personCapUsd === 0 ? "AI budget is set to $0" : `$${rules.personCapUsd}`} where={ADMIN} />
+        <ReadOnly label="Your monthly limit" value={rules.personCapUsd === 0 ? "AI budget is set to $0" : `$${rules.personCapUsd}`} where={SET_BY_ADMIN} />
       </div>
       {(st === null || notSetUp) && (
         <p className="set-problem" role="status">
@@ -1791,7 +1816,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
             <input type="checkbox" checked={a.v.keep} onChange={(e) => a.change("keep", e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
           </label>
         </AutoField>
-        <ReadOnly label="States treated as open" value={openStates.join(", ") || "None"} where={ADMIN} />
+        <ReadOnly label="States treated as open" value={openStates.join(", ") || "None"} where={SET_BY_ADMIN} />
       </div>
     </div>
   );

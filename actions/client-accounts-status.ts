@@ -1,4 +1,4 @@
-// CV-3b: Admin › Status's "Client accounts" row. Warns while the account types aren't read from Dataverse (the
+// CV-3b: Admin › Health's "Client accounts" row. Warns while the account types aren't read from Dataverse (the
 // fallback decides who is a client then: active accounts, Internal, treated as clients), with Refresh, which reads
 // people, leads and accounts now (the same read as the daily refresh). Counts and states only.
 import type { ClientAccounts } from "../plan/client-accounts.ts";

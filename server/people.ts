@@ -24,7 +24,7 @@ export type PeopleDeps = {
   /** A new person's zone from Outlook (null when Graph can't say). */
   mailboxZone: (accessToken: string) => Promise<string | null>;
   hostZone: () => string;
-  /** ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Organization), if any. */
+  /** ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Team defaults › Planning and new people), if any. */
   newPerson?: () => Promise<NewPersonDefaults | undefined>;
   /** ADM-2: the Cooptimize email domains (the Rule, in FocusTime's own store; never Dataverse). Empty: no domain check. */
   cooptimizeDomains?: () => Promise<readonly string[]>;

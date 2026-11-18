@@ -1,5 +1,5 @@
 // KB-1: the demo's standards: a handful of fictional articles in the real shape, served as the session's library so
-// Break down, Ask and Admin › Standards work on the demo with no network. Never reaches GitHub; the demo's Sync now only
+// Break down, Ask and Admin › Team defaults › Standards work on the demo with no network. Never reaches GitHub; the demo's Sync now only
 // says so. The repo address is fictional.
 import type { StandardsArticle, StandardsLibrary } from "../../plan/standards.ts";
 import type { StandardsPort } from "../../actions/standards.ts";

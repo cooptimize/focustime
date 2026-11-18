@@ -2603,7 +2603,7 @@ export function App() {
             else if (where === "install") installItem[0]?.run();
             else if (where === "docs") openDocs();
             else if (where === "about") setAboutOpen(true);
-            else if (where === "admin") setSettingsAt("admin-clients");
+            else if (where === "admin") setSettingsAt("admin");
             else if (where === "account") setAccountAt(at);
             else if (where === "vm") setSettingsAt("connections", "vm");
           }}
@@ -2660,7 +2660,7 @@ export function App() {
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
               // ADM-1: only for FocusTime admins (the server checks every admin action again).
-              ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
+              ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin") }] : []),
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],

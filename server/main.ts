@@ -363,7 +363,7 @@ let devopsPoller: DevOpsPoller | null = null;
 let devopsStoreRef: ReturnType<typeof createDevOpsStore> | null = null;
 /** TB-2: the bot's rhythm in Teams, once the bot is up (hosted app only). */
 let rhythm: Rhythm | null = null;
-/** DV-1: Admin › Status's rows registry (actions/status-rows.ts). */
+/** DV-1: Admin › Health's rows registry (actions/status-rows.ts). */
 const statusRows = createStatusRegistry();
 /**
  * AP-2: the AI guard's map of DevOps item id to client, per person (devops_item_clients). Each read's ids go to the
@@ -706,7 +706,7 @@ const build = buildInfo(process.env, () => {
   }
 });
 
-// F1, FB-1: Send feedback goes to the org.feedback Rule (Admin › Organization; the app config's [feedback] bootstraps
+// F1, FB-1: Send feedback goes to the org.feedback Rule (Admin › Team defaults › Planning and new people; the app config's [feedback] bootstraps
 // it). Each person's story is created through the write framework with their own DevOps write PAT (actions/dispatch.ts);
 // there is no app identity for DevOps.
 const feedbackTarget = async () => {
@@ -1244,7 +1244,7 @@ devopsPoller = devopsApp && directorySource
 if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 // CV-3b: whether account types are read (the client rule fails closed until they are), with Refresh.
 statusRows.register(clientAccountsStatusSource({ accounts: () => org.clientAccounts(), refreshedAt: () => adminStore.directoryRefreshedAt(), refresh: () => refreshPeople() }));
-// HK-1: telemetry's own health in Admin › Status: one row, a warning once anything was dropped or refused.
+// HK-1: telemetry's own health in Admin › Health: one row, a warning once anything was dropped or refused.
 if (telemetry) statusRows.register(telemetryStatusSource(telemetry));
 // ENV-1: on a test site, what runs only on a button, and a declared chat watch period (production: nothing added).
 const backgroundRows = backgroundStatusSource(background);

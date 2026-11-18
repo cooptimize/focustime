@@ -78,7 +78,7 @@ export type AdminStatus = {
   passes?: PassView[];
 };
 
-/** VM-3: one of the scheduler's passes for Admin › Status (server/scheduler.ts builds it). */
+/** VM-3: one of the scheduler's passes for Admin › Health (server/scheduler.ts builds it). */
 export type PassView = {
   kind: "fast" | "slow";
   /** When the last pass of this kind finished, and how long it took. */
@@ -96,7 +96,7 @@ export type StatusJob = { name: string; every: string; lastRun: string | null; n
 /** ADM-2 (D604): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
 export function ruleWarnings(rules: OrgRules): StatusWarning[] {
   const out: StatusWarning[] = rules.problems.map((p) => ({ area: "rules" as const, text: `${p.label}: the stored value isn't allowed any more, so FocusTime uses ${JSON.stringify(p.fallback)}. Set it again in Admin.` }));
-  if (!rules.organization.inviteDomains.length) out.push({ area: "people", text: "Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People and sign-in." });
+  if (!rules.organization.inviteDomains.length) out.push({ area: "people", text: "Set Cooptimize email domains in Admin › Team defaults › Planning and new people. Until then only guest accounts are left out of People and sign-in." });
   return out;
 }
 
@@ -117,7 +117,7 @@ export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
 export type AdminOps = {
-  /** KB-1: the synced standards (Admin › Standards). Absent: none here. */
+  /** KB-1: the synced standards (Admin › Team defaults › Standards). Absent: none here. */
   standards?: StandardsPort;
   check: AdminCheck;
   org: OrgRuntime;
@@ -137,7 +137,7 @@ export type AdminOps = {
   appSpentMicros(): Promise<number>;
   /** `day`: the admin's today, for the per-chat AI calls. */
   status(day: string): Promise<AdminStatus>;
-  /** DV-1: the status rows registry (Admin › Status renders its groups; a row's action runs through admin.status_action). */
+  /** DV-1: the status rows registry (Admin › Health renders its groups; a row's action runs through admin.status_action). */
   statusRows?: StatusRegistry;
   refreshPeople(): Promise<{ ok: boolean; message: string | null; people: number }>;
   /** Deletes a person's FocusTime data and personal secrets now, and ends their sessions. */
@@ -165,6 +165,11 @@ export type AdminContext = {
   zone?: () => Promise<string>;
   /** IN-2: the admin's own Graph sends and consent probes (Close the loop's, LP-1); absent: no Microsoft sign-in here. */
   send?: InviteSendPort;
+  /**
+   * SA-4: the clients this admin may register a chat under: the same set chats.add checks (actions/chat-actions.ts),
+   * null when Dataverse can't be read. Read only, so a client's Chats tab says why before anyone presses Add.
+   */
+  chatTargets?: () => Promise<ReadonlySet<string> | null>;
 };
 
 
@@ -202,8 +207,15 @@ export const groupLink = (groupId: string | null) => (groupId ? `https://entra.m
  * Admin › Clients (and AI): the clients by clientAccounts() (ADM-2, D597), or with `all` every account FocusTime knows
  * of: the active Dataverse accounts, keys with team settings and registered chats. Leads never add a client here.
  */
-async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean, all = false) {
-  const [rows, chatKeys, lv, users, dir, ca, overrides] = await Promise.all([ops.org.store.orgRows(), ops.chatClients(), ops.org.levels(), ops.people(), ops.org.store.directory(), ops.org.clientAccounts(), ops.org.store.overrides()]);
+/** SA-4: why a chat can't be registered under this client by this admin (the words chats.add would refuse with), or null. */
+export function chatRefusal(clientKey: string, targets: ReadonlySet<string> | null | undefined): string | null {
+  if (targets === undefined) return null;
+  if (targets === null) return "Dataverse couldn't be read, so FocusTime can't check the client. Try again in a moment.";
+  return targets.has(clientKey) ? null : `${clientKey} isn't one of your clients, so a chat can't be registered under it with your sign-in. An admin who follows ${clientKey} can add it.`;
+}
+
+async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean, all = false, chatTargets?: AdminContext["chatTargets"]) {
+  const [rows, chatKeys, lv, users, dir, ca, overrides, targets] = await Promise.all([ops.org.store.orgRows(), ops.chatClients(), ops.org.levels(), ops.people(), ops.org.store.directory(), ops.org.clientAccounts(), ops.org.store.overrides(), chatTargets ? chatTargets().catch(() => null) : Promise.resolve(undefined)]);
   const settingsKeys = new Set([...Object.keys(rules.clients), ...chatKeys, ...overrides.filter((o) => o.kind !== "level" && o.clientKey).map((o) => o.clientKey)]);
   const known = [...new Set([...ca.rows.map((r) => r.clientKey), ...settingsKeys])];
   const keys = (all ? known : known.filter((k) => ca.isClient(k))).sort((a, b) => a.localeCompare(b));
@@ -261,6 +273,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
         scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
         leads: isClient ? lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })) : [],
+        chatRefusal: chatRefusal(k, targets),
       };
     }),
   };
@@ -302,7 +315,7 @@ export async function clientWarnings(ops: AdminOps): Promise<StatusWarning[]> {
 /** The most clients shown per person in Client lead before "and N more" (the screen shows the rest on request). */
 export const LEADS_SHOWN = 5;
 
-async function peopleSection(ops: AdminOps, meId: string) {
+async function peopleSection(ops: AdminOps, meId: string, meName?: string | null) {
   const [users, clients, lv, overrides, seen, refreshedAt, ca, rules] = await Promise.all([ops.people(), ops.org.store.peopleClients(), ops.org.levels(), ops.org.store.overrides(), ops.org.store.seenAdmins(), ops.org.store.directoryRefreshedAt(), ops.org.clientAccounts(), ops.org.rules()]);
   const dirName = new Map((await ops.org.store.directory()).map((d) => [d.personId, d]));
   const rows = lv.people.all
@@ -350,6 +363,11 @@ async function peopleSection(ops: AdminOps, meId: string) {
     ...seen.filter((s) => !ops.breakGlass.some((b) => b.toLowerCase() === s.personId)).map((s) => ({ id: s.personId, name: nameOf(s.personId), via: s.via, checkedAt: s.checkedAt })),
     ...ops.breakGlass.map((b) => ({ id: b.toLowerCase(), name: nameOf(b), via: "break_glass" as const, checkedAt: null })),
   ];
+  // SA-4: the admin looking is an admin (the one check let them in), seen or not: "Nobody seen yet" only when true.
+  const meKey = meId.toLowerCase();
+  if (!admins.some((a) => a.id === meKey)) admins.unshift({ id: meKey, name: nameOf(meId) ?? users.find((u) => u.id.toLowerCase() === meKey)?.name ?? null, via: await ops.check.via(meId).catch(() => null), checkedAt: null });
+  // Their own row carries their name from the session when FocusTime has none for them (a break-glass admin).
+  for (const a of admins) if (a.id === meKey && !a.name && meName) a.name = meName;
   // ADM-2 (D605): every position a Cooptimizer holds, and every one mapped, with its level and how many hold it.
   const map = rules.organization.positionLevels;
   const mapKey = new Map(Object.keys(map).map((k) => [k.trim().toLowerCase(), k]));
@@ -436,7 +454,7 @@ async function setupSection(ops: AdminOps, me: { id: string; name: string }, zon
   };
 }
 
-/** AI-F1: every AI task with its tier for Admin › AI: background ones (flex unless switched back) first, plain names. */
+/** AI-F1: every AI task with its tier for Admin › Team defaults › AI: background ones (flex unless switched back) first, plain names. */
 const TASK_LABELS: Record<string, string> = {
   "conversations.update": "Sorting client chats into conversations (with image descriptions)",
   "promises.extract": "Reading promises from chat messages",
@@ -462,7 +480,7 @@ export function aiTasks(standard: readonly string[]): { name: string; label: str
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
-/** KB-1: Admin › Standards: where they come from, the last sync, each article (never its text) and the warnings. */
+/** KB-1: Admin › Team defaults › Standards: where they come from, the last sync, each article (never its text) and the warnings. */
 async function standardsSection(ops: AdminOps, rules: OrgRules) {
   const [state, library] = await Promise.all([ops.standards?.state().catch(() => null) ?? null, ops.standards?.library().catch(() => null) ?? null]);
   return {
@@ -483,16 +501,16 @@ async function standardsSection(ops: AdminOps, rules: OrgRules) {
   };
 }
 
-async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"], me?: { name: string }, zone?: AdminContext["zone"]): Promise<unknown> {
+async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"], me?: { name: string }, zone?: AdminContext["zone"], chatTargets?: AdminContext["chatTargets"]): Promise<unknown> {
   const rules = await ops.org.rules();
   switch (s) {
     case "standards":
       return standardsSection(ops, rules);
     case "clients":
-      return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all");
+      return clientsSection(ops, rules, process, input.refresh === true, input.filter === "all", chatTargets);
     case "ai": {
       const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false, input.filter === "all")]);
-      return { ...rules.ai, ...setup, appSpentMicros: spent, tasks: aiTasks(rules.ai.standardTasks), zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, groupWithoutAi: c.groupWithoutAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"], "ai.standard_tasks": ORG_SPECS["ai.standard_tasks"] }) };
+      return { ...rules.ai, ...setup, appSpentMicros: spent, tasks: aiTasks(rules.ai.standardTasks), zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, filter: clients.filter, counts: clients.counts, clients: clients.clients.map((c) => ({ key: c.key, isClient: c.isClient, whyText: c.whyText, allowAi: c.allowAi, groupWithoutAi: c.groupWithoutAi, attachmentsAi: c.attachmentsAi, /* SA-4: Admin's rail and Search Admin */ color: c.color, names: c.names, aliases: c.aliases })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"], "ai.standard_tasks": ORG_SPECS["ai.standard_tasks"] }) };
     }
     case "conversations":
       // CV-1 lists the settings it needs; they are hosted here as they appear (read through the settings reader).
@@ -511,7 +529,7 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
       };
     }
     case "people":
-      return peopleSection(ops, meId);
+      return peopleSection(ops, meId, me?.name);
     case "setup":
       return setupSection(ops, { id: meId, name: me?.name ?? "" }, zone ? await zone().catch(() => "UTC") : "UTC");
     case "status": {
@@ -550,7 +568,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       const extra = only(i, ["section", "area", "text", "refresh", "filter"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
-      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today, me, ctx.zone) };
+      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today, me, ctx.zone, ctx.chatTargets) };
     }
     case "admin.standards_sync": {
       const extra = only(i, []);
@@ -619,7 +637,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
           : i.key === "ai.on" && value === false
             ? "AI is off for everyone."
             : i.key === "hidden" && value === true && before?.allowAi
-              ? `${i.scope.slice(7)} has AI allowed. It's hidden now, and Admin › Status lists it until AI is turned off for it.`
+              ? `${i.scope.slice(7)} has AI allowed. It's hidden now, and Admin › Health lists it until AI is turned off for it.`
               : null;
       return { ok: true, data: { scope: i.scope, key: i.key, old: json(r.old), value: json(r.next), warning, ai: next.ai } };
     }

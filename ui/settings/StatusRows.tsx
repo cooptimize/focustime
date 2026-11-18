@@ -1,4 +1,4 @@
-// DV-1: the generic render of the status rows registry (actions/status-rows.ts) in Admin › Status: one table per
+// DV-1: the generic render of the status rows registry (actions/status-rows.ts) in Admin › Health: one table per
 // source, each row with its state, one plain line, its last check and its action (Check now). A source registered on
 // the server shows here with no change to this screen.
 import { useState } from "react";

@@ -7758,3 +7758,68 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* RQ-1: a held create looks held (the reason sits beside it). */
 .wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
 .bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }
+
+/* ---------- SA-4: Admin as its own place ---------- */
+.panel-shell.admin .ps-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.panel-shell .ps-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.adm-rail-swatch { align-self: center; width: 10px; height: 10px; border-radius: 3px; }
+.ps-item .adm-rail-swatch + span { flex: 1; min-width: 0; }
+/* The clients list: one row per client; a row is one link to its page. */
+.adm-find { display: block; margin: 12px 0 8px; }
+.adm-find input { width: min(100%, 360px); }
+.adm-client-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.adm-client-list li { border-bottom: 1px solid var(--line, var(--border)); }
+.adm-client-row { display: grid; grid-template-columns: 12px minmax(8em, 14em) minmax(8em, 1fr) auto; align-items: center; gap: 4px 12px; padding: 9px 8px; color: var(--text); text-decoration: none; border-radius: 8px; }
+.adm-client-row:hover { background: var(--wash-1, var(--raised)); }
+.adm-client-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.adm-client-name { font-weight: 600; overflow-wrap: anywhere; }
+.adm-client-leads { font-size: var(--fs-2); overflow-wrap: anywhere; }
+.adm-marks { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.adm-chip { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--wash-2, var(--raised)); color: var(--text); font-size: var(--fs-1); font-weight: 500; white-space: nowrap; }
+.adm-chip.off { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted); }
+.adm-client-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
+.adm-client-head .adm-marks { justify-content: flex-start; }
+.adm-client-head .link-btn { margin-left: auto; }
+.adm-readonly-line { display: block; margin: 10px 0 0; }
+.adm-first-line { margin-top: 0; }
+.dchat-picker li.refused { cursor: not-allowed; opacity: 0.85; }
+.dchat-why, .dchat-refusal { display: block; }
+.adm-remove-row > td { padding-top: 0; }
+/* Tabs: a row of links, the open one underlined; on a phone the row scrolls sideways. */
+.adm-tabs { display: flex; flex-direction: column; gap: 12px; }
+.adm-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.adm-tab { flex: none; padding: 7px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); text-decoration: none; font-size: var(--fs-3); font-weight: 500; white-space: nowrap; }
+.adm-tab:hover { color: var(--text); }
+.adm-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent, var(--text)); }
+.adm-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.adm-tabpanel:focus { outline: none; }
+.adm-by-level .set-check, .adm-ai-tiers .set-check { white-space: nowrap; }
+/* At the largest Text size on a computer, People's table keeps inside the page: it wraps before it scrolls. */
+.adm-people-table th, .adm-people-table td { overflow-wrap: anywhere; }
+.adm-people-table select { max-width: 12em; }
+
+/* The phone: lists, not tables; every control at least 44 px. */
+.panel-shell.phone.admin .ps-body table.adm-table, .panel-shell.phone.admin .ps-body table.adm-standards-table { display: block; overflow: visible; }
+.panel-shell.phone.admin .ps-body table :is(thead) { display: none; }
+.panel-shell.phone.admin .ps-body table :is(tbody, tr) { display: block; }
+.panel-shell.phone.admin .ps-body table tr { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.panel-shell.phone.admin .ps-body table :is(td, tbody th) { display: block; min-width: 0; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
+.panel-shell.phone.admin .ps-body table td[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); }
+.panel-shell.phone.admin .ps-body table td[data-label=""]::before { content: none; }
+.panel-shell.phone.admin .ps-body :is(button, select, input:not([type="checkbox"]):not([type="radio"]), .mini, .link-btn, a.adm-tab) { min-height: 44px; box-sizing: border-box; }
+.panel-shell.phone.admin .ps-body :is(label.set-check, label.adm-switch, .adm-palette .slot, .adm-scope-mode, .dchat-members summary) { min-height: 44px; display: inline-flex; align-items: center; }
+.panel-shell.phone.admin .ps-body .adm-palette .slot { min-width: 44px; justify-content: center; }
+.panel-shell.phone.admin .adm-tab { display: inline-flex; align-items: center; }
+.panel-shell.phone.admin .adm-client-row { grid-template-columns: 12px minmax(0, 1fr); min-height: 44px; }
+.panel-shell.phone.admin .adm-client-leads, .panel-shell.phone.admin .adm-client-row .adm-marks { grid-column: 2; justify-content: flex-start; }
+.panel-shell.phone.admin .adm-client-head .link-btn { margin-left: 0; }
+.panel-shell.phone.admin .adm-find input { width: 100%; }
+.panel-shell.phone.admin .ps-body a:not(.adm-tab):not(.adm-client-row) { display: inline-flex; align-items: center; min-height: 44px; }
+.panel-shell.phone.admin .set-check input, .panel-shell.phone.admin .adm-switch input { min-width: 22px; min-height: 22px; }
+.panel-shell.admin .ps-group[aria-labelledby="ps-g-admin"] .ps-item { flex-wrap: nowrap; }
+.panel-shell.admin .ps-group[aria-labelledby="ps-g-admin"] .ps-item .ps-hint { margin-left: auto; }
+/* Admin's wrapper (for the phone's row labels) takes no box: the shell stays the app's flex child and scrolls in itself. */
+.adm-place { display: contents; }
+/* The phone: a checkbox's label is the target (Deployments' Default); a bare one in a table cell gets a 44 px box. */
+.panel-shell.phone.admin .ps-body label:has(> input[type="checkbox"]) { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+.panel-shell.phone.admin .ps-body td > input[type="checkbox"], .panel-shell.phone.admin .ps-body th > input[type="checkbox"] { width: 44px; height: 44px; margin: 0; }

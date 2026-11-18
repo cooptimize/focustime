@@ -19,7 +19,7 @@ export function useNarrow(): boolean {
   return useSyncExternalStore(onResize, () => window.innerWidth < NARROW_MAX_PX, () => false);
 }
 
-export type RailItem = { id: string; label: string; href: string; hint?: ReactNode };
+export type RailItem = { id: string; label: string; href: string; hint?: ReactNode; /** SA-4: before the label (a client's color). */ icon?: ReactNode };
 export type RailGroup = { id: string; label: string; items: readonly RailItem[] };
 
 export type PanelShellProps = {
@@ -110,6 +110,7 @@ export function PanelShell(p: PanelShellProps) {
                   p.onPick(it.id);
                 }}
               >
+                {it.icon}
                 <span>{it.label}</span>
                 {it.hint && <span className="ps-hint">{it.hint}</span>}
                 {p.phone && <span className="ps-chev"><Icon name="next" /></span>}

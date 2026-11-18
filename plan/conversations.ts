@@ -758,10 +758,12 @@ export const HELD_STAYS = "They stay held until someone sorts them or marks them
  */
 export type UnsortedLine = { text: string; does: "retry" | "switch" | "held"; fix: string | null };
 export function unsortedLine(k: string | null, clientName: string): UnsortedLine {
-  const admin = (what: string) => `A FocusTime admin ${what} in Admin › AI.`;
+  const admin = (what: string) => `A FocusTime admin ${what} in Admin › Team defaults › AI.`;
+  // SA-4: Allow AI is on the client's own page.
+  const onPage = (what: string) => `A FocusTime admin ${what} on its page in Admin › Clients.`;
   switch (k) {
     case "off": return { text: "AI for FocusTime is off", does: "switch", fix: `${admin("turns it on")} They're sorted once it's on.` };
-    case "client_off": return { text: `AI isn't allowed for ${clientName}`, does: "switch", fix: `${admin(`allows it for ${clientName}`)} They're sorted once it's allowed.` };
+    case "client_off": return { text: `AI isn't allowed for ${clientName}`, does: "switch", fix: `${onPage(`allows it for ${clientName}`)} They're sorted once it's allowed.` };
     case "not_set_up": return { text: "AI isn't set up", does: "switch", fix: "A FocusTime admin adds the AI key. They're sorted once it's set up." };
     case "zero_budget": return { text: "the AI budget is $0", does: "switch", fix: `${admin("sets the budget")} They're sorted with the chat's next messages.` };
     case "over_budget": return { text: "this month's AI budget is used up", does: "switch", fix: `${admin("can raise it")} They're sorted with the chat's next messages.` };

@@ -1,6 +1,6 @@
 // KB-1: the standards sync, one app job. At startup, then hourly while FocusTime is in use (the scheduler's slow pass), and
 // from an admin's Sync now. An idle server never wakes for it (D431: wake is null). A failure keeps the last good copy and
-// records the error for Admin › Standards. Logs carry counts and outcomes only.
+// records the error for Admin › Team defaults › Standards. Logs carry counts and outcomes only.
 import type { Logger } from "../log/logger.ts";
 import { parseRepoUrl, STANDARDS_EVERY_MS, validBranch } from "../plan/standards.ts";
 import { StandardsReadError, type StandardsReader } from "../sources/github/standards.ts";

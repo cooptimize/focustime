@@ -262,7 +262,7 @@ const after = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0]!.toLowerCase() + s.sl
 
 /** FocusTime's own reasons, which aren't the AI service's (MC-1d: never said as "The AI service couldn't answer"). */
 const OWN: Record<string, string> = {
-  no_ai: "AI isn't on for this client. A FocusTime admin allows it in Admin › AI.",
+  no_ai: "AI isn't on for this client. A FocusTime admin allows it on the client's page in Admin › Clients.",
   no_context: "FocusTime couldn't read this client's DevOps items to send with the call.",
   // The AI service refused the request itself (a 4xx): its words, as for any other provider failure.
   provider_refused: AI_MESSAGES.provider,

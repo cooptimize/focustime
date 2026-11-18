@@ -24,7 +24,7 @@ export type Outside =
   | "always";
 
 export type BackgroundEntry = {
-  /** Plain words for the docs and Admin › Status. */
+  /** Plain words for the docs and Admin › Health. */
   what: string;
   /** The outside system it touches ("none": only this deployment's database). */
   touches: string;
@@ -33,7 +33,7 @@ export type BackgroundEntry = {
   /** Where it is started from: an app job on the scheduler, a part of each person's ticks, or once at server start. */
   kind: "job" | "tick" | "startup" | "reserved";
   outside: Outside;
-  /** What still works on a test site when someone presses a button (shown in Admin › Status), if anything. */
+  /** What still works on a test site when someone presses a button (shown in Admin › Health), if anything. */
   onDemand?: string;
 };
 
@@ -80,9 +80,9 @@ export type BackgroundPolicy = {
    * piece never runs outside production.
    */
   allows: (name: string, o?: { optIn?: boolean; inUse?: boolean }) => boolean;
-  /** FOCUSTIME_REQUESTS_POLL=on outside production: a declared watch period (Admin › Status says so). */
+  /** FOCUSTIME_REQUESTS_POLL=on outside production: a declared watch period (Admin › Health says so). */
   watchPeriod: boolean;
-  /** What runs only when someone presses a button here (Admin › Status's "This is a test site"); empty in production. */
+  /** What runs only when someone presses a button here (Admin › Health's "This is a test site"); empty in production. */
   onDemand: () => string[];
 };
 
