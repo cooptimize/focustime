@@ -476,10 +476,10 @@ function deployPeopleItems(env: MenuEnv, p: Pick): MenuItem[] {
   const planned = p.status === "planned";
   const hold = HOLD_WORDS[sh.hold.state];
   return [
-    { id: "deploy-people", label: PEOPLE_WORDS.menuPeople, hint: PEOPLE_WORDS.menuPeopleHint(sh.people.length), action: "deploy.people", ...(planned ? {} : { disabled: "Only a planned deployment", expected: true }), next: () => deployForm(env, { pick: p }) },
-    ...(planned && hold.offer && env.holdAction && (sh.hold.state === "off" || sh.hold.state === "on" || sh.hold.state === "deleted_in_outlook") ? [{ id: "deploy-hold", label: hold.offer, hint: hold.line, action: "deploy.hold", run: () => env.holdAction!(p, sh.hold.state !== "on") } satisfies MenuItem] : []),
+    { id: "deploy-people", icon: "people", label: PEOPLE_WORDS.menuPeople, hint: PEOPLE_WORDS.menuPeopleHint(sh.people.length), action: "deploy.people", ...(planned ? {} : { disabled: "Only a planned deployment", expected: true }), next: () => deployForm(env, { pick: p }) },
+    ...(planned && hold.offer && env.holdAction && (sh.hold.state === "off" || sh.hold.state === "on" || sh.hold.state === "deleted_in_outlook") ? [{ id: "deploy-hold", icon: "calendar", label: hold.offer, hint: hold.line, action: "deploy.hold", run: () => env.holdAction!(p, sh.hold.state !== "on") } satisfies MenuItem] : []),
     ...(others.length ? [
-      { id: "deploy-leave", label: PEOPLE_WORDS.leave, hint: PEOPLE_WORDS.leaveHint(namesText(others.map((o) => firstName(o.name)))), action: "deploy.leave", run: () => leaveDeployment(env, p) } satisfies MenuItem,
+      { id: "deploy-leave", icon: "personal", label: PEOPLE_WORDS.leave, hint: PEOPLE_WORDS.leaveHint(namesText(others.map((o) => firstName(o.name)))), action: "deploy.leave", run: () => leaveDeployment(env, p) } satisfies MenuItem,
       { id: "deploy-delete", label: PEOPLE_WORDS.deleteAllMenu, danger: true, action: "deploy.delete", next: () => deleteStep(env, p) } satisfies MenuItem,
     ] : []),
   ];
