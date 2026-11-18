@@ -17,6 +17,8 @@ export type WeekLoadData = {
   week: Week;
   /** WK-3: after-hours time this week (plan/deploy.ts afterHours), with what makes it up. Absent from older servers. */
   afterHours?: { minutes: number; parts: import("../plan/deploy.ts").AfterHoursPart[] };
+  /** DP-3: my own holds still on my Outlook for deployments I'm no longer on (Take me off, a removal, a delete). */
+  leftHolds?: { uid: string; title: string; date: string }[];
   today: TodayTarget;
   sources: SourceSummary[];
   /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */

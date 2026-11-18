@@ -237,7 +237,7 @@ One row per term in use. Where the code keeps an older name, `docs/technical/REA
 | Session | A signed-in browser: a `sessions` row (hash of the id only) with a CSRF token, 12 hours idle and 7 days at most; a demo session has a fictional person and an in-memory store |
 | Time zone | The person's own zone (`[hours] time_zone`, an IANA name), defaulting to the host clock's; always read through `userZone()` in `week/zone.ts`, never hard-coded |
 | Plan store | Everything FocusTime keeps for people, in one database: SQL Server (Azure SQL hosted, the local container in the developer loop), or SQLite for the demo and the fallback |
-| Export | One person's rows as JSON (`focustime-export-1`, schema version 42): Settings › Your data › Export my data, or `focustime export-local`; what `focustime import` loads |
+| Export | One person's rows as JSON (`focustime-export-1`, schema version 43): Settings › Your data › Export my data, or `focustime export-local`; what `focustime import` loads |
 | Host | Everything FocusTime needs from the machine it runs on, behind one interface (`host/types.ts`): `host/local` for the developer loop, `host/azure` for the hosted app; chosen by `FOCUSTIME_HOST` |
 | Developer loop | Running FocusTime on one developer machine through `host/local` and `system/` (service, launcher, key bindings); not part of the product |
 | Test site | Any deployment where `FOCUSTIME_ENV` isn't exactly `prod` (dev, the developer loop): nothing that reaches a person, spends AI, writes outside or reads delegated data runs on its own (`config/background-policy.ts`) |
