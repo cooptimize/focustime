@@ -1,5 +1,5 @@
 {
- "source": "ci runs 44172691925, 44161039703; VM-4's two new files measured locally",
+ "source": "ci runs 44172691925, 44161039703; VM-4's and DY-1's new files measured locally",
  "files": {
   "e2e/admin/admin-phone-width.test.ts": 6.3,
   "e2e/admin/background-passes.test.ts": 5.4,
@@ -39,6 +39,8 @@
   "e2e/day/catch-up-day.test.ts": 33,
   "e2e/day/client-call-door.test.ts": 14,
   "e2e/day/coworking-calls.test.ts": 12.1,
+  "e2e/day/fold-ended.test.ts": 40.5,
+  "e2e/day/meeting-marks.test.ts": 10.0,
   "e2e/day/no-over-words.test.ts": 9.7,
   "e2e/day/now-mark.test.ts": 55.7,
   "e2e/day/polish-measures.test.ts": 245.9,

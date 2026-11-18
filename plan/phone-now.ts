@@ -38,16 +38,17 @@ export function blockLine(leftMinutes: number, blockEnd: string, meeting: NowMee
   return left;
 }
 
-export type NextEvent = { title: string; start: string; end: string };
+/** DY-1: `repeats` from the calendar itself; `callType` when it is a registered call (its type, which replaces Repeats). */
+export type NextEvent = { title: string; start: string; end: string; repeats?: boolean; callType?: string | null };
 export type NextBlock = { start: string; name: string; risk: string | null };
-export type NextLine = { kind: "meeting" | "block"; at: string; text: string; detail: string | null };
+export type NextLine = { kind: "meeting" | "block"; at: string; text: string; detail: string | null; repeats?: true; callType?: string };
 
 /** Next: the next meeting today that hasn't started and the next block that hasn't started, in time order; two lines at most. */
 export function nextLines(meetings: readonly NextEvent[], blocks: readonly NextBlock[], now: string, clock: (iso: string) => string): NextLine[] {
   const t = ms(now);
   const out: NextLine[] = [];
   const m = [...meetings].filter((e) => ms(e.start) > t).sort((a, b) => ms(a.start) - ms(b.start))[0];
-  if (m) out.push({ kind: "meeting", at: clock(m.start), text: m.title, detail: span((ms(m.end) - ms(m.start)) / 60_000) });
+  if (m) out.push({ kind: "meeting", at: clock(m.start), text: m.title, detail: span((ms(m.end) - ms(m.start)) / 60_000), ...(m.callType ? { callType: m.callType } : m.repeats ? { repeats: true as const } : {}) });
   const b = [...blocks].filter((x) => ms(x.start) > t).sort((a, b) => ms(a.start) - ms(b.start))[0];
   if (b) out.push({ kind: "block", at: clock(b.start), text: b.name, detail: b.risk });
   // In time order.

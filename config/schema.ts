@@ -115,8 +115,8 @@ export const DEFAULT_INBOX: InboxPrefs = { view: "needs_you", clients: [], group
 /** RB-5: Code's Group by switch for SQL objects. A new key, so an older build skips it (BH-1). */
 export const CODE_SQL_GROUPS = ["schema", "type"] as const;
 export type CodeSqlGroup = (typeof CODE_SQL_GROUPS)[number];
-export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; showCatchUpDay: boolean; showWeekendDays: boolean; /** RB-5: how Code's By kind groups a database's SQL objects: by schema then type, or by type then schema. */ codeSqlGroup: CodeSqlGroup; inbox: InboxPrefs };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX };
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; /** TY-1: the Timeline switch on Today: on a computer, and on the phone (its own, so the phone keeps MB-1's layout until asked). */ todayTimeline: boolean; todayTimelinePhone: boolean; /** DY-1: Day folds a block that has ended to one line (today, the ordinary view). */ foldEnded: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean; showCatchUpDay: boolean; showWeekendDays: boolean; /** RB-5: how Code's By kind groups a database's SQL objects: by schema then type, or by type then schema. */ codeSqlGroup: CodeSqlGroup; inbox: InboxPrefs };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, foldEnded: true, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -480,7 +480,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   const ui: UiConfig = { ...DEFAULT_UI, inbox: { ...DEFAULT_INBOX, clients: [], statuses: [...DEFAULT_INBOX_STATUSES] } };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "reduce_motion", "text_size", "show_personal", "show_catch_up_day", "show_weekend_days", "code_sql_group", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "today_timeline", "today_timeline_phone", "fold_ended", "reduce_motion", "text_size", "show_personal", "show_catch_up_day", "show_weekend_days", "code_sql_group", "inbox_view", "inbox_clients", "inbox_group", "inbox_sort", "inbox_statuses", "inbox_grouping"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -533,7 +533,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       if (typeof sp !== "boolean") err("ui.show_personal", "Must be true or false");
       else ui.showPersonal = sp;
     }
-    for (const [key, field] of [["today_timeline", "todayTimeline"], ["today_timeline_phone", "todayTimelinePhone"], ["show_catch_up_day", "showCatchUpDay"], ["show_weekend_days", "showWeekendDays"]] as const) {
+    for (const [key, field] of [["today_timeline", "todayTimeline"], ["today_timeline_phone", "todayTimelinePhone"], ["fold_ended", "foldEnded"], ["show_catch_up_day", "showCatchUpDay"], ["show_weekend_days", "showWeekendDays"]] as const) {
       const v = t?.[key];
       if (v === undefined) continue;
       if (typeof v !== "boolean") err(`ui.${key}`, "Must be true or false");

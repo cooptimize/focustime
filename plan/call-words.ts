@@ -5,6 +5,16 @@
 import { AI_MESSAGES } from "../ai/types.ts";
 import { AI_RETRIES, parseOutcome, type OccurrenceState } from "./meetings.ts";
 
+/**
+ * DY-1: how a meeting is marked where it is drawn (Day, Week, the block panel, the phone): "Repeats" for one of a series
+ * on the calendar (an icon, with the word for screen readers and on hover); a registered call by its type. The
+ * register form's line under the type.
+ */
+export const MEETING_WORDS = {
+  repeats: "Repeats",
+  typeHint: "Both types are read the same way. The type is how the call is named on Day, Week and the call's page.",
+} as const;
+
 /** The states a person can see, as the mark and the list say them. */
 export const CALL_STATE = {
   waiting: "Waiting for the transcript",

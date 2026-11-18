@@ -8,7 +8,8 @@ import { createOAuthClient, googleProvider } from "../oauth/oauth.ts";
 import { weekRange } from "../when.ts";
 import { normalizeGoogleEvents, type GoogleEvent } from "./normalize.ts";
 
-export const GOOGLE_FIELDS = "nextPageToken,items(id,status,summary,transparency,start,end,attendees(self,responseStatus))";
+// DY-1: recurringEventId, only to know whether an event is an instance of a series; the id itself is never kept.
+export const GOOGLE_FIELDS = "nextPageToken,items(id,status,summary,transparency,start,end,attendees(self,responseStatus),recurringEventId)";
 
 export function createGoogleSource(deps: CalendarDeps<GoogleConfig>) {
   const timeoutMs = deps.timeoutMs ?? 20_000;

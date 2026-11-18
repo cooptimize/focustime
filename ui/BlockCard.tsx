@@ -4,9 +4,12 @@
 // a feature placed with no stories as "Needs stories · Break down"; "+ Add" as the last row of every block, which
 // selects it and opens the block panel with the cursor in its Add box (WD-2); meetings as one summary line that opens into the list when there is no
 // rail. With the Timeline switch on the hour rail is a slim strip (about 56 px) so titles keep their width.
-import { Fragment, useContext, useState, type CSSProperties } from "react";
-import { callForEvent, callsIn, useCallMarks } from "./meetings/calls.ts";
-import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
+import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useDayFold } from "./dayFold.tsx";
+import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
+import { callForEvent, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
+import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MEETING_WORDS } from "../plan/call-words.ts";
 import { LiveCalls } from "./cowork.tsx";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -38,7 +41,7 @@ import { movedTo, pastRows } from "../plan/pastrows.ts";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
-import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
+import { WeekDnd, pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, useIsOrigin } from "./Carry.tsx";
 import { BlockSuggestions } from "./Suggest.tsx";
 import { NowLine, NowMark, NowPast, NowTick } from "./NowLine.tsx";
@@ -140,7 +143,12 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // QT-1, WK-5: a day before today is quieter: no status, rail, meetings line, suggestions or + Add. WK-5 undoes QT-1's
   // one-line fold for blocks with to-dos: they list them again (PastRows); one with nothing stays "Nothing planned".
   const folded = slot.date < (plan.today ?? "");
-  const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev && !folded ? ", at risk" : ""}`;
+  // DY-1: on Day (its provider), a block of today that has ended folds to one line; Week has no provider and never folds.
+  const dayFold = useDayFold();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const dFolded = !phone && !eve && !!dayFold?.folded(slot.half);
+  const canFold = !phone && !eve && !!dayFold?.canFold(slot.half);
+  const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev && !folded && !dFolded ? ", at risk" : ""}${dFolded ? ", folded" : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const chipLine = chipFold([
     ...(lateChip ? [<Fragment key="late">{lateChip}</Fragment>] : []),
@@ -161,6 +169,12 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   const chipTip = [`At risk${status.short ? `: ${status.short}` : ""}`, status.detail, ...slot.risks.filter((r) => r.reason !== status.detail).map((r) => r.reason)].filter((x): x is string => !!x).filter((x, i, a) => a.indexOf(x) === i).join("\n");
   // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
   const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
+  // DY-1: a drag over a folded block opens it (until the drag ends).
+  const dnd = useContext(WeekDnd);
+  const dragHere = !!dnd?.dragging && dnd.hover === drop.props["data-drop"];
+  useEffect(() => {
+    if (dFolded && dragHere) dayFold?.dragOver(slot.half);
+  }, [dFolded, dragHere, dayFold, slot.half]);
   // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
   // MC-1d: a call whose meeting this card draws with its title (the wide timeline, or the open list) carries its mark on
   // the meeting itself; the card's line keeps the others (the slim rail, a folded list, a call missing from the calendar).
@@ -189,7 +203,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
 
   const body = (
     <div className="card-body">
-      <div className="card-head" title={!folded && status.kind === "none" ? (watch ?? undefined) : undefined}>
+      <div className="card-head" title={dFolded ? "Unfold this block" : !folded && status.kind === "none" ? (watch ?? undefined) : undefined}>
         <span className="swatch" aria-hidden="true" />
         <span className={`card-client${primary ? "" : " open-label"}${name.includes(" ") ? "" : " one-word"}`} title={name}>
           {name}
@@ -197,15 +211,28 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         <CardWhen slot={slot} tz={tz} />
         {/* UI-B, PS-1: with no rail (the phone, a card too narrow for one), "now" is a marker in the block under way's header. */}
         {compact && !rail && railNow?.at != null && <NowMark label={railNow.label} onClick={railNow.onClick} />}
-        {status.kind !== "none" && !folded && (
+        {dFolded && <FoldSummary slot={slot} picks={plan.week?.[slot.date]?.picks ?? []} ended={Date.parse(now) >= Date.parse(slot.end)} tabIndex={selected ? 0 : -1} />}
+        {/* What still needs me stays on the folded line: late promises and due dates (the chips line, which it hides). */}
+        {dFolded && chipLine.shown.length > 0 && (
+          <span className="day-fold-chips">
+            {chipLine.shown}
+            {chipLine.more > 0 && (
+              <button type="button" className="chip-more" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen())} aria-label={`${chipLine.more} more promises due: open the block`} title={`${chipLine.more} more promises due: open the block`}>
+                +{chipLine.more}
+              </button>
+            )}
+          </span>
+        )}
+        {status.kind !== "none" && !folded && !dFolded && (
           <span className={`status-pill head-chip ${status.kind}`} id={reasonsId} title={chipTip}>
             {pill}
           </span>
         )}
         {chipInHead && lateChip}
+        {canFold && <FoldArrow fold={dayFold!} half={slot.half} name={name} folded={dFolded} tabIndex={selected ? 0 : -1} />}
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
-      {folded ? (
+      {dFolded ? null : folded ? (
         <>
           {drop.tip}
           <PastRows picks={[...ticks, ...movedOn]} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} onMore={() => onOpen()} />
@@ -267,7 +294,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : call ? "is-call" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
               <span className="ce-title" {...titleOpensCall(call)}>{p.event.title}</span>
-              {call && <CallMarkButton call={call} tabIndex={selected ? 0 : -1} />}
+              <MeetingMark e={p.event} call={call} tabIndex={selected ? 0 : -1} />
             </li>
             );
           })}
@@ -304,10 +331,14 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
 
   return (
     <div
-      ref={refFn}
+      ref={(el) => {
+        rootRef.current = el;
+        refFn(el);
+      }}
       {...drop.props}
+      data-half={slot.half}
       data-tour={state === "focus" ? "wk-block" : undefined}
-      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${folded ? "past" : (sev ?? "")} ${selected ? "selected" : ""} ${compact || folded ? "card" : ""}${ruler && !folded ? " has-ruler" : ""}${rail === "slim" && !folded ? " slim" : ""}${adding ? " adding" : ""}${drop.cls}`}
+      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${folded ? "past" : (sev ?? "")} ${selected ? "selected" : ""} ${compact || folded ? "card" : ""}${ruler && !folded ? " has-ruler" : ""}${rail === "slim" && !folded ? " slim" : ""}${adding ? " adding" : ""}${dFolded ? " day-folded" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -317,6 +348,8 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       onClick={(e) => {
         // WD-2: the header or empty space opens the block panel; a row, a checkbox, a chip or a drag doesn't.
         if (interactive(e) || onRowOrChip(e)) return;
+        // DY-1: pressing a folded block's line unfolds it.
+        if (dFolded) return dayFold!.toggle(slot.half);
         onOpen();
       }}
       onContextMenu={(e) => {
@@ -451,7 +484,7 @@ function DayStrip({ slot, tz, label, now }: { slot: Slot; tz: string; label: str
         ))}
         {events.map((p) => {
           const e = p.event;
-          return <span key={e.id} className={`ds-ev ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"} show-${e.showAs ?? "busy"}`} style={seg(ms(p.clipStart), ms(p.clipEnd))} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} />;
+          return <span key={e.id} className={`ds-ev ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"} show-${e.showAs ?? "busy"}`} style={seg(ms(p.clipStart), ms(p.clipEnd))} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}${e.repeats ? ` · ${MEETING_WORDS.repeats}` : ""}`} />;
         })}
         {now && now.past > 0 && <span className="ds-past" style={{ width: pct(Math.min(1, now.past)) }} aria-hidden="true" />}
       </div>
@@ -608,8 +641,11 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
   const samples = useContext(SampleSources);
   const menu = useEventMenu(e);
   const kind = e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting";
+  // DY-1: Week's slim rail has no room for a mark: a call's type or Repeats is in its hover (and the call heads its menu).
+  const call = useCallFor(e);
+  const mark = call ? ` · ${call.role}` : e.repeats ? ` · ${MEETING_WORDS.repeats}` : "";
   return (
-    <div className={`r-ev ${kind}${e.calendar ? " linked" : ""} show-${e.showAs ?? "busy"}`} style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
+    <div className={`r-ev ${kind}${e.calendar ? " linked" : ""} show-${e.showAs ?? "busy"}`} style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}${mark}`} {...menu}>
       <span>{e.title}</span>
     </div>
   );

@@ -73,3 +73,12 @@ describe("PH-1: the one thing that needs you", () => {
     expect(oneThing([row("later", { due: "2026-11-09", views: ["promises"] })], 1, today)).toBeNull();
   });
 });
+
+describe("DY-1: the phone's Next line marks a meeting", () => {
+  const m = (o: { repeats?: boolean; callType?: string | null }) => [{ title: "Standup", start: T("10:00"), end: T("10:15"), ...o }];
+  it("Repeats from the calendar; a call's type in its place; nothing for a single meeting", () => {
+    expect(nextLines(m({ repeats: true }), [], T("09:30"), clock)[0]).toMatchObject({ repeats: true });
+    expect(nextLines(m({ repeats: true, callType: "Weekly status call" }), [], T("09:30"), clock)[0]).toEqual({ kind: "meeting", at: "10:00", text: "Standup", detail: "15 min", callType: "Weekly status call" });
+    expect(nextLines(m({}), [], T("09:30"), clock)[0]).toEqual({ kind: "meeting", at: "10:00", text: "Standup", detail: "15 min" });
+  });
+});

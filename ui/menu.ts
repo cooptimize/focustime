@@ -202,6 +202,9 @@ export type MenuEnv = {
   /** TY-1: Today's Timeline switch. */
   dayTimeline: boolean;
   saveDayTimeline: (show: boolean) => void;
+  /** DY-1: Day's "Fold blocks that have ended". */
+  dayFold: boolean;
+  saveDayFold: (on: boolean) => void;
   /** WK-3: Saturday and Sunday on Week always (remembered per viewer in this browser), not only when something is there. */
   showWeekend?: boolean;
   saveShowWeekend?: (show: boolean) => void;
@@ -756,13 +759,11 @@ const outlookDay = (date: IsoDate) => {
  */
 function registeredCallItems(c: CallMark): MenuItem[] {
   const review = c.state === "ready" && c.open > 0 && c.review;
-  // MC-2: a call that isn't registered has the same items, under "Call".
-  const group = c.kind ? "Call" : "Client call";
   return [
-    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group, run: () => openCall(c.occurrenceId) },
-    ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group, run: () => openCall(c.occurrenceId, "transcript") }] : []),
-    ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group, run: () => requestRerun(c.occurrenceId) }] : []),
-    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group, ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
+    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group: c.role, run: () => openCall(c.occurrenceId) },
+    ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group: c.role, run: () => openCall(c.occurrenceId, "transcript") }] : []),
+    ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group: c.role, run: () => requestRerun(c.occurrenceId) }] : []),
+    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group: c.role, ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
   ];
 }
 
@@ -782,7 +783,8 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
     ? [...rsvpItems(env, e, facts, rsvp.allowed ? undefined : rsvp.reason ?? "Not for this event"), ...x.actions.filter((a) => a.id === "open").map(item)]
     : x.actions.filter((a) => a.id !== "rsvp").map(item);
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
-  if (call) return { title: `${e.title} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
+  // DY-1: the call's type heads its menu (its items' group) and is in the title.
+  if (call) return { title: `${e.title} · ${call.role} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup. The 14 days count
   // from the app's today (the person's day, and the demo's), not the browser's clock.
   if (env.callsHere === true && reviewableMeeting(e, Date.now(), (env.today ? Temporal.PlainDate.from(env.today).toZonedDateTime({ timeZone: tz }) : Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay()).epochMilliseconds))
@@ -1267,6 +1269,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       ] }) };
     }
     case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
+    case "ui.set_day_fold": return { run: () => env.saveDayFold(!env.dayFold) };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };

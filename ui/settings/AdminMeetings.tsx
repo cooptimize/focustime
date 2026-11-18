@@ -8,6 +8,7 @@ import { ActionRefusal, call } from "../api.ts";
 import { SignInAgainButton } from "../Reopen.tsx";
 import type { SeriesView } from "../../plan/meeting-views.ts";
 import { Icon } from "../icons.tsx";
+import { MEETING_WORDS } from "../../plan/call-words.ts";
 
 type ListData = { meetings: SeriesView[]; people: { id: string; name: string }[] };
 type Candidate = { eventId: string; subject: string; organizerName: string | null; organizer: "home" | "other" | "unknown"; when: string; outside: number; match: boolean };
@@ -219,9 +220,10 @@ function RegisterForm({ clientKey, clientName, people, onDone, onCancel }: { cli
         </label>
         <label>
           <span className="set-label">Role</span>
-          <select value={role} onChange={(e) => setRole(e.target.value as "status" | "planning")}>{ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <select value={role} onChange={(e) => setRole(e.target.value as "status" | "planning")} aria-describedby="mtg-type-hint">{ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
       </div>
+      <p className="set-hint" id="mtg-type-hint">{MEETING_WORDS.typeHint}</p>
       <p className="set-hint">Reviewers: you and {clientName}'s leads, to start ({people.length} FocusTime users to choose from after). FocusTime decides Automatic or Upload from the organizer; you can change it after.</p>
       {problem && !graphProblem && !linkProblem && <ProblemLine p={problem} />}
       <span className="set-row-actions">

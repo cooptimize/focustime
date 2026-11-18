@@ -52,3 +52,20 @@ describe("normalizeGoogleEvents (sanitized recorded events.list, two pages)", ()
     expect(normalizeGoogleEvents([items[0]!], "family@group.calendar.google.com")[0]?.id).toBe("google:family@group.calendar.google.com:fake0001");
   });
 });
+
+describe("DY-1: whether a Google event repeats", () => {
+  const ev = (recurringEventId?: string): GoogleEvent => ({ id: `x${recurringEventId ? "1" : "2"}`, summary: "Swim class", start: { dateTime: "2026-11-02T17:30:00-05:00" }, end: { dateTime: "2026-11-02T18:15:00-05:00" }, ...(recurringEventId ? { recurringEventId } : {}) });
+  it("an instance of a series repeats; the series id itself is never kept", () => {
+    const [a, b] = normalizeGoogleEvents([ev("series1"), ev()], "primary");
+    expect(a!.repeats).toBe(true);
+    expect(b!.repeats).toBeUndefined();
+    expect(JSON.stringify(a)).not.toContain("series1");
+  });
+});
+
+describe("DY-1: the calendar read asks for recurringEventId and nothing more", async () => {
+  const { GOOGLE_FIELDS } = await import("./source.ts");
+  it("the same fields as before, plus recurringEventId", () => {
+    expect(GOOGLE_FIELDS).toBe("nextPageToken,items(id,status,summary,transparency,start,end,attendees(self,responseStatus),recurringEventId)");
+  });
+});

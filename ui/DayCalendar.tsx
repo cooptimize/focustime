@@ -3,7 +3,7 @@
 // blocks in a slim line before or after them. Each row opens the same event menu as on Week. Never "no meetings":
 // with nothing to show it renders nothing, and a source that failed is reported by the status line, not here.
 import { useCallFor } from "./meetings/calls.ts";
-import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
 import type { DayPromise } from "../plan/conversation-views.ts";
 import { wasDueNow } from "../plan/due.ts";
 import type { CalEvent } from "../week/types.ts";
@@ -22,7 +22,7 @@ export function DayEventRow({ e, tz }: { e: DayEvent; tz: string }) {
     <li className={`show-${show} ${e.kind} when-${e.when}`} title={`${e.event.title}\n${spanText(e.start, e.end, tz)}${word ? ` · ${word}` : ""}`} {...menu}>
       <span className="ev-time">{spanText(e.start, e.end, tz)}</span>
       <span className="ev-title" {...titleOpensCall(call)}>{e.event.title}</span>
-      {call && <CallMarkButton call={call} />}
+      <MeetingMark e={e.event} call={call} />
       {e.when === "now" && <span className="cal-tag now">Now</span>}
       {e.when === "next" && <span className="cal-tag next">Next</span>}
       {word && <span className="cal-word">{word}</span>}
