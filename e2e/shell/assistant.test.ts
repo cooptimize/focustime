@@ -85,7 +85,7 @@ describe.skipIf(!CHROMIUM)("AS-1 the assistant panel", () => {
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
     await page.evaluate(() => (location.hash = "#/settings/ai"));
-    const row = page.locator(".set-field", { hasText: "Assistant history" });
+    const row = page.locator('[data-setting="assistant-history"]');
     await row.getByRole("button", { name: "Clear" }).click();
     await row.getByRole("button", { name: "Clear it" }).click();
     await row.getByText(/Cleared \d+ entries/).waitFor({ timeout: 10_000 });

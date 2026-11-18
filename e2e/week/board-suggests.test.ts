@@ -153,8 +153,8 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
     const { page } = await start(h);
     await week(page);
     await expect.poll(() => page.locator("main.grid .sug-block").count()).toBeGreaterThan(0);
-    await goTo(page, "#/settings/planning", page.getByRole("checkbox", { name: /Suggest/ }));
-    await page.getByRole("checkbox", { name: /Suggest/ }).uncheck();
+    await goTo(page, "#/settings/planning", page.getByRole("switch", { name: /Suggest/ }));
+    await page.getByRole("switch", { name: /Suggest/ }).uncheck();
     await expect.poll(async () => ((await call(page, "week.load", {})).data as { planning: { suggest: boolean } }).planning.suggest).toBe(false);
     await page.reload();
     await week(page);
@@ -162,8 +162,8 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
     expect(await page.locator(".sug-block, .sug-day").count()).toBe(0);
     await week(page);
     expect(await page.locator(".sug-block, .sug-day").count()).toBe(0);
-    await goTo(page, "#/settings/planning", page.getByRole("checkbox", { name: /Suggest/ }));
-    await page.getByRole("checkbox", { name: /Suggest/ }).check();
+    await goTo(page, "#/settings/planning", page.getByRole("switch", { name: /Suggest/ }));
+    await page.getByRole("switch", { name: /Suggest/ }).check();
     await expect.poll(async () => ((await call(page, "week.load", {})).data as { planning: { suggest: boolean } }).planning.suggest).toBe(true);
     await page.reload();
     await week(page);

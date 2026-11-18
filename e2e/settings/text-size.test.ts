@@ -136,9 +136,9 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
   it("Settings > Display Text size changes every screen at once and survives a restart; Default puts it back", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, "#/settings/display");
-    const before = await fontOf(page, ".settings .set-hint");
+    const before = await fontOf(page, ".settings .sp-help");
     await page.getByRole("radio", { name: "Larger" }).check();
-    await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
+    await expect.poll(() => fontOf(page, ".settings .sp-help")).toBe(before + 4);
     for (const [hash, sel] of [["#/today", ".day-view .half.card"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/2026-11-09/add", "aside.block-panel .bp-title"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib4-row-title"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
@@ -153,7 +153,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await ctx.close();
     await go(page, "#/settings/display");
     await page.getByRole("radio", { name: "Default" }).check();
-    await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before);
+    await expect.poll(() => fontOf(page, ".settings .sp-help")).toBe(before);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
