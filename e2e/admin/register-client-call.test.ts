@@ -1,5 +1,5 @@
 // Was e2e/meetings-register.test.ts until BT-1.
-// MC-1c: registering a client call in demo mode, Admin › Clients › <client> › Meetings. The demo's calendar
+// MC-1c: registering a client call in demo mode, a client's Calls tab in Admin › Clients. The demo's calendar
 // (sources/demo/meetings-graph.ts) holds a weekly call Priya organizes at Cooptimize; a pasted link finds one Jordan
 // organizes; one link stands for Microsoft not answering. Both teammate-organized calls register as Automatic; the
 // failure shows its plain words beside the link and keeps what was typed; each registered call shows its last-read line.
@@ -27,7 +27,8 @@ async function shots(page: Page, name: string, keep: ReturnType<Page["locator"]>
   await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
 }
 
-const meetingsOf = (page: Page, client: string) => page.locator(".adm-client", { hasText: client }).first().locator(".mtg-admin");
+// SA-4: a client's calls are on its page in Admin › Clients, its Calls tab.
+const meetingsOf = (page: Page, _client: string) => page.locator(".adm-client-page .mtg-admin");
 
 describe.skipIf(!CHROMIUM)("registering a client call (browser, demo mode, MC-1c)", () => {
   beforeAll(async () => {
@@ -37,7 +38,7 @@ describe.skipIf(!CHROMIUM)("registering a client call (browser, demo mode, MC-1c
 
   it("registers a teammate's call from my calendar and by pasted link; a failure says why beside the link and keeps the form", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    await page.evaluate(() => (location.hash = "#/admin/clients/Harbor/calls"));
 
     // From my calendar, for Harbor (a client the demo person keeps no meeting of): Priya organizes it at Cooptimize.
     const harbor = meetingsOf(page, "Harbor");
@@ -55,6 +56,10 @@ describe.skipIf(!CHROMIUM)("registering a client call (browser, demo mode, MC-1c
     await expect(card.locator(".mtg-last-read").textContent()).resolves.toBe("Not read yet: the first call is Tue, Nov 10");
 
     // By pasted link, for Atlas: Microsoft isn't answering. The words show under the link; the link and name stay.
+    await page.locator('.ps-rail [data-settings-section="client:Atlas"]').click();
+    // A client's page opens on the tab last used on one this visit.
+    await page.waitForFunction(() => location.hash === "#/admin/clients/Atlas");
+    await page.getByRole("tab", { name: "Calls", selected: true }).waitFor();
     const atlas = meetingsOf(page, "Atlas");
     await atlas.getByRole("button", { name: "Register a meeting" }).click();
     await atlas.getByRole("button", { name: "Paste a Teams link" }).click();
@@ -79,6 +84,10 @@ describe.skipIf(!CHROMIUM)("registering a client call (browser, demo mode, MC-1c
     await expect(atlas.locator(".mtg-problem").count()).resolves.toBe(0);
 
     // The demo's seeded Northwind call (Upload) shows its last read: when its transcript was uploaded.
+    await page.locator('.ps-rail [data-settings-section="client:Northwind"]').click();
+    // A client's page opens on the tab last used on one this visit.
+    await page.waitForFunction(() => location.hash === "#/admin/clients/Northwind");
+    await page.getByRole("tab", { name: "Calls", selected: true }).waitFor();
     const north = meetingsOf(page, "Northwind").locator(".mtg-card").first();
     await expect.poll(() => north.locator(".mtg-last-read").textContent()).toMatch(/^Transcript uploaded Nov 5, /);
     await shots(page, "mc1c-meetings", meetingsOf(page, "Northwind"));
@@ -97,7 +106,7 @@ describe.skipIf(!CHROMIUM)("registering a client call (browser, demo mode, MC-1c
         if (body.action === "meeting.candidates") return route.fulfill({ status: w.status, contentType: "application/json", body: JSON.stringify({ ok: false, status: w.status, error: w.error, code }) });
         return route.continue();
       });
-      await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+      await page.evaluate(() => (location.hash = "#/admin/clients/Harbor/calls"));
       await page.reload();
       const harbor = meetingsOf(page, "Harbor");
       await harbor.waitFor({ timeout: 60_000 });

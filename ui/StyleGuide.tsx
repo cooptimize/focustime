@@ -350,7 +350,6 @@ export function StyleGuide() {
           <span className="status-pill on_track">On track</span>
           <span className="status-pill watch">Stale</span>
           <span className="size-chip static">M</span>
-          <span className="adm-kind">Rule</span>
           <span className="status-chip">Read only</span>
           <span className="muted">a status: a wash, no line</span>
         </div>

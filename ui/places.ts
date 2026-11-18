@@ -2,7 +2,7 @@
 // lists the screens themselves draw. The pointer check (scripts/words-guard.ts, `pointerHits`) fails a "Settings ›",
 // "Admin ›", "More ›", "Inbox ›" or "Backlog ›" that names anything else. Pure: no DOM, no React.
 import { SECTIONS } from "./settings/registry.ts";
-import { ADMIN_UI_SECTIONS } from "./settings/admin-sections.ts";
+import { ADMIN_POINTER_NAMES } from "./settings/admin/places.ts";
 import { INBOX_LIST_NAMES, MODES, MODE_NAMES } from "./nav.ts";
 import { PHONE_TEXT } from "../plan/phone-now.ts";
 
@@ -24,7 +24,8 @@ export const BACKLOG_TOOLBAR = ["Needs attention", "Filter", "Search"] as const;
 export const PLACES: Readonly<Record<"Settings" | "Admin" | "More" | "Inbox" | "Backlog", readonly string[]>> = {
   // A client's own page (Settings › Clients › <client>) is under Clients.
   Settings: SECTIONS.filter((s) => !s.parent).map((s) => s.label),
-  Admin: ADMIN_UI_SECTIONS.map(([, label]) => label),
+  // SA-4: Admin's five parts (a part's tabs after it are checked by the pointer check too).
+  Admin: ADMIN_POINTER_NAMES,
   More: [...new Set([...MORE_ITEMS, ...PHONE_MORE_ITEMS])],
   Inbox: Object.values(INBOX_LIST_NAMES),
   Backlog: [...MODES.ahead.map((m) => MODE_NAMES[m]), ...BACKLOG_TOOLBAR],

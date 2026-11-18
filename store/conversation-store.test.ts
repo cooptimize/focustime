@@ -1,5 +1,5 @@
 // CV-1: the shared conversation store on both drivers: conversations, places, commitments, suggestions, the per-chat
-// AI count, the app's AI log, counts for Admin › Status, and the viewer's gate (only chats I'm in now, D521).
+// AI count, the app's AI log, counts for Admin › Health, and the viewer's gate (only chats I'm in now, D521).
 import { expect, it } from "vitest";
 import { aChatMember, aClientChat, aTeamsMessage } from "../test/builders/index.ts";
 import { forEachDriver } from "../test/db.ts";

@@ -16,7 +16,7 @@ async function openWhoSetUp(page: Page) {
   await page.keyboard.press("Control+k");
   await page.keyboard.type("who's set up");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => location.hash === "#/settings/admin-people/whos-set-up");
+  await page.waitForFunction(() => location.hash === "#/admin/people/setup");
   const table = page.getByRole("table", { name: "Who's set up" });
   await table.waitFor();
   await page.getByRole("radio", { name: /Not signed in/ }).click();
@@ -115,7 +115,7 @@ describe.skipIf(!CHROMIUM)("IN-2: send the invite from FocusTime", () => {
       st.textContent = "html{font-size:17px}";
       document.head.append(st);
     });
-    await page.evaluate(() => void (location.hash = "#/settings/admin-people/whos-set-up"));
+    await page.evaluate(() => void (location.hash = "#/admin/people/setup"));
     const table = page.getByRole("table", { name: "Who's set up" });
     await table.waitFor();
     await page.getByRole("radio", { name: /Not signed in/ }).click();

@@ -195,7 +195,7 @@ export type ConversationPatch = Partial<{
 export type NewCommitment = Omit<Commitment, "id" | "createdAt" | "updatedAt" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "state" | "draft"> & { state?: CommitmentState; fromPromise?: string | null; createdAt?: string };
 export type CommitmentPatch = Partial<Pick<Commitment, "what" | "dueAt" | "dueDate" | "toId" | "toName" | "impliesItem" | "state" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "whoId" | "whoName" | "reason" | "messageIds" | "conversationId" | "draft" | "closeHow" | "closeNote">>;
 
-/** What ADM-1's Admin › Status shows (counts only, never text or ids). */
+/** What ADM-1's Admin › Health shows (counts only, never text or ids). */
 export type ConversationCounts = {
   conversationsByStatus: Record<ConversationStatus, number>;
   messagesByRole: Record<MessageRole, number>;
@@ -561,7 +561,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       return db.tx(async () => (await db.run("DELETE FROM conversation_messages WHERE NOT EXISTS (SELECT 1 FROM teams_messages m WHERE m.chat_id = conversation_messages.chat_id AND m.message_id = conversation_messages.message_id)")).changes);
     },
 
-    /** Counts for Admin › Status (ADM-1): never text, never ids. */
+    /** Counts for Admin › Health (ADM-1): never text, never ids. */
     async counts(day: string): Promise<ConversationCounts> {
       const by = async (sql: string, keys: readonly string[]) => {
         const out = Object.fromEntries(keys.map((k) => [k, 0])) as Record<string, number>;

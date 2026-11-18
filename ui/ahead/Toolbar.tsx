@@ -79,7 +79,7 @@ export function Toolbar({ mode, load, f, set, setWhole, view, counts, attention,
       ...(auto.length
         ? [
             admin
-              ? { id: "scope", group: "Scope", label: scopeWords, hint: "Set it in Admin › Clients", run: () => void (location.hash = "#/settings/admin-clients") }
+              ? { id: "scope", group: "Scope", label: scopeWords, hint: "Set it in Admin › Clients", run: () => void (location.hash = "#/admin/clients") }
               : { id: "scope", group: "Scope", label: scopeWords, disabled: "Your FocusTime admin sets each client's scope in Admin › Clients", expected: true },
           ]
         : []),

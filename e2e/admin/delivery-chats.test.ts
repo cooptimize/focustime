@@ -1,4 +1,4 @@
-// T-2 and AP-1: Admin › Clients › Delivery chats (ADM-1; was Settings › Clients) (browser, demo mode). Keyboard only: Add a chat opens the picker,
+// T-2 and AP-1: a client's Chats tab in Admin › Clients (ADM-1, SA-4; was Settings › Clients) (browser, demo mode). Keyboard only: Add a chat opens the picker,
 // search, Enter adds it, labelled with the kind its members suggest; members show with external people flagged by
 // tenant; a client takes a second chat; the label can change, and an outsider in a chat marked Delivery team is warned
 // about; a chat added for one client isn't offered to another; Remove forgets one and leaves the rest; Add a chat works
@@ -27,9 +27,9 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     // DM-1: the demo starts with Northwind's two chats registered (its conversations); forget them so this test adds them.
     for (const chatId of ["19:demo-northwind-delivery@thread.v2", "19:demo-northwind-collab@thread.v2"]) expect((await call(page, "chats.remove", { chatId })).ok).toBe(true);
     await page.reload();
-    await openSettings(page);
-    // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
-    await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
+    // ADM-1, SA-4: registering chats is on the client's page in Admin › Clients, its Chats tab (the demo's person is the
+    // demo's admin).
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/chats"));
     const northwind = page.getByRole("group", { name: /^Client chats for Northwind/ });
     await northwind.waitFor();
 
@@ -77,6 +77,10 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await custCard.getByText("2 people from outside Cooptimize are in this internal chat").waitFor({ state: "detached" });
 
     // Harbor's picker doesn't offer Northwind's chats; Esc closes it.
+    await page.locator('.ps-rail [data-settings-section="client:Harbor"]').click();
+    // A client's page opens on the tab last used on one this visit.
+    await page.waitForFunction(() => location.hash === "#/admin/clients/Harbor");
+    await page.getByRole("tab", { name: "Chats", selected: true }).waitFor();
     const harbor = page.getByRole("group", { name: /^Client chats for Harbor/ });
     await harbor.getByRole("button", { name: "Add a chat" }).click();
     await picks(harbor).getByRole("option").first().waitFor();
@@ -85,6 +89,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await harbor.getByRole("button", { name: "Add a chat" }).waitFor();
 
     // Remove forgets one and leaves the other.
+    await page.locator('.ps-rail [data-settings-section="client:Northwind"]').click();
     await custCard.getByRole("button", { name: /^Remove / }).click();
     await custCard.waitFor({ state: "detached" });
     await teamCard.waitFor();
@@ -100,8 +105,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
       if (/"chats\.registered"/.test(route.request().postData() ?? "")) await held;
       await route.continue();
     });
-    await openSettings(page);
-    await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/chats"));
     const northwind = page.getByRole("group", { name: /^Client chats for Northwind/ });
     await northwind.getByRole("button", { name: "Add a chat" }).click({ timeout: 5_000 });
     await picks(northwind).getByRole("option").first().waitFor();

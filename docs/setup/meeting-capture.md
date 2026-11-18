@@ -4,7 +4,7 @@ For the Entra and Teams admin, then a FocusTime admin. Meeting capture reads the
 weekly call and turns it into proposals (drafts, promises, DevOps comments) that the call's reviewers confirm in
 FocusTime. Nothing is written anywhere until a reviewer confirms.
 
-FocusTime reads only the meetings registered in Admin › Clients › <client> › Meetings, and meetings FocusTime scheduled
+FocusTime reads only the meetings registered in Admin › Clients › <client> › Calls, and meetings FocusTime scheduled
 itself. Everything is delegated: a person's own access, the registrant's first, then the other reviewers'. No
 application permission, no application access policy, no change notifications.
 
@@ -37,7 +37,7 @@ occurrence has a transcript without anyone remembering to start one.
 
 ## 3. FocusTime: register the call
 
-A FocusTime admin opens Admin › Clients › <client> › Meetings › Register a meeting. Any client in Admin › Clients'
+A FocusTime admin opens Admin › Clients › <client> › Calls › Register a meeting. Any client in Admin › Clients'
 list can have calls registered, whoever the admin is (MC-1c); the admin needs to be on the call's invite, as organizer
 or attendee, for it to be on their calendar.
 
@@ -92,7 +92,7 @@ Upload a transcript. When the organizer's policy doesn't allow attendees to down
 
 ## 6. AI
 
-The proposals come from one AI request per call, only with AI for FocusTime and the client's Allow AI on (Admin › AI),
+The proposals come from one AI request per call, only with AI for FocusTime and the client's Allow AI on (Admin › Team defaults › AI),
 under the person's and the app's monthly caps. Other clients' names, projects and item ids are masked as
 "[another client]" and spoken email addresses as "[email]" before anything is sent. Background reads run on Flex;
 an upload or Propose again runs on standard, because someone is waiting.

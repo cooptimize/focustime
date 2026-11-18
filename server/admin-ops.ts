@@ -21,7 +21,7 @@ export type AdminOpsDeps = {
   standards?: StandardsPort;
   /** RB-1: Code's view log and each client's code status. */
   code?: AdminOps["code"];
-  /** DV-1: the status rows registry Admin › Status renders (DevOps polling, and later sources). */
+  /** DV-1: the status rows registry Admin › Health renders (DevOps polling, and later sources). */
   statusRows?: StatusRegistry;
   check: AdminCheck;
   org: OrgRuntime;
@@ -50,9 +50,9 @@ export type AdminOpsDeps = {
   /** Dataverse's people and leads, read with the app's reader; null when Dataverse isn't set up here. */
   directory: (() => Promise<{ ok: true; read: DirectoryRead } | { ok: false; message: string }>) | null;
   removePerson: (userId: string) => Promise<void>;
-  /** ADM-2: when the scheduler last ran each job (by name), for Admin › Status; absent: unknown. */
+  /** ADM-2: when the scheduler last ran each job (by name), for Admin › Health; absent: unknown. */
   lastRuns?: () => Record<string, string>;
-  /** VM-3: the scheduler's passes for Admin › Status; absent: none here. */
+  /** VM-3: the scheduler's passes for Admin › Health; absent: none here. */
   passes?: () => PassView[];
   /** AH-2: Admin › Clients' scope facts per client (the poller's store). */
   scope?: AdminOps["scope"];
@@ -122,7 +122,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         ai,
         feedback: setup
           ? { ok: true, message: `Stories go under #${setup.parentId} in ${setup.project}, created by each person with their own DevOps write PAT` }
-          : { ok: false, message: "No feedback destination is set (Admin › Organization)" },
+          : { ok: false, message: "No feedback destination is set (Admin › Team defaults › Planning and new people)" },
         dataverse: { refreshedAt, ...lastDirectory },
         chats: health,
         lastPoll: polled.at(-1) ?? null,

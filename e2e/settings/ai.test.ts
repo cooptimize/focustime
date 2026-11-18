@@ -58,7 +58,7 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
 
       // AI off for FocusTime: Test AI sends nothing and says who turns it on.
       await page.getByRole("button", { name: "Test AI" }).click();
-      await page.locator('[data-setting="ai-test"]').getByText("AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI.").waitFor();
+      await page.locator('[data-setting="ai-test"]').getByText("AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI.").waitFor();
 
       // An admin turns AI on; no key yet: Test AI says why, in plain words.
       await team.set("org", "ai.on", true);

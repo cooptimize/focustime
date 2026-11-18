@@ -24,7 +24,7 @@ import { target } from "../../sources/devops/test-fakes.ts";
 import { createDevOpsStore } from "../../store/devops-store.ts";
 import type { TargetsResult } from "../../sources/devops/types.ts";
 
-/** DV-1: the central DevOps poller over a fake dev.azure.com, its rows in Admin › Status. */
+/** DV-1: the central DevOps poller over a fake dev.azure.com, its rows in Admin › Health. */
 function devopsStatus() {
   // HK-5: the live harness's Monday 9:30 AM, moving with real time from there. The poller's cadence follows the clock
   // (working hours or not), so the real clock made "every minute" read "every 10 minutes" at night and on weekends.
@@ -133,18 +133,29 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.goto(sam.url);
       await appReady(page);
 
-      // ⋯ shows Admin for an admin.
+      // ⋯ shows Admin for an admin; Admin is its own place (SA-4), opening on Clients.
       await page.getByRole("button", { name: /^More/ }).first().click();
       await page.getByRole("menuitem", { name: "Admin" }).click();
+      await page.waitForFunction(() => location.hash.startsWith("#/admin"));
       const body = page.locator(".ps-body");
-      await page.locator(".ps-head").getByRole("heading", { name: "Admin › Clients" }).waitFor();
-      const adatum = page.locator(".adm-client").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
-      await adatum.waitFor();
+      await page.locator(".ps-head").getByRole("heading", { name: "Clients" }).waitFor();
+      await body.locator('[data-client="Adatum"]').waitFor();
       // CV-3b: account types not read here, so the fallback says so; only active accounts are clients.
       await body.getByText("Account types aren't read from Dataverse yet", { exact: false }).waitFor();
-      await shotBoth(page, "admin-clients-list", page.locator(".ps-head").getByRole("heading", { name: "Admin › Clients" }));
+      await shotBoth(page, "admin-clients-list", page.locator(".ps-head").getByRole("heading", { name: "Clients" }));
 
-      // Register the chat.
+      // Adatum's page: the client's own tabs.
+      await body.locator('[data-client="Adatum"]').click();
+      await page.waitForFunction(() => location.hash === "#/admin/clients/Adatum");
+      await page.locator(".ps-head").getByRole("heading", { name: "Adatum" }).waitFor();
+      const adatum = body.locator(".adm-client-page");
+      const tab = async (name: string) => {
+        await adatum.getByRole("tablist", { name: "Adatum tabs" }).getByRole("tab", { name, exact: true }).click();
+        await adatum.getByRole("tab", { name, exact: true, selected: true }).waitFor();
+      };
+
+      // Register the chat (Chats tab).
+      await tab("Chats");
       const group = adatum.getByRole("group", { name: /^Client chats for Adatum/ });
       await group.getByRole("button", { name: "Add a chat" }).click();
       await group.getByRole("listbox", { name: "Your Teams group chats" }).getByRole("option").first().waitFor();
@@ -152,21 +163,12 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.keyboard.press("Enter");
       await group.getByRole("region", { name: "Adatum Delivery Team" }).waitFor();
 
-      // The team color: violet.
+      // The team color: violet (Overview).
+      await tab("Overview");
       await adatum.getByRole("radiogroup", { name: "Adatum: team color" }).getByRole("radio", { name: "violet" }).check();
       await adatum.getByText("Saved").first().waitFor();
       await page.locator(".set-undo-box").getByText("Adatum: team color saved.").waitFor();
       await expect.poll(async () => (await team.org.rules()).clients.Adatum?.color).toBe("violet");
-      // States treated as open (a Rule).
-      await adatum.getByLabel("Adatum: states treated as open").fill("Resolved");
-      await adatum.getByLabel("Adatum: states treated as open").press("Enter");
-      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.openStates).toEqual(["Resolved"]);
-      // WT-1's process, one row per type: Feature no longer needs breakdown, Bug is background (both Rules).
-      await adatum.getByRole("switch", { name: "Adatum: Feature needs breakdown" }).uncheck();
-      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.noBreakdown).toEqual(["Feature"]);
-      await adatum.getByRole("switch", { name: "Adatum: Bug is background" }).check();
-      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.background).toEqual(["Bug"]);
-      await adatum.getByRole("row", { name: /Bug/ }).getByText("No hours").waitFor();
       // HK-7: Match only as written, off by default for a name that isn't an ordinary word; on is the team's Rule.
       const exact = adatum.getByRole("switch", { name: "Adatum: match only as written" });
       expect(await exact.isChecked()).toBe(false);
@@ -174,63 +176,80 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await exact.check();
       await expect.poll(async () => (await team.org.rules()).clients.Adatum?.exactCase).toBe(true);
       await shotBoth(page, "admin-clients", adatum);
+      // Backlog rules: states treated as open, and WT-1's process (both Rules).
+      await tab("Backlog rules");
+      await adatum.getByLabel("Adatum: states treated as open").fill("Resolved");
+      await adatum.getByLabel("Adatum: states treated as open").press("Enter");
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.openStates).toEqual(["Resolved"]);
+      await adatum.getByRole("switch", { name: "Adatum: Feature needs breakdown" }).uncheck();
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.noBreakdown).toEqual(["Feature"]);
+      await adatum.getByRole("switch", { name: "Adatum: Bug is background" }).check();
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.background).toEqual(["Bug"]);
+      await adatum.getByRole("row", { name: /Bug/ }).getByText("No hours").waitFor();
+      // Allow AI is on the client's AI tab.
+      await tab("AI");
+      await adatum.getByRole("switch", { name: "Allow AI for Adatum" }).check();
 
-      // Admin › AI: on for FocusTime, allowed for Adatum.
-      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
-      await page.locator(".ps-head").getByRole("heading", { name: "Admin › AI" }).waitFor();
-      await body.getByRole("switch", { name: "AI on" }).check();
-      await body.getByRole("switch", { name: "Allow AI for Adatum" }).check();
+      // Admin › Team defaults › AI: on for FocusTime.
+      await page.locator('.ps-rail [data-settings-section="defaults"]').click();
+      await page.waitForFunction(() => location.hash === "#/admin/defaults");
+      await page.locator(".ps-head").getByRole("heading", { name: "Team defaults" }).waitFor();
+      await body.getByRole("switch", { name: "AI for FocusTime" }).check();
       await expect.poll(async () => (await team.org.rules()).ai).toMatchObject({ on: true, allowedClients: ["Adatum"] });
+      await expect.poll(() => body.locator("[data-allow-ai-count]").textContent()).toMatch(/^1 of \d+$/);
       await shotBoth(page, "admin-ai", body);
       // AI-F1: background tasks on Flex; an admin puts one back on standard. Interactive tasks have no switch.
-      const tiers = body.locator(".adm-ai-tiers");
+      const tiers = body.getByRole("region", { name: "Processing tier" });
       await tiers.getByRole("switch", { name: "Use Flex for Checking client messages" }).uncheck();
       await expect.poll(async () => (await team.org.rules()).ai.standardTasks).toEqual(["asks.classify"]);
-      await tiers.getByRole("row", { name: /Break down/ }).getByText("Standard", { exact: true }).waitFor();
+      await tiers.locator(".sp-row", { hasText: "Break down" }).getByText("Standard", { exact: true }).waitFor();
       expect(await tiers.getByRole("switch").count()).toBe(4);
       await shotBoth(page, "admin-ai-tiers", tiers);
       // Turning AI off for everyone asks first; Cancel keeps it on.
-      await body.getByRole("switch", { name: "AI on" }).click();
+      await body.getByRole("switch", { name: "AI for FocusTime" }).click();
       await body.getByRole("alertdialog", { name: "Turn AI off for everyone" }).getByRole("button", { name: "Cancel" }).click();
       expect((await team.org.rules()).ai.on).toBe(true);
       // HK-3: focus goes back to the switch.
-      await expect.poll(() => body.getByRole("switch", { name: "AI on" }).evaluate((e) => e === document.activeElement)).toBe(true);
+      await expect.poll(() => body.getByRole("switch", { name: "AI for FocusTime" }).evaluate((e) => e === document.activeElement)).toBe(true);
 
-      // Admin › Conversations.
-      await page.locator('.ps-rail [data-settings-section="admin-conversations"]').click();
+      // Admin › Team defaults › Client chats.
+      await body.getByRole("tab", { name: "Client chats" }).click();
       await body.getByLabel("Asking phrases").waitFor();
       await shotBoth(page, "admin-conversations", body);
 
       // Admin › People: Kim becomes a lead of Adatum (an override, marked).
-      await page.locator('.ps-rail [data-settings-section="admin-people"]').click();
-      const kim = body.locator("tr", { has: page.getByRole("rowheader", { name: /Kim Person/ }) });
+      await page.locator('.ps-rail [data-settings-section="people"]').click();
+      const kim = body.getByRole("table", { name: "People" }).locator("tr", { hasText: "Kim Person" });
       await kim.getByRole("combobox", { name: "Kim Person: add as lead of" }).selectOption("Adatum");
       await kim.getByRole("button", { name: "Add" }).click();
       await kim.getByText("Added by an admin").waitFor();
-      await kim.locator(".adm-mark", { hasText: "Override" }).first().waitFor();
+      await kim.locator(".sp-badge", { hasText: "Override" }).first().waitFor();
       expect(await team.org.isClientLead(KIM, "Adatum")).toBe(true);
       await shotBoth(page, "admin-people", body);
 
-      // Admin › Organization, Status and Audit.
-      await page.locator('.ps-rail [data-settings-section="admin-organization"]').click();
+      // Admin › Team defaults › Planning and new people, Health and Audit.
+      await page.locator('.ps-rail [data-settings-section="defaults"]').click();
+      await body.getByRole("tab", { name: "Planning and new people" }).click();
       await body.getByLabel("Help invites go only to").waitFor();
       await shotBoth(page, "admin-organization", body);
-      await page.locator('.ps-rail [data-settings-section="admin-status"]').click();
+      await page.locator('.ps-rail [data-settings-section="health"]').click();
       await body.getByText("Adatum Delivery Team").waitFor();
       // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
-      const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
+      const adatumRow = body.locator("tr", { hasText: "Adatum", has: page.getByRole("button", { name: /Check now|Checking/ }) });
       await adatumRow.getByRole("button", { name: "Check now" }).click();
       await adatumRow.getByText(/every minute/).waitFor();
-      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByRole("button", { name: "Check now" }).click();
-      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
+      await body.locator("tr", { hasText: "Fabrikam", has: page.getByRole("button", { name: /Check now|Checking/ }) }).getByRole("button", { name: "Check now" }).click();
+      await body.locator("tr", { hasText: "Fabrikam", has: page.getByRole("button", { name: /Check now|Checking/ }) }).getByText("Token not valid").waitFor();
       expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);
       await shotBoth(page, "admin-status", body);
-      await page.locator('.ps-rail [data-settings-section="admin-audit"]').click();
-      const audit = body.locator(".adm-audit");
-      await audit.locator("tr", { hasText: "client:Adatum/color" }).filter({ hasText: "violet" }).filter({ hasNotText: "suggested" }).waitFor();
-      await audit.getByText("client:Adatum/allow_ai").waitFor();
+      // Audit names each setting as the page does, never by its stored key.
+      await page.locator('.ps-rail [data-settings-section="audit"]').click();
+      const audit = body.getByRole("table", { name: "Settings changes" });
+      await audit.locator("tr", { hasText: "Team color" }).filter({ hasText: "violet" }).filter({ hasNotText: "suggested" }).waitFor();
+      await audit.locator("tr", { hasText: "Allow AI" }).filter({ hasText: "Adatum" }).first().waitFor();
       await audit.getByText("Kim Person").first().waitFor();
-      await body.getByLabel("Filter").fill("allow_ai");
+      expect(await audit.getByText("allow_ai").count()).toBe(0);
+      await body.getByLabel("Filter").fill("Allow AI");
       await expect.poll(() => audit.locator("tbody tr").count()).toBe(1);
       await shotBoth(page, "admin-audit", body);
       expect(errors).toEqual([]);
@@ -250,6 +269,15 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await openSettings(page);
       await settingsClient(page, "Adatum");
       expect(await page.locator('.ps-rail [data-settings-section^="admin-"]').count()).toBe(0);
+      // SA-4: no Admin line in Settings' rail, and every Admin address gives today's answer to someone who isn't an admin.
+      expect(await page.locator('.ps-rail [data-settings-section="admin"]').count()).toBe(0);
+      for (const hash of ["#/admin", "#/admin/clients/Adatum/ai", "#/admin/health", "#/settings/admin-clients"]) {
+        await page.evaluate((x) => (location.hash = x), hash);
+        await page.locator(".ps-body").getByText("Admin is only for FocusTime admins", { exact: false }).waitFor();
+        expect(await page.locator(".adm-client-page, [data-client], .adm-tabs, .sp-table").count(), hash).toBe(0);
+      }
+      await page.evaluate(() => (location.hash = "#/settings/you"));
+      await settingsClient(page, "Adatum");
       const card = page.locator(".ps-body");
       await card.getByRole("heading", { name: "Adatum" }).waitFor();
       // Read-only: the chat (no Add or Remove), AI allowed, the open states, all "Set by your FocusTime admin".

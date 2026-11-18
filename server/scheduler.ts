@@ -68,7 +68,7 @@ export type PassLimits = {
 };
 export const PASS_LIMITS: PassLimits = { fastPass: 2 * 60_000, slowPass: 10 * 60_000, job: 5 * 60_000, early: 3 * 60_000, wake: 30_000, maintenance: 5 * 60_000 };
 
-/** VM-3: what Admin › Status shows of a kind of pass. */
+/** VM-3: what Admin › Health shows of a kind of pass. */
 export type { PassView };
 
 /** Waits for a promise at most `ms`; true when it settled in time. The promise keeps running either way. */
@@ -97,7 +97,7 @@ export function createScheduler(o: SchedulerOptions) {
   /** When to wake while idle (in memory; the stored copy is what a restart reads). null: work it out next. */
   let wakeAt: Temporal.Instant | null = null;
   let lastMaintenance: Temporal.Instant | null = null;
-  /** ADM-2: when each job last ran (in memory; Admin › Status shows it). */
+  /** ADM-2: when each job last ran (in memory; Admin › Health shows it). */
   const lastRun = new Map<string, string>();
   let waking = false;
   // ENV-1: the jobs this deployment runs, decided once.
@@ -184,7 +184,7 @@ export function createScheduler(o: SchedulerOptions) {
     }
   }
 
-  /** VM-3: Admin › Status's view of the passes. */
+  /** VM-3: Admin › Health's view of the passes. */
   function passes(): PassView[] {
     const t = now();
     return (["fast", "slow"] as const).map((kind) => {
