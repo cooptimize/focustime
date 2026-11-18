@@ -663,6 +663,8 @@ const demos = new Map<string, Promise<ActionContext>>();
 const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" || v === "no_pat" || v === "no_access" || v === "fail" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
 /** RQ-1 checks (e2e, pictures): "target" makes the demo's Northwind process require a target date on new features and stories by a rule. */
 const demoDevopsRules = process.env.FOCUSTIME_DEMO_DEVOPS_RULES === "target" ? ("target" as const) : undefined;
+/** PK-4 checks (e2e, pictures): "long" gives the demo's calendar 30 more calls, so Calls' list is longer than the window. */
+const demoCalls = process.env.FOCUSTIME_DEMO_CALLS === "long" ? ("long" as const) : undefined;
 const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
 /** DM-1: the app's real AI, lent to the demo for its fictional data: only while the team's switch is on and under the app's cap. */
 const demoRealAi: DemoRealAi = {
@@ -678,7 +680,7 @@ const buildDemo = async (userId: string): Promise<ActionContext> => {
   // VM-2: a verification run (--clock) may move one demo session's clock on (demo.vm_tick); never otherwise.
   let shiftMs = 0;
   const vmTick = clockArg >= 0 ? async (minutes: number) => ((shiftMs += minutes * 60_000), demoAutoStart(ctx)) : undefined;
-  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl, ...(demoDevopsRules ? { devopsRules: demoDevopsRules } : {}) });
+  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl, ...(demoDevopsRules ? { devopsRules: demoDevopsRules } : {}), ...(demoCalls ? { calls: demoCalls } : {}) });
   ctx.env = "demo";
   // VM-2: the demo's auto-start gate gets only what is passed in explicitly (the e2e tests: "prod" or "dev"); unset,
   // it never fires. The demo's VM is the fake Resource Manager's, never a real one.

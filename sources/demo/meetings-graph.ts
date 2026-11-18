@@ -54,7 +54,35 @@ function demoCalls(fromIso: string, toIso: string): CalendarMeeting[] {
   return out;
 }
 
-export function demoMeetings(gate: MeetingGate = { allowed: async () => false }): MeetingsClient {
+/**
+ * PK-4 checks (FOCUSTIME_DEMO_CALLS=long): three one-off Teams calls on every weekday, organized inside Cooptimize, so
+ * Calls' last two weeks hold about 30 more and its list is longer than any window. Each is known by its date and hour
+ * alone. Fictional names only.
+ */
+function longCalls(fromIso: string, toIso: string): CalendarMeeting[] {
+  const a = Temporal.Instant.from(fromIso);
+  const b = Temporal.Instant.from(toIso);
+  const out: CalendarMeeting[] = [];
+  const zone = "America/New_York";
+  for (let day = a.toZonedDateTimeISO(zone).toPlainDate(); Temporal.PlainDate.compare(day, b.toZonedDateTimeISO(zone).toPlainDate()) <= 0; day = day.add({ days: 1 })) {
+    if (day.dayOfWeek > 5) continue;
+    for (const hour of [8, 12, 16]) {
+      const start = day.toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from({ hour }) }).toInstant();
+      const end = start.add({ minutes: 30 });
+      if (Temporal.Instant.compare(start, a) < 0 || Temporal.Instant.compare(end, b) > 0) continue;
+      const id = `long-${day.toString()}-${hour}`;
+      out.push({
+        key: callKey(id), subject: `Working session at ${hour > 12 ? hour - 12 : hour} ${hour < 12 ? "AM" : "PM"}`, startAt: start.toString(), endAt: end.toString(), isAllDay: false, isCancelled: false, isOrganizer: false,
+        response: "accepted", others: 2, joinUrl: link(`call-${id}`), organizerEmail: "jordan.lee@example.com",
+        homeAttendees: ["you@example.com", "jordan.lee@example.com"], seriesKey: null, allHome: true,
+      });
+    }
+  }
+  return out;
+}
+
+export function demoMeetings(gate: MeetingGate = { allowed: async () => false }, calls?: "long"): MeetingsClient {
+  const recent = (fromIso: string, toIso: string) => [...demoCalls(fromIso, toIso), ...(calls === "long" ? longCalls(fromIso, toIso) : [])];
   const priya = person("Priya Shah");
   const jordan = person("Jordan Lee");
   const series = (zone: string): SeriesCandidate[] => [
@@ -69,8 +97,8 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false })
       return series(zone).find((s) => s.joinUrl === joinUrl) ?? null;
     },
     instances: async () => [],
-    recentCalls: async (fromIso, toIso) => demoCalls(fromIso, toIso),
-    callAt: async (key, startAt, endAt) => demoCalls(Temporal.Instant.from(startAt).subtract({ minutes: 1 }).toString(), Temporal.Instant.from(endAt).add({ minutes: 1 }).toString()).find((c) => c.key === key) ?? null,
+    recentCalls: async (fromIso, toIso) => recent(fromIso, toIso),
+    callAt: async (key, startAt, endAt) => recent(Temporal.Instant.from(startAt).subtract({ minutes: 1 }).toString(), Temporal.Instant.from(endAt).add({ minutes: 1 }).toString()).find((c) => c.key === key) ?? null,
     // MC-2: the online meeting is the call's own id in the demo; the gate is asked first, as the real client does.
     onlineMeetingId: async (joinUrl) => {
       if (!(await gate.allowed({ joinUrl }))) throw new MeetingRefused();

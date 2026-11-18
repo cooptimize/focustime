@@ -96,3 +96,42 @@ describe.skipIf(!CHROMIUM)("Calls' layout: Needs you states and a page that does
     }
   }
 });
+
+/**
+ * With 30 or more calendar calls (the demo's long list), the document is exactly the window's height, scrolling the
+ * list never moves the top bar, and every screen-reader-only label on Calls (the list and the open call) is placed
+ * inside the page, never against it.
+ */
+describe.skipIf(!CHROMIUM)("Calls with a long list of calendar calls (browser, demo mode)", () => {
+  let long: Harness;
+  beforeAll(async () => {
+    long = await startDemo("chromium", { FOCUSTIME_DEMO_CALLS: "long" }, "2026-11-05T10:00:00-05:00");
+  }, 120_000);
+  afterAll(async () => long?.stop());
+
+  for (const [w, hgt] of [[1280, 720], [1440, 900]] as const) {
+    it(`${w} x ${hgt}: the page never scrolls`, async () => {
+      const { page, errors } = await freshPage(long, { width: w, height: hgt });
+      await go(page, "#/calls");
+      await page.locator(".calls-row.need-row").first().waitFor({ timeout: W });
+      await expect.poll(() => page.locator("[data-calls-list] li .calls-about").count(), { timeout: W }).toBeGreaterThanOrEqual(30);
+      const sizes = () => page.evaluate(() => ({ doc: document.scrollingElement!.scrollHeight, win: window.innerHeight, y: window.scrollY, bar: document.querySelector(".topbar")!.getBoundingClientRect().top }));
+      expect(await sizes()).toEqual({ doc: hgt, win: hgt, y: 0, bar: 0 });
+      // Scroll the list to its end with the wheel, as a person does; the page stays where it is.
+      const list = (await page.locator(".calls-scroll").boundingBox())!;
+      await page.mouse.move(list.x + list.width / 2, list.y + list.height / 2);
+      for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 600);
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => { const s = document.querySelector(".calls-scroll")!; return s.scrollTop > 0 && Math.abs(s.scrollTop + s.clientHeight - s.scrollHeight) < 2; })).toBe(true);
+      await page.mouse.wheel(0, 2000);
+      await page.waitForTimeout(300);
+      expect(await sizes()).toEqual({ doc: hgt, win: hgt, y: 0, bar: 0 });
+      // Every screen-reader-only label on Calls is placed against a box inside the page, never the page itself.
+      const loose = await page.evaluate(() =>
+        [...document.querySelectorAll(".calls-page .sr-only")].filter((e) => { const p = (e as HTMLElement).offsetParent; return !p || p === document.body || !p.closest(".calls-page"); }).length);
+      expect(loose).toBe(0);
+      expect(errors).toEqual([]);
+    }, T);
+  }
+});
+

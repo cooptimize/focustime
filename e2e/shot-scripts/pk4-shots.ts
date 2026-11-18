@@ -38,9 +38,9 @@ describe.skipIf(!CHROMIUM || !DIR)("PK-4 screenshots", () => {
     await page.reload();
     await page.waitForSelector(".demo-tag", { timeout: 30_000 }).catch(() => undefined);
   };
-  /** A fresh demo, my Pocket connected with `key`, Calls open on Open. */
-  const start = async (key: string, w = 1440, hgt = 900, theme = "cooptimize-dark") => {
-    const h = await startDemo("chromium", {}, CLOCK);
+  /** A fresh demo, my Pocket connected with `key`, Calls open on Open; `long` gives the calendar 30 more calls. */
+  const start = async (key: string, w = 1440, hgt = 900, theme = "cooptimize-dark", long = false) => {
+    const h = await startDemo("chromium", long ? { FOCUSTIME_DEMO_CALLS: "long" } : {}, CLOCK);
     started.push(h);
     const { page } = await freshPage(h, { width: w, height: hgt });
     await page.locator(".topbar").first().waitFor({ timeout: 30_000 });
@@ -90,7 +90,7 @@ describe.skipIf(!CHROMIUM || !DIR)("PK-4 screenshots", () => {
 
   it("Calls' layout: a Needs you state on one line, and a page that doesn't scroll (1280 by 720, Default and Larger)", async () => {
     for (const size of ["default", "larger"] as const) {
-      const page = await start(DEMO_POCKET_KEYS.shared, 1280, 720);
+      const page = await start(DEMO_POCKET_KEYS.shared, 1280, 720, "cooptimize-dark", true);
       await call(page, "ui.set_text_size", { size });
       await page.reload();
       await page.locator("[data-pocket-line]").waitFor({ state: "attached", timeout: 30_000 });
