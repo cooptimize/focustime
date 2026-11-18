@@ -1677,3 +1677,13 @@ Readings taken where the brief left room (the one that changes less), for the pr
 - **The phone's title.** On the phone a part's page says its name ("Health") with Back to Admin; a client's page says the client's name with Back to Clients. "Admin ›" isn't repeated in the title because the rail heading already says Admin.
 - **Delete stored messages** now asks with the app's own confirm under the button; what it says (every message FocusTime stored for this client that didn't become a request, for everyone on its chats) is main's text in plainer words. The action and its check are unchanged.
 - **Keep people's data (years)** left the screen. Its stored value is kept and still exported; Health's Jobs row still says deleting old data isn't enforced. When deleting people's data is built, the setting comes back on Team defaults › Planning and new people.
+- **From the review pass, left as they are** (each also on main, or for F's restyle):
+  - Remove a person in the demo answers with "FocusTime ran into a problem" (the demo's people are pretend and its remove throws). Same on main; the real path is unchanged.
+  - Settings' new Admin line is at the rail's foot, so at 1440 by 900 the rail scrolls once to show it. Should it sit at the top of the rail instead?
+  - On the phone, a part's tab row that runs past the screen gives no sign it scrolls sideways, and the Saved toast sits behind the + button.
+  - A bare checkbox in a table on the phone (Who's set up's select boxes) is drawn 44 px square to meet the target size; F's rows may give it a label to hold the target instead.
+  - A client's Calls tab says Meetings, Register a meeting and Role inside, as Calls' own screens do (not in this step).
+  - Under a client the admin doesn't follow, Add a chat still opens the picker, every row saying why it can't be added; the refusal line shows above it too.
+  - A newly registered chat reads "Not read yet" beside "Stop reading"; one click on a chat in the picker registers it, with no confirm. Both as on main.
+  - Search Admin's client settings (Allow AI and the like) go to the Clients list unless a client's page is open, since the setting is per client.
+  - People, like a client's page, opens on the tab last used this visit while the address says `#/admin/people`.
