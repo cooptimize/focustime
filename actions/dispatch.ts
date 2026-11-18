@@ -64,6 +64,7 @@ import { holidayLabel } from "../sources/dataverse/holidays.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week, WorkItem } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
+import type { NeededCheck } from "./meeting-actions.ts";
 import { devopsWriteAction, requiredFor, type DevOpsWriteContext, type WritePats, type AheadPort } from "./devops-write-actions.ts";
 import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
@@ -1454,6 +1455,11 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ai: () => aiFor(ctx, { waiting: true }),
     // MC-1e: the fields a new item needs, read with my write PAT, for the rows' check before any preview.
     required: async (clientKey, types) => requiredFor(await devopsWriteContext(ctx), clientKey, types),
+    // RQ-1: DevOps's own check, without saving, through the write framework's devops.needed.
+    needed: async (clientKey, change) => {
+      const r = await devopsWriteAction(await devopsWriteContext(ctx), "devops.needed", { clientKey, change });
+      return r.ok ? (r.data as NeededCheck) : null;
+    },
     canWrite: async (clientKey) => (await rc.writeClients()).includes(clientKey),
     log: ctx.log ?? (() => {}),
   };
@@ -1857,6 +1863,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "devops.clear_write_pat":
     case "devops.write_status":
     case "devops.states":
+    case "devops.needed":
     case "devops.preview":
     case "devops.confirm":
     case "devops.retry":

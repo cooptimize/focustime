@@ -458,3 +458,18 @@ Every word below is in `ui/appenv.ts` (`SITE_MARKS`, `SITE_WORDS`) or, for the p
 - The browser tab: **"Dev · FocusTime"**, **"Local · FocusTime"**; production's stays **"FocusTime"**.
 - The installed app: **"FocusTime Dev"**, **"FocusTime Local"**; production's stays **"FocusTime"**.
 - About (Settings › About and the About dialog): **"Site: Dev · <address>"**, with **"Local"**, **"Production"** or **"Demo"** for the others.
+
+## RQ-1 words (Nov 17)
+
+The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own buttons in `plan/call-words.ts` (`CALL_ROW`).
+
+- A field the client's process needs, as DevOps says when it checks the new item: the mark **"Needed"** beside its label, and **"Required by this client's process"** under it, kept once it's filled. Other fields still say **"Optional"**. An empty needed date reads **"Choose a date"**.
+- A call's row now names the type: **"Target Date is needed: this client's process requires it on a new Feature."** (was "…on a new item of this type.").
+- The line under a form while its preview waits: **"Target Date is needed: this client's process requires it on a new Feature. Fill it in, then preview again."**.
+- A field FocusTime has no control for: **"Northwind's process needs Risk on a new User Story, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft."** (a call's row keeps **"…then skip it here."**).
+- The draft editor, for a field only the New form has: **"Size is needed by this client's process. Create in DevOps opens the New form to fill it in."**.
+- The New form shows **"Start date"** only when the process needs one.
+- Break down's Review: above the cards, **"Target Date"** with **"Needed"**, a date, **"Use for all"** and **"Target Date starts from the feature's. Change any one, or use one for all."** (or **"Required by this client's process"** when the feature has none); on each card the same field with **"Needed"** until it has a value; under the total **"5 stories need a value before the preview"**, and Preview waits.
+- A refusal at Confirm, or one stored from before: **"DevOps says Target Date is needed on a new Feature. Fill it in and try again."**, or **"DevOps refused one of this item's fields. Check the fields and try again."**. Never DevOps's own text (no "TF401320").
+- A call's feature-tier row: **"Create and break down"** beside **"Create in DevOps"**, its tooltip **"Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories."**; a feature created from the call keeps **"Break down"**.
+- The three questions show at story level only. Above it the fold reads **"More: description and size"**.

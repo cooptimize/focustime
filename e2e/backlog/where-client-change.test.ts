@@ -6,6 +6,14 @@ import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
 
+/** RQ-1: the three questions are a story's only, and from here the New form opens on another level: choose the story type. */
+async function pickStory(f: Locator) {
+  const r = f.getByRole("radio", { name: "User Story" });
+  await r.waitFor({ timeout: 30_000 });
+  if (!(await r.isChecked())) await r.click();
+}
+
+
 let h: Harness;
 const T = 240_000;
 const VIEW = { width: 1440, height: 900 };
@@ -53,6 +61,7 @@ async function openNew(page: Page, client: string) {
   const f = form(page);
   await f.waitFor();
   await choose(page, f, "Client", client);
+  await pickStory(f);
   await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
   return f;
 }
@@ -99,6 +108,7 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await downTo(page, "dim.Store");
     await expect(box.inputValue()).resolves.toBe("The fact.SalesLine (table, Gold warehouse) totals and dim.Store (table, Gold warehouse)");
     await choose(page, f, "Client", "Atlas");
+    await pickStory(f);
     await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
     await f.locator("#nf-title").press("Control+Enter");
     await expect.poll(() => sentWhere(seen), { timeout: 30_000 }).not.toBeNull();
@@ -128,6 +138,7 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
 
     // A client change: the picks go, the typed words stay, one line with Undo, heard by a screen reader.
     await choose(page, f, "Client", "Atlas");
+    await pickStory(f);
     await expect(box.inputValue()).resolves.toBe("The totals and");
     const line = f.locator("[data-where-picks]");
     await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 2 names picked from Northwind's code.");
@@ -149,10 +160,12 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     const edited = "The fact.SalesLine (table, Golden warehouse) totals and dim.Store (table, Gold warehouse)";
     await expect(box.inputValue()).resolves.toBe(edited);
     await choose(page, f, "Client", "Harbor");
+    await pickStory(f);
     await expect(box.inputValue()).resolves.toBe("The fact.SalesLine (table, Golden warehouse) totals and");
     await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 1 name picked from Northwind's code.");
     // Back to Northwind: nothing comes back by itself, and the old Undo is gone.
     await choose(page, f, "Client", "Northwind");
+    await pickStory(f);
     await expect(box.inputValue()).resolves.toBe("The fact.SalesLine (table, Golden warehouse) totals and");
     await expect(line.getByRole("button").count()).resolves.toBe(0);
 

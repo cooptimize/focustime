@@ -6,6 +6,9 @@
 // one row or for the ticked ones (10 at a time); a promise is saved at once with Undo. A filter, one count, folded
 // skipped and done rows, headers that stay in view, and a way from a transcript line back to its proposals. An
 // attendee who isn't a reviewer can look, not act.
+import { isFeatureTier } from "../../plan/needed.ts";
+import { BreakDownButton } from "../BreakDownPanel.tsx";
+import { openBreakDown } from "../menu.ts";
 import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
@@ -189,7 +192,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
     }
   };
   /** DevOps changes, only through the one preview: one row, or the ticked ones (the first 10 in page order). */
-  const send = async (ps: Proposal[]) => {
+  const send = async (ps: Proposal[], o: { breakDown?: boolean } = {}) => {
     if (!w || !ps.length) return;
     const go = callBatch(ps, () => true).now;
     const changes: DevOpsChange[] = go.map((p) => ({ kind: p.body.kind === "gap" ? "meeting_create" : "meeting_comment", proposalId: p.id, key: `p${p.id}` }));
@@ -201,6 +204,11 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
       if (res.refused?.length) setRowErr((e) => ({ ...e, ...Object.fromEntries(res.refused!.map((x) => [Number(x.key.slice(1)), x.error])) }));
       if (res.error) (go.length === 1 ? setRowErr((e) => ({ ...e, [go[0]!.id]: res.error! })) : setNote(res.error));
       if (res.confirmed) forgetCallOptions();
+      // RQ-1: Create and break down: once the feature is confirmed and written, Break down opens on it with Run
+      // started. Cancelled or refused, nothing opens.
+      const made = res.confirmed ? res.created?.[0] : undefined;
+      const one = go[0]?.body;
+      if (o.breakDown && made && one?.kind === "gap") openBreakDown(m.clientKey, { id: made.itemId, title: one.title, type: one.type, autoRun: true });
       void load();
     }, { inline: true });
   };
@@ -312,7 +320,7 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
                   </button>
                 )}
               </h3>
-              {rows.map((p) => <ProposalRow key={p.id} p={p} check={checkOf(p)} err={rowErr[p.id] ?? null} ticked={ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
+              {rows.map((p) => <ProposalRow key={p.id} p={p} check={checkOf(p)} err={rowErr[p.id] ?? null} ticked={ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onSendBreakDown={() => void send([p], { breakDown: true })} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
               {!rows.length && <p className="muted mtg-none">Nothing left to review here.</p>}
               {folds.map((f) => {
                 const key = `${kind}:${f.k}`;
@@ -460,8 +468,10 @@ function Quotes({ qs }: { qs: Quote[] | null }) {
   );
 }
 
-function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, onTick, onEdit, onSend, onKeep, onSkip, onEnable, onShowLines }: { p: Proposal; check: ProposalCheck | undefined; err: string | null; ticked: boolean; editable: boolean; can: boolean; busy: boolean; clientKey: string; opts: ReturnType<typeof useNewOptions>; today: string; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onSend: () => void; onKeep: () => void; onSkip: (on: boolean) => void; onEnable: () => void; onShowLines?: ((line: number) => void) | undefined }) {
+function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onShowLines }: { p: Proposal; check: ProposalCheck | undefined; err: string | null; ticked: boolean; editable: boolean; can: boolean; busy: boolean; clientKey: string; opts: ReturnType<typeof useNewOptions>; today: string; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onSend: () => void; onSendBreakDown?: () => void; onKeep: () => void; onSkip: (on: boolean) => void; onEnable: () => void; onShowLines?: ((line: number) => void) | undefined }) {
   const b = p.body;
+  // RQ-1: a new item at the feature tier (the lowest portfolio level of the client's process, never a type's name).
+  const featureTier = b.kind === "gap" && isFeatureTier(opts?.levels, b.type);
   const live = toReview(p);
   const main = proposalWords(b);
   const [text, setText] = useState(main);
@@ -492,7 +502,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
         )}
         {where && <p className="muted mtg-where">{where}</p>}
         {b.kind === "gap" && (live ? <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable} check={check} onEdit={onEdit} /> : <p className="muted mtg-where">{b.type}{b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ""}</p>)}
-        {live && needs.length > 0 && <p className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name))}</p>}
+        {live && needs.length > 0 && <p id={`mtg-need-${p.id}`} className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name), b.kind === "gap" ? b.type : null)}</p>}
         {live && check?.cant && <p className="mtg-need" role="status">{check.cant}</p>}
         {live && blocked && <p className="mtg-need" role="note">{blocked}</p>}
         {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
@@ -512,12 +522,19 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
           {live && !blocked && (b.kind === "commitment" ? (
             <button type="button" className="mini primary" disabled={busy} onClick={onKeep}>{mainLabel}</button>
           ) : can ? (
-            <button type="button" className="mini primary" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
+            <>
+              <button type="button" className="mini primary" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
+              {featureTier && onSendBreakDown && !failed && (
+                <button type="button" className="mini" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>
+              )}
+            </>
           ) : (
             <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › DevOps">Enable DevOps writes</button>
           ))}
           {live && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(true)}>{CALL_ROW.skip}</button>}
           {p.state === "skipped" && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(false)}>{CALL_ROW.bringBack}</button>}
+          {/* RQ-1: a feature created from this call can be broken down from its row. */}
+          {p.state === "confirmed" && featureTier && b.kind === "gap" && p.result?.itemId ? <BreakDownButton clientKey={clientKey} item={{ id: p.result.itemId, title: b.title, type: b.type }} short /> : null}
         </div>
       )}
     </article>

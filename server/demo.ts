@@ -21,7 +21,7 @@ import type { ProcessOverrides } from "../plan/process.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEFAULT_AI } from "./appconfig.ts";
 import { demoAi } from "../sources/demo/ai.ts";
-import { createDemoDevOps, parseTeammate, type DemoDevOps } from "../sources/demo/devops.ts";
+import { createDemoDevOps, DEMO_RULES_TARGET, parseTeammate, type DemoDevOps } from "../sources/demo/devops.ts";
 import { createDemoOutlook, type DemoOutlook } from "../sources/demo/outlook.ts";
 import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
@@ -96,14 +96,14 @@ const sessions = new WeakMap<ActionContext, DemoSession>();
 /** The demo session a context belongs to (null for any other context). */
 export const demoSessionOf = (ctx: ActionContext): DemoSession | null => sessions.get(ctx) ?? null;
 
-export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null; /** IN-1: the app's address, for the invite's link. */ publicUrl?: string; /** MC-1e tests: the fields a client's process requires on a new item (the demo's own by default). */ devopsRequired?: Parameters<typeof createDemoDevOps>[0]["required"] }): ActionContext {
+export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent; /** DM-1: the app's real AI, for real answers on the demo's fictional data. */ realAi?: DemoRealAi | null; /** IN-1: the app's address, for the invite's link. */ publicUrl?: string; /** MC-1e tests: the fields a client's process requires on a new item (the demo's own by default). */ devopsRequired?: Parameters<typeof createDemoDevOps>[0]["required"]; /** RQ-1: fields a client's process rule requires on a new item (none by default). */ devopsRules?: Parameters<typeof createDemoDevOps>[0]["rules"] | "target" }): ActionContext {
   let text = followTeamColors(DEMO_CONFIG);
   // The demo team's process Rules (Admin › Clients in the demo) apply to the demo's process models.
   let rulesOf: (k: string) => Promise<ProcessOverrides> = async () => ({});
   // AH-2: the demo team's DevOps scope per client, through the same helper as the hosted app's.
   let scopeOf: (k: string) => Promise<ScopeDeps | null> = async () => null;
   // DM-1: the session's own DevOps and calendar: the reads come from them and the writes go to them.
-  const devops = createDemoDevOps({ items: demoItems(), people: demoDevOpsPeople(), now: opts.now, ...(opts.devopsRequired ? { required: opts.devopsRequired } : {}) });
+  const devops = createDemoDevOps({ items: demoItems(), people: demoDevOpsPeople(), now: opts.now, ...(opts.devopsRequired ? { required: opts.devopsRequired } : {}), ...(opts.devopsRules ? { rules: opts.devopsRules === "target" ? DEMO_RULES_TARGET : opts.devopsRules } : {}) });
   const outlook = createDemoOutlook({ now: opts.now });
   const sources = createDemoSources(devops, outlook, opts.now, (k) => rulesOf(k), (k) => scopeOf(k));
   const zoned = () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ);

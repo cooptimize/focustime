@@ -10,13 +10,16 @@ import type { WeekLoadData } from "../actions/types.ts";
 import { SIZES, type DraftStory, type Size } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { captureClients, useClientFeatures } from "./capture-clients.ts";
-import { DevOpsAction } from "./DevOpsWrite.tsx";
+import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { addStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { descriptionMax, NO_ANSWERS, storedOf, withCarried, type Answers } from "../plan/three-questions.ts";
 import { ThreeQuestions } from "./ThreeQuestions.tsx";
+import { NEEDED_WORDS, splitNeeded, type NeededFill } from "../plan/needed.ts";
+import { useNeeded } from "./needed.ts";
+import { useOpenNew } from "./newitem-ctx.ts";
 import { useWherePicks, WherePicksLine } from "./WherePicks.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -68,6 +71,21 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   // TP-1b: the third question is the acceptance; a separate box only when the draft already holds acceptance text (CP-1's AI version, an older draft).
   const showAc = !feature && !!draft.acceptance?.trim() && (features?.acceptanceField ?? features?.status !== "ok");
   const startAfter = feature && start && target && start > target;
+  // RQ-1: what the client's process needs on this draft's item, as DevOps says when it checks it without saving. The
+  // editor marks what it can fill (a feature's dates, the description, a story's third question); a field only the New
+  // form has (a story's target date, its size, the assignee) sends Create in DevOps to the New form for this draft.
+  const w = useDevOpsWrite();
+  const openNew = useOpenNew();
+  const story = !feature;
+  const neededChange = w?.can(client) && client === draft.clientKey ? { kind: "new_item", draftId: draft.id, title: "", parentId: parent.itemId, ...(feature ? { date: target || null, startDate: start || null } : {}), description: description.trim() ? "x" : null, ...(story && (answers.check.trim() || acceptance.trim()) ? { answers: { where: "", change: "", check: "x" } } : {}) } : null;
+  const need = useNeeded(client, neededChange);
+  const here = new Set<NeededFill>(["title", "description", ...(feature ? (["date", "start"] as const) : (["check"] as const))]);
+  const split = splitNeeded(need.needed, here);
+  const hasValue: Partial<Record<NeededFill, boolean>> = { title: !!title.trim(), description: !!description.trim(), date: !!target, start: !!start, check: !!answers.check.trim() || !!acceptance.trim() };
+  const missing = split.fill.filter((f) => f.fill && !hasValue[f.fill]);
+  const elsewhere = split.cant.filter((f) => f.fill !== null);
+  const cant = split.cant.filter((f) => f.fill === null);
+  const mark = (f: NeededFill) => (missing.some((x) => x.fill === f) ? <span className="mtg-needed">{NEEDED_WORDS.needed}</span> : null);
   const dirty =
     title.trim() !== draft.title || (description.trim() || null) !== (shownDescription ?? null) || (acceptance.trim() || null) !== (draft.acceptance ?? null) || client !== draft.clientKey ||
     parent.itemId !== draft.parentItemId || size !== draft.size || (start || null) !== (draft.startDate ?? null) || (target || null) !== (draft.targetDate ?? null) || answersChanged;
@@ -134,7 +152,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             <span className="set-label">Title</span>
             <input ref={first} value={title} required maxLength={200} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" lookup={{ clientKey: client, clientName: clientName(client), from: "draft_editor", onPicked: picks.onPicked }} />
+          {story && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix={`de-q-${draft.id}`} layout="stack" lookup={{ clientKey: client, clientName: clientName(client), from: "draft_editor", onPicked: picks.onPicked }} />}
           <label className="set-field">
             <span className="set-label">Description</span>
             <TextBox value={description} minRows={4} maxRows={14} maxLength={descriptionMax(draft.carried)} onChange={(e) => setDescription(e.target.value)} />
@@ -171,11 +189,11 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             ) : (
               <>
                 <label className="set-field">
-                  <span className="set-label">Start date</span>
+                  <span className="set-label">Start date{mark("start")}</span>
                   <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
                 </label>
                 <label className="set-field">
-                  <span className="set-label">Target date</span>
+                  <span className="set-label">Target date{mark("date")}</span>
                   <input type="date" value={target} onChange={(e) => setTarget(e.target.value)} />
                 </label>
               </>
@@ -205,6 +223,9 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
             </p>
           )}
           {startAfter && <p className="set-problem">The start date is after the target date.</p>}
+          <p className="nf-needed" role="status" aria-live="polite">
+            {missing.length ? NEEDED_WORDS.fillFirst(missing.map((f) => f.name), feature ? "feature" : "story") : elsewhere.length ? NEEDED_WORDS.inNewForm(elsewhere.map((f) => f.name)) : cant.length ? NEEDED_WORDS.cant(need.projectName ?? clientName(client), cant.map((f) => f.name), feature ? "feature" : "story") : ""}
+          </p>
           <div className="wd-actions draft-actions">
             <button type="submit" className="commit" disabled={busy || !title.trim()}>
               {dirty ? "Save" : "Done"}
@@ -230,10 +251,13 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
               clientKey={client}
               label="Create in DevOps"
               onRun={async (w) => {
+                if (missing.length || cant.length) return;
                 const d = await save();
                 if (!d) return;
-                // QC-1: straight to the preview; a parent is optional (no parent: the project's default area and iteration).
                 onClose();
+                // RQ-1: a field only the New form has: the New form for this draft, with the field marked Needed there.
+                if (elsewhere.length && openNew) return void openNew({ from: "draft", clientKey: d.clientKey, draftId: d.id });
+                // QC-1: straight to the preview; a parent is optional (no parent: the project's default area and iteration).
                 w.create(d.clientKey, [d]);
               }}
             />

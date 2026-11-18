@@ -111,7 +111,7 @@ export type UrgentAsk = { chatId: string; messageId: string; clientKey: string; 
 
 /** A value problem on one config field (Settings shows it next to the field). */
 export type FieldProblem = { field: string; message: string };
-export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string };
+export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string; /** RQ-1: with "required_field", the fields a new item still needs (plan/needed.ts). */ needed?: import("../plan/needed.ts").NeededField[] };
 
 // ---- Settings (step 6b): what settings.load returns. Never a secret value. ----
 export type SettingsClient = {
@@ -378,7 +378,7 @@ export type DevOpsPreview = {
   /** ED-1: a description or acceptance criteria before and after, as each will read (safe HTML, made on the server). */
   looks?: { label: string; before: string; after: string }[];
 };
-export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
+export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; /** RQ-1: a create DevOps refused at Confirm for a field its process needs: that field, for Try again. */ needed?: import("../plan/needed.ts").NeededField[]; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 /** PK-1: one checked-off to-do whose DevOps item FocusTime may offer to set done: its current state and the done choices (Completed first, then Resolved). */
 export type DoneOffer = { pickId: number; clientKey: string; clientName: string; itemId: number; title: string; type: string; state: string; choices: string[]; /** The rule's open "Update DevOps" follow-up for it, closed by the write. */ followUpId: number | null };
 /** FN-1: what Wrap it up offers for one item (devops.wrap_offer): its done states by category, the state a New item moves to, Remaining Work, my right to change it, its parent. */

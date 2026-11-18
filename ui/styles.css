@@ -7621,3 +7621,16 @@ body.ah-dragging * { cursor: grabbing !important; }
   position: absolute; z-index: 2147483000; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--border-strong);
   background: var(--surface); color: var(--text); font: 600 15px/1 var(--font-ui); box-shadow: var(--shadow-pop); white-space: nowrap;
 }
+/* RQ-1: what the preview still waits for (the New form, the draft editor); nothing shows when it waits for nothing. */
+.nf-needed { margin: 4px 0 0; font-size: var(--fs-2); color: var(--watch); }
+.nf-needed:empty { display: none; }
+/* RQ-1: Break down's needed fields: one value for every story, and each card's own. */
+.bd-needs { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid color-mix(in oklab, var(--watch) 40%, transparent); border-radius: 8px; background: var(--sunken); margin-bottom: 8px; }
+.bd-need-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bd-need-row input { width: 8em; }
+.bd-need-why { font-size: var(--fs-2); }
+.bd-card-needs { display: flex; flex-wrap: wrap; gap: 12px; }
+.bd-need-field input { width: 8em; }
+/* RQ-1: a held create looks held (the reason sits beside it). */
+.wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
+.bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }

@@ -1,4 +1,5 @@
 import { PREVIEW_WORDS } from "../plan/preview-parts.ts";
+import type { NeededField } from "../plan/needed.ts";
 import { TextBox } from "./TextBox.tsx";
 import { whenText } from "./labels.ts";
 // DevOps writes in the window (step 14). Every change opens one preview dialog: org, project, item, each field before
@@ -91,7 +92,7 @@ type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; sta
 /** OP-1: how one previewed change ended, by the caller's key. */
 export type RowResult = { key: string | null; op: string; itemId: number | null; confirmed: boolean; message: string; /** The write log entry, for Undo or Retry; null when nothing was logged. */ writeId: number | null; /** The first field's value as written (after GD-2's Replace, the replaced text). */ after: string | null };
 /** OP-1: a series' end: every row's result, the changes that weren't previewed (by key), and whether Not now stopped it. */
-export type SeriesEnd = { results: RowResult[]; refused: { key: string; error: string; code: string | null }[]; stopped: boolean; errors: string[]; /** Some preview's Confirm was pressed (even if nothing came back). */ attempted: boolean };
+export type SeriesEnd = { results: RowResult[]; refused: { key: string; error: string; code: string | null }[]; stopped: boolean; errors: string[]; /** RQ-1: fields DevOps said a create still needs, when a part's preview was held for them. */ needed: NeededField[]; /** Some preview's Confirm was pressed (even if nothing came back). */ attempted: boolean };
 export type BeginOpts = {
   /** QC-1: a refused preview goes to `settled` (the caller shows it) instead of a toast. */
   inline?: boolean;
@@ -100,7 +101,7 @@ export type BeginOpts = {
   /** OP-1: this preview's place in a series. */
   step?: { n: number; of: number };
 };
-export type Settled = (r: { confirmed: boolean; sent: boolean; /** OP-1: each previewed row's result, once Confirm ran. */ results?: RowResult[]; /** OP-1: closed with Not now (or ×, Esc) before Confirm: nothing was sent. */ cancelled?: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** MC-1e: changes with a key that weren't previewed, and why (inline begins only: the caller says it on each row). */ refused?: { key: string; error: string; code: string | null }[]; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[]; /** OP-1: Confirm was pressed (even if its call failed): not a Not now. */ attempted?: boolean }) => void;
+export type Settled = (r: { confirmed: boolean; sent: boolean; /** OP-1: each previewed row's result, once Confirm ran. */ results?: RowResult[]; /** OP-1: closed with Not now (or ×, Esc) before Confirm: nothing was sent. */ cancelled?: boolean; /** QC-1: why no preview opened (inline begins only). */ error?: string; /** MC-1e: changes with a key that weren't previewed, and why (inline begins only: the caller says it on each row). */ refused?: { key: string; error: string; code: string | null }[]; /** ED-1: the refusal's code ("changed" when DevOps has a newer version). */ code?: string; /** QC-1: what was created, once confirmed. */ created?: { itemId: number; url: string | null }[]; /** RQ-1: with code "required_field", the fields DevOps says the item still needs. */ needed?: NeededField[]; /** OP-1: Confirm was pressed (even if its call failed): not a Not now. */ attempted?: boolean }) => void;
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null; settled?: Settled | undefined; opts?: BeginOpts | undefined; /** OP-1: Confirm was pressed and its call failed. */ attempted?: boolean };
 /** OP-1: one row's result in the caller's words. */
 const rowResult = (r: Row): RowResult | null => {
@@ -139,7 +140,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
         }
         setFlow({ clientKey, changes, rows: r.previews.map((preview) => ({ preview, result: null })), busy: false, error: null, settled: told, opts });
       } catch (e) {
-        if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e), ...(e instanceof ActionRefusal && e.code ? { code: e.code } : {}) });
+        if (opts?.inline) return void settled?.({ confirmed: false, sent: false, error: errText(e), ...(e instanceof ActionRefusal && e.code ? { code: e.code } : {}), ...(e instanceof ActionRefusal && e.needed ? { needed: e.needed } : {}) });
         settled?.({ confirmed: false, sent: false });
         if (e instanceof ActionRefusal && e.code === "no_write_pat") return void notify(`${e.message}.`);
         notify(errText(e));
@@ -201,7 +202,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
       return r;
     },
     series: (parts, settled, opts) => {
-      const end: SeriesEnd = { results: [], refused: [], stopped: false, errors: [], attempted: false };
+      const end: SeriesEnd = { results: [], refused: [], stopped: false, errors: [], needed: [], attempted: false };
       const list = parts.filter((p) => p.changes.length);
       const next = (i: number) => {
         if (i >= list.length) return settled(end);
@@ -218,6 +219,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
             end.results.push(...(r.results ?? []));
             end.refused.push(...(r.refused ?? []));
             if (r.error) end.errors.push(r.error);
+            if (r.needed) end.needed.push(...r.needed);
             // Not now before Confirm: nothing of this part was sent, and the parts after it aren't shown.
             if (r.cancelled) return settled({ ...end, stopped: true });
             next(i + 1);
@@ -245,7 +247,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     void begin(f.clientKey, left, settled, f.opts);
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled, flow.opts)} onReload={() => reloadFlow(flow)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled, flow.opts)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result), ...(flow.rows.some((r) => r.result) ? { results: resultsOf(flow.rows) } : flow.attempted ? { attempted: true, ...(flow.error ? { error: flow.error } : {}) } : { cancelled: true }) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReplace={() => void begin(flow.clientKey, replaced(flow.changes) as DevOpsChange[], flow.settled, flow.opts)} onReload={() => reloadFlow(flow)} onTryAgain={flow.settled ? (needed) => (setFlow(null), flow.settled?.({ confirmed: false, sent: false, attempted: true, code: "required_field", needed, error: flow.rows.map((r) => (r.result && "message" in r.result && !("confirmed" in r.result && r.result.confirmed) ? r.result.message : "")).filter(Boolean)[0] ?? "" })) : undefined} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled, flow.opts)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result), ...(flow.rows.some((r) => r.result) ? { results: resultsOf(flow.rows) } : flow.attempted ? { attempted: true, ...(flow.error ? { error: flow.error } : {}) } : { cancelled: true }) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -362,14 +364,16 @@ export function PreviewActions({ children, closeLabel, onClose, busy, note }: { 
   );
 }
 
-function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages, onClose, onTryAgain }: { flow: Flow; client?: ClientLook | undefined; /** RQ-1 */ onTryAgain?: ((needed: NeededField[]) => void) | undefined; onConfirm: () => void; /** GD-2: write "another client" instead. */ onReplace: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
   const done = (r: Row) => !!r.result && "confirmed" in r.result && r.result.confirmed;
   const tried = rows.some((r) => r.result);
   const changed = rows.some((r) => r.result && "entry" in r.result && r.result.entry.status === "refused" && r.result.changed);
-  const retryable = rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
+  // RQ-1: a create DevOps refused for a field its process needs: Try again goes back to the form, not the same create again.
+  const needed = rows.flatMap((r) => (r.result && "needed" in r.result && r.result.needed && !r.result.confirmed ? r.result.needed : []));
+  const retryable = !needed.length && rows.some((r) => r.result && ("error" in r.result ? r.result.status !== 410 && r.result.status !== 409 : !r.result.confirmed && r.result.entry.status !== "refused"));
   const label = rows.length === 1 ? p0.summary : `${rows.length} DevOps changes`;
   const clientWord = client?.name(flow.clientKey) ?? flow.clientKey;
   const flagged = rows.some((r) => r.preview.mentions?.length);
@@ -432,6 +436,10 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
         ) : changed ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onReload}>
             Reload and review again
+          </button>
+        ) : needed.length && onTryAgain ? (
+          <button ref={first} type="button" className="commit" disabled={busy} onClick={() => onTryAgain(needed)}>
+            Try again
           </button>
         ) : retryable ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>

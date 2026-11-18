@@ -308,7 +308,9 @@ function cycle(ps: readonly { id: string; dependsOn: readonly string[] }[]): boo
 // ---------- the review ----------
 
 /** A card in Review: the proposal as the person edited it, with Keep or Drop. Acceptance as checklist lines. */
-export type Proposal = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: StorySize | null; evidence: string[]; questions: string[]; keep: boolean };
+/** RQ-1: `values`: the fields the client's process needs on each story (Review asks for them; written at publish, kept in the draft). */
+export type StoryValues = { date?: string | null; start?: string | null; size?: number | null };
+export type Proposal = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: StorySize | null; evidence: string[]; questions: string[]; keep: boolean; values?: StoryValues };
 
 export const toProposal = (p: CoopProposal): Proposal => ({
   id: p.id,

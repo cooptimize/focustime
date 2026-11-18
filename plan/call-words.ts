@@ -48,7 +48,7 @@ export const CALL_ROW = {
   bringBack: "Bring back",
   needed: "Needed",
   /** A required field the form fills, still empty: on the row, before any preview. */
-  needs: (names: readonly string[]) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new item of this type.`,
+  needs: (names: readonly string[], type: string | null = null) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new ${type ?? "item of this type"}.`,
   cantFill: (project: string, names: readonly string[], type: string) => `${processNeeds(project, names, type)} Create this one in DevOps, then skip it here.`,
   commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",
@@ -68,6 +68,9 @@ export const CALL_ROW = {
   toReview: (n: number) => `${n} to review`,
   showLine: (n: number) => (n === 1 ? "Proposal" : `${n} proposals`),
   goToProposal: "Go to the proposal",
+  /** RQ-1: a new item at the feature tier: create it through the one preview, then Break down on it with Run started. */
+  createAndBreakDown: "Create and break down",
+  createAndBreakDownWhy: "Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories.",
 } as const;
 
 /** MC-1e: the bar for ticked rows, as the Backlog's Grid has one. */
