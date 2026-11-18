@@ -434,6 +434,49 @@ describe("VM-5: a Stop before the day", () => {
       expect(early.starts()).toBe(1);
     });
 
+  it("the Stop's preview says when it starts again and offers the box only while today's start is still to come", async () => {
+    const ws = workStart();
+    const prev = async (w: Awaited<ReturnType<ReturnType<typeof world>["init"]>>, vmCtx = w.vm()) => {
+      w.arm.vms.get(VM.toLowerCase())!.power = "running";
+      const p = await vmAction(vmCtx, "vm.preview", { op: "deallocate" });
+      expect(p.ok).toBe(true);
+      clearVmState();
+      return (p as { data: { startAgain?: { text: string; box: string } | null } }).data.startAgain ?? null;
+    };
+    const w = await world({ start: nyAt("02:51") }).init();
+    expect(await prev(w)).toEqual({ at: nyAt(minus(ws, 5)).replace(".000", ""), text: "It will start again today at 8:55 AM.", box: "Skip today's start too" });
+    // No start to come: at or after the planned time, outside production, off, a day not chosen, PTO, skipped, paused.
+    expect(await prev(await world({ start: nyAt(minus(ws, 5)) }).init())).toBeNull();
+    expect(await prev(w, { ...w.vm(), autoStartEnv: "dev" })).toBeNull();
+    expect(await prev(await world({ start: nyAt("02:51"), toml: tomlWith("auto_start = false") }).init())).toBeNull();
+    expect(await prev(await world({ start: nyAt("02:51"), toml: tomlWith('auto_start = true\nauto_start_minutes = 5\nauto_start_off_days = ["wed"]') }).init())).toBeNull();
+    expect(await prev(await world({ start: nyAt("02:51"), pto: ["2026-11-11"] }).init())).toBeNull();
+    const skipped = await world({ start: nyAt("02:51") }).init();
+    await vmAction(skipped.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    expect(await prev(skipped)).toBeNull();
+    const paused = await world({ start: nyAt("02:51") }).init();
+    await paused.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-02", lastUseOn: "2026-11-06", pausedOn: "2026-11-10" });
+    expect(await prev(paused)).toBeNull();
+  });
+
+  it("the box: unticked, today isn't skipped and the message says when it starts again; ticked, today is skipped with its reason", async () => {
+    const ws = workStart();
+    const un = await world({ start: nyAt("02:51") }).init();
+    const c = await stopAt(un, { skipToday: false });
+    expect(c).toMatchObject({ ok: true, data: { startsAgain: "8:55 AM" } });
+    expect((await readAutoStart(un.plan)).skipped).toEqual([]);
+    clearVmState();
+    const ticked = await world({ start: nyAt("02:51") }).init();
+    const t = await stopAt(ticked, { skipToday: true });
+    expect((t as { data: { startsAgain?: string } }).data.startsAgain).toBeUndefined();
+    expect(await readAutoStart(ticked.plan)).toMatchObject({ skipped: ["2026-11-11"], skipHow: { "2026-11-11": "stop" } });
+    ticked.clock.set(nyAt(minus(ws, 5)));
+    expect(await autoStartCheck(ticked.deps("prod"))).toBe("skipped");
+    expect(ticked.starts()).toBe(0);
+    // skipToday is a yes or no.
+    expect(await vmAction(ticked.vm(), "vm.confirm", { previewId: "x", skipToday: "yes" })).toMatchObject({ ok: false, status: 400 });
+  });
+
   it("a Stop while a start is still being retried after an unreadable state ends the retries for today", async () => {
     let now = 0;
     const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: "busy" };

@@ -29,6 +29,11 @@ export type VmPreview = {
   /** Shown prominently (none today). */
   warning: string | null;
   confirmLabel: string;
+  /**
+   * VM-5: a Stop while today's automatic start is still to come: the line ("It will start again today at 8:55 AM.") and
+   * the box under it ("Skip today's start too", unticked; ticked, vm.confirm's skipToday). Absent: no start to come.
+   */
+  startAgain?: { at: string; text: string; box: string } | null;
 };
 
 export type VmError = { kind: string; message: string; permission: string | null };

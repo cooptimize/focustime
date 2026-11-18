@@ -13,7 +13,7 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, stopEndsToday, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, clock, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, stopEndsToday, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
@@ -192,10 +192,10 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       const vm = (await chosen(ctx));
       const g = guard(vm, input.vmId);
       if (g) return g;
-      return preview(ctx, vm!, op);
+      return preview(ctx, vm!, op, cfg, today);
     }
     case "vm.confirm": {
-      if (!isObj(input) || Object.keys(input).some((k) => k !== "previewId") || typeof input.previewId !== "string") return bad("vm.confirm takes { previewId }");
+      if (!isObj(input) || Object.keys(input).some((k) => k !== "previewId" && k !== "skipToday") || typeof input.previewId !== "string" || (input.skipToday !== undefined && typeof input.skipToday !== "boolean")) return bad("vm.confirm takes { previewId, skipToday? }");
       const held = previews.get(input.previewId);
       previews.delete(input.previewId);
       if (!held || held.expiresAt < nowMs(ctx)) return refuse("That preview expired. Look again before confirming", 410);
@@ -207,8 +207,14 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       const r = await power(ctx, vm!, held.op, { recheck: true });
       // VM-2 review, VM-5: a Stop at or after today's planned time ends today's automatic start, so FocusTime never
       // starts again a VM I stopped during my day. One before it (the night before, after midnight) leaves it alone.
-      if (r.ok && held.op === "deallocate" && ctx.plan && cfg && stopEndsToday({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes }))
-        await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "stop"));
+      // VM-5: before it, "Skip today's start too" ticked skips today as Skip this one does (its reason: with a Stop).
+      if (r.ok && held.op === "deallocate" && ctx.plan && cfg) {
+        const ends = stopEndsToday({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes });
+        if (ends || input.skipToday === true) await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "stop"));
+        // The message after says when it starts again, when it still does today.
+        const again = await startLaterToday(ctx, cfg, today);
+        if (again) return { ...r, data: { ...(r.data as object), startsAgainAt: again.toString(), startsAgain: clock(again, tz) } };
+      }
       return r;
     }
     case "vm.start_now": {
@@ -384,7 +390,19 @@ async function settleOrphans(ctx: VmContext, vm: ChosenVm, p: PowerState, t: num
   }
 }
 
-async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionResponse> {
+/**
+ * VM-5: today's automatic start, when it is still to come (on, production, a chosen day with working hours, not PTO or
+ * a holiday, not paused, skipped or tried already, and its time still ahead): the same answer as the "Next:" line, read
+ * as if the VM were off. Null otherwise, or when it can't be told.
+ */
+async function startLaterToday(ctx: VmContext, cfg: AppConfig, today: IsoDate): Promise<Temporal.Instant | null> {
+  const v = await autoStartView(ctx, cfg, "deallocated").catch(() => null);
+  if (!v?.next || v.next.date !== today) return null;
+  const at = Temporal.Instant.from(v.next.at);
+  return Temporal.Instant.compare(at, Temporal.Instant.from(ctx.now())) > 0 ? at : null;
+}
+
+async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp, cfg: AppConfig | null, today: IsoDate): Promise<ActionResponse> {
   try {
     const p = await client(ctx).power(refOf(vm));
     const chip = chipOf(p, transitions.get(vm.id.toLowerCase()) ?? null);
@@ -404,6 +422,10 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionRe
             notes: [`${vm.name} is deallocated: it shuts down and stops billing for compute.`, "Its auto-shutdown isn't changed.", "FocusTime follows it until Azure shows it stopped (deallocated)."],
             warning: "Anything running or unsaved on it ends: a remote session, Coop, open programs.", confirmLabel: "Stop",
           };
+    if (op === "deallocate" && cfg) {
+      const again = await startLaterToday(ctx, cfg, today);
+      if (again) out.startAgain = { at: again.toString(), text: `It will start again today at ${clock(again, userZone(cfg))}.`, box: "Skip today's start too" };
+    }
     return { ok: true, data: out };
   } catch (e) {
     return errResponse(e);

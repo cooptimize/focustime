@@ -367,6 +367,8 @@ const DONE: Record<VmPreviewOp, string> = {
 function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => void; onDone: (msg: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // VM-5: "Skip today's start too", unticked.
+  const [skipToday, setSkipToday] = useState(false);
   const first = useRef<HTMLButtonElement>(null);
   useReturnFocus();
   useEffect(() => first.current?.focus(), []);
@@ -388,6 +390,14 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           ))}
         </dl>
         <ul className="vm-notes">{p.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        {p.startAgain && (
+          <div className="vm-again">
+            <p>{p.startAgain.text}</p>
+            <label className="set-check">
+              <input type="checkbox" checked={skipToday} disabled={busy} onChange={(e) => setSkipToday(e.target.checked)} /> {p.startAgain.box}
+            </label>
+          </div>
+        )}
         {error && <p className="set-problem" role="alert">{error}</p>}
         <div className="wd-actions">
           <button
@@ -399,8 +409,8 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
               setBusy(true);
               setError(null);
               try {
-                await call("vm.confirm", { previewId: p.previewId });
-                onDone(DONE[p.op]);
+                const r = await call<{ startsAgain?: string }>("vm.confirm", { previewId: p.previewId, ...(p.startAgain ? { skipToday } : {}) });
+                onDone(r?.startsAgain ? `Stopped. It will start again at ${r.startsAgain}.` : DONE[p.op]);
               } catch (e) {
                 setError(errText(e));
               } finally {
