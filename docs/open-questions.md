@@ -1636,3 +1636,15 @@ From the IT review (TD-1):
 - **The page before a transcript (consultant walkthrough).** On a call waiting for its upload the actions' Upload a transcript and the box's Choose a file both show, as on a client call today; left as client calls have it (they're unchanged in this step). The phone shows the switch, summary and buttons before the first proposal.
 - **Add a call's start (consultant walkthrough).** It starts at 10:00 whatever the time; a call later than now is refused on Add. Should it default to the last full hour?
 - **Esc from a setup opened from Day** returns to Calls, not Day (the setup is on Calls). Back to Day would need the place it came from, as a call's page has.
+
+## MC-3: Calls is a tab (Nov 17)
+
+- **Should the phone's bar carry Calls?** It stays in More, first, with its count (as decided). A person who reviews calls daily on the phone takes two taps; the bar has room for five.
+- **Should Day on the phone point at a call that needs me?** The urgent strip shows the Inbox's own items only; a call waiting for review shows on its meeting's mark and in More's count.
+- **Is 14 days right for the list?** Calls that need me stay until their transcript goes at 30 days; the rest fold under Earlier calls. A week and a weekend may be enough for the list itself.
+- **Calls' browser tests in their own folder.** They are still in `e2e/week/` (and `e2e/day/client-call-door.test.ts`); the new one sits beside them. A folder of their own (`e2e/calls/`) would match the tab.
+- **A repeating meeting in the list (MC-2's question).** A daily standup is still a row a day. Folding repeats into one row ("Team standup · 6"), or hiding a call for me, is open.
+- **What MC-2b and MC-2c need from the list.** Pocket recordings (MC-2b) would match a recording to a row by start and length and put it on the setup's upload; calls in chats (MC-2c) would add rows with a source "From a chat". The row's second line has room for both.
+- **The server's `#/meetings` links.** The Teams bot's notes and the assistant's links still say `#/meetings` (and "Open Client calls"). They land on Calls; changing their words was left out (no rewording in this step).
+- **Back in two steps.** Below 900 px a call has a Back button; side by side it has none (the list is there, and the browser's Back works). Should the wide page keep a Back for people who arrived from Day?
+- **Choosing a filter goes into history.** Each filter press is its own Back step (as MC-1e's call filter is). Replacing the address instead would make Back leave Calls sooner.

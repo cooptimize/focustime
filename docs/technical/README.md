@@ -23,11 +23,12 @@ It runs in Azure (Container Apps, Azure SQL, Key Vault) in two environments, dev
 | Inbox | The fifth tab (5 or L), `#/inbox` | Three lists: From chats, Promises, Captures |
 | Block panel | Beside Week and Day | One block: what's on it, its meetings, and one Add box |
 | Story card | Over any screen, `#/item/<client>/<id>` | A DevOps item as FocusTime shows it, with Edit and Wrap it up |
-| Code | The Code tab (6; on a phone More › Code), `#/code` | Any client's repos, read only |
+| Calls | The sixth tab (6; on a phone More › Calls), `#/calls` | Every call I was on, by day, with the one I choose beside the list: its proposals, transcript or setup |
+| Code | The Code tab (7; on a phone More › Code), `#/code` | Any client's repos, read only |
 | Settings and Admin | More › Settings, More › Admin | A person's preferences; the team's values (admins only) |
 | The Guide and these docs | More › Guide, More › Technical docs | How to use FocusTime; how it works |
 
-On the phone the bottom bar holds Day, Week, Capture, Inbox and More, with Ask at the top right (PH-1). Today's Day is made for a glance: the Now card, what's next, the one thing that needs you and today's to-dos. More is a screen with Backlog, Status, Calls, Code, My VM, Settings, the Guide, Everything else and the Desktop version (the app laid out as on a computer, kept in the browser).
+On the phone the bottom bar holds Day, Week, Capture, Inbox and More, with Ask at the top right (PH-1). Today's Day is made for a glance: the Now card, what's next, the one thing that needs you and today's to-dos. More is a screen with Calls (first, with its count), Backlog, Status, Code, My VM, Settings, the Guide, Everything else and the Desktop version (the app laid out as on a computer, kept in the browser).
 
 ## The pages
 
