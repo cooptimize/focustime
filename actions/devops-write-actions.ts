@@ -571,7 +571,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       }
       if (typeof h === "string" || h.op !== "create" || !h.type) return { ok: true, data: none };
       // The item as it would be sent decides the key: the same person, organization, type and patch ask DevOps once.
-      const key = `${env.me.email.toLowerCase()}|${env.org.toLowerCase()}|${env.project}|${h.type}|${JSON.stringify(h.ops)}`;
+      const key = neededKey(env, h);
       const neededCache = neededCacheOf(env.writer);
       const cached = neededCache.get(key);
       const answer = cached && cached.at > Date.now() - NEEDED_MS ? cached.answer : await askDevOps(env, h, memo);
@@ -835,6 +835,7 @@ const neededCacheOf = (writer: object) => neededCaches.get(writer) ?? neededCach
 const NEEDED_MS = 10 * 60_000;
 /** RQ-1: the title an early check stands in for one not typed yet (sent only with validateOnly, so never saved). */
 const CHECK_TITLE = "FocusTime check";
+const neededKey = (env: Env, h: HeldIn) => `${env.me.email.toLowerCase()}|${env.org.toLowerCase()}|${env.project}|${h.type}|${JSON.stringify(h.ops)}`;
 const once = <T,>(memo: Map<string, Promise<unknown>>, k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
 
 /** RQ-1: the controls each screen has for a new item's fields (what it can mark Needed; the rest are said in words). */
@@ -882,6 +883,8 @@ async function askDevOps(env: Env, h: HeldIn, memo: Map<string, Promise<unknown>
 /** RQ-1: the preview opens only once DevOps's check passes; otherwise the fields it still needs, in plain words. */
 async function requireNeeded(env: Env, h: HeldIn, memo: Map<string, Promise<unknown>>, has: ReadonlySet<NeededFill>): Promise<void> {
   const a = await askDevOps(env, h, memo);
+  // The fresher answer replaces an early one for the same item, so a row read again says what the preview found.
+  if (a.checked) neededCacheOf(env.writer).set(neededKey(env, h), { at: Date.now(), answer: a });
   if (!a.needed.length) return;
   throw new Refused(neededMessage(a.needed, { project: env.projectName, type: h.type ?? "item", has }), 409, "required_field", a.needed);
 }
