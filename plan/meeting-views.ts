@@ -1,6 +1,6 @@
 // MC-1: what the meeting actions show the page (Admin, the review, Week's call marker): never a join link, an event or
 // online meeting id, or a transcript's words outside the review. Pure types, shared by actions/ and ui/.
-import type { MeetingNudge, MeetingRole, MeetingSeries, Occurrence, TranscriptSource } from "./meetings.ts";
+import type { CallKind, MeetingNudge, MeetingRole, MeetingSeries, Occurrence, TranscriptSource } from "./meetings.ts";
 
 /** A series as Admin and the review show it: never the join link, the event id or the online meeting id. */
 export type SeriesView = {
@@ -23,6 +23,28 @@ export type SeriesView = {
   mine: { review: boolean; attend: boolean };
   /** MC-1c: Admin's one line of proof: the latest call's transcript, read when and through whose sign-in, or why not. */
   lastRead?: string;
+  /** MC-2: null for a registered client call; "calendar" or "hand" for a call that isn't registered. */
+  call: CallKind | null;
+  /** MC-2: a calendar call whose transcript its reviewer can ask Teams for (an online meeting organized at Cooptimize or unknown). */
+  teams: boolean;
+};
+
+/** MC-2: one of my other calls as Calls lists it (from my own calendar, kept nowhere): never a link or an address. */
+export type OtherCallView = {
+  /** The meeting's iCalUId (the same on every attendee's calendar); what Review sends back. */
+  key: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  minutes: number;
+  /** Everyone on it, me included. */
+  people: number;
+  /** A Teams meeting organized at Cooptimize (or not known): Get it from Teams is offered. */
+  teams: boolean;
+  /** Organized outside Cooptimize: only Upload a file. */
+  outside: boolean;
+  /** Its kept call's occurrence once someone on it pressed Review (that I can see), else null. */
+  occurrenceId: number | null;
 };
 
 export type OccurrenceView = {

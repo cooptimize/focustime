@@ -2,7 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { CALL_ACTIONS } from "../plan/call-words.ts";
-import { openCall, requestRerun, type CallMark } from "./meetings/calls.ts";
+import { openCall, requestRerun, requestReviewCall, reviewableMeeting, type CallMark } from "./meetings/calls.ts";
 import { takeOffRule } from "../plan/blockpanel.ts";
 import type { CheckinGhost } from "../plan/carry.ts";
 import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
@@ -121,6 +121,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** MC-2: Calls is here (meeting.mine answered), so a meeting I was on offers Review this call. */
+  callsHere?: boolean;
   /** CW-1: my clients' registered chats with their live calls (absent or null: not loaded, or not available here). */
   cowork?: CoworkData | null;
   /** CW-1: open a chat in Teams (Join, Start a call). */
@@ -849,6 +851,10 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
   // DY-1: the call's type heads its menu (its items' group) and is in the title.
   if (call) return { title: `${e.title} · ${call.role} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
+  // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup. The 14 days count
+  // from the app's today (the person's day, and the demo's), not the browser's clock.
+  if (env.callsHere === true && reviewableMeeting(e, Date.now(), (env.today ? Temporal.PlainDate.from(env.today).toZonedDateTime({ timeZone: tz }) : Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay()).epochMilliseconds))
+    return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items: [{ id: "call-review", label: CALL_ACTIONS.reviewCall, group: "Call", hint: "choose its client first", run: () => requestReviewCall(e) }, ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
 
   function item(a: (typeof x.actions)[number]): MenuItem {
@@ -1638,6 +1644,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.keep":
     case "meeting.unkeep":
     case "meeting.rerun":
+    case "meeting.calls":
+    case "meeting.call_start":
+    case "meeting.call_fetch":
+    case "meeting.call_add":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":

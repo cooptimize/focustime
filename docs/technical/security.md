@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same pull request. Checked against `2f4c0ea` on Nov 13, 2026; shared deployments against the DP-3 branch on Nov 18, 2026.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same pull request. Checked against `2f4c0ea` on Nov 13, 2026; Whose request against the ID-1 branch on Nov 17, 2026; shared deployments against the DP-3 branch on Nov 18, 2026.
 
 ## In short
 
@@ -36,6 +36,7 @@ Arrows point from the side that starts the call, labelled with the identity it u
 - **Who.** Entra OpenID Connect for the Cooptimize tenant only, or "Try the demo" (a fictional person, nothing fetched). The ID token is validated (signature, issuer, audience, expiry, nonce) and the tenant checked (`server/auth/entra.ts`); it is never stored. Only name, UPN, email, object id and tenant id are kept.
 - **Sessions.** A random id in a `__Host-` cookie; the database keeps only its hash, with a CSRF token. 12 hours idle, 7 days at most (`store/accounts.ts`).
 - **Every request.** The Host and Origin must be FocusTime's public URL and API calls must come from its own page (`server/guard.ts`). Every state change needs the session and its `X-CSRF` token (`server/app.ts`).
+- **Whose request.** Every request and job runs as the session's or the job's own person, through one function (`signedContext`; [Who is asking](architecture.md#who-is-asking)). One person's identity never reaches another's request: each context is built from that person's own runtime and stored sign-in.
 - **Headers.** A Content Security Policy of `default-src 'self'` with no inline styles or scripts, no frames, no object or base URI (`CSP` in `server/app.ts`); images from chats are served with a sandboxed CSP of their own.
 
 ### Compression

@@ -2,7 +2,7 @@
 // Monday 13:00 meeting: on Day's Timeline and Cards, in the block panel's agenda and on the phone it carries one short
 // mark with its state; the mark and the title open the call; its menu leads with the call (Review proposals, Read the
 // transcript, Propose again, Upload a transcript) and Open in Outlook comes after. A meeting that isn't a registered
-// call is unchanged: no mark, no call items. More has Client calls with its count. Clock: Mon Nov 2, 2026 3:00 PM ET,
+// call is unchanged: no mark, no call items. More has Calls with its count (MC-2: called Client calls before). Clock: Mon Nov 2, 2026 3:00 PM ET,
 // after the call (the demo seeds the latest call that has ended).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -92,7 +92,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await page.close();
   }, T);
 
-  it("the phone (Week): the mark on the card's list opens the call; More has Client calls with its count", async () => {
+  it("the phone (Week): the mark on the card's list opens the call; More has Calls with its count", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await open(page, "#/week");
     // The phone's Week: the call's card carries its line until the meetings list opens, then the meeting carries it.
@@ -105,12 +105,12 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     await open(page, "#/today");
-    // PH-1: More is a screen; Client calls is a row with how many calls are there to review.
+    // PH-1: More is a screen; Calls (MC-2: was Client calls) is a row with how many calls are there to review.
     await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();
     const item = page.locator('.mr-row[data-row="calls"]');
     await expect(item.textContent()).resolves.toContain("1 call to review");
     await item.click();
-    await page.getByRole("heading", { name: "Client calls" }).waitFor();
+    await page.getByRole("heading", { name: "Calls", exact: true }).waitFor();
     expect(errors).toEqual([]);
     await page.close();
   }, T);

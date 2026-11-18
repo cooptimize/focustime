@@ -12,7 +12,7 @@ import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
 import { errorKind, MALFORMED_WORDS, newRef, unexpectedAnswer } from "./unexpected.ts";
-import { assistantTranscribe, chatImage, dispatch, meetingContext, type ActionContext } from "../actions/dispatch.ts";
+import { assistantTranscribe, chatImage, dispatch, meetingContext, signedContext, type ActionContext } from "../actions/dispatch.ts";
 import { uploadTranscript } from "../actions/meeting-actions.ts";
 import { MAX_UPLOAD_BYTES } from "../actions/transcript-file.ts";
 import { VOICE_MAX_BYTES } from "../assistant/types.ts";
@@ -180,6 +180,12 @@ const same = (a: string | undefined, b: string) => {
 
 export function createApp(opts: AppOptions) {
   let lastReopen = 0;
+  /**
+   * ID-1: the session's person's context for a route that reaches their actions without the dispatcher (the voice, an
+   * upload, a chat's image): with their identity, as `dispatch` gives every action (actions/dispatch.ts signedContext).
+   * The action route hands `dispatch` the session's context as it is, since the dispatcher signs it itself.
+   */
+  const personCtx = async (s: Session) => signedContext(await opts.ctx(s));
   /**
    * PF-2: the built files, read and compressed once here, before the server listens (the build doesn't change while
    * it runs), with the service worker's source for this build (P1) among them. None in the dev UI (Vite serves it).
@@ -429,7 +435,7 @@ export function createApp(opts: AppOptions) {
         } catch {
           return json(res, 413, { ok: false, reason: "too_large", message: "That recording is too large" });
         }
-        const r = await (opts.transcribe ?? assistantTranscribe)(await opts.ctx(s), { audio, mime, seconds: Number(q.get("seconds")), context: { ...(client && client.length <= 100 ? { clientKey: client } : {}), ...(Number.isInteger(item) && item > 0 ? { itemId: item } : {}) } }).catch((e: unknown) => {
+        const r = await (opts.transcribe ?? assistantTranscribe)(await personCtx(s), { audio, mime, seconds: Number(q.get("seconds")), context: { ...(client && client.length <= 100 ? { clientKey: client } : {}), ...(Number.isInteger(item) && item > 0 ? { itemId: item } : {}) } }).catch((e: unknown) => {
           opts.onError?.(e, "transcribe");
           return { ok: false as const, reason: "provider" as const, message: "The recording couldn't be turned into text. Try again, or type it" };
         });
@@ -450,7 +456,7 @@ export function createApp(opts: AppOptions) {
         }
         const series = Number(q.get("series"));
         const out = Number.isSafeInteger(series) && series > 0
-          ? await uploadTranscript(await meetingContext(await opts.ctx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1" }).catch((e: unknown) => {
+          ? await uploadTranscript(await meetingContext(await personCtx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1" }).catch((e: unknown) => {
               opts.onError?.(e, "meeting_upload");
               return { ok: false as const, status: 500, error: "The transcript couldn't be saved. Try again" };
             })
@@ -482,7 +488,7 @@ export function createApp(opts: AppOptions) {
         res.writeHead(401, { "cache-control": "no-store" });
         return res.end();
       }
-      const r: ServedImage = await (opts.chatImage ?? chatImage)(await opts.ctx(s), Number(m[1])).catch((e: unknown) => (opts.onError?.(e, "chat_image"), { status: 404 as const }));
+      const r: ServedImage = await (opts.chatImage ?? chatImage)(await personCtx(s), Number(m[1])).catch((e: unknown) => (opts.onError?.(e, "chat_image"), { status: 404 as const }));
       opts.log({ source: "server", op: "chat_image", status: r.status });
       res.setHeader("Content-Security-Policy", IMAGE_CSP);
       if (r.status !== 200) {

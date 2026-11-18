@@ -55,7 +55,7 @@ import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, has
 import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { sound } from "./sound.ts";
-import type { TimerView } from "../actions/types.ts";
+import type { TimerView, WeekLoadData } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { useInboxToday } from "./inboxcount.ts";
@@ -347,11 +347,13 @@ export function App() {
   const tourAt = loc.overlay?.kind === "tour" ? (tourById(loc.overlay.id) ?? null) : null;
   // PF-1: the tour's own file is asked for when a tour starts and its card appears once it is in; the screen under it is drawn at once.
   const Tour = useScreen("tour", !!tourAt)?.default;
-  // MC-1: Client calls over the place (#/meetings and #/meetings/<occurrence>).
+  // MC-1, MC-2: Calls over the place (#/meetings and #/meetings/<occurrence>).
   const meetingAt = loc.overlay?.kind === "meeting" ? loc.overlay : null;
   // MC-1d: the registered calls I review or attend, once for the app: Day, Week, the block panel, the phone and the
   // More menu's count all read them, so a call's meeting is its door everywhere it is drawn.
   const mine = useMine();
+  /** MC-2: Calls is here, so a meeting I was on offers Review this call. */
+  const callsHere = !!mine.data;
   const callsNeed = callsNeedingMe(callMarks(mine.data));
   /** FN-1: a story card over the place (#/item/<client>/<id>). */
   const itemAt = loc.overlay?.kind === "item" ? loc.overlay : null;
@@ -1838,6 +1840,7 @@ export function App() {
       },
       connectWrite: () => void connectWrite(),
       eventEdit: data.eventEdit ?? {},
+      callsHere,
       canWrite: !!data.canWrite,
       editEvent: (input) => void writes.edit(input),
       rsvp: (input) => void writes.rsvp(input),
@@ -1864,7 +1867,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork, devopsWrites.env, openNew]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [callsHere, data, target, sel, openGuide, work, runPlan, openPlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, openPlanWeek, togglePlanning, connectWrite, addWork, timeboxDay, goNav, asksOpen, cowork, devopsWrites.env, openNew]); // eslint-disable-line react-hooks/exhaustive-deps
   // QC-1: Shift+N reads the selection at the moment it is pressed.
   const envRef = useRef<MenuEnv | null>(null);
   envRef.current = env;
@@ -2254,7 +2257,7 @@ export function App() {
             access={docsAccess}
           />
       ) : meetingAt && Meetings ? (
-        <Meetings occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} filter={meetingAt.filter ?? null} proposal={meetingAt.proposal ?? null} colors={data.clients} today={data.planDay.date} undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })} onOpen={(id, at) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(at?.view ? { view: at.view } : {}), ...(at?.line ? { line: at.line } : {}), ...(at?.filter ? { filter: at.filter } : {}), ...(at?.proposal ? { proposal: at.proposal } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
+        <Meetings clients={captureClients(data)} blockClientAt={(iso) => blockClientAt(data.week, iso)} occurrence={meetingAt.occurrence} view={meetingAt.view ?? null} line={meetingAt.line ?? null} filter={meetingAt.filter ?? null} proposal={meetingAt.proposal ?? null} colors={data.clients} today={data.planDay.date} undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })} onOpen={(id, at) => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: id, ...(at?.view ? { view: at.view } : {}), ...(at?.line ? { line: at.line } : {}), ...(at?.filter ? { filter: at.filter } : {}), ...(at?.proposal ? { proposal: at.proposal } : {}) } }))} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} onChanged={mine.reload} />
       ) : focusOpen && FocusM ? (
         <FocusM.FocusScreen
           t={data.timer}
@@ -2649,8 +2652,8 @@ export function App() {
             title: "More",
             items: [
               { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
-              // MC-1d: my registered client calls, with how many need me (proposals to review, a transcript to upload, a failed step).
-              { id: "calls", label: "Client calls", ...(callsNeed > 0 ? { hint: `${callsNeed} need you` } : {}), run: () => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } })) },
+              // MC-1d, MC-2: Calls (my client calls and other calls), with how many need me (proposals to review, a transcript to upload, a failed step).
+              { id: "calls", label: "Calls", ...(callsNeed > 0 ? { hint: `${callsNeed} need you` } : {}), run: () => go((l) => ({ nav: l.nav, overlay: { kind: "meeting", occurrence: null } })) },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "docs", label: "Technical docs", run: () => openDocs() },
@@ -2770,4 +2773,11 @@ function PhoneGate({ phone, onBack, backLabel, children }: { phone: boolean; onB
   ) : (
     <>{children}</>
   );
+}
+
+/** MC-2: the client of the focus block a moment falls in (this week's), for a call's suggested client; else null. */
+function blockClientAt(week: WeekLoadData["week"], iso: string): string | null {
+  const t = Date.parse(iso);
+  for (const d of week.days) for (const sl of [d.am, d.pm]) if (sl.focus[0] && Date.parse(sl.start) <= t && t < Date.parse(sl.end)) return sl.focus[0].clientKey;
+  return null;
 }

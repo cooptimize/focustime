@@ -49,6 +49,8 @@ const ANSWER = {
     { who: "Dana Client", what: "Send sample rates", toName: null, due: null, lines: [4] },
   ],
   comments: [{ itemId: 1201, note: "decision", text: "CSV only for now; Excel later.", lines: [4] }],
+  // MC-2: the answer has a summary now (the schema requires one).
+  summary: ["Decided CSV only for now."],
 };
 
 async function setup() {

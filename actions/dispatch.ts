@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import type { PressGrants } from "./call-press.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
@@ -785,6 +786,22 @@ export function withSignedIn(ctx: ActionContext): ActionContext {
   };
 }
 
+/** ID-1: the contexts `signedContext` made, so applying it again changes nothing. */
+const SIGNED = new WeakSet<ActionContext>();
+
+/**
+ * ID-1: the one way a request or a job knows who the person is. The person's clients only (ADM-2's onlyClients) and
+ * config's "me" and Dataverse user from their sign-in (withSignedIn): what the dispatcher gives every action. Every
+ * route and job under server/ that reaches a person's actions without `dispatch` takes its context from here
+ * (server/identity-guard.test.ts). Applying it twice gives back the same context.
+ */
+export function signedContext(ctx: ActionContext): ActionContext {
+  if (SIGNED.has(ctx)) return ctx;
+  const signed = withSignedIn(onlyClients(ctx));
+  SIGNED.add(signed);
+  return signed;
+}
+
 /** Step 16.3: Teams presence (my status during focus, teammates' presence). */
 export async function presenceContext(ctx: ActionContext): Promise<PresenceContext> {
   return {
@@ -1399,6 +1416,10 @@ export type MeetingsPort = {
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
   /** PK-1: the PDF reader for a Pocket export (server/pdf-text.ts); absent: a PDF upload is refused in plain words. */
   readPdf?: ReadPdf;
+  /** MC-2: the presses the Graph gate lets through (actions/call-press.ts); absent: Get it from Teams isn't here. */
+  press?: PressGrants;
+  /** MC-2: a Cooptimizer by the people rule (not a guest, not an automation account, inside the domains). */
+  cooptimizer?: (userId: string) => Promise<boolean>;
 };
 
 /**
@@ -1439,6 +1460,8 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
     ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
+    ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
+    ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -1765,9 +1788,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
   // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
   // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
   // ADM-2: clients only, everywhere a person's clients are listed (actions/client-accounts.ts).
-  ctx = onlyClients(ctx);
-  const raw = ctx;
-  if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
+  // ID-1: the same one function every route and job outside the dispatcher uses (signedContext).
+  const raw = onlyClients(ctx);
+  ctx = action !== "settings.load" && action !== "settings.save" ? signedContext(ctx) : raw;
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
     case "demo.reset": {
@@ -2700,6 +2723,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.rerun":
     case "meeting.check_now":
     case "meeting.transcript":
+    case "meeting.calls":
+    case "meeting.call_start":
+    case "meeting.call_fetch":
+    case "meeting.call_add":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

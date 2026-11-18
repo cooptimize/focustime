@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     expect(errors).toEqual([]);
   }, T);
 
-  it("from Client calls: the same count there; filter after a reload; Bring back; a line's button opens a folded row; Back to Client calls", async () => {
+  it("from Calls: the same count there; filter after a reload; Bring back; a line's button opens a folded row; Back to Calls", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/meetings"));
     const series = page.locator(".mtg-series").first();
@@ -128,8 +128,8 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await page.locator(".mtg-prop.skipped").getByRole("button", { name: "Bring back" }).click();
     await expect.poll(() => row.count()).toBe(1);
     await expect.poll(() => page.locator(".mtg-count").textContent()).toMatch(new RegExp(`^${listed} to review`));
-    // Back to Client calls, where it was opened from.
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to client calls" }).click();
+    // Back to Calls (MC-2: was Client calls), where it was opened from.
+    await page.locator(".mtg-view").getByRole("button", { name: "Back to Calls" }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/meetings");
     expect(errors).toEqual([]);
   }, T);

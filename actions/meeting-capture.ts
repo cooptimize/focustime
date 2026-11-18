@@ -31,6 +31,14 @@ export const MEETING_CAPTURE_INSTRUCTIONS = [
 ].join("\n");
 
 /**
+ * MC-2: the one line added for the summary shown above the proposals on every call. Nothing else in the task changes:
+ * not its other instructions, its three lists, the model or the windows.
+ */
+export const SUMMARY_INSTRUCTION = "Also give summary: one to five short plain lines of what was discussed and decided in this part of the call, each a sentence, without names of other companies.";
+/** MC-2: the summary's lines at most, across all of a call's windows. */
+export const SUMMARY_LINES = 5;
+
+/**
  * PK-1: added only for a transcript whose speakers aren't named (a Pocket export): its labels are not people and may
  * be mixed up, and a person is named only where the words name them. Nothing else about the task changes.
  */
@@ -59,8 +67,10 @@ export const MEETING_CAPTURE_SCHEMA: JsonSchema = {
       maxItems: 15,
       items: { type: "object", properties: { itemId: { type: "integer" }, note: { type: "string", enum: ["decision", "next_step", "status"] }, text: { type: "string" }, lines: LINES }, required: ["itemId", "note", "text", "lines"], additionalProperties: false },
     },
+    // MC-2: what was discussed and decided, shown above the proposals.
+    summary: { type: "array", maxItems: SUMMARY_LINES, items: { type: "string" } },
   },
-  required: ["gaps", "commitments", "comments"],
+  required: ["gaps", "commitments", "comments", "summary"],
   additionalProperties: false,
 };
 
@@ -68,6 +78,7 @@ type Answer = {
   gaps: { type: string; parentId: number | null; title: string; description: string; lines: number[] }[];
   commitments: { who: string; what: string; toName: string | null; due: string | null; lines: number[] }[];
   comments: { itemId: number; note: "decision" | "next_step" | "status"; text: string; lines: number[] }[];
+  summary: string[];
 };
 
 export type CaptureInput = {
@@ -75,7 +86,8 @@ export type CaptureInput = {
   clientName: string;
   /** GD-1: Cooptimize Internal's meeting may name clients. */
   internal: boolean;
-  meeting: { name: string; role: MeetingRole; date: IsoDate };
+  /** MC-2: `role` null for a call that isn't registered (it has none, so none is said). */
+  meeting: { name: string; role: MeetingRole | null; date: IsoDate };
   /** Cooptimize attendees by FocusTime id and display name (the speakers matched to them are Cooptimizers). */
   cooptimizers: readonly { id: string; name: string }[];
   /** The client's open items in scope (Cooptimize's scope; capped). */
@@ -89,7 +101,7 @@ export type CaptureInput = {
 };
 
 export type CaptureResult =
-  | { ok: true; proposals: { body: ProposalBody; quotes: Quote[] }[]; windows: number; masked: { client: number; email: number }; dropped: number; costUsd: number }
+  | { ok: true; proposals: { body: ProposalBody; quotes: Quote[] }[]; /** MC-2: at most SUMMARY_LINES, no other client's name. */ summary: string[]; windows: number; masked: { client: number; email: number }; dropped: number; costUsd: number }
   /** MC-1d: which part of a call sent in parts failed (1-based), and how many parts; one failed part fails the pass. */
   | { ok: false; kind: AiErrorKind; message: string; part: number; parts: number; httpStatus?: number };
 
@@ -102,7 +114,7 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
 /** The context block: the client's items and the types each parent takes. */
 export function contextOf(x: Pick<CaptureInput, "clientName" | "meeting" | "items" | "model" | "cooptimizers">, speakers: readonly string[]): string {
   const items = [...x.items].sort((a, b) => Number(!!b.tier) - Number(!!a.tier) || a.id - b.id).slice(0, CONTEXT_ITEMS);
-  const out = [`Client: ${x.clientName}`, `Meeting: ${x.meeting.name} (${ROLE_LABEL[x.meeting.role]}), ${x.meeting.date} (${Temporal.PlainDate.from(x.meeting.date).toLocaleString("en-US", { weekday: "long" })})`, ""];
+  const out = [`Client: ${x.clientName}`, `Meeting: ${x.meeting.name}${x.meeting.role ? ` (${ROLE_LABEL[x.meeting.role]})` : ""}, ${x.meeting.date} (${Temporal.PlainDate.from(x.meeting.date).toLocaleString("en-US", { weekday: "long" })})`, ""];
   const coop = new Set(x.cooptimizers.map((c) => norm(c.name)));
   out.push("Speakers:", ...speakers.map((s) => `- ${s}${coop.has(norm(s)) ? " (Cooptimize)" : ""}`), "");
   if (x.model) {
@@ -214,12 +226,13 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
   const featureTypes = new Set(x.model?.types.filter((t) => t.level === "parent").map((t) => t.name) ?? []);
   const windows = windowsOf(x.lines);
   const all: { body: ProposalBody; quotes: Quote[] }[] = [];
+  const said: string[][] = [];
   const masked = { client: 0, email: 0 };
   let dropped = 0;
   let cost = 0;
   for (const [i, w] of windows.entries()) {
     const speakers = [...new Set(w.map((l) => l.speaker))];
-    const instructions = `${MEETING_CAPTURE_INSTRUCTIONS}${x.speakersNamed === false ? `\n${UNNAMED_SPEAKERS}` : ""}`;
+    const instructions = `${MEETING_CAPTURE_INSTRUCTIONS}${x.speakersNamed === false ? `\n${UNNAMED_SPEAKERS}` : ""}\n${SUMMARY_INSTRUCTION}`;
     const m = maskTranscript(`${contextOf(x, speakers)}Transcript:\n${numbered(w)}`, x.clientKey, x.directory, { internal: x.internal });
     masked.client += m.masked.client;
     masked.email += m.masked.email;
@@ -235,6 +248,30 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
       return sc.count ? { ...p, body: { ...sc.value, namesRemoved: true } } : p;
     }));
     dropped += c.dropped;
+    said.push(Array.isArray(r.value.summary) ? r.value.summary : []);
   }
-  return { ok: true, proposals: dedupe(all), windows: windows.length, masked, dropped, costUsd: cost };
+  return { ok: true, proposals: dedupe(all), summary: summaryOf(said, x), windows: windows.length, masked, dropped, costUsd: cost };
+}
+
+/**
+ * MC-2: the call's summary from each window's lines: plain text only, clipped, the same line once, taken in turn from
+ * each window (so a long call's end is in it too), at most SUMMARY_LINES. It names no other client: any other client's
+ * name or alias is replaced with "another client" (for Internal too: the summary is shown to everyone the call is shown
+ * to).
+ */
+export function summaryOf(perWindow: readonly (readonly unknown[])[], x: Pick<CaptureInput, "clientKey" | "directory">): string[] {
+  // Scrubbed before it is clipped, so a name cut at the clip can't slip through.
+  const clean = perWindow.map((w) => w.filter((l): l is string => typeof l === "string").map((l) => clip(scrubValue(l.replace(/\s+/g, " ").trim(), x.clientKey, x.directory).value, 300)).filter(Boolean));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; out.length < SUMMARY_LINES && clean.some((w) => i < w.length); i++)
+    for (const w of clean) {
+      const l = w[i];
+      if (!l || out.length >= SUMMARY_LINES) continue;
+      const scrubbed = l;
+      if (seen.has(norm(scrubbed))) continue;
+      seen.add(norm(scrubbed));
+      out.push(scrubbed);
+    }
+  return out;
 }

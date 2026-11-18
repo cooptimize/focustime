@@ -2,9 +2,15 @@
 // occurrences, where each transcript comes from, when FocusTime looks for it, who may see and confirm what came of it,
 // and the proposals the AI pass makes. Pure: no I/O, no clock (the caller passes now).
 //
-// Only registered meetings (and, later, meetings FocusTime scheduled) are ever read (`mayRead`). A client-hosted
-// meeting (organized in another tenant) is Upload: FocusTime reads only what the registrant's own calendar shows of it
-// (time, title, join link), never asks Graph for its meeting or transcript.
+// MC-2: FocusTime reads a call's transcript only when the call is registered by an admin, when FocusTime scheduled it,
+// or when a Cooptimizer who was on it asks FocusTime to review it, on their press, for that one call (`mayRead`). A
+// client-hosted meeting (organized in another tenant) is Upload: FocusTime reads only what the registrant's own
+// calendar shows of it (time, title, join link), never asks Graph for its meeting or transcript.
+//
+// MC-2: a call that isn't registered (one the person was on, from their own calendar, or one they added by hand) is
+// kept only once its person presses Review: one row like a series (`callKind` set) with one occurrence, Upload as its
+// source so nothing ever reads it in the background, the presser its one reviewer, the Cooptimizers on their invite
+// its attendees (a hand-added call has none). Every list of registered calls leaves these out (`isCall`).
 import type { IsoDate } from "../week/types.ts";
 import type { Answers } from "./three-questions.ts";
 
@@ -17,9 +23,18 @@ export type TranscriptSource = (typeof TRANSCRIPT_SOURCES)[number];
 /** PK-1: a Teams transcript (.vtt, .docx, or Graph's) or a Pocket export (its PDF, or the zip holding it). */
 export type TranscriptKind = "teams" | "pocket";
 
+/**
+ * MC-2: what kind of call a row is: null for a client call an admin registered; "calendar" for a call from the
+ * presser's own calendar (one occurrence of it), "hand" for one they added by hand.
+ */
+export const CALL_KINDS = ["calendar", "hand"] as const;
+export type CallKind = (typeof CALL_KINDS)[number];
+
 /** One registered call of a client: an app table row, shared by its reviewers and attendees. */
 export type MeetingSeries = {
   id: number;
+  /** MC-2: null for a registered client call; otherwise one call that isn't registered (see CALL_KINDS). */
+  callKind: CallKind | null;
   clientKey: string;
   name: string;
   role: MeetingRole;
@@ -111,9 +126,21 @@ export function joinKey(url: string): string {
 }
 
 /** Registered (and not removed), or one FocusTime scheduled: the only meetings FocusTime may read. */
-export function mayRead(m: { registered: MeetingSeries | null; scheduledByFocusTime?: boolean }): boolean {
-  return (!!m.registered && !m.registered.removedAt) || m.scheduledByFocusTime === true;
+/**
+ * MC-2: the one rule for reading a call's transcript. A call registered by an admin (live, not an unregistered call's
+ * row), a call FocusTime scheduled, or a press: a Cooptimizer who was on the call (it is on their own calendar, not
+ * declined) asked to review it, for that one call. Nothing else, and never in the background for a press.
+ */
+export type Press = { cooptimizer: boolean; onInvite: boolean; thisCall: boolean };
+export function mayRead(m: { registered: MeetingSeries | null; scheduledByFocusTime?: boolean; press?: Press | null }): boolean {
+  if (m.registered && !m.registered.removedAt && !m.registered.callKind) return true;
+  if (m.scheduledByFocusTime === true) return true;
+  const p = m.press;
+  return !!p && p.cooptimizer && p.onInvite && p.thisCall;
 }
+
+/** MC-2: a call that isn't registered (from my calendar or added by hand), never one of the registered client calls. */
+export const isCall = (s: Partial<Pick<MeetingSeries, "callKind">>) => !!s.callKind;
 
 /** Automatic for a meeting organized in Cooptimize's tenant; Upload for anyone else's or an unknown organizer. */
 export function detectSource(organizerEmail: string | null, homeDomains: readonly string[]): { organizer: MeetingSeries["organizer"]; source: TranscriptSource } {
@@ -124,7 +151,7 @@ export function detectSource(organizerEmail: string | null, homeDomains: readonl
 }
 
 /** May a transcript be asked of Graph for this series? Only Automatic, home-tenant, registered meetings. */
-export const graphReadable = (s: MeetingSeries) => !s.removedAt && s.source === "automatic" && s.organizer !== "other";
+export const graphReadable = (s: MeetingSeries) => !s.removedAt && !s.callKind && s.source === "automatic" && s.organizer !== "other";
 
 export const canView = (s: MeetingSeries, userId: string) => has(s.reviewers, userId) || has(s.attendees, userId);
 export const canConfirm = (s: MeetingSeries, userId: string) => has(s.reviewers, userId);
@@ -326,7 +353,8 @@ export function nudgesFor(userId: string, series: readonly MeetingSeries[], occs
   const out: MeetingNudge[] = [];
   for (const o of occs) {
     const s = series.find((x) => x.id === o.seriesId);
-    if (!s || s.removedAt || !canConfirm(s, userId) || o.dismissedBy) continue;
+    // MC-2: a call I pressed Review on is in front of me already; nudges are for the registered client calls only.
+    if (!s || s.removedAt || isCall(s) || !canConfirm(s, userId) || o.dismissedBy) continue;
     if (o.state === "ready") out.push({ kind: "review", key: `meeting_review:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });
     else if (o.state === "needs_upload") out.push({ kind: "upload", key: `meeting_upload:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });
     else if (o.state === "failed" && !o.nextCheckAt) out.push({ kind: "failed", key: `meeting_failed:${o.id}`, occurrenceId: o.id, seriesId: s.id, clientKey: s.clientKey, meeting: s.name, date: o.date });

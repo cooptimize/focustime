@@ -364,13 +364,26 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - The Transcript view: tabs (MC-1e: the segmented switch) **"Proposals"** and **"Transcript"** with their counts; **"Filter the transcript"** (placeholder **"Words or a name"**); **"2 of 8 lines"**, **"No line has "<words>""**; a marked line **"Proposal"** (read as **"A proposal rests on this line: <proposal>"**); **"Kept 30 days, for this call's reviewers and attendees only. Read only."**; **"The transcript is kept 30 days after the call. This one is gone; the proposals and what was done stay."**
 - Last 20 requests: **"Failed · HTTP 400"**; the meeting task is **"Read a client call"**.
 
+## MC-2 words (Nov 17)
+
+From `plan/call-words.ts` (`CALLS_TEXT`, `FETCH_WORDS`).
+
+- The area: **"Calls"** in More, the command menu (**"My calls"**, still found by "client calls"), the phone and the heading, with **"The calls you were on, and what to do about them."** Its lists: **"Client calls"** (**"Your clients' registered weekly calls"**) and **"Your other calls"** (**"Calls on your calendar in the last 14 days. Only you see this list."**). Empty: **"No client calls for you."**, **"No calls on your calendar in the last 14 days."**
+- A row: its name, **"Mon, Nov 2 · 3:00 PM · 1 h"**, **"4 people"**, its state **"Not reviewed"** or a call's states, then **"Review"** or **"Open"**. A hand-added row says **"Added by you"**.
+- **"Add a call"**: **"For a call that wasn't on your calendar. Only you see it."**, **"Name"**, **"Day"**, **"Start"**, **"Length"**, **"About"**, **"Add and upload the transcript"**, **"Cancel"**.
+- The setup: **"Review <call>"**, **"Which client is this call about?"** (**"FocusTime suggests one. You choose; one client per call."**), an option **"Northwind (suggested)"**, **"Pick a client"**; **"Where does the transcript come from?"**: **"Get it from Teams"** (**"FocusTime asks Teams once, with your sign-in, for this call only."**) or **"Upload a file"**; a call Teams can't be asked for says why under the choice. **"Continue"**.
+- Get it from Teams on the page, and what came of it: **"Got the transcript from Teams (42 lines). 6 proposals to review."**; **"Teams has no transcript for this call. Transcription may not have been on. Upload a file instead."**; **"This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. …"**; **"Microsoft didn't let your sign-in read this call's transcript. The organizer may have turned transcripts off for attendees. Ask the organizer for the file and upload it here."**; **"This call isn't on your calendar, so FocusTime can't read it for you."**; **"This isn't a Teams meeting. Upload a transcript or recording instead."**; and the sign-in, consent, busy and unreadable cases, each ending at the upload.
+- The summary: **"What was said"**, at most 5 lines, above the proposals on every call.
+- Who sees: **"You and the Cooptimizers on the invite can see this call. Only you act on it."**; a hand-added one **"Only you can see this call."**; another viewer **"Only <name>, who asked FocusTime to review this call, can act on it. You can look."**
+- A meeting's menu: **"Review this call"** (hint **"choose its client first"**), under **"Call"**.
+
 ## PH-1 words (Nov 17)
 
 - The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** or **"More: new notifications"** with its dot). The VM: **"VM Stopped"**, **"VM Running"**. The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
 - The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**). After the day: **"Close out"**.
 - Next: **"Next"**, then **"11:00 AM Proposal review with Jordan · 45 min"**, **"12:30 PM Northwind · At risk · Dentist 12:00"**.
 - The one thing: **"Needs you"**, then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
-- More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Client calls"** with **"1 call to review"**, **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.
+- More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Calls"** with **"1 call to review"** (MC-2: was **"Client calls"**), **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.
 - Everything else: **"Notifications"** (**"2 new"**), **"Sources"** (**"All sources live"**, **"Some data is older"**, **"A source needs attention"**), **"Focus"** (**"Start a session or a break"**), **"Midday check-in"**, **"Close out"**, the person's name, **"Install app"**, **"Technical docs"**, **"About"**, **"Admin"**, and **"Back to More"**.
 - The way back: **"Phone version"** (**"Back to the phone version"**).
 

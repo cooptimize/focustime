@@ -88,7 +88,8 @@ import { localToday } from "../week/dates.ts";
 import { recordUse } from "../actions/vm-autostart.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { pollCycle, requestsNextDue, type PollDeps } from "../actions/request-poll.ts";
-import { requestContext, aiFor, dispatch, meetingPerson, audienceRulesOf } from "../actions/dispatch.ts";
+import { dispatch, audienceRulesOf } from "../actions/dispatch.ts";
+import { meetingJobPerson, pollJobPerson } from "./job-people.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { BLOCKED_KEY, createRhythm, pacedSender, type Rhythm, type Takeover } from "./teams/rhythm.ts";
 import { createTeamsRhythmStore } from "../store/teams-rhythm-store.ts";
@@ -103,6 +104,7 @@ import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
 import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
 import { canView, graphReadable } from "../plan/meetings.ts";
+import { createPressGrants } from "../actions/call-press.ts";
 import { MEETING_JOB, meetingJob } from "./meeting-job.ts";
 import { pdfReader } from "./pdf-text.ts";
 import { inviteDomains } from "../config/schema.ts";
@@ -300,7 +302,8 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
       calendarToken: () => src.auth.accessToken("read"),
       meetingsToken: () => src.auth.accessToken("meetings"),
       invalidate: () => src.auth.invalidate(),
-      gate: { allowed: async (q) => { const s = await meetingStore.registered(q).catch(() => null); return !!s && graphReadable(s); } },
+      // MC-2: or this person's own press on one call they were on, while it is open (actions/call-press.ts).
+      gate: { allowed: async (q) => { if (callPresses.allowed(who.userId, q)) return true; const s = await meetingStore.registered(q).catch(() => null); return !!s && graphReadable(s); } },
       homeDomains: inviteDomains(cfg),
       log,
     })));
@@ -429,12 +432,7 @@ const pollDeps: PollDeps = {
   person: async (uid) => {
     const user = await accounts.users.get(uid);
     if (!user || user.deletedAt) return null;
-    const ctx = await runtimeFor(uid);
-    const loaded = await ctx.loadConfig();
-    const config = loaded.parsed.ok ? loaded.parsed.config : null;
-    const account = config && ctx.account ? ctx.account(config) : null;
-    const rc = await requestContext(ctx);
-    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), pipelineAi: () => aiFor(ctx, { cap: "app" }), plan: ctx.plan ?? null, openItems: rc.openItems, ...(rc.boundary ? { boundary: rc.boundary } : {}) };
+    return pollJobPerson(user.displayName || user.upn, await runtimeFor(uid));
   },
   homeTenant: async () => app.entra?.tenantId ?? null,
   // GD-2: a chat's audience from its members, by the people rule (guests, automation accounts, other domains).
@@ -451,6 +449,8 @@ const pollDeps: PollDeps = {
 // MC-1: the registered client calls (app tables). A call's shared commitments live in conversations under the pseudo
 // chat meeting:<series>, seen only by its reviewers and attendees.
 const meetingStore = createMeetingStore(db, instantNow);
+// MC-2: the presses the meetings gate lets through, in memory only (one person, one call, one try).
+const callPresses = createPressGrants();
 const meetingUsers = async (): Promise<MeetingUser[]> => (await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => ({ id: u.id, name: u.displayName || u.upn, emails: [u.email, u.upn].filter((e): e is string => !!e) }));
 const conversations = createConversationStore(db, instantNow, teams, async (chatId, userId) => {
   const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
@@ -989,7 +989,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
-    meetings: { store: meetingStore, users: meetingUsers, checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
+    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
     account: accountFor(who),
     photoCache: host.photos,
     push,
@@ -1353,7 +1353,7 @@ const meetings = meetingJob({
   now: instantNow,
   log,
   users: meetingUsers,
-  person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingPerson(await runtimeFor(uid)) : null),
+  person: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? meetingJobPerson(await runtimeFor(uid)) : null),
 });
 const ownershipBackfill = ownershipBackfillJob({ db, convs: conversations, teams, homeTenant: async () => app.entra?.tenantId ?? null, now: instantNow, log });
 const scheduler = createScheduler({
