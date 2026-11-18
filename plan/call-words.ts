@@ -199,7 +199,7 @@ export const CALL_LIST = {
   fileOnly: "Upload only",
   /** The mark on a registered weekly call, before its type. */
   weekly: "Weekly",
-  noneHere: "No calls here. Choose All to see every call.",
+  noneHere: "No calls here.",
   none: (days: number) => `No calls in the last ${days} days. A call on your calendar shows here once it has started.`,
   privacy: "Only you see the calls from your calendar, and FocusTime keeps nothing about one until you review it.",
   /** The space beside the list when there's no call at all. */
