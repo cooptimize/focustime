@@ -7768,6 +7768,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .sp-group { margin: 0; padding: 4px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-width: 0; }
 .ps-body .sp-group-h { margin: 12px 0 2px; font-size: var(--fs-3); font-weight: 600; color: var(--text); display: block; }
 .sp-intro { margin: 0 0 8px; font-size: var(--fs-2); color: var(--text-muted); }
+.sp-group > .sp-intro:first-child { margin-top: 12px; }
 .sp-group-h + .sp-row, .sp-intro + .sp-row { border-top: 0; }
 .sp-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; row-gap: 8px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); min-width: 0; }
 .sp-group > .sp-row:first-child, .sp-group > :is(.sp-group-h, .sp-intro) + .sp-row { border-top: 0; }

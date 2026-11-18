@@ -105,7 +105,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "lunch", section: "hours", label: "Lunch", kind: "text" },
   { id: "time-zone", section: "hours", label: "Time zone", kind: "text", keywords: ["zone", "timezone"] },
   { id: "one-day-changes", section: "hours", label: "One-day changes", kind: "list", keywords: ["override", "usual hours"] },
-  { id: "standing-blocks", section: "hours", label: "Standing blocks", group: "Standing blocks", kind: "list", keywords: ["internal", "focus block"] },
+  { id: "standing-blocks", section: "hours", label: "Standing blocks", kind: "list", keywords: ["internal", "focus block"] },
   // Notifications
   { id: "test-site", section: "notifications", label: "This test site", group: "This test site", kind: "status", part: true },
   { id: "from-test-site", section: "notifications", label: "Send me notices from this test site", old: ["From this test site"], group: "This test site", kind: "switch" },

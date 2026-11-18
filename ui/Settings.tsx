@@ -15,7 +15,7 @@ import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES } from "../config/schem
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
-import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS } from "../week/hours.ts";
+import { VIEW_RANGE_NAMES, VIEW_RANGES } from "../week/hours.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
@@ -49,6 +49,7 @@ import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 import { DeploySettings } from "./DeployItems.tsx";
 import { Icon } from "./icons.tsx";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
+import { HoursSection } from "./settings/sections/Hours.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -59,16 +60,6 @@ export type SettingsSectionId = string;
 const ADMIN = "Set by your FocusTime admin";
 
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
-
-const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" } as const;
-/** Zones the browser knows, for the time zone field (A1: each person sets their own). */
-const ZONES: readonly string[] = (() => {
-  try {
-    return Intl.supportedValuesOf("timeZone");
-  } catch {
-    return [];
-  }
-})();
 
 /** ST-1: `sid` is the setting's id in the registry (ui/settings/registry.ts): search and deep links land on it. */
 function Field({ label, children, hint, sid }: { label: string; children: ReactNode; hint?: ReactNode; sid?: string | undefined }) {
@@ -316,14 +307,7 @@ function SectionBody(p: BodyProps) {
     case "you":
       return <ProfileSection {...p} />;
     case "hours":
-      return (
-        <>
-          {d.hours && <HoursForm {...p} />}
-          <Group title="Standing blocks" sid="standing-blocks" intro="Shown when Dataverse has no focus block there.">
-            <StandingForm {...p} />
-          </Group>
-        </>
-      );
+      return <HoursSection {...p} />;
     case "planning":
       return (
         <>
@@ -468,8 +452,6 @@ function SectionBody(p: BodyProps) {
   }
 }
 
-/** "09:00-17:00, 20:00-22:00" ⇄ spans. */
-const spansIn = (s: string) => s.split(/[,;]/).map((x) => x.replace(/\s+/g, "")).filter(Boolean);
 
 
 /** A field that saves itself: its input (from `children`), "Saved" or "Couldn't save. Retry" by it, an error under it. */
@@ -491,104 +473,6 @@ function AutoField<V>({ a, k, label, hint, children, sid }: { a: AutoSave<V>; k:
       {children}
       <SaveMark s={a.status(k)} retry={() => a.commit(k)} />
     </Field>
-  );
-}
-
-function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
-  const h = p.data.hours!;
-  const a = useAutoSave({
-    section: "hours",
-    initial: { tz: userZone(h), lunch: h.lunch ? spanText(h.lunch) : "", ...(Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, h.weekdays[k].map(spanText).join(", ")])) as Record<(typeof WEEKDAY_KEYS)[number], string>) },
-    payload: (v) => ({ timeZone: v.tz, lunch: v.lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(v[k] ?? "")])) }),
-    onSaved: p.onSavedData,
-    label: (k) => (k === "tz" ? "Time zone" : k === "lunch" ? "Lunch" : `${DAY_NAMES[k as (typeof WEEKDAY_KEYS)[number]]} hours`),
-  });
-  return (
-    <div className="set-form">
-      <p className="muted set-intro">Like 09:00-17:00; a second span is an evening. Empty is a day off.</p>
-      <div className="set-days" data-setting="weekdays">
-        {WEEKDAY_KEYS.map((k) => (
-          <AutoField key={k} a={a} k={k} label={DAY_NAMES[k]}>
-            <input value={a.v[k]} placeholder="day off" onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
-          </AutoField>
-        ))}
-      </div>
-      <div className="set-grid">
-        <AutoField a={a} k="lunch" label="Lunch" hint="Like 12:00-12:30. Empty splits the day in the middle.">
-          <input value={a.v.lunch} placeholder="none" onChange={(e) => a.set("lunch", e.target.value)} {...a.text("lunch")} />
-        </AutoField>
-        <AutoField a={a} k="tz" label="Time zone" hint="Where you work, as a Region/City name from the list.">
-          <input value={a.v.tz} list="set-zones" onChange={(e) => a.set("tz", e.target.value)} {...a.text("tz")} />
-          <datalist id="set-zones">
-            {ZONES.map((z) => (
-              <option key={z} value={z} />
-            ))}
-          </datalist>
-        </AutoField>
-      </div>
-      <h3 data-setting="one-day-changes">One-day changes</h3>
-      {h.overrides.length === 0 ? (
-        <p className="muted">None. Set a day's own hours from its Actions menu on Week.</p>
-      ) : (
-        <ul className="set-list">
-          {h.overrides.map((o) => (
-            <li key={o.date}>
-              <strong>{shortDate(o.date)}</strong>
-              <span>{o.segments ? (o.segments.length ? o.segments.map(spanText).join(" + ") : "no working hours") : "usual hours"}</span>
-              {o.lunch !== undefined && <span className="muted">lunch {o.lunch ? spanText(o.lunch) : "none"}</span>}
-              <button type="button" className="mini quiet" onClick={() => void p.runTime("hours.clear_day", { date: o.date }).then(() => p.reload())}>
-                Use usual hours
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-type StandingRow = { day: string; half: string; client: string };
-function StandingForm(p: FormProps) {
-  const a = useAutoSave({
-    section: "standing",
-    initial: { rows: p.data.standingBlocks.map((b): StandingRow => ({ day: b.day as string, half: b.half as string, client: b.clientKey })) },
-    payload: (v) => ({ blocks: v.rows }),
-    onSaved: p.onSavedData,
-    label: () => "Standing blocks",
-  });
-  const rows = a.v.rows;
-  const keys = p.data.clients.map((c) => c.key);
-  const edit = (i: number, patch: Partial<StandingRow>) => a.change("rows", rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  return (
-    <div className="set-form">
-      {rows.map((r, i) => (
-        <div key={i} className="set-row">
-          <select value={r.day} onChange={(e) => edit(i, { day: e.target.value })} aria-label="Day">
-            {["Mon", "Tue", "Wed", "Thu"].map((d) => (
-              <option key={d}>{d}</option>
-            ))}
-          </select>
-          <select value={r.half} onChange={(e) => edit(i, { half: e.target.value })} aria-label="Half">
-            <option>AM</option>
-            <option>PM</option>
-          </select>
-          <select value={r.client} onChange={(e) => edit(i, { client: e.target.value })} aria-label="Client">
-            {[...new Set([r.client, ...keys])].map((k) => (
-              <option key={k}>{k}</option>
-            ))}
-          </select>
-          <button type="button" className="mini quiet" onClick={() => a.change("rows", rows.filter((_, j) => j !== i))}>
-            Remove
-          </button>
-        </div>
-      ))}
-      <span className="set-inline">
-        <button type="button" className="mini" onClick={() => a.change("rows", [...rows, { day: "Mon", half: "AM", client: keys[0] ?? "Internal" }])}>
-          Add a standing block
-        </button>
-        <SaveMark s={a.status("rows")} retry={() => a.commit("rows")} />
-      </span>
-    </div>
   );
 }
 
