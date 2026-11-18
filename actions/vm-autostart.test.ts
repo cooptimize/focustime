@@ -497,6 +497,88 @@ describe("VM-5: a Stop before the day", () => {
   });
 });
 
+describe("VM-5: a skip says why, and Don't skip", () => {
+  const view = async (w: Awaited<ReturnType<ReturnType<typeof world>["init"]>>) => {
+    clearVmState();
+    return (await status(w.vm(), { fresh: true })).autoStart!;
+  };
+
+  it("each way of skipping shows its own reason in Settings' line and the chip's menu; an old skip says Skipped today", async () => {
+    const ws = workStart();
+    const ways: [string, (w: Awaited<ReturnType<ReturnType<typeof world>["init"]>>) => Promise<unknown>, string][] = [
+      ["skip", (w) => vmAction(w.vm(), "vm.autostart_skip", { date: "2026-11-11" }), "Skipped today: you pressed Skip this one"],
+      ["not_today", (w) => dispatch(w.ctx(), { action: "vm.dismiss_prompt", input: {} }), "Skipped today: you chose Not today on Day"],
+      ["stop", async (w) => {
+        w.arm.vms.get(VM.toLowerCase())!.power = "running";
+        const p = await vmAction(w.vm(), "vm.preview", { op: "deallocate" });
+        await vmAction(w.vm(), "vm.confirm", { previewId: (p as { data: { previewId: string } }).data.previewId, skipToday: true });
+        await settled();
+      }, "Skipped today: you skipped it when you stopped the VM"],
+      ["old", (w) => w.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-09", lastUseOn: "2026-11-11", skipped: ["2026-11-11"] }), "Skipped today"],
+    ];
+    for (const [how, skip, text] of ways) {
+      const w = await world({ start: nyAt("06:00") }).init();
+      await skip(w);
+      // Before the planned time: the reason, with Don't skip.
+      const a = await view(w);
+      expect(a.skippedToday, how).toEqual({ how: how === "old" ? null : how, text, undo: true });
+      expect(a.line, how).toBe(`${text}. Next: Thu, Nov 12 at 8:55 AM`);
+      // After the planned time (the day settled as skipped): the same words, no Don't skip.
+      w.clock.set(nyAt(minus(ws, 5)));
+      expect(await autoStartCheck(w.deps("prod")), how).toBe("skipped");
+      w.clock.advance(60 * 60_000);
+      const b = await view(w);
+      expect(b.skippedToday, how).toEqual({ how: how === "old" ? null : how, text, undo: false });
+      expect(b.line, how).toBe(`${text}. Next: Thu, Nov 12 at 8:55 AM`);
+    }
+  });
+
+  it("nothing about a skip outside production, on a PTO day, or once the start ran", async () => {
+    const w = await world({ start: nyAt("06:00") }).init();
+    await vmAction(w.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    clearVmState();
+    expect((await status({ ...w.vm(), autoStartEnv: "dev" }, { fresh: true })).autoStart!.skippedToday).toBeNull();
+    const pto = await world({ start: nyAt("06:00"), pto: ["2026-11-11"] }).init();
+    await pto.plan.setState(AUTOSTART_KEY, { onSince: "2026-11-09", lastUseOn: "2026-11-11", skipped: ["2026-11-11"], skipHow: { "2026-11-11": "skip" } });
+    expect((await view(pto)).skippedToday).toBeNull();
+  });
+
+  it("Don't skip takes today's skip back before the planned time, and the VM is started at it", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt("06:00") }).init();
+    await vmAction(w.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    expect(await dispatch(w.ctx(), { action: "vm.autostart_unskip", input: {} })).toMatchObject({ ok: true, data: { unskipped: "2026-11-11" } });
+    expect(await readAutoStart(w.plan)).toMatchObject({ skipped: [], skipHow: {} });
+    expect((await view(w)).skippedToday).toBeNull();
+    w.clock.set(nyAt(minus(ws, 5)));
+    expect(await autoStartCheck(w.deps("prod"))).toBe("started");
+  });
+
+  it("Don't skip is refused at and after the planned time, when today isn't skipped, and with any input", async () => {
+    const ws = workStart();
+    const w = await world({ start: nyAt("06:00") }).init();
+    expect(await vmAction(w.vm(), "vm.autostart_unskip", {})).toMatchObject({ ok: false, status: 409, error: "Today's automatic start isn't skipped" });
+    await vmAction(w.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    for (const input of [{ date: "2026-11-11" }, { userId: "someone-else" }]) expect(await vmAction(w.vm(), "vm.autostart_unskip", input)).toMatchObject({ ok: false, status: 400 });
+    w.clock.set(nyAt(minus(ws, 5)));
+    expect(await vmAction(w.vm(), "vm.autostart_unskip", {})).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/^Today's start time has passed/) });
+    w.clock.advance(3 * 60 * 60_000);
+    expect(await vmAction(w.vm(), "vm.autostart_unskip", {})).toMatchObject({ ok: false, status: 409 });
+    expect((await readAutoStart(w.plan)).skipped).toEqual(["2026-11-11"]);
+    expect(w.starts()).toBe(0);
+  });
+
+  it("acts only on the signed-in person's own plan: another person's skip stays", async () => {
+    const me = await world({ start: nyAt("06:00") }).init();
+    const other = await world({ start: nyAt("06:00") }).init();
+    await vmAction(me.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    await vmAction(other.vm(), "vm.autostart_skip", { date: "2026-11-11" });
+    expect((await vmAction(me.vm(), "vm.autostart_unskip", {})).ok).toBe(true);
+    expect((await readAutoStart(me.plan)).skipped).toEqual([]);
+    expect((await readAutoStart(other.plan)).skipped).toEqual(["2026-11-11"]);
+  });
+});
+
 describe("the status's auto-start part", () => {
   it("outside production: the form's line says so and the chip's menu gets no time", async () => {
     const w = await world({ start: nyAt("06:00") }).init();

@@ -1967,6 +1967,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "vm.log":
     case "vm.start_now":
     case "vm.autostart_skip":
+    case "vm.autostart_unskip":
     case "vm.autostart_resume":
     case "vm.autostart_seen":
       return vmAction(await vmContext(ctx), action, req.input);

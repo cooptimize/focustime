@@ -13,14 +13,14 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, clock, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, stopEndsToday, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsToday, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.dismiss_prompt", "vm.log", "vm.start_now", "vm.autostart_skip", "vm.autostart_resume", "vm.autostart_seen"] as const;
+export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.dismiss_prompt", "vm.log", "vm.start_now", "vm.autostart_skip", "vm.autostart_unskip", "vm.autostart_resume", "vm.autostart_seen"] as const;
 export type VmAction = (typeof VM_ACTIONS)[number];
 
 export type VmContext = {
@@ -252,6 +252,17 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       await writeAutoStart(ctx.plan, (s) => withSkip(s, date, "skip"));
       return { ok: true, data: { skipped: date } };
     }
+    case "vm.autostart_unskip": {
+      // VM-5: Don't skip: today's skip is taken back while today's planned time is still ahead; after it, the way on is
+      // Start. Only today, only my own plan (the store is the signed-in person's); nothing is read from Azure.
+      if (!onlyKeys(input, [])) return bad("vm.autostart_unskip takes no input");
+      if (!ctx.plan || !cfg) return refuse("Settings aren't available", 503);
+      if (!(await readAutoStart(ctx.plan)).skipped.includes(today)) return refuse("Today's automatic start isn't skipped");
+      const at = plannedAt(cfg.week.hours, today, tz, cfg.azure.autoStart.minutes);
+      if (!at || Temporal.Instant.compare(Temporal.Instant.from(ctx.now()), at) >= 0) return refuse("Today's start time has passed, so it can't be put back. Start your VM from the VM menu if you need it");
+      await writeAutoStart(ctx.plan, (s) => withoutSkip(s, today));
+      return { ok: true, data: { unskipped: today } };
+    }
     case "vm.autostart_resume": {
       // VM-2: Resume after it paused itself; counts as using FocusTime today.
       if (!onlyKeys(input, [])) return bad("vm.autostart_resume takes no input");
@@ -366,6 +377,14 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
   }
   const n = nextAutoStart({ env: ctx.autoStartEnv, now, zone: tz, hours: cfg.week.hours, settings, state, pto: (d) => !!off?.pto?.has(d), holiday: (d) => !!off?.holidays?.has(d), on: chip === "running" || chip === "starting", ...(off ? { ptoRead: !!off.pto, holidaysRead: !!off.holidays } : {}) });
   const told = prod && settings.on ? outcomeToday(state, today) : null;
+  // VM-5: today skipped, on a day it would otherwise start (not PTO, a holiday or a day not chosen), whatever happened
+  // since isn't another outcome: how, the words, and Don't skip while its time is still ahead.
+  const at = plannedAt(cfg.week.hours, today, tz, settings.minutes);
+  const skippedToday =
+    prod && settings.on && n.kind !== "paused" && (!told || told.reason === "skipped") && state.attemptedOn !== today &&
+    dayReason({ date: today, settings, hours: cfg.week.hours, skipped: state.skipped, pto: !!off?.pto?.has(today), holiday: !!off?.holidays?.has(today) }) === "skipped"
+      ? { how: state.skipHow[today] ?? null, text: skipText(state.skipHow[today]), undo: !!at && Temporal.Instant.compare(now, at) < 0 }
+      : null;
   return {
     on: settings.on,
     minutes: settings.minutes,
@@ -378,6 +397,7 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
     signInProblem: prod && settings.on && state.signInFailedOn === today ? { seen: state.signInSeen } : null,
     leftOff: told && OUTCOMES[told.reason].tell ? { reason: told.reason, short: OUTCOMES[told.reason].text, text: outcomeText(told), seen: told.seen } : null,
     days: workingWeekdays(cfg.week.hours),
+    skippedToday,
   };
 }
 

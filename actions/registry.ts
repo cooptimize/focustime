@@ -63,6 +63,7 @@ export const ACTIONS = [
   { name: "vm.confirm", title: "Confirm a VM change", group: "My VM", target: "vm", summary: "Do the change shown in the preview, then follow it until Azure shows it" },
   { name: "vm.dismiss_prompt", title: "Not today (VM prompt)", group: "My VM", target: "none", summary: "Don't ask to start the VM again today, and skip today's automatic start" },
   { name: "vm.autostart_skip", aka: ["skip auto-start"], title: "Skip the next VM auto-start", group: "My VM", target: "none", summary: "Skip this one: the next automatic start before your day doesn't happen (production only)" },
+  { name: "vm.autostart_unskip", aka: ["don't skip auto-start", "unskip auto-start"], title: "Don't skip today's VM auto-start", group: "My VM", target: "none", summary: "Don't skip: today's automatic start before your day happens after all, while its time is still ahead (production only)" },
   { name: "vm.autostart_resume", aka: ["resume auto-start"], title: "Resume the VM auto-start", group: "My VM", target: "none", summary: "Start your VM before your day again after it paused itself (3 working days without FocusTime)" },
   { name: "vm.autostart_seen", title: "VM auto-start notice seen", group: "My VM", target: "none", summary: "The auto-start's paused or couldn't-sign-in notice was shown (it shows once)" },
   { name: "vm.start_now", title: "Start my VM now", group: "My VM", target: "vm", summary: "The morning box's Start: starts your VM at once when Start without a preview is on, logged and followed until it runs" },

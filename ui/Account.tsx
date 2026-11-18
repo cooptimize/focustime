@@ -296,6 +296,12 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       else if (s.needsConsent && s.problem?.kind !== "sign_in") items.push({ id: "consent", label: "Allow Azure access…", run: consent });
       // VM-3: today's start left the VM off: the reason and what to do (Settings has the same line).
       if (s.autoStart?.leftOff && s.autoStart.leftOff.reason !== "sign_in") items.push({ id: "auto-left", label: s.autoStart.leftOff.short, hint: "Why", run: () => void notify(s.autoStart!.leftOff!.text) });
+      // VM-5: today's start skipped: why, and Don't skip while its time is still ahead.
+      const sk = s.autoStart?.skippedToday;
+      if (sk) {
+        items.push({ id: "auto-skipped", label: sk.text, run: onSettings });
+        if (sk.undo) items.push({ id: "auto-unskip", label: "Don't skip", action: "vm.autostart_unskip", run: () => void call("vm.autostart_unskip", {}).then(() => (notify("Today's auto-start is back on"), void refresh(true)), (e: unknown) => notify(errText(e))) });
+      }
       // VM-2: the next automatic start, in production only (outside it `next` is null and nothing shows).
       if (s.autoStart?.next) {
         items.push({ id: "auto-next", label: `Auto-start: ${s.autoStart.next.short}`, run: onSettings });
@@ -918,6 +924,7 @@ export function VmStartForm() {
             <p className={`vm-next${a.paused ? " paused" : ""}`} aria-live="polite">
               {a.prodOnly ? "Next: never here. It runs only on the production FocusTime." : a.line}
               {a.paused && <button type="button" className="mini" disabled={busy} onClick={() => void call("vm.autostart_resume", {}).then(() => vm.refresh(true), (e: unknown) => setError(errText(e)))}>Resume</button>}
+              {a.skippedToday?.undo && <button type="button" className="mini" disabled={busy} onClick={() => void call("vm.autostart_unskip", {}).then(() => vm.refresh(true), (e: unknown) => setError(errText(e)))}>Don't skip</button>}
             </p>
             <span className="set-hint">Only on days your working hours cover, not on PTO or holidays, and only when the VM is stopped. It never stops your VM: only Stop does, when you confirm.</span>
           </>
