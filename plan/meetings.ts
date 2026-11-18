@@ -21,7 +21,10 @@ export const ROLE_LABEL: Record<MeetingRole, string> = { status: "Weekly status 
 export const TRANSCRIPT_SOURCES = ["automatic", "upload"] as const;
 export type TranscriptSource = (typeof TRANSCRIPT_SOURCES)[number];
 /** PK-1: a Teams transcript (.vtt, .docx, or Graph's) or a Pocket export (its PDF, or the zip holding it). */
-export type TranscriptKind = "teams" | "pocket";
+/** PK-1: "pocket" a Pocket export uploaded as a file; MC-2b: "pocket_api" a reviewer's own Pocket recording brought in from Pocket (speakers numbered, never named; its lines have times). */
+export type TranscriptKind = "teams" | "pocket" | "pocket_api";
+/** A transcript whose speakers Pocket numbered: never named, and the AI is told the labels aren't people. */
+export const unnamedSpeakers = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api";
 
 /**
  * MC-2: what kind of call a row is: null for a client call an admin registered; "calendar" for a call from the
@@ -392,7 +395,7 @@ export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | 
     return `Transcript read ${at(o.transcriptAt)}${n ? ` through ${n}'s sign-in` : ""}`;
   }
   // PK-1: a Pocket export says so, wherever a call's source is shown.
-  if (o.transcriptAt && o.transcriptFrom === "upload") return `${o.transcriptKind === "pocket" ? "Pocket export uploaded by a reviewer" : "Transcript uploaded"} ${at(o.transcriptAt)}`;
+  if (o.transcriptAt && o.transcriptFrom === "upload") return `${o.transcriptKind === "pocket" ? "Pocket export uploaded by a reviewer" : o.transcriptKind === "pocket_api" ? "Pocket recording brought in by a reviewer" : "Transcript uploaded"} ${at(o.transcriptAt)}`;
   if (o.state === "no_transcript") return `${day}: no transcript this week`;
   // Why nobody's sign-in could read it, for the first person tried; someone no longer in FocusTime can't fix it.
   const tried = r && (r.kind === "no_token" || r.kind === "consent" || r.kind === "missing") ? r : null;

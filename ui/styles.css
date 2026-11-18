@@ -7691,6 +7691,19 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-meta { min-width: 0; overflow-wrap: anywhere; }
 .calls-weekly { grid-column: 2; display: inline-flex; align-items: center; gap: 4px; }
 .calls-note { margin: 8px 0; font-size: var(--fs-2); }
+/* MC-2b: Get my Pocket recordings, its last-run line, or the line to connect Pocket. */
+.calls-pocket { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 0 16px 8px 24px; font-size: var(--fs-2); }
+.calls-pocket .mini { min-height: 32px; }
+.app.phone .calls-pocket { padding: 0 16px 8px; }
+.app.phone .calls-pocket .mini { min-height: 44px; }
+.mtg-pocket-pick { display: grid; gap: 6px; }
+.mtg-pocket-ask { padding: 6px 8px; border-radius: 8px; background: var(--sunken); }
+.mtg-pocket-who { font-size: var(--fs-2); }
+.mtg-pocket-box { margin: 8px 0; }
+.app.phone .mtg-setup-source label { min-height: 44px; align-items: center; }
+/* MC-2b: on the phone a row's state goes under its name, so long states don't squeeze the name. */
+.app.phone .calls-row-one { flex-wrap: wrap; }
+.app.phone .calls-row-one .calls-state { flex-basis: 100%; max-width: none; text-align: left; }
 .calls-privacy { margin: 12px 0 0; font-size: var(--fs-1); }
 .calls-fold { display: grid; margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
 .calls-fold > .link-btn { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); min-height: var(--target, 28px); }

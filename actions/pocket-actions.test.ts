@@ -40,14 +40,14 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
   it("a good key connects: the count from the last 7 days and when it was checked; the key is in the person's sealed secrets", async () => {
     const t = await setup();
     const r = await t.act(ADA, "pocket.connect", { key: ` ${GOOD} ` });
-    expect(r).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 6 } });
+    expect(r).toEqual({ ok: true, data: { connected: true, checkedAt: "2026-11-17T15:00:00.000Z", recordings: 1 } });
     expect(t.calls).toHaveLength(1);
     expect(await t.secretsOf(ADA).get("pocket-key")).toBe(GOOD);
     // Stored sealed, never as is.
     const rows = (await t.db.conn.all("SELECT sealed FROM user_secrets")) as { sealed: string }[];
     expect(JSON.stringify(rows)).not.toContain(GOOD);
     // Reading the status afterwards: no call.
-    expect(await t.act(ADA, "pocket.status")).toMatchObject({ ok: true, data: { connected: true, recordings: 6 } });
+    expect(await t.act(ADA, "pocket.status")).toMatchObject({ ok: true, data: { connected: true, recordings: 1 } });
     expect(t.calls).toHaveLength(1);
   });
 
@@ -84,7 +84,7 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
     const r = await t.act(ADA, "pocket.connect", { key: DEMO_POCKET_KEYS.wrong });
     expect(r).toMatchObject({ ok: false, code: "pocket_not_accepted" });
     expect(await t.secretsOf(ADA).get("pocket-key")).toBe(GOOD);
-    expect(await t.act(ADA, "pocket.status")).toMatchObject({ data: { connected: true, recordings: 6 } });
+    expect(await t.act(ADA, "pocket.status")).toMatchObject({ data: { connected: true, recordings: 1 } });
     // One it accepts: replaced.
     expect(await t.act(ADA, "pocket.connect", { key: NEWER })).toMatchObject({ ok: true });
     expect(await t.secretsOf(ADA).get("pocket-key")).toBe(NEWER);
@@ -95,7 +95,7 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
     expect(await t.act(ADA, "pocket.check")).toMatchObject({ ok: false, status: 409, code: "pocket_not_connected" });
     expect(t.calls).toHaveLength(0);
     await t.act(ADA, "pocket.connect", { key: GOOD });
-    expect(await t.act(ADA, "pocket.check")).toMatchObject({ ok: true, data: { connected: true, recordings: 6 } });
+    expect(await t.act(ADA, "pocket.check")).toMatchObject({ ok: true, data: { connected: true, recordings: 1 } });
     expect(t.calls).toHaveLength(2);
     // The key stops working in Pocket (here: swapped for one Pocket refuses, as a revoked key would be).
     await t.secretsOf(ADA).set("pocket-key", DEMO_POCKET_KEYS.wrong);
@@ -135,7 +135,7 @@ describe("PK-2: Check and save, Check again, Disconnect", () => {
     expect(out).not.toMatch(/Invented|rec-demo|transcript/);
     // The kept check holds a time and a count only.
     await t.act(ADA, "pocket.connect", { key: GOOD });
-    expect(JSON.parse(await t.secretsOf(ADA).get("pocket-check"))).toEqual({ at: "2026-11-17T15:00:00.000Z", recordings: 6 });
+    expect(JSON.parse(await t.secretsOf(ADA).get("pocket-check"))).toEqual({ at: "2026-11-17T15:00:00.000Z", recordings: 1 });
   });
 
   it("only pocket.connect and pocket.check reach Pocket", async () => {

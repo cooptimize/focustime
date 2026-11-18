@@ -423,7 +423,7 @@ Every word below is in `plan/call-words.ts`.
 Every word below is in `plan/pocket-words.ts` (the failures' too; the server and the page say the same).
 
 - The section: **"Pocket recorder"** in Settings › Accounts and calendars.
-- What connecting does: **"Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. It never reads a recording's title, words or audio. Bringing in a recording for a client call comes later."**
+- What connecting does: **"Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works; it reads nothing else here. To bring a recording in as a call's transcript, press Get my Pocket recordings in Calls."** (MC-2b; before it said bringing in a recording came later)
 - The steps, under **"How to connect"**: **"In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team."**, **"Choose what the key may do: tick only reading recordings (recordings:read). Pocket gives a key every permission when none is ticked. If Pocket asks for an expiry date, any date is fine; when the key expires, paste a new one here."**, **"Copy the whole key. It starts with pk_ (often pk_live_), and Pocket may show it only once."**, **"Paste it below and press Check and save. Nothing is saved unless Pocket accepts it."**, then **"Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees it or whether you connected, admins included, and it never goes to the AI or the logs."** and the link **"Pocket's guide to API keys"**.
 - The field: **"Your Pocket key"** (a password field), its hint **"pk_…"**; the button **"Check and save"**, **"Checking with Pocket…"** while it waits.
 - Connected: **"Connected"**, then **"checked just now"** (**"checked 5 min ago"**, **"checked 2 h ago"**, **"checked Nov 12"**) and **"6 recordings in the last 7 days"** (**"1 recording"**); **"FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here."** Buttons **"Check again"**, **"Use a new key"** (**"The new key replaces this one only if Pocket accepts it."**, with **"Cancel"**) and **"Disconnect"**.
@@ -569,6 +569,21 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - **Which items count** is the scope row on Backlog rules: Automatic, Whole project, By team, By area path, each with its count where known.
 - Someone who isn't an admin, at any Admin address: "Admin is only for FocusTime admins (the "FocusTime Admins" group in Entra)." with where Settings shows the team's values.
 
+## MC-2b words (Nov 18)
+
+The words are in one place, `POCKET_CALL_WORDS`, `othersLeftOut`, `gotLine` and `recordingLine` in `plan/pocket-words.ts`.
+
+- In Calls, under the filters, for someone with Pocket connected: the button **"Get my Pocket recordings"** (**"Asking Pocket…"** while it waits), then **"Got 4 recordings at 10:42 AM."** (**"Got 1 recording"**, or **"No recordings of yours in the last 14 days, at 10:42 AM."**), **"3 recordings by other people were left out."** (**"1 recording by other people was left out."**) and, when Pocket had more than FocusTime reads at once, **"Pocket has more recordings than FocusTime reads at once (300). The newest are here."**
+- Without Pocket connected: one quiet line, **"Record calls on a Pocket? Connect it in Settings."**, its last words a link to Settings › Accounts and calendars › Pocket recorder. No button.
+- A call a recording goes with: its state reads **"Pocket recording found"**. Its source reads **"Your Pocket recording"**. A recording with no call is its own row: its title as its name (or **"Pocket recording"**), **"Not reviewed"** as its state and **"Your Pocket recording"** as its source.
+- The setup's third source: **"Use my Pocket recording"** with the recording's start and length (**"Mon, Nov 16 · 10:58 AM · 47 min"**), or **"Which recording"** when two go with the call. A recording more than 10 minutes longer than its call: **"This recording is 2 h 15 min; the call was 1 h. Which part comes in?"**, then **"Only the part during the call (5 minutes either side)"** and **"Bring in all of it"**. Without line times, after Continue: **"Pocket gave this recording's lines no times, so all of it comes in: 2 h 15 min."** and Continue again.
+- Who will see it, always before Continue: **"The Cooptimizers on this call's invite will be able to read it."** (a call from my calendar), **"This call's reviewers and attendees will be able to read it."** (a registered client call, as its upload card says), **"Only you will see it."** (a call I added or a recording's own call), each followed by **"Once it's in, the AI proposes updates from it if AI is on for this client. Nothing goes to DevOps until you confirm."** On a call's page with a recording offered, the upload card leaves out its tip to export from Pocket.
+- A recording's own setup: **"Make this recording a call"**, **"Name"** (the title, editable), **"Client it is about"**, Continue and Cancel.
+- On a call I review with no transcript: **"Your Pocket recording of this call"** with **"Bring it in"** (**"Bringing it in…"**).
+- A call that already has a transcript: **"This call already has a transcript. Replace it with your Pocket recording?"** and **"Replace it"**.
+- On the call's page: **"From your Pocket recording. Speakers aren't named, and Pocket can mix them up."** to whoever brought it in, **"From a reviewer's Pocket recording. …"** to everyone else.
+- Refusals: **"Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes"**, **"That recording doesn't go with this call: they overlap for less than half the call"**, **"Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file"**, **"Pocket isn't connected. Connect it in Settings › Accounts and calendars › Pocket recorder"**, and PK-2's failure words (not accepted, didn't answer, busy, an answer FocusTime doesn't understand), plus **"Pocket's answer was too long for FocusTime to read"** for a recording over 20 MB.
+
 ## CO-1 words (Nov 18)
 
 - **When**, with "times in <zone>" ("times in Eastern Time"); **Day**, **Start**, **End**, the length chips.
@@ -578,4 +593,3 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - **Or let FocusTime find a time** (Find times folded under When); "Times when everyone is free inside their own working hours and yours. Free/busy only, no event details. Pick one to put it in When."; "<length>, the length in When"; suggestions read "Mon, Nov 2, 2:00–2:30 PM with Jordan Lee".
 - The footer: "Check who is free first. Nothing is sent until you confirm the preview." until checked, then "Nothing is sent until you confirm the preview."
 - The preview: **"Not everyone is free then. You can still send it."** above its fields, with the lines; "Couldn't check who is free just now".
-
