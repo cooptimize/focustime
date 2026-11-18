@@ -4,8 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { inspect } from "node:util";
 import type { LogRecord } from "../../log/logger.ts";
-import { createDemoPocketFetch, DEMO_POCKET_KEYS, type PocketCall } from "../demo/pocket.ts";
-import { allowedPocketCall, createPocketClient, keyProblem, POCKET_FAILURE_TEXT, POCKET_LIST_PATH, POCKET_ORIGIN, PocketError, PocketKey } from "./client.ts";
+import { createDemoPocketFetch, DEMO_POCKET_KEYS, DEMO_POCKET_OTHER, type PocketCall } from "../demo/pocket.ts";
+import { allowedPocketCall, createPocketClient, POCKET_MAX_PAGES, POCKET_RECORDING_MAX_BYTES, keyProblem, POCKET_FAILURE_TEXT, POCKET_LIST_PATH, POCKET_ORIGIN, PocketError, PocketKey } from "./client.ts";
 
 const KEY = "pk_test_0123456789abcdef";
 const NOW = Date.parse("2026-11-17T15:00:00Z");
@@ -27,7 +27,7 @@ describe("PK-2: the Pocket client", () => {
   it("counts the last 7 days with one GET for one item, and returns only the count", async () => {
     const t = setup();
     const r = await t.client.countLastWeek(t.key(), NOW);
-    expect(r).toEqual({ recordings: 6 });
+    expect(r).toEqual({ recordings: 1 });
     expect(t.calls).toHaveLength(1);
     expect(t.calls[0]).toMatchObject({ method: "GET", authorized: true, url: `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1` });
     // Nothing of a recording comes out: not a title, a date or a word.
@@ -58,7 +58,28 @@ describe("PK-2: the Pocket client", () => {
     ["GET", LIST],
     ["GET", `${LIST}?constructor=1`],
     ["GET", `${LIST}?__proto__=1`],
-    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=100`],
+    // MC-2b: the list's pages are 1 to 3 of 100; the count is page 1 of 1; nothing between or beyond.
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=4&limit=100`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=0&limit=100`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=50`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=01&limit=100`],
+    ["GET", `${LIST}?end_date=2026-11-17&start_date=2026-11-11&page=1&limit=100`],
+    ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=100&include=transcript`],
+    // MC-2b: one recording only with exactly its two parameters, an id of the accepted form, no other path below it.
+    ["GET", `${LIST}/rec-1?include_transcript=true`],
+    ["GET", `${LIST}/rec-1?include_transcript=true&include_summarizations=true`],
+    ["GET", `${LIST}/rec-1?include_summarizations=false&include_transcript=true`],
+    ["GET", `${LIST}/rec-1?include_transcript=true&include_summarizations=false&summarization_id=s1`],
+    ["GET", `${LIST}/rec-1/?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/rec-1/audio?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/rec%2D1?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/rec.1?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/..?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/-rec?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/${"a".repeat(129)}?include_transcript=true&include_summarizations=false`],
+    ["GET", `${LIST}/rec%201?include_transcript=true&include_summarizations=false`],
+    ["DELETE", `${LIST}/rec-1?include_transcript=true&include_summarizations=false`],
+    ["PATCH", `${LIST}/rec-1?include_transcript=true&include_summarizations=false`],
     ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=2&limit=1`],
     ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&lim%69t=1`],
     ["GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1&`],
@@ -70,8 +91,10 @@ describe("PK-2: the Pocket client", () => {
     expect(t.logs).toEqual([{ source: "pocket", op: "refused", kind: "refused" }]);
   });
 
-  it("allows only the list call with known parameters", () => {
-    expect(allowedPocketCall("GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1`)).toBe("list");
+  it("allows only the three calls, each in its exact form", () => {
+    expect(allowedPocketCall("GET", `${LIST}?start_date=2026-11-11&end_date=2026-11-17&page=1&limit=1`)).toBe("count");
+    for (const p of [1, 2, 3]) expect(allowedPocketCall("GET", `${LIST}?start_date=2026-11-04&end_date=2026-11-17&page=${p}&limit=100`)).toBe("list");
+    expect(allowedPocketCall("GET", `${LIST}/rec-demo_1?include_transcript=true&include_summarizations=false`)).toBe("recording");
     expect(allowedPocketCall("HEAD", LIST)).toBeNull();
   });
 
@@ -107,7 +130,7 @@ describe("PK-2: the Pocket client", () => {
       expect(l.source).toBe("pocket");
     }
     const all = JSON.stringify(t.logs);
-    expect(all).not.toMatch(/pk_|Invented|rec-demo|count/);
+    expect(all).not.toMatch(/pk_|Invented|rec-demo|"count":/);
   });
 
   it("the key never prints, serializes or inspects as itself", () => {
@@ -124,5 +147,81 @@ describe("PK-2: the Pocket client", () => {
     expect(keyProblem("sk_abcdefgh")).toMatch(/start with pk_/);
     expect(keyProblem(KEY)).toBeNull();
     for (const v of ["not a key", "sk_abcdefgh"]) expect(keyProblem(v)).not.toContain(v);
+  });
+});
+
+describe("MC-2b: the list of my recordings and one recording", () => {
+  const LATER = Date.parse("2026-11-19T22:00:00Z");
+  const mineOnly = (rs: readonly (string | null)[]) => rs.map((r) => r === "you@example.com");
+  function later(o: { fetch?: typeof fetch } = {}) {
+    const calls: PocketCall[] = [];
+    const logs: LogRecord[] = [];
+    const client = createPocketClient({ fetch: o.fetch ?? createDemoPocketFetch({ now: () => LATER, calls }), log: (r) => logs.push(r), timeoutMs: 200 });
+    return { client, calls, logs, key: async () => new PocketKey(KEY) };
+  }
+
+  it("lists 100 a page and reads of a kept recording only its id, time, length and title", async () => {
+    const t = later();
+    const r = await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", mineOnly);
+    expect(t.calls.map((c) => c.url)).toEqual([`${LIST}?start_date=2026-11-05&end_date=2026-11-19&page=1&limit=100`]);
+    expect(r.others).toBe(1);
+    expect(r.more).toBe(false);
+    for (const x of r.recordings) expect(Object.keys(x).sort()).toEqual(["id", "seconds", "startAt", "title"]);
+    expect(r.recordings.map((x) => x.id)).toEqual(["rec-demo-carrier", "rec-demo-long", "rec-demo-prop", "rec-demo-weekly"]);
+    // The listed transcripts, summaries, speakers and tags never come out; nor anything of the other person's.
+    const out = JSON.stringify(r);
+    expect(out).not.toMatch(/invented words|summary|SPEAKER|Dana|tag|Someone else|sam\.taylor|rec-demo-other/i);
+    expect(JSON.stringify(t.logs)).not.toMatch(/rec-demo|Proposal|2026-11|@/);
+  });
+
+  it("stops after 3 pages and says more were left", async () => {
+    const page = (n: number) => new Response(JSON.stringify({ success: true, data: [{ id: `r${n}`, recording_at: "2026-11-10T15:00:00Z", duration: 60, title: "t", recorded_by: { email: "you@example.com" } }], pagination: { has_more: true } }), { status: 200 });
+    let n = 0;
+    const t = later({ fetch: (async () => page(++n)) as typeof fetch });
+    const r = await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", mineOnly);
+    expect(n).toBe(POCKET_MAX_PAGES);
+    expect(r).toMatchObject({ more: true, others: 0 });
+    expect(r.recordings).toHaveLength(3);
+  });
+
+  it("a list in a shape the docs don't show is unexpected; a kept recording missing a field is left out", async () => {
+    const odd = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 })) as typeof fetch });
+    await expect(odd.client.listRecordings(odd.key, "2026-11-05", "2026-11-19", mineOnly)).rejects.toMatchObject({ kind: "unexpected" });
+    const part = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: [{ id: "a/b", recording_at: "x", duration: 1, recorded_by: { email: "you@example.com" } }], pagination: { has_more: false } }), { status: 200 })) as typeof fetch });
+    expect(await part.client.listRecordings(part.key, "2026-11-05", "2026-11-19", mineOnly)).toEqual({ recordings: [], others: 0, more: false });
+  });
+
+  it("the keep rule sees only the recorders' addresses", async () => {
+    const t = later();
+    let seen: readonly (string | null)[] = [];
+    await t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", (rs) => ((seen = rs), rs.map(() => false)));
+    expect([...new Set(seen)].sort()).toEqual([DEMO_POCKET_OTHER, "you@example.com"]);
+  });
+
+  it("reads one recording's segments (start, end, label, text) and its length; never the speaker's name or summaries", async () => {
+    const t = later();
+    const r = await t.client.recording(t.key, "rec-demo-prop");
+    expect(t.calls.map((c) => c.url)).toEqual([`${LIST}/rec-demo-prop?include_transcript=true&include_summarizations=false`]);
+    expect(r.seconds).toBe(2820);
+    expect(r.segments[0]).toEqual({ start: 0, end: 40, speaker: "SPEAKER_0", text: "Thanks for making time. Let's walk the proposal for the reporting work." });
+    expect(JSON.stringify(r)).not.toMatch(/Dana|Guest|summary|originalText/);
+    expect(JSON.stringify(t.logs)).not.toMatch(/rec-demo|proposal/i);
+  });
+
+  it("refuses an id of another form before the key is read, and an answer past 20 MB", async () => {
+    const t = later();
+    let reads = 0;
+    await expect(t.client.recording(async () => (reads++, new PocketKey(KEY)), "../tags")).rejects.toMatchObject({ kind: "refused" });
+    expect(reads).toBe(0);
+    expect(t.calls).toHaveLength(0);
+    const big = later({ fetch: (async () => new Response(new Uint8Array(POCKET_RECORDING_MAX_BYTES + 10), { status: 200 })) as typeof fetch });
+    await expect(big.client.recording(big.key, "rec-1")).rejects.toMatchObject({ kind: "too_long" });
+  });
+
+  it("a missing recording or a shape without segments is said in Pocket's words", async () => {
+    const t = later();
+    await expect(t.client.recording(t.key, "rec-gone")).rejects.toMatchObject({ kind: "unexpected", status: 404 });
+    const odd = later({ fetch: (async () => new Response(JSON.stringify({ success: true, data: { transcript: "one text" } }), { status: 200 })) as typeof fetch });
+    await expect(odd.client.recording(odd.key, "rec-1")).rejects.toMatchObject({ kind: "unexpected" });
   });
 });
