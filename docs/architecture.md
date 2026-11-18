@@ -12,7 +12,7 @@ The React app: everything the browser runs, with no server code.
 
 - Entry points: `index.html` loads `ui/boot.ts`, which adds the Temporal polyfill only where the browser lacks it and then starts `ui/main.tsx`. `main.tsx` applies the theme, text size and reduce motion, then mounts `ui/App.tsx` behind the sign-in gate (`ui/Account.tsx`).
 - Screens that load when first opened: `ui/screens.ts` is the one list (names in `ui/screen-names.ts`); Day, Week and the top bar are the first download, and `scripts/split-chunks.ts` cuts the build's files to match. A new screen is added there, never imported statically from what the first download holds (`docs/technical/development.md`).
-- `App.tsx` holds the tabs, the top bar, the panels and the open week's shared state. `ui/nav.ts` is the one model of where the window is (tab, date, half, open panel, filters) and of its address; every screen reads and changes the address through it.
+- `App.tsx` holds the tabs, the top bar, the panels and the open week's shared state. `SiteTag.tsx` is the top bar's "Dev" or "Local", from `appenv.ts`, which asks `/version` only on a page the server marked as a test site. `ui/nav.ts` is the one model of where the window is (tab, date, half, open panel, filters) and of its address; every screen reads and changes the address through it.
 - `ui/api.ts` is how the UI reads and changes things: a named action on the server, with the session's CSRF token on every call. The only other calls are the version (`/version`) and the assistant's voice, which have routes of their own.
 - `ui/menu.ts` builds the command menu (Ctrl+K) from the action registry; `ui/keys.ts` and `ui/keyboard.ts` hold the keys and the rule that keys never fire while typing.
 - `ui/StatusBar.tsx` is the line at the foot of the window (sources, DevOps freshness, hidden personal events). `ui/layout.ts` places timed events in lanes on the rails and timelines. `ui/viewport.ts` decides phone or desktop (under 600 px is the phone); `ui/Phone.tsx` and `ui/PhoneShell.tsx` are the phone's shell.
@@ -140,6 +140,7 @@ The web server and what runs beside it.
 - `scheduler.ts` runs everyone's background work: the app's jobs, which `main.ts` hands it (`retention-job.ts`, `meeting-job.ts`, `standards-job.ts` and the readers in `actions/`), and each person's ticks (`ticks.ts`: the timer, reminders, Teams status). `use.ts` knows whether anyone is using FocusTime, for the idle rule.
 - `teams/` is the Teams bot's endpoint: `bot.ts` receives, `assistant.ts` hands a message to the assistant, `cards.ts` and `render.ts` build the cards, `rhythm.ts` the daily messages, `gate.ts` the notification gate.
 - `notify.ts`, `push.ts` and `webpush.ts` deliver notifications; `sw.js` and `pwa.ts` are the service worker and the installable app.
+- `site-env.ts`: on dev and local, the page and the manifest say which site this is (the tab's title, the installed name, the page's `data-site="test"`), rewritten once at start; production's files are served as built.
 
 ## `log/`
 
