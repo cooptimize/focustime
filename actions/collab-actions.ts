@@ -223,7 +223,7 @@ async function checkFor(ctx: CollabContext, cfg: AppConfig, clientKey: string, t
     } catch (e) {
       if (e instanceof NetworkError) return { refuse: "Outlook unreachable, so free/busy can't be checked", status: 503 };
       availability = [];
-      problems.push("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings › Accounts and calendars");
+      problems.push("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings › Connections");
     }
   }
   const check = checkTime({
