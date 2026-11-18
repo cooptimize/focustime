@@ -35,8 +35,10 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     if (process.env.FOCUSTIME_SHOTS) await ev.screenshot({ path: `${process.env.FOCUSTIME_SHOTS}/door-event.png` });
     await expect(page.locator(".today-tl .event.is-call").count()).resolves.toBe(1);
     const mark = ev.locator(".ev-call");
-    await expect(mark.textContent()).resolves.toBe("Review 11 proposals");
-    await expect(mark.getAttribute("aria-label")).resolves.toBe("Northwind weekly status call: Review 11 proposals. Review proposals");
+    // DY-1: the mark names the call's type, then its state.
+    await expect(mark.textContent()).resolves.toBe("Weekly status callReview 11 proposals");
+    await expect(mark.locator(".call-what").textContent()).resolves.toBe("Review 11 proposals");
+    await expect(mark.getAttribute("aria-label")).resolves.toBe("Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     // MC-1e: Back returns to Day, where the call was opened from.
@@ -77,7 +79,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await row.waitFor();
     // Open list: the meeting itself carries the mark, once.
     await expect(card.locator(".call-mark").count()).resolves.toBe(1);
-    await expect(row.locator(".ev-call").textContent()).resolves.toBe("Review 11 proposals");
+    await expect(row.locator(".ev-call .call-what").textContent()).resolves.toBe("Review 11 proposals");
     await expect(card.locator(".card-events li", { hasText: "Northwind data model review" }).locator(".ev-call").count()).resolves.toBe(0);
     // The block panel's agenda.
     await card.locator(".card-when").click();
@@ -99,7 +101,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     const card = page.locator(`[data-drop="${await marked.getAttribute("data-drop")}"]`);
     await card.locator(".card-agenda-fold").click();
     const mark = card.locator(".card-events li", { hasText: "Northwind weekly status" }).locator(".ev-call");
-    await expect(mark.textContent()).resolves.toBe("Review 11 proposals");
+    await expect(mark.locator(".call-what").textContent()).resolves.toBe("Review 11 proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     await open(page, "#/today");

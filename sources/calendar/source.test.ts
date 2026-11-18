@@ -53,7 +53,7 @@ describe("Outlook source requests", () => {
     expect(u.searchParams.get("startDateTime")).toBe("2026-11-02T00:00:00-05:00");
     expect(u.searchParams.get("endDateTime")).toBe("2026-11-09T00:00:00-05:00");
     // isOrganizer and attendees only for the risk rules' "no one else on it" (notMeeting); addresses are never kept.
-    expect(u.searchParams.get("$select")).toBe("subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees");
+    expect(u.searchParams.get("$select")).toBe("subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees,type");
     // Calendars.ReadBasic can't read extended properties, so no marker is asked for.
     expect(u.searchParams.get("$expand")).toBeNull();
     expect(first.headers.prefer).toBe('outlook.timezone="America/New_York", IdType="ImmutableId"');
@@ -97,7 +97,7 @@ describe("Google source requests", () => {
     expect(u.searchParams.get("orderBy")).toBe("startTime");
     expect(u.searchParams.get("timeMin")).toBe("2026-11-02T00:00:00-05:00");
     expect(u.searchParams.get("timeMax")).toBe("2026-11-09T00:00:00-05:00");
-    expect(u.searchParams.get("fields")).toBe("nextPageToken,items(id,status,summary,transparency,start,end,attendees(self,responseStatus))");
+    expect(u.searchParams.get("fields")).toBe("nextPageToken,items(id,status,summary,transparency,start,end,attendees(self,responseStatus),recurringEventId)");
     expect(first.headers.authorization).toBe(`Bearer ${FAKE_ACCESS}`);
   });
 

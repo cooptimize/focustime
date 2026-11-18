@@ -28,7 +28,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, foldEnded: true, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# FocusTime configuration.");
@@ -127,5 +127,18 @@ describe("ui.set_code_sql_group (RB-5)", () => {
   });
   it("says so when settings can't be saved", async () => {
     expect(await dispatch(setup(false).c, { action: "ui.set_code_sql_group", input: { group: "type" } })).toMatchObject({ ok: false, status: 503 });
+  });
+});
+
+describe("ui.set_day_fold (DY-1)", () => {
+  it("saves Day's Fold blocks that have ended in [ui] fold_ended, kept after a reload; refuses anything else", async () => {
+    const t = setup();
+    const off = await dispatch(t.c, { action: "ui.set_day_fold", input: { on: false } });
+    expect(off.ok && (off.data as { ui: { foldEnded: boolean } }).ui.foldEnded).toBe(false);
+    expect(readFileSync(t.path, "utf8")).toContain("fold_ended = false");
+    const on = await dispatch(t.c, { action: "ui.set_day_fold", input: { on: true } });
+    expect(on.ok && (on.data as { ui: { foldEnded: boolean } }).ui.foldEnded).toBe(true);
+    expect((await dispatch(t.c, { action: "ui.set_day_fold", input: { on: "yes" } })).ok).toBe(false);
+    expect((await dispatch(t.c, { action: "ui.set_day_fold", input: { on: true, x: 1 } })).ok).toBe(false);
   });
 });

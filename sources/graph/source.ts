@@ -14,7 +14,8 @@ import { createScheduleReader, type ScheduleReader } from "./schedule.ts";
 import type { WriteAccess } from "../oauth/oauth.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
-export const GRAPH_SELECT = "subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees";
+// DY-1: type, only to know whether an event is one of a series (occurrence, exception, seriesMaster); nothing else of it is kept.
+export const GRAPH_SELECT = "subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees,type";
 /**
  * FocusTime's marker on the read, so a time box this store has no record of (an earlier FocusTime's) isn't a meeting
  * either. Graph needs Calendars.Read or more for extended properties, so only a ReadWrite read token asks for it.

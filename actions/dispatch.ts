@@ -2193,6 +2193,16 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_day_fold": {
+      // DY-1: Day's "Fold blocks that have ended", the person's own ([ui] fold_ended, on to start). A new key, so an older
+      // build skips it (BH-1). It changes how Day is drawn and nothing else.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("input must be { on: boolean }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "fold_ended", i.on as boolean, "Display (DY-1): Day folds blocks that have ended."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
     case "ui.set_code_sql_group": {
       // RB-5: Code's Group by switch for a database's SQL objects (Schema or Type). Saved in [ui] code_sql_group, the
       // person's own; a new key, so an older build skips it (BH-1). It changes how a list is drawn and nothing else.

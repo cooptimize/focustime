@@ -7621,6 +7621,54 @@ body.ah-dragging * { cursor: grabbing !important; }
   position: absolute; z-index: 2147483000; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--border-strong);
   background: var(--surface); color: var(--text); font: 600 15px/1 var(--font-ui); box-shadow: var(--shadow-pop); white-space: nowrap;
 }
+
+/* DY-1: on a computer and a tablet, Day's own header row stays at the top of Day while the page scrolls (in Timeline and
+   Cards); the lines under it scroll away. A block's header stays under it while the block scrolls by, and so do the
+   Timebox bar and the to-do column. Focus moved by Tab is kept below both (scroll-padding). The phone (PH-1) is unchanged. */
+.app:not(.phone) .today-view.u2.mode-now { --day-head-h: 56px; --tt-head-h: calc(38px * var(--text-scale)); scroll-padding-top: calc(var(--day-head-h) + var(--tt-head-h) + 8px); }
+/* Its box keeps Day's left edge (the Inbox lines up with it); the page's background behind it, across Day's padding, is
+   drawn by ::before, under the header's own controls. */
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar { position: sticky; top: calc(-1 * 24px); z-index: 16; margin-top: -24px; padding: 24px 0 10px; }
+.app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar::before { content: ""; position: absolute; inset: 0 -24px; z-index: -1; background: var(--bg); box-shadow: 0 1px 0 var(--border); pointer-events: none; }
+/* With Timebox my day's bar up it stays on top (Accept all, Discard), and the block headers and the to-do column stick
+   under it. */
+.app:not(.phone) .today-view.u2.mode-now .today-tl { --tt-bar-h: 0px; }
+.app:not(.phone) .today-view.u2.mode-now .today-tl.has-bar { --tt-bar-h: calc(56px * var(--text-scale)); }
+.app:not(.phone) .today-view.u2.mode-now .tt-head { position: sticky; top: calc(var(--day-head-h) - 24px + var(--tt-bar-h)); z-index: 12; background: inherit; border-radius: inherit; }
+.app:not(.phone) .today-view.u2.mode-now .tt-bar { top: calc(var(--day-head-h) - 24px); z-index: 14; }
+.app:not(.phone) .today-view.u2.mode-now .tt-check { top: calc(var(--day-head-h) - 24px + var(--tt-bar-h) + var(--tt-head-h) + 4px); max-height: calc(100vh - var(--day-head-h) - var(--tt-bar-h) - var(--tt-head-h) - 90px * var(--text-scale)); }
+.app:not(.phone) .today-view.u2.mode-now:has(.today-tl.has-bar) { scroll-padding-top: calc(var(--day-head-h) + var(--tt-bar-h) + var(--tt-head-h) + 8px); }
+/* The card's own background (tinted by its state), through the body, which has none of its own; rows scroll under it. */
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { background: inherit; }
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-head { position: sticky; top: calc(var(--day-head-h) - 24px); z-index: 12; background: inherit; }
+/* A card clips its content (overflow: hidden made it the sticky header's scroller); clip draws the same and lets the
+   header stick to Day's scroll. */
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half.card, .app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { overflow: clip; }
+
+/* DY-1: a block on today's Day folds to one line once it has ended; the arrow folds or unfolds it by hand. */
+.day-fold-arrow { flex: none; align-self: center; display: inline-grid; place-items: center; width: calc(28px * var(--text-scale)); height: calc(28px * var(--text-scale)); margin: -4px 0 -4px 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text-muted); cursor: pointer; }
+.day-fold-arrow:hover { background: var(--raised); color: var(--text); }
+.day-fold-arrow:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
+.tt-head .day-fold-arrow, .card-head .day-fold-arrow { margin-left: auto; }
+.tt-head .status-pill ~ .day-fold-arrow, .card-head .head-chip ~ .day-fold-arrow { margin-left: 4px; }
+.card-head .day-fold-arrow + .card-more { margin-left: 0; }
+.day-fold-sum { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; margin-left: 8px; color: var(--text-muted); font-size: var(--fs-2); font-weight: 400; }
+.day-fold-sum .dfs-left.late { color: var(--watch); font-weight: 600; }
+.day-fold-sum .call-mark { align-self: center; }
+.half.day-folded { cursor: pointer; }
+.half.tt-block.day-folded { opacity: 1; }
+.half.tt-block.day-folded .tt-head { border-bottom: 0; }
+.today-view .day-cards .half.day-folded { flex-grow: 0; align-self: flex-start; height: auto; min-height: 0; }
+
+/* DY-1: a meeting's mark. A registered call names its type beside its state (the type gives way first where it is
+   narrow; it is always in the mark's label and hover). A meeting that is one of a series carries the repeat icon. */
+.call-mark.ev-call { max-width: 24em; flex: 0 4 auto; min-width: 3em; }
+.call-mark.ev-call .call-type { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.call-mark.ev-call .call-type::after { content: " ·"; }
+.call-mark.ev-call .call-what { flex: none; white-space: nowrap; }
+.repeat-mark { flex: none; display: inline-flex; align-items: center; align-self: center; color: var(--text-muted); --icon: calc(13px * var(--text-scale)); }
+.repeat-mark .ft-icon { width: var(--icon); height: var(--icon); }
+.pn-call-type { flex: none; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 99px; color: var(--text-muted); font-size: var(--fs-1); }
 /* RQ-1: what the preview still waits for (the New form, the draft editor); nothing shows when it waits for nothing. */
 .nf-needed { margin: 4px 0 0; font-size: var(--fs-2); color: var(--watch); }
 .nf-needed:empty { display: none; }

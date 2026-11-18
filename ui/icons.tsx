@@ -29,7 +29,7 @@ const ICONS = {
   "arrow-up": ArrowUp, "arrow-down": ArrowDown, "arrow-left": ArrowLeft, "arrow-right": ArrowRight,
   // Things
   promise: Handshake, chats: MessagesSquare, "to-sort": StickyNote, meeting: Video, call: Phone, personal: User, "all-day": Sun, pto: TreePalm,
-  holiday: CalendarOff, catchup: History, standing: Repeat, risk: TriangleAlert, folder: Folder, file: File, repo: FolderGit2, people: Users,
+  holiday: CalendarOff, catchup: History, standing: Repeat, repeats: Repeat, risk: TriangleAlert, folder: Folder, file: File, repo: FolderGit2, people: Users,
   flag: Flag, priority: Star, timer: Timer, size: Ruler, schedule: CalendarClock, "add-date": CalendarPlus, grid: LayoutGrid, gantt: GanttChart, archive: Archive, calendar: Calendar, deploy: Upload,
   // RB-2: what a thing in a client's code is (Code's By kind and Search names)
   report: ChartColumn, model: Layers, table: Table2, pipeline: Workflow, notebook: NotebookText, dataflow: Split, lake: Waves, sql: Database, "sql-script": FileCode, "fabric-item": Box,

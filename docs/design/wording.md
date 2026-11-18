@@ -479,3 +479,14 @@ The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own bu
 - Settings › Notifications › Quiet hours, the field **"Days off"** with the switch **"Quiet on days off"** and the hint **"PTO and company holidays from Dataverse."** (`DAYS_OFF_WORDS`, `plan/notify.ts`, the one place the screen and Settings search read). The stored setting is unchanged (`[notify] quiet_pto`); search still finds the old **"Quiet on PTO days"**.
 - A day off, wherever notices are described: **"a day off"**, said once as **"PTO or a company holiday"**. In Messages in Teams' hint: **"never in quiet hours, on days off or weekends"**.
 - Nothing new is shown or told: a day off quiets what it did before, and now holidays count.
+
+## DY-1 words (Nov 17)
+
+The meeting words are in one place, `MEETING_WORDS` in `plan/call-words.ts`; the folded line's in `foldWords` (`plan/day-fold.ts`).
+
+- Day's menu: **"Fold blocks that have ended"**, ticked to start. The command menu finds it as "Fold ended blocks" too.
+- A folded block's line: the client, the times, then **"2 done"**, **"1 not done"** (in the late color once the block has ended), **"3 meetings"** (**"1 meeting"**), and a call still to review as its mark. A block with nothing planned: **"Nothing planned"**.
+- The arrow: **"Fold <client>"** and **"Unfold <client>"** for a screen reader; on hover **"Fold this block to one line"** and **"Unfold this block"**. The folded line says **"Unfold this block"** on hover.
+- A meeting that is one of a series on the calendar: the repeat icon, **"Repeats"** to a screen reader and on hover. Where a rail has no room for it, its hover ends **"· Repeats"**.
+- A registered call: its type beside its state, **"Weekly status call · Review 11 proposals"** (the type gives way first where it is narrow); its label **"Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals"**; its menu's first group is the type; the menu title **"<meeting> · Weekly status call · Review 11 proposals"**. A call never also shows Repeats.
+- The register form, under the type: **"Both types are read the same way. The type is how the call is named on Day, Week and the call's page."**

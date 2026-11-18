@@ -92,6 +92,11 @@ export type CalEvent = {
   unavailable?: { id: number; note: string | null };
   /** CAL-1: a calendar added by link (source "ics"): its name and color as the person set them. */
   calendar?: { name: string; color: string };
+  /**
+   * DY-1: the calendar itself says the event is one of a series (Outlook's type, Google's recurringEventId). Only this
+   * boolean is kept; nothing is guessed from a title. Unset: a single event, or a calendar that doesn't say.
+   */
+  repeats?: true;
 };
 
 /** Time blocked in FocusTime for things on no calendar (step 6b). Counts against capacity like a meeting. */
