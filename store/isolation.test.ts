@@ -56,6 +56,7 @@ async function view(p: PlanStore): Promise<unknown> {
     halves: await p.aheadHalves(),
     assistant: await p.assistantTurns(50),
     inboxMarks: [...(await p.inboxMarks()).entries()],
+    callHides: await p.callHides().then((h) => ({ keys: [...h.keys], series: [...h.series] })),
   };
 }
 

@@ -65,6 +65,8 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   // IB-1: a seen promise and a snoozed one.
   await plan.markInbox(["c1", "f1"], { seen: true });
   await plan.markInbox(["v1"], { snoozedUntil: "2026-11-09T14:00:00Z" });
+  // MC-4: a hidden meeting and a hidden series.
+  await plan.hideCalls([{ kind: "one", key: "ical-standup" }, { kind: "every", key: "series-standup" }]);
   (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
   // AH-1: a pending change and a kept half-day.
