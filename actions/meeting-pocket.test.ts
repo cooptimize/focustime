@@ -41,7 +41,7 @@ function aMeeting(p: Partial<CalendarMeeting> = {}): CalendarMeeting {
 }
 
 type Seg = { start: number | null; end: number | null; speaker: string; speakerName: string; text: string };
-type Rec = { id: string; title: string; at: string; minutes: number; by: string; segs: Seg[] };
+type Rec = { id: string; title: string; at: string; minutes: number; by: string | null; segs: Seg[] };
 const seg = (start: number | null, speaker: string, text: string): Seg => ({ start, end: start === null ? null : start + 30, speaker, speakerName: "Dana Client", text });
 
 /** Invented recordings: mine on the call, a teammate's under the same key, a long one, one with no call, one with no times. */
@@ -55,7 +55,7 @@ const RECS: Rec[] = [
 
 /** A fake Pocket that answers the list and one recording from RECS, in the docs' shape, and records each request. */
 function fakePocket(reqs: string[], recs: Rec[] = RECS): typeof fetch {
-  const listed = (r: Rec) => ({ id: r.id, title: r.title, recording_at: r.at, duration: r.minutes * 60, recorded_by: { email: r.by, display_name: r.by }, transcript: { segments: r.segs }, summarizations: { s: "summary words" }, speakers: { SPEAKER_0: { name: "Dana Client" } }, tags: [] });
+  const listed = (r: Rec) => ({ id: r.id, title: r.title, recording_at: r.at, duration: r.minutes * 60, recorded_by: r.by === null ? null : { email: r.by, display_name: r.by }, transcript: { segments: r.segs }, summarizations: { s: "summary words" }, speakers: { SPEAKER_0: { name: "Dana Client" } }, tags: [] });
   return (async (input: string | URL | Request) => {
     const url = String(input);
     reqs.push(url);
@@ -67,7 +67,7 @@ function fakePocket(reqs: string[], recs: Rec[] = RECS): typeof fetch {
   }) as typeof fetch;
 }
 
-async function setup(o: { allowAi?: boolean; pocketStatus?: number } = {}) {
+async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[] } = {}) {
   const db = sqliteDb();
   await addUsers(db.conn, ME, MATE, OUTSIDER);
   let nowMs = Date.parse(NOW);
@@ -107,7 +107,7 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number } = {}) {
     const secrets = new Map<string, string>(connected.has(who) ? [["pocket-key", `pk_test_${who.slice(0, 4)}`]] : []);
     return pocketPort({
       secrets: { get: async (a) => (keyReads[who]!++, secrets.get(a)!), set: async (a, v) => void secrets.set(a, v), delete: async (a) => void secrets.delete(a), has: async (a) => secrets.has(a) },
-      client: createPocketClient({ fetch: o.pocketStatus ? ((async (u: string) => (reqs[who]!.push(String(u)), new Response("{}", { status: o.pocketStatus ?? 500 }))) as unknown as typeof fetch) : fakePocket(reqs[who]!), log: (r) => logs.push(r), timeoutMs: 500 }),
+      client: createPocketClient({ fetch: o.pocketStatus ? ((async (u: string) => (reqs[who]!.push(String(u)), new Response("{}", { status: o.pocketStatus ?? 500 }))) as unknown as typeof fetch) : fakePocket(reqs[who]!, o.recs), log: (r) => logs.push(r), timeoutMs: 500 }),
       now: () => nowMs,
     });
   };
@@ -281,5 +281,21 @@ describe("A recording with no call (MC-2b)", () => {
     // Only a client FocusTime knows, and only from my own list.
     expect(await t.act(ME, "meeting.pocket_add", { recordingId: "r-lone", name: "x", clientKey: "nobody" })).toMatchObject({ ok: false });
     expect(await t.act(MATE, "meeting.pocket_add", { recordingId: "r-lone", name: "x", clientKey: "contoso" })).toMatchObject({ ok: false, status: 410 });
+  });
+});
+
+describe("PK-4: the case of Nov 18", () => {
+  // Eighteen listed: sixteen under one address FocusTime doesn't know me by (my own Pocket account's), two with no
+  // recorder at all. Before PK-4 none were kept and the page said "18 recordings by other people were left out".
+  const SOLO = "sam.personal@example.com";
+  const eighteen: Rec[] = Array.from({ length: 18 }, (_, i) => ({
+    id: `r-${i}`, title: `Invented call ${i}`, at: `2026-11-0${2 + (i % 8)}T1${i % 6}:00:00Z`, minutes: 30, by: i < 16 ? SOLO : null, segs: [seg(5, "SPEAKER_0", "Invented words.")],
+  }));
+
+  it.fails("keeps all eighteen: sixteen under one address nobody else records under, and two with no recorder", async () => {
+    const t = await setup({ recs: eighteen });
+    const l = t.data<List>(await t.act(ME, "meeting.pocket_list", {}));
+    expect(l.recordings).toHaveLength(18);
+    expect(l.others).toBe(0);
   });
 });
