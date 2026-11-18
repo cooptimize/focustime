@@ -1,6 +1,6 @@
 # Operations
 
-For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `2f4c0ea` on Nov 13, 2026; Telling the sites apart against EV-1 on Nov 17, 2026; Reminders against the NT-1 branch on Nov 17, 2026.
+For whoever deploys, watches or fixes FocusTime. The step-by-step commands are in the [runbook](../azure/runbook.md); this page is the map. Checked against `2f4c0ea` on Nov 13, 2026; Telling the sites apart against EV-1 on Nov 17, 2026; Reminders against the NT-1 branch on Nov 17, 2026; the jobs' identity against the ID-1 branch on Nov 17, 2026.
 
 ## Environments
 
@@ -104,7 +104,7 @@ Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each k
 
 The Teams bot sends its own rhythm (brief, check-in, close out, nudges, client calls) only with "Let FocusTime message me in Teams" and that kind on, all off by default.
 
-**How the background reads a person's settings.** A person's ticks read their settings one way, the way a request does: in production with their sign-in's identity added (`withSignedIn`), because a hosted person's Dataverse user is kept with the sign-in, not in their settings. Outside production the raw settings, so nothing new is read there. `server/ticks-identity.test.ts` fails when a part reads settings, Dataverse or a context built from them the raw way.
+**How the background reads a person's settings.** A person's ticks read their settings one way, the way a request does: in production with their sign-in's identity added (`withSignedIn`), because a hosted person's Dataverse user is kept with the sign-in, not in their settings. Outside production the raw settings, so nothing new is read there. `server/ticks-identity.test.ts` fails when a part reads settings, Dataverse or a context built from them the raw way. The meeting job and the chat poll build each person the way a request does, in every environment (`server/job-people.ts`; [Who is asking](architecture.md#who-is-asking)).
 
 **What a day off is.** Whole-day PTO (the Time Off Tracker) or a company holiday (the Working Days Calendar). One reader per person (`server/days-off.ts`) answers for the whole background: the gate, the reminders, the Teams rhythm, the VM's morning notice and the automatic VM start, from one read of each for a window of 14 days from today, at most every 30 minutes. When PTO can't be read, a read from the last 24 hours that covers the day stands in; without one the gate sends, while the reminders (the look-ahead and direction review among them) and the status nudge wait for a later pass. Holidays that can't be read make it a working day. A failed read is logged once a day per reason as `dataverse day_off pto_unread`, `pto_unread_earlier` or `holidays_unread`, never with a name, an id, a date or a holiday's name. Outside production nothing is read and no day is off. The reminders skip a day off whatever the setting; Quiet on days off decides the rest.
 
