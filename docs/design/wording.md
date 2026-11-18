@@ -391,6 +391,40 @@ Every word below is in `plan/call-words.ts`.
 - Propose again: **"7 new proposals to review. 3 left out: the same as ones already done, skipped or failed here."**, or **"Nothing new to propose."**.
 - Back: **"Week"**, **"Day"**, **"Calls"** and the rest, named **"Back to Week"** or **"Back to client calls"**.
 
+## PK-2 words (Nov 17)
+
+Every word below is in `plan/pocket-words.ts` (the failures' too; the server and the page say the same).
+
+- The section: **"Pocket recorder"** in Settings › Accounts and calendars.
+- What connecting does: **"Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. It never reads a recording's title, words or audio. Bringing in a recording for a client call comes later."**
+- The steps, under **"How to connect"**: **"In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team."**, **"Choose what the key may do: tick only reading recordings (recordings:read). Pocket gives a key every permission when none is ticked. If Pocket asks for an expiry date, any date is fine; when the key expires, paste a new one here."**, **"Copy the whole key. It starts with pk_ (often pk_live_), and Pocket may show it only once."**, **"Paste it below and press Check and save. Nothing is saved unless Pocket accepts it."**, then **"Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees it or whether you connected, admins included, and it never goes to the AI or the logs."** and the link **"Pocket's guide to API keys"**.
+- The field: **"Your Pocket key"** (a password field), its hint **"pk_…"**; the button **"Check and save"**, **"Checking with Pocket…"** while it waits.
+- Connected: **"Connected"**, then **"checked just now"** (**"checked 5 min ago"**, **"checked 2 h ago"**, **"checked Nov 12"**) and **"6 recordings in the last 7 days"** (**"1 recording"**); **"FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here."** Buttons **"Check again"**, **"Use a new key"** (**"The new key replaces this one only if Pocket accepts it."**, with **"Cancel"**) and **"Disconnect"**.
+- Disconnect asks first (the row's buttons step aside while it asks): **"Disconnect Pocket? FocusTime forgets your key now. Your recordings stay in Pocket; you can also delete the key there."** with **"Disconnect"** and **"Keep it"**.
+- After a press: nothing more after connecting (the Connected line says it), **"New key checked and saved."**, **"Checked. Pocket answered."**, **"Disconnected. FocusTime forgot your key."**
+- The failures, each ending **"Nothing was saved."** (Check and save) or **"Your connection is kept as it was."** (Check again):
+  - **"Pocket didn't accept this key. Check that you copied all of it, or make a new one in Pocket and paste that."**
+  - **"Pocket didn't answer in time. Try again in a few minutes."**
+  - **"Pocket is busy right now. Try again in a few minutes."**
+  - **"Pocket answered in a way FocusTime doesn't understand; Pocket may have changed how it answers. Try again later, and tell your FocusTime admin if it keeps happening."**
+  - Before Pocket is asked: **"Paste your Pocket key first"**, **"That doesn't look like a Pocket key: it is one line with no spaces"**, **"That doesn't look like a Pocket key: Pocket's keys start with pk_"**.
+
+## VM-4 words (Nov 17)
+
+The VM chip's words are in one place, `READ_PROBLEM` and `CHECKING` in `plan/vm.ts`; an unexpected failure's in `server/unexpected.ts`.
+
+- While a read fails: the chip keeps its state with a hollow mark, its title **"Last read 1 minute ago"**, and the menu's first line **"Checking…"** with **"Read 1 minute ago"**. Ages: **"just now"**, **"40 seconds ago"**, **"1 minute ago"**, **"3 minutes ago"**, **"2 hours ago"**. After a restart, before the first read: **"Checking…"** alone.
+- After 2 minutes, on the chip's face and the menu's first line, then the sentence:
+  - **"Can't reach Azure"**: "FocusTime can't reach Azure to read your VM's state. It keeps trying; nothing to do unless this lasts."
+  - **"Azure is busy"**: "Azure is busy and asked FocusTime to wait. It keeps trying; nothing to do."
+  - **"Sign in to Azure again"**: "Azure wants you to sign in again before FocusTime can read your VM. Choose Allow Azure access."
+  - **"Azure refused"**: "Azure refused to show your VM's state. If this lasts, check in the Azure portal that you can still see the VM, or tell an admin."
+  - **"Can't reach FocusTime"** (the page's own request failed): "FocusTime isn't answering, so it can't check your VM. It keeps trying; nothing to do unless this lasts."
+- Under the reason in the menu, what to do (`READ_NEXT`): **"Check your connection; FocusTime keeps trying"**, **"Nothing to do; FocusTime keeps trying"**, **"Your access may have changed: check the Azure portal or ask an admin"**. A sign-in is one item, **"Sign in to Azure again…"**, that signs in. The chip's face keeps the state's one word: **"Stopped · Azure refused"**; on the phone the state and the "!".
+- **"Unknown"** only when Azure answers with no state.
+- The automatic start: **"Today's start is waiting: FocusTime couldn't read your VM's state yet"** (shown, not told), and at the late limit **"Left off today: FocusTime couldn't read your VM's state"** with **"Start it from the VM menu if you need it."**
+- An unexpected failure: **"That didn't work: FocusTime ran into a problem it didn't expect. Try again, and if it keeps happening, tell an admin (reference K7QH2M)."** A request that can't be read at all: **"FocusTime couldn't read that request. Reload the page and try again."**
+
 ## OP-1 words (Nov 17)
 
 Every word below is in `plan/preview-parts.ts` (`partsLine`, `PREVIEW_WORDS`). The one preview's other words (Where, Writes as, Who can see it, Not now, Retry, Reload and review again, the flag and Replace) are unchanged.

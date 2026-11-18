@@ -2,7 +2,7 @@
 
 For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `2f4c0ea` on Nov 13, 2026.
 
-FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI and public GitHub. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
+FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI, public GitHub and, for a person who connects it, their own Pocket recorder. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
 ## The parts
 
@@ -267,6 +267,7 @@ Some reads, such as `week.load`, are handled in `actions/dispatch.ts` itself rat
 4. `actions/dispatch.ts` looks the action up in the registry, validates its input and builds the person's context: their settings, their scoped plan store, their sources.
 5. Every plan store statement goes through `store/scope.ts`, which adds the session's `user_id`; a user id never comes from the browser.
 6. The answer is JSON. Source failures come back as a status with a plain message and a fix, never as another source's data.
+7. An action that throws answers 500 in plain words with a short random reference (`server/unexpected.ts`); the log line `server action_failed` has the action's name, the error's type and the same reference. A body that isn't JSON is a 400 of its own.
 
 Two routes take a raw body instead of an action, behind the same guard, session and CSRF checks: `POST /api/assistant/transcribe` (push-to-talk audio, 60 seconds and 2 MB at most) and `POST /api/meetings/upload` (a reviewer's .vtt or .docx transcript, 5 MB at most, parsed in memory). Both are named in `server/app.ts`.
 

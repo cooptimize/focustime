@@ -32,13 +32,14 @@ export type Telemetry = {
   log: Logger;
   request: (r: RequestRecord) => void;
   job: (op: Operation, durationMs: number) => void;
-  exception: (e: unknown, where: string) => void;
+  /** VM-4: `ref`, the reference an unexpected failure's answer showed, kept on the item to find it by. */
+  exception: (e: unknown, where: string, ref?: string) => void;
   status: () => TelemetryStatus;
   flush: () => Promise<void>;
   stop: () => void;
 };
 
-const EXTERNAL = new Set(["dataverse", "outlook", "google", "devops", "azure"]);
+const EXTERNAL = new Set(["dataverse", "outlook", "google", "devops", "azure", "pocket"]);
 
 /** "InstrumentationKey=…;IngestionEndpoint=https://…/" → the key and the track URL; null when it isn't one. */
 export function parseConnectionString(s: string): { iKey: string; url: string } | null {
@@ -66,6 +67,8 @@ const props = (r: LogRecord): Record<string, string> => {
   if (r.count !== undefined) out.count = String(r.count);
   if (r.kind !== undefined) out.kind = r.kind;
   if (r.client !== undefined) out.client = clientRef(r.client);
+  if (r.action !== undefined) out.action = r.action;
+  if (r.ref !== undefined) out.ref = r.ref;
   return out;
 };
 
@@ -115,11 +118,12 @@ export function operationEnvelope(op: Operation, o: { iKey: string; role: string
 }
 
 /** An error as an exception item: its type, a redacted message, frames under `root` only. */
-export function exceptionEnvelope(e: unknown, o: { iKey: string; role: string; at: Date; where: string; root: string; known?: Iterable<string>; op?: Operation | undefined }): object {
+export function exceptionEnvelope(e: unknown, o: { iKey: string; role: string; at: Date; where: string; root: string; known?: Iterable<string>; op?: Operation | undefined; ref?: string | undefined }): object {
   const op = o.op;
   const message = redact(e instanceof Error ? e.message : typeof e === "string" ? e : "", o.known);
   const frames = ownFrames(e instanceof Error ? e.stack : undefined, o.root);
   const properties: Record<string, string> = { where: /^[a-z0-9_.-]{1,40}$/i.test(o.where) ? o.where : "unknown" };
+  if (o.ref && /^[A-Z0-9]{6}$/.test(o.ref)) properties.ref = o.ref;
   if (op?.client) properties.client = clientRef(op.client);
   return {
     name: "Microsoft.ApplicationInsights.Exception",
@@ -228,11 +232,11 @@ export function appInsights(o: {
       const outcome = op.outcome ?? "ok";
       push(operationEnvelope(op, { iKey: cfg.iKey, role, at: now(), durationMs, code: outcome, success: outcome !== "failed" }));
     },
-    exception: (e, where) => {
+    exception: (e, where, ref) => {
       o.next({ source: "server", op: "exception", kind: where });
       const op = currentOperation();
       learn(op?.client);
-      push(exceptionEnvelope(e, { iKey: cfg.iKey, role, at: now(), where, root, known, op }));
+      push(exceptionEnvelope(e, { iKey: cfg.iKey, role, at: now(), where, root, known, op, ref }));
     },
     status: () => ({ ...st, lastProblem: st.lastProblem && { ...st.lastProblem } }),
     flush,

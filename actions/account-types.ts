@@ -1,5 +1,5 @@
 // Step 15.4: the shapes the UI sees for the sign-in and my VM (types only; no I/O, safe to import in the window).
-import type { PowerState, Shutdown, VmChip, VmOp, VmTransition } from "../plan/vm.ts";
+import type { PowerState, ReadProblem, Shutdown, VmChip, VmOp, VmTransition } from "../plan/vm.ts";
 
 export type Person = { name: string; username: string; initials: string };
 export type AuthStatus = {
@@ -58,6 +58,17 @@ export type VmStatus = {
   error: VmError | null;
   /** VM-2: start my VM before my day (null: settings unavailable). */
   autoStart: AutoStartView | null;
+  /** VM-4: when the state shown was read from Azure (null: none read yet). */
+  readAt?: string | null;
+  /** VM-4: the server's time when it answered, so the page can say "how long ago" on its own clock (ui/vm-status.ts). */
+  answeredAt?: string;
+  /**
+   * VM-4: this answer couldn't read Azure. The chip keeps the last state it knew (chip null: none known yet) with a
+   * quiet checking mark, and asks again in about 10 seconds. `since`: when the reads began failing.
+   */
+  checking?: { since: string } | null;
+  /** VM-4: still failing after 2 minutes: the reason, on the chip's face and in its menu. */
+  problem?: { kind: ReadProblem | "app"; short: string; text: string } | null;
 };
 
 /** VM-2: the auto-start's state for the form, the chip's menu and the once-only notices. */

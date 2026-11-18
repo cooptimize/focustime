@@ -57,7 +57,7 @@ Four small planning components shared by Week's and Day's cards, the block panel
 
 ### `ui/settings/`
 
-Settings and Admin. `registry.ts` is the one list of Settings' groups, sections and addresses; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. Each other file is one section (Admin, client chats, calendar links, Diagnostics, Find an item, client calls). `ui/Settings.tsx` is the panel that holds them, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
+Settings and Admin. `registry.ts` is the one list of Settings' groups, sections and addresses; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. Each other file is one section (Admin, client chats, calendar links, the Pocket recorder, Diagnostics, Find an item, client calls). `ui/Settings.tsx` is the panel that holds them, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
 
 ## `actions/`
 
@@ -67,7 +67,7 @@ Every named, validated operation. The UI, the command menu, the assistant, the T
 - `dispatch.ts` takes an action name and its input, rejects an unknown name or unexpected input, and calls the action. Its switch is exhaustive, so a registered action with no handler fails the type check.
 - `types.ts` holds the response shapes the server and the UI share (types only).
 - One file per area holds that area's actions (`plan-actions.ts` for to-dos and days, `weekplan-actions.ts`, `ahead-actions.ts`, `status-actions.ts`, `conversation-actions.ts`, `code-actions.ts` and the rest); a `*-types.ts` beside one holds its shapes.
-- External writes live only in their named files: `timebox-actions.ts` (Outlook), `devops-write-actions.ts` (DevOps), `loop-actions.ts` (Close the loop), `presence-actions.ts` (Teams status), `vm-actions.ts` (the VM). Each follows the write framework, with `readback.ts` the shared read back. How to add one is in [Adding an external write safely](technical/development.md#adding-an-external-write-safely).
+- External writes live only in their named files: `timebox-actions.ts` (Outlook), `devops-write-actions.ts` (DevOps), `loop-actions.ts` (Close the loop), `presence-actions.ts` (Teams status), `vm-actions.ts` (the VM; the chip keeps the last state while a read fails, and `ui/vm-status.ts` does the same in the page). Each follows the write framework, with `readback.ts` the shared read back. How to add one is in [Adding an external write safely](technical/development.md#adding-an-external-write-safely).
 - `admin.ts` is the one `isAdmin()` check; `org.ts` reads the team's values.
 - The background readers the scheduler calls live here too: `devops-poll.ts` (DevOps), `request-poll.ts` and `conversations-pipeline.ts` (client chats), `notifier.ts` (the one notifier).
 
@@ -115,7 +115,7 @@ Rules: SQL Server changes only through `sql/migrate.ts`; migrations only add; ev
 
 ## `sources/`
 
-The adapters that read outside systems, one folder each: `dataverse/` (clients, focus time patterns, PTO, holidays, the directory), `graph/` (Outlook, Teams chats and meetings, people, presence, photos, and the Graph writes in `write.ts` and `send.ts`), `google/` (the personal calendar), `ics/` (calendar links), `calendar/` (the shared calendar reader), `devops/` (work items, processes and Git, and the DevOps writes in `write.ts`), `azure/` (the VM, behind the allowlist in `client.ts`), `github/` (Cooptimize's standards) and `oauth/` (token exchange and ID token checks). `demo/` holds the demo's fictional sources. `not-set-up.ts` is what a calendar says when it isn't set up.
+The adapters that read outside systems, one folder each: `dataverse/` (clients, focus time patterns, PTO, holidays, the directory), `graph/` (Outlook, Teams chats and meetings, people, presence, photos, and the Graph writes in `write.ts` and `send.ts`), `google/` (the personal calendar), `ics/` (calendar links), `calendar/` (the shared calendar reader), `devops/` (work items, processes and Git, and the DevOps writes in `write.ts`), `azure/` (the VM, behind the allowlist in `client.ts`), `pocket/` (a person's own Pocket, one list call behind the allowlist in `client.ts`), `github/` (Cooptimize's standards) and `oauth/` (token exchange and ID token checks). `demo/` holds the demo's fictional sources. `not-set-up.ts` is what a calendar says when it isn't set up.
 
 Rules: a source that fails or isn't set up says so with its fix, and nothing stands in for it; only `server/demo.ts` wires `sources/demo/` (`host/no-demo-leak.test.ts`); each client sends only the requests its allowlist names. What each source reads and writes is in [Where each source is read and written](technical/architecture.md#where-each-source-is-read-and-written) and [Integrations](technical/integrations.md).
 

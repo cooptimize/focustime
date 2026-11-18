@@ -123,7 +123,8 @@ describe.skipIf(!CHROMIUM)("the Guide (UI-5)", () => {
     await box.press("Enter");
     await page.locator("main.guide .guide-body[data-section='backlog']").waitFor();
     await box.fill("chat images");
-    await page.locator(".gsr-hit").first().waitFor();
+    // Wait for this search's hits, not the last one's (VM-4: "stale"'s hits were still there in a CI run).
+    await expect.poll(() => page.locator(".gsr-hit").first().textContent(), { timeout: 10_000 }).toMatch(/image/i);
     await box.press("ArrowDown");
     await page.keyboard.press("Enter");
     await expect.poll(() => page.locator(".guide-body details.guide-q[open]").count()).toBeGreaterThan(0);

@@ -44,7 +44,9 @@ export const DEMO_VM_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/r
 export const DEMO_VM_NO_SHUTDOWN_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-spare";
 
 export function createDemoAzure() {
-  const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000 });
+  // VM-4: verification runs only (demo.vm_fail): reads of the demo VM's state fail in the way asked, to see the chip.
+  const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
+  const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000, readFails });
   arm.addVm({ id: DEMO_VM_ID, name: "vm-demo-alex", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: { Owner: DEMO_PERSON.name }, power: "deallocated" }, { time: "1900", timeZoneId: "Eastern Standard Time" });
   arm.addVm({ id: DEMO_VM_NO_SHUTDOWN_ID, name: "vm-demo-spare", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: {}, power: "deallocated" });
   const account: MicrosoftAccount = {
@@ -62,5 +64,5 @@ export function createDemoAzure() {
     probe: async (kind) => (kind === "mail_send" ? { kind, state: "consent", granted: [] } : { kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : kind === "send" ? ["ChatMessage.Send", "Chat.Create"] : kind === "mail" ? ["Mail.ReadWrite"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic"] }),
     signOut: async () => {},
   };
-  return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm };
+  return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm, readFails };
 }

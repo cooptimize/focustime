@@ -1219,7 +1219,11 @@ export function App() {
           const p = (r as { pick?: { clientKey: string; itemId: number | null } } | undefined)?.pick;
           if (p) ticked(id, done, p.clientKey, p.itemId);
         })
-        .catch(reloadQuiet);
+        .catch((e: unknown) => {
+          // VM-4: put back and say why (before, a failed tick went back without a word).
+          reloadQuiet();
+          window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: e instanceof Error && e.message ? e.message : "That didn't work. Try again." }));
+        });
     },
     [reloadQuiet, ticked],
   );

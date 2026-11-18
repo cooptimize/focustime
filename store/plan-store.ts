@@ -1698,6 +1698,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   const db = scopedDb(conn, opts.userId, () => opts.now().timeZoneId);
 
   const stamp = (): ZonedStamp => opts.now().toString({ smallestUnit: "second" });
+  /** VM-4: a time for a column too short for a zone name (nvarchar(40) on SQL Server): the instant, in UTC. */
+  const settledAt = (): string => opts.now().toInstant().toString({ smallestUnit: "second" });
   /** Every write runs in a transaction (joined when the caller has one open). */
   const tx = <T>(fn: () => Promise<T>): Promise<T> => db.tx(fn);
 
@@ -2017,7 +2019,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         for (const id of o.timeboxIds) {
           const t = (await db.get("SELECT pick_id, settled_as, outlook FROM timeboxes WHERE id = ? AND removed_at IS NULL", id)) as Row | undefined;
           if (!t || t.pick_id !== o.pickId || t.settled_as) throw new PlanError("That timebox was already answered");
-          await db.run("UPDATE timeboxes SET settled_as = ?, settled_at = ?, settle_before = ?, removed_at = ?, updated_at = ? WHERE id = ?", o.as, at, before, o.as === "none" && t.outlook !== 1 ? at : null, at, id);
+          // VM-4: settled_at is nvarchar(40) on SQL Server: the instant ("2026-11-17T22:17:17Z"), never the zoned stamp,
+          // whose bracketed zone name made it 43 characters and the answer fail. Nothing reads it back.
+          await db.run("UPDATE timeboxes SET settled_as = ?, settled_at = ?, settle_before = ?, removed_at = ?, updated_at = ? WHERE id = ?", o.as, settledAt(), before, o.as === "none" && t.outlook !== 1 ? at : null, at, id);
         }
         if (o.as === "partly") await writeProgress(p, o.spent, o.remaining);
         // TX-1b: a Done touches only its own to-do and keeps the last time left in the column (it reads as 0): a story

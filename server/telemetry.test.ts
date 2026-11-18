@@ -33,13 +33,14 @@ describe("telemetry through the server (HK-1)", () => {
     await b.signIn("oid-ana");
     const caller = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
     const r = await b.post(`/api/action?token=${PLANTED.secret}`, { action: "note.set", input: { clientKey: PLANTED.client, date: "2026-11-02", note: PLANTED.chat, raw: PLANTED.body } }, { authorization: `Bearer ${PLANTED.jwt}`, traceparent: caller, "x-devops-pat": PLANTED.pat });
-    expect(r.status).toBe(400);
+    // VM-4: an action that throws is a server error with a reference now (was 400 "bad request").
+    expect(r.status).toBe(500);
     // A path the server doesn't know with secrets in it: a fixed route name only.
     await b.send(`/api/${PLANTED.pat}/${encodeURIComponent(PLANTED.email)}?q=${encodeURIComponent(PLANTED.chat)}`);
     await t.flush();
     const items = sent.flat() as Env[];
     const req = items.find((i) => i.data.baseType === "RequestData" && String(i.data.baseData.name).includes("note.set"))!;
-    expect(req.data.baseData).toMatchObject({ name: "POST /api/action note.set", responseCode: "400" });
+    expect(req.data.baseData).toMatchObject({ name: "POST /api/action note.set", responseCode: "500" });
     expect(req.tags["ai.operation.id"]).toBe("4bf92f3577b34da6a3ce929d0e0e4736");
     expect(req.tags["ai.operation.parentId"]).toBe("00f067aa0ba902b7");
     expect((req.data.baseData.properties as Record<string, string>).client).toBe(clientRef(PLANTED.client));

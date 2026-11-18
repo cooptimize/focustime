@@ -138,6 +138,7 @@ import type { ClientChat } from "../plan/requests.ts";
 import { inviteDomains } from "../config/schema.ts";
 import type { LinkCalendars } from "../sources/ics/source.ts";
 import { calendarLinkAction } from "./calendar-link-actions.ts";
+import { pocketAction, type PocketPort } from "./pocket-actions.ts";
 
 /** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
 const TOUR_MARK = "tour_offer";
@@ -193,6 +194,8 @@ export type ActionContext = {
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   /** CAL-1: this person's calendars added by link (read only); absent where there are none (tests). */
   linkCalendars?: LinkCalendars;
+  /** PK-2: this person's own Pocket (their key in their sealed secrets, and the one-call client); absent: not here. */
+  pocket?: PocketPort;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   /** A2: the signed-in person's names (their sign-in email and UPN), to find them in Dataverse. */
@@ -228,7 +231,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -757,8 +760,8 @@ async function connect(ctx: ActionContext, which: "outlook" | "google") {
  * gets it; VM-3: so does the automatic start in the background (server/ticks.ts), which read PTO without it.
  */
 export function withSignedIn(ctx: ActionContext): ActionContext {
-  const me = storedIdentity(ctx.plan);
-  if (!me) return ctx;
+  // VM-4: there was a read of the stored identity here, never awaited (a promise is always truthy, so it decided
+  // nothing); when the store failed it was an unhandled rejection. The reads below are each awaited.
   return {
     ...ctx,
     loadConfig: async () => {
@@ -1718,6 +1721,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
+  // VM-4: a demo verification run may make this one call fail unexpectedly (demo.fail_next), to see what the screen says.
+  if (ctx.demo?.takeFail?.(action)) throw new Error("demo: a failure the server didn't expect");
   // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback). Settings writes the file as
   // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
   // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
@@ -1760,6 +1765,24 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("demo.pass_stall takes { on: true | false }");
       ctx.demo.passStall(i.on);
       return { ok: true, data: { on: i.on } };
+    }
+    case "demo.vm_fail": {
+      // VM-4: only in a demo session started with --clock (the e2e tests and pictures): reads of the demo VM's state
+      // fail as asked, to see the chip keep its state, check and then say why.
+      if (!ctx.demo?.on || !ctx.demo.vmFail) return { ok: false, status: 403, error: "Only in a demo verification run" };
+      const i = req.input as Record<string, unknown> | null;
+      const kinds = ["network", "busy", "sign_in", "refused", "no_state", null];
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "kind") || !kinds.includes(i.kind as never)) return bad("demo.vm_fail takes { kind: network | busy | sign_in | refused | no_state | null }");
+      ctx.demo.vmFail(i.kind as never);
+      return { ok: true, data: { kind: i.kind } };
+    }
+    case "demo.fail_next": {
+      // VM-4: only in a demo verification run: the next call of the named action fails in a way the server didn't expect.
+      if (!ctx.demo?.on || !ctx.demo.failNext) return { ok: false, status: 403, error: "Only in a demo verification run" };
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "action") || !isActionName(i.action)) return bad("demo.fail_next takes { action }, a registered action");
+      ctx.demo.failNext(i.action);
+      return { ok: true, data: { action: i.action } };
     }
     case "demo.status": {
       if (!noInput(req.input)) return bad("demo.status takes no input");
@@ -1987,6 +2010,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "calendar_link.replace":
     case "calendar_link.remove":
       return calendarLinkAction(ctx.linkCalendars, action, req.input);
+    case "pocket.status":
+    case "pocket.connect":
+    case "pocket.check":
+    case "pocket.disconnect":
+      return pocketAction(ctx.pocket, action, req.input);
     case "notices.list":
     case "notices.read":
     case "push.status":
