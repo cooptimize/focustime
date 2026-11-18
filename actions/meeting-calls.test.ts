@@ -78,7 +78,7 @@ async function setup(calendar: CalendarMeeting[] = [aMeeting()], teams: { transc
         if (!(await allowed({ onlineMeetingId: id }))) throw new MeetingRefused();
         log("transcripts");
         if (teams.transcripts === 403) throw new HttpError(403);
-        return teams.transcripts === "none" ? [] : [{ id: "t1", createdAt: "2026-11-09T15:50:00Z", endAt: null }];
+        return teams.transcripts === "none" ? [] : [{ id: "t1", createdAt: "2026-11-09T15:02:00Z", endAt: null }];
       },
       transcriptVtt: async (id: string) => {
         if (!(await allowed({ onlineMeetingId: id }))) throw new MeetingRefused();
@@ -265,6 +265,17 @@ describe("Review on a call that isn't registered (MC-2)", () => {
     expect(t.graphCalls.map((c) => c.op)).not.toContain("onlineMeetingId");
   });
 
+  it("reads only a transcript Teams started during this occurrence, never another one on the same link", async () => {
+    const t = await setup();
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.start());
+    const g = t.graphFor(ME) as unknown as { transcripts: (id: string) => Promise<unknown> };
+    // The same join link was used again later that day (14:00 here; the call was 10:00 to 10:45 ET).
+    g.transcripts = async () => [{ id: "later", createdAt: "2026-11-09T19:02:00Z", endAt: null }];
+    const r = await meetingAction({ ...t.ctxAs(ME), graph: () => g as never }, "meeting.call_fetch", { occurrenceId });
+    expect(r).toMatchObject({ ok: true, data: { outcome: "none" } });
+    expect(t.providerCalls).toEqual([]);
+  });
+
   it("takes an upload from the presser only, on the same page as a client call", async () => {
     const t = await setup([aMeeting({ joinUrl: null })]);
     const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.start());
@@ -273,6 +284,8 @@ describe("Review on a call that isn't registered (MC-2)", () => {
     // The mate on the invite can look at it, never upload to it.
     expect(await uploadTranscript(t.ctxAs(MATE), { seriesId: s!.id, date: "2026-11-09", bytes })).toMatchObject({ ok: false, status: 403 });
     expect(await uploadTranscript(t.ctxAs(OUTSIDER), { seriesId: s!.id, date: "2026-11-09", bytes })).toMatchObject({ ok: false, status: 404 });
+    // Only on the call's own day: never a second occurrence the attendees would see.
+    expect(await uploadTranscript(t.ctxAs(ME), { seriesId: s!.id, date: "2026-11-08", bytes })).toMatchObject({ ok: false, status: 422 });
     const up = await uploadTranscript(t.ctxAs(ME), { seriesId: s!.id, date: "2026-11-09", bytes });
     expect(up).toMatchObject({ ok: true, data: { occurrenceId, lines: 3, outcome: "done" } });
     expect(t.providerCalls).toHaveLength(1);

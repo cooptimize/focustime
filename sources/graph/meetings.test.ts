@@ -117,10 +117,10 @@ describe("Graph meetings (MC-1)", () => {
 
   it("reads my own calls of a range, and one of them again, as counts and keys only (MC-2)", async () => {
     const ev = (p: Record<string, unknown>) => ({ iCalUId: "ical-1", subject: "Contoso review", start: { dateTime: "2026-11-10T15:00:00.0000000" }, end: { dateTime: "2026-11-10T15:45:00.0000000" }, isAllDay: false, isCancelled: false, isOrganizer: false, responseStatus: { response: "accepted" }, organizer: { emailAddress: { address: "kat@cooptimize.example" } }, attendees: [{ emailAddress: { address: "me@cooptimize.example" } }, { emailAddress: { address: "pm@contoso.example" } }], onlineMeeting: { joinUrl: OTHER }, ...p });
-    const { c, calls } = client(onlyRegistered, { "/me/calendarView?": { value: [ev({}), ev({ iCalUId: "ical-2", isOrganizer: true, organizer: { emailAddress: { address: "me@cooptimize.example" } }, attendees: [] })] } });
+    const { c, calls } = client(onlyRegistered, { "/me/calendarView?": { value: [ev({}), ev({ iCalUId: "ical-2", isOrganizer: true, organizer: { emailAddress: { address: "me@cooptimize.example" } }, attendees: [{ type: "resource", emailAddress: { address: "room-4@cooptimize.example" } }] })] } });
     const got = await c.recentCalls("2026-11-04T05:00:00Z", "2026-11-17T17:00:00Z");
     expect(got[0]).toMatchObject({ key: "ical-1", subject: "Contoso review", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T15:45:00Z", others: 2, joinUrl: OTHER, organizerEmail: "kat@cooptimize.example", homeAttendees: ["me@cooptimize.example", "kat@cooptimize.example"] });
-    // My own hold: I organize it with nobody on it.
+    // My own hold: I organize it with nobody on it (a room booked on it isn't a person).
     expect(got[1]).toMatchObject({ key: "ical-2", isOrganizer: true, others: 0 });
     expect(calls.every((u) => u.startsWith("https://graph.microsoft.com/v1.0/me/calendarView?"))).toBe(true);
     expect(await c.callAt("ical-1", "2026-11-10T15:00:00Z", "2026-11-10T15:45:00Z")).toMatchObject({ key: "ical-1" });

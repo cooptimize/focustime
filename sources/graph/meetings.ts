@@ -92,7 +92,7 @@ export type TranscriptRef = { id: string; createdAt: string; endAt: string | nul
 const WEEKDAY: Record<string, number> = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
 const str = (v: unknown, max = 2000) => (typeof v === "string" && v.length <= max ? v : null);
 
-type GraphAttendee = { emailAddress?: { address?: unknown } };
+type GraphAttendee = { type?: unknown; emailAddress?: { address?: unknown } };
 type GraphSeries = {
   id?: unknown;
   subject?: unknown;
@@ -196,7 +196,8 @@ export function createMeetingsClient(d: MeetingsDeps) {
     const at = (x: string) => Temporal.PlainDateTime.from(x.replace(/(\.\d{3})\d*$/, "$1")).toZonedDateTime("UTC").toInstant().toString();
     const org = str(e.organizer?.emailAddress?.address, 320)?.toLowerCase() ?? null;
     const mine = e.isOrganizer === true;
-    const addrs = new Set((e.attendees ?? []).map((a) => str(a.emailAddress?.address, 320)?.toLowerCase()).filter((x): x is string => !!x));
+    // A room or equipment booked on it is not a person (a hold with only a room is still a hold).
+    const addrs = new Set((e.attendees ?? []).filter((a) => a.type !== "resource").map((a) => str(a.emailAddress?.address, 320)?.toLowerCase()).filter((x): x is string => !!x));
     // When I organize it, Graph lists only the others as attendees; when someone else does, I'm one of the attendees
     // and the organizer is another person.
     if (org && !mine) addrs.add(org);
@@ -338,6 +339,21 @@ export function createMeetingsClient(d: MeetingsDeps) {
 export type MeetingsClient = ReturnType<typeof createMeetingsClient>;
 
 /** The transcript of one occurrence: the newest one created between its start and 12 hours after its end. */
+/**
+ * MC-2: the transcript a press may read: one Teams started during that occurrence (from 15 minutes before its start to
+ * its end), the one nearest its start. A recurring meeting (or a reused link) has one join link for every occurrence, so
+ * the wide window a registered weekly call uses would let a press read another occurrence's transcript.
+ */
+export function pressTranscript(refs: readonly TranscriptRef[], startAt: string, endAt: string): TranscriptRef | null {
+  const s = Date.parse(startAt);
+  const e = Date.parse(endAt);
+  const inside = refs.filter((r) => {
+    const t = Date.parse(r.createdAt);
+    return t >= s - 15 * 60_000 && t <= e;
+  });
+  return inside.sort((a, b) => Math.abs(Date.parse(a.createdAt) - s) - Math.abs(Date.parse(b.createdAt) - s))[0] ?? null;
+}
+
 export function transcriptFor(refs: readonly TranscriptRef[], startAt: string, endAt: string): TranscriptRef | null {
   const s = Date.parse(startAt);
   const e = Date.parse(endAt) + 12 * 3_600_000;

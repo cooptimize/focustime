@@ -206,5 +206,8 @@ describe("a call's summary (MC-2)", () => {
   it("names no other client even for Internal, and drops what isn't text", () => {
     expect(summaryOf([["Fabrikam asked about rates.", 7, null, ""]], { clientKey: "internal", directory })).toEqual(["another client asked about rates."]);
     expect(summaryOf([], { clientKey: "contoso", directory })).toEqual([]);
+    // A name at the clip is replaced before it is cut, so no part of it survives.
+    const long = `${"x".repeat(295)} Fabrikam`;
+    expect(summaryOf([[long]], { clientKey: "contoso", directory })[0]).not.toMatch(/Fabr|Fab/);
   });
 });

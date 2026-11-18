@@ -27,7 +27,7 @@ import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
-import { graphFailureOf, MeetingRefused, transcriptFor, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
+import { graphFailureOf, MeetingRefused, pressTranscript, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -743,6 +743,8 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   const series = await v.seriesById(q.seriesId);
   if (!series) return bad("No such meeting", 404);
   if (!canConfirm(series, me)) return bad("Only this meeting's reviewers can upload its transcript", 403);
+  // MC-2: a call has one occurrence; its transcript goes there, never under another day.
+  if (series.callKind && !(await store.occurrencesOf(series.id)).some((o) => o.date === q.date)) return bad("Upload this call's transcript on its own day", 422);
   let read: TranscriptRead;
   try {
     read = await readTranscriptFile(q.bytes, { readPdf: ctx.readPdf });
@@ -865,7 +867,7 @@ async function startCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfi
   const kept = await store.callByKey(c.key);
   if (kept) {
     const seen = await store.viewer(me).occurrence(kept.occurrence.id);
-    if (!seen) return bad("Someone else on this call already asked FocusTime to review it", 409);
+    if (!seen) return bad("FocusTime can't open this call for you. Upload its transcript with Add a call instead.", 409);
     return { ok: true, data: { occurrenceId: kept.occurrence.id, existed: true } };
   }
   const local = Temporal.Instant.from(c.startAt).toZonedDateTimeISO(zone);
@@ -940,7 +942,7 @@ async function fetchFromTeams(ctx: MeetingContext, store: MeetingStore, cfg: App
     const meetingId = await g.onlineMeetingId(c!.joinUrl);
     if (!meetingId) return say("none");
     press.meeting(meetingId);
-    const ref = transcriptFor(await g.transcripts(meetingId), occ.startAt, occ.endAt);
+    const ref = pressTranscript(await g.transcripts(meetingId), occ.startAt, occ.endAt);
     if (!ref) return say("none");
     const lines = parseVtt(await g.transcriptVtt(meetingId, ref.id));
     await store.saveTranscript(occ.id, lines, "automatic", null, "teams");

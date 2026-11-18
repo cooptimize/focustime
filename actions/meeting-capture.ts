@@ -260,14 +260,15 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
  * to).
  */
 export function summaryOf(perWindow: readonly (readonly unknown[])[], x: Pick<CaptureInput, "clientKey" | "directory">): string[] {
-  const clean = perWindow.map((w) => w.filter((l): l is string => typeof l === "string").map((l) => clip(l.replace(/\s+/g, " ").trim(), 300)).filter(Boolean));
+  // Scrubbed before it is clipped, so a name cut at the clip can't slip through.
+  const clean = perWindow.map((w) => w.filter((l): l is string => typeof l === "string").map((l) => clip(scrubValue(l.replace(/\s+/g, " ").trim(), x.clientKey, x.directory).value, 300)).filter(Boolean));
   const out: string[] = [];
   const seen = new Set<string>();
   for (let i = 0; out.length < SUMMARY_LINES && clean.some((w) => i < w.length); i++)
     for (const w of clean) {
       const l = w[i];
       if (!l || out.length >= SUMMARY_LINES) continue;
-      const scrubbed = scrubValue(l, x.clientKey, x.directory).value;
+      const scrubbed = l;
       if (seen.has(norm(scrubbed))) continue;
       seen.add(norm(scrubbed));
       out.push(scrubbed);

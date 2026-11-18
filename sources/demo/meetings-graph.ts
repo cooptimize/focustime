@@ -79,7 +79,7 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false })
       if (/prop/.test(onlineMeetingId)) throw new HttpError(403);
       if (!/nwmodel/.test(onlineMeetingId)) return [];
       const date = /(\d{4}-\d{2}-\d{2})$/.exec(onlineMeetingId)?.[1] ?? "2026-11-02";
-      return [{ id: "t-1", createdAt: `${date}T21:05:00Z`, endAt: null }];
+      return [{ id: "t-1", createdAt: `${date}T20:02:00Z`, endAt: null }];
     },
     transcriptVtt: async (onlineMeetingId) => {
       if (!(await gate.allowed({ onlineMeetingId }))) throw new MeetingRefused();

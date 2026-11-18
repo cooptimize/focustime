@@ -92,6 +92,20 @@ await forEachDriver("meeting store: calls (MC-2)", ({ open }) => {
     expect((await store.series(c.series.id))?.removedAt).toBeNull();
   });
 
+  it("leaves nothing behind for a call that never got a transcript, after 14 days; keeps one that did, and client calls", async () => {
+    const { db, store, reg, c } = await setup();
+    const kept = await store.addCall(aCall({ eventId: "ical-b", joinUrl: "hand:b", callKind: "hand", attendees: [] }));
+    await store.saveTranscript(kept.occurrence.id, lines, "upload", "presser");
+    await purgeRetention(db, NOW.add({ hours: 24 * 13 }));
+    expect(await store.series(c.series.id)).not.toBeNull();
+    await purgeRetention(db, NOW.add({ hours: 24 * 15 }));
+    expect(await store.series(c.series.id)).toBeNull();
+    expect(await store.occurrence(c.occurrence.id)).toBeNull();
+    expect(await store.callByKey("ical-a")).toBeNull();
+    expect(await store.series(kept.series.id)).not.toBeNull();
+    expect(await store.series(reg.id)).not.toBeNull();
+  });
+
   it("keeps a summary of at most 5 lines beside the transcript, gone with it at 30 days; none before MC-2", async () => {
     const { db, store, c } = await setup();
     expect(await store.summary(c.occurrence.id)).toBeNull();

@@ -57,6 +57,21 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     source: "MC-1",
     run: del("UPDATE meeting_proposals SET quotes_json = NULL WHERE quotes_json IS NOT NULL AND created_at < ?", (n) => ago(n, days(30))),
   },
+  // MC-2: a call someone pressed Review on but that never got a transcript (Teams refused and nobody uploaded) leaves
+  // nothing behind: after 14 days its occurrence and its row go. A call that got one is kept like a client call.
+  {
+    name: "meeting_calls_unreviewed",
+    table: "meeting_series",
+    keep: "14 days without a transcript",
+    source: "MC-2",
+    run: async (db, now) => {
+      const cut = ago(now, days(14));
+      const stale = "SELECT o.id FROM meeting_occurrences o JOIN meeting_series s ON s.id = o.series_id WHERE s.call_kind IS NOT NULL AND o.state = 'needs_upload' AND o.created_at < ? AND NOT EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.occurrence_id = o.id) AND NOT EXISTS (SELECT 1 FROM meeting_proposals p WHERE p.occurrence_id = o.id)";
+      const occ = (await db.run(`DELETE FROM meeting_occurrences WHERE id IN (${stale})`, [cut])).changes;
+      const ser = (await db.run("DELETE FROM meeting_series WHERE call_kind IS NOT NULL AND created_at < ? AND NOT EXISTS (SELECT 1 FROM meeting_occurrences o WHERE o.series_id = meeting_series.id)", [cut])).changes;
+      return occ + ser;
+    },
+  },
   // RB-1: the code view log (who opened which file, never content), 12 months.
   { name: "code_views", table: "code_views", keep: "12 months", source: "RB-1", run: del("DELETE FROM code_views WHERE at < ?", (n) => ago(n, days(365))) },
   { name: "job_claims", table: "job_claims", keep: `${CLAIM_DAYS} days`, source: "HK-4", run: del("DELETE FROM job_claims WHERE claimed_at < ? AND job <> 'conversation_ownership_backfill'", (n) => ago(n, days(CLAIM_DAYS))) },

@@ -125,6 +125,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `devops_takes`, `devops_notes`, `devops_edit_notes` | 14 days |
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
+| `meeting_series` calls (MC-2) | A call pressed for review that never got a transcript (Teams refused and nobody uploaded): its occurrence and row go after 14 days. One that got a transcript is kept like a client call |
 | `meeting_transcripts` | 30 days (MC-2: the summary with it); the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
 | `code_views` | 12 months |
 | `job_claims` | 30 days |
