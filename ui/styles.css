@@ -7732,7 +7732,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .card-meetings .cm-time { color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .card-meetings .cm-main { display: grid; gap: 1px; min-width: 0; }
 .card-meetings .cm-name-line { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-.card-meetings .cm-name { min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.card-meetings .cm-name { min-width: 0; overflow-wrap: break-word; }
 .card-meetings .cm-icon { flex: none; align-self: center; display: inline-flex; color: var(--accent); --icon: calc(13px * var(--text-scale)); }
 .card-meetings .cm-icon .ft-icon { width: var(--icon); height: var(--icon); }
 .card-meetings .cm-call { font-size: var(--fs-1); color: var(--accent); font-weight: 600; overflow-wrap: break-word; }
@@ -7765,8 +7765,8 @@ body.ah-dragging * { cursor: grabbing !important; }
 .card-meetings a.cm-hit, .card-meetings a.cm-hit:visited { color: var(--text); }
 /* WK-6: a call's state on its meeting in a rail or Day's Timeline, in place of the source line. */
 .event .ev-call-state { color: var(--accent); font-weight: 600; }
-/* WK-6 review: names wrap whole words (a long word may still break) and show up to three lines, on the card and in
-   the block panel's agenda; the panel's count is in the link colour, as on the card. */
-.card-meetings .cm-name { overflow-wrap: break-word; -webkit-line-clamp: 3; }
-.block-panel .bp-meetings .ag-title { white-space: normal; overflow-wrap: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; text-overflow: clip; }
+/* WK-6 review: names wrap whole words in full (a long word may still break), on the card and in the block panel's
+   agenda; no line clamp (a -webkit-box clamp on every row doubled the time Week takes to answer a press). The panel's
+   count is in the link colour, as on the card. */
+.block-panel .bp-meetings .ag-title { white-space: normal; overflow-wrap: break-word; display: block; overflow: visible; text-overflow: clip; -webkit-line-clamp: unset; }
 .block-panel .bp-meet-line .ml-needs { color: var(--accent); font-weight: 600; }
