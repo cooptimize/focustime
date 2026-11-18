@@ -110,7 +110,7 @@ describe.skipIf(!CHROMIUM)("Send feedback (F1, FB-1)", () => {
     await page.keyboard.press("Escape");
 
     await page.evaluate(() => (location.hash = "#/settings/connections"));
-    const row = page.locator(".feedback-setup");
+    const row = page.locator('[data-setting="feedback"]');
     await row.waitFor({ timeout: 30_000 });
     await row.getByText(/^Turn on DevOps writes for Internal: feedback is sent with your own DevOps write PAT\.$/).waitFor();
     await expect(row.getByRole("link", { name: "Turn on DevOps writes" }).count()).resolves.toBe(1);

@@ -23,17 +23,28 @@ from before ST-1; only where and how it is shown moved. The before and after map
 
 ## Adding a setting
 
-1. **Where it does its job.** The config key, `settingsEdit` in `config/settings.ts` and the field in its form in
-   `ui/Settings.tsx`, as for any setting. Change nothing in the shell for this.
-2. **The registry.** Add a row to `SETTINGS` in `ui/settings/registry.ts`: a unique kebab-case `id` (it becomes the
-   address's last part), its `section`, the `label` exactly as the page shows it, `keywords` people might type, and
-   `old` if it replaces an older label. `devOnly` shows it only in the developer loop, `demoOnly` only in a demo.
-3. **Mark it on the page.** Give its field `sid="<id>"` (`Field`, `AutoField`, `ReadOnly` and `Group` take it), or
-   put `data-setting="<id>"` on the element around it. An `AutoField` whose key is in `SID` gets it already.
+SA-2: every Settings section is drawn with one set of parts (`ui/settings/parts.tsx`), one file per section in
+`ui/settings/sections/`, in one column about 760 px wide. A section file draws nothing itself: no class names, no
+inline styles, no raw elements (`ui/settings/sections.guard.test.ts` fails on one).
+
+1. **Where it does its job.** The config key and `settingsEdit` in `config/settings.ts`, as for any setting, and the
+   field in its section's `useAutoSave` (`ui/settings/autosave.tsx`). Change nothing in the shell for this.
+2. **The registry.** Add a row to `SETTINGS` in `ui/settings/registry.ts`: a unique kebab-case `id` (the address's
+   last part), its `section`, its `group` when the page shows one, the `label` (the one name: the page, search, links
+   and the Undo message all read it), its `kind` (switch, choice for two to four, select for more, number with its
+   `unit`, time, text, list, action or status), its `help` (what it does first, one line) and `more` (the rest, behind
+   More about this), `keywords` people might type, and `old` if it replaces an older label. `devOnly` shows it only in
+   the developer loop, `demoOnly` only in a demo; `part` marks a setting's own rows (a weekday, one notice kind).
+3. **Draw it.** In its section file, inside a `Group`, a `Row id="<id>"` with the control its kind takes: `Switch`,
+   `Choice`, `Select`, `Num` (or `NumRow` and `SwitchRow` in `sections/fields.tsx`), `Time`, `Text`, a `List` of
+   `ListItem`s with one Add at its foot, or a `Button` with its result said on the row. Pass `mark={markOf(a, key)}`
+   for the saved mark and `team` for a team value ("Set by your FocusTime admin") or a `TeamDefault` with Reset. A
+   switch's label says what on means; it has no words of its own. The row carries `data-setting` for deep links.
 4. **Link to it.** `settingsHref(section, id)` for an `<a>`, `openSettings(section, id)` from the command menu
-   (`ui/menu.ts`), or `go(section, id)` inside Settings. Don't write `#/settings/...` strings by hand.
-5. **Check it.** `e2e/settings/panel-shell.test.ts` opens every section and fails when a registry setting has no
-   `data-setting` on its page; `ui/settings/registry.test.ts` checks the ids and search.
+   (`ui/menu.ts`), or `GoLink` inside Settings. Don't write `#/settings/...` strings by hand.
+5. **Check it.** `e2e/settings/panel-shell.test.ts` fails when a registry setting has no `data-setting` on its page;
+   `e2e/settings/sa2.test.ts` that a row's label isn't the registry's or its kind's control is missing;
+   `ui/settings/registry.test.ts` checks the ids, the names and search.
 
 A **new section**: add it to `SECTIONS` with its group and a one-line description (no em dashes), a `case` in
 `SectionBody`, and, when it replaces an old one, its old id in `OLD_SECTIONS` so bookmarks and notifications still land.

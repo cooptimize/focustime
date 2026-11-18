@@ -35,7 +35,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
 
     // The filter, in the address.
     await page.locator(".mtg-filter").getByRole("button", { name: /New in DevOps/ }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/new`);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/new`);
     await expect.poll(() => page.locator(".mtg-group").count()).toBe(1);
 
     // The Epic: Northwind's process needs a target date. Said on the row; Create waits for it.
@@ -67,7 +67,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
 
     // A promise is kept at once, with Undo.
     await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/promises`);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/promises`);
     const mine = page.locator(".mtg-prop:not(.confirmed)").filter({ has: page.locator("input[value='Send the date range filter for review']") });
     await mine.getByRole("button", { name: "Add to Promises" }).click();
     const toast = page.locator(".undo-toast");
@@ -90,25 +90,26 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await bar.getByRole("button", { name: "Clear" }).click();
     await bar.waitFor({ state: "detached" });
 
-    // Back returns to Week, where the call was opened from.
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Week" }).click();
+    // MC-3: Calls is a place, so the browser's Back returns to Week, where the call was opened from.
+    for (let i = 0; i < 6 && (await page.evaluate(() => location.hash)).startsWith("#/calls"); i++) await page.goBack();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");
     expect(errors).toEqual([]);
   }, T);
 
-  it("from Calls: the same count there; filter after a reload; Bring back; a line's button opens a folded row; Back to Calls", async () => {
+  it("from Calls: the same count there; filter after a reload; Bring back; a line's button opens a folded row; the list stays beside", async () => {
     const { page, errors } = await freshPage(h);
+    // MC-3: the address before Calls was a tab lands on Calls.
     await page.evaluate(() => (location.hash = "#/meetings"));
-    const series = page.locator(".mtg-series").first();
+    const series = page.locator("[data-call-row]").filter({ hasText: "Weekly status call" }).first();
     await series.waitFor({ timeout: 30_000 });
     const listed = Number(/Review (\d+) proposals/.exec((await series.textContent()) ?? "")?.[1]);
-    await series.getByRole("button", { name: /Review|Open/ }).first().click();
+    await series.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
     const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);
     await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(new RegExp(`^${listed} to review`));
     // The filter survives a reload.
     await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/meetings/${id}/promises`);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/promises`);
     await page.reload();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
     await expect(page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).getAttribute("aria-pressed")).resolves.toBe("true");
@@ -128,9 +129,8 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await page.locator(".mtg-prop.skipped").getByRole("button", { name: "Bring back" }).click();
     await expect.poll(() => row.count()).toBe(1);
     await expect.poll(() => page.locator(".mtg-count").textContent()).toMatch(new RegExp(`^${listed} to review`));
-    // Back to Calls (MC-2: was Client calls), where it was opened from.
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Calls" }).click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/meetings");
+    // MC-3: the list is still beside the call, with the call's row marked open.
+    await expect(series.getAttribute("aria-current")).resolves.toBe("true");
     expect(errors).toEqual([]);
   }, T);
 
@@ -139,7 +139,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
       const { page, errors } = await freshPage(h, { width: w, height: ht });
       await page.evaluate(() => (location.hash = "#/week"));
       const id = (await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "meeting.mine", input: {} }) }).then((r) => r.json()))).data.occurrences[0].id as number;
-      await page.evaluate((x) => (location.hash = x), `#/meetings/${id}`);
+      await page.evaluate((x) => (location.hash = x), `#/calls/${id}`);
       await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
       const view = page.locator(".mtg-view");
       const top = await view.evaluate((el) => el.getBoundingClientRect().top);
@@ -154,8 +154,11 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
         await expect(page.getByRole("heading", { name: "Update Northwind's plan" }).isVisible()).resolves.toBe(true);
         await expect(page.locator(".mtg-filter").isVisible()).resolves.toBe(true);
         // The header of the section being read sits right under them.
-        const stuck = await page.locator(".mtg-sec-head").evaluateAll((hs) => hs.map((x) => Math.round(x.getBoundingClientRect().top)));
-        expect(stuck.some((t) => Math.abs(t - (head.y + head.height)) <= 2), JSON.stringify({ stuck, head })).toBe(true);
+        // MC-3: the section under that line, unless its end is pushing its header out for the next one's.
+        const line = head.y + head.height;
+        const stuck = await page.locator(".mtg-sec-head").evaluateAll((hs, at) => hs.map((x) => { const sec = x.parentElement!.getBoundingClientRect(); const pad = parseFloat(getComputedStyle(x.parentElement!).paddingTop) + parseFloat(getComputedStyle(x.parentElement!).borderTopWidth); return { top: Math.round(x.getBoundingClientRect().top), under: sec.top + pad <= at + 1 && sec.bottom > at + 2 * x.getBoundingClientRect().height }; }), line);
+        expect(stuck.filter((s) => s.under).every((s) => Math.abs(s.top - line) <= 2), JSON.stringify({ stuck, head })).toBe(true);
+        if (steps === 1) expect(stuck.some((s) => s.under), JSON.stringify({ stuck, head })).toBe(true);
       }
       // The page never scrolls sideways.
       await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);

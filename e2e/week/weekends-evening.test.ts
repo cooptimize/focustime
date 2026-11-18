@@ -278,17 +278,18 @@ describe.skipIf(!CHROMIUM)("WK-3: weekends, the Evening band and Deployment to-d
     await planDeployments(page);
     await page.evaluate(() => (location.hash = "#/week"));
     await page.reload();
-    await page.locator(".day-tab").first().waitFor();
-    await expect.poll(() => page.locator(".day-tab", { hasText: /Sat/ }).count()).toBe(1);
-    expect(await page.locator(".day-tab", { hasText: /Sun/ }).count()).toBe(0);
+    // PH-2: Saturday is a row with its weekend tile; Sunday has none.
+    await page.locator(".pw-row").first().waitFor();
+    await expect.poll(() => page.locator(".pw-wd", { hasText: /^Sat$/ }).count()).toBe(1);
+    expect(await page.locator(".pw-wd", { hasText: /^Sun$/ }).count()).toBe(0);
     await page.getByTestId("after-hours").waitFor();
     expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
-    const tabs = await page.locator(".day-tab").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
-    expect(Math.max(...tabs)).toBeLessThanOrEqual(360);
+    const tiles = await page.locator(".pw-tile").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right));
+    expect(Math.max(...tiles)).toBeLessThanOrEqual(360);
     await shot(page, "wk3-phone-week");
-    await page.locator(".day-tab", { hasText: /Sat/ }).click();
+    await page.locator(".pw-row", { has: page.locator(".pw-wd", { hasText: /^Sat$/ }) }).locator(".pw-tile.weekend").click();
     await page.waitForTimeout(400);
-    await page.locator(".weekend-cell .pick-row", { hasText: "Release 4.2" }).scrollIntoViewIfNeeded();
+    await page.getByText("Release 4.2").first().scrollIntoViewIfNeeded();
     await shot(page, "wk3-phone-saturday");
     await page.close();
   }, T);

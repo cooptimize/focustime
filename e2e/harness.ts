@@ -306,7 +306,7 @@ export async function settingsSection(page: Page, id: string): Promise<void> {
 /** ST-1: one client's own page in Settings › Clients (from its row). */
 export async function settingsClient(page: Page, name: string): Promise<void> {
   await settingsSection(page, "clients");
-  await page.locator(".set-client-row", { hasText: name }).first().click();
+  await page.locator(".ps-body .sp-link-item", { hasText: name }).first().click();
   await page.locator(".ps-head h2", { hasText: name }).waitFor();
 }
 

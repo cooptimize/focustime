@@ -116,8 +116,9 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await shot(page, "ph1-now-block");
     // Next: the next meeting and the next block, with its risk, in time order.
     expect(await page.locator(".pn-next-row").allTextContents()).toEqual(["11:00 AMProposal review with Jordan45 min", "12:30 PMNorthwindAt risk · Dentist 12:00"]);
-    // Today, under its own heading, by block.
-    expect(await page.locator(".ph-todos .section-label").textContent()).toBe("Today");
+    // PH-2: the day's blocks as sections under Next and the one thing; the Now card's to-do isn't listed again.
+    await page.locator(".dg-block").first().waitFor();
+    expect(await page.locator(".dg-title", { hasText: "Write the migration notes" }).count()).toBe(0);
     // Off Now: the day's arrows, Cards or Timeline, the Day menu, the suggestions line, the moment card, the urgent strip.
     expect(await page.locator(".day-bar, .day-switch, .pd-step, .sug-day-head, .moment-card, .urgent-strip, .day-chips, .ph-next").count()).toBe(0);
 
@@ -179,7 +180,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await page.close();
   }, T);
 
-  it("the one thing that needs you: the most pressing, 1 of the Inbox's count, opening in the Inbox", async () => {
+  it("the one thing that needs you: the most pressing, 1 of the Inbox's count, opening the Inbox one at a time at it", async () => {
     const page = await phonePage(h, 390);
     await open(page, h, "#/day", at("09:30"));
     const one = page.locator(".pn-one-row");
@@ -188,8 +189,13 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     expect(await one.locator(".pn-one-of").textContent()).toBe(`1 of ${count}`);
     // The demo's late promise comes first.
     expect(await one.locator(".pn-one-why").textContent()).toBe("Late");
+    // PH-2: the heading is the Inbox's own name.
+    expect(await page.getByRole("heading", { name: "Inbox", exact: true }).count()).toBeGreaterThan(0);
     await one.click();
-    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/inbox\/item\//);
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/inbox\/one\//);
+    const key = (await page.evaluate(() => location.hash)).split("/").pop();
+    await expect.poll(() => page.locator(".io-card").getAttribute("data-key"), { timeout: 15_000 }).toBe(key);
+    expect(await page.locator(".io-of").textContent()).toBe(`1 of ${count}`);
     expect(await bar(page).locator('[aria-current="page"]').getAttribute("data-tab")).toBe("inbox");
     await page.close();
   }, T);
@@ -208,7 +214,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await screen.waitFor();
     expect(await bar(page).locator('[aria-current="page"]').getAttribute("data-tab")).toBe("more");
     const rows = await screen.locator(".mr-row").evaluateAll((els) => els.map((e) => [e.querySelector(".mr-name")?.textContent, e.querySelector(".mr-line")?.textContent ?? null, Math.round(e.getBoundingClientRect().height)] as const));
-    expect(rows.map((r) => r[0])).toEqual(["Backlog", "Status", "Calls", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
+    expect(rows.map((r) => r[0])).toEqual(["Calls", "Backlog", "Status", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
     for (const r of rows) expect(r[2], r[0]!).toBeGreaterThanOrEqual(56);
     expect(Object.fromEntries(rows.map((r) => [r[0], r[1]]))).toMatchObject({ Status: "2 features need your update", Calls: "1 call to review", "My VM": "Stopped (deallocated)" });
     await shot(page, "ph1-more");
@@ -239,7 +245,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     };
     await go("backlog", false, () => page.getByRole("heading", { name: "Backlog is made for a bigger screen" }).waitFor());
     await go("status", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/status/));
-    await go("calls", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/meetings/));
+    await go("calls", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/calls/));
     await go("code", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/code/));
     await go("vm", false, () => page.getByRole("menu").waitFor());
     await go("settings", false, () => expect.poll(() => page.evaluate(() => location.hash), { timeout: 15_000 }).toMatch(/^#\/settings/));
@@ -293,7 +299,7 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     // Focus starts on More's heading; Tab walks the rows.
     expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("H1");
     await page.keyboard.press("Tab");
-    expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("backlog");
+    expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("calls");
     for (let i = 0; i < 7; i++) await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement?.getAttribute("data-row"))).toBe("else");
     await page.keyboard.press("Enter");

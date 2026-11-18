@@ -130,7 +130,7 @@ export const CALL_ACTIONS = {
   fromTeams: "Get it from Teams",
 } as const;
 
-/** MC-2: Calls (#/meetings): its two lists, Add a call, and the setup a call that isn't registered opens with. */
+/** MC-2: Calls (#/calls since MC-3; #/meetings before): its lists, Add a call, and the setup a call that isn't registered opens with. */
 export const CALLS_TEXT = {
   heading: "Calls",
   sub: "Your client calls and the other calls you were on",
@@ -173,6 +173,55 @@ export const CALLS_TEXT = {
   summary: "What was said",
   whoSees: "You and the Cooptimizers on the invite can see this call. Only you can act on it.",
   whoSeesHand: "Only you can see this call.",
+} as const;
+
+/**
+ * MC-3: Calls as a tab: one list by day, its filters and client chips, each row's second line, the folds at its foot,
+ * and the space beside the list. A row's state is CALL_STATE's (or CALLS_TEXT.notReviewed).
+ */
+export const CALL_LIST = {
+  /** The tab's title (and its number key's line). */
+  tabTitle: "Calls: review the calls you were on",
+  sub: "The calls you were on, newest first",
+  /** The filters: All, then each bucket. */
+  filters: { all: "All", review: "To review", open: CALLS_TEXT.notReviewed, done: "Done" },
+  filterHint: { all: "Every call in the list", review: "Calls waiting for you: proposals to review, a transcript to upload or a step that failed", open: "Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer", done: "Calls that were reviewed, had nothing to propose or had no transcript" },
+  allClients: "All clients",
+  noClient: "No client yet",
+  today: "Today",
+  yesterday: "Yesterday",
+  /** A row's second line: where the transcript came from, or will. */
+  fromTeams: "Transcript from Teams",
+  uploaded: "Transcript uploaded",
+  readAfter: "Read from Teams after the call",
+  uploadedByReviewer: "Uploaded by a reviewer",
+  teamsOrFile: "From Teams or a file",
+  fileOnly: "Upload only",
+  /** The mark on a registered weekly call, before its type. */
+  weekly: "Weekly",
+  noneHere: "No calls here. Choose All to see every call.",
+  none: (days: number) => `No calls in the last ${days} days. A call on your calendar shows here once it has started.`,
+  privacy: "Only you see the calls from your calendar, and FocusTime keeps nothing about one until you review it.",
+  /** The space beside the list when there's no call at all. */
+  emptyBeside: "Calls turns what was said on a call into DevOps items, promises and comments you confirm. Review any call you were on, or add one that isn't on your calendar.",
+  /** The fold at the list's foot: the registered client calls, each with when it meets and how its transcript arrives. */
+  clientCalls: (n: number) => `Client calls (${n})`,
+  clientCallsSub: "Weekly calls a FocusTime admin registered. Their calls from the last 14 days are in the list above.",
+  reviewers: (names: readonly string[]) => `Reviewed by ${names.join(", ")}`,
+  /** Calls older than the list's days that don't need me, until their transcript is dropped. */
+  older: (n: number) => `Earlier calls (${n})`,
+  olderSub: "Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call.",
+  /** A registered call with no occurrence in the weeks FocusTime looks at. */
+  noneLately: "Nothing in the last five weeks.",
+  hideList: "Hide the list",
+  showList: "Show the list",
+  back: "Back to Calls",
+  loading: "Loading calls…",
+  tryAgain: "Try again",
+  /** The calls FocusTime keeps couldn't be read: no list rather than one missing the calls that need me. */
+  failedMine: "FocusTime couldn't read your calls just now, so the list isn't shown: it would leave out the calls waiting for you.",
+  /** Only my calendar's calls couldn't be read: the rest of the list is shown. */
+  failedOthers: "FocusTime couldn't read your calendar's calls just now. The calls it keeps are listed.",
 } as const;
 
 /** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */

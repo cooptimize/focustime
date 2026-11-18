@@ -457,8 +457,8 @@ describe.skipIf(!CHROMIUM)("BR-1: the loader is the week mark alone (browser, de
     await page.goto(h.url);
     await appUp(page);
     await page.evaluate(() => (location.hash = "#/settings/connections"));
-    await page.locator("li.source button").filter({ hasText: /^Reconnect$/ }).first().click();
-    const line = page.locator(".reconnect-line[role=status]");
+    await page.locator('[data-setting="sources"] .sp-status li button').filter({ hasText: /^Reconnect$/ }).first().click();
+    const line = page.locator('[data-setting="sources"] .sp-note[role=status]');
     await expect.poll(() => line.textContent()).toBe("Outlook is connected again.");
     expect(await line.locator("svg").count()).toBe(0);
     // A week read still in flight through the route when the context closes is not this test's failure.

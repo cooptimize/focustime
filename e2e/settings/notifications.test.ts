@@ -17,19 +17,20 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     const { page, errors } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "notifications");
-    const form = page.locator(".set-form", { hasText: "Ritual reminders" });
+    const form = page.locator(".ps-body", { hasText: "Ritual reminders" });
     await form.waitFor();
-    for (const name of ["Add work to today", "Check-in", "Close out", "Add work to the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
-      await expect(form.locator(".set-notify-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
-    // TB-2's In Teams kinds sit in the same form ("Midday check-in", its time select): these are the app's own.
-    await form.getByRole("checkbox", { name: /^Check-in/ }).uncheck();
-    await form.locator("select:not(.set-teams select)").selectOption("off");
+    for (const name of ["Add work to today", "Midday check-in", "Close out", "Add work to the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
+      await expect(form.locator(".sp-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
+    // TB-2's In Teams kinds sit in the same page, also "Midday check-in": these are the app's own (SA-2: the kind's
+    // name is "Midday check-in" everywhere).
+    await form.locator('[data-setting="notify-checkin"]').getByRole("switch").uncheck();
+    await form.locator('[data-setting="quiet"]').getByRole("radio", { name: "Never quiet" }).check();
     // Fix/settings-autosave: each change saves itself; no Save button.
     await expect(form.getByRole("button", { name: "Save" }).count()).resolves.toBe(0);
     await expect.poll(() => form.textContent(), { timeout: 5000 }).toContain("Saved");
     const saved = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()));
     expect(saved.data.notify).toMatchObject({ quiet: "off", kinds: { checkin: false, closeout: true } });
-    await expect(form.getByRole("button", { name: "Send a test notification" }).count()).resolves.toBe(1);
+    await expect(form.locator('[data-setting="test-notification"]').getByRole("button", { name: "Send now" }).count()).resolves.toBe(1);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -41,9 +42,9 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await settingsSection(page, "notifications");
     const field = page.locator('[data-setting="quiet-pto"]');
     await field.waitFor();
-    await expect(field.textContent()).resolves.toContain("Days off");
+    await expect(field.textContent()).resolves.toContain("Quiet on days off");
     await expect(field.textContent()).resolves.toContain("PTO and company holidays from Dataverse.");
-    const box = field.getByRole("checkbox", { name: "Quiet on days off" });
+    const box = field.getByRole("switch");
     await expect(box.isChecked()).resolves.toBe(true);
     await box.uncheck();
     await expect.poll(load, { timeout: 5000 }).toBe(false);
@@ -89,7 +90,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week/2026-11-09/add");
     await expectView("focus", ".focus-screen");
     await expectView("inbox", 'main[aria-label="Inbox"]');
-    await expectView("settings:notifications", ".set-notify");
+    await expectView("settings:notifications", '.ps-body [data-setting^="notify-"]');
     await expectView("today", ".today-view");
     // A promise I added (a follow-up before IB-1) opens the Inbox with it open in the detail pane.
     const id = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "followups.list", input: {} }) }).then((r) => r.json()).then((j) => j.data.followUps[0].id as number));

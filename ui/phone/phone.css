@@ -139,4 +139,138 @@
   .mr-name { font-weight: 500; }
   .mr-line { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
   .mr-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--risk); }
+
+  /* PH-2: Week as day rows. The header stays in view under the top bar (--ph-top, measured); every day on one screen
+     at 390 by 844 for a week with no evenings. A tile: the client's name, then one line; the client's color as a tint
+     and an edge, never a fill; the block under way outlined; an Open half-day dashed; a day that is one thing one tile. */
+  .pw { display: grid; gap: 4px; font-size: var(--ph-body); }
+  .pw-head { position: sticky; top: var(--ph-top, 0px); z-index: 20; background: var(--bg); padding: 2px 0 6px; display: grid; gap: 2px; box-shadow: 0 1px 0 var(--border); }
+  .pw-head-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: var(--tap); }
+  .pw-title { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; min-width: 0; }
+  .app.phone .pw-step, .app.phone .pd-step-ph button { min-width: var(--tap); min-height: var(--tap); padding: 0; display: inline-grid; place-items: center; border: 0; background: none; color: var(--text); }
+  .pw-step svg, .pd-step-ph svg { width: 20px; height: 20px; }
+  .app.phone .pw-this { min-height: var(--tap); margin-left: auto; padding: 0 12px; font-size: var(--fs-2); }
+  .pw-chips:empty { display: none; }
+  .pw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pw-head .week-subline, .pw-head .next-empty-line { margin: 0; }
+  .pw-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  /* A fixed column for the day's name, so every row's tiles start at the same x (the due words wrap inside it). */
+  .pw-row { display: grid; grid-template-columns: 5.2em minmax(0, 1fr); gap: 6px; align-items: stretch; }
+  .app.phone .pw-day {
+    min-height: var(--tap); padding: 6px 4px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px;
+    border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; max-width: 5.6em;
+  }
+  .pw-wd { font-weight: 600; font-size: var(--fs-3); }
+  .pw-date { font-size: var(--fs-2); color: var(--text-muted); }
+  .pw-due { font-size: var(--fs-1); font-weight: 600; color: var(--watch-text, var(--watch)); overflow-wrap: anywhere; }
+  /* Today: marked by its weight and a bar (and aria-current), never by color alone. Past days quieter. */
+  .pw-row.today .pw-day { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; }
+  .pw-row.past .pw-tile, .pw-row.past .pw-day { opacity: .62; }
+  .pw-rows.busy { opacity: .5; }
+  .pw-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5em), 1fr)); gap: 6px; min-width: 0; }
+  .app.phone .pw-tile {
+    min-height: 56px; min-width: 0; padding: 7px 10px 7px 12px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
+    border-radius: 10px; border: 1px solid color-mix(in srgb, var(--c, var(--border-strong)) 35%, var(--border));
+    background: color-mix(in srgb, var(--c, var(--border-strong)) 12%, var(--surface)); color: var(--text); text-align: left;
+    box-shadow: inset 4px 0 0 var(--c, var(--border-strong)); font-size: var(--ph-body); line-height: 1.2;
+  }
+  .pw-tile.plain { --c: var(--border-strong); }
+  .app.phone .pw-tile.open { background: none; border: 1.5px dashed var(--border-strong); box-shadow: none; }
+  .app.phone .pw-tile.now { outline: 2px solid var(--text); outline-offset: 1px; }
+  .pw-tile.whole { grid-column: 1 / -1; }
+  .app.phone .pw-tile.whole.pto { background: repeating-linear-gradient(135deg, var(--surface) 0 6px, color-mix(in srgb, var(--text-muted) 10%, var(--surface)) 6px 12px); box-shadow: none; border-color: var(--border); }
+  .app.phone .pw-tile.whole.catchup { background: none; border: 1.5px dashed var(--border-strong); box-shadow: none; }
+  .app.phone .pw-tile.whole.weekend { background: var(--surface); box-shadow: none; border-color: var(--border); }
+  .app.phone .pw-tile.eve { grid-column: 1 / -1; min-height: var(--tap); flex-direction: row; align-items: baseline; gap: 8px; padding: 6px 12px; background: var(--surface); box-shadow: none; border-color: var(--border); }
+  .pw-name { font-weight: 600; max-width: 100%; overflow-wrap: break-word; }
+  .pw-tile.eve .pw-name { font-weight: 500; color: var(--text-muted); font-size: var(--fs-2); flex: none; }
+  .pw-line { font-size: var(--fs-2); color: var(--text-muted); max-width: 100%; overflow-wrap: break-word; }
+  .pw-tile.st-at_risk .pw-line, .pw-tile.now.st-now .pw-line { color: var(--text); }
+  .pw-tile.st-at_risk .pw-line { color: var(--risk-text, var(--risk)); font-weight: 500; }
+  .pw-tile.st-not_done .pw-line { color: var(--watch-text, var(--watch)); }
+  .pw-tile:focus-visible, .pw-day:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+  /* PH-2: a day at a glance. Each block a section with its color as an edge; to-dos a tick box and a title (44 px rows);
+     meetings in time order, then the card's line of meetings and free time; one quiet Add. Another day's small header
+     stays in view under the top bar. */
+  .dg { display: grid; gap: 12px; padding-bottom: 32px; font-size: var(--ph-body); }
+  .dg-empty-day { margin: 0; color: var(--text-muted); }
+  .dg-block { display: grid; gap: 2px; padding: 4px 12px 6px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); box-shadow: inset 4px 0 0 var(--c, var(--border-strong)); }
+  .dg-block.plain { --c: var(--border-strong); }
+  .dg-block.over { opacity: .8; }
+  .app.phone .dg-head {
+    width: 100%; min-height: var(--tap); display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 0; padding: 8px 0 4px;
+    border: 0; background: none; color: var(--text); text-align: left; font-size: var(--ph-body);
+  }
+  .dg-head.static { margin: 0; font-weight: 600; }
+  .dg-head .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); align-self: center; }
+  .dg-name { font-weight: 600; overflow-wrap: anywhere; }
+  .dg-hours { color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+  .dg-risk { flex-basis: 100%; color: var(--risk-text, var(--risk)); font-size: var(--fs-2); font-weight: 500; }
+  .dg-todos, .dg-meetings { list-style: none; margin: 0; padding: 0; display: grid; }
+  .dg-todo { display: grid; grid-template-columns: var(--tap) minmax(0, 1fr); align-items: center; }
+  .dg-tick { display: grid; place-items: center; min-width: var(--tap); min-height: var(--tap); margin-left: -10px; cursor: pointer; }
+  .app.phone .dg-tick input[type="checkbox"] { width: 22px; height: 22px; }
+  .app.phone .dg-title {
+    min-height: var(--tap); min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 0;
+    border: 0; background: none; color: var(--text); text-align: left; font-size: var(--ph-body);
+  }
+  .dg-title-text { min-width: 0; overflow-wrap: anywhere; }
+  .dg-todo.done .dg-title-text { color: var(--text-muted); text-decoration: line-through; }
+  .dg-size { flex: none; color: var(--text-muted); font-size: var(--fs-2); }
+  .dg-none { margin: 2px 0; color: var(--text-muted); font-size: var(--fs-2); }
+  .dg-meetings { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px; }
+  /* A wide mark (a call's "Review 11 proposals") wraps under the title rather than squeezing it. */
+  .dg-meeting { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 2px; min-height: var(--tap); padding: 2px 0; }
+  .dg-meeting > :last-child:not(.dg-mtitle) { margin-left: auto; max-width: 100%; }
+  .dg-at { min-width: 6.6em; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dg-mtitle { flex: 1 1 12ch; min-width: 12ch; overflow-wrap: anywhere; }
+  .dg-meeting.personal .dg-mtitle { font-style: italic; }
+  .dg-meeting .call-mark-btn, .dg-meeting button { min-height: var(--tap); }
+  .dg-line { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-2); }
+  .app.phone .dg-add { justify-self: start; min-height: var(--tap); margin-top: 2px; }
+  .ph-today .dg { margin-top: 4px; }
+
+  .dg-headbar { position: sticky; top: var(--ph-top, 0px); z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; padding: 2px 0 6px; margin-bottom: 8px; background: var(--bg); box-shadow: 0 1px 0 var(--border); }
+  .dg-date { margin: 0; font-size: calc(var(--ph-body) + 2px); font-weight: 600; white-space: nowrap; min-width: 0; }
+  .pd-step-ph { display: inline-flex; }
+  .dg-headacts { margin-left: auto; display: inline-flex; gap: 4px; }
+  .app.phone .dg-today, .app.phone .dg-week { min-height: var(--tap); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
+  .dg-week svg { width: 16px; height: 16px; }
+
+  /* PH-2: the Inbox one at a time. One card, its actions as full-width buttons (the main one first, the rest under
+     More), Previous and Next, then Up next; the three lists one tap from the top. */
+  .io { display: grid; gap: 12px; padding: 8px 16px 48px; font-size: var(--ph-body); }
+  .io-head { display: flex; align-items: baseline; gap: 10px; }
+  .io-h { margin: 0; font-size: calc(var(--ph-body) + 4px); font-weight: 600; }
+  .io-of { color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+  .io-lists { display: flex; flex-wrap: wrap; gap: 6px; }
+  .app.phone .io-list { min-height: var(--tap); padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 22px; font-size: var(--fs-2); }
+  .io-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .io-card { display: grid; gap: 6px; padding: 14px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--c, var(--border-strong)) 35%, var(--border)); background: color-mix(in srgb, var(--c, var(--border-strong)) 8%, var(--surface)); box-shadow: inset 4px 0 0 var(--c, var(--border-strong)); }
+  .io-card > * { margin: 0; }
+  .io-client { display: flex; align-items: center; gap: 8px; font-size: var(--fs-2); color: var(--text-muted); font-weight: 500; }
+  .io-client .swatch, .io-nextrow .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+  .io-title { font-size: calc(var(--ph-body) + 2px); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .io-title:focus { outline: none; }
+  .io-who { font-weight: 500; }
+  .io-where { font-size: var(--fs-2); overflow-wrap: anywhere; }
+  .io-card .ib-said, .io-card .ib4-why, .io-card .ib-summary { margin: 0; overflow-wrap: anywhere; }
+  .io-acts { display: grid; gap: 8px; }
+  .io-rest { display: grid; gap: 8px; }
+  .app.phone .io-act { width: 100%; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; font-size: var(--ph-body); font-weight: 500; text-decoration: none; }
+  .app.phone .io-act.primary { font-weight: 600; }
+  .io-more svg { width: 16px; height: 16px; }
+  .io-step { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .app.phone .io-stepbtn { min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--fs-2); }
+  .io-stepbtn svg { width: 16px; height: 16px; }
+  .io-next ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .app.phone .io-nextrow { width: 100%; min-height: var(--tap); display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "sw client" "sw title"; align-items: center; column-gap: 8px; row-gap: 0; padding: 6px 4px; border: 0; background: none; color: var(--text); text-align: left; font-size: var(--ph-body); }
+  .io-nextrow .swatch { grid-area: sw; }
+  .io-nextclient { grid-area: client; color: var(--text-muted); font-size: var(--fs-2); }
+  .io-nexttitle { grid-area: title; min-width: 0; overflow-wrap: anywhere; }
+  .io-end { margin: 0; font-weight: 500; }
+  .ib4-head .io-end { flex-basis: 100%; }
+  .app.phone .io-back { min-height: var(--tap); padding: 0 10px 0 4px; display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--text); font-size: var(--fs-2); }
+  .io-back svg { width: 18px; height: 18px; }
 }

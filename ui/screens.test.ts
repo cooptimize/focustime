@@ -269,7 +269,7 @@ describe("fetching ahead in the background", () => {
       await t.arrive(n);
     }
     expect(t.asked).toEqual([...BACKGROUND]);
-    expect(BACKGROUND.slice(0, 4)).toEqual(["ahead", "status", "inbox", "code"]);
+    expect(BACKGROUND.slice(0, 5)).toEqual(["ahead", "status", "inbox", "meetings", "code"]); // MC-3: Calls is a tab, before Code.
     expect(BACKGROUND).not.toContain("guide");
     expect(BACKGROUND).not.toContain("docs");
     expect(idle).toEqual([]);

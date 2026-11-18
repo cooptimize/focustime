@@ -47,10 +47,10 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
       // Settings › AI: no switch of my own; AI for FocusTime is off, set by an admin; no key yet.
       await openSettings(page);
       await settingsSection(page, "ai");
-      const ai = page.locator(".set-ai");
+      const ai = page.locator(".ps-body");
       await ai.getByText("AI for FocusTime").waitFor();
       expect(await page.getByRole("switch", { name: "Use AI" }).count()).toBe(0);
-      await ai.locator(".set-field", { hasText: "AI for FocusTime" }).getByText("Off", { exact: true }).waitFor();
+      await ai.locator(".sp-row", { hasText: "AI for FocusTime" }).getByText("Off", { exact: true }).waitFor();
       await ai.getByText("Set by your FocusTime admin").first().waitFor();
       await page.getByText("AI isn't set up for this FocusTime yet").waitFor();
       await page.getByText("No AI requests yet.").waitFor();
@@ -58,18 +58,18 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
 
       // AI off for FocusTime: Test AI sends nothing and says who turns it on.
       await page.getByRole("button", { name: "Test AI" }).click();
-      await page.locator(".set-ai-test").getByText("AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI.").waitFor();
+      await page.locator('[data-setting="ai-test"]').getByText("AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI.").waitFor();
 
       // An admin turns AI on; no key yet: Test AI says why, in plain words.
       await team.set("org", "ai.on", true);
       await page.getByRole("button", { name: "Test AI" }).click();
-      await page.locator(".set-ai-test").getByText("AI isn't set up").waitFor();
+      await page.locator('[data-setting="ai-test"]').getByText("AI isn't set up").waitFor();
 
       // A key arrives (the stub stands in for OpenAI): Test AI is OK with its time and cost, and it's in the log.
       provider = stubProvider();
       await page.getByRole("button", { name: "Test AI" }).click();
-      await page.locator(".set-ai-ok").getByText(/^OK · \d+\.\d s · /).waitFor();
-      const row = page.locator(".set-ai-log tbody tr").first();
+      await page.locator('[data-setting="ai-test"]').getByText(/^OK · \d+\.\d s · /).waitFor();
+      const row = page.locator('[data-setting="ai-log"] tbody tr').first();
       await row.getByText("Test AI").waitFor();
       await row.getByText("OK", { exact: true }).waitFor();
       expect(await ai.textContent()).not.toContain("Reply with ok");
@@ -77,11 +77,11 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
       // The admin allows Adatum: Settings › AI and Settings › Clients show it, read-only.
       await team.set("client:Adatum", "allow_ai", true);
       await settingsClient(page, "Adatum");
-      const adatum = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
+      const adatum = page.locator(".ps-body");
       await adatum.getByText("Allowed for Adatum").waitFor();
       expect(await adatum.getByRole("switch", { name: /Allow AI/ }).count()).toBe(0);
       await settingsSection(page, "ai");
-      await ai.locator(".set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
+      await ai.locator(".sp-row", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
       await ai.getByText("Adatum").first().waitFor();
 
       // A $0 cap: "AI budget is set to $0", never "reached".

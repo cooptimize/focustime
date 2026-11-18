@@ -1664,6 +1664,52 @@ From the IT review (TD-1):
 - **`docs/technical/operations.md` names the wrong smoke test.** It says deploy-dev's smoke test is `infra/scripts/smoke.sh`; the workflow runs its own inline Smoke test step (health, the commit served, the title, sign-in, headers) and smoke.sh is a by-hand check after a deploy. Not the title's cause, so not changed here.
 - **The style guide's light `--risk` reads #C0311F; the stylesheet's is #B42F1D** (`--p-co-red-700`). DD-1's row gives the stylesheet's value. Which one should the table show?
 
+## MC-3: Calls is a tab (Nov 17)
+
+- **Should the phone's bar carry Calls?** It stays in More, first, with its count (as decided). A person who reviews calls daily on the phone takes two taps; the bar has room for five.
+- **Should Day on the phone point at a call that needs me?** The urgent strip shows the Inbox's own items only; a call waiting for review shows on its meeting's mark and in More's count.
+- **Is 14 days right for the list?** Calls that need me stay until their transcript goes at 30 days; the rest fold under Earlier calls. A week and a weekend may be enough for the list itself.
+- **Calls' browser tests in their own folder.** They are still in `e2e/week/` (and `e2e/day/client-call-door.test.ts`); the new one sits beside them. A folder of their own (`e2e/calls/`) would match the tab.
+- **A repeating meeting in the list (MC-2's question).** A daily standup is still a row a day. Folding repeats into one row ("Team standup · 6"), or hiding a call for me, is open.
+- **What MC-2b and MC-2c need from the list.** Pocket recordings (MC-2b) would match a recording to a row by start and length and put it on the setup's upload; calls in chats (MC-2c) would add rows with a source "From a chat". The row's second line has room for both.
+- **The server's `#/meetings` links.** The Teams bot's notes and the assistant's links still say `#/meetings` (and "Open Client calls"). They land on Calls; changing their words was left out (no rewording in this step).
+- **Back in two steps.** Below 900 px a call has a Back button; side by side it has none (the list is there, and the browser's Back works). Should the wide page keep a Back for people who arrived from Day?
+- **Choosing a filter goes into history.** Each filter press is its own Back step (as MC-1e's call filter is). Replacing the address instead would make Back leave Calls sooner.
+- **The tab's title says its key (consultant walkthrough).** Every tab's title ends with its number key, "Calls: review the calls you were on (6)", beside a count of 1. A person read the 6 as a second count. Saying "key 6" would change every tab's title, so it was left.
+- **The client suggested for an internal call (consultant walkthrough).** A daily standup during a Northwind block is suggested as Northwind (MC-2's rule: the block's client when the title names none). One careless Continue files it under Northwind. Suggest nothing for a call whose people are all Cooptimizers?
+- **A setup has no address (consultant walkthrough).** A calendar call nobody has read has no id FocusTime keeps, and its calendar key is not put in an address, so a reload closes its setup.
+- **The call that needs me on the phone's list (consultant walkthrough).** Newest first puts it under that day's other calls; on a computer it opens beside the list by itself, on the phone it doesn't. Should the phone open on To review, or put calls that need me first?
+- **A calendar call named after a client (consultant walkthrough).** "Northwind requirements workshop" says No client yet until it is reviewed, so the Northwind chip leaves it out. Its client is chosen in the setup by design.
+- **Focus after the DevOps preview's Not now (consultant walkthrough).** It goes to the page, not back to Create in DevOps. The call's page is MC-1e's, unchanged in this step.
+
+## PH-2
+
+- **Should the phone place or move work on Week?** Not in this step: Week on the phone only opens a day. Placing is a day's Add (the block's sheet) and moving is the to-do's sheet. A long-press on a tile could open the block's sheet later.
+- **Should Day's timeline on the phone go, or move under More?** It stays as PH-1 left it, with its switch now in Settings › Display ("Show Day as a timeline", phone only). Few will find it there; if nobody uses it, it could go, with Timebox my day left to the computer.
+- **Should the phone's Day point at a call that needs me?** Not here (calls are PH-3's or MC-2's). The meeting's call mark in a section opens the call, and More › Calls lists them.
+- **Should a tile say its free time?** No: the tile says one line, and free time is the day's section line ("3 meetings · 2h 30m · 1h 45m free"). A tile with nothing planned might say "2h free" instead of "Nothing planned" later.
+- **What can PH-3 and PH-4 reuse?** The day's sections (`DaySections`) for Close out's per-block review (PH-4), the small sticky header (`DayGlanceHead`, `useTopOffset`) for any phone screen with Previous and Next, `InboxOne`'s frame (one card, full-width actions, More, Previous, Next, Up next) for a quick Backlog or Status queue (PH-3), and `needsQueue` for anything that walks what needs me.
+- **Promises due on a day's row are that day's only.** Late ones go to the Inbox; a row never says "Late". The reading that changes less.
+- **The catch-up day's whole cell and a weekend day** keep their own bodies (the grid cell, WK-3's list) under the small header, not sections. The reading that changes less; the catch-up day with hours draws as sections.
+- **More expands in place** under the main button rather than opening a sheet: the literal reading of "the rest under More", and one less layer on a small screen.
+- **From the consultant review (PH-2), left for later.** "1 of 5" counts what needs me while the lists' chips count each list's rows (both as the Inbox counts them today); a day row's "Due tomorrow" doesn't say it means promises (its screen-reader name does); with More open, Previous and Next sit below the fold; the Inbox's late tag is red where the rest of the app keeps late amber (the Inbox's own style, unchanged); the to-do sheet's words ("Size? 1h", "Move to Tuesday" when Tuesday is today) are the sheet's, which PH-2 doesn't change; a meeting across the noon split shows in both blocks, as on the computer's cards.
+- **`e2e/week/pto-and-about.test.ts` failed now and then** ("Founders Day (observed)" where it expects "PTO"): it opened the week of Nov 9 and read the fourth day as soon as the block panel showed, so when this week was still drawn it read this week's Thursday, the demo's holiday (SR-3). It now waits for Nov 12 to be drawn first. Answered: a race in the test, not a change in the app.
+- **`docs/open-questions.md` passed the guards' 300 KB limit** when PH-2 merged MC-3 (main's was 299 KB). It is now in `LARGE_OK` beside the decision log, the reading that changes less. Splitting the list by step, or moving answered questions out, would keep it small.
+
+## SA-2: One way to draw a setting, one name per setting (Nov 18)
+
+- **A zero-length lunch is the defaults' split time.** `config/starter.ts` and `config/org.ts` default lunch to "12:00-12:00", and the demo has "12:30-12:30": a lunch of no length that splits the day at that time. It isn't only demo data, so the demo was left as it is (the reading that changes less). Settings refuses a newly typed zero lunch with an example and still saves the one already stored. Should the split time be its own setting, and the defaults move to it?
+- **The app's one time format for working hours.** Settings keeps "09:00-13:00" (the config's format, as before) after reading "9:00 to 13:00". Elsewhere the app writes times as "9:00 AM". Which should Settings show?
+- **Components that keep their insides.** Client chats and the data platform (shared with Admin), My VM's rows (shared with Setup), calendar links, the Pocket recorder, Diagnostics and the DevOps, Azure, Teams status and Close the loop logs sit in the parts' cards but keep their own rows, buttons and help. They are most of what's left in `docs/ux/sa2/after.md`'s kinds. Redraw them in SA-4 (Admin's) or a follow-up?
+- **The client page's order.** On main a client's page had no `data-setting` ids at all (SA-0 inventory), so `sa2-order-main.json` has no client entry; its rows now have ids (`client-*`) and their order was checked by eye against `settings/09-client-Atlas` on `shots/sa0`.
+- **Help at Larger.** The two-line limit is checked at the default Text size with the iPhone's 17 px root font. At Larger some help still takes three lines on a phone. Should the split move with the text size?
+- **"Team default: violet."** A client's team color shows as its palette name. Is a swatch better there?
+- **The AI log's task names.** `capture.prepare` shows as the raw task name in Last 20 AI requests; `AI_TASK_NAMES` has no word for it (unchanged by SA-2).
+- **Admin › Clients' card edge** (SA-0 part 1, the fifth break) is Admin's, left for SA-4.
+- **From SA-2's walkthrough, unchanged from main and left alone** (nothing moves in SA-2): in the demo, DevOps Turn off says the PAT was removed but the client still reads On (the demo keeps its fictional write access); Download JSON says "Export isn't available here" in the demo; Pocket's demo connects while DevOps says nothing leaves the demo; the Undo toast can sit over the status bar and a control near the foot of the window; "Kat 🤖" shows with its emoji in the never-suggested list; Settings has no entry in the top bar's More menu (the avatar menu has it; the More menu is PH-2's and MC-3's to change). Which of these should a later step take?
+- **"Outlook calendar changes" and "Put new timeboxes on Outlook" are two sections apart.** The walkthrough looked for the switch in Accounts and calendars. SA-2 keeps both where they were and adds a link from the first to the second; should they sit together?
+- **A status line is shown whole.** A row whose help is a status (a check's answer, Feedback's setup line, Teams' connection, an action's result) isn't folded behind More about this, and the two-line limit doesn't count it (`status` on `Row`). Feedback's setup line takes three or four lines on a phone. Shorter status words, or fold them too?
+
 ## SA-4: Admin as its own place, a list of clients, a page for each (Nov 18)
 
 Readings taken where the brief left room (the one that changes less), for the product owner to confirm or change:

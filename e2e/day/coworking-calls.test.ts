@@ -78,7 +78,7 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
   }, T);
 
   for (const width of [360, 390])
-    it(`the phone at ${width}: the line and Join fit on the Now card and the Week card, 44 px, no sideways scroll`, async () => {
+    it(`the phone at ${width}: the line and Join fit on the Now card, 44 px, no sideways scroll (PH-2: Week has no call line)`, async () => {
       const page = await phonePage(h, width);
       await at(page, "#/today");
       const now = page.locator(".pn-card .live-call");
@@ -92,20 +92,12 @@ describe.skipIf(!CHROMIUM)("co-working calls (browser, demo mode)", () => {
       expect(await wide()).toBeLessThanOrEqual(width);
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/cw1-phone${width}-today.png`, fullPage: true });
 
+      // PH-2: the phone's Week is day rows with no live call line (it is the Now card's and the block's sheet's,
+      // docs/ux/ph2/reach.md), and nothing scrolls sideways.
       await at(page, "#/week");
-      const card = page.locator(".card-live .live-call").first();
-      await card.waitFor({ timeout: 30_000 });
-      const j = (await card.locator(".lc-join").boundingBox())!;
-      expect(j.height).toBeGreaterThanOrEqual(44);
-      expect(j.x + j.width).toBeLessThanOrEqual(width);
+      await page.locator(".pw-tile").first().waitFor({ timeout: 30_000 });
+      expect(await page.locator(".pw .live-call").count()).toBe(0);
       expect(await wide()).toBeLessThanOrEqual(width);
-      // The line wraps inside the card rather than running past it.
-      const line = (await card.locator(".lc-line").boundingBox())!;
-      expect(line.x + line.width).toBeLessThanOrEqual(j.x);
-      if (SHOTS) {
-        await card.scrollIntoViewIfNeeded();
-        await page.screenshot({ path: `${SHOTS}/cw1-phone${width}-week.png` });
-      }
       await page.close();
     }, T);
 });

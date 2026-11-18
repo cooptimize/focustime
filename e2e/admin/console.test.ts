@@ -3,7 +3,7 @@
 // the admin (break-glass list) registers a client chat in Admin › Clients, sets the client's team color, turns AI on
 // and allows it for the client, and adds a lead override in Admin › People; Admin › Audit lists each change. Then
 // someone who isn't an admin sees no Admin, sees the chat, the AI line and the open states read-only ("Set by your
-// FocusTime admin"), and picks their own color for the client, with Reset to team color. Screenshots of every Admin
+// FocusTime admin"), and picks their own color for the client, with Reset to team default. Screenshots of every Admin
 // section, the read-only Settings and the color override, at 1920 and Text size Larger, when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../../actions/account.ts";
@@ -278,18 +278,18 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       }
       await page.evaluate(() => (location.hash = "#/settings/you"));
       await settingsClient(page, "Adatum");
-      const card = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
-      await card.waitFor();
+      const card = page.locator(".ps-body");
+      await card.getByRole("heading", { name: "Adatum" }).waitFor();
       // Read-only: the chat (no Add or Remove), AI allowed, the open states, all "Set by your FocusTime admin".
       const group = card.getByRole("group", { name: /^Client chats for Adatum/ });
       await group.getByRole("region", { name: "Adatum Delivery Team" }).waitFor();
       expect(await group.getByRole("button", { name: "Add a chat" }).count()).toBe(0);
       await card.getByText("Allowed for Adatum").waitFor();
-      await card.locator(".set-field", { hasText: "States treated as open" }).getByText("Resolved").waitFor();
+      await card.locator(".sp-row", { hasText: "States treated as open" }).getByText("Resolved").waitFor();
       await card.getByText("Set by your FocusTime admin").first().waitFor();
-      // Kim's color from before the team had one stays hers (custom), with Reset to team color.
-      await card.getByText("Your own color.").waitFor();
-      await card.getByRole("button", { name: "Reset to team color" }).click();
+      // Kim's color from before the team had one stays hers (custom), with Reset to team default.
+      await card.getByText(/^Team default: /).waitFor();
+      await card.getByRole("button", { name: "Reset to team default" }).click();
       await card.getByText(/^The team color, set by your FocusTime admin\./).waitFor();
       await expect(card.getByRole("radio", { name: "violet" }).isChecked()).resolves.toBe(true);
       await shotBoth(page, "settings-clients-read-only", card);
@@ -304,16 +304,16 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
 
       // Kim's own color for Adatum, then back to the team's.
       await card.getByRole("radio", { name: "rose" }).check();
-      await card.getByRole("button", { name: "Reset to team color" }).waitFor();
+      await card.getByRole("button", { name: "Reset to team default" }).waitFor();
       await shotBoth(page, "settings-color-override", card);
-      await card.getByRole("button", { name: "Reset to team color" }).click();
+      await card.getByRole("button", { name: "Reset to team default" }).click();
       await card.getByText(/^The team color, set by your FocusTime admin\./).waitFor();
       await expect(card.getByRole("radio", { name: "violet" }).isChecked()).resolves.toBe(true);
 
       // Settings › AI: read-only, AI on, allowed for Adatum.
       await settingsSection(page, "ai");
-      await page.locator(".set-ai .set-field", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
-      await shotBoth(page, "settings-ai-read-only", page.locator(".set-ai"));
+      await page.locator(".ps-body .sp-row", { hasText: "AI for FocusTime" }).getByText("On", { exact: true }).waitFor();
+      await shotBoth(page, "settings-ai-read-only", page.locator(".ps-body"));
       expect(errors).toEqual([]);
     } finally {
       await kimApp.close();

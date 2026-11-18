@@ -1,6 +1,6 @@
 // PH-1: the phone's Now screen, pure: the block's line and bar, Next, and the one thing that needs you.
 import { describe, expect, it } from "vitest";
-import { blockGone, blockLine, nextLines, oneThing, span } from "./phone-now.ts";
+import { blockGone, blockLine, needsQueue, nextLines, oneThing, span } from "./phone-now.ts";
 import type { InboxItemView } from "./inbox-items.ts";
 
 const T = (hm: string) => `2026-11-02T${hm}:00-05:00`;
@@ -80,5 +80,26 @@ describe("DY-1: the phone's Next line marks a meeting", () => {
     expect(nextLines(m({ repeats: true }), [], T("09:30"), clock)[0]).toMatchObject({ repeats: true });
     expect(nextLines(m({ repeats: true, callType: "Weekly status call" }), [], T("09:30"), clock)[0]).toEqual({ kind: "meeting", at: "10:00", text: "Standup", detail: "15 min", callType: "Weekly status call" });
     expect(nextLines(m({}), [], T("09:30"), clock)[0]).toEqual({ kind: "meeting", at: "10:00", text: "Standup", detail: "15 min" });
+  });
+});
+
+describe("needsQueue (PH-2: the Inbox one at a time)", () => {
+  const today = "2026-11-02";
+  it("holds exactly what needs me, in the one thing's order, the Inbox's own order inside a kind", () => {
+    const rows = [
+      row("chat1", { kind: "conversation" }),
+      row("later", { views: ["promises"], due: "2026-11-05" }),
+      row("today", { due: today }),
+      row("chat2", { kind: "conversation" }),
+      row("done", { done: true, late: true }),
+      row("late1", { late: true, due: "2026-10-28" }),
+      row("cap", { kind: "capture", views: ["captures"] }),
+      row("late2", { late: true, due: "2026-10-30" }),
+    ];
+    expect(needsQueue(rows, today).map((r) => r.key)).toEqual(["late1", "late2", "today", "chat1", "chat2"]);
+  });
+  it("its first is the one thing", () => {
+    const rows = [row("chat", { kind: "conversation" }), row("late", { late: true })];
+    expect(needsQueue(rows, today)[0]!.key).toBe(oneThing(rows, 2, today)!.key);
   });
 });

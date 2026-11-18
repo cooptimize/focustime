@@ -8,7 +8,7 @@ import { Icon, type IconName } from "../icons.tsx";
 import { CONTENTS, SECTION_GROUPS, SECTIONS, TAB_SECTIONS, type SectionId } from "./sections.ts";
 
 /** GU-1: a tab's section carries the tab's own icon in the rail (the names the top bar uses, ui/App.tsx TAB_ICONS). */
-export const TAB_ICON: Record<"today" | "week" | "ahead" | "status" | "inbox" | "code", IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", code: "code" };
+export const TAB_ICON: Record<"today" | "week" | "ahead" | "status" | "inbox" | "calls" | "code", IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", calls: "calls", code: "code" };
 
 /** Whether the rail is its own list page (a phone or a narrow window). */
 export function useGuideList(): boolean {

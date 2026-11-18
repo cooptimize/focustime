@@ -80,8 +80,8 @@ export function Detail(p: DetailProps & { inline?: boolean }): ReactNode {
   );
 }
 
-/** Under the title: my own words for a chat promise. */
-function Lead({ entry: e, tz, today }: DetailProps): ReactNode {
+/** Under the title: my own words for a chat promise (also the phone's card, PH-2). */
+export function Lead({ entry: e, tz, today }: DetailProps): ReactNode {
   if (e.kind === "chatPromise" && e.promise?.messages.length)
     return (
       <blockquote className="ib-said">
@@ -91,8 +91,8 @@ function Lead({ entry: e, tz, today }: DetailProps): ReactNode {
   return null;
 }
 
-/** The form an action opened, under the actions (one at a time). */
-function FormArea(p: DetailProps): ReactNode {
+/** The form an action opened, under the actions (one at a time; also under the phone's card, PH-2). */
+export function FormArea(p: DetailProps): ReactNode {
   const { entry: e, form, setForm } = p;
   const writes = useDevOpsWrite();
   if (!form) return null;

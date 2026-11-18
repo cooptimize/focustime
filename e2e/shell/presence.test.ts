@@ -59,9 +59,9 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     const { page } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "focus");
-    await expect(page.getByLabel("Set my status while I focus").isChecked()).resolves.toBe(true);
-    await expect(page.locator("select", { has: page.locator("option", { hasText: "Leave my status alone" }) }).inputValue()).resolves.toBe("busy");
-    await expect.poll(() => page.locator(".set-teams-access").textContent(), { timeout: 10_000 }).toContain("Teams is connected");
+    await expect(page.getByRole("switch", { name: "Set my Teams status while I focus" }).isChecked()).resolves.toBe(true);
+    await expect(page.getByRole("radiogroup", { name: "Plain focus sets my status to" }).getByRole("radio", { name: "Busy" }).getAttribute("aria-checked")).resolves.toBe("true");
+    await expect.poll(() => page.locator('[data-setting="teams-status"]').textContent(), { timeout: 10_000 }).toContain("Teams is connected");
     await page.close();
   }, T);
 

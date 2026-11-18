@@ -39,7 +39,7 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps } from "./Phone.tsx";
-import { PhoneTodos, phoneNowOf, phoneNameOf } from "./PhoneDay.tsx";
+import { phoneNowOf, phoneNameOf } from "./PhoneDay.tsx";
 import { isMeeting } from "../plan/phonenow.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { WeekDnd } from "./WeekStories.tsx";
@@ -68,6 +68,10 @@ type Props = {
   viewDate?: IsoDate | null;
   /** QF-1: ‹ › and Today (null: today). */
   onDay?: (date: IsoDate | null) => void;
+  /** PH-2: back to Week, on the week holding this date (the phone's small header). */
+  onWeek?: (date: IsoDate) => void;
+  /** PH-2: the one thing opens its item in the Inbox one at a time, at that item. */
+  onOneThing?: (key: string) => void;
   /** RS-2: the day asked for while its week is being read (`viewDate` is then the last day drawn, dimmed); its read state and Retry. */
   asked?: IsoDate | null;
   read?: WeekRead;
@@ -174,6 +178,9 @@ export function Day(props: Props) {
   // today's to-dos by block. Other days and the flows are as before. The phone's own parts come from its screen file.
   const PhoneM = phone ? screen("phone") : null;
   const phoneToday = phone && mode === "now" && isToday && !!PhoneM;
+  // PH-2: another day on the phone is the same day at a glance (its blocks as sections) under a small header that
+  // stays in view. A weekend day keeps its plain list; a phone that turned the timeline on keeps it (PH-1, TY-1).
+  const phoneOther = phone && mode === "now" && !isToday && !!PhoneM;
   const vmPrompt = vmNeedsToday(useContext(VmCtx).status);
   // PF-1: the check-in and Close out load when first opened (ui/screens.ts); App draws their flow only once the file is in.
   const CheckinM = mode === "checkin" ? screen("checkin") : null;
@@ -339,6 +346,8 @@ export function Day(props: Props) {
 
   // TY-1: the timeline shows on a day with blocks or PTO (a weekend day stays its plain list; so do the flows).
   const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay || catchUpCell);
+  // PH-2: the small header and the sections on another day (with the timeline on, the day keeps PH-1's header and timeline).
+  const phoneGlance = phoneOther && !timelineShown;
   // DY-1: which blocks are folded (plan/day-fold.ts). Only today's, in the ordinary view, on a computer or a tablet.
   const handFolds = useHandFolds(realToday);
   const callMarks = useCallMarks();
@@ -485,7 +494,19 @@ export function Day(props: Props) {
       {/* PH-1: Now has no header of its own: the date is the top bar's, and another day is reached from Week. */}
       {/* PH-1: a phone that turned the timeline on (TY-1) keeps the header: its Timebox my day, and the switch back. */}
       {phoneToday && !timelineShown && <h1 className="sr-only">{PhoneM!.PHONE_TEXT.dayHeading}</h1>}
-      {(!phoneToday || timelineShown) && <header className="today-head day-bar">
+      {phoneGlance && PhoneM && (
+        <PhoneM.DayGlanceHead
+          date={headDate}
+          today={realToday}
+          pill={mode === "now" && day?.pto && !props.asked ? <span className={`pto-pill${day.pto.holiday ? " holiday-pill" : ""}`} title={ptoLabel(day.pto)}>{offWord(day.pto)}</span> : null}
+          read={props.onRetryRead && (day || props.read === "failed") ? <ReadLine read={props.read ?? null} what="day" onRetry={props.onRetryRead} /> : null}
+          onPrev={() => props.onDay?.(stepWeekday(headDate, -1, stops))}
+          onNext={() => props.onDay?.(stepWeekday(headDate, 1, stops))}
+          onToday={() => props.onDay?.(null)}
+          onWeek={() => props.onWeek?.(headDate)}
+        />
+      )}
+      {(!phoneToday || timelineShown) && !phoneGlance && <header className="today-head day-bar">
         <div className="ph-title">
           {mode === "checkin" ? (
             <h1>
@@ -605,7 +626,7 @@ export function Day(props: Props) {
               )}
             />
           )}
-          {nudges && <PhoneM.OneThingLine thing={PhoneM.oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onItem ?? (() => props.onInbox()))(k)} />}
+          {nudges && <PhoneM.OneThingLine thing={PhoneM.oneThing(props.inbox ?? [], props.needsYou ?? 0, date)} onOpen={(k) => (props.onOneThing ?? props.onItem ?? (() => props.onInbox()))(k)} />}
         </div>
       )}
       {!phoneToday && aboveBlocks({ mode, today: nudges, urgent: urgentLines(urgentSources, clockNow, tz).length, chips: !!chips, moment: props.moment ?? null }).map((part) =>
@@ -653,9 +674,14 @@ export function Day(props: Props) {
             </button>
           )}
         </p>
-      ) : phoneToday && !catchUpCell && !timelineShown ? (
-        <div className="today-body ph-today ph1-now" data-tour="today-blocks">
-          <PhoneTodos heading={PhoneM!.PHONE_TEXT.today} blocks={blocks} picks={picks} data={data} nameOf={nameOf} tickable={tickable} now={now} onTick={(p, d) => tickWithUndo(p, d)} onAdd={(half) => openBlock(half, { add: true })} />
+      ) : phoneToday && PhoneM && !catchUpCell && !timelineShown ? (
+        <div className="today-body ph-today ph1-now">
+          {/* PH-2: today's blocks at a glance, without the to-do the Now card shows. */}
+          <PhoneM.DaySections day={day} blocks={blocks} data={data} picks={picks} now={now} today={realToday} tickable={tickable} hideId={nudges ? (nextPick?.id ?? null) : null} onTick={(p, d) => tickWithUndo(p, d)} onOpenBlock={(half) => openBlock(half)} onAdd={(half) => openBlock(half, { add: true })} />
+        </div>
+      ) : phoneGlance && PhoneM && !catchUpCell ? (
+        <div className="today-body ph-today">
+          <PhoneM.DaySections day={day} blocks={blocks} data={data} picks={picks} now={now} today={realToday} tickable={tickable} onTick={(p, d) => tickWithUndo(p, d)} onOpenBlock={(half) => openBlock(half)} onAdd={(half) => openBlock(half, { add: true })} />
         </div>
       ) : mode === "now" && timelineShown ? (
         <div className="today-body with-tl">

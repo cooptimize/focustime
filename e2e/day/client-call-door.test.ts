@@ -41,8 +41,10 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await expect(mark.getAttribute("aria-label")).resolves.toBe("Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
-    // MC-1e: Back returns to Day, where the call was opened from.
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Day" }).click();
+    // MC-3: the call opens on the Calls tab, beside the list; the browser's Back returns to Day.
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+$/);
+    await expect(page.locator(".topbar .view-tab[aria-current]").textContent()).resolves.toContain("Calls");
+    await page.goBack();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/day/);
     await ev.waitFor({ timeout: 30_000 });
     await ev.locator(".ev-title").click();
@@ -92,15 +94,13 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await page.close();
   }, T);
 
-  it("the phone (Week): the mark on the card's list opens the call; More has Calls with its count", async () => {
+  it("the phone (Week, then the day): the mark on the meeting opens the call; More has Calls with its count", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await open(page, "#/week");
-    // The phone's Week: the call's card carries its line until the meetings list opens, then the meeting carries it.
-    const marked = page.locator(".half", { has: page.locator(".card-calls .call-mark") }).first();
-    await marked.waitFor({ timeout: 30_000 });
-    const card = page.locator(`[data-drop="${await marked.getAttribute("data-drop")}"]`);
-    await card.locator(".card-agenda-fold").click();
-    const mark = card.locator(".card-events li", { hasText: "Northwind weekly status" }).locator(".ev-call");
+    // PH-2: the phone's Week opens the call's day; there the meeting's row carries the call's mark.
+    await page.locator(".pw-row").first().locator(".pw-day").click({ timeout: 30_000 });
+    const mark = page.locator(".dg-meeting", { hasText: "Northwind weekly status" }).locator(".ev-call");
+    await mark.waitFor({ timeout: 30_000 });
     await expect(mark.locator(".call-what").textContent()).resolves.toBe("Review 11 proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
