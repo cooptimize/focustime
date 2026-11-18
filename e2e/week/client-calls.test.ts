@@ -20,9 +20,11 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
   it("each row its own way: needed fields first, the one preview, a promise with Undo, the bar only when ticked; Back to Week", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/week"));
-    const mark = page.locator(".call-mark").first();
+    // WK-6: Monday is past, so its card counts the call that needs me; the count opens it.
+    const mark = page.locator(".calls-need").first();
     await mark.waitFor({ timeout: 30_000 });
-    await expect(mark.textContent()).resolves.toBe("Weekly status call· Review 11 proposals");
+    await expect(mark.textContent()).resolves.toBe("1 call needs you");
+    await expect(mark.getAttribute("aria-label")).resolves.toBe("1 call needs you: Northwind weekly status call, Weekly status call · Review 11 proposals. Open in Calls");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
     const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);

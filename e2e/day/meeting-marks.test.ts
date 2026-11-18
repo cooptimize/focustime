@@ -57,18 +57,19 @@ describe.skipIf(!CHROMIUM)("DY-1: meeting marks (browser, demo mode, 3:55 PM)", 
     await call(page, "ui.set_today_timeline", { show: false });
     await day(page);
     const am = page.locator('.day-view [data-half="AM"]');
-    await am.locator(".card-agenda-fold").click();
-    const row = (t: string) => am.locator(".card-events li", { hasText: t });
+    // WK-6: Day's cards name their meetings.
+    const row = (t: string) => am.locator(".card-meetings .cm-row", { hasText: t });
     await expect(row("Team standup").getByRole("img", { name: "Repeats" }).count()).resolves.toBe(1);
     await expect(row("Proposal review").locator(".repeat-mark").count()).resolves.toBe(0);
     // The panel on the afternoon: its agenda.
     await day(page, "#/day/2026-11-02/PM");
     const panel = page.locator("aside.block-panel");
     await panel.locator(".bp-meet-line").click();
+    // WK-6: the call's state sits under its meeting's name (it needs me); no mark at the row's end.
     const weekly = panel.locator(".bp-meetings li", { hasText: "Northwind weekly status" });
-    await expect(weekly.locator(".call-type").textContent()).resolves.toBe("Weekly status call");
-    await expect(weekly.locator(".repeat-mark").count()).resolves.toBe(0);
-    await expect(panel.locator(".bp-meetings li", { hasText: "data model review" }).locator(".repeat-mark, .call-mark").count()).resolves.toBe(0);
+    await expect(weekly.locator(".ag-call").textContent()).resolves.toBe("Weekly status call · Review 11 proposals");
+    await expect(panel.locator(".bp-meetings .call-mark").count()).resolves.toBe(0);
+    await expect(panel.locator(".bp-meetings li", { hasText: "data model review" }).locator(".repeat-mark, .ag-call").count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
