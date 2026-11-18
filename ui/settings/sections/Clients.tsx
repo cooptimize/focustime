@@ -140,9 +140,7 @@ export function ClientSection(p: BodyProps) {
             <Value>{!d.aiRules.on ? "Off for FocusTime" : allowed ? `Allowed for ${name}` : `Not allowed for ${name}`}</Value>
           </Row>
         </Group>
-        <Group sid="client-platform">
-          <DeploySettings clientKey={c.key} clientName={name} teamNote={teamValueLine(name)} />
-        </Group>
+        <DeploySettings clientKey={c.key} clientName={name} teamNote={teamValueLine(name)} frame={(x) => <Group sid="client-platform">{x}</Group>} />
         {c.devops && <HouseStyle clientKey={c.key} name={name} />}
       </Page>
     </DeliveryChatsProvider>
