@@ -1,6 +1,6 @@
-// DV-1: the status rows registry for Admin › Status. A part of FocusTime that has health to show (DevOps polling
+// DV-1: the status rows registry for Admin › Health. A part of FocusTime that has health to show (DevOps polling
 // first; ADM-2 and later steps can add theirs) registers a source once at startup: a title, its rows (label, state,
-// detail, last check) and, optionally, one action per row such as Check now. Admin › Status renders every source the
+// detail, last check) and, optionally, one action per row such as Check now. Admin › Health renders every source the
 // same way, so a new source needs no screen change. Rows carry names, states and counts only, never a secret, a token,
 // an item title or an identity.
 

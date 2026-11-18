@@ -135,7 +135,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 
 Kept elsewhere:
 
-- **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Client chats, 14 days by default, 1 to 90; `config/org.ts`).
+- **Chat messages** that aren't part of a request, promise or conversation: deleted after the Rule `conv.retention_days` (Admin › Team defaults › Client chats, 14 days by default, 1 to 90; `config/org.ts`).
 - **Co-working calls** (`chat_calls`): 48 hours after the call started, at the next poll (`actions/request-poll.ts`); with their chat when it is removed or its messages purged.
 - **Sessions** end after 12 hours idle or 7 days at most (`store/accounts.ts`); the hourly maintenance sweeps them.
 - **Delete my data** (Settings › Your data): a soft delete now, everything removed 30 days later (`HARD_DELETE_AFTER_DAYS` in `store/user-data.ts`). The Teams bot's rows go at once. Clear (the assistant history, for example) deletes at once.

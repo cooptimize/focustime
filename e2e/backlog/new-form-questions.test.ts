@@ -231,7 +231,9 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
     await failShot(page, "t2", async () => {
       // The demo's person is an admin in their own demo: Admin's first page.
       await page.evaluate(() => (location.hash = "#/settings/admin-templates"));
-      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).toBe("Admin › Clients");
+      // SA-4: Admin is its own place; its first page is Clients.
+      await page.waitForFunction(() => location.hash === "#/admin");
+      await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).toBe("Clients");
       await page.evaluate(() => (location.hash = "#/settings/planning/work-templates"));
       await expect.poll(() => heading(page).textContent(), { timeout: 30_000 }).not.toContain("Admin");
       await expect(page.locator('[data-setting="work-templates"]').count()).resolves.toBe(0);

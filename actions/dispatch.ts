@@ -236,7 +236,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Health's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -1819,7 +1819,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return { ok: true, data: { outcome: await ctx.demo.vmTick(m), now: ctx.now() } };
     }
     case "demo.pass_stall": {
-      // VM-3: only in a demo session started with --clock (the e2e tests): Admin › Status's pretend slow pass holds or
+      // VM-3: only in a demo session started with --clock (the e2e tests): Admin › Health's pretend slow pass holds or
       // lets go, so its warning can be seen once the demo's clock moves past the limit (demo.vm_tick).
       if (!ctx.demo?.on || !ctx.demo.passStall) return { ok: false, status: 403, error: "Only in a demo verification run" };
       const i = req.input as Record<string, unknown> | null;
@@ -2405,6 +2405,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           },
           // IN-2: the same sends and consent probes as Close the loop (LP-1), as this admin.
           send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
+          // SA-4: the clients chats.add would let this admin register a chat under (the same check, read only).
+          chatTargets: async () => (await chatContext(ctx)).clientKeys(),
         },
         action as AdminAction,
         req.input,

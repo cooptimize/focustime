@@ -1,6 +1,6 @@
 // Was e2e/conversations-3.test.ts until BT-1.
 // CV-3 follow-ups, the main path, in a real (not demo) session on a fake Graph, with AI off for the client (Allow AI
-// off, so no AI request runs). Admin › AI shows the client's "Group messages without AI" switch, on. The chat's messages
+// off, so no AI request runs). The client's page in Admin › Clients shows its "Group messages without AI" switch, on. The chat's messages
 // group by rules: Blake's request mentioning Evan starts a conversation, Evan (mentioned) and my reply to Blake join it,
 // titled by its first message with no summary; nothing is judged, so From chats stays empty (IB-4). A loose promise in the Delivery chat: Link to item… lists likely items
 // with reasons. Today: a promise due within 2 hours and one overdue in the urgent strip, one later only in the agenda.
@@ -193,9 +193,9 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 
-      // Admin › Clients: add both chats to Adatum.
+      // Adatum's page in Admin › Clients, its Chats tab: add both chats.
       await openSettings(page);
-      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
+      await page.evaluate(() => (location.hash = "#/admin/clients/Adatum/chats"));
       const adatum = page.getByRole("group", { name: /^Client chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
@@ -207,13 +207,14 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await page.keyboard.press("Escape");
 
 
-      // Admin › AI: the client's Group messages without AI switch, on by default, beside Allow AI (off).
+      // A client's page in Admin › Clients, its Chats tab: the Group messages without AI switch, on by default; its AI tab: Allow AI, off.
       await openSettings(page);
-      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
+      await page.evaluate(() => (location.hash = "#/admin/clients/Adatum/chats"));
       const groupSwitch = page.getByRole("switch", { name: "Group messages without AI for Adatum" });
       await expect.poll(() => groupSwitch.isChecked()).toBe(true);
-      expect(await page.getByRole("switch", { name: "Allow AI for Adatum" }).isChecked()).toBe(false);
       await shotAll(page, "cv3-admin-group-without-ai", groupSwitch);
+      await page.getByRole("tab", { name: "AI", exact: true }).click();
+      expect(await page.getByRole("switch", { name: "Allow AI for Adatum" }).isChecked()).toBe(false);
       await page.keyboard.press("Escape");
 
       // Blake asks Evan (a Request); Evan answers (he was mentioned) and I reply to Blake: one conversation by rules.

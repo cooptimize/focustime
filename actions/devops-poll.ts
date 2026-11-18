@@ -190,7 +190,7 @@ export function problemOf(row: Pick<PollRow, "errorKind" | "error" | "loadedAt">
   return null;
 }
 
-/** One status row per client (Admin › Status, through the status rows registry). */
+/** One status row per client (Admin › Health, through the status rows registry). */
 export type DevOpsStatusRow = {
   clientKey: string;
   checkedAt: string | null;
@@ -584,7 +584,7 @@ export function createDevOpsPoller(d: PollerDeps) {
     },
   };
 
-  /** Admin › Status: one row per client polled. */
+  /** Admin › Health: one row per client polled. */
   async function status(): Promise<DevOpsStatusRow[]> {
     const t = d.now();
     const out: DevOpsStatusRow[] = [];
@@ -684,7 +684,7 @@ export function createDevOpsPoller(d: PollerDeps) {
 
 export type DevOpsPoller = ReturnType<typeof createDevOpsPoller>;
 
-/** DV-1: the poller's rows for Admin › Status (the status rows registry): one per client, with Check now. */
+/** DV-1: the poller's rows for Admin › Health (the status rows registry): one per client, with Check now. */
 export function devopsStatusSource(poller: Pick<DevOpsPoller, "status" | "checkNow">): StatusSource {
   const mins = (n: number) => (n === 1 ? "every minute" : `every ${n} minutes`);
   return {

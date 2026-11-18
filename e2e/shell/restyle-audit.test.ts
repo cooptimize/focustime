@@ -104,7 +104,7 @@ describe.skipIf(!CHROMIUM || !OUT)("RS-1 audit numbers", () => {
       }
       await go(page, "#/settings/display", 1500);
       await measure(page, `Settings, Display${tag}`, 28);
-      await go(page, "#/settings/admin-clients", 1500);
+      await go(page, "#/admin/clients", 1500);
       await measure(page, `Admin, Clients${tag}`, 28);
       await page.close();
     }, T);

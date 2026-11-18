@@ -101,7 +101,7 @@ export async function inviteSendAction(d: Deps, action: InviteSendAction, i: Rec
       if (people.some((p) => p.signedIn)) return bad("They have signed in already", 409, "signed_in");
       if (people.some((p) => !validEmail(p.email))) return bad("FocusTime has no email address for them. Copy the message instead.", 422, "no_email");
       const domains = await d.domains();
-      if (!domains.length) return bad("Set Cooptimize email domains in Admin › Organization before sending from FocusTime", 422, "no_domains");
+      if (!domains.length) return bad("Set Cooptimize email domains in Admin › Team defaults › Planning and new people before sending from FocusTime", 422, "no_domains");
       if (people.some((p) => !insideDomain(p.email!, domains))) return bad("FocusTime only sends invites to addresses at Cooptimize", 422, "outside");
 
       // Only with the permission present; otherwise the sheet keeps IN-1's links (the probe, again, on the server).

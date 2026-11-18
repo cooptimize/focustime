@@ -184,7 +184,7 @@ export const GRAPH_WORDS: Record<Exclude<GraphFailure, "missing">, { status: num
   consent: { status: 403, error: "Microsoft refused FocusTime access to your calendar (Calendars.ReadWrite). A Cooptimize admin grants it once for everyone in the Entra admin center" },
   refused: { status: 502, error: "Microsoft didn't accept that request. Paste the meeting's Teams join link instead" },
   busy: { status: 503, error: "Microsoft isn't answering right now. Try again in a minute" },
-  setup: { status: 503, error: "FocusTime's Microsoft sign-in isn't set up here. A FocusTime admin can see why in Admin › Status" },
+  setup: { status: 503, error: "FocusTime's Microsoft sign-in isn't set up here. A FocusTime admin can see why in Admin › Health" },
 };
 const NOT_ON_CALENDAR = "That meeting isn't a weekly Teams meeting on your calendar";
 type Refusal = { ok: false; status: number; error: string; code: string };
@@ -370,7 +370,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
     const kind = graphFailureOf(e);
     ctx.log({ source: "plan", op: "meeting_action_failed", kind: kind ?? (e instanceof Error ? e.name : "unknown") });
     if (kind && kind !== "missing") return { ok: false, ...GRAPH_WORDS[kind === "refused" ? "refused" : kind], code: kind === "refused" ? "graph_refused" : kind };
-    return { ok: false, status: 500, error: "FocusTime couldn't finish that. Try again; if it keeps happening, a FocusTime admin can look in Admin › Status", code: "failed" };
+    return { ok: false, status: 500, error: "FocusTime couldn't finish that. Try again; if it keeps happening, a FocusTime admin can look in Admin › Health", code: "failed" };
   }
 }
 

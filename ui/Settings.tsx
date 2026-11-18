@@ -8,7 +8,7 @@ import { AutoSaveProvider } from "./settings/autosave.tsx";
 import { call } from "./api.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneReadOnly } from "./Phone.tsx";
-import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
+import { AdminPlace, NOT_ADMIN_TEXT, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useDeveloperLoop } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
@@ -25,8 +25,11 @@ import { DataSection } from "./settings/sections/Data.tsx";
 import { AboutSection } from "./settings/sections/About.tsx";
 import type { BodyProps, Props } from "./settings/sections/types.ts";
 
-/** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
-export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
+/** ST-1: every section id Settings opens (the registry's). SA-4: Admin is its own place (#/admin), not a section. */
+export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = SECTIONS.map((s) => [s.id, s.label] as const);
+/** SA-4: the section Admin's place rides on (ui/nav.ts ADMIN_SECTION), and where someone who isn't an admin lands. */
+const ADMIN = "admin";
+const NOT_ADMIN = "admin-only";
 export type SettingsSectionId = string;
 
 /** ST-1: the rail's search. Finds any setting by its label, an old label or a keyword; Enter opens the first. */
@@ -92,15 +95,28 @@ function SearchResults({ q, hits, onGo }: { q: string; hits: SearchHit[]; onGo: 
 /** The section and setting an address opens: old ids mapped; "" is the rail (a list on the phone, Profile otherwise). */
 function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean, admin: boolean | null): { current: string | null; setting: string | null } {
   if (section === "") return { current: list ? null : "you", setting: null };
-  // TP-1b: a retired Admin page: Admin's first page, or Profile for someone who isn't an admin.
-  if (RETIRED_ADMIN_SECTIONS.includes(section)) return { current: admin === false ? "you" : ADMIN_UI_SECTIONS[0][0], setting: null };
-  if (isAdminSection(section)) return { current: section, setting: null };
+  // TP-1b: a retired Admin page: Admin (its first page), or Profile for someone who isn't an admin.
+  if (RETIRED_ADMIN_SECTIONS.includes(section)) return { current: admin === false ? "you" : null, setting: null };
+  // SA-4: someone who isn't an admin, at an Admin address, gets the one line they always got.
+  if (section === ADMIN) return { current: NOT_ADMIN, setting: null };
   const r = resolveSettings(section, setting);
   if (!r || (sectionOf(r.section)?.demoOnly && !demo)) return { current: "you", setting: null };
   return { current: r.section, setting: r.setting };
 }
 
+/** SA-4: #/admin is Admin's own place (for admins); every other address is Settings. */
 export function Settings(props: Props) {
+  const admin = useAdmin();
+  const retired = RETIRED_ADMIN_SECTIONS.includes(props.section);
+  // TP-1b: a retired Admin page lands on Admin for an admin.
+  useEffect(() => {
+    if (retired && admin) props.onSection(ADMIN, null);
+  }, [retired, admin]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (props.section === ADMIN && admin === true) return <AdminPlace path={props.setting ?? null} admin={admin} onGo={(path) => props.onSection(ADMIN, path)} onClose={props.onClose} onSettings={() => props.onSection("")} {...(props.onNotice ? { onNotice: props.onNotice } : {})} />;
+  return <SettingsPanel {...props} admin={admin} />;
+}
+
+function SettingsPanel(props: Props & { admin: boolean | null }) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -108,7 +124,7 @@ export function Settings(props: Props) {
   const jumpDue = useRef(false);
   const phone = usePhone();
   const list = useNarrow() || phone;
-  const admin = useAdmin();
+  const admin = props.admin;
   const devLoop = useDeveloperLoop();
   const { current, setting } = placeOf(props.section, props.setting, list, props.demo, admin);
   const reload = useCallback(async () => {
@@ -162,12 +178,12 @@ export function Settings(props: Props) {
     [props.onSaved], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const inAdmin = current !== null && isAdminSection(current);
+  const inAdmin = current === NOT_ADMIN;
   const def = current ? sectionOf(current) : undefined;
   const client = current === "client" ? (data?.clients.find((c) => c.key === setting) ?? null) : null;
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
-  const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
-  const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
+  const title = inAdmin ? "Admin" : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
+  const description = inAdmin ? undefined : def?.description;
   const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop, phone }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
@@ -175,7 +191,6 @@ export function Settings(props: Props) {
       label,
       items: SECTIONS.filter((s) => s.group === g && !s.parent && (!s.demoOnly || props.demo)).map((s) => ({ id: s.id, label: s.label, href: settingsHref(s.id) })),
     })),
-    ...(admin ? [{ id: "admin", label: "Admin", items: ADMIN_UI_SECTIONS.map(([id, label]) => ({ id, label, href: settingsHref(id) })) }] : []),
   ];
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
@@ -196,6 +211,16 @@ export function Settings(props: Props) {
             description={description}
             railTop={<SettingsSearch q={q} setQ={setQ} hits={hits} onGo={(h) => go(h.section, h.setting)} />}
             railOverride={q.trim() ? <SearchResults q={q} hits={hits} onGo={(h) => go(h.section, h.setting)} /> : undefined}
+            railFoot={
+              // SA-4: Admin is its own place; Settings' rail has one line for it, for admins only.
+              admin ? (
+                <div className="ps-group ps-foot" role="group" aria-label="Admin">
+                  <a href="#/admin" className="ps-item" data-settings-section="admin" onClick={(e) => (e.preventDefault(), go(ADMIN))}>
+                    <span>Admin</span>
+                  </a>
+                </div>
+              ) : undefined
+            }
             phone={list}
             pageKey={`${current}/${current === "client" ? setting : ""}`}
           >
@@ -215,7 +240,7 @@ export function Settings(props: Props) {
                   </div>
                 )}
                 {inAdmin ? (
-                  <AdminSection id={current as Parameters<typeof AdminSection>[0]["id"]} admin={admin} />
+                  admin === null ? <p className="muted">Loading…</p> : <p className="muted">{NOT_ADMIN_TEXT}</p>
                 ) : (
                   data &&
                   (phone && def?.phoneReadOnly ? (

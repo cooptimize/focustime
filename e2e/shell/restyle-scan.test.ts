@@ -120,9 +120,14 @@ describe.skipIf(!CHROMIUM || !OUT)("RS-1 scan", () => {
       await page.waitForTimeout(700);
       await look(page, `inbox ${list}`);
     }
-    for (const s of [...SECTION_IDS.filter((x) => x !== "client"), "admin-clients", "admin-ai", "admin-conversations", "admin-people", "admin-organization", "admin-status", "admin-audit", "admin-standards"]) {
+    for (const s of SECTION_IDS.filter((x) => x !== "client")) {
       await go(page, `#/settings/${s}`, 900);
       await look(page, `settings ${s}`);
+    }
+    // SA-4: Admin's own place: each part, each tab, and a client's page.
+    for (const a of ["clients", "clients/Northwind/overview", "clients/Northwind/chats", "clients/Northwind/calls", "clients/Northwind/ai", "clients/Northwind/code", "clients/Northwind/deployments", "clients/Northwind/backlog", "people/people", "people/setup", "people/logins", "people/levels", "people/admins", "defaults/ai", "defaults/chats", "defaults/planning", "defaults/standards", "health", "audit/changes", "audit/code"]) {
+      await go(page, `#/admin/${a}`, 900);
+      await look(page, `admin ${a}`);
     }
     await esc(page);
     await go(page, "#/code/Northwind/a1b2c3d4-0001-4000-8000-00000000a001/%2Fsql%2Fdbo%2FViews%2FvSales.sql", 2500);

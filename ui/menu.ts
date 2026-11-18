@@ -1406,7 +1406,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.kind":
     case "chats.reading":
     case "chats.refresh":
-    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin-clients") : env.openSettings("chats", "chats-read")) };
+    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin", "clients") : env.openSettings("chats", "chats-read")) };
     case "chats.social":
     case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
@@ -1458,28 +1458,28 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ai.status":
     case "ai.test":
       return { run: () => env.openSettings("ai") };
-    // ADM-1: the admin console is a part of Settings, only for admins (the server checks every action again).
-    case "admin.status": return { run: () => env.openSettings(env.admin ? "admin-people" : "you") };
+    // ADM-1, SA-4: Admin is its own place (#/admin), only for admins (the server checks every action again).
+    case "admin.status": return { run: () => (env.admin ? env.openSettings("admin", "people") : env.openSettings("you")) };
     case "admin.load":
-    case "admin.set": return env.admin ? { run: () => env.openSettings("admin-clients") } : { disabled: "Only for FocusTime admins" };
+    case "admin.set": return env.admin ? { run: () => env.openSettings("admin", "clients") } : { disabled: "Only for FocusTime admins" };
     case "admin.override":
     case "admin.identity":
     case "admin.refresh_people":
-    case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
+    case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin", "people") } : { disabled: "Only for FocusTime admins" };
     // IN-1: Who's set up and the invite sheet live in Admin › People.
     // IN-2: sending is only ever the invite sheet's preview and Send; these open Who's set up.
     case "admin.invite_access":
     case "admin.invite_preview":
     case "admin.invite_send":
     case "admin.invite_retry":
-    case "admin.invited": return env.admin ? { run: () => env.openSettings("admin-people", "whos-set-up") } : { disabled: "Only for FocusTime admins" };
+    case "admin.invited": return env.admin ? { run: () => env.openSettings("admin", "people/setup") } : { disabled: "Only for FocusTime admins" };
     // NM-2: the invite commands fell through to Standards; they open Who's set up as IN-2 says.
-    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin-standards") } : { disabled: "Only for FocusTime admins" };
-    case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };
+    case "admin.standards_sync": return env.admin ? { run: () => env.openSettings("admin", "defaults/standards") } : { disabled: "Only for FocusTime admins" };
+    case "admin.audit": return env.admin ? { run: () => env.openSettings("admin", "audit") } : { disabled: "Only for FocusTime admins" };
     // RB-1: Code views sit in Admin › Audit; a client's code status in Admin › Clients.
-    case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin-audit", "code-views") } : { disabled: "Only for FocusTime admins" };
-    case "admin.code_check": return env.admin ? { run: () => env.openSettings("admin-clients") } : { disabled: "Only for FocusTime admins" };
-    case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin-status") } : { disabled: "Only for FocusTime admins" };
+    case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin", "audit/code") } : { disabled: "Only for FocusTime admins" };
+    case "admin.code_check": return env.admin ? { run: () => env.openSettings("admin", "clients") } : { disabled: "Only for FocusTime admins" };
+    case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin", "health") } : { disabled: "Only for FocusTime admins" };
     // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
     // happens in the panel.
     case "stories.prepare": return { next: () => chooseItem(env, "Break down which item?", (i, k) => i.level === "portfolio" && typeNeedsBreakdown(env.work.get(k)?.types, i.type), (k, i) => () => void openBreakDown(k, { id: i.id, title: i.title, type: i.type })) };
@@ -1636,7 +1636,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.update":
     case "meeting.remove":
     case "meeting.check_now":
-      return { run: () => env.openSettings("admin-clients") };
+      return { run: () => env.openSettings("admin", "clients") };
     case "meeting.mine":
     case "meeting.review":
     case "meeting.transcript":

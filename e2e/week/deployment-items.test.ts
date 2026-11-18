@@ -165,10 +165,11 @@ describe.skipIf(!CHROMIUM)("DP-2: Deployment items by data platform", () => {
     await page.close();
   }, T);
 
-  it("Admin › Clients: the platform and the list; a change reaches new deployments only", async () => {
+  it("A client's Deployments tab in Admin › Clients: the platform and the list; a change reaches new deployments only", async () => {
     const { page, errors } = await freshPage(h);
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
-    const card = page.locator(".adm-client", { hasText: "Atlas" }).first();
+    // SA-4: Atlas's page in Admin › Clients, its Deployments tab.
+    await page.evaluate(() => (location.hash = "#/admin/clients/Atlas/deployments"));
+    const card = page.locator(".adm-client-page");
     const set = card.locator(".dep-settings");
     await set.waitFor({ timeout: 60_000 });
     await set.getByRole("radio", { name: "Fabric" }).click();

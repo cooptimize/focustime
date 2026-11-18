@@ -46,7 +46,7 @@ async function viewOf(c: DeployItemContext, clientKey: string): Promise<DeployIt
     platform: deploy.dataPlatform ?? null,
     groups: groupsFor(deploy),
     canEdit,
-    editHref: !canEdit ? null : admin ? `#/settings/admin-clients/deploy-${encodeURIComponent(clientKey)}` : `#/settings/client/${encodeURIComponent(clientKey)}`,
+    editHref: !canEdit ? null : admin ? `#/admin/clients/${encodeURIComponent(clientKey)}/deployments` : `#/settings/client/${encodeURIComponent(clientKey)}`,
     lists: canEdit ? DATA_PLATFORMS.map((p) => ({ platform: p, label: PLATFORM_LABEL[p], items: fullList(p, deploy.deployItems) })) : null,
   };
 }

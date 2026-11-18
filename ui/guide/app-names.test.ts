@@ -73,9 +73,10 @@ describe("names", () => {
       expect(retiredIn(now), `${was} → ${now}`).toEqual([]);
     }
     // NM-2 adds three rows (Delivery chats, Admin › Conversations, Request phrases): 9 words over the 260 NM-1 left.
-    // SA-3 adds six Settings sections that moved (Day and Week, Backlog, Notifications, Client chats, Accounts and
-    // calendars, DevOps, Activity; Planning and Connections stopped being old names): 37 words more.
-    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(310);
+    // SA-4 adds two (Admin › Status, Admin › Organization) and lengthens Admin › Conversations' new place: 20 words more.
+    expect(RENAMED_ROWS.flat().join(" ").split(/\s+/).length).toBeLessThanOrEqual(330);
+    // SA-3 adds the Settings sections that moved (Day and Week, Backlog, Notifications, Client chats, Accounts and
+    // calendars, DevOps, Activity; Planning and Connections stopped being old names): 37 words more, so 290 + 40.
   });
 });
 

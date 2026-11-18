@@ -198,7 +198,7 @@ PK-2. Pocket's public API (`https://public.heypocketai.com/api/v1`, [docs.heypoc
 
 **Auth.** An OpenAI API key, the Key Vault secret `ft-openai-key` (the developer's keyring in the developer loop). No key means "AI isn't set up" and everything else works.
 
-**Models.** `gpt-6-luna` by default for text (Admin › AI may change it) and `gpt-transcribe` for push-to-talk (`DEFAULT_AI` in `server/appconfig.ts`). Background tasks run on OpenAI's Flex tier (`conversations.update`, `promises.extract`, `asks.classify`, `meeting.capture`; `FLEX_TASKS` in `ai/tiers.ts`), falling back to standard after 3 tries or 90 seconds; everything a person waits for runs on standard. Requests are sent with `store: false`.
+**Models.** `gpt-6-luna` by default for text (Admin › Team defaults › AI may change it) and `gpt-transcribe` for push-to-talk (`DEFAULT_AI` in `server/appconfig.ts`). Background tasks run on OpenAI's Flex tier (`conversations.update`, `promises.extract`, `asks.classify`, `meeting.capture`; `FLEX_TASKS` in `ai/tiers.ts`), falling back to standard after 3 tries or 90 seconds; everything a person waits for runs on standard. Requests are sent with `store: false`.
 
 **Sent.** Only through `ai/` after the guard (see [Security](security.md#ai-the-guard-and-redaction)): one client per request, structured output only.
 
@@ -206,12 +206,12 @@ PK-2. Pocket's public API (`https://public.heypocketai.com/api/v1`, [docs.heypoc
 
 ## GitHub (Cooptimize's standards)
 
-FocusTime reads Cooptimize's public standards repo (`cooptimize/coop-standards` by default; repo and branch in Admin › Standards) so AI drafts and Ask can use it (`sources/github/standards.ts`).
+FocusTime reads Cooptimize's public standards repo (`cooptimize/coop-standards` by default; repo and branch in Admin › Team defaults › Standards) so AI drafts and Ask can use it (`sources/github/standards.ts`).
 
 - **Read only and anonymous.** Every request is a GET with no token, no cookies and no redirects, to `api.github.com` (the default branch, its head commit, the file list) or `raw.githubusercontent.com` (one Markdown file at that commit). FocusTime never writes to the repo.
 - **Data only.** Only paths that can be articles are fetched. Scripts, hooks, `standards.yml` and the retired folders are never downloaded, and nothing from the repo is executed, imported or evaluated.
 - **What's kept.** Active articles with their path, front matter, SHA-256 and the repo commit, in `standards_articles` and `standards_sync`.
-- **When.** Once at start, hourly while FocusTime is in use, and on Sync now. An unchanged commit reads no files. A failure keeps the last good copy and shows the error in Admin › Standards.
+- **When.** Once at start, hourly while FocusTime is in use, and on Sync now. An unchanged commit reads no files. A failure keeps the last good copy and shows the error in Admin › Team defaults › Standards.
 - **Limits.** 60 anonymous API requests an hour per IP on GitHub's side; a check uses two.
 
 ## The Teams bot

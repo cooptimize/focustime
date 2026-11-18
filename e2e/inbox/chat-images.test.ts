@@ -1,6 +1,6 @@
 // Was e2e/conversations-4.test.ts until BT-1.
 // CV-4 chat images without storage, the main path, in a real (not demo) session on a fake Graph, a fake AI behind the
-// real ai/ service and a fake DevOps. An admin turns on "Send attachments to AI" for the client in Admin › AI; the
+// real ai/ service and a fake DevOps. An admin turns on "Send attachments to AI" on the client's page in Admin › Clients; the
 // client pastes three images (one Teams can no longer give); Refresh reads the chat and sends the two readable images
 // with the batch, labelled with their message; the sorting answer judges it needs an item, so once quiet it is a suggestion in From chats
 // (IB-4); the descriptions show under the thumbnails, read from Teams on view; the third shows "Image in Teams" with Open in Teams. Create DevOps item: the preview
@@ -180,16 +180,15 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 
-      // Admin › Clients: register the chat. Admin › AI: Send attachments to AI for Adatum.
+      // Adatum's page in Admin › Clients, its Chats tab: register the chat, then Send attachments to AI.
       await openSettings(page);
-      await page.locator('.ps-rail [data-settings-section="admin-clients"]').click();
+      await page.evaluate(() => (location.hash = "#/admin/clients/Adatum/chats"));
       const adatum = page.getByRole("group", { name: /^Client chats for Adatum/ });
       await adatum.getByRole("button", { name: "Add a chat" }).click();
       await adatum.getByRole("listbox", { name: "Your Teams group chats" }).getByRole("option").first().waitFor();
       await page.keyboard.type("alliance");
       await page.keyboard.press("Enter");
       await adatum.getByText(/^Added Adatum .*\. Read from now on/).waitFor();
-      await page.locator('.ps-rail [data-settings-section="admin-ai"]').click();
       const sw = page.getByRole("switch", { name: "Send attachments to AI for Adatum" });
       await sw.check();
       await expect.poll(async () => {

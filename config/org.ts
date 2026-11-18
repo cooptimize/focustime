@@ -9,6 +9,7 @@
 // built-in value); an admin write is refused for a key that has none. Nothing secret is ever an org setting.
 import { FLEX_TASKS } from "../ai/tiers.ts";
 import { DEFAULT_ACK_PHRASES, DEFAULT_PROMISE_PHRASES, DEFAULT_REQUEST_PHRASES } from "../plan/asks.ts";
+import { CHAT_RETENTION_DAYS } from "../plan/retention-days.ts";
 import { WEEKDAY_KEYS, parseSpan, type WeekdayKey } from "../week/hours.ts";
 import { CLIENT_SLOTS } from "./schema.ts";
 import { parseScope, ScopeInputError, type DevOpsScope } from "../plan/devops-scope.ts";
@@ -257,7 +258,7 @@ export const ORG_SPECS = {
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
   // ADM-2 (D604): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
   "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 30, "minutes") },
-  "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep chat messages nothing was found in (days)", builtin: 14, parse: intIn(1, 90, "days") },
+  "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep chat messages nothing was found in (days)", builtin: CHAT_RETENTION_DAYS, parse: intIn(1, 90, "days") },
   "conv.closed_shown_days": { kind: "rule", area: "conversations", label: "Closed conversations stay shown (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
   // ADM-2 (D600): also who is a Cooptimizer (sign-in and People); help invites go only to these too.

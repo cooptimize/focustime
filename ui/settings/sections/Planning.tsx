@@ -136,7 +136,7 @@ function BacklogFields(p: FormProps) {
 }
 
 /**
- * ADM-1: guidance with a team default by level (Admin › Organization): your own choice over it, and Reset to team
+ * ADM-1: guidance with a team default by level (Admin › Team defaults › Planning and new people): your own choice over it, and Reset to team
  * default. Levels change emphasis only: none of these ever blocks anything.
  */
 function GuidanceForm(p: FormProps) {

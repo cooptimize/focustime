@@ -265,7 +265,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Client chats (AP-1, ADM-1): my own phrases, on top of the team's." : undefined), removeValue(text, "asks", "poll_minutes"));
     }
     case "ai": {
-      // ADM-1: AI is an admin decision (Admin › AI): only how far back Draft stories looks is a person's own.
+      // ADM-1: AI is an admin decision (Admin › Team defaults › AI): only how far back Draft stories looks is a person's own.
       only(v, ["draftMonths"], "ai");
       const values: [string, boolean | number | string[]][] = [];
       if (v.draftMonths !== undefined) {

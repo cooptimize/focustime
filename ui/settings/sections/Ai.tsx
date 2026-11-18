@@ -1,4 +1,4 @@
-// SA-2: Settings › AI and assistant, drawn with the parts. The team's AI values read-only (Admin › AI sets them), this
+// SA-2: Settings › AI and assistant, drawn with the parts. The team's AI values read-only (Admin › Team defaults › AI sets them), this
 // month's spend, Test AI, what is sent, the last 20 requests, and the assistant's history.
 import { useCallback, useEffect, useState } from "react";
 import type { AiView } from "../../../ai/view.ts";

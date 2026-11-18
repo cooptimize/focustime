@@ -1,16 +1,15 @@
 // SA-3: Settings › Your data › What FocusTime keeps about you. Every line and number comes from docs/technical/ (Data,
 // "Retention" and "Who sees what") and the code's own constants, never typed a second time (ui/settings/keeps.test.ts).
 import { HISTORY_DAYS } from "../../assistant/types.ts";
-import { ORG_SPECS } from "../../config/org.ts";
 import { TRANSCRIPT_DAYS } from "../../plan/meetings.ts";
-import { HARD_DELETE_AFTER_DAYS } from "../../plan/retention-days.ts";
+import { CHAT_RETENTION_DAYS, HARD_DELETE_AFTER_DAYS } from "../../plan/retention-days.ts";
 
 /** Where a line is controlled: a Settings place, or another address in the app. */
 export type KeepLink = { label: string; section?: string; setting?: string; href?: string };
 export type KeepLine = { id: string; what: string; kept: string; link: KeepLink };
 
 /** The chat messages' days are a team Rule (Admin › Client chats); this is its starting value. */
-const CHAT_DAYS = ORG_SPECS["conv.retention_days"].builtin;
+const CHAT_DAYS = CHAT_RETENTION_DAYS;
 export const KEEP_NUMBERS = { HARD_DELETE_AFTER_DAYS, CHAT_DAYS, TRANSCRIPT_DAYS, HISTORY_DAYS } as const;
 
 export const KEEP_LINES: readonly KeepLine[] = [

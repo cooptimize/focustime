@@ -124,9 +124,9 @@ describe.skipIf(!CHROMIUM)("SA-3: Settings in eleven sections (browser, demo on 
     const purge = body.getByRole("button", { name: "Delete stored messages" });
     if (await purge.count()) {
       await purge.click();
-      const ask = page.getByRole("alertdialog", { name: "Delete stored messages" });
+      const ask = page.getByRole("alertdialog", { name: /^Delete stored messages for / });
       await ask.waitFor();
-      await expect(ask.textContent()).resolves.toContain("for everyone on these chats");
+      await expect(ask.textContent()).resolves.toContain("for everyone on");
       await ask.getByRole("button", { name: "Cancel" }).click();
       await ask.waitFor({ state: "detached" });
     }

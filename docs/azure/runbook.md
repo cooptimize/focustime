@@ -251,7 +251,7 @@ DevOps writes for Internal" and offers Copy text; Settings > Connections > Send 
 Set by the Bicep only (main.bicep defaults, `infra/prod.bicepparam`, `infra/dev.bicepparam`), never by hand:
 `FOCUSTIME_FEEDBACK_ORG` `cooptimize`, `FOCUSTIME_FEEDBACK_PROJECT` `Cooptimize Internal`,
 `FOCUSTIME_FEEDBACK_PARENT_ID` `496`, the same on dev and prod (a send from dev is a real write; its title starts
-"[dev]"). They bootstrap the Rule in Admin › Organization › Send feedback, where an admin can change them.
+"[dev]"). They bootstrap the Rule in Admin › Team defaults › Planning and new people › Send feedback, where an admin can change them.
 To move feedback to another feature, change it there (or `feedbackParentId` in main.bicep and deploy).
 
 ## Reset the local dev database (HK-3)
@@ -423,7 +423,7 @@ poller awake all night (Q-HK2-1). Now:
   once a minute (`POST /api/activity`), so reading without clicking still counts.
 - Timer calls (notices, presence, Teams status on the focus screen, the Inbox count, the week's quiet 5-minute
   refresh) always say `background` and never count. A hidden tab never counts. A demo session never counts.
-- N is the team's Rule **Counts as in use (minutes)** in Admin › Organization (`org.idle_minutes`): 10 by default,
+- N is the team's Rule **Counts as in use (minutes)** in Admin › Team defaults › Planning and new people (`org.idle_minutes`): 10 by default,
   5 to 60. The server reads it from memory (`server/use.ts`), never the database.
 - Running a focus timer or a notification still works with nobody active: the scheduler wakes at the stored next-due
   time (D431), as before.
@@ -456,7 +456,7 @@ deploy prod by SHA. Online, about a minute per GB of data (it is under 50 MB), t
 `/healthz`, `/readyz`, `/version`, the database through the app, no database errors since the revision started
 (opening the store migrates it, so a served build with a working database is at its head), and whether the Teams
 chats poller and the DevOps checks ran in the last 30 minutes (a warning outside working hours). Read only. Then
-Admin › Status as an admin.
+Admin › Health as an admin.
 
 ### Budgets and alerts (HK-2)
 
@@ -567,7 +567,7 @@ The poller sorts every message that passes the rules into conversations with one
 | A busy day: 7 chats with new messages every cycle for 10 hours | about 120 | about 0.11 USD |
 | Ceiling: 200 calls a day in each of 7 chats | 1,400 | about 0.90 USD |
 
-Admin › Status will show the counts (ADM-1): `convs.counts(day)` returns conversations by status, messages by role (work, chatter, ack, unsorted), commitments by state and AI calls per chat today.
+Admin › Health will show the counts (ADM-1): `convs.counts(day)` returns conversations by status, messages by role (work, chatter, ack, unsorted), commitments by state and AI calls per chat today.
 
 **Dev replicas:** the CV-1 watch period is over and dev scales to zero again (HK-1, `param minReplicas = 0` in `infra/dev.bicepparam`). The first request wakes it (a cold start of a few seconds), and it goes back to zero 300 s after the last request. Since ENV-1 `requestsPoll` is `'off'`: dev reads chats only on Refresh. The DevOps checks catch up from their stored watermarks while someone uses dev.
 
@@ -575,7 +575,7 @@ Admin › Status will show the counts (ADM-1): `convs.counts(day)` returns conve
 
 1. In a pull request, set `param requestsPoll = 'on'` (and `param minReplicas = 1` if dev must stay awake) in `infra/dev.bicepparam`, saying in the PR why and until when.
 2. Merge it; **deploy-dev** shows the what-if (one change: the app's `FOCUSTIME_REQUESTS_POLL` setting) and deploys. Never `az containerapp update` by hand.
-3. While it's on, dev reads every registered chat every 5 minutes in followers' working hours and sorts them with AI, as prod does, and Admin › Status says "Chat reading is on for a watch period". Nothing else turns on: no meeting capture, reminders, Teams messages, background AI on held messages or Teams status.
+3. While it's on, dev reads every registered chat every 5 minutes in followers' working hours and sorts them with AI, as prod does, and Admin › Health says "Chat reading is on for a watch period". Nothing else turns on: no meeting capture, reminders, Teams messages, background AI on held messages or Teams status.
 4. When the period ends, set it back to `'off'` (and `minReplicas = 0`) the same way. What dev stored stays; the usual retention expires it.
 
 ### Purging a client's stored chat text
@@ -637,7 +637,7 @@ App settings, the same for everyone; the defaults are in `server/appconfig.ts` (
 
 **Flex (AI-F1).** The background tasks (conversation sorting with image descriptions, promise extraction, sorting requests) run on OpenAI's Flex tier: 0.05 / 0.005 cached / 0.25 USD per million for `gpt-6-luna` on 2026-11-06, half the standard prices, slower, and now and then a 429 that isn't billed. FocusTime retries a busy Flex call with backoff and then sends it on standard, so nothing waits long; Application Insights counts `ai/flex_fallback` by task. Everything a person waits on (the assistant, drafts, Break down, Status drafts, capture drafts, Sort again and Sort unsorted) is always standard. To put a background task back on standard: Admin › AI › Processing tier. If the model is changed to one without Flex, its 400 falls back to standard by itself; set that model's Flex prices (or let them default to half) when it has them.
 
-Prices checked again on 2026-11-06 (HK-4): unchanged, and `gpt-6-luna` is still the cheapest current model; the model comparison is `node scripts/ai-eval.ts --live` (needs the key in the keyring, see docs/azure/ai-eval-results.md). Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
+Prices checked again on 2026-11-06 (HK-4): unchanged, and `gpt-6-luna` is still the cheapest current model; the model comparison is `node scripts/ai-eval.ts --live` (needs the key in the keyring, see docs/azure/ai-eval-results.md). Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Since ADM-1 the model, each person's cap (default 10 USD) and the app's cap are set by an admin in Admin › Team defaults › AI; `FOCUSTIME_AI_MODEL` and `FOCUSTIME_AI_APP_CAP_USD` are only their starting values, and AI is on or off for FocusTime there too.
 
 ### What "AI isn't set up" means
 
