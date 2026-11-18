@@ -49,6 +49,13 @@ export type OtherCallView = {
   seriesKey: string | null;
   /** MC-4: everyone on it is at Cooptimize: no client is suggested from the focus block it started in. */
   allHome: boolean;
+  /**
+   * MC-2c: a call started in a client's registered delivery chat (its key "chat:<call id>"): the chat's name and the
+   * client of its registration (a suggestion). Its people aren't counted. Absent for a call from my calendar.
+   */
+  chat?: { name: string; clientKey: string };
+  /** MC-2c: false when the call's end isn't known (only its start shows; endAt is when its transcript was ready). */
+  endKnown?: boolean;
 };
 
 export type OccurrenceView = {

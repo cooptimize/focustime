@@ -22,15 +22,20 @@ export const TRANSCRIPT_SOURCES = ["automatic", "upload"] as const;
 export type TranscriptSource = (typeof TRANSCRIPT_SOURCES)[number];
 /** PK-1: a Teams transcript (.vtt, .docx, or Graph's) or a Pocket export (its PDF, or the zip holding it). */
 /** PK-1: "pocket" a Pocket export uploaded as a file; MC-2b: "pocket_api" a reviewer's own Pocket recording brought in from Pocket (speakers numbered, never named; its lines have times). */
-export type TranscriptKind = "teams" | "pocket" | "pocket_api";
-/** A transcript whose speakers Pocket numbered: never named, and the AI is told the labels aren't people. */
-export const unnamedSpeakers = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api";
+/** MC-2c: "teams_unnamed" a chat call's transcript Teams gave without speaker names (the organization's setting). */
+export type TranscriptKind = "teams" | "pocket" | "pocket_api" | "teams_unnamed";
+export const TRANSCRIPT_KINDS: readonly TranscriptKind[] = ["teams", "pocket", "pocket_api", "teams_unnamed"];
+/** A transcript whose speakers aren't named (Pocket numbered them, or Teams left them out): the AI is told the labels aren't people. */
+export const unnamedSpeakers = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api" || k === "teams_unnamed";
+/** PK-1, MC-2b: a transcript from Pocket. */
+export const fromPocket = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api";
 
 /**
  * MC-2: what kind of call a row is: null for a client call an admin registered; "calendar" for a call from the
- * presser's own calendar (one occurrence of it), "hand" for one they added by hand.
+ * presser's own calendar (one occurrence of it), "hand" for one they added by hand; MC-2c: "chat" for a call started
+ * in a client's registered delivery chat (its event id "chat:<the call's id>", its join link "chat:<the chat's id>").
  */
-export const CALL_KINDS = ["calendar", "hand"] as const;
+export const CALL_KINDS = ["calendar", "hand", "chat"] as const;
 export type CallKind = (typeof CALL_KINDS)[number];
 
 /** One registered call of a client: an app table row, shared by its reviewers and attendees. */

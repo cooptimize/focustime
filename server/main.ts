@@ -1016,7 +1016,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
-    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, exists: { grants: callChecks, hold: callAnswers }, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), pocketHold, ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
+    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, chatPress: chatCallPresses, exists: { grants: callChecks, hold: callAnswers }, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), pocketHold, ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
     account: accountFor(who),
     photoCache: host.photos,
     push,

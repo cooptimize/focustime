@@ -2,6 +2,8 @@
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import type { PressGrants } from "./call-press.ts";
 import type { ExistsGrants, ExistsHold } from "./call-exists.ts";
+import type { ChatCallPresses } from "./chat-call-press.ts";
+import { chatCallsPort } from "./chat-calls-port.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
@@ -1426,6 +1428,8 @@ export type MeetingsPort = {
   pocketHold?: PocketHold;
   /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute answers (actions/call-exists.ts). */
   exists?: { grants: ExistsGrants; hold: ExistsHold };
+  /** MC-2c: the presses the chat call transcript client lets through (actions/chat-call-press.ts); absent: not here. */
+  chatPress?: ChatCallPresses;
 };
 
 /**
@@ -1469,6 +1473,21 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.exists ? { exists: ctx.meetings.exists } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    // MC-2c: the calls started in my registered client chats (what the poll kept), and their press and client.
+    ...(ctx.requests?.teams && ctx.meetings?.cooptimizer
+      ? {
+          chatCalls: chatCallsPort({
+            teams: ctx.requests.teams,
+            me: rc.me,
+            clientKeys: async () => (await chatContext(ctx)).clientKeys(),
+            users: async () => (ctx.meetings ? (await ctx.meetings.users()).map((u) => ({ id: u.id, name: u.name, deleted: false })) : []),
+            cooptimizer: ctx.meetings.cooptimizer,
+            now: ctx.now,
+          }),
+        }
+      : {}),
+    ...(ctx.meetings?.chatPress ? { chatPress: ctx.meetings.chatPress } : {}),
+    adhoc: (cfg) => ctx.account?.(cfg)?.adhocCalls ?? null,
     // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
     ...(ctx.pocket && ctx.meetings?.pocketHold
       ? {

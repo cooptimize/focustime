@@ -18,12 +18,16 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { callWriteWords, CALL_LIST, CALL_ROW, CHAT_NO_SPEAKERS, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
+import type { ChatCallPresses } from "./chat-call-press.ts";
+import type { ChatCallsPort, ChatCallEntry } from "./chat-calls-port.ts";
+import { AdhocRefused, readChatTranscript, type AdhocCallsClient } from "../sources/graph/adhoc-calls.ts";
+import { callIdOfKey, chatCallKey } from "../plan/cowork.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
 import { pocketAdd, pocketAddressAdd, pocketAddressRemove, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
 
@@ -31,7 +35,8 @@ import { pocketAdd, pocketAddressAdd, pocketAddressRemove, pocketBring, pocketLi
 export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
-import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { atOf, joinTranscriptParts, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { HttpError } from "../sources/calendar/http.ts";
 import { graphFailureOf, MeetingRefused, pressTranscript, TranscriptsOff, type ExistsAsk, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
@@ -108,6 +113,12 @@ export type MeetingContext = {
   pocket?: MeetingPocket;
   /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute memory of answers; absent: not checked here. */
   exists?: { grants: ExistsGrants; hold: ExistsHold };
+  /** MC-2c: the calls started in my registered client chats with a transcript event (what the poll kept); absent: none here. */
+  chatCalls?: ChatCallsPort;
+  /** MC-2c: the presses the chat call transcript client lets through; absent: Get it from Teams isn't here for a chat call. */
+  chatPress?: ChatCallPresses;
+  /** MC-2c: my chat call transcript client (CallTranscripts.Read.All, behind my press), or null when I'm not signed in. */
+  adhoc?: (cfg: AppConfig) => AdhocCallsClient | null;
 };
 
 class Invalid extends Error {}
@@ -156,7 +167,7 @@ function viewOf(s: MeetingSeries, clientName: string, users: readonly MeetingUse
     id: s.id, clientKey: s.clientKey, clientName, name: s.name, role: s.role, roleLabel: isCall(s) ? "Call" : ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
     when: isCall(s) ? callWhen(s) : whenOf(s), weekday: s.weekday, start: s.start, minutes: s.minutes, zone: s.zone, reviewers: s.reviewers.map((r) => ({ id: r, name: name(r) })), attendees: s.attendees.length,
     mine: { review: s.reviewers.some((r) => lower(r) === lower(me)), attend: s.attendees.some((a) => lower(a) === lower(me)) },
-    call: s.callKind, teams: s.callKind === "calendar" && /^https:\/\//.test(s.joinUrl) && s.organizer !== "other",
+    call: s.callKind, teams: (s.callKind === "calendar" && /^https:\/\//.test(s.joinUrl) && s.organizer !== "other") || s.callKind === "chat",
   };
 }
 /** MC-2: a call's one time, "9:30 to 10:15 AM" style, in its own zone (its day is the occurrence's). */
@@ -310,7 +321,8 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const from = Temporal.Instant.from(ctx.now()).subtract({ hours: 24 * 35 }).toZonedDateTimeISO("UTC").toPlainDate().toString();
         // MC-2: with the calls that aren't registered that I pressed Review on, was on, or added (their marks on Day and
         // Week, their rows in Calls); nudges stay the registered calls' (nudgesFor).
-        const mine = [...(await store.viewer(me).series()), ...(await store.viewer(me).calls(from))];
+        // MC-2c: a kept chat call shows to its reviewers, and to the others on it only while they're in its chat and follow its client.
+        const mine = [...(await store.viewer(me).series()), ...(await seenChatCalls(ctx, me, await store.viewer(me).calls(from)))];
         const occs = await store.recentOccurrences(mine.map((s) => s.id), from);
         const counts = new Map<number, { all: number; open: number; done: CallOutcome; closedAt: string | null }>();
         for (const o of occs) {
@@ -370,6 +382,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       case "meeting.call_fetch": {
         const o = obj(input, ["occurrenceId"]);
         const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+        if (series.callKind === "chat") return await fetchChatCall(ctx, store, cfg, me, series, occ);
         if (series.callKind !== "calendar") return bad("Only a call from your calendar can be asked of Teams; upload its transcript instead", 409);
         return await fetchFromTeams(ctx, store, cfg, me, series, occ);
       }
@@ -569,7 +582,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
   const o = obj(input, ["occurrenceId"]);
   const v = store.viewer(me);
   const r = await v.occurrence(id(o.occurrenceId, "occurrenceId"));
-  if (!r) return bad("No such meeting", 404);
+  if (!r || !(await seesChatCall(ctx, me, r.series))) return bad("No such meeting", 404);
   let ps = (await v.proposals(r.o.id)).sort(proposalOrder);
   const lines = await store.transcript(r.o.id);
   const users = await ctx.users();
@@ -601,7 +614,9 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       summary: lines ? await store.summary(r.o.id) : null,
       // PK-1: a Pocket export's speakers are numbered, never named, and its lines have no times (kept past 30 days).
       // MC-2b: a Pocket recording brought in from Pocket is numbered too, with times.
-      pocket: unnamedSpeakers(r.o.transcriptKind),
+      pocket: fromPocket(r.o.transcriptKind),
+      // MC-2c: Teams gave this chat call's transcript without speaker names.
+      noSpeakers: r.o.transcriptKind === "teams_unnamed",
       // MC-2b: whose Pocket recording it was, said only as mine or a reviewer's (never a name); null otherwise.
       pocketFrom: r.o.transcriptKind === "pocket_api" && lines ? ((await store.transcriptBy(r.o.id))?.toLowerCase() === me.toLowerCase() ? "mine" : "reviewer") : null,
       canConfirm: reviewer,
@@ -621,7 +636,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
 async function transcriptOf(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceId"]);
   const r = await store.viewer(me).occurrence(id(o.occurrenceId, "occurrenceId"));
-  if (!r) return bad("No such meeting", 404);
+  if (!r || !(await seesChatCall(ctx, me, r.series))) return bad("No such meeting", 404);
   const lines = await store.transcript(r.o.id);
   ctx.log({ source: "plan", op: "meeting_transcript_read", count: lines?.length ?? 0 });
   if (!lines) return { ok: true, data: { lines: [], gone: !!r.o.transcriptAt, missing: !r.o.transcriptAt } };
@@ -1000,9 +1015,123 @@ async function otherCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConf
     const outside = detectSource(c.organizerEmail, home).organizer === "other";
     rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null, seriesKey: c.seriesKey ?? null, allHome: c.allHome === true });
   }
+  // MC-2c: the calls started in my registered client chats whose transcript Teams said is ready (only what the poll kept).
+  if (ctx.chatCalls && (await ctx.cooptimizer?.(me).catch(() => false))) {
+    for (const c of await ctx.chatCalls.listed(w.fromIso)) {
+      if (!inWindow(c.startedAt!, w)) continue;
+      const key = chatCallKey(c.callId);
+      const kept = await store.callByKey(key);
+      const seen = kept ? await v.occurrence(kept.occurrence.id) : null;
+      const endAt = chatCallEnd(c);
+      rows.push({ key, name: CALL_LIST.chatCallName(c.chatName), startAt: c.startedAt!, endAt, minutes: Math.max(0, Math.round((Date.parse(endAt) - Date.parse(c.startedAt!)) / 60_000)), people: 0, teams: true, outside: false, occurrenceId: seen ? seen.o.id : null, seriesKey: null, allHome: false, chat: { name: c.chatName, clientKey: c.clientKey }, endKnown: !!c.endedAt });
+    }
+  }
   rows.sort((a, b) => b.startAt.localeCompare(a.startAt));
   ctx.log({ source: "plan", op: "meeting_other_calls", count: rows.length });
   return { ok: true, data: { calls: rows, days: OTHER_CALL_DAYS } };
+}
+
+/** MC-2c: a chat call's end: its call-ended event's time, else when Teams said its transcript was ready. */
+const chatCallEnd = (c: Pick<ChatCallEntry, "endedAt" | "transcriptAt" | "startedAt">): string => {
+  const end = c.endedAt ?? c.transcriptAt;
+  return Date.parse(end) > Date.parse(c.startedAt!) ? end : Temporal.Instant.from(c.startedAt!).add({ minutes: 1 }).toString();
+};
+const chatIdOf = (s: Pick<MeetingSeries, "joinUrl">) => (s.joinUrl.startsWith("chat:") ? s.joinUrl.slice(5) : null);
+/**
+ * MC-2c: whether I may see a kept chat call: its reviewers always (they pressed Review on it); anyone else on it only
+ * while they're in its chat now and follow its client. Any other call: yes (the store's viewer already decided).
+ */
+async function seesChatCall(ctx: MeetingContext, me: string, s: MeetingSeries): Promise<boolean> {
+  if (s.callKind !== "chat" || canConfirm(s, me)) return true;
+  const chatId = chatIdOf(s);
+  return !!chatId && !!ctx.chatCalls && (await ctx.chatCalls.sees(chatId).catch(() => false));
+}
+async function seenChatCalls(ctx: MeetingContext, me: string, calls: MeetingSeries[]): Promise<MeetingSeries[]> {
+  const out: MeetingSeries[] = [];
+  for (const s of calls) if (await seesChatCall(ctx, me, s)) out.push(s);
+  return out;
+}
+
+/**
+ * MC-2c: Review on a call started in a client's registered chat. Checked here before anything is kept: I'm a
+ * Cooptimizer; the call is held with its transcript event in a chat that is still registered, that I'm in now and whose
+ * client I follow (the port's `one`). The client is the one I confirmed (the chat's registration's by default). Kept as
+ * MC-2 keeps a call: I'm its reviewer, the other Cooptimizers in the chat who use FocusTime are on it, its event id the
+ * call's key. Nothing is asked of Microsoft here.
+ */
+async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, key: string, clientKey: string): Promise<ActionResponse> {
+  if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
+  const callId = callIdOfKey(key);
+  const c = callId && ctx.chatCalls ? await ctx.chatCalls.one(callId) : null;
+  if (!c || !c.startedAt) {
+    ctx.log({ source: "plan", op: "meeting_call_start", kind: "not_in_chat" });
+    return { ok: false, status: 403, error: FETCH_WORDS.not_in_chat, code: "not_in_chat" };
+  }
+  const client = await clientOf(ctx, clientKey);
+  if (isRefusal(client)) return client;
+  const kept = await store.callByKey(key);
+  if (kept) {
+    const seen = await store.viewer(me).occurrence(kept.occurrence.id);
+    if (!seen) return bad("FocusTime can't open this call for you. Upload its transcript with Add a call instead.", 409);
+    return { ok: true, data: { occurrenceId: kept.occurrence.id, existed: true } };
+  }
+  const zone = userZone(cfg);
+  const endAt = chatCallEnd(c);
+  const local = Temporal.Instant.from(c.startedAt).toZonedDateTimeISO(zone);
+  const attendees = await ctx.chatCalls!.cooptimizersIn(c.chatId);
+  const r = await store.addCall({
+    callKind: "chat", clientKey: client.key, name: CALL_LIST.chatCallName(c.chatName), organizer: "home", joinUrl: `chat:${c.chatId}`, eventId: key, registrantId: me,
+    start: local.toPlainTime().toString({ smallestUnit: "minute" }), minutes: Math.max(1, Math.round((Date.parse(endAt) - Date.parse(c.startedAt)) / 60_000)), zone, attendees, day: local.toPlainDate().toString(), startAt: c.startedAt, endAt,
+  });
+  ctx.log({ source: "plan", op: "meeting_call_start", kind: r.existed ? "existed" : "kept_chat", count: attendees.length });
+  return { ok: true, data: { occurrenceId: r.occurrence.id, existed: r.existed } };
+}
+
+/**
+ * MC-2c: Get it from Teams for a kept chat call, one try per press, with my own sign-in. Checked first: I'm a
+ * Cooptimizer and a reviewer, and the call is still held with its event in a chat that is registered, that I'm in and
+ * whose client I follow. Only then one press opens, for me and this call id, two minutes; the client's gate lets
+ * nothing else through. The transcripts are listed (or the event's id used), read in time order, joined and kept 30
+ * days; with speaker names off Teams is asked once more without them. Each of Microsoft's answers becomes plain words
+ * with the way on. Logged by outcome and count only.
+ */
+async function fetchChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, series: MeetingSeries, occ: Occurrence): Promise<ActionResponse> {
+  const say = (outcome: Exclude<FetchOutcome, "found">, status = 200): ActionResponse => {
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: outcome });
+    return status === 200 ? { ok: true, data: { outcome, message: FETCH_WORDS[outcome] } } : { ok: false, status, error: FETCH_WORDS[outcome], code: outcome };
+  };
+  if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return say("not_cooptimizer", 403);
+  if (!ctx.chatPress || !ctx.chatCalls) return say("unavailable");
+  const callId = series.eventId ? callIdOfKey(series.eventId) : null;
+  const c = callId ? await ctx.chatCalls.one(callId) : null;
+  if (!c || c.chatId !== chatIdOf(series)) return say("not_in_chat", 403);
+  const client = ctx.adhoc?.(cfg) ?? null;
+  if (!client) return say("signin");
+  const press = ctx.chatPress.open(me, c.callId);
+  try {
+    const read = await readChatTranscript(client, c.callId, c.transcriptId);
+    const lines = joinTranscriptParts(read.parts, read.named);
+    await store.saveTranscript(occ.id, lines, "automatic", null, read.named ? "teams" : "teams_unnamed");
+    await store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: me, at: ctx.now() } });
+    const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, (await store.occurrence(occ.id))!, lines);
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: read.named ? "found" : "found_unnamed", count: lines.length });
+    const message = `${fetchFound(lines.length, r.proposals, r.outcome === "done")}${read.named ? "" : ` ${CHAT_NO_SPEAKERS}`}`;
+    return { ok: true, data: { ...r, aiOutcome: r.outcome, outcome: "found", message, lines: lines.length, noSpeakers: !read.named } };
+  } catch (e) {
+    if (e instanceof AdhocRefused) return say("not_in_chat", 403);
+    if (e instanceof TranscriptsOff) return say("tenant_off");
+    if (e instanceof TranscriptError) return say("unreadable");
+    if (e instanceof HttpError && e.status === 413) return say("unreadable");
+    if (e instanceof AuthFailure && e.kind === "consent") return say("chat_not_granted");
+    const k = graphFailureOf(e);
+    if (k === "missing") return say("chat_none");
+    if (k === "signin" || k === "setup") return say("signin");
+    if (k === "busy") return say("busy");
+    if (k === "consent" || k === "refused") return say("chat_refused");
+    throw e;
+  } finally {
+    press.done();
+  }
 }
 
 /** MC-4: what one check answers for a call: a transcript in Teams, none, the tenant's setting off, or not checked yet. */
@@ -1101,6 +1230,7 @@ async function startCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfi
   const o = obj(input, ["key", "startAt", "endAt", "clientKey"]);
   const key = text(o.key, "key", 2000)!;
   if (!KEY.test(key)) throw new Invalid("key must be a call's key");
+  if (key.startsWith("chat:")) return await startChatCall(ctx, store, cfg, me, key, text(o.clientKey, "clientKey", 100)!);
   const startAt = isoAt(o.startAt, "startAt");
   const endAt = isoAt(o.endAt, "endAt");
   if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
