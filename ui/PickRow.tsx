@@ -15,6 +15,7 @@ import { MenuCtx, useMenu } from "./Menus.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { PickTime } from "./PickTime.tsx";
 import { DeployIcon, DeployTitle, WindowChip } from "./Deploy.tsx";
+import { PeopleChip } from "./DeployPeople.tsx";
 import { DeployItemsChip } from "./DeployItems.tsx";
 import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
@@ -152,7 +153,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     // An untimed to-do has no such line at rest; "+ time", the size and ⋯ show on hover and focus over the row's end.
     const sized = !dep && pick.size;
     const meta = dep ? (
-      <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /></>
+      <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /><PeopleChip pick={pick} /></>
     ) : timed ? (
       <>
         <TodoTime pick={pick} editable={timeEditable && !readOnly} />
@@ -243,5 +244,5 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
 
 /** WK-3: a Deployment's window chip in place of the to-do's time (its window is changed from Deployment details). */
 function TodoTime(props: Parameters<typeof PickTime>[0]) {
-  return props.pick.todoKind === "deployment" ? <><WindowChip pick={props.pick} /><DeployItemsChip pick={props.pick} /></> : <PickTime {...props} />;
+  return props.pick.todoKind === "deployment" ? <><WindowChip pick={props.pick} /><DeployItemsChip pick={props.pick} /><PeopleChip pick={props.pick} /></> : <PickTime {...props} />;
 }

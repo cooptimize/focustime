@@ -26,6 +26,8 @@ export type HoldState =
 /** What a person's to-do for a shared deployment carries beside the to-do itself (read models only). */
 export type SharedView = {
   id: number;
+  /** Who I am on it (my own id), so a screen can say "You" and who else a change is for. */
+  me: string;
   version: number;
   people: DeployPerson[];
   /** Me: who added me (null when I made it). */

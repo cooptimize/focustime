@@ -6246,6 +6246,32 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .dep-list li > button { grid-column: 3; }
 }
 
+/* DP-3: who is on a deployment (a count on a row, names where it opens), the People field, and my own hold's line. */
+.deploy-people { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-1); color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.deploy-people-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; font-size: var(--fs-2); overflow-wrap: anywhere; }
+.deploy-people-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.deploy-people-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.dp-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 1px 4px 1px 9px; font-size: var(--fs-2); border: 1px solid var(--border); border-radius: 999px; overflow-wrap: anywhere; }
+.dp-chip.me { padding-right: 9px; color: var(--text-muted); }
+.dp-remove { display: inline-grid; place-items: center; min-width: 24px; min-height: 24px; padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; border-radius: 999px; }
+.dp-remove:hover, .dp-remove:focus-visible { color: var(--text); background: var(--border); }
+.menu-form-intro { grid-column: 1 / -1; margin: 0; font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.menu-form .field.people { grid-column: 1 / -1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.deploy-hold { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; font-size: var(--fs-2); }
+.deploy-hold-line { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.deploy-hold.behind .deploy-hold-line, .deploy-hold.moved_in_outlook .deploy-hold-line, .deploy-hold.deleted_in_outlook .deploy-hold-line { color: var(--watch); }
+.deploy-hold-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.deploy-hold-error { flex-basis: 100%; color: var(--watch); }
+.left-holds { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 8px; font-size: var(--fs-2); color: var(--watch); max-width: 100%; overflow-wrap: anywhere; }
+.cap-people { display: flex; flex-direction: column; gap: 4px; }
+.deploy-people-field .person-picker input { width: min(20em, 100%); }
+.weekend-cell .pick-row:not(.ph-row) .deploy-people { order: 3; }
+@media (max-width: 600px) {
+  .dp-remove { min-width: 44px; min-height: 44px; }
+  .deploy-hold-acts .mini { min-height: 44px; }
+  .left-holds .mini { min-height: 44px; }
+}
+
 /* IB-2: the Everything timeline. Day headings stick while their day scrolls; rows wait to be laid out until near the view. */
 .ib-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
 .ib-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }

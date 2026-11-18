@@ -18,7 +18,7 @@ import { DEFAULT_SIZE_SCALE, MAX_ESTIMATE_HOURS, validEstimateMinutes, validStor
 import type { DeployItem } from "../plan/deploy-items.ts";
 import { movedTitle, windowMinutes } from "../plan/deploy.ts";
 import { sharedDeployments, StaleDeployment, type SharedRow } from "./deployments.ts";
-import { instantsOf, localOf, movedTo, STALE_SAVE, type DeployPerson, type HoldState, type SharedView } from "../plan/shared-deploy.ts";
+import { instantsOf, localOf, movedTo, STALE_SAVE, windowWords, type DeployPerson, type HoldState, type SharedView } from "../plan/shared-deploy.ts";
 import type { InboxMark, InboxMarkPatch } from "../plan/inbox-items.ts";
 import type { Capture, DayPlan, DraftAi, DraftAiState, DraftStory, Pick, PickKind, PlanWeek, Size, TodoKind, TodoLink, TodoWindow, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
@@ -1845,7 +1845,13 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     return h >= 17 ? "EVE" : h < 12 ? "AM" : "PM";
   };
   const stale = (e: unknown): never => {
-    if (e instanceof StaleDeployment) throw new PlanError(e.current ? STALE_SAVE : "That deployment isn't on your plan any more");
+    if (e instanceof StaleDeployment) {
+      const c = e.current;
+      if (!c) throw new PlanError("That deployment isn't on your plan any more");
+      // What it is now, so the person sees what changed before they save again.
+      const now = [`${c.title}, ${windowWords(c.startAt, c.endAt, zone())}`, c.notes ? `note "${c.notes.length > 60 ? `${c.notes.slice(0, 60)}…` : c.notes}"` : "", c.updatedBy && c.updatedBy !== personId ? `changed by ${c.people.find((x) => x.id === c.updatedBy)?.name ?? "a teammate"}` : ""].filter(Boolean).join(" · ");
+      throw new PlanError(`${STALE_SAVE}. It is now: ${now}`);
+    }
     throw e;
   };
   /** The local ISO times (with offset) of an instant in my zone, as timeboxes keep them. */
@@ -1969,7 +1975,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
   /** The shared part of a handle's read model. */
   async function viewOf(p: Pick, d: SharedRow): Promise<SharedView> {
     const meOn = d.people.find((x) => x.id === personId);
-    return { id: d.id, version: d.version, people: d.people, addedBy: meOn && meOn.addedBy !== personId ? meOn.addedBy : null, createdBy: d.createdBy, startAt: d.startAt, endAt: d.endAt, clipped: localOf(d.startAt, d.endAt, zone()).clipped, hold: await holdOf(p.id) };
+    return { id: d.id, me: personId, version: d.version, people: d.people, addedBy: meOn && meOn.addedBy !== personId ? meOn.addedBy : null, createdBy: d.createdBy, startAt: d.startAt, endAt: d.endAt, clipped: localOf(d.startAt, d.endAt, zone()).clipped, hold: await holdOf(p.id) };
   }
   async function withShared(list: Pick[], mine?: Map<number, SharedRow>): Promise<Pick[]> {
     const ids = list.filter((p) => p.deploymentId != null && (p.status === "planned" || p.status === "done")).map((p) => p.deploymentId!);
