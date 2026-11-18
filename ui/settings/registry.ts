@@ -108,7 +108,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "standing-blocks", section: "hours", label: "Standing blocks", kind: "list", keywords: ["internal", "focus block"] },
   // Notifications
   { id: "test-site", section: "notifications", label: "This test site", group: "This test site", kind: "status", part: true },
-  { id: "from-test-site", section: "notifications", label: "Send me notices from this test site", old: ["From this test site"], group: "This test site", kind: "switch" },
+  { id: "from-test-site", section: "notifications", label: "Send me reminders and Teams messages from this test site", old: ["From this test site"], group: "This test site", kind: "switch" },
   { id: "kinds", section: "notifications", label: "What to notify me about", kind: "switch", keywords: ["reminders", "ritual", "timer", "meeting", "follow-ups", "promises", "expiry", "vm"] },
   ...NOTIFY_SHOWN.map(([k, group]) => ({ id: `notify-${k.replace(/_/g, "-")}`, section: "notifications", label: KIND_LABEL[k], group, kind: "switch" as const, part: true, ...(k === "checkin" ? { old: ["Check-in"] } : {}) })),
   { id: "status-report-times", section: "notifications", label: "Status report times", group: "Timing", kind: "time", keywords: ["friday", "sunday", "monday report"] },
@@ -116,7 +116,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "quiet", section: "notifications", label: "Quiet hours", old: ["Quiet"], group: "Quiet hours", kind: "choice", keywords: ["outside working hours", "never quiet"] },
   { id: "quiet-pto", section: "notifications", label: DAYS_OFF_WORDS.label, old: ["Days off", "Quiet on PTO days"], group: "Quiet hours", kind: "switch", keywords: ["pto", "holiday", "holidays", "time off"] },
   { id: "test-notification", section: "notifications", label: "Send a test notification", group: "Test", kind: "action" },
-  { id: "devices", section: "notifications", label: "Notify this device", group: "On your devices", kind: "list", keywords: ["push", "phone", "iphone", "devices"] },
+  { id: "devices", section: "notifications", label: "Devices that get notifications", old: ["Notify this device"], group: "On your devices", kind: "list", keywords: ["push", "phone", "iphone", "devices"] },
   { id: "push-details", section: "notifications", label: "Show details in notifications", old: ["Show details"], group: "On your devices", kind: "switch", keywords: ["lock screen"] },
   { id: "teams-messages", section: "notifications", label: "Let FocusTime message me in Teams", old: ["Messages in Teams"], group: "In Teams", kind: "switch", keywords: ["bot", "teams"] },
   { id: "teams-kinds", section: "notifications", label: "What FocusTime sends in Teams", group: "In Teams", kind: "switch", keywords: ["morning brief", "midday check-in", "close out", "nudges", "friday"] },

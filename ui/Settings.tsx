@@ -25,9 +25,6 @@ import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
-import { DAYS_OFF_WORDS, KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
-import { DEFAULT_STATUS_TIMES, type StatusTimes } from "../plan/status-report.ts";
-import { CLOSEOUT_MINUTES, DEFAULT_TEAMS_RHYTHM, HM, TEAMS_KIND_HINT, TEAMS_KIND_LABEL, TEAMS_KINDS, type TeamsKind, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
@@ -36,13 +33,11 @@ import { version as APP_VERSION } from "../package.json";
 import { Lockup } from "./brand/Brand.tsx";
 import { usePhone } from "./viewport.ts";
 import { PhoneReadOnly } from "./Phone.tsx";
-import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from "./pwa.ts";
-import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
-import { siteLine, useAppEnv, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
+import { siteLine, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
@@ -50,6 +45,7 @@ import { DeploySettings } from "./DeployItems.tsx";
 import { Icon } from "./icons.tsx";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
+import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -326,7 +322,7 @@ function SectionBody(p: BodyProps) {
         </>
       );
     case "notifications":
-      return <NotifyForm {...p} />;
+      return <NotificationsSection {...p} />;
     case "ahead":
       return <RoadmapForm {...p} />;
     case "clients":
@@ -965,125 +961,6 @@ function AsksForm(p: FormProps) {
 }
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
-function NotifyForm(p: FormProps) {
-  const n = p.data.notify;
-  const a = useAutoSave({
-    section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, fromTestSite: n.fromTestSite ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
-    payload: (v) => v,
-    onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "fromTestSite" ? "From this test site" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : DAYS_OFF_WORDS.label),
-  });
-  const [test, setTest] = useState<string | null>(null);
-  // ENV-1: outside production nothing is sent on its own unless the person switches it on here (the server decides
-  // what is production; this only hides the switch where it means nothing).
-  const env = useAppEnv();
-  const testSite = env !== null && env !== "prod" && env !== "demo";
-  const group = (title: string, list: readonly NotifyKind[]) => (
-    <fieldset className="set-notify-group">
-      <legend>{title}</legend>
-      {list.map((k) => (
-        <label key={k} className="set-notify-row">
-          <input type="checkbox" checked={a.v.kinds[k]} onChange={(e) => a.change("kinds", { ...a.v.kinds, [k]: e.target.checked })} />
-          <span className="set-notify-name">{KIND_LABEL[k]}</span>
-          <span className="set-hint">{KIND_HINT[k]}</span>
-        </label>
-      ))}
-    </fieldset>
-  );
-  return (
-    <div className="set-form">
-      {testSite && (
-        <Group title="This test site" sid="test-site" intro="This is a test site. It sends nothing on its own: no reminders, notices, pushes or Teams messages, unless you switch them on here. It never reads chats or calls on its own and never changes your Teams status.">
-          <AutoField a={a} k="fromTestSite" label="From this test site" hint="On: you get reminders, notices, pushes and Teams messages from this test site as the real FocusTime sends them, by the switches below. Only for you.">
-            <label className="set-check">
-              <input type="checkbox" checked={a.v.fromTestSite} onChange={(e) => a.change("fromTestSite", e.target.checked)} /> Send me reminders and Teams messages from this test site
-            </label>
-          </AutoField>
-        </Group>
-      )}
-      <Group title="In FocusTime" sid="kinds" intro="Each is sent once; a click opens FocusTime there.">
-      <div className="set-notify">
-        {group("Ritual reminders", RITUAL_KINDS)}
-        {group("While you focus", ["timer", "meeting"])}
-        {group("Other", ["vm", "followups", "expiry", "asks"])}
-        {group("Monday's status report", ["status_report"])}
-        {group("Client calls", ["meeting_review"])}
-        {group("Deployments", ["deployments"])}
-      </div>
-      <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
-      </Group>
-      <Group title="Timing">
-      <AutoField a={a} k="status" label="Status report times" hint="Friday at this time, or an hour before your day ends if that comes first. Sunday only when you turn it on. These times hold in Teams too.">
-        <span className="set-teams-time">
-          <input type="time" aria-label="Friday at" value={a.v.status.fridayAt} onChange={(e) => HM.test(e.target.value) && a.set("status", { ...a.v.status, fridayAt: e.target.value })} onBlur={() => a.commit("status")} />
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.status.sunday} onChange={(e) => a.change("status", { ...a.v.status, sunday: e.target.checked })} /> Also Sunday evening at
-          </label>
-          <input type="time" aria-label="Sunday at" disabled={!a.v.status.sunday} value={a.v.status.sundayAt} onChange={(e) => HM.test(e.target.value) && a.set("status", { ...a.v.status, sundayAt: e.target.value })} onBlur={() => a.commit("status")} />
-        </span>
-      </AutoField>
-      <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">
-        <label className="set-check">
-          <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent requests through
-        </label>
-      </AutoField>
-      </Group>
-      <Group title="Quiet hours">
-      <div className="set-grid">
-        <AutoField a={a} k="quiet" label="Quiet" hint="Focus timer and meeting warnings still come.">
-          <select value={a.v.quiet} onChange={(e) => a.change("quiet", e.target.value as QuietMode)}>
-            <option value="outside_hours">Outside working hours</option>
-            <option value="off">Never quiet</option>
-          </select>
-        </AutoField>
-        <AutoField a={a} k="quietPto" label={DAYS_OFF_WORDS.field} hint={DAYS_OFF_WORDS.hint}>
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.quietPto} onChange={(e) => a.change("quietPto", e.target.checked)} /> {DAYS_OFF_WORDS.label}
-          </label>
-        </AutoField>
-      </div>
-      </Group>
-      <Group title="Test" intro="During a focus session only the timer, meeting warnings and (if you let them) urgent requests come; the rest wait and come as one after the session.">
-      <div className="set-actions-row" data-setting="test-notification">
-        <button
-          type="button"
-          className="mini"
-          onClick={() => {
-            setTest("Sending…");
-            void call("notify.test", {}).then(
-              () => (setTest("Sent. Click it to come back here."), window.dispatchEvent(new Event(NOTICES_CHANGED))),
-              (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"),
-            );
-          }}
-        >
-          Send a test notification
-        </button>
-        {test && <span className="set-hint" role="status">{test}</span>}
-      </div>
-      </Group>
-      <Group title="On your devices" sid="devices">
-      <PushDevices />
-      <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Promises due). On: client names and work item titles too, on the lock screen.">
-        <label className="set-check">
-          <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
-        </label>
-      </AutoField>
-      </Group>
-      <Group title="In Teams">
-      <TeamsStatusLine />
-      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. On: it may send the kinds you turn on below, only in your own chat with it, never in quiet hours, on days off or weekends, and held while you focus.">
-        <label className="set-check">
-          <input type="checkbox" checked={a.v.teamsMessages} onChange={(e) => a.change("teamsMessages", e.target.checked)} /> Let FocusTime message me in Teams
-        </label>
-      </AutoField>
-      <TeamsKinds v={a.v.teams} on={a.v.teamsMessages} set={(t) => a.set("teams", t)} commit={(t) => a.commit("teams", t)} change={(t) => a.change("teams", t)} />
-      <SaveMark s={a.status("teams")} retry={() => a.commit("teams")} />
-      </Group>
-    </div>
-  );
-}
-
 type TeamsStatus = { available: boolean; chat: boolean; blocked: boolean };
 
 /** TB-2: whether FocusTime can reach me in Teams: the hosted app only, after my first message, unless Teams refused it. */
@@ -1095,151 +972,6 @@ function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
   if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
   if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
   return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
-}
-
-/** TB-2: the kinds FocusTime may send in Teams, each with its time and Send me a test now. */
-function TeamsKinds(p: { v: TeamsRhythm; on: boolean; set: (t: TeamsRhythm) => void; commit: (t: TeamsRhythm) => void; change: (t: TeamsRhythm) => void }) {
-  const [test, setTest] = useState<{ kind: TeamsKind; text: string } | null>(null);
-  const t = p.v;
-  const send = (kind: TeamsKind) => {
-    setTest({ kind, text: "Sending…" });
-    void call("teams.test", { kind }).then(
-      () => setTest({ kind, text: "Sent. Look in your chat with FocusTime in Teams." }),
-      (e: unknown) => setTest({ kind, text: e instanceof Error ? e.message : "Couldn't send it" }),
-    );
-  };
-  const time = (kind: TeamsKind) => {
-    if (kind === "brief")
-      return (
-        <span className="set-teams-time">
-          <select aria-label="Morning brief time" value={t.briefAt ? "time" : "start"} onChange={(e) => p.change({ ...t, briefAt: e.target.value === "start" ? null : (t.briefAt ?? "09:00") })}>
-            <option value="start">At the start of my day</option>
-            <option value="time">At a set time</option>
-          </select>
-          {t.briefAt !== null && <input type="time" aria-label="Morning brief at" value={t.briefAt} onChange={(e) => HM.test(e.target.value) && p.set({ ...t, briefAt: e.target.value })} onBlur={() => p.commit(t)} />}
-        </span>
-      );
-    if (kind === "checkin")
-      return <input type="time" aria-label="Midday check-in at" value={t.checkinAt} onChange={(e) => HM.test(e.target.value) && p.set({ ...t, checkinAt: e.target.value })} onBlur={() => p.commit(t)} />;
-    if (kind === "closeout")
-      return (
-        <span className="set-teams-time">
-          <input type="number" aria-label="Minutes before my day ends" min={CLOSEOUT_MINUTES.min} max={CLOSEOUT_MINUTES.max} step={5} value={t.closeoutMinutes} onChange={(e) => p.set({ ...t, closeoutMinutes: Math.max(CLOSEOUT_MINUTES.min, Math.min(CLOSEOUT_MINUTES.max, Math.round(Number(e.target.value) || 30))) })} onBlur={() => p.commit(t)} />
-          <span className="set-hint">minutes before my day ends</span>
-        </span>
-      );
-    return null;
-  };
-  return (
-    <fieldset className="set-notify-group set-teams" disabled={!p.on} data-setting="teams-kinds">
-      <legend>What FocusTime sends</legend>
-      {TEAMS_KINDS.map((k) => (
-        <div key={k} className="set-teams-row">
-          <label className="set-notify-row">
-            <input type="checkbox" checked={t[k]} onChange={(e) => p.change({ ...t, [k]: e.target.checked })} />
-            <span className="set-notify-name">{TEAMS_KIND_LABEL[k]}</span>
-            <span className="set-hint">{TEAMS_KIND_HINT[k]}</span>
-          </label>
-          <div className="set-teams-controls">
-            {time(k)}
-            <button type="button" className="mini" onClick={() => send(k)}>
-              Send me a test now
-            </button>
-            {test?.kind === k && (
-              <span className="set-hint" role="status">
-                {test.text}
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-      <label className="set-check">
-        <input type="checkbox" checked={t.friday} onChange={(e) => p.change({ ...t, friday: e.target.checked })} /> Also on Fridays (catch-up)
-      </label>
-      <p className="muted">Never on weekends or PTO days. A test comes now, whatever the switches say.</p>
-    </fieldset>
-  );
-}
-
-/**
- * P1: push, per device. "Notify this device" asks the browser's permission only when tapped; the list shows every
- * device with push on, with Remove. In-app notifications (⋯ › Notifications) work without any of this.
- */
-function PushDevices() {
-  const [st, setSt] = useState<PushStatus | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => void call<PushStatus>("push.status", {}).then(setSt, () => setSt({ available: false, reason: "Push status isn't available right now.", publicKey: null, devices: [] })), []);
-  if (!st) return <p className="muted">Checking…</p>;
-  const me = deviceId();
-  const here = st.devices.some((d) => d.deviceId === me);
-  const support = pushSupport();
-  const run = async (f: () => Promise<void>) => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await f();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "That didn't work");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const when = (iso: string) => new Date(iso.replace(/\[.*\]$/, "")).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return (
-    <div className="set-push">
-      {!st.available ? (
-        <p className="muted">{st.reason}</p>
-      ) : support === "ios-install" ? (
-        <p className="muted">On iPhone, add FocusTime to your home screen first (More › Install app), then open it from there to turn this on.</p>
-      ) : support === "unsupported" ? (
-        <p className="muted">This browser can't get push notifications. In-app notifications still work.</p>
-      ) : (
-        <div className="set-actions-row">
-          {here ? (
-            <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt((await disablePush()) ?? st))}>
-              Turn off for this device
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="mini primary"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const r = await enablePush(st.publicKey!);
-                  if (r.ok) (setSt(r.status), setMsg("This device gets notifications now. Send a test above to check."));
-                  else setMsg(r.reason);
-                })
-              }
-            >
-              Notify this device
-            </button>
-          )}
-        </div>
-      )}
-      {msg && <p className="set-hint" role="status">{msg}</p>}
-      {st.devices.length > 0 && (
-        <ul className="push-devices">
-          {st.devices.map((d) => (
-            <li key={d.deviceId}>
-              <span className="pd-name">
-                {d.label}
-                {d.deviceId === me ? " (this device)" : ""}
-              </span>
-              <span className="set-hint">
-                Added {when(d.createdAt)}
-                {d.failedAt ? " · last one didn't arrive" : d.sentAt ? ` · last ${when(d.sentAt)}` : ""}
-              </span>
-              <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt(d.deviceId === me ? ((await disablePush()) ?? st) : await call<PushStatus>("push.remove", { deviceId: d.deviceId })))}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 function RiskForm(p: FormProps) {

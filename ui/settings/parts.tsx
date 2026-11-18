@@ -66,6 +66,11 @@ type RowProps = {
   children?: ReactNode;
 };
 
+/** A small heading inside a group, over the rows it names (Notifications' kinds). */
+export function Subhead({ children }: { children: ReactNode }) {
+  return <h4 className="sp-subhead">{children}</h4>;
+}
+
 /** One setting. */
 export function Row({ id, help, more, mark, team, wide, below, noSid, children }: RowProps) {
   const d = defOf(id);

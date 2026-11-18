@@ -22,3 +22,13 @@ export const ZONES: readonly string[] = (() => {
 })();
 
 export const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" } as const;
+
+/** A long help line split for "More about this", word for word: its first sentence, and the rest (or nothing). */
+export const firstLine = (t: string) => {
+  const i = t.indexOf(". ");
+  return i < 0 ? t : t.slice(0, i + 1);
+};
+export const rest = (t: string) => {
+  const i = t.indexOf(". ");
+  return i < 0 ? undefined : t.slice(i + 2);
+};

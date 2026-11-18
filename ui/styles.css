@@ -7888,3 +7888,5 @@ a.sp-btn:hover { background: var(--wash-1); }
 .app.phone .sp-btn, .app.phone .sp-choice .seg-btn, .app.phone .sp-go { min-height: var(--target); }
 .app.phone .sp-go { display: inline-flex; align-items: center; }
 .app.phone .sp-help .sp-go, .app.phone .sp-more-text .sp-go { display: inline; min-height: 0; }
+.ps-body .sp-subhead { margin: 14px 0 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
+.sp-subhead + .sp-row { border-top: 0; }
