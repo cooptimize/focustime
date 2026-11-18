@@ -3,10 +3,14 @@
 // (`callForEvent`), its state and its mark's words (plan/call-words.ts). The server decides what I may see
 // (meeting.mine returns only calls I review or attend); a meeting that isn't one of them gets nothing here and stays an
 // ordinary meeting. Loaded once for the app (meeting.mine) and again every 5 minutes, and after a change to a call.
+// MC-2: a call that isn't registered that I reviewed (or was on and someone on it reviewed) carries the same mark; a
+// meeting I was on that nobody reviewed yet offers Review this call (`reviewableMeeting`), which opens Calls on its
+// setup. My other calls themselves are read only when Calls opens (meeting.calls), never here.
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { call } from "../api.ts";
 import type { OccurrenceView, SeriesView, MeetingNudgeView } from "../../plan/meeting-views.ts";
-import type { OccurrenceState } from "../../plan/meetings.ts";
+import type { CallKind, OccurrenceState } from "../../plan/meetings.ts";
+import { OTHER_CALL_DAYS } from "../../plan/calls.ts";
 import { callLabel } from "../../plan/call-words.ts";
 
 export type MineData = { meetings: SeriesView[]; occurrences: OccurrenceView[]; nudges: MeetingNudgeView[] };
@@ -24,6 +28,8 @@ export type CallMark = {
   state: OccurrenceState;
   open: number;
   hasTranscript: boolean;
+  /** MC-2: null for a registered client call; "calendar" or "hand" for a call that isn't registered. */
+  kind: CallKind | null;
 };
 
 /** What an occurrence needs, in words (MC-1d: one place for the mark, the list and the page, plan/call-words.ts). */
@@ -33,7 +39,7 @@ export function callMarks(d: MineData | null): CallMark[] {
   if (!d) return [];
   return d.occurrences.flatMap((o) => {
     const s = d.meetings.find((m) => m.id === o.seriesId);
-    return s ? [{ occurrenceId: o.id, name: s.name, role: s.roleLabel, clientKey: s.clientKey, startAt: o.startAt, endAt: o.endAt, review: s.mine.review, state: o.state, open: o.open, hasTranscript: o.hasTranscript, ...callLabel(o, s.mine.review) }] : [];
+    return s ? [{ occurrenceId: o.id, name: s.name, role: s.roleLabel, clientKey: s.clientKey, startAt: o.startAt, endAt: o.endAt, review: s.mine.review, state: o.state, open: o.open, hasTranscript: o.hasTranscript, kind: s.call ?? null, ...callLabel(o, s.mine.review) }] : [];
   });
 }
 
@@ -65,11 +71,47 @@ export function callForEvent(marks: readonly CallMark[], e: DrawnMeeting): CallM
   return marks.find((m) => Date.parse(m.startAt) === a && Date.parse(m.endAt) === b) ?? null;
 }
 
+/**
+ * MC-2: a meeting I was on that isn't a call I can already see, and that could be reviewed: on my Outlook calendar
+ * with someone else on it (not my own hold, a timebox, unavailable time, a personal or all-day event or a calendar
+ * added by link), not declined, started already, in my last OTHER_CALL_DAYS days. The server checks it all again on the
+ * press against my own calendar; this only decides whether the menu offers it.
+ */
+export function reviewableMeeting(e: DrawnMeeting & { responseStatus?: string }, nowMs: number, todayStartMs: number): boolean {
+  if (e.source !== "outlook" || e.allDay || e.isPersonal || e.unavailable || e.notMeeting) return false;
+  if (e.responseStatus === "declined") return false;
+  const a = Date.parse(e.start);
+  return Number.isFinite(a) && a < nowMs && a >= todayStartMs - (OTHER_CALL_DAYS - 1) * 86_400_000;
+}
+
+/**
+ * MC-2: Review this call from a meeting's menu: Calls opens and finds the meeting among my other calls (by its start
+ * and end), then opens its setup. Held in memory only until Calls takes it; nothing about the meeting goes anywhere.
+ */
+let reviewWanted: { start: string; end: string } | null = null;
+export const requestReviewCall = (e: { start: string; end: string }) => {
+  reviewWanted = { start: e.start, end: e.end };
+  location.hash = "#/meetings";
+};
+export const takeReviewCall = (): { start: string; end: string } | null => {
+  const x = reviewWanted;
+  reviewWanted = null;
+  return x;
+};
+/** MC-2: the setup's Get it from Teams press runs on the call's page (where its result shows), once. In memory only. */
+let fetchFor: number | null = null;
+export const requestFetch = (occurrenceId: number) => void (fetchFor = occurrenceId);
+export const takeFetch = (occurrenceId: number): boolean => {
+  if (fetchFor !== occurrenceId) return false;
+  fetchFor = null;
+  return true;
+};
+
 /** "#/meetings/<occurrence>", or its Transcript view, or a line in it. */
 export const callHref = (occurrenceId: number, view?: "transcript" | "upload", line?: number) => `#/meetings/${occurrenceId}${view ? `/${view}` : ""}${view === "transcript" && line ? `/${line}` : ""}`;
 /**
- * MC-1e: where a call was opened from (Day, Week, Client calls), so its Back returns there rather than always to Week.
- * Kept in memory only, for this page; after a reload Back goes to Client calls.
+ * MC-1e: where a call was opened from (Day, Week, Calls), so its Back returns there rather than always to Week.
+ * Kept in memory only, for this page; after a reload Back goes to Calls.
  */
 let cameFrom: { occurrenceId: number; hash: string } | null = null;
 export const rememberCallFrom = (occurrenceId: number, hash: string) => void (cameFrom = { occurrenceId, hash });

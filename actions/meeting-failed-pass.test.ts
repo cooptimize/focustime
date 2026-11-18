@@ -23,7 +23,8 @@ const series = (p: Partial<NewSeries> = {}): NewSeries => ({
   weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: [REVIEWER], attendees: [ATTENDEE], ...p,
 });
 const lines = (n: number, words = "We talked about the rates export and what comes next for it."): TranscriptLine[] => Array.from({ length: n }, (_, i) => ({ n: i + 1, speaker: i % 2 ? "Dana Client" : "Sam Reviewer", at: i * 20, text: `${words} (${i + 1})` }));
-const EMPTY = JSON.stringify({ gaps: [], commitments: [], comments: [] });
+// MC-2: with the summary the schema requires now.
+const EMPTY = JSON.stringify({ gaps: [], commitments: [], comments: [], summary: [] });
 
 async function setup(respond: (c: ProviderCall, i: number) => string | ProviderReply) {
   const db = sqliteDb();

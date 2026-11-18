@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { HttpError, NetworkError } from "../calendar/http.ts";
 import { AuthFailure } from "../oauth/oauth.ts";
 import { createMeetingsClient, graphFailureOf, MeetingRefused, transcriptFor, type MeetingGate } from "./meetings.ts";
+import { createPressGrants } from "../../actions/call-press.ts";
 
 const REG = "https://teams.microsoft.com/l/meetup-join/registered";
 const OTHER = "https://teams.microsoft.com/l/meetup-join/someone-elses";
@@ -88,6 +89,44 @@ describe("Graph meetings (MC-1)", () => {
     expect(graphFailureOf(new AuthFailure("network", "x"))).toBe("busy");
     expect(graphFailureOf(new AuthFailure("keyring", "x"))).toBe("setup");
     expect(graphFailureOf(new Error("x"))).toBeNull();
+  });
+
+  // MC-2: the gate the hosted app builds (server/main.ts): a registered call, or this sign-in's person's open press.
+  it("lets an unregistered call through only during its own person's press (MC-2)", async () => {
+    const presses = createPressGrants();
+    const gateFor = (userId: string): MeetingGate => ({ allowed: async (q) => presses.allowed(userId, q) || (await onlyRegistered.allowed(q)) });
+    const answers = { "/me/onlineMeetings?": { value: [{ id: "om-x" }] }, "/transcripts?": { value: [{ id: "t1", createdDateTime: "2026-11-10T16:02:00Z" }] }, "/content": "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v A>Hi</v>\n" };
+    const mine = client(gateFor("u1"), answers);
+    const theirs = client(gateFor("u2"), answers);
+    // No press: refused before any request, for everyone (the job never presses).
+    await expect(mine.c.onlineMeetingId(OTHER)).rejects.toBeInstanceOf(MeetingRefused);
+    const p = presses.open("u1", OTHER);
+    expect(await mine.c.onlineMeetingId(OTHER)).toBe("om-x");
+    await expect(theirs.c.onlineMeetingId(OTHER)).rejects.toBeInstanceOf(MeetingRefused);
+    await expect(mine.c.transcripts("om-x")).rejects.toBeInstanceOf(MeetingRefused);
+    p.meeting("om-x");
+    expect((await mine.c.transcripts("om-x")).map((t) => t.id)).toEqual(["t1"]);
+    expect(await mine.c.transcriptVtt("om-x", "t1")).toContain("WEBVTT");
+    await expect(theirs.c.transcripts("om-x")).rejects.toBeInstanceOf(MeetingRefused);
+    p.done();
+    await expect(mine.c.transcriptVtt("om-x", "t1")).rejects.toBeInstanceOf(MeetingRefused);
+    expect(theirs.calls).toEqual([]);
+    // The registered call still passes for anyone, as before.
+    expect(await theirs.c.onlineMeetingId(REG)).toBe("om-x");
+  });
+
+  it("reads my own calls of a range, and one of them again, as counts and keys only (MC-2)", async () => {
+    const ev = (p: Record<string, unknown>) => ({ iCalUId: "ical-1", subject: "Contoso review", start: { dateTime: "2026-11-10T15:00:00.0000000" }, end: { dateTime: "2026-11-10T15:45:00.0000000" }, isAllDay: false, isCancelled: false, isOrganizer: false, responseStatus: { response: "accepted" }, organizer: { emailAddress: { address: "kat@cooptimize.example" } }, attendees: [{ emailAddress: { address: "me@cooptimize.example" } }, { emailAddress: { address: "pm@contoso.example" } }], onlineMeeting: { joinUrl: OTHER }, ...p });
+    const { c, calls } = client(onlyRegistered, { "/me/calendarView?": { value: [ev({}), ev({ iCalUId: "ical-2", isOrganizer: true, organizer: { emailAddress: { address: "me@cooptimize.example" } }, attendees: [{ type: "resource", emailAddress: { address: "room-4@cooptimize.example" } }] })] } });
+    const got = await c.recentCalls("2026-11-04T05:00:00Z", "2026-11-17T17:00:00Z");
+    expect(got[0]).toMatchObject({ key: "ical-1", subject: "Contoso review", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T15:45:00Z", others: 2, joinUrl: OTHER, organizerEmail: "kat@cooptimize.example", homeAttendees: ["me@cooptimize.example", "kat@cooptimize.example"] });
+    // My own hold: I organize it with nobody on it (a room booked on it isn't a person).
+    expect(got[1]).toMatchObject({ key: "ical-2", isOrganizer: true, others: 0 });
+    expect(calls.every((u) => u.startsWith("https://graph.microsoft.com/v1.0/me/calendarView?"))).toBe(true);
+    expect(await c.callAt("ical-1", "2026-11-10T15:00:00Z", "2026-11-10T15:45:00Z")).toMatchObject({ key: "ical-1" });
+    expect(await c.callAt("ical-9", "2026-11-10T15:00:00Z", "2026-11-10T15:45:00Z")).toBeNull();
+    // Only my own calendar (/me), never another person's.
+    expect(calls.some((u) => /\/users\//.test(u))).toBe(false);
   });
 
   it("still refuses an unregistered meeting after a teammate's registration of another", async () => {

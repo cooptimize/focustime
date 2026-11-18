@@ -6,23 +6,32 @@
 // commitment a shared commitment that shows in the committer's own Promises (a Cooptimizer's) or my Waiting on (the
 // client's). Nothing writes without Confirm; nobody's plan but my own is written.
 //
+// MC-2: Calls. A call that isn't registered, from my own calendar (`meeting.calls` lists them, kept nowhere) or added
+// by hand (`meeting.call_add`), is kept only from my press (`meeting.call_start`): the client it is about (my choice),
+// me its one reviewer, the Cooptimizers on my invite its attendees. Get it from Teams (`meeting.call_fetch`) checks the
+// call on my own calendar again and opens one press (actions/call-press.ts) the Graph gate lets through for that one
+// try; a refusal says why in plain words and points to the upload. Nothing reads such a call in the background.
+//
 // Transcript text never goes to a log or an error message; logs carry ids-free counts and outcomes only.
 import type { CheckNowResult } from "../plan/meetings.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { attendeeIds, canConfirm, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_ROW, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
+import type { PressGrants } from "./call-press.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
 
 /** RQ-1: devops.needed's answer as a row reads it. */
 export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
-import { atOf, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
-import { graphFailureOf, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
+import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { HttpError } from "../sources/calendar/http.ts";
+import { graphFailureOf, MeetingRefused, pressTranscript, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -31,11 +40,11 @@ import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { capturePass } from "./meeting-capture.ts";
 import { READS, IntakeError, readTranscriptFile, type ReadPdf, type TranscriptRead } from "./transcript-file.ts";
-import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
-export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
+import type { OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
+export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -88,6 +97,10 @@ export type MeetingContext = {
   /** Whether I have a checked write PAT for the client. */
   canWrite: (clientKey: string) => Promise<boolean>;
   log: (r: LogRecord) => void;
+  /** MC-2: the presses the Graph gate lets through; absent: Get it from Teams isn't available here. */
+  press?: PressGrants;
+  /** MC-2: a Cooptimizer by the people rule (never a guest or an automation account); absent: nobody is. */
+  cooptimizer?: (userId: string) => Promise<boolean>;
 };
 
 class Invalid extends Error {}
@@ -133,10 +146,17 @@ function whenOf(s: Pick<MeetingSeries, "weekday" | "start" | "minutes" | "interv
 function viewOf(s: MeetingSeries, clientName: string, users: readonly MeetingUser[], me: string): SeriesView {
   const name = (uid: string) => users.find((u) => lower(u.id) === lower(uid))?.name ?? "A former teammate";
   return {
-    id: s.id, clientKey: s.clientKey, clientName, name: s.name, role: s.role, roleLabel: ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
-    when: whenOf(s), weekday: s.weekday, start: s.start, minutes: s.minutes, zone: s.zone, reviewers: s.reviewers.map((r) => ({ id: r, name: name(r) })), attendees: s.attendees.length,
+    id: s.id, clientKey: s.clientKey, clientName, name: s.name, role: s.role, roleLabel: isCall(s) ? "Call" : ROLE_LABEL[s.role], source: s.source, detected: s.detected, organizer: s.organizer,
+    when: isCall(s) ? callWhen(s) : whenOf(s), weekday: s.weekday, start: s.start, minutes: s.minutes, zone: s.zone, reviewers: s.reviewers.map((r) => ({ id: r, name: name(r) })), attendees: s.attendees.length,
     mine: { review: s.reviewers.some((r) => lower(r) === lower(me)), attend: s.attendees.some((a) => lower(a) === lower(me)) },
+    call: s.callKind, teams: s.callKind === "calendar" && /^https:\/\//.test(s.joinUrl) && s.organizer !== "other",
   };
+}
+/** MC-2: a call's one time, "9:30 to 10:15 AM" style, in its own zone (its day is the occurrence's). */
+function callWhen(s: Pick<MeetingSeries, "start" | "minutes">): string {
+  const [h, m] = s.start.split(":").map(Number);
+  const t = (mins: number) => `${Math.floor(mins / 60) % 24 % 12 || 12}:${String(mins % 60).padStart(2, "0")} ${Math.floor(mins / 60) % 24 < 12 ? "AM" : "PM"}`;
+  return `${t(h! * 60 + m!)} to ${t(h! * 60 + m! + s.minutes)}`;
 }
 
 // MC-1c: a Graph meeting call that failed, in plain words with a next step, never "bad request". `code` lets the
@@ -246,7 +266,8 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         const o = obj(input, ["seriesId"], ["name", "role", "reviewers", "source"]);
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins change registered meetings", 403);
         const s = await store.series(id(o.seriesId, "seriesId"));
-        if (!s || s.removedAt) return bad("No such meeting", 404);
+        // MC-2: a call that isn't registered is its person's own; Admin never changes one.
+        if (!s || s.removedAt || isCall(s)) return bad("No such meeting", 404);
         const users = await ctx.users();
         const clientName = (await namesOf(ctx, [s.clientKey]))(s.clientKey);
         const reviewers = o.reviewers === undefined ? undefined : reviewerIds(o.reviewers, users);
@@ -264,7 +285,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         if (!(await ctx.isAdmin())) return bad("Only FocusTime admins check registered meetings", 403);
         if (!ctx.checkNow) return bad("Check now isn't available here", 503);
         const s = await store.series(id(o.seriesId, "seriesId"));
-        if (!s || s.removedAt) return bad("No such meeting", 404);
+        if (!s || s.removedAt || isCall(s)) return bad("No such meeting", 404);
         const result = await ctx.checkNow(s.id, me);
         return { ok: true, data: { result, message: CHECK_NOW_WORDS[result] } };
       }
@@ -279,8 +300,10 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // The calls I review or attend, with their last 5 weeks of occurrences (Week's call marker, the review list).
         obj(input, [], []);
         const users = await ctx.users();
-        const mine = await store.viewer(me).series();
         const from = Temporal.Instant.from(ctx.now()).subtract({ hours: 24 * 35 }).toZonedDateTimeISO("UTC").toPlainDate().toString();
+        // MC-2: with the calls that aren't registered that I pressed Review on, was on, or added (their marks on Day and
+        // Week, their rows in Calls); nudges stay the registered calls' (nudgesFor).
+        const mine = [...(await store.viewer(me).series()), ...(await store.viewer(me).calls(from))];
         const occs = await store.recentOccurrences(mine.map((s) => s.id), from);
         const counts = new Map<number, { all: number; open: number }>();
         for (const o of occs) {
@@ -329,6 +352,15 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       }
       case "meeting.keep": return await keep(ctx, store, me, input);
       case "meeting.unkeep": return await unkeep(ctx, store, me, input);
+      case "meeting.calls": return await otherCalls(ctx, store, cfg, input);
+      case "meeting.call_start": return await startCall(ctx, store, cfg, me, input);
+      case "meeting.call_fetch": {
+        const o = obj(input, ["occurrenceId"]);
+        const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+        if (series.callKind !== "calendar") return bad("Only a call from your calendar can be asked of Teams; upload its transcript instead", 409);
+        return await fetchFromTeams(ctx, store, cfg, me, series, occ);
+      }
+      case "meeting.call_add": return await addCall(ctx, store, cfg, me, input);
     }
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
@@ -500,6 +532,8 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter(toReview).length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
+      // MC-2: what was discussed and decided (at most 5 lines), on every call; null for one reviewed before MC-2.
+      summary: lines ? await store.summary(r.o.id) : null,
       // PK-1: a Pocket export's speakers are numbered, never named, and its lines have no times (kept past 30 days).
       pocket: r.o.transcriptKind === "pocket",
       canConfirm: reviewer,
@@ -690,8 +724,10 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const users = await d.users().catch((): MeetingUser[] => []);
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: occ.transcriptKind !== "pocket" });
+    // MC-2: a call that isn't registered has no role (it isn't a weekly status or planning call): none is said.
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: occ.transcriptKind !== "pocket" });
     if (r.ok) {
+      await d.store.saveSummary(occ.id, r.summary);
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.
       const fresh = newOnly(r.proposals, await d.store.proposals(occ.id));
       same = r.proposals.length - fresh.length;
@@ -736,6 +772,8 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   const series = await v.seriesById(q.seriesId);
   if (!series) return bad("No such meeting", 404);
   if (!canConfirm(series, me)) return bad("Only this meeting's reviewers can upload its transcript", 403);
+  // MC-2: a call has one occurrence; its transcript goes there, never under another day.
+  if (series.callKind && !(await store.occurrencesOf(series.id)).some((o) => o.date === q.date)) return bad("Upload this call's transcript on its own day", 422);
   let read: TranscriptRead;
   try {
     read = await readTranscriptFile(q.bytes, { readPdf: ctx.readPdf });
@@ -765,4 +803,195 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   if (facts.pages) ctx.log({ source: "plan", op: "meeting_upload_pages", kind: facts.kind, count: facts.pages });
   const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, (await store.occurrence(occ.id))!, lines);
   return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, kind, ...r } };
+}
+
+// ---- MC-2: calls that aren't registered ----
+
+const KEY = /^[\x21-\x7e]{1,2000}$/;
+const isoAt = (v: unknown, name: string): string => {
+  if (typeof v !== "string" || v.length > 40 || !Number.isFinite(Date.parse(v))) throw new Invalid(`${name} must be a time`);
+  return Temporal.Instant.from(v).toString();
+};
+
+/** The registered calls' join links (any admin's), so my calendar's occurrence of one is never an "other call". */
+async function registeredLinks(store: MeetingStore): Promise<Set<string>> {
+  return new Set((await store.allSeries()).map((s) => joinKey(s.joinUrl)));
+}
+
+/**
+ * Calls › Your other calls: the calls on my own calendar in my last 14 local days that count (plan/calls.ts) and
+ * aren't registered, newest first, as names, times and counts only (never a link or an address). Read now, kept
+ * nowhere. With each, its kept call when someone on it pressed Review and I can see it.
+ */
+async function otherCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, input: unknown): Promise<ActionResponse> {
+  obj(input, []);
+  const me = (await ctx.me())!;
+  const g = ctx.graph(cfg);
+  if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+  const zone = userZone(cfg);
+  const w = otherCallsWindow(ctx.now(), zone);
+  let all: CalendarMeeting[];
+  try {
+    all = await g.recentCalls(w.fromIso, w.toIso);
+  } catch (e) {
+    const p = graphProblem(ctx, e);
+    if (p) return p;
+    throw e;
+  }
+  const taken = await registeredLinks(store);
+  const home = await ctx.homeDomains();
+  const v = store.viewer(me);
+  const rows: OtherCallView[] = [];
+  for (const c of all) {
+    if (!isOtherCall(c) || !inWindow(c.startAt, w) || (c.joinUrl && taken.has(joinKey(c.joinUrl)))) continue;
+    const kept = await store.callByKey(c.key);
+    const seen = kept ? await v.occurrence(kept.occurrence.id) : null;
+    const outside = detectSource(c.organizerEmail, home).organizer === "other";
+    rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null });
+  }
+  rows.sort((a, b) => b.startAt.localeCompare(a.startAt));
+  ctx.log({ source: "plan", op: "meeting_other_calls", count: rows.length });
+  return { ok: true, data: { calls: rows, days: OTHER_CALL_DAYS } };
+}
+
+/** The Cooptimizers among FocusTime users on a call's invite (never a guest, an automation account or anyone outside). */
+async function invitedCooptimizers(ctx: MeetingContext, emails: readonly string[]): Promise<string[]> {
+  const ids = attendeeIds(emails.map((email) => ({ email })), await ctx.users());
+  const out: string[] = [];
+  for (const uid of ids) if (ctx.cooptimizer && (await ctx.cooptimizer(uid).catch(() => false))) out.push(uid);
+  return out;
+}
+
+/**
+ * MC-2: Review on one of my other calls, after its setup: the client it is about (my choice, one of FocusTime's
+ * clients; the suggestion was only that) and where its transcript comes from. The press checks the call on my own
+ * calendar now (on it, not declined, not registered) and keeps it: me its one reviewer, the Cooptimizers on my invite
+ * its attendees. A call someone on it already pressed Review on opens as it is. Nothing goes to the AI here.
+ */
+async function startCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["key", "startAt", "endAt", "clientKey"]);
+  const key = text(o.key, "key", 2000)!;
+  if (!KEY.test(key)) throw new Invalid("key must be a call's key");
+  const startAt = isoAt(o.startAt, "startAt");
+  const endAt = isoAt(o.endAt, "endAt");
+  if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
+  const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+  if (isRefusal(client)) return client;
+  const g = ctx.graph(cfg);
+  if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+  const zone = userZone(cfg);
+  let c: CalendarMeeting | null;
+  try {
+    c = await g.callAt(key, startAt, endAt);
+  } catch (e) {
+    const p = graphProblem(ctx, e);
+    if (p) return p;
+    throw e;
+  }
+  // Only a call I was on: on my own calendar now, counting as a call, in my last 14 days, not a registered one.
+  if (!c || !isOtherCall(c) || !inWindow(c.startAt, otherCallsWindow(ctx.now(), zone)) || (c.joinUrl && (await registeredLinks(store)).has(joinKey(c.joinUrl)))) {
+    ctx.log({ source: "plan", op: "meeting_call_start", kind: "not_on_invite" });
+    return { ok: false, status: 403, error: FETCH_WORDS.not_on_invite, code: "not_on_invite" };
+  }
+  const kept = await store.callByKey(c.key);
+  if (kept) {
+    const seen = await store.viewer(me).occurrence(kept.occurrence.id);
+    if (!seen) return bad("FocusTime can't open this call for you. Upload its transcript with Add a call instead.", 409);
+    return { ok: true, data: { occurrenceId: kept.occurrence.id, existed: true } };
+  }
+  const local = Temporal.Instant.from(c.startAt).toZonedDateTimeISO(zone);
+  const organizer = detectSource(c.organizerEmail, await ctx.homeDomains()).organizer;
+  const attendees = await invitedCooptimizers(ctx, c.homeAttendees);
+  const r = await store.addCall({
+    callKind: "calendar", clientKey: client.key, name: c.subject, organizer, joinUrl: c.joinUrl ?? `none:${c.key}`.slice(0, 2000), eventId: c.key, registrantId: me,
+    start: local.toPlainTime().toString({ smallestUnit: "minute" }), minutes: Math.max(1, Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000)), zone, attendees, day: local.toPlainDate().toString(), startAt: c.startAt, endAt: c.endAt,
+  });
+  ctx.log({ source: "plan", op: "meeting_call_start", kind: r.existed ? "existed" : "kept", count: attendees.length });
+  return { ok: true, data: { occurrenceId: r.occurrence.id, existed: r.existed } };
+}
+
+/**
+ * MC-2: Add a call that isn't on my calendar (a teammates' call, a phone call): its name, day, start, length and the
+ * client it is about. Only I see it (no attendees); its transcript is uploaded. Kept because I asked for it here.
+ */
+async function addCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, ["name", "date", "start", "minutes", "clientKey"]);
+  const name = text(o.name, "name", 200)!;
+  if (typeof o.date !== "string" || !DATE.test(o.date)) throw new Invalid("Pick the call's day");
+  if (typeof o.start !== "string" || !TIME.test(o.start)) throw new Invalid("Give the call's start time");
+  if (typeof o.minutes !== "number" || !Number.isInteger(o.minutes) || o.minutes < 5 || o.minutes > 480) throw new Invalid("A call's length is 5 minutes to 8 hours");
+  if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
+  const client = await clientOf(ctx, text(o.clientKey, "clientKey", 100)!);
+  if (isRefusal(client)) return client;
+  const zone = userZone(cfg);
+  const w = otherCallsWindow(ctx.now(), zone);
+  const start = Temporal.PlainDate.from(o.date).toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(o.start) });
+  if (Temporal.PlainDate.compare(Temporal.PlainDate.from(o.date), Temporal.PlainDate.from(w.fromDay)) < 0 || Temporal.Instant.compare(start.toInstant(), Temporal.Instant.from(ctx.now())) > 0) return bad("Add a call from the last 14 days that has started", 422);
+  const r = await store.addCall({
+    callKind: "hand", clientKey: client.key, name, organizer: "unknown", joinUrl: `hand:${crypto.randomUUID()}`, eventId: null, registrantId: me,
+    start: o.start, minutes: o.minutes, zone, attendees: [], day: o.date, startAt: start.toInstant().toString(), endAt: start.add({ minutes: o.minutes }).toInstant().toString(),
+  });
+  ctx.log({ source: "plan", op: "meeting_call_add" });
+  return { ok: true, data: { occurrenceId: r.occurrence.id } };
+}
+
+/**
+ * MC-2: Get it from Teams, one try per press, for a calendar call I pressed Review on. The call is checked on my own
+ * calendar again (still on it, not declined, the same Teams meeting), an outside organizer is never asked, and only then
+ * one press is opened for me and this call's join link, the same rule as everywhere (`mayRead`); the Graph gate lets
+ * nothing else through. Microsoft's answers each become plain words that point to the upload. The transcript is kept
+ * 30 days like any other; the AI pass runs on it once, under my switches. Logged by outcome only.
+ */
+async function fetchFromTeams(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, series: MeetingSeries, occ: Occurrence): Promise<ActionResponse> {
+  const say = (outcome: Exclude<FetchOutcome, "found">, status = 200): ActionResponse => {
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: outcome });
+    return status === 200 ? { ok: true, data: { outcome, message: FETCH_WORDS[outcome] } } : { ok: false, status, error: FETCH_WORDS[outcome], code: outcome };
+  };
+  const cooptimizer = !!ctx.cooptimizer && (await ctx.cooptimizer(me).catch(() => false));
+  if (!cooptimizer) return say("not_cooptimizer", 403);
+  if (!ctx.press) return say("unavailable");
+  const g = ctx.graph(cfg);
+  if (!g) return say("signin");
+  let c: CalendarMeeting | null;
+  try {
+    c = series.eventId ? await g.callAt(series.eventId, occ.startAt, occ.endAt) : null;
+  } catch (e) {
+    const k = graphFailureOf(e);
+    if (!k) throw e;
+    return say(k === "consent" ? "consent" : k === "signin" || k === "setup" ? "signin" : "busy");
+  }
+  const onInvite = !!c && isOtherCall(c);
+  if (!onInvite) return say("not_on_invite", 403);
+  if (!c!.joinUrl) return say("not_online");
+  if (detectSource(c!.organizerEmail, await ctx.homeDomains()).organizer === "other" || series.organizer === "other") return say("outside");
+  const thisCall = joinKey(c!.joinUrl) === joinKey(series.joinUrl);
+  if (!mayRead({ registered: null, press: { cooptimizer, onInvite, thisCall } })) return say("not_on_invite", 403);
+  const press = ctx.press.open(me, c!.joinUrl);
+  try {
+    const meetingId = await g.onlineMeetingId(c!.joinUrl);
+    if (!meetingId) return say("none");
+    press.meeting(meetingId);
+    const ref = pressTranscript(await g.transcripts(meetingId), occ.startAt, occ.endAt);
+    if (!ref) return say("none");
+    const lines = parseVtt(await g.transcriptVtt(meetingId, ref.id));
+    await store.saveTranscript(occ.id, lines, "automatic", null, "teams");
+    await store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: me, at: ctx.now() } });
+    // The pass runs once now, for me; nothing tries it again by itself (no retriesHere for a call).
+    const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, (await store.occurrence(occ.id))!, lines);
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: "found", count: lines.length });
+    return { ok: true, data: { ...r, aiOutcome: r.outcome, outcome: "found", message: fetchFound(lines.length, r.proposals, r.outcome === "done"), lines: lines.length } };
+  } catch (e) {
+    if (e instanceof MeetingRefused) return say("not_on_invite", 403);
+    if (e instanceof TranscriptError) return say("unreadable");
+    if (e instanceof HttpError && e.status === 413) return say("unreadable");
+    const k = graphFailureOf(e);
+    if (k === "missing") return say("none");
+    if (k === "consent") return say("not_allowed");
+    if (k === "signin" || k === "setup") return say("signin");
+    if (k === "busy") return say("busy");
+    if (k === "refused") return say("not_allowed");
+    throw e;
+  } finally {
+    press.done();
+  }
 }

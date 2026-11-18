@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import type { PressGrants } from "./call-press.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
@@ -1410,6 +1411,10 @@ export type MeetingsPort = {
   checkNow?: (seriesId: number, userId: string) => Promise<CheckNowResult>;
   /** PK-1: the PDF reader for a Pocket export (server/pdf-text.ts); absent: a PDF upload is refused in plain words. */
   readPdf?: ReadPdf;
+  /** MC-2: the presses the Graph gate lets through (actions/call-press.ts); absent: Get it from Teams isn't here. */
+  press?: PressGrants;
+  /** MC-2: a Cooptimizer by the people rule (not a guest, not an automation account, inside the domains). */
+  cooptimizer?: (userId: string) => Promise<boolean>;
 };
 
 /**
@@ -1450,6 +1455,8 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.checkNow ? { checkNow: ctx.meetings.checkNow } : {}),
     ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
     ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
+    ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
+    ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
     // MC-1c: the organization's clients (Admin › Clients' clientAccounts()), never the admin's own settings; keys match
     // case-insensitively and come back as the organization's. It fails closed: with the team runtime, a list that can't
     // be read is "unavailable", never the admin's settings. Only without one (no team runtime) the configured clients.
@@ -2669,6 +2676,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.rerun":
     case "meeting.check_now":
     case "meeting.transcript":
+    case "meeting.calls":
+    case "meeting.call_start":
+    case "meeting.call_fetch":
+    case "meeting.call_add":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

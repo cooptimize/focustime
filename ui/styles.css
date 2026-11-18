@@ -5402,7 +5402,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
 .mtg-series, .mtg-group, .mtg-upload, .mtg-done { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); }
 .mtg-series-head { display: grid; gap: 2px; }
-.mtg-series-head h3, .mtg-group h3, .mtg-upload h3, .mtg-done h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.mtg-series-head h3, .mtg-series-head h4, .mtg-group h3, .mtg-upload h3, .mtg-done h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .mtg-series-head .swatch { background: var(--c, var(--border-strong)); }
 .mtg-series-head .muted { font-size: var(--fs-2); }
 .mtg-occs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
@@ -5449,6 +5449,45 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-date-ask:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-date-ask p { margin: 0; font-size: var(--fs-3); }
 /* PK-1: a Pocket export's one note, above the proposals and the Transcript; its lines have no time column. */
+/* MC-2: Calls: its two lists, Add a call and a call's setup; a call's summary above its proposals. */
+.mtg-head-actions { display: inline-flex; gap: 8px; margin-left: auto; }
+.mtg-calls { display: grid; gap: 8px; }
+.mtg-calls-head { display: grid; gap: 2px; margin-top: 4px; }
+.mtg-calls-head h3 { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mtg-calls-head .muted { font-size: var(--fs-2); }
+.mtg-others { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.mtg-others:empty { display: none; }
+.mtg-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name state act" "when state act"; gap: 2px 12px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); border-left: 3px solid var(--c, transparent); }
+.mtg-other:first-child { border-top: 0; }
+.mtg-other-name { grid-area: name; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.mtg-other-name .swatch { background: var(--c, var(--border-strong)); }
+.mtg-other-when { grid-area: when; font-size: var(--fs-2); }
+.mtg-other .mtg-state { grid-area: state; flex: none; font-size: var(--fs-2); text-align: right; }
+.mtg-other.needs .mtg-state { color: var(--text); font-weight: 600; }
+.mtg-other > button { grid-area: act; }
+.phone .mtg-other { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name act" "when act" "state act"; }
+.phone .mtg-other .mtg-state { text-align: left; }
+.mtg-setup { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-1, none); }
+.mtg-other-setup { list-style: none; padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.mtg-setup h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; overflow-wrap: anywhere; }
+.mtg-setup h3:focus { outline: none; }
+.mtg-setup p { margin: 0; }
+.mtg-setup-field { font-weight: 500; }
+.mtg-setup select, .mtg-add input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; max-width: 100%; box-sizing: border-box; }
+.mtg-setup-hint { font-size: var(--fs-2); }
+.mtg-setup-source { margin: 0; padding: 0; border: 0; display: grid; gap: 6px; }
+.mtg-setup-source legend { font-weight: 500; padding: 0; margin-bottom: 4px; }
+.mtg-setup-source label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.mtg-setup-source label > span { display: grid; gap: 2px; }
+.mtg-setup-source label .muted { font-size: var(--fs-2); }
+.mtg-setup-source label.disabled { opacity: 0.7; cursor: default; }
+.mtg-setup-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.mtg-add-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11em, 1fr)); gap: 8px 12px; }
+.mtg-add-grid > label, .mtg-add-field { display: grid; gap: 4px; font-weight: 500; min-width: 0; }
+.mtg-add-grid label:first-child { grid-column: 1 / -1; }
+.mtg-summary { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--sunken); }
+.mtg-summary h3 { margin: 0 0 4px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mtg-summary ul { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
 .mtg-pocket-note { margin: 0; padding: 6px 10px; border-left: 3px solid var(--border-strong); border-radius: 6px; background: var(--sunken); font-size: var(--fs-2); color: var(--text); }
 .mtg-lines.untimed li { grid-template-columns: minmax(6em, 8em) minmax(0, 1fr) auto; }
 .phone .mtg-lines.untimed li { grid-template-columns: minmax(0, 1fr); }
