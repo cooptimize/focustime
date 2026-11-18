@@ -92,6 +92,18 @@ export const POCKET_CALL_WORDS = {
   fromReviewer: "From a reviewer's Pocket recording.",
   unnamed: "Speakers aren't named, and Pocket can mix them up.",
   more: "Pocket has more recordings than FocusTime reads at once (300). The newest are here.",
+  /** A call that already has a transcript: asked before Pocket is asked. */
+  replaceAsk: "This call already has a transcript. Replace it with your Pocket recording?",
+  replaceYes: "Replace it",
+  /** A recording's own row: its setup. */
+  addTitle: "Make this recording a call",
+  addName: "Name",
+  addClient: "Client it is about",
+  /** On a call I review that has no transcript yet. */
+  bringHead: "Your Pocket recording of this call",
+  bring: "Bring it in",
+  bringing: "Bringing it in…",
+  pick: "Which recording",
 } as const;
 
 /** "3 recordings by other people were left out." */

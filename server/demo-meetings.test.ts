@@ -34,13 +34,9 @@ describe("meeting capture on the demo (MC-1)", () => {
     expect(mine.meetings.map((m) => [m.name, m.source])).toEqual([["Northwind weekly status call", "upload"]]);
     const occ = mine.occurrences[0]!;
     expect(occ).toMatchObject({ date: "2026-11-02", state: "ready", open: 11 });
-    // MC-2b: the week before, the same call waits for its transcript (a Pocket recording of it can be brought in).
-    const waiting = mine.occurrences.find((o) => o.date === "2026-10-26")!;
-    expect(waiting).toMatchObject({ state: "needs_upload" });
-    const keys = mine.nudges.map((n) => n.key);
-    expect(keys).toHaveLength(2);
-    expect(keys).toContain(`meeting_review:${occ.id}`);
-    expect(keys.some((k) => k.endsWith(`:${waiting.id}`))).toBe(true);
+    expect(mine.nudges.map((n) => n.key)).toEqual([`meeting_review:${occ.id}`]);
+    // MC-2b: the week before, the same call ended with no transcript (a Pocket recording of it can be brought in).
+    expect(mine.occurrences.find((o) => o.date === "2026-10-26")).toMatchObject({ state: "no_transcript" });
     const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     expect(r.transcript).toEqual({ lines: 12, speakers: 3 });
     expect(r.proposals.map((p) => p.body.kind)).toEqual(["gap", "gap", "gap", "commitment", "commitment", "commitment", "commitment", "comment", "comment", "comment", "comment"]);

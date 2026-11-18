@@ -77,7 +77,7 @@ export function demoPocketRecordings(nowMs: number, mine: string = DEMO_PERSON.e
     { id: "rec-demo-weekly", title: "Northwind weekly", recording_at: at(nowMs, -1, 0, "13:01"), duration: 1740, by: mine, segments: WEEKLY },
     { id: "rec-demo-long", title: "Sprint planning", recording_at: at(nowMs, 0, 1, "09:40"), duration: 8100, by: mine, segments: LONG },
     { id: "rec-demo-carrier", title: "Call with the carrier", recording_at: at(nowMs, 0, 1, "16:30"), duration: 1500, by: mine, segments: SUPPLIER },
-    { id: "rec-demo-other", title: "Someone else's recording", recording_at: at(nowMs, 0, 2, "09:30"), duration: 3600, by: DEMO_POCKET_OTHER, segments: OTHER },
+    { id: "rec-demo-other", title: "Someone else's recording", recording_at: at(nowMs, 0, 2, "08:00"), duration: 3600, by: DEMO_POCKET_OTHER, segments: OTHER },
   ];
   return all.filter((r) => Date.parse(r.recording_at) + r.duration * 1000 <= nowMs).sort((a, b) => b.recording_at.localeCompare(a.recording_at));
 }

@@ -107,11 +107,11 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number } = {}) {
     const secrets = new Map<string, string>(connected.has(who) ? [["pocket-key", `pk_test_${who.slice(0, 4)}`]] : []);
     return pocketPort({
       secrets: { get: async (a) => (keyReads[who]!++, secrets.get(a)!), set: async (a, v) => void secrets.set(a, v), delete: async (a) => void secrets.delete(a), has: async (a) => secrets.has(a) },
-      client: createPocketClient({ fetch: o.pocketStatus ? ((async (u: string) => (reqs[who]!.push(String(u)), new Response("{}", { status: o.pocketStatus }))) as unknown as typeof fetch) : fakePocket(reqs[who]!), log: (r) => logs.push(r), timeoutMs: 500 }),
+      client: createPocketClient({ fetch: o.pocketStatus ? ((async (u: string) => (reqs[who]!.push(String(u)), new Response("{}", { status: o.pocketStatus ?? 500 }))) as unknown as typeof fetch) : fakePocket(reqs[who]!), log: (r) => logs.push(r), timeoutMs: 500 }),
       now: () => nowMs,
     });
   };
-  const ports = { [ME]: portOf(ME), [MATE]: portOf(MATE), [OUTSIDER]: portOf(OUTSIDER) };
+  const ports: Record<string, ReturnType<typeof portOf>> = { [ME]: portOf(ME), [MATE]: portOf(MATE), [OUTSIDER]: portOf(OUTSIDER) };
   const ctxAs = (me: string): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => instant().toZonedDateTimeISO("UTC"), userId: me }),
     me: async () => me, isAdmin: async () => false, config: async () => cfg.config, now: () => instant().toString(), homeDomains: async () => ["cooptimize.example"],

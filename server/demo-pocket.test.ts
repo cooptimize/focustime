@@ -54,7 +54,7 @@ describe("PK-2: only a press reaches Pocket", () => {
     expect(body("pocketBring")).toMatch(/\.recording\(/);
     expect(body("pocketAdd")).not.toMatch(/\.(listRecordings|recording)\(/);
     const callers = src.filter((f) => /["']meeting\.pocket_(list|bring)["']/.test(f.t)).map((f) => f.p).sort();
-    expect(callers).toEqual(["actions/dispatch.ts", "actions/meeting-actions.ts", "actions/registry.ts", "ui/menu.ts"]);
+    expect(callers).toEqual(["actions/dispatch.ts", "actions/meeting-actions.ts", "actions/registry.ts", "ui/meetings/Meetings.tsx", "ui/menu.ts"]);
   });
 
   it("MC-2b: no job, schedule, background policy, the assistant or the Teams bot reaches Pocket", () => {
