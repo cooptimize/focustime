@@ -7600,6 +7600,12 @@ body.ah-dragging * { cursor: grabbing !important; }
   .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
   .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
 }
+/* EV-1: with "Dev" (or "Local") beside the name the VM's state goes to one word up to 1440 too, the same order of giving
+   way. Never on production, where the mark isn't drawn. */
+@media (max-width: 1440px) {
+  .topbar.six-tabs:has(.site-tag) .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.six-tabs:has(.site-tag) .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
 @media (max-width: 1500px) {
   :root[data-text-size="large"] .topbar.six-tabs .top-btn .top-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   :root[data-text-size="large"] .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
