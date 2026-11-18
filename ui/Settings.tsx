@@ -16,9 +16,8 @@ import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
-import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
+import { PlanningSection } from "./settings/sections/Planning.tsx";
 import { FocusSection } from "./settings/sections/Focus.tsx";
-import { BacklogSection } from "./settings/sections/Backlog.tsx";
 import { ChatsSection } from "./settings/sections/Chats.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
 import { DevOpsSection } from "./settings/sections/DevOps.tsx";
@@ -249,12 +248,7 @@ function SectionBody(p: BodyProps) {
     case "hours":
       return <HoursSection {...p} />;
     case "planning":
-      return (
-        <>
-          <DayWeekSection {...p} />
-          <BacklogSection {...p} />
-        </>
-      );
+      return <PlanningSection {...p} />;
     case "focus":
       return <FocusSection {...p} />;
     case "notifications":
