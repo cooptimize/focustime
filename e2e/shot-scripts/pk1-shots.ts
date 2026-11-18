@@ -65,6 +65,9 @@ describe.skipIf(!CHROMIUM || !DIR)("PK-1 screenshots", () => {
           await page.locator(".mtg-upload.dropping").waitFor({ timeout: 5000 });
         });
         await shot(page, `${tag}-5-proposals`, async () => {
+          // The drag above never dropped: start from the page at rest.
+          await page.reload();
+          await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
           await page.locator(".mtg-upload input[type=file]").setInputFiles({ name: "export.zip", mimeType: "application/zip", buffer: Buffer.from(pocketZip()) });
           await page.getByText("From a Pocket recording.").waitFor({ timeout: 30_000 });
           await page.locator(".mtg-view").evaluate((el) => el.scrollTo(0, 0));

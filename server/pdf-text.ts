@@ -47,12 +47,18 @@ export function pdfReader(o: { timeoutMs?: number; maxPages?: number; memoryMb?:
         if (done) return;
         done = true;
         clearTimeout(timer);
-        clearInterval(watch);
+        clearTimeout(watch);
         void w.terminate();
         resolve(r);
       };
       const timer = setTimeout(() => finish({ ok: false, reason: "slow" }), timeoutMs);
-      const watch = setInterval(() => process.memoryUsage.rss() - start > memory && finish({ ok: false, reason: "large" }), 25);
+      // Only while this one PDF is read (never background work: config/background-policy.test.ts), every 25 ms.
+      let watch: ReturnType<typeof setTimeout>;
+      const look = () => {
+        if (process.memoryUsage.rss() - start > memory) finish({ ok: false, reason: "large" });
+        else if (!done) watch = setTimeout(look, 25);
+      };
+      watch = setTimeout(look, 25);
       w.once("message", (m: PdfWorkerOut) => finish(m.ok ? m : { ok: false, reason: m.reason, ...(m.pages !== undefined ? { pages: m.pages } : {}) }));
       w.once("error", (e: Error & { code?: string }) => finish({ ok: false, reason: e.code === "ERR_WORKER_OUT_OF_MEMORY" ? "large" : "damaged" }));
       w.once("exit", () => finish({ ok: false, reason: "damaged" }));
