@@ -569,5 +569,5 @@ export function anOccurrenceView(o: Partial<import("../../plan/meeting-views.ts"
 /** MC-3: a call on my own calendar nobody has read, as meeting.calls lists it. */
 export function anOtherCall(o: Partial<import("../../plan/meeting-views.ts").OtherCallView> = {}): import("../../plan/meeting-views.ts").OtherCallView {
   const n = next();
-  return { key: `ical-${n}`, name: `Fabrikam sync ${n}`, startAt: "2026-11-02T15:00:00Z", endAt: "2026-11-02T16:00:00Z", minutes: 60, people: 4, teams: true, outside: false, occurrenceId: null, ...o };
+  return { key: `ical-${n}`, name: `Fabrikam sync ${n}`, startAt: "2026-11-02T15:00:00Z", endAt: "2026-11-02T16:00:00Z", minutes: 60, people: 4, teams: true, outside: false, occurrenceId: null, seriesKey: null, allHome: false, ...o };
 }

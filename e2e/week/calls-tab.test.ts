@@ -51,9 +51,10 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await expect.poll(() => hash(page)).toMatch(/^#\/calls/);
     await expect(callsTab(page).getAttribute("aria-current")).resolves.toBe("page");
     await page.locator("[data-call-row]").first().waitFor({ timeout: 30_000 });
-    const needing = page.locator('[data-calls-list] [data-call-row][data-bucket="review"]');
+    // MC-4: Needs you is first, and its count is the tab's.
+    const needing = page.locator("[data-calls-list] [data-section='needs'] [data-call-row]");
     await expect(needing.count()).resolves.toBe(1);
-    await expect(page.locator('[data-calls-filter="review"] .seg-count').textContent()).resolves.toBe("1");
+    await expect(page.locator("#calls-needs .calls-head-count").textContent()).resolves.toBe("1");
     // No call named: the newest call that needs me opens beside the list (the address says which).
     await expect.poll(() => hash(page)).toMatch(/^#\/calls\/\d+$/);
     const id = Number((await hash(page)).split("/")[2]);
@@ -153,60 +154,48 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       }
     }, T);
 
-  it("one list by day, newest first, a state on every row; filters add up; client chips; both in the address, kept on reload and remembered; MC-2's details findable", async () => {
+  it("MC-4: Needs you, then the weeks; Open, Closed and Hidden with counts; client chips; both in the address, kept on reload and remembered; MC-2's details findable", async () => {
     const h = await demo();
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/calls");
     await rows(page).first().waitFor({ timeout: 30_000 });
-    // Newest day first, under its heading, and no call twice.
-    const days = await page.locator("[data-calls-list] .calls-day").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-day")!));
-    expect(days).toEqual([...days].sort().reverse());
-    expect(new Set(days).size).toBe(days.length);
-    await expect(page.locator(".calls-day-head").first().textContent()).resolves.toBe("Yesterday");
+    // Needs you first, then This week and Last week (a past week says how many closed).
+    const sections = await page.locator("[data-calls-list] .calls-scroll > .calls-day").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-section")));
+    expect(sections.slice(0, 2)).toEqual(["needs", "week-this"]);
+    expect(sections).toContain("week-last");
+    await expect(page.locator("#calls-week-last").textContent()).resolves.toMatch(/1 closed/);
     const keys = await rows(page).evaluateAll((rs) => rs.map((r) => r.getAttribute("data-call-row")));
     expect(new Set(keys).size).toBe(keys.length);
-    // Every row: start time, name and state on the first line; client (or No client yet) and length on the second.
-    for (const r of await rows(page).all()) {
-      await expect(r.locator(".calls-time").textContent()).resolves.toMatch(/^\d{1,2}:\d{2} [AP]M$/);
-      await expect(r.locator(".calls-state").textContent()).resolves.toMatch(/\S/);
-      await expect(r.locator(".calls-meta").textContent()).resolves.toMatch(/^(Northwind|Harbor|Atlas|Internal|No client yet|[A-Z][a-z]+) · /);
-    }
-    // The filters' counts add up to All, for every client.
+    // The calls with no transcript are folded at the end, with their count.
+    await expect.poll(() => page.locator("[data-calls-fold='no-transcript'] > .link-btn").textContent(), { timeout: 30_000 }).toMatch(/^\s*\d+ calls with no transcript$/);
+    // Closed shows one line each with what came of it; it's in the address.
     const count = async (f: string) => Number(await page.locator(`[data-calls-filter="${f}"] .seg-count`).textContent());
-    const all = await count("all");
-    expect(all).toBe((await count("review")) + (await count("open")) + (await count("done")));
-    expect(all).toBe(await rows(page).count());
-    // To review shows only what needs me; it's in the address.
-    await page.locator('[data-calls-filter="review"]').click();
-    await expect.poll(() => hash(page)).toMatch(/[?&]show=review/);
-    await expect.poll(() => rows(page).count()).toBe(await count("review"));
-    for (const b of await rows(page).evaluateAll((rs) => rs.map((r) => r.getAttribute("data-bucket")))) expect(b).toBe("review");
+    await page.locator('[data-calls-filter="closed"]').click();
+    await expect.poll(() => hash(page)).toMatch(/[?&]show=closed/);
+    const closed = page.locator("[data-section='closed'] [data-call-row]");
+    await expect.poll(() => closed.count()).toBe(await count("closed"));
+    await expect(page.locator("[data-closed-line]").first().textContent()).resolves.toMatch(/created|promise|skipped|Nothing taken|No transcript/);
     // A client chip narrows to that client; the counts follow it.
-    await page.locator('[data-calls-filter="all"]').click();
+    await page.locator('[data-calls-filter="open"]').click();
     const chips = page.locator(".calls-chips .ib4-chip");
+    const allOpen = await count("open");
     await chips.filter({ hasText: "Northwind" }).click();
     await expect.poll(() => hash(page)).toMatch(/[?&]client=northwind/i);
-    for (const t of await rows(page).locator(".calls-meta").allTextContents()) expect(t).toMatch(/^Northwind · /);
-    expect(await count("all")).toBe(await rows(page).count());
-    // No client yet is a chip too.
-    await chips.filter({ hasText: "No client yet" }).click();
-    for (const t of await rows(page).locator(".calls-meta").allTextContents()) expect(t).toMatch(/^No client yet · /);
+    await expect.poll(() => count("open")).toBeLessThan(allOpen);
     // Both kept on a reload, and remembered when Calls opens again from the tab.
-    await page.locator('[data-calls-filter="open"]').click();
+    await page.locator('[data-calls-filter="hidden"]').click();
     const kept = await hash(page);
-    expect(kept).toMatch(/show=open/);
+    expect(kept).toMatch(/show=hidden/);
+    // An empty filter says so.
+    await expect(page.locator(".calls-note").filter({ hasText: "No calls here." }).count()).resolves.toBe(1);
     await page.reload();
-    await rows(page).first().waitFor({ timeout: 30_000 });
-    await expect(page.locator('[data-calls-filter="open"]').getAttribute("aria-pressed")).resolves.toBe("true");
-    await expect(chips.filter({ hasText: "No client yet" }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.locator('[data-calls-filter="hidden"]').waitFor({ timeout: 30_000 });
+    await expect(page.locator('[data-calls-filter="hidden"]').getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect(chips.filter({ hasText: "Northwind" }).getAttribute("aria-pressed")).resolves.toBe("true");
     await go(page, "#/week");
     await callsTab(page).click();
-    await expect.poll(() => hash(page)).toMatch(/show=open/);
-    await expect(page.locator('[data-calls-filter="open"]').getAttribute("aria-pressed")).resolves.toBe("true");
-    // An empty filter says so.
-    await page.locator('[data-calls-filter="done"]').click();
-    await expect(page.locator(".calls-note").filter({ hasText: "No calls here." }).count()).resolves.toBe(1);
-    await page.locator('[data-calls-filter="all"]').click();
+    await expect.poll(() => hash(page)).toMatch(/show=hidden/);
+    await page.locator('[data-calls-filter="open"]').click();
     await page.locator(".calls-chips .ib4-chip").first().click();
     // MC-2's details, still findable: Add a call, the registered client calls with when and how the transcript
     // arrives, and the line about who sees the list.
@@ -262,11 +251,11 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await expect(name.inputValue()).resolves.toBe("j");
     await expect(page.evaluate(() => document.activeElement?.tagName)).resolves.toBe("INPUT");
     // A registered call opens its page beside the list, with the list's filter left as it was.
-    await page.locator('[data-calls-filter="review"]').click();
-    await rows(page).first().click();
+    await page.locator('[data-calls-filter="closed"]').click();
+    await page.locator("[data-section='closed'] [data-call-row]").first().click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    await expect.poll(() => hash(page)).toMatch(/^#\/calls\/\d+\?show=review$/);
-    await expect(page.locator('[data-calls-filter="review"]').getAttribute("aria-pressed")).resolves.toBe("true");
+    await expect.poll(() => hash(page)).toMatch(/^#\/calls\/\d+\?show=closed$/);
+    await expect(page.locator('[data-calls-filter="closed"]').getAttribute("aria-pressed")).resolves.toBe("true");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -301,20 +290,16 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
 
   // The rule itself (a call that needs me stays listed until its transcript is dropped; the rest fold) is
   // plan/call-list.test.ts's; here, two weeks on, the list, the fold and the tab's count still agree.
-  it("two weeks on: the tab's count is the listed calls that need me; Earlier calls holds only calls that don't", async () => {
+  it("two weeks on: the tab's count is Needs you's; closed calls older than the list's days are off it", async () => {
     const h = await demo({}, "2026-11-19T10:00:00-05:00");
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/calls");
     await page.locator("[data-calls-list] .calls-scroll").waitFor({ timeout: 30_000 });
     const old = rows(page).filter({ hasText: "Northwind weekly status call" });
     await expect.poll(() => old.count(), { timeout: 30_000 }).toBeGreaterThan(0);
-    const needing = await page.locator('[data-calls-list] .calls-scroll > .calls-day [data-call-row][data-bucket="review"]').count();
+    const needing = await page.locator("[data-calls-list] [data-section='needs'] [data-call-row]").count();
     await expect(callsTab(page).locator(".count").textContent()).resolves.toBe(String(needing));
-    const earlier = page.locator('[data-calls-fold="older"]');
-    if (await earlier.count()) {
-      await earlier.getByRole("button").first().click();
-      for (const b of await earlier.locator("[data-call-row]").evaluateAll((rs) => rs.map((r) => r.getAttribute("data-bucket")))) expect(b).not.toBe("review");
-    }
+    await expect(page.locator('[data-calls-fold="older"]').count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -369,18 +354,18 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       await expect(page.locator(".calls-beside").count()).resolves.toBe(0);
       expect(await hash(page)).toMatch(/^#\/calls(\?|$)/);
       if (label === "phone") {
-        for (const b of await page.locator("[data-calls-list] [data-call-row], [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head-actions button").all())
+        for (const b of await page.locator("[data-calls-list] [data-call-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head-actions button").all())
           expect((await b.boundingBox())!.height, (await b.textContent()) ?? "").toBeGreaterThanOrEqual(44);
         await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);
       }
-      await page.locator('[data-calls-list] [data-call-row][data-bucket="review"]').first().click();
+      await page.locator("[data-calls-list] [data-section='needs'] [data-call-row]").first().click();
       await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
       await expect(page.locator("[data-calls-list]").count()).resolves.toBe(0);
       const back = page.locator("[data-calls-back]");
       if (label === "phone") expect((await back.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await back.click();
       await rows(page).first().waitFor();
-      await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-bucket"))).toBe("review");
+      await expect.poll(() => page.evaluate(() => document.activeElement?.closest("[data-section]")?.getAttribute("data-section"))).toBe("needs");
       // A call nobody has read: its setup is the second step too.
       await rows(page).filter({ hasText: "Northwind data model review" }).first().click();
       await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();

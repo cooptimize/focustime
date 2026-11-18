@@ -45,6 +45,10 @@ export type OtherCallView = {
   outside: boolean;
   /** Its kept call's occurrence once someone on it pressed Review (that I can see), else null. */
   occurrenceId: number | null;
+  /** MC-4: the series it is one of on my calendar, or null for a single meeting (what Hide every one keeps). */
+  seriesKey: string | null;
+  /** MC-4: everyone on it is at Cooptimize: no client is suggested from the focus block it started in. */
+  allHome: boolean;
 };
 
 export type OccurrenceView = {
@@ -59,6 +63,10 @@ export type OccurrenceView = {
   hasTranscript: boolean;
   /** MC-1d: the transcript was found but couldn't be read (needs_upload, "Couldn't read the transcript"). */
   readFailed: boolean;
+  /** MC-4: what came of its proposals, counted from them (nothing more is stored): created in DevOps, kept as promises, comments added, skipped. */
+  done?: CallOutcome;
+  /** MC-4: when its last undecided proposal was decided (the latest decision), while nothing is undecided; else null. */
+  closedAt?: string | null;
   /**
    * WK-6, meeting.mine only: the occurrence's meeting on the calendar, by its iCalUId (the same on every attendee's
    * calendar), so Day, Week and the block panel tie the call to its meeting by the meeting itself; null when it isn't
@@ -66,6 +74,9 @@ export type OccurrenceView = {
    */
   eventKey?: string | null;
 };
+
+/** MC-4: what came of a call, counted from its proposals. */
+export type CallOutcome = { created: number; promises: number; comments: number; skipped: number };
 
 /** meeting.mine's nudges, with the client's name and the date in words. */
 export type MeetingNudgeView = MeetingNudge & { clientName: string; dateLabel: string };

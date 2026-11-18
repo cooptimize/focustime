@@ -23,6 +23,7 @@ import { AnswersError, parseAnswers, type Answers } from "../plan/three-question
 import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
+import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
 import { pocketAdd, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
 
@@ -32,7 +33,7 @@ import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
-import { graphFailureOf, MeetingRefused, pressTranscript, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
+import { graphFailureOf, MeetingRefused, pressTranscript, TranscriptsOff, type ExistsAsk, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -41,11 +42,12 @@ import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { capturePass } from "./meeting-capture.ts";
 import { READS, IntakeError, readTranscriptFile, type ReadPdf, type TranscriptRead } from "./transcript-file.ts";
-import type { OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
+import type { CallOutcome, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
+import { closedAtOf, outcomeOfCall } from "../plan/call-list.ts";
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -104,6 +106,8 @@ export type MeetingContext = {
   cooptimizer?: (userId: string) => Promise<boolean>;
   /** MC-2b: my own Pocket (my key, the one client), the shared 5 minute hold and my addresses; absent: not here. */
   pocket?: MeetingPocket;
+  /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute memory of answers; absent: not checked here. */
+  exists?: { grants: ExistsGrants; hold: ExistsHold };
 };
 
 class Invalid extends Error {}
@@ -308,10 +312,10 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // Week, their rows in Calls); nudges stay the registered calls' (nudgesFor).
         const mine = [...(await store.viewer(me).series()), ...(await store.viewer(me).calls(from))];
         const occs = await store.recentOccurrences(mine.map((s) => s.id), from);
-        const counts = new Map<number, { all: number; open: number }>();
+        const counts = new Map<number, { all: number; open: number; done: CallOutcome; closedAt: string | null }>();
         for (const o of occs) {
           const ps = await store.proposals(o.id);
-          counts.set(o.id, { all: ps.length, open: ps.filter(toReview).length });
+          counts.set(o.id, { all: ps.length, open: ps.filter(toReview).length, done: outcomeOfCall(ps), closedAt: closedAtOf(ps) });
         }
         const kept = await store.withTranscript(occs.map((o) => o.id));
         const vo = (o: Occurrence): ViewOpts => ({ counts: counts.get(o.id), hasTranscript: kept.has(o.id), retriesHere: !!ctx.retriesHere, zone: userZone(cfg) });
@@ -336,6 +340,9 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         if (o.skip !== undefined) {
           if (typeof o.skip !== "boolean") throw new Invalid("skip must be true or false");
           const next = await store.viewer(me).updateProposal(p.id, { state: o.skip ? "skipped" : "open", decidedBy: o.skip ? me : null, decidedAt: o.skip ? ctx.now() : null });
+          // MC-4: a skip that leaves nothing undecided closes the call; putting one back opens it again.
+          if (o.skip) await settledCall(store, p.occurrenceId, me);
+          else await reopenCall(store, p.occurrenceId);
           return { ok: true, data: { proposal: next } };
         }
         const body = edited(p.body, o);
@@ -367,6 +374,30 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         return await fetchFromTeams(ctx, store, cfg, me, series, occ);
       }
       case "meeting.call_add": return await addCall(ctx, store, cfg, me, input);
+      // MC-4: only from Calls' own opening and its Refresh (ui/meetings/Meetings.tsx), never a job, the assistant or the bot.
+      case "meeting.calls_check": return await checkCalls(ctx, store, cfg, me, input);
+      // MC-4: Hide a meeting nobody asked FocusTime to read, for me only; Put back. Only which meeting is kept.
+      case "meeting.call_hides": {
+        obj(input, []);
+        if (!ctx.plan) return bad("Hiding isn't available here", 503);
+        const h = await ctx.plan.callHides();
+        return { ok: true, data: { keys: [...h.keys], series: [...h.series] } };
+      }
+      case "meeting.call_hide":
+      case "meeting.call_unhide": {
+        if (!ctx.plan) return bad("Hiding isn't available here", 503);
+        const items = hideItems(input);
+        if (action === "meeting.call_hide") {
+          // Hide is for a call nobody asked FocusTime to read: a call it keeps stays where it is.
+          for (const i of items) if (i.kind === "one" && (await store.callByKey(i.key))) return bad("Someone asked FocusTime to review this call, so it can't be hidden. Skip all and close it instead.", 409);
+          await ctx.plan.hideCalls(items);
+        } else await ctx.plan.unhideCalls(items);
+        ctx.log({ source: "plan", op: action === "meeting.call_hide" ? "meeting_call_hide" : "meeting_call_unhide", count: items.length });
+        return { ok: true, data: { count: items.length } };
+      }
+      // MC-4: Skip all and close (one call or several I review), and its Undo. Nothing is written to DevOps or kept as a promise.
+      case "meeting.skip_all": return await skipAll(store, me, input, ctx);
+      case "meeting.unskip_all": return await unskipAll(store, me, input, ctx);
       // MC-2b: only from the person's two presses in Calls (Get my Pocket recordings; Continue on a setup).
       case "meeting.pocket_list": {
         obj(input, []);
@@ -398,7 +429,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
 }
 
 /** What the page, the mark and the list are told of an occurrence (MC-1d: the failed pass's words, the next try). */
-type ViewOpts = { counts?: { all: number; open: number } | undefined; hasTranscript?: boolean; retriesHere?: boolean; zone?: string };
+type ViewOpts = { counts?: { all: number; open: number; done?: CallOutcome; closedAt?: string | null } | undefined; hasTranscript?: boolean; retriesHere?: boolean; zone?: string };
 function occView(o: Occurrence, x: ViewOpts = {}): OccurrenceView {
   const failed = o.state === "failed";
   const kind = o.aiOutcome ? parseOutcome(o.aiOutcome).kind : "";
@@ -411,8 +442,10 @@ function occView(o: Occurrence, x: ViewOpts = {}): OccurrenceView {
     retryAt,
     hasTranscript: !!x.hasTranscript,
     readFailed: o.state === "needs_upload" && o.lastRead?.kind === "failed",
+    ...(x.counts?.done ? { done: x.counts.done, closedAt: x.counts.closedAt ?? null } : {}),
   };
 }
+
 
 const roleOf = (v: unknown): MeetingRole => {
   if (!MEETING_ROLES.includes(v as MeetingRole)) throw new Invalid("role must be status or planning");
@@ -627,6 +660,89 @@ async function unkeep(ctx: MeetingContext, store: MeetingStore, me: string, inpu
   if (occ.state === "reviewed") await store.updateOccurrence(occ.id, { state: "ready", reviewedBy: null });
   ctx.log({ source: "plan", op: "meeting_unkept", count: 1 });
   return { ok: true, data: { proposal: next } };
+}
+
+/** MC-4: a proposal put back on a reviewed call opens it again (its mark and nudge come back). */
+async function reopenCall(store: MeetingStore, occurrenceId: number): Promise<void> {
+  const occ = await store.occurrence(occurrenceId);
+  if (occ?.state === "reviewed" && (await store.proposals(occurrenceId)).some(toReview)) await store.updateOccurrence(occurrenceId, { state: "ready", reviewedBy: null });
+}
+
+/** MC-4: Hide's input: single meetings by their calendar key, series by their key on my calendar; 60 at most. */
+function hideItems(input: unknown): { kind: "one" | "every"; key: string }[] {
+  const o = obj(input, [], ["keys", "series"]);
+  const list = (v: unknown, kind: "one" | "every") => {
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.some((k) => typeof k !== "string" || !k.trim() || k.length > 300)) throw new Invalid("keys must be meetings' keys");
+    return (v as string[]).map((key) => ({ kind, key }));
+  };
+  const items = [...list(o.keys, "one"), ...list(o.series, "every")];
+  if (!items.length || items.length > 60) throw new Invalid("Hide 1 to 60 meetings at a time");
+  return items;
+}
+
+/** MC-4: what Skip all and close changed on one proposal: its state before, for Undo. */
+/** What Skip all and close changed on one proposal: what it was (and, for a failed one, who decided it and when), and when the skip was. */
+type Skipped = { id: number; was: "open" | "failed"; skippedAt: string; by: string | null; decidedAt: string | null };
+
+/**
+ * MC-4: Skip all and close, on one call or several ticked together: every undecided proposal (open, or failed and waiting
+ * for its fix) on calls I review is skipped, and each call closes. Nothing goes to DevOps, no promise is kept, and the
+ * answer says what each was, for Undo.
+ */
+async function skipAll(store: MeetingStore, me: string, input: unknown, ctx: MeetingContext): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceIds"]);
+  if (!Array.isArray(o.occurrenceIds) || !o.occurrenceIds.length || o.occurrenceIds.length > 30) throw new Invalid("Close 1 to 30 calls at a time");
+  const ids = [...new Set(o.occurrenceIds.map((v) => id(v, "occurrenceIds")))];
+  // Every call first: only one I review (a refusal changes nothing).
+  for (const oid of ids) await store.viewer(me).reviewer(oid);
+  const out: { occurrenceId: number; skipped: Skipped[] }[] = [];
+  const at = ctx.now();
+  for (const oid of ids) {
+    const skipped: Skipped[] = [];
+    for (const p of await store.proposals(oid)) {
+      if (!toReview(p)) continue;
+      await store.viewer(me).updateProposal(p.id, { state: "skipped", decidedBy: me, decidedAt: at });
+      skipped.push({ id: p.id, was: p.state as Skipped["was"], skippedAt: at, by: p.state === "failed" ? p.decidedBy : null, decidedAt: p.state === "failed" ? p.decidedAt : null });
+    }
+    await settledCall(store, oid, me);
+    out.push({ occurrenceId: oid, skipped });
+  }
+  ctx.log({ source: "plan", op: "meeting_skip_all", count: out.reduce((n, c) => n + c.skipped.length, 0) });
+  return { ok: true, data: { calls: out } };
+}
+
+/** MC-4: Undo of Skip all and close: each proposal it skipped goes back as it was, while it is still skipped by me; the call opens again. */
+async function unskipAll(store: MeetingStore, me: string, input: unknown, ctx: MeetingContext): Promise<ActionResponse> {
+  const o = obj(input, ["items"]);
+  if (!Array.isArray(o.items) || !o.items.length || o.items.length > 500) throw new Invalid("items must be what Skip all and close answered");
+  const items = o.items.map((x) => {
+    const i = obj(x, ["id", "was", "skippedAt"], ["by", "decidedAt"]);
+    if (i.was !== "open" && i.was !== "failed") throw new Invalid("was must be open or failed");
+    const str = (v: unknown, k: string) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "string" || v.length > 320) throw new Invalid(`${k} must be what Skip all and close answered`);
+      return v;
+    };
+    const skippedAt = str(i.skippedAt, "skippedAt");
+    if (!skippedAt) throw new Invalid("skippedAt must be what Skip all and close answered");
+    return { id: id(i.id, "id"), was: i.was as Skipped["was"], skippedAt, by: str(i.by, "by"), decidedAt: str(i.decidedAt, "decidedAt") };
+  });
+  const calls = new Set<number>();
+  let back = 0;
+  for (const i of items) {
+    const p = await store.proposal(i.id);
+    if (!p) continue;
+    await store.viewer(me).reviewer(p.occurrenceId);
+    // Only this Skip all's own skip, still mine and still a skip: anything decided since (even skipped again by me) stays.
+    if (p.state !== "skipped" || (p.decidedBy ?? "").toLowerCase() !== me.toLowerCase() || p.decidedAt !== i.skippedAt) continue;
+    await store.viewer(me).updateProposal(p.id, i.was === "open" ? { state: "open", decidedBy: null, decidedAt: null } : { state: "failed", decidedBy: i.by, decidedAt: i.decidedAt });
+    calls.add(p.occurrenceId);
+    back++;
+  }
+  for (const oid of calls) await reopenCall(store, oid);
+  ctx.log({ source: "plan", op: "meeting_unskip_all", count: back });
+  return { ok: true, data: { back } };
 }
 
 /** Nothing left to review: the call is reviewed (its mark and nudge go). */
@@ -873,11 +989,89 @@ async function otherCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConf
     const kept = await store.callByKey(c.key);
     const seen = kept ? await v.occurrence(kept.occurrence.id) : null;
     const outside = detectSource(c.organizerEmail, home).organizer === "other";
-    rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null });
+    rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null, seriesKey: c.seriesKey ?? null, allHome: c.allHome === true });
   }
   rows.sort((a, b) => b.startAt.localeCompare(a.startAt));
   ctx.log({ source: "plan", op: "meeting_other_calls", count: rows.length });
   return { ok: true, data: { calls: rows, days: OTHER_CALL_DAYS } };
+}
+
+/** MC-4: what one check answers for a call: a transcript in Teams, none, the tenant's setting off, or not checked yet. */
+export type CheckAnswer = HeldAnswer | "unchecked";
+
+/**
+ * MC-4: which calls on my own calendar have a transcript in Teams, asked when I open Calls and on Refresh (`refresh`
+ * forgets what is held), or for the next CHECK_CAP with `more`. Only a Teams meeting organized at Cooptimize that
+ * nobody asked FocusTime to read yet, in the list's window, not hidden, is asked; with my own sign-in, the newest
+ * first, at most CHECK_CAP a press. Answers are held in the server's memory for 15 minutes and in the page while Calls
+ * is open: never stored, logged or exported. The answer is each call's key and yes, no, off or unchecked: nothing else.
+ */
+async function checkCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, [], ["refresh", "more"]);
+  if (o.refresh !== undefined && typeof o.refresh !== "boolean") throw new Invalid("refresh must be true or false");
+  if (o.more !== undefined && typeof o.more !== "boolean") throw new Invalid("more must be true or false");
+  if (!ctx.exists) return { ok: true, data: { answers: {}, unchecked: 0, failed: false, unavailable: true } };
+  const g = ctx.graph(cfg);
+  if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+  const zone = userZone(cfg);
+  const w = otherCallsWindow(ctx.now(), zone);
+  let all: CalendarMeeting[];
+  try {
+    all = await g.recentCalls(w.fromIso, w.toIso);
+  } catch (e) {
+    const p = graphProblem(ctx, e);
+    if (p) return p;
+    throw e;
+  }
+  if (o.refresh) ctx.exists.hold.clear(me);
+  const taken = await registeredLinks(store);
+  const home = await ctx.homeDomains();
+  // A meeting I hid isn't asked about.
+  const hidden = ctx.plan ? await ctx.plan.callHides() : null;
+  const asks: ExistsAsk[] = [];
+  for (const c of all) {
+    if (!isOtherCall(c) || !inWindow(c.startAt, w) || !c.joinUrl || taken.has(joinKey(c.joinUrl))) continue;
+    if (detectSource(c.organizerEmail, home).organizer === "other") continue;
+    if (hidden && (hidden.keys.has(c.key) || (c.seriesKey && hidden.series.has(c.seriesKey)))) continue;
+    if (await store.callByKey(c.key)) continue;
+    asks.push({ key: c.key, joinUrl: c.joinUrl, startAt: c.startAt, endAt: c.endAt });
+  }
+  asks.sort((a, b) => b.startAt.localeCompare(a.startAt));
+  const answers: Record<string, CheckAnswer> = {};
+  const toAsk: ExistsAsk[] = [];
+  const exists = ctx.exists;
+  // Opening Calls and Refresh ask only about the newest 40; only Check more goes past them, 40 at a time.
+  asks.forEach((a, i) => {
+    const h = exists.hold.get(me, a.key);
+    if (h) answers[a.key] = h;
+    else if (toAsk.length < CHECK_CAP && (o.more || i < CHECK_CAP)) toAsk.push(a);
+    else answers[a.key] = "unchecked";
+  });
+  let failed = false;
+  if (toAsk.length) {
+    const grant = ctx.exists.grants.open(me, toAsk.map((a) => a.joinUrl));
+    try {
+      const got = await g.transcriptsExist(toAsk);
+      for (const a of toAsk) {
+        const v = got.get(a.key) ?? "failed";
+        if (v === "failed") (failed = true), (answers[a.key] = "unchecked");
+        else ctx.exists.hold.set(me, a.key, v), (answers[a.key] = v);
+      }
+    } catch (e) {
+      if (e instanceof MeetingRefused) throw e;
+      if (e instanceof TranscriptsOff) for (const a of toAsk) ctx.exists.hold.set(me, a.key, "off"), (answers[a.key] = "off");
+      else {
+        if (!graphFailureOf(e)) throw e;
+        failed = true;
+        for (const a of toAsk) answers[a.key] = "unchecked";
+      }
+    } finally {
+      grant.done();
+    }
+  }
+  const n = (v: CheckAnswer) => Object.values(answers).filter((x) => x === v).length;
+  ctx.log({ source: "plan", op: "meeting_calls_check", count: toAsk.length, kind: failed ? "failed" : "ok" });
+  return { ok: true, data: { answers, yes: n("yes"), unchecked: n("unchecked"), off: n("off") > 0, failed } };
 }
 
 /** The Cooptimizers among FocusTime users on a call's invite (never a guest, an automation account or anyone outside). */
@@ -1008,6 +1202,7 @@ async function fetchFromTeams(ctx: MeetingContext, store: MeetingStore, cfg: App
     return { ok: true, data: { ...r, aiOutcome: r.outcome, outcome: "found", message: fetchFound(lines.length, r.proposals, r.outcome === "done"), lines: lines.length } };
   } catch (e) {
     if (e instanceof MeetingRefused) return say("not_on_invite", 403);
+    if (e instanceof TranscriptsOff) return say("tenant_off");
     if (e instanceof TranscriptError) return say("unreadable");
     if (e instanceof HttpError && e.status === 413) return say("unreadable");
     const k = graphFailureOf(e);

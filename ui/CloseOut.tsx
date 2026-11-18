@@ -19,6 +19,7 @@ import { ProgressOfferCard, TimeboxCheckin } from "./TimeboxCheckin.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName } from "./PickReview.tsx";
 import { userZone } from "../week/zone.ts";
+import { CloseOutCalls } from "./meetings/CallsToClose.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { Icon } from "./icons.tsx";
@@ -217,6 +218,8 @@ export function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onErr
             </ul>
           </section>
         )}
+        {/* MC-4: today's calls still open. */}
+        <CloseOutCalls date={date} today={st.today} zone={tz} />
         {dueBy.length > 0 && (
           <section className="cp-section" aria-label="Promises due">
             <h3>Promises due</h3>

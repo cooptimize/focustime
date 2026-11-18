@@ -31,7 +31,8 @@ const ADMIN = "11111111-1111-4111-8111-111111111111";
 const LEAD = "22222222-2222-4222-8222-222222222222";
 const MATE = "33333333-3333-4333-8333-333333333333";
 const OUTSIDER = "44444444-4444-4444-8444-444444444444";
-const NOW = "2026-11-10T17:00:00Z";
+const NOW0 = "2026-11-10T17:00:00Z";
+let NOW = NOW0;
 const readPdf = pdfReader();
 const JOIN = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_contoso%40thread.v2/0";
 const CLIENT_HOSTED = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_fabrikamhosted%40thread.v2/0";
@@ -450,5 +451,100 @@ describe("a Pocket export as a call's transcript (PK-1)", () => {
     expect(r).toMatchObject({ ok: false, status: 422, error: "FocusTime couldn't read that file. FocusTime reads a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)" });
     expect(JSON.stringify([r, logs])).not.toMatch(/secret|99999999/);
     expect(await meetings.occurrencesOf(m.id)).toEqual([]);
+  });
+});
+
+// MC-4: Skip all and close, its Undo, putting one back, and Hide (TEST 6). Nothing goes to DevOps, no promise is kept.
+describe("MC-4: closing a call", () => {
+  async function aCall() {
+    const s = await setup();
+    const m = data<{ meeting: { id: number } }>(await s.act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(s.ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    const review = async () => data<{ occurrence: { state: string; open: number; closedAt?: string | null; done?: unknown }; proposals: { id: number; state: string; decidedBy: string | null; decidedAt: string | null }[] }>(await s.act(ADMIN, "meeting.review", { occurrenceId }));
+    return { ...s, occurrenceId, review };
+  }
+
+  it("skips every undecided proposal and closes the call, writing nothing; Undo puts each back as it was and opens it again", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    const before = await review();
+    const first = before.proposals[0]!;
+    data(await act(ADMIN, "meeting.edit", { proposalId: first.id, skip: true }));
+    const r = data<{ calls: { occurrenceId: number; skipped: { id: number; was: string }[] }[] }>(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId] }));
+    // Only the ones still undecided: the one skipped by hand isn't in Undo's list.
+    expect(r.calls[0]!.skipped.map((x) => x.id)).toEqual(before.proposals.slice(1).map((p) => p.id));
+    const closed = await review();
+    expect(closed.proposals.every((p) => p.state === "skipped")).toBe(true);
+    expect(closed.occurrence.state).toBe("reviewed");
+    expect(closed.occurrence.open).toBe(0);
+    data(await act(ADMIN, "meeting.unskip_all", { items: r.calls[0]!.skipped }));
+    const back = await review();
+    expect(back.proposals.map((p) => [p.id, p.state])).toEqual(before.proposals.map((p, i) => [p.id, i === 0 ? "skipped" : "open"]));
+    expect(back.proposals.slice(1).every((p) => p.decidedBy === null && p.decidedAt === null)).toBe(true);
+    expect(back.occurrence.state).toBe("ready");
+  });
+
+  it("Undo leaves alone a proposal decided since", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    const r = data<{ calls: { skipped: { id: number; was: string }[] }[] }>(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId] }));
+    const [a, b] = r.calls[0]!.skipped;
+    // Put back by hand, then skipped again by the lead: no longer this Undo's.
+    data(await act(ADMIN, "meeting.edit", { proposalId: b!.id, skip: false }));
+    data(await act(LEAD, "meeting.edit", { proposalId: b!.id, skip: true }));
+    data(await act(ADMIN, "meeting.unskip_all", { items: [a, b] }));
+    const ps = (await review()).proposals;
+    expect(ps.find((p) => p.id === a!.id)!.state).toBe("open");
+    expect(ps.find((p) => p.id === b!.id)!.state).toBe("skipped");
+  });
+
+  it("Undo leaves alone a proposal I skipped again myself since, and puts a failed one back with who decided it", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    try {
+      const r = data<{ calls: { skipped: { id: number; was: string; skippedAt: string }[] }[] }>(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId] }));
+      const [a, b] = r.calls[0]!.skipped;
+      expect(a!.skippedAt).toBe(NOW0);
+      NOW = "2026-11-10T17:01:00Z";
+      data(await act(ADMIN, "meeting.edit", { proposalId: b!.id, skip: false }));
+      data(await act(ADMIN, "meeting.edit", { proposalId: b!.id, skip: true }));
+      data(await act(ADMIN, "meeting.unskip_all", { items: [a, b] }));
+      const ps = (await review()).proposals;
+      expect(ps.find((p) => p.id === a!.id)!.state).toBe("open");
+      expect(ps.find((p) => p.id === b!.id)!.state).toBe("skipped");
+      // A failed one: Undo restores who decided it and when, as Skip all answered.
+      data(await act(ADMIN, "meeting.unskip_all", { items: [{ ...b!, skippedAt: "2026-11-10T17:01:00Z", was: "failed", by: LEAD, decidedAt: NOW0 }] }));
+      const f = (await review()).proposals.find((p) => p.id === b!.id)!;
+      expect([f.state, f.decidedBy, f.decidedAt]).toEqual(["failed", LEAD, NOW0]);
+      expect(await act(ADMIN, "meeting.unskip_all", { items: [{ id: a!.id, was: "open" }] })).toMatchObject({ ok: false, status: 400 });
+    } finally {
+      NOW = NOW0;
+    }
+  });
+
+  it("putting one skipped proposal back opens a closed call", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    data(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId] }));
+    expect((await review()).occurrence.state).toBe("reviewed");
+    const one = (await review()).proposals[0]!;
+    data(await act(ADMIN, "meeting.edit", { proposalId: one.id, skip: false }));
+    const after = await review();
+    expect(after.occurrence.state).toBe("ready");
+    expect(after.occurrence.open).toBe(1);
+  });
+
+  it("only a reviewer closes, and a refusal for one call changes none of them", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    expect(await act(MATE, "meeting.skip_all", { occurrenceIds: [occurrenceId] })).toMatchObject({ ok: false, status: 403 });
+    expect(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId, 999_999] })).toMatchObject({ ok: false });
+    expect((await review()).proposals.every((p) => p.state === "open")).toBe(true);
+    expect(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [] })).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("Hide keeps only which meeting, for me", async () => {
+    const { act } = await aCall();
+    data(await act(ADMIN, "meeting.call_hide", { keys: ["ical-x"], series: ["series-y"] }));
+    expect(data(await act(ADMIN, "meeting.call_hides", {}))).toEqual({ keys: ["ical-x"], series: ["series-y"] });
+    expect(data(await act(LEAD, "meeting.call_hides", {}))).toEqual({ keys: [], series: [] });
+    data(await act(ADMIN, "meeting.call_unhide", { keys: ["ical-x"] }));
+    expect(data(await act(ADMIN, "meeting.call_hides", {}))).toEqual({ keys: [], series: ["series-y"] });
+    expect(await act(ADMIN, "meeting.call_hide", { keys: [] })).toMatchObject({ ok: false, status: 400 });
   });
 });

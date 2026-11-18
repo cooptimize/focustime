@@ -3672,6 +3672,30 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, seen_at, hidden) VALUES (?, ?, ?, 0)", id, version, now);
       });
     },
+    // ---- MC-4: the meetings I hid from Calls: only which meeting (its calendar key, or its series' key for every one) ----
+    /** My hides. A single meeting's row older than CALL_HIDE_DAYS goes first (an "every one" stays until I put it back). */
+    async callHides(): Promise<{ keys: Set<string>; series: Set<string> }> {
+      const cut = opts.now().toInstant().subtract({ hours: 24 * CALL_HIDE_DAYS }).toString();
+      await tx(async () => void (await db.run("DELETE FROM call_hides WHERE kind = 'one' AND hidden_at < ?", cut)));
+      const rows = (await db.all("SELECT kind, meeting_key FROM call_hides")) as Row[];
+      return { keys: new Set(rows.filter((r) => r.kind === "one").map((r) => String(r.meeting_key))), series: new Set(rows.filter((r) => r.kind === "every").map((r) => String(r.meeting_key))) };
+    },
+    /** Hides meetings (kept: only the key and when); one already hidden stays as it was. */
+    async hideCalls(items: readonly { kind: "one" | "every"; key: string }[]): Promise<void> {
+      if (!items.length) return;
+      const now = opts.now().toInstant().toString();
+      await tx(async () => {
+        for (const i of items) await db.run("INSERT INTO call_hides (kind, meeting_key, hidden_at) VALUES (?, ?, ?) ON CONFLICT (kind, meeting_key) DO NOTHING", i.kind, i.key, now);
+      });
+    },
+    /** Puts hidden meetings back. */
+    async unhideCalls(items: readonly { kind: "one" | "every"; key: string }[]): Promise<void> {
+      if (!items.length) return;
+      await tx(async () => {
+        for (const i of items) await db.run("DELETE FROM call_hides WHERE kind = ? AND meeting_key = ?", i.kind, i.key);
+      });
+    },
+
     // ---- IB-1: my marks on Inbox items (seen, snoozed until, hidden), by item key (plan/inbox-items.ts) ----
     // IB-4 adds: when a conversation first showed as a suggestion, what I did with it, when I last touched a promise,
     // how a promise cleared on its own and when I put it back.
@@ -3926,6 +3950,9 @@ function toLoopSend(r: Row): LoopSend {
     createdAt: String(r.created_at), sentAt: (r.sent_at as string | null) ?? null, updatedAt: String(r.updated_at),
   };
 }
+/** MC-4: a hidden single meeting is forgotten this many days after it was hidden. */
+export const CALL_HIDE_DAYS = 60;
+
 export type PlanStore = ReturnType<typeof planStoreOn>;
 
 /** AS-1: one turn as stored (the service types its cards). */

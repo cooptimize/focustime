@@ -24,8 +24,9 @@ import type { CaptureClient } from "../../plan/capture.ts";
 import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
-import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListedRecording, type ListFilter } from "../../plan/call-list.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CLOSE_TEXT, FETCH_WORDS, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
+import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
 import { gotLine, othersLeftOut, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
 import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
@@ -35,7 +36,6 @@ import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { useNarrow } from "../PanelShell.tsx";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
-import { RepeatMark } from "./CallMark.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
 type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
@@ -96,9 +96,32 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const [pocket, setPocket] = useState<{ recordings: ListedRecording[]; others: number; more: boolean; at: string } | null>(null);
   const [pocketBusy, setPocketBusy] = useState(false);
   const [pocketErr, setPocketErr] = useState<string | null>(null);
+  // MC-4: which of my calendar's calls have a transcript in Teams (this page's memory only, while Calls is open), my
+  // hides, the ticked rows, Review from a row's progress, the repeating meetings opened and the client I chose on a row.
+  const [check, setCheck] = useState<Record<string, CheckState> | null>(null);
+  const [checkInfo, setCheckInfo] = useState<{ failed: boolean; off: boolean; unchecked: number; busy: boolean }>({ failed: false, off: false, unchecked: 0, busy: false });
+  const [hides, setHides] = useState<CallHides | null>(null);
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
+  const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   useEffect(() => {
     void call<PocketView>("pocket.status", {}).then((v) => setPocketOn(v.connected), () => setPocketOn(false));
   }, []);
+  /** MC-4: asks Teams which calls have a transcript: as Calls opens, on Refresh (refresh), or the next ones (more). */
+  const runCheck = useCallback(async (o: { refresh?: boolean; more?: boolean } = {}) => {
+    setCheckInfo((c) => ({ ...c, busy: true }));
+    try {
+      const d = await call<{ answers: Record<string, CheckState>; unchecked: number; off: boolean; failed: boolean }>("meeting.calls_check", o);
+      setCheck((c) => ({ ...(o.refresh ? {} : c ?? {}), ...d.answers }));
+      setCheckInfo({ failed: d.failed, off: d.off, unchecked: d.unchecked, busy: false });
+    } catch {
+      // The list still shows; one quiet line says the check failed, with Check again.
+      setCheck((c) => c ?? {});
+      setCheckInfo((c) => ({ ...c, failed: true, busy: false }));
+    }
+  }, []);
+  const loadHides = useCallback(() => call<{ keys: string[]; series: string[] }>("meeting.call_hides", {}).then((h) => setHides({ keys: new Set(h.keys), series: new Set(h.series) }), () => setHides({ keys: new Set(), series: new Set() })), []);
   const getPocket = async () => {
     setPocketBusy(true);
     setPocketErr(null);
@@ -136,25 +159,29 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const wanted = useRef<{ start: string; end: string; key?: string } | null>(asked);
   useEffect(() => {
     void loadMine();
+    void loadHides();
     let live = true;
     void loadOthers().then((d) => {
+      // MC-4: once my calendar's calls are read, Teams is asked which have a transcript (never on a schedule).
+      if (live && d) void runCheck();
       const want = asked;
       if (!live || !want) return;
       // WK-6: by the meeting itself when its key is known, else by its start and end.
       const hit = (want.key ? d?.calls.find((c) => c.key === want.key) : undefined) ?? d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
-      wanted.current = null;
+      // Found: wanted stays set, so nothing opens by itself in its place. A render already committed (the calendar's
+      // calls arriving) can run its effects after this and before the setup's own render; it must still see a call wanted.
       if (hit?.occurrenceId) go({ occurrence: hit.occurrenceId });
       else if (hit) setSetupKey(otherRowKey(hit));
-      else setMissing(true);
+      else (wanted.current = null), setMissing(true);
     });
     return () => {
       live = false;
     };
     // Once, as Calls opens (loadMine, loadOthers and go never change; asked is taken once).
-  }, [loadMine, loadOthers, go, asked]);
+  }, [loadMine, loadOthers, loadHides, runCheck, go, asked]);
 
   // The list's filter and client: the address's, else the ones this browser remembered (written into the address).
-  const show: ListFilter = at.show ?? "all";
+  const show: ListFilter = at.show ?? "open";
   const client = at.client ?? null;
   useEffect(() => {
     if (at.show !== undefined || at.client !== undefined) return remember(at.show, at.client);
@@ -165,14 +192,21 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   /** A filter or client chosen: remembered at once (so an address without them doesn't bring back the old ones). */
   const setList = (f: ListFilter, c: string | null) => {
     remember(f, c ?? undefined);
-    onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
+    onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "open" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
   };
   // Without the calls FocusTime keeps there is no list: my calendar's calls alone would read as nothing to review.
-  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, addPocket: pocketRows(pocket?.recordings ?? null, zone) }) : { rows: [], older: [] }), [data, others, today, zone, pocket]);
-  const shown = useMemo(() => filterRows(rows, show, client), [rows, show, client]);
-  const counts = useMemo(() => filterCounts(rows, client), [rows, client]);
-  const chips = useMemo(() => chipClients(rows), [rows]);
-  const setupRow = setupKey ? [...rows, ...older].find((r) => r.key === setupKey && (r.other || r.recording)) ?? null : null;
+  // MC-4: a calendar call's client is only a suggestion: from its title, else its focus block, but never from the block
+  // when everyone on it is at Cooptimize ("Which client?").
+  const suggest = useCallback((c: OtherCallView) => suggestClient(c.name, clients, blockClientAt(c.startAt), c.allHome), [clients, blockClientAt]);
+  const rows = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, addPocket: pocketRows(pocket?.recordings ?? null, zone), check, hides, suggest }) : []), [data, others, today, zone, pocket, check, hides, suggest]);
+  const gone = useMemo(() => hiddenMissing(rows, hides), [rows, hides]);
+  const goneCount = gone.keys.length + gone.series.length;
+  const counts = useMemo(() => filterCounts(rows, client, goneCount, hides?.series), [rows, client, goneCount, hides]);
+  const nameOfClient = useCallback((k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k, [clients]);
+  const chips = useMemo(() => chipClients(rows, nameOfClient), [rows, nameOfClient]);
+  const open = useMemo(() => openList(rows, client, today), [rows, client, today]);
+  const setupRow = setupKey ? rows.find((r) => r.key === setupKey && (r.other || r.recording)) ?? null : null;
+  const clientOn = (r: CallRow) => chosen[r.key] ?? r.suggested;
   // Calls with no call named: the newest call that needs me opens, else the newest call (side by side only; when
   // narrow the list is the first step).
   const loaded = !!data && (!!others || !!othersErr);
@@ -245,6 +279,11 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
         backToList();
         return;
       }
+      if (e.key === "x") {
+        const k = t?.closest<HTMLElement>("[data-calls-list] [data-call-row]")?.getAttribute("data-call-row");
+        if (k) (e.preventDefault(), xRef.current(k));
+        return;
+      }
       if (e.key !== "j" && e.key !== "k") return;
       const list = [...document.querySelectorAll<HTMLElement>("[data-calls-list] [data-call-row]")].filter((b) => b.offsetParent !== null);
       if (!list.length) return;
@@ -282,6 +321,114 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const showBeside = twoStep ? besideOpen : true;
   const registered = data?.meetings.filter((m) => !m.call) ?? [];
 
+  // ---- MC-4: Hide, Put back, Skip all and close, Review from a row, ticks ----
+  const say = (e: unknown) => setRowStatus((x) => ({ ...x, _page: { busy: null, error: errText(e), occurrenceId: null } }));
+  const hideItems = async (items: { keys?: string[]; series?: string[] }, text: string) => {
+    try {
+      await call("meeting.call_hide", items);
+      await loadHides();
+      setTicked(new Set());
+      undoable?.(text, async () => {
+        await call("meeting.call_unhide", items);
+        await loadHides();
+      });
+    } catch (e) {
+      say(e);
+    }
+  };
+  const putBack = async (items: { keys?: string[]; series?: string[] }) => {
+    try {
+      await call("meeting.call_unhide", items);
+      await loadHides();
+    } catch (e) {
+      say(e);
+    }
+  };
+  const hideRows = (rs: readonly CallRow[]) => {
+    const keys = rs.filter((r) => r.other && r.occurrenceId === null).map((r) => r.other!.key);
+    if (keys.length) void hideItems({ keys }, CLOSE_TEXT.hidden(keys.length));
+  };
+  // MC-4: bumped when the list closes or reopens calls, so a call's page open beside it reads itself again.
+  const [closedStamp, setClosedStamp] = useState(0);
+  const skipAllCalls = async (ids: readonly number[]) => {
+    if (!ids.length) return;
+    try {
+      const d = await call<{ calls: { occurrenceId: number; skipped: { id: number; was: "open" | "failed" }[] }[] }>("meeting.skip_all", { occurrenceIds: ids });
+      setTicked(new Set());
+      await loadMine();
+      changed();
+      setClosedStamp((n) => n + 1);
+      // One call closed from the list: its closed page is what shows beside it, not the next call in line.
+      if (ids.length === 1 && !narrow) go({ occurrence: ids[0]! }, true);
+      const items = d.calls.flatMap((c) => c.skipped);
+      undoable?.(ids.length === 1 ? CLOSE_TEXT.closedOne : CLOSE_TEXT.closedMany(ids.length), async () => {
+        if (items.length) await call("meeting.unskip_all", { items });
+        await loadMine();
+        changed();
+        setClosedStamp((n) => n + 1);
+      });
+    } catch (e) {
+      say(e);
+    }
+  };
+  /** Review from a row: with a client and a Teams transcript, the transcript is fetched and read with no setup; else the setup or the client choice. */
+  const reviewRow = async (r: CallRow) => {
+    const c = r.other;
+    const key = clientOn(r);
+    if (!c || r.recording || !key || r.check !== "yes") return openRow(r);
+    setRowStatus((x) => ({ ...x, [r.key]: { busy: CLOSE_TEXT.reviewing, error: null, occurrenceId: null } }));
+    let occ: number | null = null;
+    try {
+      occ = (await call<{ occurrenceId: number }>("meeting.call_start", { key: c.key, startAt: c.startAt, endAt: c.endAt, clientKey: key })).occurrenceId;
+      const f = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ });
+      changed();
+      if (f.outcome !== "found") {
+        setRowStatus((x) => ({ ...x, [r.key]: { busy: null, error: FETCH_WORDS[f.outcome as Exclude<FetchOutcome, "found">] ?? f.message, occurrenceId: occ } }));
+        await loadMine();
+        return;
+      }
+      setRowStatus((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== r.key)));
+      await Promise.all([loadMine(), loadOthers()]);
+      fromList.current = narrow;
+      go({ occurrence: occ });
+    } catch (e) {
+      setRowStatus((x) => ({ ...x, [r.key]: { busy: null, error: errText(e), occurrenceId: occ } }));
+    }
+  };
+  const tickRow = (k: string, on: boolean) => setTicked((t) => { const n = new Set(t); if (on) n.add(k); else n.delete(k); return n; });
+  const tickedRows = rows.filter((r) => ticked.has(r.key) && r.bucket === "open");
+  const tickedHide = tickedRows.filter((r) => r.other && r.occurrenceId === null);
+  const tickedClose = tickedRows.filter((r) => r.occurrenceId !== null && r.left?.open);
+  const seriesTicked = (e: SeriesEntry) => e.rows.every((r) => ticked.has(r.key));
+  const askSkipAll = (r: CallRow) => {
+    if (!r.occurrenceId || !r.left?.open) return;
+    const words = r.left.open === r.left.all ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(r.left.open);
+    if (window.confirm(`${words}: ${r.name}? ${CLOSE_TEXT.skippedNone}`)) void skipAllCalls([r.occurrenceId]);
+  };
+  // X: hides the row in focus, or on a call with proposals asks to skip all and close. Never while typing.
+  const xRef = useRef<(k: string) => void>(() => {});
+  xRef.current = (k: string) => {
+    const r = rows.find((x) => x.key === k);
+    if (!r || r.bucket !== "open") return;
+    if (r.occurrenceId !== null) askSkipAll(r);
+    else if (r.other) hideRows([r]);
+  };
+  const weekRow = (r: CallRow, inSeries = false) => (
+    <WeekRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)}
+      clients={clients} client={clientOn(r)} onClient={(k) => setChosen((x) => ({ ...x, [r.key]: k }))} onReview={() => void reviewRow(r)} onHide={() => hideRows([r])}
+      status={rowStatus[r.key] ?? null} onUpload={() => { const st = rowStatus[r.key]; if (st?.occurrenceId) go({ occurrence: st.occurrenceId, view: "upload" }); }} inSeries={inSeries} />
+  );
+  const entryRow = (e: Entry, label: string) => e.kind === "one" ? weekRow(e.row) : (
+    <SeriesRow key={e.key} e={e} weekLabel={label} expanded={expanded.has(e.key)} onExpand={(on) => setExpanded((x) => { const n = new Set(x); if (on) n.add(e.key); else n.delete(e.key); return n; })}
+      onHideEvery={() => void hideItems({ series: [e.seriesKey] }, CLOSE_TEXT.hiddenEvery(e.name))} onHideWeek={() => hideRows(e.rows)}
+      ticked={seriesTicked(e)} onTick={(on) => setTicked((t) => { const n = new Set(t); for (const r of e.rows) if (on) n.add(r.key); else n.delete(r.key); return n; })}>
+      {e.rows.map((r) => weekRow(r, true))}
+    </SeriesRow>
+  );
+  const closedRows = show === "closed" ? closedList(rows, client) : [];
+  const hiddenRows = show === "hidden" ? hiddenList(rows, client) : [];
+  const nothingHere = show === "open" ? !open.needs.length && !open.weeks.length && !open.foldCount : show === "closed" ? !closedRows.length : !hiddenRows.length && !goneCount;
+
   const list = (
     <section className="calls-list" aria-labelledby="calls-title" data-calls-list="" ref={listRef}>
       <header className="calls-head">
@@ -290,6 +437,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           <span className="muted">{CALL_LIST.sub}</span>
         </div>
         <span className="calls-head-actions">
+          <button type="button" className="mini quiet" disabled={checkInfo.busy} onClick={() => (void loadOthers(), void runCheck({ refresh: true }))} data-calls-refresh="">{CLOSE_TEXT.refresh}</button>
           <button type="button" className="mini" onClick={() => (setSetupKey(null), setAdding(true), at.occurrence ? go({ occurrence: null }) : undefined)} aria-expanded={adding}>{CALLS_TEXT.add}</button>
           {!twoStep && (
             <button type="button" className="mini quiet icon-only" data-calls-hide="" onClick={() => fold(true)} aria-label={CALL_LIST.hideList} title={CALL_LIST.hideList}>
@@ -349,25 +497,72 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>
         ) : data && !rows.length && (others || othersErr) ? (
           <p className="muted calls-note">{CALL_LIST.none(others?.days ?? OTHER_CALL_DAYS)}</p>
-        ) : rows.length > 0 && !shown.length ? (
+        ) : rows.length > 0 && nothingHere ? (
           <p className="muted calls-note">{CALL_LIST.noneHere}</p>
         ) : null}
-        {byDay(shown).map((d) => (
-          <section key={d.day} className="calls-day" aria-labelledby={`calls-day-${d.day}`} data-day={d.day}>
-            <h2 id={`calls-day-${d.day}`} className="calls-day-head">{dayHeading(d.day, today)}</h2>
+        {show === "open" && checkInfo.failed && (
+          <p className="muted calls-note calls-check-line" role="status" data-calls-check="failed">
+            {CLOSE_TEXT.checkFailed} <button type="button" className="link-btn" onClick={() => void runCheck({ refresh: true })}>{CLOSE_TEXT.checkAgain}</button>
+          </p>
+        )}
+        {show === "open" && checkInfo.off && <p className="muted calls-note calls-check-line" role="status" data-calls-check="off">{CLOSE_TEXT.tenantOff}</p>}
+        {show === "open" && !checkInfo.failed && checkInfo.unchecked > 0 && (
+          <p className="muted calls-note calls-check-line" role="status" data-calls-check="more">
+            {CLOSE_TEXT.notChecked(checkInfo.unchecked)} <button type="button" className="link-btn" disabled={checkInfo.busy} onClick={() => void runCheck({ more: true })}>{CLOSE_TEXT.checkMore(Math.min(40, checkInfo.unchecked))}</button>
+          </p>
+        )}
+        {rowStatus._page?.error && <p className="error-line calls-note" role="alert">{rowStatus._page.error}</p>}
+        <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} />
+        {show === "open" && open.needs.length > 0 && (
+          <section className="calls-day calls-needs" aria-labelledby="calls-needs" data-section="needs">
+            <h2 id="calls-needs" className="calls-day-head">{CLOSE_TEXT.needs} <span className="calls-head-count">{open.needs.length}</span></h2>
             <ul className="calls-rows">
-              {d.rows.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} zone={zone} onOpen={() => openRow(r)} />)}
+              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
             </ul>
           </section>
+        )}
+        {show === "open" && open.weeks.map((w) => (
+          <section key={w.week} className="calls-day" aria-labelledby={`calls-week-${w.week}`} data-section={`week-${w.week}`}>
+            <h2 id={`calls-week-${w.week}`} className="calls-day-head">
+              {w.label}
+              {w.closed > 0 && <button type="button" className="link-btn calls-head-note" onClick={() => setList("closed", client)}>{CLOSE_TEXT.closedCount(w.closed)}</button>}
+              {w.stillOpen > 0 && <span className="calls-head-note amber" data-still-open="">{CLOSE_TEXT.stillOpen(w.stillOpen)}</span>}
+            </h2>
+            {w.entries.length > 0 && <ul className="calls-rows">{w.entries.map((e) => entryRow(e, w.label))}</ul>}
+          </section>
         ))}
-        {data && !othersErr && !others && <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>}
-        {older.length > 0 && (
-          <Fold id="older" title={CALL_LIST.older(older.length)} sub={CALL_LIST.olderSub}>
-            <ul className="calls-rows">
-              {older.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} zone={zone} onOpen={() => openRow(r)} withDay={dayLabel(r.day)} />)}
-            </ul>
+        {show === "open" && open.foldCount > 0 && (
+          <Fold id="no-transcript" title={CLOSE_TEXT.fold(open.foldCount)} sub={CLOSE_TEXT.foldSub}>
+            <ul className="calls-rows">{open.fold.map((e) => entryRow(e, ""))}</ul>
           </Fold>
         )}
+        {show === "closed" && closedRows.length > 0 && (
+          <ul className="calls-rows" data-section="closed">
+            {closedRows.map((r) => <ClosedRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} onOpen={() => openRow(r)} />)}
+          </ul>
+        )}
+        {show === "hidden" && (
+          <>
+            {hiddenRows.length > 0 && (
+              <ul className="calls-rows" data-section="hidden">
+                {hiddenRows.flatMap((r, i) => {
+                  const every = !!r.seriesKey && !!hides?.series.has(r.seriesKey);
+                  // A series hidden for every one is one row, at its newest call.
+                  if (every && hiddenRows.findIndex((x) => x.seriesKey === r.seriesKey) !== i) return [];
+                  const count = every ? hiddenRows.filter((x) => x.seriesKey === r.seriesKey).length : 1;
+                  return [<HiddenRow key={r.key} r={r} every={every} count={count} zone={zone} onPutBack={() => void putBack(every ? { series: [r.seriesKey!] } : { keys: [r.other!.key] })} />];
+                })}
+              </ul>
+            )}
+            {goneCount > 0 && client === null && (
+              <p className="muted calls-note" data-hidden-gone="">
+                {CLOSE_TEXT.hiddenGone(goneCount)} <button type="button" className="link-btn" onClick={() => void putBack({ ...(gone.keys.length ? { keys: gone.keys } : {}), ...(gone.series.length ? { series: gone.series } : {}) })}>{CLOSE_TEXT.putBackAll}</button>
+              </p>
+            )}
+            <p className="muted calls-note">{CLOSE_TEXT.hiddenWhy}</p>
+          </>
+        )}
+        {data && !othersErr && !others && <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>}
         {data && (
           <Fold id="client-calls" title={CALL_LIST.clientCalls(registered.length)} sub={CALL_LIST.clientCallsSub}>
             {registered.length === 0 && <p className="muted">{CALLS_TEXT.noClientCalls}</p>}
@@ -399,7 +594,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       </div>
     );
   else if (at.occurrence)
-    beside = <ReviewScreen key={at.occurrence} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
+    beside = <ReviewScreen key={`${at.occurrence}:${closedStamp}`} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
   else if (setupRow?.other)
     beside = (
       <div className="calls-beside-pad">
@@ -408,7 +603,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           key={setupRow.key}
           call={setupRow.other}
           clients={clients}
-          suggested={suggestClient(setupRow.other.name, clients, blockClientAt(setupRow.other.startAt))}
+          suggested={clientOn(setupRow)}
           zone={zone}
           pocket={setupRow.pocket}
           onCancel={backToList}
@@ -444,7 +639,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   else
     beside = (
       <div className="calls-beside-pad calls-empty">
-        {loaded && !rows.length && !older.length ? (
+        {loaded && !rows.length ? (
           <>
             <p>{CALL_LIST.emptyBeside}</p>
             <button type="button" className="mini primary" onClick={() => setAdding(true)}>{CALLS_TEXT.add}</button>
@@ -495,36 +690,6 @@ function Fold({ id, title, sub, children }: { id: string; title: string; sub: st
   );
 }
 
-/**
- * One call in the list: two lines. First, when it started, its name and its state in words. Second, the client it is
- * about with its color (or No client yet), how long, how many people, where its transcript came from, and the weekly
- * mark on a registered call. The whole row is one button that opens the call beside the list.
- */
-function CallRowButton({ r, open, colors, zone, onOpen, withDay }: { r: CallRow; open: boolean; colors: Record<string, string>; zone: string; onOpen: () => void; withDay?: string }) {
-  const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
-  const bits = [r.clientName ?? CALL_LIST.noClient, lengthLabel(r.minutes), r.people !== null ? CALLS_TEXT.people(r.people) : null, r.source].filter(Boolean);
-  return (
-    <li>
-      <button type="button" className={`calls-row${open ? " open" : ""}${r.state.needsMe ? " needs" : ""}`} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
-        <span className="calls-row-one">
-          <span className="calls-time">{withDay ? `${withDay} · ` : ""}{timeOf(r.startAt, zone)}</span>
-          <span className="calls-name">{r.name}</span>
-          <span className={`calls-state${r.state.needsMe ? " needs" : ""}`}>{r.state.label}</span>
-        </span>
-        <span className="calls-row-two">
-          <span className={`swatch${color ? "" : " none"}`} aria-hidden="true" />
-          <span className="calls-meta">{bits.join(" · ")}</span>
-          {r.weekly && (
-            <span className="calls-weekly">
-              <RepeatMark />
-              {CALL_LIST.weekly} · {r.weekly}
-            </span>
-          )}
-        </span>
-      </button>
-    </li>
-  );
-}
 
 /** "Tue, Nov 10 · 2:00 PM · 45 min": a call's day, start and length in my zone. */
 const whenLine = (startAt: string, endAt: string, zone: string) => {
@@ -944,6 +1109,27 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
   const batch = callBatch(tickedDevops, ready);
   const sendable = [...batch.now, ...batch.later];
   const tickedPromises = tickedRows.filter((p) => p.body.kind === "commitment");
+  // MC-4: closed once nothing is undecided; Skip all and close from the head, with Undo; an open call from before this
+  // week says when its transcript goes (30 days after the call).
+  const closedAt = closedAtOf(r.proposals.map((p) => ({ state: p.state, decidedAt: p.decidedAt ?? null })));
+  const seeSkipped = KINDS.some((k) => unfolded.has(`${k}:skipped`));
+  const goesOn = weekOf(o.date, today) !== "this" ? dayLabel(Temporal.PlainDate.from(o.date).add({ days: 30 }).toString()) : null;
+  const skipAllHere = async () => {
+    setBusy(true);
+    try {
+      const d = await call<{ calls: { skipped: { id: number; was: "open" | "failed" }[] }[] }>("meeting.skip_all", { occurrenceIds: [o.id] });
+      const items = d.calls.flatMap((c) => c.skipped);
+      await load();
+      undoable?.(CLOSE_TEXT.closedOne, async () => {
+        if (items.length) await call("meeting.unskip_all", { items });
+        await load();
+      });
+    } catch (e) {
+      setNote(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -951,7 +1137,8 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
         <BackHead onBack={onBack} title={`Update ${m.clientName}'s plan`} sub={`${m.name} · ${dayLabel(o.date)}`} />
         {r.transcript || r.proposals.length ? (
           <div className="mtg-filter-row">
-            {view !== "transcript" && r.proposals.length > 0 && (
+            {/* MC-4: a closed call has nothing to filter; its kinds' counts would all read 0. */}
+            {view !== "transcript" && open.length > 0 && (
               <div className="seg mtg-filter" role="group" aria-label="Show">
                 {CALL_FILTERS.map((f) => (
                   <button key={f.key} type="button" className={`seg-btn${(filter ?? "all") === f.key ? " on" : ""}`} aria-pressed={(filter ?? "all") === f.key} onClick={() => onPlace(f.key === "all" ? undefined : { filter: f.key })}>
@@ -978,6 +1165,27 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
           </div>
         ) : null}
       </div>
+      {view !== "transcript" && r.proposals.length > 0 && (closedAt !== null ? (
+        // MC-4: a closed call says when it closed and what came of it; what was skipped is one press away, and putting one back opens the call again.
+        <section className="mtg-closed" aria-labelledby="mtg-closed-head" data-closed-page="">
+          <h3 id="mtg-closed-head">{CLOSE_TEXT.closedAt(whenOf(closedAt, zone))}</h3>
+          <p>{closedLine({ at: closedAt, done: outcomeOfCall(r.proposals.map((p) => ({ kind: p.body.kind, state: p.state }))), noTranscript: false })}</p>
+          {skipped > 0 && (
+            <>
+              <button type="button" className="link-btn" data-see-skipped="" aria-expanded={seeSkipped} onClick={() => setUnfolded((u) => { const n = new Set(u); for (const k of KINDS) if (seeSkipped) n.delete(`${k}:skipped`); else n.add(`${k}:skipped`); return n; })}>
+                {seeSkipped ? CLOSE_TEXT.hideSkipped : CLOSE_TEXT.seeSkipped(skipped)}
+              </button>
+              {editable && <p className="muted">{CLOSE_TEXT.putBackOpens}</p>}
+            </>
+          )}
+        </section>
+      ) : editable && open.length > 0 && (
+        <div className="mtg-open-head" data-open-head="">
+          <button type="button" className="mini" disabled={busy} onClick={() => void skipAllHere()} data-call-act="skip-all">{open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length)}</button>
+          <span className="muted">{CLOSE_TEXT.skippedNone}</span>
+          {goesOn && <span className="calls-head-note amber" data-transcript-goes="">{CLOSE_TEXT.goesIn(goesOn)}</span>}
+        </div>
+      ))}
       {r.pocket && <p className="mtg-pocket-note" role="note">{r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note}</p>}
       {view !== "transcript" && r.summary && r.summary.length > 0 && (
         // MC-2: what was discussed and decided, above the proposals, on every call.

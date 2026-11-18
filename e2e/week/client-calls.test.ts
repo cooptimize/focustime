@@ -102,9 +102,10 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     const { page, errors } = await freshPage(h);
     // MC-3: the address before Calls was a tab lands on Calls.
     await page.evaluate(() => (location.hash = "#/meetings"));
-    const series = page.locator("[data-call-row]").filter({ hasText: "Weekly status call" }).first();
+    // MC-4: in Needs you, with how many are left.
+    const series = page.locator("[data-section='needs'] [data-call-row]").filter({ hasText: "Northwind weekly status" }).first();
     await series.waitFor({ timeout: 30_000 });
-    const listed = Number(/Review (\d+) proposals/.exec((await series.textContent()) ?? "")?.[1]);
+    const listed = Number(/(\d+) left of/.exec((await page.locator("[data-section='needs'] li").first().textContent()) ?? "")?.[1]);
     await series.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
     const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);

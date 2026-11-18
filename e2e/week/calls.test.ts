@@ -22,15 +22,17 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls(\/|$)/);
     const rows = page.locator("[data-calls-list] [data-call-row]");
     await rows.first().waitFor({ timeout: 30_000 });
-    // The registered call is listed once a week, with its weekly mark (MC-2b: last week's ended with no transcript).
-    await expect(rows.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(2);
-    await expect(rows.filter({ hasText: "Northwind weekly status" }).first().textContent()).resolves.toContain("Weekly");
+    // MC-4: this week's registered call needs me (Needs you, how far along); last week's ended with no transcript, so it is Closed.
+    await expect(rows.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(1);
+    await expect(page.locator("[data-section='needs']").textContent()).resolves.toMatch(/Northwind weekly status[\s\S]*left of/);
 
     // Review a call on my calendar: the setup opens beside the list, suggests Northwind from its title; Teams is the
     // source. The newest first: this Monday's (last Monday's is further down).
     const model = rows.filter({ hasText: "Northwind data model review" }).first();
     const listedOnce = await rows.filter({ hasText: "Northwind data model review" }).count();
-    await expect(model.textContent()).resolves.toContain("Not reviewed");
+    // MC-4: Teams said it has a transcript; the row says which client FocusTime suggests.
+    const modelRow = page.locator("[data-calls-list] li").filter({ has: page.locator(".calls-name", { hasText: "Northwind data model review" }) }).first();
+    await expect.poll(() => modelRow.textContent(), { timeout: 30_000 }).toMatch(/Transcript in Teams[\s\S]*About Northwind/);
     // Keyboard: Esc closes the setup and puts focus back on the row; nothing about the call is in the address.
     await model.click();
     await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
@@ -55,7 +57,9 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     await expect.poll(() => rows.filter({ hasText: "Northwind data model review" }).first().getAttribute("aria-current"), { timeout: 30_000 }).toBe("true");
     await expect(rows.filter({ hasText: "Northwind data model review" }).count()).resolves.toBe(listedOnce);
 
-    // A call whose organizer turned transcripts off: plain words, pointing to the upload.
+    // A call whose organizer turned transcripts off: plain words, pointing to the upload. MC-4: Teams said it has no
+    // transcript, so it is in the fold, and everyone on it is at Cooptimize: nothing is suggested.
+    await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
     await rows.filter({ hasText: "Proposal review with Jordan" }).first().click();
     const s2 = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
     await s2.getByLabel("Which client is this call about?").selectOption({ index: 1 });

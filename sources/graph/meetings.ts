@@ -47,13 +47,36 @@ export function graphFailureOf(e: unknown): GraphFailure | null {
   return null;
 }
 
+/**
+ * MC-4: why a request is asked of the gate. "read" (the default) is every read there was before: the online meeting, the
+ * transcripts and one transcript's text. "exists" is only whether a call on my own calendar has a transcript: the
+ * online meeting of its join link and its transcripts' ids and times, never a transcript's text.
+ */
+export type GatePurpose = "read" | "exists";
+export type GateQuery = { joinUrl?: string; onlineMeetingId?: string; purpose?: GatePurpose };
 export type MeetingGate = {
   /**
-   * True only for a join link or online meeting id of a registered, Automatic, home-tenant series, or (MC-2) of the one
-   * call this sign-in's person pressed Review on, while that press is open.
+   * For "read": true only for a join link or online meeting id of a registered, Automatic, home-tenant series, or (MC-2)
+   * of the one call this sign-in's person pressed Review on, while that press is open. For "exists" (MC-4): true only for
+   * the calls on this person's own calendar their own opening of Calls (or Refresh) is checking, while it runs.
    */
-  allowed: (q: { joinUrl?: string; onlineMeetingId?: string }) => Promise<boolean>;
+  allowed: (q: GateQuery) => Promise<boolean>;
 };
+
+/** MC-4: the tenant's administrator turned Graph's access to transcripts off (403 GraphAccessToTranscriptsDisabled). */
+export class TranscriptsOff extends HttpError {
+  constructor() {
+    super(403);
+    this.name = "TranscriptsOff";
+  }
+}
+
+/** MC-4: what the check says of one call: a transcript, none, the tenant's setting off, or the request failed. */
+export type ExistsAnswer = "yes" | "no" | "off" | "failed";
+/** MC-4: the calls of one check: each one's key, its join link (never leaves the server) and its own times. */
+export type ExistsAsk = { key: string; joinUrl: string; startAt: string; endAt: string };
+/** Graph's JSON batching takes 20 requests at most in one batch. */
+export const BATCH_MAX = 20;
 
 export type MeetingsDeps = {
   fetch: typeof fetch;
@@ -137,7 +160,9 @@ export function createMeetingsClient(d: MeetingsDeps) {
       return request(op, url, token, o, true);
     }
     if (!res.ok) {
-      await res.body?.cancel();
+      // MC-4: a 403 says whether it is the tenant's setting (only its inner error code is read; the body is never kept or logged).
+      if (res.status === 403 && /transcript/.test(op) && offIn(await res.json().catch(() => null))) throw new TranscriptsOff();
+      await res.body?.cancel().catch(() => {});
       throw new HttpError(res.status);
     }
     if (!o.text) return res.json().catch(() => null);
@@ -186,7 +211,7 @@ export function createMeetingsClient(d: MeetingsDeps) {
   }
 
   const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting,type";
-  const CALL_SELECT = "iCalUId,subject,organizer,attendees,onlineMeeting,start,end,isAllDay,isCancelled,isOrganizer,responseStatus";
+  const CALL_SELECT = "iCalUId,subject,organizer,attendees,onlineMeeting,start,end,isAllDay,isCancelled,isOrganizer,responseStatus,seriesMasterId";
 
   /** MC-2: one event of my calendar as a call (times in UTC), or null when Graph's answer lacks what it needs. */
   function callOf(e: GraphSeries): CalendarMeeting | null {
@@ -207,6 +232,8 @@ export function createMeetingsClient(d: MeetingsDeps) {
       key, subject: str(e.subject, 400)?.trim() || "(No title)", startAt: at(s), endAt: at(f), isAllDay: e.isAllDay === true, isCancelled: e.isCancelled === true, isOrganizer: mine,
       response: str(e.responseStatus?.response, 40) ?? "none", others, joinUrl: str(e.onlineMeeting?.joinUrl, 4000), organizerEmail: org,
       homeAttendees: [...new Set([...homeAttendees(e.attendees), ...(org && home(org) ? [org] : [])])],
+      seriesKey: str(e.seriesMasterId, 1000),
+      allHome: [...addrs].every(home),
     };
   }
 
@@ -334,10 +361,102 @@ export function createMeetingsClient(d: MeetingsDeps) {
       if (!(await d.gate.allowed({ onlineMeetingId }))) throw new MeetingRefused();
       return (await request("meetings_transcript", `${GRAPH}/me/onlineMeetings/${encodeURIComponent(onlineMeetingId)}/transcripts/${encodeURIComponent(transcriptId)}/content?$format=text/vtt`, d.meetingsToken, { accept: "text/vtt", text: true })) as string;
     },
+
+    /**
+     * MC-4: whether each of these calls on my own calendar has a transcript, and nothing more. Two kinds of request, each
+     * asked of the gate with the purpose "exists" first and sent in JSON batches of 20: the online meeting of a join link
+     * (its id only), then that meeting's transcripts (ids and times only, to tell one occurrence of a repeating meeting
+     * from another, the way a press does). Never a transcript's text. One join link is asked once however many of its
+     * occurrences are checked. Answers in memory only; the log has the op, the status and counts.
+     */
+    async transcriptsExist(asks: readonly ExistsAsk[]): Promise<Map<string, ExistsAnswer>> {
+      const out = new Map<string, ExistsAnswer>();
+      const links = [...new Set(asks.map((a) => a.joinUrl))];
+      for (const l of links) if (!(await d.gate.allowed({ joinUrl: l, purpose: "exists" }))) throw new MeetingRefused();
+      const idOf = new Map<string, string | null>();
+      for (let i = 0; i < links.length; i += BATCH_MAX) {
+        const part = links.slice(i, i + BATCH_MAX);
+        const res = await batch("meetings_exists_meeting", part.map((l) => `/me/onlineMeetings?$filter=${encodeURIComponent(`JoinWebUrl eq '${l.replace(/'/g, "''")}'`)}&$select=id`));
+        part.forEach((l, n) => {
+          const r = res[n]!;
+          if (r.status === 200) idOf.set(l, str((r.body as { value?: { id?: unknown }[] } | null)?.value?.[0]?.id, 1000));
+          else idOf.set(l, r.status === 404 ? null : "failed");
+        });
+      }
+      // Each meeting is asked with the join link Graph found it from (the gate checks that link again).
+      const linkOf = new Map<string, string>();
+      for (const [l, v] of idOf) if (typeof v === "string" && v !== "failed" && !linkOf.has(v)) linkOf.set(v, l);
+      const ids = [...linkOf.keys()];
+      for (const id of ids) if (!(await d.gate.allowed({ onlineMeetingId: id, joinUrl: linkOf.get(id)!, purpose: "exists" }))) throw new MeetingRefused();
+      const refsOf = new Map<string, TranscriptRef[] | ExistsAnswer>();
+      for (let i = 0; i < ids.length; i += BATCH_MAX) {
+        const part = ids.slice(i, i + BATCH_MAX);
+        const res = await batch("meetings_exists_transcripts", part.map((id) => `/me/onlineMeetings/${encodeURIComponent(id)}/transcripts?$select=id,createdDateTime`));
+        part.forEach((id, n) => {
+          const r = res[n]!;
+          if (r.status === 200) refsOf.set(id, ((r.body as { value?: { id?: unknown; createdDateTime?: unknown }[] } | null)?.value ?? []).map((t) => ({ id: str(t.id, 2000) ?? "", createdAt: str(t.createdDateTime, 40) ?? "", endAt: null })).filter((t) => t.id && t.createdAt));
+          else if (r.status === 403) refsOf.set(id, offIn(r.body) ? "off" : "no");
+          else refsOf.set(id, r.status === 404 ? "no" : "failed");
+        });
+      }
+      for (const a of asks) {
+        const id = idOf.get(a.joinUrl);
+        if (id === "failed") out.set(a.key, "failed");
+        else if (!id) out.set(a.key, "no");
+        else {
+          const refs = refsOf.get(id as string);
+          out.set(a.key, Array.isArray(refs) ? (pressTranscript(refs, a.startAt, a.endAt) ? "yes" : "no") : (refs ?? "failed"));
+        }
+      }
+      return out;
+    },
   };
+
+  /**
+   * MC-4: Graph JSON batching (POST /$batch, 20 requests at most), GETs only, on the meetings token. Each answer's status
+   * and body, in the order asked; a 401 for the batch is retried once with a fresh token, as `request` does.
+   */
+  async function batch(op: string, urls: readonly string[], retried = false): Promise<{ status: number; body: unknown }[]> {
+    if (urls.length > BATCH_MAX) throw new Error("A batch takes 20 requests at most");
+    const t = await d.meetingsToken();
+    const started = performance.now();
+    let res: Response;
+    try {
+      res = await d.fetch(`${GRAPH}/$batch`, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${t}` },
+        body: JSON.stringify({ requests: urls.map((url, i) => ({ id: String(i + 1), method: "GET", url })) }),
+        signal: AbortSignal.timeout(d.timeoutMs ?? 20_000),
+      });
+    } catch {
+      d.log({ source: "outlook", op, kind: "network" });
+      throw new NetworkError("network");
+    }
+    if (res.status === 401 && !retried) {
+      await res.body?.cancel().catch(() => {});
+      d.invalidate();
+      return batch(op, urls, true);
+    }
+    if (!res.ok) {
+      d.log({ source: "outlook", op, status: res.status, durationMs: performance.now() - started });
+      await res.body?.cancel().catch(() => {});
+      throw new HttpError(res.status);
+    }
+    const j = (await res.json().catch(() => null)) as { responses?: { id?: unknown; status?: unknown; body?: unknown }[] } | null;
+    const byId = new Map((j?.responses ?? []).map((r) => [String(r.id), { status: typeof r.status === "number" ? r.status : 0, body: r.body ?? null }]));
+    const out = urls.map((_u, i) => byId.get(String(i + 1)) ?? { status: 0, body: null });
+    d.log({ source: "outlook", op, status: res.status, count: urls.length, durationMs: performance.now() - started });
+    return out;
+  }
 }
 
 export type MeetingsClient = ReturnType<typeof createMeetingsClient>;
+
+/** MC-4: Graph's inner error code for the tenant's setting, read from an error body (nothing else of it). */
+function offIn(j: unknown): boolean {
+  const e = (j as { error?: { innerError?: { code?: unknown }; innererror?: { code?: unknown } } } | null)?.error;
+  return (e?.innerError?.code ?? e?.innererror?.code) === "GraphAccessToTranscriptsDisabled";
+}
 
 /** The transcript of one occurrence: the newest one created between its start and 12 hours after its end. */
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
+import { WeekCallsLine } from "./meetings/CallsToClose.tsx";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { CalEvent, Half, IsoDate } from "../week/types.ts";
@@ -2500,7 +2501,7 @@ export function App() {
                   promises={inboxToday?.items ?? []}
                   read={<ReadLine read={read} what="week" onRetry={retryRead} />}
                   busy={read !== null}
-                  sub={<><div className="pw-chips">{weekChips}</div>{weekSub}</>}
+                  sub={<><WeekCallsLine today={zonedNow(userZone(data)).toPlainDate().toString()} weekStart={askedWeek} zone={userZone(data)} /><div className="pw-chips">{weekChips}</div>{weekSub}</>}
                   onPrev={() => changeWeek(-1)}
                   onNext={() => changeWeek(1)}
                   onThisWeek={askedWeek !== data.today.weekStart ? goToday : null}
@@ -2525,6 +2526,8 @@ export function App() {
                 </button>
               )}
               {weekendNote && <span className="weekend-note">{weekendNote}</span>}
+              {/* MC-4: from Thursday, this week's calls still to close. */}
+              <WeekCallsLine today={zonedNow(userZone(data)).toPlainDate().toString()} weekStart={askedWeek} zone={userZone(data)} />
               {weekChips}
             </div>
             <ModeArea>
