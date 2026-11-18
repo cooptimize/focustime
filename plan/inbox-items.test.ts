@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemKey, lifecycleOf, needsYou, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeDayOf, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
+import { forToday, itemKey, railItems, type InboxItemView, lifecycleOf, needsYou, needsYouCount, parseKey, reasonOf, snoozeChoices, snoozeDayOf, viewCounts, viewsOf, type InboxFacts, type Mark } from "./inbox-items.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 const today = "2026-11-05";
@@ -111,4 +111,15 @@ describe("snooze (slice 3)", () => {
     expect(f.due).toBe("2026-11-04");
     expect(needsYouCount([{ facts: f, mark: m }], "2026-11-09", "2026-11-09T15:00:01Z")).toBe(1);
   });
+});
+
+describe("forToday (PH-2: a promise with a due day reaches the phone's Week)", () => {
+  const view = (o: Partial<InboxItemView>): InboxItemView => ({ key: "c1", kind: "promise", clientKey: null, at: "2026-11-03T08:00:00Z", views: ["promises"], title: "x", who: null, where: null, due: null, dueAt: null, itemId: null, late: false, done: false, snoozedUntil: null, ...o });
+  it("carries a promise due on a later day, but not a done, hidden or undated one", () => {
+    expect(forToday(view({ due: "2026-11-06" }))).toBe(true);
+    expect(forToday(view({ due: "2026-11-06", done: true }))).toBe(false);
+    expect(forToday(view({ due: "2026-11-06", views: [] }))).toBe(false);
+    expect(forToday(view({}))).toBe(false);
+  });
+  it("the rail still shows only timed or late ones", () => expect(railItems([view({ due: "2026-11-06" })])).toEqual([]));
 });

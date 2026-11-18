@@ -141,12 +141,13 @@ describe.skipIf(!CHROMIUM)("RS-2: Day shows the catch-up day (browser, demo)", (
     await workingFriday(page);
     expect((await call(page, "pick.add", { date: FRI, half: "AM", clientKey: "Northwind", intention: "Reply to the release question", size: "S" })).ok).toBe(true);
     await page.reload();
-    // PH-1: today on the phone has no day bar; its to-dos are under the Now card.
-    await goTo(page, `#/day/${FRI}`, page.locator(".ph-todos").first());
-    const heads = page.locator(".ph-todos .ph-block-head");
+    // PH-2: the day's blocks as sections, each named Catch-up.
+    await goTo(page, `#/day/${FRI}`, page.locator(".dg").first());
+    const heads = page.locator(".dg-block[data-half] .dg-name");
     await expect.poll(() => heads.count()).toBe(2);
-    await expect.poll(async () => (await heads.allInnerTexts()).map((t) => t.split("·")[0]!.trim())).toEqual(["Catch-up", "Catch-up"]);
-    await page.locator(".ph-todos", { hasText: "Reply to the release question" }).waitFor();
+    await expect.poll(() => heads.allInnerTexts()).toEqual(["Catch-up", "Catch-up"]);
+    // Today, so it may be the Now card's next to-do (not listed twice): somewhere on Day.
+    await page.locator(".today-view", { hasText: "Reply to the release question" }).waitFor();
     await page.close();
   }, T);
 

@@ -18,7 +18,7 @@ async function go(page: Page, hash: string): Promise<void> {
   await page.reload();
   await page.waitForSelector(".topbar");
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-  await page.locator("[data-drop], .tt-block, .pn-card, .ph-block").first().waitFor({ timeout: 30_000 });
+  await page.locator("[data-drop], .tt-block, .pn-card, .ph-block, .pw-tile").first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(400);
 }
 
@@ -78,9 +78,11 @@ describe.skipIf(!CHROMIUM)("NL-1: the now mark only on a block under way", () =>
       // The Now card keeps its own words before and after the day; a block reads as under way only inside its hours.
       await expect(phone.locator(".pn-card").first().getAttribute("class")).resolves.toContain(`pn-${c.phone}`);
       expect(await phone.locator(MARK).count()).toBe(0);
+      // PH-2: the phone's Week is day rows; the block under way is the tile with the outline and "Now".
       await go(phone, "#/week");
-      const wk = await marked(phone);
-      expect(wk.filter((k) => k.startsWith(WED))).toEqual(cards);
+      const now = await phone.locator(".pw-row.today .pw-tile.now").evaluateAll((els) => els.map((e) => (/, morning:/.test(e.getAttribute("aria-label")!) ? "AM" : "PM")));
+      expect(now.map((h) => `${WED}:${h}`)).toEqual(cards);
+      expect(await phone.locator(".pw-tile.now").count()).toBe(cards.length);
       await phone.close();
     }, T);
   }

@@ -73,8 +73,9 @@ Where each screen lives and what it reads. Every read is one action, so the assi
 
 | Screen | UI | Reads | Rules |
 |---|---|---|---|
-| Day | `ui/Day.tsx`, `ui/DayTimeline.tsx`, `ui/dayFold.tsx`, `ui/DayFoldLine.tsx`, `ui/PhoneDay.tsx`, on the phone `ui/phone/PhoneScreens.tsx` | `week.load`, `inbox.today` | `plan/blockpanel.ts`, `plan/timeline.ts`, `plan/cardfold.ts`, `plan/day-fold.ts`, `plan/phonenow.ts`, `plan/phone-now.ts` |
+| Day | `ui/Day.tsx`, `ui/DayTimeline.tsx`, `ui/dayFold.tsx`, `ui/DayFoldLine.tsx`, `ui/PhoneDay.tsx`, on the phone `ui/phone/PhoneScreens.tsx` and `ui/phone/PhoneDayGlance.tsx` (PH-2) | `week.load`, `inbox.today` | `plan/blockpanel.ts`, `plan/timeline.ts`, `plan/cardfold.ts`, `plan/day-fold.ts`, `plan/phonenow.ts`, `plan/phone-now.ts` |
 | The phone's bar, More, Desktop version | `ui/phone/PhoneScreens.tsx`, `ui/PhoneVersion.tsx`, `ui/desktop-version.ts`, `public/prefs.js` | `inbox.today`, `meeting.mine` | `plan/phone-now.ts` |
+| The phone's Week and its Inbox one at a time (PH-2) | `ui/phone/PhoneWeek.tsx`, `ui/phone/InboxOne.tsx` (drawn by `ui/App.tsx` and `ui/inbox/InboxPage.tsx` on the phone) | `week.load`, `inbox.today`, `inbox.list` | `plan/phone-week.ts`, `plan/phone-now.ts` (`needsQueue`) |
 | Week | `ui/WeekGrid.tsx`, `ui/BlockCard.tsx` | `week.load` | `week/`, `plan/weekdays.ts`, `plan/evening.ts`, `plan/boardsuggest.ts` |
 | Block panel | `ui/BlockPanel.tsx` | `week.load`, its Add box's searches | `plan/blockpanel.ts`, `plan/addwork.ts` |
 | Backlog | `ui/ahead/` (`Ahead.tsx`, `Grid.tsx`, `Gantt.tsx`, `Toolbar.tsx`, `Bulk.tsx`) | `ahead.load`, `ahead.people` | `plan/backlog-list.ts`, `plan/gantt-tree.ts`, `plan/ahead-view.ts`, `plan/backlog-status.ts`, `plan/readiness.ts`, `plan/fixnext.ts` |
@@ -103,7 +104,7 @@ The first screen downloads only what Day, Week, the top bar and the loader need.
 | `shared` | What two or more of those screens use and `main` doesn't hold (date and time fields, the cell popover, the people field) | With the first screen that needs it |
 | `guide-text` | The Guide's words and frame, shared by the Guide, its tours and these docs | With the first of those |
 | The Temporal polyfill | `temporal-polyfill` | Only in a browser without Temporal, before anything else runs |
-| `PhoneScreens` (script and styles) | The phone's bar, the parts of its Day (the Now card, Next, the one thing) and More (PH-1): about 3 kB and 2 kB gzipped | On a phone only, asked for at start by `ui/main.tsx`; the phone is drawn once it is in |
+| `PhoneScreens` (script and styles) | The phone's bar, its Day (the Now card, Next, the one thing, and since PH-2 a day's sections), its Week in day rows, its Inbox one at a time and More: about 25 kB of script and 18 kB of styles, 8 kB and 4 kB gzipped | On a phone only, asked for at start by `ui/main.tsx`; the phone is drawn once it is in |
 
 - **The one list** of screens that load on demand is `LOADERS` in `ui/screens.ts` (their names alone are in `ui/screen-names.ts`). `locScreens` in `ui/nav.ts` says which of them a place needs.
 - **How the files are cut** is `scripts/split-chunks.ts`, used by `vite.config.ts`: `main` is read from the module graph (everything reachable from `ui/main.tsx` without an `import()`), so no list is kept by hand. Styles a screen imports in its own file travel with that screen.

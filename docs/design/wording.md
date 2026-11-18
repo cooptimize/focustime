@@ -396,7 +396,7 @@ From `plan/call-words.ts` (`CALL_LIST`). A row's state keeps MC-1d's and MC-2's 
 - The phone's bar: **"Day"**, **"Week"**, **"Capture"**, **"Inbox"** (read aloud **"Inbox, 5"**), **"More"** (read aloud **"More: a source needs attention"** or **"More: new notifications"** with its dot). The VM: **"VM Stopped"**, **"VM Running"**. The top bar: the date (**"Mon, Nov 2"**), the VM's word, **"Ask"** (**"Ask the assistant"**).
 - The Now card: **"Now"**, **"until 12:30"**, **"3h left · a 45 min meeting at 11:00"**, **"In Proposal review with Jordan until 11:45"**, the bar read as **"14% of the block has gone"**, **"Done: <title>"** for the box, **"Start focus"**, **"Focusing"**, **"Done"**, **"Stop"**, **"Nothing planned for this block."** with **"Add"** (**"Add to <client>"**). After the day: **"Close out"**.
 - Next: **"Next"**, then **"11:00 AM Proposal review with Jordan · 45 min"**, **"12:30 PM Northwind · At risk · Dentist 12:00"**.
-- The one thing: **"Needs you"**, then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
+- The one thing: **"Needs you"** (**"Inbox"** since PH-2), then **"Late"**, **"Due today"**, **"From a chat"** or **"Needs you"**, its title, **"1 of 5"**. Then **"Today"** over the to-dos.
 - More: **"Backlog"**, **"Status"** with **"2 features need your update"**, **"Calls"** with **"1 call to review"** (MC-2: was **"Client calls"**), **"Code"**, **"My VM"** with its state or **"Not set up"**, **"Settings"**, **"Guide"**, **"Everything else"**, **"Desktop version"** with **"The whole app as on a computer"**.
 - Everything else: **"Notifications"** (**"2 new"**), **"Sources"** (**"All sources live"**, **"Some data is older"**, **"A source needs attention"**), **"Focus"** (**"Start a session or a break"**), **"Midday check-in"**, **"Close out"**, the person's name, **"Install app"**, **"Technical docs"**, **"About"**, **"Admin"**, and **"Back to More"**.
 - The way back: **"Phone version"** (**"Back to the phone version"**).
@@ -517,6 +517,17 @@ The meeting words are in one place, `MEETING_WORDS` in `plan/call-words.ts`; the
 - A meeting that is one of a series on the calendar: the repeat icon, **"Repeats"** to a screen reader and on hover. Where a rail has no room for it, its hover ends **"· Repeats"**.
 - A registered call: its type beside its state, **"Weekly status call · Review 11 proposals"** (the type gives way first where it is narrow); its label **"Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals"**; its menu's first group is the type; the menu title **"<meeting> · Weekly status call · Review 11 proposals"**. A call never also shows Repeats.
 - The register form, under the type: **"Both types are read the same way. The type is how the call is named on Day, Week and the call's page."**
+
+## PH-2 words (Nov 17)
+
+All in `plan/phone-week.ts` (`WEEK_TEXT`) and `plan/phone-now.ts` (`PHONE_TEXT.one`).
+
+- Week's header: the dates (**"Nov 2–6, 2026"**, read as **"Week of Nov 2–6, 2026"**), **"Previous week"**, **"Next week"**, **"This week"**. Rows read as **"Days of the week. Tap a day or a block to open it; swipe sideways to change the week."**
+- A row: **"Tue"**, **"Nov 3"**, then the due badge's words: **"Due today"**, **"Due tomorrow"**, **"Due Fri · 2"**.
+- A tile: the client, **"Open"**, **"Catch-up"**, **"PTO"**, **"No working hours"**; its line: **"Now · 2 to-dos"**, **"At risk · Dentist 12:00"**, **"1 done · 2 not done"**, **"3 to-dos"**, **"1 to-do"**, **"1 of 3 to-dos done"**, **"3 done"**, **"Nothing planned"**. One tile across: **"You're off"**, the holiday's name over **"You're off"**, **"Weekend"** with **"7:00 Deploy · 2 more"**. **"Evening"** with its first thing. Read as **"Tuesday, November 3, morning: Northwind. Now · 2 to-dos. Open Tue"**.
+- A day: **"Wed, Nov 4"**, **"Previous day"**, **"Next day"**, **"Today"**, **"Week"** (**"Back to Week"**). A section's name read as **"Northwind, morning: open the block"**; **"At risk · <reason>"**; **"Done: <title>"**; the size (**"1h"**, or what's left); **"Nothing planned"**; **"Nothing planned Tuesday."**; the card's **"3 meetings · 2h 30m · 1h 45m free"** or **"No meetings"**; **"Add"** (**"Add to Northwind"**); **"Evening"**.
+- The Inbox one at a time: **"Inbox"**, **"1 of 5"**, the lists **"From chats 2"**, **"Promises 7"**, **"Captures 2"**, **"For Marcus Bell"**, the actions' own names (**"Close the loop"**, **"Create item"**, **"Dismiss"**…), **"More"** (**"More actions for <title>"**), **"Previous"**, **"Next"**, **"Up next"**, **"Nothing needs you now."**, and on the lists **"Back"** (**"Back to what needs you, one at a time"**).
+- Settings › Display on the phone: **"Day on this phone"**, **"Show Day as a timeline"**, **"The hours beside each block, with Timebox my day. Only this phone; your computer keeps its own."**
 
 ## DP-3 words (Nov 18)
 

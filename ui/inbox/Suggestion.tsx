@@ -22,6 +22,36 @@ export function suggestionActs(s: SuggestionRow, env: { form: (f: SuggestionForm
   ] as const;
 }
 
+/** Why it needs an item, what it would be, and the conversation's summary (the row open in place, and the phone's card). */
+export function SuggestionWhy({ s }: { s: SuggestionRow }): ReactNode {
+  return (
+    <>
+      <p className="ib4-why">
+        <span className="muted">Why it needs an item:</span> {s.why || "It asks for work no item covers yet."} <span className="muted">· Suggested as a {s.levelWord.toLowerCase()}: “{s.title}”</span>
+      </p>
+      {s.summary.trim() && <p className="ib-summary">{s.summary}</p>}
+    </>
+  );
+}
+
+/** The form a suggestion's action opened: Create item (then the write's preview) or Already covered (link it). */
+export function SuggestionForms({ s, form, setForm, onLinked }: { s: SuggestionRow; form: SuggestionForm; setForm: (f: SuggestionForm) => void; onLinked: (itemId: number, comment: boolean) => void }): ReactNode {
+  const writes = useDevOpsWrite();
+  if (form === "create")
+    return (
+      <div className="ib-form">
+        <DraftItem c={{ id: s.id, clientName: s.clientName, clientKey: s.clientKey }} commitmentId={null} onCancel={() => setForm(null)} onCreate={(change) => (setForm(null), void writes?.begin(s.clientKey, [change]))} />
+      </div>
+    );
+  if (form === "link")
+    return (
+      <div className="ib-form">
+        <ConvLink c={{ id: s.id, likely: null, canCreate: s.canCreate, clientName: s.clientName, clientKey: s.clientKey }} onCancel={() => setForm(null)} onPick={onLinked} />
+      </div>
+    );
+  return null;
+}
+
 export function SuggestionOpen({ s, form, setForm, tz, color, phone, onDismiss, onPromise, onNotWork, onLinked }: {
   s: SuggestionRow;
   form: SuggestionForm;
@@ -34,17 +64,13 @@ export function SuggestionOpen({ s, form, setForm, tz, color, phone, onDismiss, 
   onNotWork: () => void;
   onLinked: (itemId: number, comment: boolean) => void;
 }): ReactNode {
-  const writes = useDevOpsWrite();
   const [menu, setMenu] = useState(false);
   const acts = suggestionActs(s, { form: setForm, dismiss: onDismiss, promise: onPromise, notWork: onNotWork });
   const shown = acts.filter((a) => !("more" in a && a.more));
   const more = acts.filter((a) => "more" in a && a.more);
   return (
     <div className="ib4-open" style={{ "--c": color } as CSSProperties}>
-      <p className="ib4-why">
-        <span className="muted">Why it needs an item:</span> {s.why || "It asks for work no item covers yet."} <span className="muted">· Suggested as a {s.levelWord.toLowerCase()}: “{s.title}”</span>
-      </p>
-      {s.summary.trim() && <p className="ib-summary">{s.summary}</p>}
+      <SuggestionWhy s={s} />
       <div className="ib-acts ib4-acts" role="group" aria-label={`Actions for ${s.conversationTitle}`} data-tour="ib-acts">
         {shown.map((a) => (
           <button key={a.id} type="button" className={`ib-act${"primary" in a && a.primary ? " primary" : ""}`} data-act={a.id} onClick={a.run} aria-keyshortcuts={"key" in a ? a.key : undefined}>
@@ -73,16 +99,7 @@ export function SuggestionOpen({ s, form, setForm, tz, color, phone, onDismiss, 
           )}
         </span>
       </div>
-      {form === "create" && (
-        <div className="ib-form">
-          <DraftItem c={{ id: s.id, clientName: s.clientName, clientKey: s.clientKey }} commitmentId={null} onCancel={() => setForm(null)} onCreate={(change) => (setForm(null), void writes?.begin(s.clientKey, [change]))} />
-        </div>
-      )}
-      {form === "link" && (
-        <div className="ib-form">
-          <ConvLink c={{ id: s.id, likely: null, canCreate: s.canCreate, clientName: s.clientName, clientKey: s.clientKey }} onCancel={() => setForm(null)} onPick={onLinked} />
-        </div>
-      )}
+      <SuggestionForms s={s} form={form} setForm={setForm} onLinked={onLinked} />
       <section className="ib-messages" aria-label="Messages">
         <h3 className="ib-section">
           Messages{" "}

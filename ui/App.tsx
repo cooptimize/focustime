@@ -2238,6 +2238,8 @@ export function App() {
           setReduceMotion={(on) => void saveReduceMotion(on)}
           showPersonal={showPersonal}
           setShowPersonal={(show) => void saveShowPersonal(show)}
+          dayTimeline={dayTimeline}
+          setDayTimeline={(show) => void saveDayTimeline(show)}
           weekDays={weekDays}
           setWeekDays={(v) => void saveWeekDays(v)}
           catchUpName={catchUpWord(data.week.days)}
@@ -2356,6 +2358,7 @@ export function App() {
           onRetryRead={retryRead}
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
+          onWeek={(d) => goNav(navOf.week("board", mondayOf(d) === data.today.weekStart ? null : mondayOf(d)))}
           onTimebox={(d) => void timeboxDay(d)}
           timeboxAsk={timeboxAsk}
           timeline={dayTimeline}
@@ -2383,6 +2386,7 @@ export function App() {
           inbox={inboxToday?.items ?? null}
           needsYou={needsYouCount}
           onItem={(key) => goNav(navOf.inboxItem(key))}
+          onOneThing={(key) => goNav(navOf.inboxOne(key))}
           onNeedsYou={() => goNav(navOf.inboxView("needs_you"))}
           onLate={(client) => goNav(navOf.inboxLate(client))}
           onInbox={() => setView("follow_ups")}
@@ -2419,6 +2423,79 @@ export function App() {
           const past = data.weekStart < data.today.weekStart;
           // RS-2: the header names the week asked for at once; its blocks follow when its read is in.
           const askedWeek = read ? wantWeek! : data.weekStart;
+          // WK-5: the sub-line ("N to place · Review", the hidden days note) and "Next week is empty", for both layouts.
+          const weekSub = (
+            <>
+        {(thisWeek || hiddenWords) && (
+          // WK-5: the sub-line: "N to place · Review" and, beside it, the one quiet note about hidden days.
+          <div className="week-subline">
+            {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
+            {hiddenWords && (
+              <p className="hidden-days-note">
+                <span role="status">{hiddenWords}</span>
+                <span aria-hidden="true"> · </span>
+                <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label="Show hidden days" title="Shows them until you leave Week; the setting is under Week's View options">
+                  Show
+                </button>
+              </p>
+            )}
+          </div>
+        )}
+        {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
+          <p className="next-empty-line" role="status">
+            Next week is empty ·{" "}
+            <button type="button" className="link-btn" onClick={() => goNav(navOf.weekAdd(addWeeks(data.weekStart, 1)))}>
+              Open next week
+            </button>
+          </p>
+        )}
+            </>
+          );
+          // The borrowed time and after hours chips beside the week's dates.
+          const weekChips = (
+            <>
+              {(borrowWeek.totalMinutes > 0 || borrowWeek.unpaid > 0) && (
+                <button
+                  type="button"
+                  className="borrow-chip"
+                  title="Borrowed time: slipped focus you said you'd make up"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setBorrowMenuAt({ x: r.left, y: r.bottom + 4 });
+                  }}
+                >
+                  {borrowWeek.unpaid ? `${formatDuration(borrowWeek.unpaidMinutes)} to make up` : `Borrowed ${formatDuration(borrowWeek.totalMinutes)}, paid`}
+                </button>
+              )}
+              <AfterHoursChip after={data.afterHours} />
+              <LeftHolds holds={data.leftHolds} />
+            </>
+          );
+          // PH-2: on the phone, the whole week in day rows (ui/phone/PhoneWeek.tsx); a day opens Day on that date.
+          if (phone && PhoneM)
+            return (
+              // Its own key: Day's provider sits in the same place, and Week reads its suggestions when it opens, as on a computer.
+              <CarryProvider key="phone-week" {...carryProps(nowIso)}>
+                <PhoneM.PhoneWeek
+                  week={week}
+                  title={read ? weekLabel(askedWeek, weekDates(askedWeek)[4]!) : weekLabel(week.days[0]!.date, week.days[4]!.date)}
+                  today={localToday}
+                  now={nowIso}
+                  tz={userZone(data)}
+                  colors={data.clients}
+                  shown={shown}
+                  promises={inboxToday?.items ?? []}
+                  read={<ReadLine read={read} what="week" onRetry={retryRead} />}
+                  busy={read !== null}
+                  sub={<><div className="pw-chips">{weekChips}</div>{weekSub}</>}
+                  onPrev={() => changeWeek(-1)}
+                  onNext={() => changeWeek(1)}
+                  onThisWeek={askedWeek !== data.today.weekStart ? goToday : null}
+                  onOpenDay={(d) => goNav(navOf.todayOn(d === data.planDay.date ? null : d))}
+                />
+                {panelEl}
+              </CarryProvider>
+            );
           return (
         <>
           <header className="page-head week-head wd1-head">
@@ -2435,21 +2512,7 @@ export function App() {
                 </button>
               )}
               {weekendNote && <span className="weekend-note">{weekendNote}</span>}
-              {(borrowWeek.totalMinutes > 0 || borrowWeek.unpaid > 0) && (
-                <button
-                  type="button"
-                  className="borrow-chip"
-                  title="Borrowed time: slipped focus you said you'd make up"
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setBorrowMenuAt({ x: r.left, y: r.bottom + 4 });
-                  }}
-                >
-                  {borrowWeek.unpaid ? `${formatDuration(borrowWeek.unpaidMinutes)} to make up` : `Borrowed ${formatDuration(borrowWeek.totalMinutes)}, paid`}
-                </button>
-              )}
-              <AfterHoursChip after={data.afterHours} />
-              <LeftHolds holds={data.leftHolds} />
+              {weekChips}
             </div>
             <ModeArea>
               <CardsTimelineSwitch shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
@@ -2468,29 +2531,7 @@ export function App() {
             </ModeArea>
           </header>
       <CarryProvider {...carryProps(nowIso)}>
-      {(thisWeek || hiddenWords) && (
-        // WK-5: the sub-line: "N to place · Review" and, beside it, the one quiet note about hidden days.
-        <div className="week-subline">
-          {thisWeek && <ToPlaceNotice weekStart={data.weekStart} version={data} short={phone} onReview={() => addWork(null, null, true)} />}
-          {hiddenWords && (
-            <p className="hidden-days-note">
-              <span role="status">{hiddenWords}</span>
-              <span aria-hidden="true"> · </span>
-              <button type="button" className="link-btn" onClick={() => setRevealDays(true)} aria-label="Show hidden days" title="Shows them until you leave Week; the setting is under Week's View options">
-                Show
-              </button>
-            </p>
-          )}
-        </div>
-      )}
-      {thisWeek && data.nextWeekEmpty && nextWeekEmptyDay(localToday) && (
-        <p className="next-empty-line" role="status">
-          Next week is empty ·{" "}
-          <button type="button" className="link-btn" onClick={() => goNav(navOf.weekAdd(addWeeks(data.weekStart, 1)))}>
-            Open next week
-          </button>
-        </p>
-      )}
+      {weekSub}
       <div className={`wd1-body${shownPanel ? " with-panel" : ""}${read ? " reading" : ""}`} aria-busy={read === "loading"} inert={!!read}>
       <AddPanelCtx.Provider value={{ at: shownPanel, open: (d, h) => addWork(d, h) }}>
       <WeekGrid

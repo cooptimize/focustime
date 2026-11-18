@@ -205,12 +205,12 @@ export type Allowed = { re: RegExp; file?: RegExp; why: string };
  * Keep it short: a new entry needs a reason a reader of the screen would accept.
  */
 export const NAMES_ALLOWED: readonly Allowed[] = [
-  { re: /^Today ?$/, file: /^(ui\/(Day|WeekGrid|PhoneDay|StyleGuide|dateinput|stamp|inbox\/Detail|phone\/PhoneScreens)\.tsx?|plan\/(phone-now|call-words)\.ts)$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM), the phone's heading over today's to-dos (PH-1), Calls' heading over today's calls (MC-3): the day that is today" },
+  { re: /^Today ?$/, file: /^(ui\/(Day|WeekGrid|PhoneDay|StyleGuide|dateinput|stamp|inbox\/Detail|phone\/PhoneScreens)\.tsx?|plan\/(phone-now|phone-week|call-words)\.ts)$/, why: "the Today pill and button, the quick date and a stamp (Today 4:07 PM), the phone's Today button on another day's header and a row's today (PH-2), Calls' heading over today's calls (MC-3): the day that is today" },
   { re: /\bToday(?='s\b| is\b| isn't\b| \(| \d)/g, why: "today the day, starting a sentence: Today's blocks, Today is Sat, Today isn't planned yet, Today (Fri) is hidden" },
   { re: /\bToday(?= onboarding| it's)/g, file: /^sources\/demo\//, why: "the demo's example text: today as in these days" },
   { re: /\bLoop (closed|updates sent)\b/g, why: "Close the loop is the action's name today; these are its results" },
   { re: /\bWaiting on $/g, file: /^plan\/conversations\.ts$/, why: "waiting on a person, by name: a sentence, not the Inbox's old view" },
-  { re: /\bNeeds you\b/g, file: /^(ui\/Day\.tsx|plan\/phone-now\.ts)$/, why: "the phone's heading over Day's urgent lines (PH-1: over the one thing): plain words, not the Inbox's old view" },
+  { re: /\bNeeds you\b/g, file: /^(ui\/Day\.tsx|plan\/phone-now\.ts)$/, why: "the one thing's reason when it is none of late, due today or from a chat (PH-2: its heading says Inbox): plain words, not the Inbox's old view" },
   { re: /\bRequests (go to|and DevOps items)\b/g, file: /^(public\/legal\.html|ui\/settings\/DeliveryChats\.tsx)$/, why: "requests the plural noun, starting a sentence" },
   { re: /\b[Rr]equest types?\b|\bReadiness (as written|by request type)\b|^Readiness$/g, file: /^(ui|plan|actions)\/patterns[./]|^actions\/registry\.ts$/, why: "DevOps patterns' own words (WP-1): its list of request types and how ready an item reads as written" },
   { re: /^FocusTime's words:[\s\S]*$/, file: /^assistant\/service\.ts$/, why: "the assistant's glossary tells the model which old words people may still say, so it understands them" },

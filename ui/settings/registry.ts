@@ -61,6 +61,8 @@ export type SettingDef = {
   devOnly?: boolean;
   /** Shown only in a demo session. */
   demoOnly?: boolean;
+  /** PH-2: shown only on a phone. */
+  phoneOnly?: boolean;
 };
 
 // One row per setting or status a person looks for. `id` is unique across Settings (it is the deep link's last part).
@@ -94,6 +96,8 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "text-size", section: "display", label: "Text size", keywords: ["font", "larger", "zoom"] },
   { id: "timelines", section: "display", label: "Timelines", keywords: ["business hours", "12 hours", "24 hours", "view range"] },
   { id: "personal-events", section: "display", label: "Show personal events", old: ["Personal events"], keywords: ["google"] },
+  // PH-2: only on a phone (the computer's Day switch is Cards or Timeline in Day's header).
+  { id: "day-timeline", section: "display", label: "Show Day as a timeline", phoneOnly: true, keywords: ["timeline", "phone", "cards", "timebox"] },
   { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], keywords: ["animation", "loader"] },
   // Day and Week
   { id: "level", section: "planning", label: "Your level", keywords: ["guidance", "consultant", "senior", "lead"] },
@@ -217,7 +221,7 @@ const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p
  * Settings and sections whose label, old label or keywords contain every word typed, best first: a label match before
  * an old label, before a keyword. `matched` names the old label when that is what matched.
  */
-export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; limit?: number } = {}): SearchHit[] {
+export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; phone?: boolean; limit?: number } = {}): SearchHit[] {
   const words = norm(q).split(" ").filter(Boolean);
   if (!words.length) return [];
   const has = (s: string) => {
@@ -233,7 +237,7 @@ export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean;
   }
   for (const d of SETTINGS) {
     const s = sectionOf(d.section);
-    if (!shown(s) || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo)) continue;
+    if (!shown(s) || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo) || (d.phoneOnly && !opts.phone)) continue;
     const old = d.old?.find(has);
     const score = has(d.label) ? 0 : old ? 1 : d.keywords?.some(has) || has(`${d.label} ${s!.label} ${(d.keywords ?? []).join(" ")}`) ? 2 : -1;
     if (score < 0) continue;

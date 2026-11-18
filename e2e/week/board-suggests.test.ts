@@ -173,13 +173,14 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
   it("the phone: Keep all on a block", async () => {
     const page = await phonePage(h, 390);
     await emptyFrom(page, TUE);
-    // PH-1: today on the phone has no day bar; its to-dos are under the Now card.
-    await goTo(page, "#/day", page.locator(".ph-todos").first());
-    const sug = page.locator(".ph-todos .sug-block").first();
+    // PH-2: today's blocks are sections under the Now card; an empty one offers its suggestions.
+    await goTo(page, "#/day", page.locator(".dg").first());
+    const sug = page.locator(".dg .sug-block").first();
     await sug.waitFor({ timeout: 30_000 });
     const offered = await sug.locator(".sug-title").allInnerTexts();
     await sug.locator(".sug-keep-all").click();
-    await expect.poll(() => page.locator(".ph-todos .ph-todo-title").allInnerTexts()).toEqual(expect.arrayContaining(offered.filter((t) => t !== "Patient portal login")));
+    // In the sections, or on the Now card for the next one (never both).
+    await expect.poll(async () => [...(await page.locator(".dg .dg-title-text").allInnerTexts()), ...(await page.locator(".pn-card .pn-title").allInnerTexts())]).toEqual(expect.arrayContaining(offered.filter((t) => t !== "Patient portal login")));
   }, T);
 });
 

@@ -18,14 +18,16 @@ import { markSeen } from "../inboxcount.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { ASK_KEY_EVENT } from "../menu.ts";
 import { clientColor } from "../labels.ts";
-import { INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type LateFilter, type Nav } from "../nav.ts";
+import { hashOf, INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type LateFilter, type Nav } from "../nav.ts";
 import { Stamp } from "../Stamp.tsx";
 import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
-import { Detail } from "./Detail.tsx";
+import { Detail, FormArea, Lead } from "./Detail.tsx";
 import { actsFor, ITEM_KEYS, type FormId } from "./ItemActions.tsx";
 import { chipHint, chipName, dueWords, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
-import { SuggestionOpen, type SuggestionForm } from "./Suggestion.tsx";
+import { SuggestionForms, SuggestionOpen, SuggestionWhy, suggestionActs, type SuggestionForm } from "./Suggestion.tsx";
+import { needsQueue } from "../../plan/phone-now.ts";
+import { screen } from "../screens.ts";
 import "./inbox.css";
 import { Icon } from "../icons.tsx";
 
@@ -48,6 +50,9 @@ function byClient<T>(rows: readonly T[], keyOf: (r: T) => string | null, name: (
   }
   return [...m.values()].sort((a, b) => (a.clientKey === null ? 1 : b.clientKey === null ? -1 : a.name.localeCompare(b.name)));
 }
+
+/** A promise's person, as its row says it. */
+export const forWho = (who: string | null) => (who ? `For ${who}` : "For no one named");
 
 /** Promises: late first, then by due (a time before a day), then no date, newest first. */
 export function promiseOrder(a: InboxItemView, b: InboxItemView): number {
@@ -86,6 +91,13 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     else if (nav.view !== "promises" || !nav.item) setKept(null);
   }, [nav.late?.client, nav.view, nav.item]); // eslint-disable-line react-hooks/exhaustive-deps
   const late = nav.late ?? (nav.view === "promises" && nav.item ? kept : null);
+  // PH-2: on the phone, the bare #/inbox and #/inbox/one show what needs me one at a time (ui/phone/InboxOne.tsx).
+  const PhoneM = phone ? screen("phone") : null;
+  const oneAsked = !!PhoneM && (!!nav.one || (!nav.view && !nav.item && !nav.late));
+  const oneRef = useRef(oneAsked);
+  oneRef.current = oneAsked;
+  /** An action was taken one at a time: once nothing is left, the end line shows above the lists. */
+  const [worked, setWorked] = useState(false);
 
   // The list I chose is remembered (my Inbox setting); an address with a list wins while it's there.
   useEffect(() => {
@@ -107,9 +119,37 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
 
   // ---- the three lists ----
   const items = useMemo(() => src.list?.items ?? [], [src.list]);
+  // PH-2: what the Inbox counts as needing me, in the one thing's order (plan/phone-now.ts), and the one shown.
+  const queue = useMemo(() => (PhoneM ? needsQueue(items, today) : []), [PhoneM, items, today]);
+  const qKeys = queue.map((r) => r.key);
+  const [cur, setCur] = useState<string | null>(nav.one ? nav.item : null);
+  useEffect(() => {
+    if (nav.one) setCur(nav.item);
+  }, [nav.one, nav.item]);
+  const prevKeys = useRef<string[]>([]);
+  let oneIdx = qKeys.length ? (cur ? qKeys.indexOf(cur) : 0) : -1;
+  if (cur && qKeys.length && oneIdx < 0) {
+    // The one shown has left (dealt with): the next one after it that is still here, else the one before it.
+    const old = prevKeys.current;
+    const i = old.indexOf(cur);
+    const k = i < 0 ? undefined : (old.slice(i + 1).find((x) => qKeys.includes(x)) ?? [...old.slice(0, i)].reverse().find((x) => qKeys.includes(x)));
+    oneIdx = k ? qKeys.indexOf(k) : 0;
+  }
+  // While a form is open on the item shown, it stays, even if a reread drops it (a teammate's link): what I typed
+  // there is never taken away under me, as on the lists. It goes when the form closes.
+  const heldRef = useRef<(typeof queue)[number] | null>(null);
+  const holding = oneAsked && !!(form || sForm) && !!heldRef.current && heldRef.current.key === cur && !qKeys.includes(cur ?? "");
+  const curRow = holding ? heldRef.current : oneIdx >= 0 ? queue[oneIdx]! : null;
+  useEffect(() => {
+    if (!holding) prevKeys.current = qKeys;
+    heldRef.current = curRow;
+    if (oneAsked && curRow && curRow.key !== cur) setCur(curRow.key);
+  });
+  const curRef = useRef<string | null>(null);
+  curRef.current = oneAsked ? (curRow?.key ?? null) : null;
   // The open suggestion stays while its form is open, even if a reread would drop it (a new message, a teammate's
   // link): what I typed there is never taken away under me. It goes when the form closes.
-  const openKey = nav.item && listOfKey(nav.item) === list ? nav.item : null;
+  const openKey = !oneAsked && nav.item && listOfKey(nav.item) === list ? nav.item : null;
   const keptRef = useRef<SuggestionRow | null>(null);
   const suggestions = useMemo(() => {
     const now = (src.chats?.suggestions ?? []).filter((s) => inClients(s.clientKey));
@@ -195,7 +235,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const run = useCallback(
     async (action: string, input: Record<string, unknown>, msg: string, undo?: { action: string; input: Record<string, unknown> } | (() => Promise<unknown>)) => {
       try {
+        // PH-2: one at a time, Undo comes back to the item it undid (read before the call: Next may be tapped meanwhile).
+        const acted = curRef.current;
         if (action !== "inbox.list") await call(action, input);
+        if (oneRef.current) setWorked(true);
         setError(null);
         setForm(null);
         setSForm(null);
@@ -204,7 +247,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
           undoRun ? (
             <>
               {msg}.{" "}
-              <button type="button" className="mini quiet" onClick={() => void undoRun().then(() => (setNotice("Undone"), void reloadAll()), (e) => setError(errText(e)))}>
+              <button type="button" className="mini quiet" onClick={() => void undoRun().then(() => (setNotice("Undone"), void reloadAll().then(() => void (acted && oneRef.current && setCur(acted)))), (e) => setError(errText(e)))}>
                 Undo
               </button>
             </>
@@ -224,6 +267,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     async (action: string, input: Record<string, unknown>, msg: string): Promise<string | null> => {
       try {
         await call(action, input);
+        if (oneRef.current) setWorked(true);
         setForm(null);
         setNotice(msg);
         await reloadAll();
@@ -242,33 +286,34 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     const i = o.indexOf(key);
     return i < 0 ? null : (o[i + 1] ?? o[i - 1] ?? null);
   };
+  /** On the lists, the row after the one that left opens; one at a time, the next item takes its place by itself. */
+  const moveOn = (key: string) => void (!oneRef.current && open(after(key)));
   const dismiss = (s: SuggestionRow) => {
-    open(after(`v${s.id}`));
+    moveOn(`v${s.id}`);
     void run("conversations.dismiss", { id: s.id }, "Dismissed for you", { action: "conversations.undismiss", input: { id: s.id } });
   };
   const asPromise = async (s: SuggestionRow) => {
     try {
       const r = await call<{ followUp: { id: number } }>("followup.add", { what: s.title, clientKey: s.clientKey });
-      open(after(`v${s.id}`));
+      moveOn(`v${s.id}`);
       await run("conversations.dismiss", { id: s.id, as: "promised" }, "Added to your promises", () => Promise.all([call("followup.delete", { id: r.followUp.id }), call("conversations.undismiss", { id: s.id })]));
     } catch (e) {
       setError(errText(e));
     }
   };
   const notWork = (s: SuggestionRow) => {
-    open(after(`v${s.id}`));
+    moveOn(`v${s.id}`);
     void run("conversations.not_work", { id: s.id }, "Not work: closed for everyone on the chat", { action: "conversations.not_work_undo", input: { id: s.id } });
   };
   const linked = (s: SuggestionRow, itemId: number, comment: boolean) => {
-    open(after(`v${s.id}`));
+    moveOn(`v${s.id}`);
     void run("conversations.link", { id: s.id, itemId }, `Linked to #${itemId} for everyone on the chat`).then(() => {
       if (comment && writes) void writes.begin(s.clientKey, [{ kind: "conversation_comment", conversationId: s.id, itemId }]);
     });
   };
   const dismissRef = useRef(dismiss);
   dismissRef.current = dismiss;
-  const acts = entry
-    ? actsFor(entry, {
+  const actEnv = {
         run,
         form: setForm,
         // QC-1: a draft's Create in DevOps opens the preview directly (the New form is for changing it first).
@@ -283,17 +328,32 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
         },
         planWeek: () => onNav(navOf.addWork()),
         today,
-      })
-    : [];
+      };
+  const acts = entry ? actsFor(entry, actEnv) : [];
+  // PH-2: the item shown one at a time: its source, its actions (the same as on the lists) and its form.
+  const oneEntry = curRow && curRow.kind === "promise" ? entryOf(curRow, src) : null;
+  const sugRef = useRef<SuggestionRow | null>(null);
+  const oneSug = curRow && curRow.kind === "conversation" ? (src.chats?.suggestions.find((x) => `v${x.id}` === curRow.key) ?? (sForm && sugRef.current && `v${sugRef.current.id}` === curRow.key ? sugRef.current : null)) : null;
+  sugRef.current = oneSug;
+  const oneActs = oneEntry ? actsFor(oneEntry, actEnv) : oneSug ? suggestionActs(oneSug, { form: setSForm, dismiss: () => dismiss(oneSug), promise: () => void asPromise(oneSug), notWork: () => notWork(oneSug) }).map((a) => ({ ...a })) : [];
+  useEffect(() => {
+    if (!oneAsked) return;
+    setForm(null);
+    setSForm(null);
+    if (curRow?.kind === "promise") void markSeen([curRow.key], () => changedRef.current());
+  }, [oneAsked, curRow?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- keys ----
-  const keyRef = useRef({ order, openKey, acts, open, form, sForm, openSuggestion, list });
-  keyRef.current = { order, openKey, acts, open, form, sForm, openSuggestion, list };
+  const showingOne = !!(oneAsked && PhoneM && curRow);
+  const keyRef = useRef({ order, openKey, acts, open, form, sForm, openSuggestion, list, one: showingOne });
+  keyRef.current = { order, openKey, acts, open, form, sForm, openSuggestion, list, one: showingOne };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = keyRef.current;
+      // PH-2: one at a time shows no list; its own buttons move and act (the keys stay the lists').
+      if (k.one) return;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
       // The Inbox's keys win over the app's own (C is Capture elsewhere): this listener runs first and stops the rest.
       const done = () => (e.preventDefault(), e.stopImmediatePropagation());
@@ -430,7 +490,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   ) : null;
   const promisesList = rowList(promiseGroups, (r) => (
     <>
-      {r.who ? `For ${r.who}` : "For no one named"}
+      {forWho(r.who)}
       {r.where ? ` · ${r.where}` : ""}
       {r.itemId ? ` · #${r.itemId}` : ""}
     </>
@@ -499,10 +559,101 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     </footer>
   ) : null;
 
+  const noticeEl = (
+    <>
+      {notice && (
+        <p className="ib-notice ib4-notice" role="status">
+          {notice}
+        </p>
+      )}
+      {(error || src.error) && (
+        <p className="set-problem" role="alert">
+          {error ?? src.error}
+        </p>
+      )}
+    </>
+  );
+
+  // PH-2: one at a time, on the phone, while something needs me.
+  if (oneAsked && PhoneM && loaded && curRow) {
+    const where =
+      oneEntry?.kind === "chatPromise" && oneEntry.promise ? (
+        <>
+          {oneEntry.promise.chatName}
+          {oneEntry.promise.conversationTitle ? ` · ${oneEntry.promise.conversationTitle}` : ""} · <Stamp at={oneEntry.promise.createdAt} tz={tz} today={today} />
+        </>
+      ) : oneEntry?.kind === "followUp" && oneEntry.followUp ? (
+        <>
+          {oneEntry.followUp.byHand ? "You added it, " : "Opened "}
+          <Stamp at={oneEntry.followUp.openedAt} tz={tz} today={today} />
+        </>
+      ) : curRow.where ? (
+        <>
+          {curRow.where} · <Stamp at={curRow.at} tz={tz} today={today} />
+        </>
+      ) : null;
+    const tag = curRow.kind === "promise" ? promiseTag(curRow) : null;
+    const card =
+      curRow.kind === "promise" ? (
+        <>
+          {tag && (
+            <p className="io-tag">
+              <span className={`ib-tag tone-${tag.tone}`}>{tag.text}</span>
+            </p>
+          )}
+          <p className="io-who">{forWho(curRow.who)}</p>
+          {where && <p className="io-where muted">{where}</p>}
+          {oneEntry && <Lead entry={oneEntry} acts={[]} form={null} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} />}
+        </>
+      ) : oneSug ? (
+        <>
+          <SuggestionWhy s={oneSug} />
+          <p className="io-where muted">
+            {oneSug.people.length ? `${oneSug.people.join(", ")} · ` : ""}
+            <Stamp at={oneSug.lastWorkAt} tz={tz} today={today} />
+            {oneSug.mentions?.length ? ` · mentions ${oneSug.mentions.join(", ")}` : ""}
+          </p>
+        </>
+      ) : (
+        <p className="muted">{src.chatsError ? `From chats couldn't be read: ${src.chatsError}` : "Loading…"}</p>
+      );
+    const formEl = oneEntry ? (
+      <FormArea entry={oneEntry} acts={[]} form={form} setForm={setForm} data={data} tz={tz} today={today} clientName={clientName} run={run} submit={submit} reload={() => void src.reload()} phone finished={(m) => (setForm(null), setNotice(m), setWorked(true), void reloadAll())} />
+    ) : oneSug ? (
+      <SuggestionForms s={oneSug} form={sForm} setForm={setSForm} onLinked={(id, c) => linked(oneSug, id, c)} />
+    ) : null;
+    const line = (r: InboxItemView) => ({ key: r.key, client: clientName(r.clientKey), color: color(r.clientKey), title: r.kind === "conversation" ? (src.chats?.suggestions.find((x) => `v${x.id}` === r.key)?.title ?? r.title) : r.title });
+    return (
+      <PhoneM.InboxOne
+        index={oneIdx}
+        count={queue.length}
+        current={line(curRow)}
+        card={card}
+        acts={oneActs}
+        form={formEl}
+        notice={noticeEl}
+        upNext={queue.slice(oneIdx + 1).map(line)}
+        lists={INBOX_LISTS.map((l) => ({ id: l, label: INBOX_LIST_NAMES[l], count: counts[l] }))}
+        onList={(l) => chooseList(l as InboxList)}
+        onPrev={() => oneIdx > 0 && setCur(qKeys[oneIdx - 1]!)}
+        onNext={() => oneIdx < qKeys.length - 1 && setCur(qKeys[oneIdx + 1]!)}
+        onPick={setCur}
+        onShown={(key) => {
+          // The address follows the item shown, without a new history entry (a reload lands on it).
+          const h = hashOf({ nav: navOf.inboxOne(key), overlay: null });
+          if (location.hash !== h) history.replaceState(history.state, "", h);
+        }}
+      />
+    );
+  }
+
   return (
     <main className="ib4" aria-label="Inbox">
+      {/* PH-2: the end of one at a time says so; the lists' way back while something still needs me. */}
       <header className="ib4-head">
+        {PhoneM && !oneAsked && queue.length > 0 && <PhoneM.InboxBack onBack={() => onNav(navOf.inboxOne())} />}
         <h1 className="ib4-title">Inbox</h1>
+        {PhoneM && oneAsked && loaded && !queue.length && (worked || nav.one) && <PhoneM.InboxEnd />}
         <div className="ib4-switch" role="tablist" aria-label="Lists" data-tour="ib-rail">
           {INBOX_LISTS.map((l) => (
             <button key={l} type="button" role="tab" aria-selected={list === l} className={`ib4-tab${list === l ? " on" : ""}`} onClick={() => chooseList(l)}>
@@ -541,16 +692,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
           </button>
         </p>
       )}
-      {notice && (
-        <p className="ib-notice ib4-notice" role="status">
-          {notice}
-        </p>
-      )}
-      {(error || src.error) && (
-        <p className="set-problem" role="alert">
-          {error ?? src.error}
-        </p>
-      )}
+      {noticeEl}
       {notWaiting && list === "chats" && (
         <p className="ib4-not-waiting" role="status">
           This conversation isn't waiting for anything.{" "}

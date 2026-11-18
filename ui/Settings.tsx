@@ -86,6 +86,9 @@ type Props = {
   /** U5.1 (D408): personal events shown on Week and Today. */
   showPersonal: boolean;
   setShowPersonal: (show: boolean) => void;
+  /** PH-2: Day's timeline on this phone (TY-1's phone setting): its home on the phone now that another day has no ⋯. */
+  dayTimeline?: boolean;
+  setDayTimeline?: (show: boolean) => void;
   /** WK-5: the days Week shows, and the catch-up day's name in the loaded week ("Friday"). */
   weekDays: { catchUp: boolean; weekend: boolean };
   setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;
@@ -287,7 +290,7 @@ export function Settings(props: Props) {
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? `Admin › ${ADMIN_UI_SECTIONS.find(([id]) => id === current)![1]}` : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
   const description = inAdmin ? "Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit." : def?.description;
-  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop }) : [];
+  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop, phone }) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
       id: g,
@@ -359,6 +362,7 @@ type BodyProps = Props & { section: string; data: SettingsData; onSavedData: (d:
 function SectionBody(p: BodyProps) {
   const d = p.data;
   const dev = useDeveloperLoop();
+  const phone = usePhone();
   switch (p.section) {
     default:
       return null;
@@ -484,6 +488,15 @@ function SectionBody(p: BodyProps) {
             </label>
             <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
           </fieldset>
+          {phone && p.setDayTimeline && (
+            <fieldset className="set-choice" data-setting="day-timeline">
+              <legend>Day on this phone</legend>
+              <label>
+                <input type="checkbox" checked={!!p.dayTimeline} onChange={(e) => p.setDayTimeline!(e.target.checked)} /> Show Day as a timeline
+              </label>
+              <span className="set-hint">The hours beside each block, with Timebox my day. Only this phone; your computer keeps its own.</span>
+            </fieldset>
+          )}
           <fieldset className="set-choice" data-setting="week-days">
             <legend>Days on Week</legend>
             <label>
