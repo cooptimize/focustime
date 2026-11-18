@@ -9,7 +9,7 @@ export function PartsGuide() {
   const [sound, setSound] = useState("brown");
   const [mins, setMins] = useState(50);
   const [at, setAt] = useState("08:45");
-  const [name, setName] = useState("America/New_York");
+  const [name, setName] = useState(() => Temporal.Now.timeZoneId());
   const [items, setItems] = useState(["Monday AM · Internal", "Friday PM · Catch-up"]);
   const [tested, setTested] = useState<string | null>(null);
   return (
