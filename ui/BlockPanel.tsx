@@ -282,6 +282,13 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
   const meetings = slot && !day?.pto ? meetingsWords(slot.events.map((e) => ({ minutes: Math.round((Date.parse(e.clipEnd) - Date.parse(e.clipStart)) / 60000), free: e.event.showAs === "free" }))) : null;
   const [agendaOpen, setAgendaOpen] = useState(false);
+  // WK-6: opened from a card's "N more" or its count of calls: the agenda open, in view.
+  const wantsMeetings = focus?.kind === "meetings";
+  useEffect(() => {
+    if (!wantsMeetings) return;
+    setAgendaOpen(true);
+    requestAnimationFrame(() => ref.current?.querySelector(".bp-meetings")?.scrollIntoView({ block: "nearest" }));
+  }, [wantsMeetings, at.date, at.half]);
   const firstPlanned = blockPicks.find((p) => p.status === "planned")?.id ?? null;
   const note = clientKey ? data.resumeNotes[clientKey] : undefined;
   const monday = mondayOf(at.date);
