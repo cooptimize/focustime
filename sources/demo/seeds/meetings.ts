@@ -35,5 +35,10 @@ export const meetingsSeed: DemoSeed = {
     const lines = (await store.transcript(occurrenceId)) ?? [];
     const on = lines.find((l) => /on track/i.test(l.text));
     if (on) await store.addProposals(occurrenceId, [{ body: { kind: "comment", itemId: 1110, itemTitle: "Order history export", itemType: "Feature", note: "status", text: "Order history export is on track with Northwind.", inReport: true, lines: [on.n] }, quotes: [{ n: on.n, speaker: on.speaker, at: atOf(on), text: on.text }] }]);
+    // MC-2b: the week before, the same call ended with no transcript, so a Pocket
+    // recording of it can be brought in (sources/demo/pocket.ts records it).
+    const before = call.subtract({ days: 7 });
+    const at = (d: Temporal.PlainDate, m: number) => d.toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(DEMO_MEETING.start).add({ minutes: m }) }).toInstant().toString();
+    await store.ensureOccurrence(seriesId, before.toString(), at(before, 0), at(before, DEMO_MEETING.minutes), "no_transcript", null);
   },
 };
