@@ -7,15 +7,16 @@ import { INBOX_LIST_NAMES, MODES, MODE_NAMES } from "./nav.ts";
 import { PHONE_TEXT } from "../plan/phone-now.ts";
 
 /**
+ * MC-3: Calls left the computer's ⋯ for a tab of its own (the phone's More keeps it, first).
  * The computer's ⋯ menu's rows (ui/App.tsx; ui/places.test.ts checks every label here is drawn there). Install app
  * shows only where the browser can install.
  */
-export const MORE_ITEMS = ["About", "Admin", "Calls", "Commands", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Technical docs"] as const;
+export const MORE_ITEMS = ["About", "Admin", "Commands", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Technical docs"] as const;
 
 /** PH-1: the phone's More screen's rows and Everything else's, by their words (plan/phone-now.ts). */
 const R = PHONE_TEXT.rows;
 const E = PHONE_TEXT.else;
-export const PHONE_MORE_ITEMS: readonly string[] = [R.backlog, R.status, R.calls, R.code, R.vm, R.settings, R.guide, R.everything, R.desktop, E.notifications, E.sources, E.focus, E.checkin, E.closeout, E.install, E.docs, E.about, E.admin];
+export const PHONE_MORE_ITEMS: readonly string[] = [R.calls, R.backlog, R.status, R.code, R.vm, R.settings, R.guide, R.everything, R.desktop, E.notifications, E.sources, E.focus, E.checkin, E.closeout, E.install, E.docs, E.about, E.admin];
 
 /** Backlog's toolbar: Needs attention (a chip) and Filter, beside the Grid and Gantt views (ui/ahead/Toolbar.tsx). */
 export const BACKLOG_TOOLBAR = ["Needs attention", "Filter", "Search"] as const;

@@ -7,7 +7,7 @@
 import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDayFold } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
-import { callForEvent, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
+import { callForEvent, callHref, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
 import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
 import { MEETING_WORDS } from "../plan/call-words.ts";
 import { LiveCalls } from "./cowork.tsx";
@@ -241,7 +241,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
           {calls.length > 0 && (
             <div className="card-calls">
               {calls.map((c) => (
-                <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
+                <a key={c.occurrenceId} href={callHref(c.occurrenceId)} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
                   <span className="call-name">{c.role}</span>
                   <span className="call-what">· {c.label}</span>
                 </a>
@@ -274,7 +274,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {calls.length > 0 && (
         <div className="card-calls">
           {calls.map((c) => (
-            <a key={c.occurrenceId} href={`#/meetings/${c.occurrenceId}`} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
+            <a key={c.occurrenceId} href={callHref(c.occurrenceId)} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
               <span className="call-name">{c.role}</span>
               <span className="call-what">· {c.label}</span>
             </a>

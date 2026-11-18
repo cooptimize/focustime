@@ -49,7 +49,7 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     // Dropped anywhere else: the page keeps the browser from opening it, and nothing is sent.
     expect(await dropOn(page, ".mtg-view h2", [{ name: "x.zip", bytes: pocketZip() }])).toBe(true);
     await expect.poll(() => area.evaluate((el) => el.classList.contains("dropping"))).toBe(false);
-    expect(page.url()).toContain(`#/meetings/${id}`);
+    expect(page.url()).toContain(`#/calls/${id}`);
     // Two files: one at a time.
     await dropOn(page, ".mtg-upload", [{ name: "a.zip", bytes: pocketZip() }, { name: "b.zip", bytes: pocketZip() }]);
     await expect.poll(() => area.textContent()).toContain("One file at a time");

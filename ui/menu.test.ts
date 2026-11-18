@@ -430,7 +430,7 @@ describe("event menus by editing tier (step 13)", () => {
       const loc = { hash: "" };
       vi.stubGlobal("location", loc);
       review.run!();
-      expect(loc.hash).toBe("#/meetings");
+      expect(loc.hash).toBe("#/calls");
       vi.unstubAllGlobals();
       // Without Calls (a demo of an older build, or no sign-in), a future meeting, a declined one, all day, a personal event: as before.
       expect(first({}).id).not.toBe("call-review");
