@@ -53,6 +53,8 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     // Two files: one at a time.
     await dropOn(page, ".mtg-upload", [{ name: "a.zip", bytes: pocketZip() }, { name: "b.zip", bytes: pocketZip() }]);
     await expect.poll(() => area.textContent()).toContain("One file at a time");
+    // After a drop on the area, it stops showing the dragging look (no dragleave comes after a drop).
+    await expect.poll(() => area.evaluate((el) => el.classList.contains("dropping"))).toBe(false);
     expect(uploads).toEqual([]);
 
     // A drop onto a call with a transcript asks first, in the page's words for replacing; No leaves it as it was.
@@ -79,7 +81,10 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     expect(quotes.length).toBeGreaterThan(0);
     expect(quotes.every((q) => /^Speaker \d+$/.test(q.trim()))).toBe(true);
     await expect(page.locator(".mtg-prop").filter({ hasText: "Share three sample statements" }).first().textContent()).resolves.toContain("Pocket didn't say who");
-    await expect(page.locator(".mtg-prop").filter({ hasText: "date range filter for review" }).first().textContent()).resolves.toContain("in Alex's Promises");
+    // Alex names himself, so it's his; the words don't name who it's for, so no one is guessed.
+    const alex = (await page.locator(".mtg-prop").filter({ hasText: "date range filter for review" }).first().textContent()) ?? "";
+    expect(alex).toContain("in Alex's Promises");
+    expect(alex).not.toContain("Dana");
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     const lines = page.locator(".mtg-lines li");
     await lines.first().waitFor({ timeout: 30_000 });

@@ -25,7 +25,7 @@ const DOCX_ENTRIES = 5000;
 export type TranscriptFormat = "vtt" | "docx" | "pocket";
 
 /** PK-1: the PDF reader the server hands in (server/pdf-text.ts). */
-export type PdfRead = { ok: true; pages: number; lines: string[] } | { ok: false; reason: "pages" | "locked" | "damaged" | "large" | "slow"; pages?: number };
+export type PdfRead = { ok: true; pages: number; lines: string[] } | { ok: false; reason: "pages" | "locked" | "damaged" | "large" | "slow" | "busy"; pages?: number };
 export type ReadPdf = (bytes: Uint8Array) => Promise<PdfRead>;
 
 /** What FocusTime reads, as every refusal ends. */
@@ -45,10 +45,11 @@ export type Kind = "pdf" | "vtt" | "zip" | "archive" | "other";
 export function kindOf(b: Uint8Array): Kind {
   const at = (i: number, ...xs: number[]) => xs.every((x, j) => b[i + j] === x);
   if (at(0, 0x50, 0x4b, 0x03, 0x04) || at(0, 0x50, 0x4b, 0x05, 0x06)) return "zip";
+  // A .vtt starts with WEBVTT; checked before the PDF header, which may sit anywhere in the first 1 KB.
+  if (new TextDecoder().decode(b.subarray(0, 16)).replace(/^\ufeff/, "").startsWith("WEBVTT")) return "vtt";
   // A PDF's header may follow up to 1024 bytes of something else (the PDF reference allows it).
   const head = new TextDecoder("latin1").decode(b.subarray(0, 1024 + 5));
   if (head.includes("%PDF-")) return "pdf";
-  if (new TextDecoder().decode(b.subarray(0, 16)).replace(/^﻿/, "").startsWith("WEBVTT")) return "vtt";
   if (at(0, 0x1f, 0x8b) || at(0, 0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c) || at(0, 0x52, 0x61, 0x72, 0x21) || at(0, 0x42, 0x5a, 0x68) || at(0, 0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00) || at(0, 0x28, 0xb5, 0x2f, 0xfd) || at(0, 0x50, 0x4b, 0x07, 0x08)) return "archive";
   if (b.length > 262 && new TextDecoder("latin1").decode(b.subarray(257, 262)) === "ustar") return "archive";
   return "other";
@@ -179,6 +180,7 @@ const PDF_WORDS: Record<Exclude<PdfRead, { ok: true }>["reason"], (pages?: numbe
   locked: () => "That PDF is locked with a password. Export it from Pocket again without one",
   damaged: () => "That PDF can't be opened: it may be damaged",
   large: () => "That PDF has far more text than a call's transcript. Nothing was kept",
+  busy: () => "FocusTime is reading other PDFs right now. Try again in a minute",
 };
 
 /** An uploaded file → lines (the same structure for every format), or a TranscriptError with plain words. */
@@ -206,7 +208,8 @@ export async function readTranscriptFile(bytes: Uint8Array, o: { readPdf?: ReadP
   }
   if (kind === "docx") {
     facts.kind = zipped ? "docx.zip" : "docx";
-    const xml = zipEntry(body, "word/document.xml");
+    // Inside a zip, the document counts against the zip's 20 MB too, never a second allowance.
+    const xml = zipEntry(body, "word/document.xml", zipped ? Math.max(0, ZIP_UNPACKED - facts.unpacked) : MAX_XML_BYTES);
     if (!xml) throw new IntakeError("docx_empty", "That .docx file has no document in it");
     return { format: "docx", lines: parseDocxXml(new TextDecoder().decode(xml)), recorded: null, facts };
   }

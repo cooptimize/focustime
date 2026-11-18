@@ -155,7 +155,7 @@ export function checkAnswer(a: Answer, x: CaptureInput, window: readonly Transcr
     const mate = unnamed ? said?.mate ?? null : coop.get(norm(who)) ?? null;
     const side: CommitmentProposal["side"] = mate ? "cooptimize" : unnamed && !said ? "unknown" : "client";
     const due = c.due && /^\d{4}-\d{2}-\d{2}$/.test(c.due) ? (() => { try { return Temporal.PlainDate.from(c.due!).toString(); } catch { return null; } })() : null;
-    const body: CommitmentProposal = { kind: "commitment", who: side === "unknown" ? "" : mate?.name ?? clip(who, 200), whoId: mate?.id ?? null, side, what: clip(c.what.trim(), 200), toName: c.toName?.trim() ? clip(c.toName.trim(), 200) : null, due, lines };
+    const body: CommitmentProposal = { kind: "commitment", who: side === "unknown" ? "" : mate?.name ?? clip(who, 200), whoId: mate?.id ?? null, side, what: clip(c.what.trim(), 200), toName: toNameOf(c.toName, unnamed, window.filter((l) => lines.includes(l.n)).map((l) => l.text)), due, lines };
     out.push({ body, quotes: quotesOf(window, lines) });
   }
   for (const c of a.comments) {
@@ -170,6 +170,14 @@ export function checkAnswer(a: Answer, x: CaptureInput, window: readonly Transcr
     out.push({ body, quotes: quotesOf(window, lines) });
   }
   return { proposals: out, dropped };
+}
+
+/** To whom: as the AI gave it; with numbered speakers (PK-1), only a name the cited lines' own words hold, never a label. */
+function toNameOf(to: string | null, unnamed: boolean, texts: readonly string[]): string | null {
+  const t = to?.trim();
+  if (!t) return null;
+  if (unnamed && !namedIn(t, texts, [])) return null;
+  return clip(t, 200);
 }
 
 const words = (s: string) => ` ${norm(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;

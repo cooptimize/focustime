@@ -164,3 +164,64 @@ describe("Pocket intake is safe (PK-1)", () => {
     }
   });
 });
+
+describe("the intake review's findings (PK-1)", () => {
+  it("a PDF that decodes to far more than its size is ended before the process grows past the limit", async () => {
+    const { deflateSync } = await import("node:zlib");
+    // One page whose content stream is 300 MB of spaces, about 300 KB compressed.
+    const stream = deflateSync(Buffer.alloc(300 * 1024 * 1024, 0x20), { level: 9 });
+    const head = "%PDF-1.7\n";
+    const objs = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
+    ];
+    const parts: Buffer[] = [Buffer.from(head, "latin1")];
+    const offsets: number[] = [];
+    let at = parts[0]!.length;
+    const push = (b: Buffer) => (parts.push(b), (at += b.length));
+    objs.forEach((o, i) => (offsets.push(at), push(Buffer.from(`${i + 1} 0 obj\n${o}\nendobj\n`, "latin1"))));
+    offsets.push(at);
+    push(Buffer.from(`4 0 obj\n<< /Length ${stream.length} /Filter /FlateDecode >>\nstream\n`, "latin1"));
+    push(stream);
+    push(Buffer.from("\nendstream\nendobj\n", "latin1"));
+    const xref = at;
+    push(Buffer.from(`xref\n0 5\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`, "latin1"));
+    const pdf = new Uint8Array(Buffer.concat(parts));
+    expect(pdf.length).toBeLessThan(MAX_UPLOAD_BYTES);
+    const r = await pdfReader({ memoryMb: 64 })(pdf);
+    expect(r).toEqual({ ok: false, reason: "large" });
+  }, 60_000);
+
+  it("reads at most a few PDFs at once; more wait their turn, and past the waiting line it says busy", async () => {
+    const pdf = pocketPdf({ turns: TURNS });
+    const reader = pdfReader({ atOnce: 1, waiting: 1 });
+    const rs = await Promise.all([reader(pdf), reader(pdf), reader(pdf)]);
+    expect(rs.map((r) => (r.ok ? "ok" : r.reason))).toEqual(["ok", "ok", "busy"]);
+    await expect(readTranscriptFile(pdf, { readPdf: async () => ({ ok: false, reason: "busy" }) })).rejects.toThrow("reading other PDFs right now");
+  });
+
+  it("an unclosed tag repeated 200,000 times reads in well under a second (the parsers are linear)", async () => {
+    const t0 = performance.now();
+    await read(zipOf({ "[Content_Types].xml": "<x/>", "word/document.xml": "<w:p ".repeat(200_000) })).catch(() => null);
+    await read(zipOf({ "[Content_Types].xml": "<x/>", "word/document.xml": `<w:p>${"<w:t ".repeat(200_000)}</w:p>` })).catch(() => null);
+    await read(enc(`WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n${"<v x".repeat(200_000)}`)).catch(() => null);
+    expect(performance.now() - t0).toBeLessThan(2000);
+  });
+
+  it("a character reference past Unicode is a replacement mark, never an error with the file's number in it", async () => {
+    const r = await read(enc("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Alex Kim>Hello &#99999999; there"));
+    expect(r.lines[0]!.text).toBe("Hello � there");
+  });
+
+  it("a .docx in a zip counts against the zip's 20 MB, never a second allowance", async () => {
+    const big = `<w:document><w:body>${"<w:p><w:r><w:t>x</w:t></w:r></w:p>".repeat(400_000)}</w:body></w:document>`;
+    const docx = zipOf({ "[Content_Types].xml": "<x/>", "word/document.xml": big + " ".repeat(19 * 1024 * 1024 - big.length) });
+    const e = await read(zipOf({ "t.docx": docx, "pad.bin": "\0".repeat(2 * 1024 * 1024) })).then(() => null, (x: Error) => x);
+    expect(e?.message).toBe("That .docx file is too large or damaged");
+  });
+
+  it("a .vtt with a PDF header in its first kilobyte is still a .vtt", () => {
+    expect(kindOf(enc("WEBVTT\n\nNOTE %PDF-1.7 in a note\n"))).toBe("vtt");
+  });
+});

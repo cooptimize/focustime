@@ -21,6 +21,7 @@ import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { transcriptDocx, transcriptVtt, zipOf } from "../test/docx.ts";
 import { pocketPdf } from "../test/pdf.ts";
+import type { ReadPdf } from "./transcript-file.ts";
 import { pdfReader } from "../server/pdf-text.ts";
 import { CALL_ROW } from "../plan/call-words.ts";
 import type { ActionResponse } from "./types.ts";
@@ -92,7 +93,7 @@ async function setup() {
   ];
   // MC-1c: the organization's clients (Admin › Clients' list), whatever the admin's own settings hold.
   const orgClients = ["contoso", "fabrikam", "Northwind"];
-  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean } = {}): MeetingContext => ({
+  const ctxAs = (me: string, o: { admin?: boolean; write?: boolean; graph?: MeetingsClient | null; log?: (r: LogRecord) => void; clientsDown?: boolean; usersFail?: boolean; readPdf?: ReadPdf } = {}): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC"), userId: me }),
     me: async () => me, isAdmin: async () => !!o.admin, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
     graph: () => (o.graph === undefined ? graph : o.graph), users: async () => { if (o.usersFail) throw new Error("db down"); return users; },
@@ -102,7 +103,7 @@ async function setup() {
     ai: async () => ai,
     canWrite: async () => o.write ?? true,
     log: o.log ?? (() => {}),
-    readPdf,
+    readPdf: o.readPdf ?? readPdf,
   });
   const act = (me: string, action: MeetingAction, input: unknown, o?: Parameters<typeof ctxAs>[1]) => meetingAction(ctxAs(me, o), action, input);
   return { db, meetings, conversations, graphCalls, providerCalls, act, ctxAs, graph, candidate };
@@ -434,5 +435,18 @@ describe("a Pocket export as a call's transcript (PK-1)", () => {
     expect(r).toMatchObject({ ok: false, status: 422, error: expect.stringContaining("That zip holds 2 PDFs") });
     expect(await meetings.occurrencesOf(m.id)).toEqual([]);
     expect(logs.map((l) => [l.op, l.kind])).toEqual([["meeting_upload_refused", "zip_several"]]);
+  });
+
+  it("an error of any other kind is refused in fixed words: nothing from the file reaches the answer or the log", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = await register(act);
+    const logs: LogRecord[] = [];
+    const readPdf = async () => {
+      throw new RangeError("Invalid code point 99999999 secret-word");
+    };
+    const r = await uploadTranscript(ctxAs(ADMIN, { log: (x) => void logs.push(x), readPdf }), { seriesId: m.id, date: "2026-11-10", bytes: pocketPdf({ turns }) });
+    expect(r).toMatchObject({ ok: false, status: 422, error: "FocusTime couldn't read that file. FocusTime reads a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)" });
+    expect(JSON.stringify([r, logs])).not.toMatch(/secret|99999999/);
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
   });
 });

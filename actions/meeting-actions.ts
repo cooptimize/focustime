@@ -26,7 +26,7 @@ import { PlanError } from "../store/plan-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import { capturePass } from "./meeting-capture.ts";
-import { IntakeError, readTranscriptFile, type ReadPdf, type TranscriptRead } from "./transcript-file.ts";
+import { READS, IntakeError, readTranscriptFile, type ReadPdf, type TranscriptRead } from "./transcript-file.ts";
 import type { OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 export type { MeetingNudgeView, OccurrenceView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
@@ -715,7 +715,10 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
       ctx.log({ source: "plan", op: "meeting_upload_refused", kind: e instanceof IntakeError ? e.code : "unreadable", count: q.bytes.length });
       return bad(e.message, 422);
     }
-    throw e;
+    // PK-1 review: anything else (a parser's own error can quote a file's contents) is refused in fixed words, and
+    // only its kind is logged.
+    ctx.log({ source: "plan", op: "meeting_upload_refused", kind: "error", count: q.bytes.length });
+    return bad(`FocusTime couldn't read that file. ${READS}`, 422);
   }
   const { lines, facts } = read;
   const kind: TranscriptKind = read.format === "pocket" ? "pocket" : "teams";

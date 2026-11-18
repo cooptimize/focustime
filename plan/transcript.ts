@@ -22,14 +22,45 @@ export const MAX_LINES = 4000;
 /** The longest one line may be after merging; longer is split at a sentence end. */
 export const MAX_LINE_CHARS = 1200;
 
+/** A character reference's character; one past Unicode's end is the replacement mark, never an error (PK-1 review). */
+const charOf = (n: number) => (n <= 0x10ffff ? String.fromCodePoint(n) : "\ufffd");
+
+/**
+ * Every `<open ...>...</close>` in order, by plain scans (PK-1 review: a lazy regex over an unclosed tag is quadratic,
+ * so 1 MB of "<w:p " held the server for over a minute). An open tag with no close after it ends the scan: none later
+ * can close either.
+ */
+function blocks(s: string, open: RegExp, close: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(open.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const end = s.indexOf(close, m.index + m[0].length);
+    if (end < 0) break;
+    out.push(s.slice(m.index, end + close.length));
+    re.lastIndex = end + close.length;
+  }
+  return out;
+}
+
+/** A cue's voice tag, `<v Name>` or `<v.class Name>`: the first one, by plain scans. */
+function voiceOf(raw: string): string | null {
+  const i = raw.search(/<v[\s.]/);
+  if (i < 0) return null;
+  const j = raw.indexOf(">", i);
+  if (j < 0) return null;
+  const m = /^(?:\.\S*)?\s+([\s\S]*)$/.exec(raw.slice(i + 2, j));
+  return m ? m[1]! : null;
+}
+
 const decode = (s: string) =>
   s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d{1,8});/g, (_, d: string) => charOf(Number(d)))
+    .replace(/&#x([0-9a-f]{1,8});/gi, (_, h: string) => charOf(parseInt(h, 16)))
     .replace(/&amp;/g, "&");
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -85,8 +116,8 @@ export function parseVtt(text: string): TranscriptLine[] {
     const raw = rows.slice(ti + 1).join(" ");
     let speaker = "";
     let words = raw;
-    const v = /<v(?:\.[^\s>]*)?\s+([^>]*)>/.exec(raw);
-    if (v) speaker = v[1]!;
+    const v = voiceOf(raw);
+    if (v !== null) speaker = v;
     else {
       const named = /^([^:<>]{1,80}):\s+(.*)$/.exec(raw);
       if (named) {
@@ -94,7 +125,7 @@ export function parseVtt(text: string): TranscriptLine[] {
         words = named[2]!;
       }
     }
-    words = decode(words.replace(/<[^>]*>/g, ""));
+    words = decode(words.replace(/<[^<>]*>/g, ""));
     cues.push({ speaker: decode(speaker), at, text: words });
   }
   const lines = linesOf(cues);
@@ -109,9 +140,9 @@ export function parseVtt(text: string): TranscriptLine[] {
  */
 export function parseDocxXml(xml: string): TranscriptLine[] {
   const paras: string[] = [];
-  for (const m of xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)) {
-    const p = m[0].replace(/<w:(tab|br)\b[^>]*\/>/g, " ");
-    const runs = [...p.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map((r) => decode(r[1]!));
+  for (const para of blocks(xml, /<w:p[ >]/, "</w:p>")) {
+    const p = para.replace(/<w:(tab|br)\b[^<>]*\/>/g, " ");
+    const runs = blocks(p, /<w:t(?:\s[^<>]*)?>/, "</w:t>").map((r) => decode(r.slice(r.indexOf(">") + 1, -"</w:t>".length)));
     const t = clean(runs.join(""));
     if (t) paras.push(t);
   }

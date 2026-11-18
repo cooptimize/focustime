@@ -143,7 +143,7 @@ describe("meeting capture AI pass (MC-1)", () => {
 describe("a transcript whose speakers aren't named (PK-1)", () => {
   const pocket: TranscriptLine[] = [
     { n: 1, speaker: "Speaker 1", at: null, text: "Morning. We need a holiday calendar import." },
-    { n: 2, speaker: "Speaker 2", at: null, text: "Sam here, I'll send the export spec by Friday." },
+    { n: 2, speaker: "Speaker 2", at: null, text: "Sam here, I'll send the export spec to Dana by Friday." },
     { n: 3, speaker: "Speaker 1", at: null, text: "I'll share sample rates." },
     { n: 4, speaker: "Speaker 3", at: null, text: "Dana will check the import with her team." },
     { n: 5, speaker: "Speaker 2", at: null, text: "Decided: CSV only for now." },
@@ -151,8 +151,9 @@ describe("a transcript whose speakers aren't named (PK-1)", () => {
   const answer = {
     gaps: [{ type: "User Story", parentId: 1201, title: "Holiday calendar import", description: "Holidays imported.", lines: [1] }],
     commitments: [
-      { who: "Sam Tester", what: "Send the export spec", toName: null, due: null, lines: [2] },
-      { who: "Speaker 1", what: "Share sample rates", toName: null, due: null, lines: [3] },
+      { who: "Sam Tester", what: "Send the export spec", toName: "Dana", due: null, lines: [2] },
+      // To whom: a name the words don't hold is a guess, so no one.
+      { who: "Speaker 1", what: "Share sample rates", toName: "Dana Client", due: null, lines: [3] },
       // A name the cited words don't hold: a guess, so nobody's.
       { who: "Sam Tester", what: "Share sample rates again", toName: null, due: null, lines: [3] },
       { who: "Dana", what: "Check the import with her team", toName: null, due: null, lines: [4] },
@@ -172,7 +173,7 @@ describe("a transcript whose speakers aren't named (PK-1)", () => {
     const c = t.calls[0]!;
     expect(c.instructions).toContain("Labels like Speaker 1 are not people");
     expect(c.instructions).toContain("Name a person only where the words themselves name them");
-    expect(c.input).toContain("L2 Speaker 2: Sam here, I'll send the export spec by Friday.");
+    expect(c.input).toContain("L2 Speaker 2: Sam here, I'll send the export spec to Dana by Friday.");
     expect(c.input).not.toMatch(/\[\d+:\d\d\]/);
   });
 
@@ -182,8 +183,8 @@ describe("a transcript whose speakers aren't named (PK-1)", () => {
     if (!r.ok) throw new Error(r.message);
     const promises = r.proposals.map((p) => p.body).filter((b) => b.kind === "commitment");
     expect(promises).toEqual([
-      expect.objectContaining({ what: "Send the export spec", who: "Sam Tester", whoId: "me-id", side: "cooptimize" }),
-      expect.objectContaining({ what: "Share sample rates", who: "", whoId: null, side: "unknown" }),
+      expect.objectContaining({ what: "Send the export spec", who: "Sam Tester", whoId: "me-id", side: "cooptimize", toName: "Dana" }),
+      expect.objectContaining({ what: "Share sample rates", who: "", whoId: null, side: "unknown", toName: null }),
       expect.objectContaining({ what: "Share sample rates again", who: "", whoId: null, side: "unknown" }),
       expect.objectContaining({ what: "Check the import with her team", who: "Dana", whoId: null, side: "client" }),
     ]);

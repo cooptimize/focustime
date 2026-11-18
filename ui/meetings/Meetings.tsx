@@ -608,7 +608,7 @@ function useTranscriptUpload(series: SeriesView, occ: OccurrenceView, onDone: ()
   const pick = (f: File | undefined) => f && void send(f);
   const dropped = (e: ReactDragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
+    // Not stopped here: the page's own drop handler then clears the dragging look (a browser sends no dragleave after a drop).
     if (busy) return;
     const fs = [...e.dataTransfer.files];
     if (fs.length !== 1) return setMsg(fs.length ? POCKET_TEXT.oneAtATime : null);
@@ -639,7 +639,11 @@ const dropProps = (u: ReturnType<typeof useTranscriptUpload>) => ({
 /** PK-1: the recording's date isn't the call's: asked before anything is kept. */
 function DateAsk({ text, onAnswer }: { text: string; onAnswer: (yes: boolean) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => ref.current?.focus(), []);
+  useEffect(() => {
+    ref.current?.focus();
+    // On a phone the bottom bar can cover its buttons: bring the whole question into the middle of the screen.
+    ref.current?.scrollIntoView?.({ block: "center" });
+  }, []);
   return (
     <div className="mtg-date-ask" role="alertdialog" aria-label="The recording's date" aria-describedby="mtg-date-ask-text" tabIndex={-1} ref={ref}>
       <p id="mtg-date-ask-text">{text}</p>
