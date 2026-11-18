@@ -87,7 +87,7 @@ export const POCKET_CALL_WORDS = {
   all: "Bring in all of it",
   whole: (length: string) => `Pocket gave this recording's lines no times, so all of it comes in: ${length}.`,
   seeCall: "The Cooptimizers on this call's invite will be able to read it.",
-  seeClient: "This call's reviewers and the Cooptimizers on its invite will be able to read it.",
+  seeClient: "This call's reviewers and attendees will be able to read it.",
   seeMe: "Only you will see it.",
   fromMine: "From your Pocket recording.",
   fromReviewer: "From a reviewer's Pocket recording.",
@@ -105,6 +105,12 @@ export const POCKET_CALL_WORDS = {
   bring: "Bring it in",
   bringing: "Bringing it in…",
   pick: "Which recording",
+  /** Said beside Continue: the transcript goes to the AI only from here, and nothing goes to DevOps yet. */
+  ai: "Continue brings it in and, if AI is on for this client, the AI proposes updates from it. Nothing goes to DevOps until you confirm.",
+  /** The part question for a recording much longer than its call. */
+  partAsk: (rec: string, call: string) => `This recording is ${rec}; the call was ${call}. Which part comes in?`,
+  /** A row's source when a recording of mine goes with it. */
+  rowSource: "Your Pocket recording",
 } as const;
 
 /** "3 recordings by other people were left out." */

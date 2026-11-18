@@ -34,7 +34,9 @@ export const hasTimes = (segs: readonly Segment[]) => segs.some((s) => s.start !
  * length, they are milliseconds.
  */
 export function inSeconds(segs: readonly Segment[], recordingSeconds: number | null): Segment[] {
-  const last = Math.max(0, ...segs.map((s) => s.end ?? s.start ?? 0));
+  // A loop, not a spread: a long transcript has more segments than a call's arguments can hold.
+  let last = 0;
+  for (const s of segs) last = Math.max(last, s.end ?? s.start ?? 0);
   const millis = recordingSeconds !== null && recordingSeconds > 0 && last > recordingSeconds * 1.5 + 60;
   return millis ? segs.map((s) => ({ ...s, start: s.start === null ? null : s.start / 1000, end: s.end === null ? null : s.end / 1000 })) : [...segs];
 }

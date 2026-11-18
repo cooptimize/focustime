@@ -174,6 +174,16 @@ describe("MC-2b: the list of my recordings and one recording", () => {
     expect(JSON.stringify(t.logs)).not.toMatch(/rec-demo|Proposal|2026-11|@/);
   });
 
+  it("a page past 40 MB is refused as too long, and a length past a day is never read as a recording", async () => {
+    const big = new Response(new ReadableStream({ start(c) { for (let i = 0; i < 41; i++) c.enqueue(new Uint8Array(1024 * 1024)); c.close(); } }), { status: 200 });
+    const t = later({ fetch: (async () => big) as typeof fetch });
+    await expect(t.client.listRecordings(t.key, "2026-11-05", "2026-11-19", mineOnly)).rejects.toMatchObject({ kind: "too_long" });
+    const odd = new Response(JSON.stringify({ success: true, data: [{ id: "r1", recording_at: "2026-11-10T15:00:00Z", duration: 1e15, title: "t", recorded_by: { email: "you@example.com" } }], pagination: { has_more: false } }), { status: 200 });
+    const u = later({ fetch: (async () => odd) as typeof fetch });
+    const r = await u.client.listRecordings(u.key, "2026-11-05", "2026-11-19", mineOnly).catch((e: unknown) => e);
+    expect(JSON.stringify(r)).not.toMatch(/"r1"/);
+  });
+
   it("stops after 3 pages and says more were left", async () => {
     const page = (n: number) => new Response(JSON.stringify({ success: true, data: [{ id: `r${n}`, recording_at: "2026-11-10T15:00:00Z", duration: 60, title: "t", recorded_by: { email: "you@example.com" } }], pagination: { has_more: true } }), { status: 200 });
     let n = 0;

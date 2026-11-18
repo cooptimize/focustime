@@ -119,6 +119,7 @@ describe("MC-2b: my Pocket recordings in the list", () => {
   it("a call it goes with says Pocket recording found, with both recordings, the longer overlap first", () => {
     expect(at("o20").pocket.map((r) => r.id)).toEqual(["on-intake", "short-on-intake"]);
     expect(at("o20").state.label).toBe("Pocket recording found");
+    expect(at("o20").source).toBe("Your Pocket recording");
     expect(at("cstandup").pocket.map((r) => r.id)).toEqual(["on-standup"]);
     expect(at("o21").pocket).toEqual([]);
     expect(at("o21").state.label).not.toBe("Pocket recording found");
@@ -126,8 +127,8 @@ describe("MC-2b: my Pocket recordings in the list", () => {
 
   it("a recording with no call is its own row on its day, under Not reviewed; its title or the kind as its name", () => {
     expect(rows.filter((r) => r.recording).map((r) => [r.key, r.name, r.day, r.bucket, r.state.label])).toEqual([
-      ["puntitled", "Pocket recording", "2026-11-04", "open", "Pocket recording"],
-      ["pno-call", "Call with the carrier", "2026-11-01", "open", "Pocket recording"],
+      ["puntitled", "Pocket recording", "2026-11-04", "open", "Not reviewed"],
+      ["pno-call", "Call with the carrier", "2026-11-01", "open", "Not reviewed"],
     ]);
     expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
   });

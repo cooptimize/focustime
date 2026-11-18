@@ -52,7 +52,8 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await expect.poll(() => bar.locator('[role="status"]').textContent(), { timeout: 30_000 }).toMatch(/^Got 4 recordings at \d+:\d\d [AP]M\. 1 recording by other people was left out\.$/);
     await expect(row(page, "Proposal review with Jordan").locator(".calls-state").textContent()).resolves.toBe("Pocket recording found");
     await expect(row(page, "Harbor sprint planning").locator(".calls-state").textContent()).resolves.toBe("Pocket recording found");
-    await expect(row(page, "Call with the carrier").locator(".calls-state").textContent()).resolves.toBe("Pocket recording");
+    await expect(row(page, "Call with the carrier").locator(".calls-state").textContent()).resolves.toBe("Not reviewed");
+    await expect(row(page, "Call with the carrier").locator(".calls-meta").textContent()).resolves.toMatch(/Your Pocket recording$/);
     await expect(page.getByText("Someone else's recording").count()).resolves.toBe(0);
     expect(await storage(page)).not.toMatch(/rec-demo|carrier|Sprint planning|Proposal review"/);
     expect(errors).toEqual([]);
@@ -81,7 +82,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await row(page, "Proposal review with Jordan").click();
     const setup = page.locator(".mtg-setup");
     await expect(setup.locator('[data-source="pocket"]').isChecked()).resolves.toBe(true);
-    await expect(setup.locator("[data-pocket-who]").textContent()).resolves.toBe("The Cooptimizers on this call's invite will be able to read it.");
+    await expect(setup.locator("[data-pocket-who]").textContent()).resolves.toMatch(/^The Cooptimizers on this call's invite will be able to read it\. Continue brings it in and, if AI is on for this client, the AI proposes updates from it\. Nothing goes to DevOps until you confirm\.$/);
     await expect(setup.locator("[data-pocket-part]").count()).resolves.toBe(0);
     await setup.locator("select").selectOption({ index: 1 });
     await setup.getByRole("button", { name: "Continue" }).click();
@@ -97,7 +98,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await row(page, "Harbor sprint planning").locator(".calls-state", { hasText: "Pocket recording found" }).waitFor({ timeout: 30_000 });
     await row(page, "Harbor sprint planning").click();
     const part = page.locator("[data-pocket-part]");
-    await expect(part.locator("legend").textContent()).resolves.toBe("2 h 15 min");
+    await expect(part.locator("legend").textContent()).resolves.toBe("This recording is 2 h 15 min; the call was 1 h. Which part comes in?");
     await expect(part.getByLabel("Only the part during the call (5 minutes either side)").isChecked()).resolves.toBe(true);
     await expect(part.getByLabel("Bring in all of it").isChecked()).resolves.toBe(false);
     await page.locator(".mtg-setup select").selectOption({ index: 1 });
@@ -119,7 +120,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await row(page, "Call with the carrier").click();
     const add = page.locator("[data-pocket-add]");
     await expect(add.getByLabel("Name").inputValue()).resolves.toBe("Call with the carrier");
-    await expect(add.locator("[data-pocket-who]").textContent()).resolves.toBe("Only you will see it.");
+    await expect(add.locator("[data-pocket-who]").textContent()).resolves.toMatch(/^Only you will see it\. /);
     await add.getByLabel("Name").fill("Carrier labels call");
     await add.locator("select").selectOption({ index: 1 });
     await add.getByRole("button", { name: "Continue" }).click();
@@ -134,7 +135,9 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await nw.first().click();
     const box = page.locator("[data-pocket-bring]");
     await box.waitFor({ timeout: 30_000 });
-    await expect(box.locator("[data-pocket-who]").textContent()).resolves.toBe("This call's reviewers and the Cooptimizers on its invite will be able to read it.");
+    await expect(box.locator("[data-pocket-who]").textContent()).resolves.toMatch(/^This call's reviewers and attendees will be able to read it\. /);
+    // The upload card below doesn't also tell me to export from Pocket.
+    await expect(page.getByText("Export the transcript from Pocket").count()).resolves.toBe(0);
     await box.getByRole("button", { name: "Bring it in" }).click();
     await page.locator(".mtg-pocket-note").waitFor({ timeout: 60_000 });
     await expect(box.count()).resolves.toBe(0);

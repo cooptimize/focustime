@@ -341,4 +341,4 @@ export function aiNextLine(o: { retryAt: string | null; tries: number; retryable
 }
 
 /** MC-2b: a call my Pocket recording goes with, and a recording's own row (plan/pocket-words.ts has the rest). */
-export const POCKET_ROW = { found: "Pocket recording found", kind: "Pocket recording" } as const;
+export const POCKET_ROW = { found: "Pocket recording found", kind: "Pocket recording", source: "Your Pocket recording" } as const;

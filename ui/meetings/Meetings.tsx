@@ -598,11 +598,11 @@ function CallSetup({ call: c, clients, suggested, zone, pocket = [], onCancel, o
         {pocket.length > 0 && (
           <label>
             <input type="radio" name="mtg-source" value="pocket" checked={source === "pocket"} onChange={() => setSource("pocket")} data-source="pocket" />
-            <span><strong>{PW.source}</strong><span className="muted">{pocket.length === 1 ? recordingLine(whenShort(pocket[0]!.startAt, zone), lengthLabel(pocket[0]!.minutes)) : PW.pick}</span></span>
+            <span><strong>{PW.source}</strong><span className="muted">{pocket.length === 1 ? `${pocket[0]!.title ? `${pocket[0]!.title} · ` : ""}${recordingLine(whenShort(pocket[0]!.startAt, zone), lengthLabel(pocket[0]!.minutes))}` : PW.pick}</span></span>
           </label>
         )}
       </fieldset>
-      {source === "pocket" && <PocketFields recs={pocket} call={c} zone={zone} value={choice} onChange={setChoice} who={PW.seeCall} />}
+      {source === "pocket" && <PocketFields recs={pocket} call={c} zone={zone} value={choice} onChange={setChoice} who={PW.seeCall} named />}
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">
         <button type="button" className="mini primary" disabled={busy || !client} onClick={() => void start()}>{busy ? "Starting…" : source === "pocket" && choice.replace ? PW.replaceYes : CALLS_TEXT.start}</button>
@@ -630,7 +630,7 @@ async function bringPocket(occurrenceId: number, v: PocketChoice): Promise<{ ask
  * start and length, which part comes in when it runs more than 10 minutes past the call, what the server said back,
  * and who will see it, all before Continue.
  */
-function PocketFields({ recs, call: c, zone, value, onChange, who }: { recs: readonly ListedRecording[]; call: { startAt: string; endAt: string }; zone: string; value: PocketChoice; onChange: (v: PocketChoice) => void; who: string }) {
+function PocketFields({ recs, call: c, zone, value, onChange, who, named = false }: { recs: readonly ListedRecording[]; call: { startAt: string; endAt: string }; zone: string; value: PocketChoice; onChange: (v: PocketChoice) => void; who: string; /** The one recording is already named above (the setup's source option). */ named?: boolean }) {
   const rec = recs.find((r) => r.id === value.id) ?? recs[0];
   if (!rec) return null;
   const longer = longerThanCall(spanOf(rec), c);
@@ -647,10 +647,10 @@ function PocketFields({ recs, call: c, zone, value, onChange, who }: { recs: rea
           ))}
         </fieldset>
       )}
-      {recs.length === 1 && <p className="muted">{rec.title ? `${rec.title} · ` : ""}{recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>}
+      {recs.length === 1 && !named && <p className="muted">{rec.title ? `${rec.title} · ` : ""}{recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>}
       {longer && value.whole === null && (
         <fieldset className="mtg-setup-source" data-pocket-part="">
-          <legend>{lengthWords(spanOf(rec).seconds)}</legend>
+          <legend>{PW.partAsk(lengthWords(spanOf(rec).seconds), lengthWords((Date.parse(c.endAt) - Date.parse(c.startAt)) / 1000))}</legend>
           <label>
             <input type="radio" name="mtg-pocket-part" checked={value.part === "call"} onChange={() => onChange({ ...value, part: "call" })} />
             <span>{PW.part}</span>
@@ -663,7 +663,7 @@ function PocketFields({ recs, call: c, zone, value, onChange, who }: { recs: rea
       )}
       {value.whole !== null && <p role="status" className="mtg-pocket-ask">{PW.whole(value.whole)}</p>}
       {value.replace && <p role="status" className="mtg-pocket-ask">{PW.replaceAsk}</p>}
-      <p className="muted mtg-pocket-who" data-pocket-who="">{who}</p>
+      <p className="mtg-pocket-who" data-pocket-who="">{who} {PW.ai}</p>
     </div>
   );
 }
@@ -698,7 +698,7 @@ function PocketAddSetup({ rec, clients, suggested, zone, onCancel, onAdded }: { 
         <label>{PW.addName}<input ref={first} value={name} maxLength={200} required disabled={kept !== null} onChange={(e) => setName(e.target.value)} /></label>
         <span className="mtg-add-field"><label htmlFor="mtg-padd-client">{PW.addClient}</label><ClientPick id="mtg-padd-client" clients={clients} value={client} suggested={suggested} onChange={setClient} /></span>
       </div>
-      <p className="muted mtg-pocket-who" data-pocket-who="">{PW.seeMe}</p>
+      <p className="mtg-pocket-who" data-pocket-who="">{PW.seeMe} {PW.ai}</p>
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">
         <button type="submit" className="mini primary" disabled={busy || !name.trim() || !client}>{busy ? PW.bringing : CALLS_TEXT.start}</button>
@@ -999,7 +999,7 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
         </section>
       )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} />}
+      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} pocketOffered={editable && !r.transcript && pocketRecs.length > 0} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
       {view === "transcript" ? (
         <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
@@ -1457,7 +1457,7 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
   );
 }
 
-function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean }) {
+function UploadBox({ series, occ, onDone, dragging = false, pocketOffered = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean; /** MC-2b: my Pocket recording is offered above: no export tip. */ pocketOffered?: boolean }) {
   const up = useTranscriptUpload(series, occ, onDone);
   const [msg, setMsg] = useState<string | null>(null);
   const none = async () => {
@@ -1473,7 +1473,7 @@ function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesVi
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} {series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (

@@ -27,6 +27,8 @@ export const POCKET_TIMEOUT_MS = 15_000;
 export const POCKET_PAGE_SIZE = 100;
 export const POCKET_MAX_PAGES = 3;
 /** MC-2b: the most of one recording's answer read (its transcript), as the upload's unpacked limit. */
+/** A page of the list, read up to this many bytes (each listed recording comes with its transcript). */
+export const POCKET_PAGE_MAX_BYTES = 40 * 1024 * 1024;
 export const POCKET_RECORDING_MAX_BYTES = 20 * 1024 * 1024;
 /**
  * MC-2b: a recording's id as FocusTime accepts it. Pocket's docs say only "Recording ID" (a string); this is the
@@ -129,6 +131,11 @@ export type PocketTranscript = { segments: PocketSegment[]; seconds: number | nu
 const fail = (kind: PocketFailure, status = 0) => new PocketError(kind, status, POCKET_FAILURE_TEXT[kind]);
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+/** A recording's length: at most a day (anything longer isn't a call, and would overflow the time arithmetic). */
+const length = (v: unknown): number | null => {
+  const n = num(v);
+  return n !== null && n <= 24 * 3600 ? n : null;
+};
 
 /** Only who recorded a listed recording: their address, or null. Nothing else of it is touched here. */
 function recorderOf(r: unknown): string | null {
@@ -143,7 +150,7 @@ function readListed(r: unknown): PocketRecording | null {
   const o = r as Record<string, unknown>;
   const id = o.id;
   const at = o.recording_at;
-  const seconds = num(o.duration);
+  const seconds = length(o.duration);
   if (typeof id !== "string" || !POCKET_ID.test(id) || typeof at !== "string" || at.length > 40 || seconds === null) return null;
   let startAt: string;
   try {
@@ -240,8 +247,10 @@ export function createPocketClient(d: PocketDeps) {
     for (let page = 1; page <= POCKET_MAX_PAGES; page++) {
       const res = await send("GET", pageUrl(from, to, page), key, "list");
       let j: { success?: unknown; data?: unknown; pagination?: { has_more?: unknown } } | null;
+      // A page of 100 carries each recording's transcript (no field filter): read up to its own limit, then refused.
+      const text = await textUpTo(res, POCKET_PAGE_MAX_BYTES);
       try {
-        j = (await res.json()) as typeof j;
+        j = JSON.parse(text) as typeof j;
       } catch {
         j = null;
       }
@@ -293,7 +302,7 @@ export function createPocketClient(d: PocketDeps) {
       if (!text.trim()) continue;
       segments.push({ start: num(o.start), end: num(o.end), speaker: typeof o.speaker === "string" ? o.speaker.slice(0, 40) : "", text });
     }
-    const seconds = num(j?.data?.duration);
+    const seconds = length(j?.data?.duration);
     return { segments, seconds };
   }
   return {

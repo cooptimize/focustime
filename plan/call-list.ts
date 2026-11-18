@@ -154,14 +154,14 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
     for (const row of all) {
       if (!takes.has(row)) continue;
       row.pocket = forCall(spans, row).map(({ seconds: _s, ...r }) => r);
-      if (row.pocket.length) row.state = { ...row.state, label: POCKET_ROW.found };
+      if (row.pocket.length) (row.state = { ...row.state, label: POCKET_ROW.found }), (row.source = POCKET_ROW.source);
     }
     for (const r of withNoCall(spans, all)) {
       const { seconds: _s, ...rec } = r;
       all.push({
         key: `p${rec.id}`, occurrenceId: null, other: null, name: rec.title || POCKET_ROW.kind, startAt: rec.startAt, endAt: rec.endAt,
-        day: dayOf(rec.startAt, x.zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_ROW.kind, weekly: null,
-        state: { label: POCKET_ROW.kind, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
+        day: dayOf(rec.startAt, x.zone), minutes: rec.minutes, people: null, clientKey: null, clientName: null, source: POCKET_ROW.source, weekly: null,
+        state: { label: CALLS_TEXT.notReviewed, needsMe: false }, bucket: "open", review: true, pocket: [], recording: rec,
       });
     }
   }
