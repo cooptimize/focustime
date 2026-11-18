@@ -1,9 +1,10 @@
 // DY-1: whether Day draws a block folded to one line. Pure: Day hands in what it knows about the block and the person.
 //
 // By itself, a block folds only on today, in the ordinary view (not Midday check-in, Close out or Timebox my day), with
-// "Fold blocks that have ended" on, once its end has passed. It never folds by itself while a focus session runs on one
-// of its to-dos, while its panel is open, or while the person is in it (keyboard focus or the pointer inside when it
-// ends). A fold or unfold by hand wins over that, for today, in this browser. A drag over a folded block opens it.
+// "Fold blocks that have ended" on, once its end has passed. It never folds by itself while its panel is open, or while
+// the person is in it (keyboard focus, the pointer, or a menu or dialog open, when it ends). A fold or unfold by hand
+// wins over that, for today, in this browser. A focus session on one of its to-dos, or a drag over it, opens it; with
+// the option off every block is open.
 
 export type FoldFacts = {
   /** The day shown is today. */
@@ -33,7 +34,8 @@ export function foldsByItself(f: Omit<FoldFacts, "hand" | "dragOver">): boolean 
 
 /** Whether the block is drawn folded. */
 export function isFolded(f: FoldFacts): boolean {
-  if (!f.isToday || !f.ordinary || f.dragOver) return false;
+  // Off, every block is drawn open; a focus session on one of its to-dos always shows (even folded by hand before).
+  if (!f.isToday || !f.ordinary || !f.option || f.working || f.dragOver) return false;
   if (f.hand !== undefined) return f.hand;
   return foldsByItself(f);
 }
@@ -41,12 +43,13 @@ export function isFolded(f: FoldFacts): boolean {
 /** What a folded line counts: done, not done (late once the block ended), and meetings. */
 export type FoldCounts = { done: number; notDone: number; meetings: number };
 
-export function foldCounts(picks: readonly { half: string; status: string }[], half: string, events: readonly { event: { showAs?: string | undefined; isPersonal?: boolean | undefined; unavailable?: unknown; allDay?: boolean | undefined } }[]): FoldCounts {
+export function foldCounts(picks: readonly { half: string; status: string }[], half: string, events: readonly { event: { showAs?: string | undefined; isPersonal?: boolean | undefined; unavailable?: unknown; allDay?: boolean | undefined; notMeeting?: unknown } }[]): FoldCounts {
   const mine = picks.filter((p) => p.half === half);
   return {
     done: mine.filter((p) => p.status === "done").length,
     notDone: mine.filter((p) => p.status === "planned").length,
-    meetings: events.filter((e) => !e.event.allDay && !e.event.unavailable && e.event.showAs !== "free").length,
+    // Meetings as everywhere else (isMeeting): not personal events, my own timeboxes and solo time, all-day or unavailable time.
+    meetings: events.filter((e) => !e.event.allDay && !e.event.unavailable && !e.event.isPersonal && !e.event.notMeeting && e.event.showAs !== "free").length,
   };
 }
 

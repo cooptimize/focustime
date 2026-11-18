@@ -63,6 +63,16 @@ describe.skipIf(!CHROMIUM || !DIR)("DY-1 screenshots", () => {
           m.scrollTop += el.getBoundingClientRect().top - m.getBoundingClientRect().top + 160;
         });
       });
+      // Cards scrolled: the block's header stays under Day's, on the card's own surface.
+      await call(page, "ui.set_today_timeline", { show: false });
+      await shot(page, `${s}/4b-cards-scrolled`, async () => {
+        await day(page);
+        await page.locator('.day-view [data-half="AM"]').first().evaluate((el) => {
+          const m = el.closest("main")!;
+          m.scrollTop += el.getBoundingClientRect().top - m.getBoundingClientRect().top + 60;
+        });
+      });
+      await call(page, "ui.set_today_timeline", { show: true });
       await page.evaluate(() => localStorage.removeItem("focustime.dayFolds"));
       // The menu with the option.
       await shot(page, `${s}/5-menu`, async () => {

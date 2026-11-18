@@ -5,7 +5,7 @@
 // shows its suggestions as dashed placeholders to accept, drop or move. The phone keeps TY-1's in-block tray, all by tap.
 // Own-plan changes run at once with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
 import { BlockSuggestions } from "./Suggest.tsx";
-import { useDayFold, useHoldWhileInside } from "./dayFold.tsx";
+import { useDayFold } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
@@ -525,7 +525,6 @@ function TimelineBlock(b: BlockProps) {
   // DY-1: a block that has ended folds to one line (Day decides, plan/day-fold.ts); the line or its arrow unfolds it.
   const fold = useDayFold();
   const articleRef = useRef<HTMLElement>(null);
-  useHoldWhileInside(articleRef, slot.half, fold);
   const folded = !b.phone && !!fold?.folded(slot.half);
   const canFold = !b.phone && !!fold?.canFold(slot.half);
   const hours = (

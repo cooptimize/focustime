@@ -5,7 +5,7 @@
 // selects it and opens the block panel with the cursor in its Add box (WD-2); meetings as one summary line that opens into the list when there is no
 // rail. With the Timeline switch on the hour rail is a slim strip (about 56 px) so titles keep their width.
 import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
-import { useDayFold, useHoldWhileInside } from "./dayFold.tsx";
+import { useDayFold } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
 import { callForEvent, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
 import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
@@ -146,7 +146,6 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // DY-1: on Day (its provider), a block of today that has ended folds to one line; Week has no provider and never folds.
   const dayFold = useDayFold();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  useHoldWhileInside(rootRef, slot.half, phone || eve ? null : dayFold);
   const dFolded = !phone && !eve && !!dayFold?.folded(slot.half);
   const canFold = !phone && !eve && !!dayFold?.canFold(slot.half);
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev && !folded && !dFolded ? ", at risk" : ""}${dFolded ? ", folded" : ""}`;
@@ -213,7 +212,17 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         {/* UI-B, PS-1: with no rail (the phone, a card too narrow for one), "now" is a marker in the block under way's header. */}
         {compact && !rail && railNow?.at != null && <NowMark label={railNow.label} onClick={railNow.onClick} />}
         {dFolded && <FoldSummary slot={slot} picks={plan.week?.[slot.date]?.picks ?? []} ended={Date.parse(now) >= Date.parse(slot.end)} tabIndex={selected ? 0 : -1} />}
-        {dFolded && lateChip}
+        {/* What still needs me stays on the folded line: late promises and due dates (the chips line, which it hides). */}
+        {dFolded && chipLine.shown.length > 0 && (
+          <span className="day-fold-chips">
+            {chipLine.shown}
+            {chipLine.more > 0 && (
+              <button type="button" className="chip-more" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen())} aria-label={`${chipLine.more} more promises due: open the block`} title={`${chipLine.more} more promises due: open the block`}>
+                +{chipLine.more}
+              </button>
+            )}
+          </span>
+        )}
         {status.kind !== "none" && !folded && !dFolded && (
           <span className={`status-pill head-chip ${status.kind}`} id={reasonsId} title={chipTip}>
             {pill}

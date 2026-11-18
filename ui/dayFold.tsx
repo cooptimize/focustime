@@ -1,7 +1,7 @@
 // DY-1: Day's folds, for the Timeline and the cards. Day decides (plan/day-fold.ts) and hands each block what it needs
 // through DayFoldCtx; Week has no provider, so its cards never fold. Folds by hand are kept for today in this browser's
 // storage and forgotten the next day; with storage refused they last for the visit. Nothing goes to the server.
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { readHandFolds, writeHandFolds } from "../plan/day-fold.ts";
 import type { Half } from "../week/types.ts";
 
@@ -46,44 +46,18 @@ export type DayFold = {
   toggle: (half: Half) => void;
   /** A drag passed over the block: it stays open until the drag ends. */
   dragOver: (half: Half) => void;
-  /** The person is in the block as it would fold by itself: it waits until they leave. */
-  hold: (half: Half, inside: boolean) => void;
-  /** Whether the block would fold by itself now (for holding it while the person is in it). */
-  wants: (half: Half) => boolean;
 };
 
 export const DayFoldCtx = createContext<DayFold | null>(null);
 export const useDayFold = () => useContext(DayFoldCtx);
 
 /**
- * Holds a block open while the person is in it (focus or the pointer inside) at the moment it would fold by itself;
- * it folds once they leave.
+ * Whether the person is in the block (`el`): keyboard focus in it, the pointer over it, or focus in a menu or dialog
+ * (which lives outside the block and may have been opened from it). Read while the block is still drawn open, so a
+ * fold never removes what they are on.
  */
-export function useHoldWhileInside(ref: RefObject<HTMLElement | null>, half: Half, fold: DayFold | null) {
-  const wants = !!fold?.wants(half);
-  const was = useRef(wants);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!fold || !el) return;
-    if (wants && !was.current) {
-      const inside = el.contains(document.activeElement) || el.matches(":hover");
-      if (inside) fold.hold(half, true);
-    }
-    was.current = wants;
-  });
-  useEffect(() => {
-    const el = ref.current;
-    if (!fold || !el) return;
-    const leave = () => {
-      window.setTimeout(() => {
-        if (!el.contains(document.activeElement) && !el.matches(":hover")) fold.hold(half, false);
-      }, 0);
-    };
-    el.addEventListener("focusout", leave);
-    el.addEventListener("pointerleave", leave);
-    return () => {
-      el.removeEventListener("focusout", leave);
-      el.removeEventListener("pointerleave", leave);
-    };
-  }, [ref, half, fold]);
+export function personIn(el: Element | null): boolean {
+  const a = document.activeElement;
+  if (a && a !== document.body && a.closest("dialog[open], [popover], [role='dialog'], [role='menu'], [role='listbox']")) return true;
+  return !!el && (el.contains(a) || el.matches(":hover"));
 }

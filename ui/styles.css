@@ -7606,9 +7606,16 @@ body.ah-dragging * { cursor: grabbing !important; }
 .app:not(.phone) .today-view.u2.mode-now { --day-head-h: 56px; --tt-head-h: calc(38px * var(--text-scale)); scroll-padding-top: calc(var(--day-head-h) + var(--tt-head-h) + 8px); }
 .app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar { position: sticky; top: calc(-1 * 24px); z-index: 30; margin: -24px -24px 0; padding: 24px 24px 10px; background: var(--bg); }
 .app:not(.phone) .today-view.u2.mode-now > .today-head.day-bar:has(+ *) { box-shadow: 0 1px 0 var(--border); }
-.app:not(.phone) .today-view.u2.mode-now .tt-head { position: sticky; top: calc(var(--day-head-h) - 24px); z-index: 12; background: inherit; border-radius: inherit; }
-.app:not(.phone) .today-view.u2.mode-now .tt-bar { top: calc(var(--day-head-h) - 24px); }
-.app:not(.phone) .today-view.u2.mode-now .tt-check { top: calc(var(--day-head-h) - 24px + var(--tt-head-h) + 4px); max-height: calc(100vh - var(--day-head-h) - var(--tt-head-h) - 90px * var(--text-scale)); }
+/* With Timebox my day's bar up it stays on top (Accept all, Discard), and the block headers and the to-do column stick
+   under it. */
+.app:not(.phone) .today-view.u2.mode-now .today-tl { --tt-bar-h: 0px; }
+.app:not(.phone) .today-view.u2.mode-now .today-tl.has-bar { --tt-bar-h: calc(56px * var(--text-scale)); }
+.app:not(.phone) .today-view.u2.mode-now .tt-head { position: sticky; top: calc(var(--day-head-h) - 24px + var(--tt-bar-h)); z-index: 12; background: inherit; border-radius: inherit; }
+.app:not(.phone) .today-view.u2.mode-now .tt-bar { top: calc(var(--day-head-h) - 24px); z-index: 14; }
+.app:not(.phone) .today-view.u2.mode-now .tt-check { top: calc(var(--day-head-h) - 24px + var(--tt-bar-h) + var(--tt-head-h) + 4px); max-height: calc(100vh - var(--day-head-h) - var(--tt-bar-h) - var(--tt-head-h) - 90px * var(--text-scale)); }
+.app:not(.phone) .today-view.u2.mode-now:has(.today-tl.has-bar) { scroll-padding-top: calc(var(--day-head-h) + var(--tt-bar-h) + var(--tt-head-h) + 8px); }
+/* The card's own background (tinted by its state), through the body, which has none of its own; rows scroll under it. */
+.app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { background: inherit; }
 .app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-head { position: sticky; top: calc(var(--day-head-h) - 24px); z-index: 12; background: inherit; }
 /* A card clips its content (overflow: hidden made it the sticky header's scroller); clip draws the same and lets the
    header stick to Day's scroll. */

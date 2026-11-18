@@ -257,26 +257,41 @@ describe.skipIf(!CHROMIUM)("DY-1: a block folds as the clock passes its end (bro
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("folds the morning once 12:30 passes, unless the person is in it; then once they leave", async () => {
+  it("folds the morning once 12:30 passes, unless the person is in it (focus on a to-do, a menu open); then once they leave", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 }, { before: (p) => p.clock.install({ time: Date.parse(START) }) });
     await call(page, "ui.set_today_timeline", { show: true });
+    await call(page, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Answer the sizing question", size: "S" });
     // The harness pins the page's clock with ?now=; here the page's own (installed) clock runs, so it can pass 12:30.
     await page.goto(`${h.url.split("?")[0]}#/day`);
     await openDay(page);
     expect(await folded(page, AM)).toBe(false);
     await page.clock.runFor(3 * 60_000);
     await expect.poll(() => folded(page, AM)).toBe(true);
-    // Unfold it by hand, then forget that; with focus inside as it ends, it waits.
+    // With focus on a to-do's checkbox in its body as it ends, it waits, and focus stays where it was.
     await page.evaluate(() => localStorage.removeItem("focustime.dayFolds"));
     await page.clock.setSystemTime(Date.parse(START));
     await openDay(page);
     expect(await folded(page, AM)).toBe(false);
-    await page.locator(`${AM} .day-fold-arrow`).focus();
+    const box = page.locator(`${AM} input[type="checkbox"]`).first();
+    await box.focus();
     await page.mouse.move(0, 0);
     await page.clock.runFor(3 * 60_000);
     await page.waitForTimeout(300);
     expect(await folded(page, AM)).toBe(false);
+    await expect(box.evaluate((el) => el === document.activeElement)).resolves.toBe(true);
     await page.locator(".day-view > .day-bar").getByRole("button", { name: "View options for Day" }).focus();
+    await expect.poll(() => folded(page, AM)).toBe(true);
+    // A menu open (it lives outside the block) as it ends: it waits until the menu closes.
+    await page.evaluate(() => localStorage.removeItem("focustime.dayFolds"));
+    await page.clock.setSystemTime(Date.parse(START));
+    await openDay(page);
+    await page.locator(".day-view > .day-bar").getByRole("button", { name: "View options for Day" }).click();
+    await page.getByRole("menu").first().waitFor();
+    await page.clock.runFor(3 * 60_000);
+    await page.waitForTimeout(300);
+    expect(await folded(page, AM)).toBe(false);
+    await page.keyboard.press("Escape");
+    await page.mouse.move(0, 0);
     await expect.poll(() => folded(page, AM)).toBe(true);
     // Its panel open as it ends: it stays open.
     await page.evaluate(() => localStorage.removeItem("focustime.dayFolds"));

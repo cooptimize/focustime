@@ -20,10 +20,11 @@ describe("DY-1: what folds by itself", () => {
     expect(f({ panelOpen: true })).toBe(false);
     expect(f({ inside: true })).toBe(false);
   });
-  it("by hand wins either way, on today in the ordinary view; a drag over it opens it", () => {
+  it("by hand wins either way, on today in the ordinary view; a drag over it, focus on it or the option off opens it", () => {
     expect(f({ hand: false })).toBe(false);
     expect(f({ ended: false, hand: true })).toBe(true);
-    expect(f({ working: true, hand: true })).toBe(true);
+    expect(f({ working: true, hand: true })).toBe(false);
+    expect(f({ option: false, hand: true })).toBe(false);
     expect(f({ hand: true, dragOver: true })).toBe(false);
     expect(f({ hand: true, isToday: false })).toBe(false);
     expect(f({ hand: true, ordinary: false })).toBe(false);
@@ -36,9 +37,9 @@ describe("DY-1: what folds by itself", () => {
 
 describe("DY-1: the folded line", () => {
   const ev = (showAs?: string, extra: Record<string, unknown> = {}) => ({ event: { showAs, ...extra } });
-  it("counts done and not done in the block, and its meetings (not free, all-day or unavailable time)", () => {
+  it("counts done and not done in the block, and its meetings (not free, all-day, unavailable, personal or my own time)", () => {
     const picks = [{ half: "AM", status: "done" }, { half: "AM", status: "planned" }, { half: "AM", status: "dropped" }, { half: "PM", status: "planned" }];
-    expect(foldCounts(picks, "AM", [ev("busy"), ev("free"), ev(undefined, { allDay: true }), ev("busy", { unavailable: {} }), ev("tentative")])).toEqual({ done: 1, notDone: 1, meetings: 2 });
+    expect(foldCounts(picks, "AM", [ev("busy"), ev("free"), ev(undefined, { allDay: true }), ev("busy", { unavailable: {} }), ev("tentative"), ev("busy", { isPersonal: true }), ev("busy", { notMeeting: "timebox" })])).toEqual({ done: 1, notDone: 1, meetings: 2 });
   });
   it("in words", () => {
     expect(foldWords({ done: 2, notDone: 1, meetings: 1 })).toEqual({ done: "2 done", notDone: "1 not done", meetings: "1 meeting" });

@@ -45,7 +45,7 @@ import { blockStatus } from "../plan/blockstatus.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
-import { DayFoldCtx, useHandFolds, type DayFold } from "./dayFold.tsx";
+import { DayFoldCtx, personIn, useHandFolds, type DayFold } from "./dayFold.tsx";
 import { callForEvent, useCallMarks } from "./meetings/calls.ts";
 import { arrivalScroll, foldsByItself, isFolded } from "../plan/day-fold.ts";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
@@ -343,7 +343,9 @@ export function Day(props: Props) {
   const handFolds = useHandFolds(realToday);
   const callMarks = useCallMarks();
   const [dragOpen, setDragOpen] = useState<ReadonlySet<Half>>(new Set());
-  const [held, setHeld] = useState<ReadonlySet<Half>>(new Set());
+  // A block that would fold by itself folds only once Day has seen the person isn't in it (below): until then it is drawn
+  // open, so the check reads the block as it is and a fold never removes what they are on.
+  const [clear, setClear] = useState<ReadonlySet<Half>>(new Set());
   useEffect(() => {
     if (!dnd?.dragging && dragOpen.size) setDragOpen(new Set());
   }, [dnd?.dragging, dragOpen]);
@@ -352,15 +354,15 @@ export function Day(props: Props) {
   const slotOf = (half: Half) => blocks.find((s) => s.half === half);
   const factsOf = (half: Half) => {
     const s = slotOf(half);
-    return { isToday, ordinary, option: props.fold !== false, ended: !!s && ended(s), working: focusHalf === half, panelOpen: panelHere?.half === half, inside: held.has(half), dragOver: dragOpen.has(half), hand: handFolds.hand[half] };
+    const f = { isToday, ordinary, option: props.fold !== false, ended: !!s && ended(s), working: focusHalf === half, panelOpen: panelHere?.half === half, inside: false, dragOver: dragOpen.has(half), hand: handFolds.hand[half] };
+    return { ...f, inside: !!s && foldsByItself(f) && !clear.has(half) };
   };
+  const wants = (half: Half) => !!slotOf(half) && foldsByItself({ ...factsOf(half), inside: false });
   const dayFold: DayFold = {
     folded: (half) => !!slotOf(half) && isFolded(factsOf(half)),
-    canFold: (half) => isToday && ordinary && !!slotOf(half) && !slotOf(half)!.pto,
+    canFold: (half) => isToday && ordinary && props.fold !== false && focusHalf !== half && !!slotOf(half) && !slotOf(half)!.pto,
     toggle: (half) => handFolds.set(half, !isFolded(factsOf(half))),
     dragOver: (half) => setDragOpen((d) => (d.has(half) ? d : new Set([...d, half]))),
-    hold: (half, inside) => setHeld((h) => (h.has(half) === inside ? h : inside ? new Set([...h, half]) : new Set([...h].filter((x) => x !== half)))),
-    wants: (half) => !!slotOf(half) && foldsByItself({ ...factsOf(half), inside: false }),
   };
   const startTimebox = () => {
     if (!day || !canTimebox) return;
@@ -418,14 +420,53 @@ export function Day(props: Props) {
     ro.observe(head);
     return () => ro.disconnect();
   }, [phoneToday, timelineShown, mode]);
+  // DY-1: a block that would fold by itself is checked while still open: the person not in it, it may fold; in it (focus,
+  // the pointer, or a menu or dialog open), it waits, checked again as focus or the pointer moves. A block that no
+  // longer would fold (unfolded by hand, its panel opened, focus started) is forgotten, to be checked again next time.
+  const pending = blocks.filter((s) => wants(s.half) && !clear.has(s.half)).map((s) => s.half);
+  const pendingKey = pending.join(",");
+  const recheckRef = useRef<() => void>(() => {});
+  recheckRef.current = () => {
+    const main = mainRef.current;
+    setClear((c) => {
+      const keep = [...c].filter((h) => wants(h));
+      const add = pending.filter((h) => !personIn(main?.querySelector(`[data-half="${h}"]`) ?? null));
+      const next = new Set([...keep, ...add]);
+      return next.size === c.size && [...next].every((h) => c.has(h)) ? c : next;
+    });
+  };
+  useLayoutEffect(() => recheckRef.current());
+  useEffect(() => {
+    if (!pendingKey) return;
+    const later = () => window.setTimeout(() => recheckRef.current(), 0);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
+    document.addEventListener("pointerover", later);
+    return () => {
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+      document.removeEventListener("pointerover", later);
+    };
+  }, [pendingKey]);
+
   // DY-1: on arrival at today, once a block has ended, Day opens on the block under way (or the next one): its header
   // and first to-dos on screen and the now line in view. Once per day and view; never again while the person is here.
   const arrived = useRef<string | null>(null);
-  const arrivalKey = isToday && mode === "now" && !phone && !props.read && day && blocks.length && blocks.some((s) => ended(s)) ? `${date}|${timelineShown}` : null;
+  const waited = useRef<string | null>(null);
+  const [, setWaitTick] = useState(0);
+  // Opened before any block ended, it counts as arrived: a block ending later never moves the page under the person.
+  const arrivalKey = isToday && mode === "now" && !phone && !props.read && day && blocks.length ? `${date}|${timelineShown}` : null;
   useLayoutEffect(() => {
     const main = mainRef.current;
     if (!arrivalKey || arrived.current === arrivalKey || !main) return;
+    // Measured once the folds are settled: the check above may fold a block in this same commit, so wait one draw
+    // (still before the page is painted). A block the person is in stays open, and the measure takes it as it is.
+    if (pending.length && waited.current !== arrivalKey) {
+      waited.current = arrivalKey;
+      return setWaitTick((n) => n + 1);
+    }
     arrived.current = arrivalKey;
+    if (!blocks.some((s) => ended(s))) return;
     const half = blocks.find((s) => !ended(s))?.half;
     const el = half ? main.querySelector<HTMLElement>(`[data-half="${half}"]`) : null;
     if (!el) return;
@@ -523,7 +564,7 @@ export function Day(props: Props) {
             { id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) },
             ...(props.onSuggest ? [{ id: "suggestions", label: "Suggestions", group: "Show", checked: props.suggestOn !== false, hint: props.suggestOn !== false ? "on" : "off", run: () => props.onSuggest!(props.suggestOn === false) }] : []),
             ...(mode === "now" && !weekendDay && props.onTimeline ? [{ id: "timeline", label: "Timeline", group: "Show", checked: timelineShown, hint: "B", run: () => toggleTimeline() }] : []),
-            ...(mode === "now" && !weekendDay && !phoneToday && props.onFold ? [{ id: "fold", label: "Fold blocks that have ended", group: "Show", toggle: true, checked: props.fold !== false, run: () => props.onFold!(props.fold === false) }] : []),
+            ...(mode === "now" && !weekendDay && !phone && props.onFold ? [{ id: "fold", label: "Fold blocks that have ended", group: "Show", toggle: true, checked: props.fold !== false, run: () => props.onFold!(props.fold === false) }] : []),
             ...(mode === "now" && past && props.onCloseOutOn && !props.asked ? [{ id: "closeout", label: `Close out ${dayWord}`, run: () => props.onCloseOutOn!(date) }] : []),
           ] }}
           onClose={() => setMoreAt(null)}
