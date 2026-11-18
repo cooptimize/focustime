@@ -2216,6 +2216,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   margin-left: 10px; padding: 2px 10px; border-radius: 99px; font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: 0.02em;
   color: var(--on-action); background: var(--sample, var(--watch)); border: 0; cursor: pointer;
 }
+/* EV-1: the top bar's "Dev" or "Local": a quiet status pill (a wash, no line, muted words), never a button look. */
+.site-tag {
+  flex: none; margin-left: 10px; padding: 2px 8px; border-radius: 99px; font-size: var(--fs-2); font-weight: 500; line-height: 1.4;
+  color: var(--text-muted); background: var(--wash-2); white-space: nowrap; cursor: default; user-select: none;
+}
 .feat-link { font-size: inherit; text-align: left; }
 
 /* Plan the week rows (D267): title, state, stories, blocks, pin, ⋯ */
@@ -3490,6 +3495,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 /* S1 (D452): ⋯ › About: one line, Copy and the Guide. */
 .about-dialog { width: min(560px, calc(100vw - 32px)); }
 .about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
+.about-site { margin: 4px 14px 0; font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
 .about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
 /* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives). */
 .owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
@@ -7593,6 +7599,12 @@ body.ah-dragging * { cursor: grabbing !important; }
 @media (max-width: 1320px) {
   .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
   .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+/* EV-1: with "Dev" (or "Local") beside the name the VM's state goes to one word up to 1440 too, the same order of giving
+   way. Never on production, where the mark isn't drawn. */
+@media (max-width: 1440px) {
+  .topbar.six-tabs:has(.site-tag) .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.six-tabs:has(.site-tag) .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
 }
 @media (max-width: 1500px) {
   :root[data-text-size="large"] .topbar.six-tabs .top-btn .top-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

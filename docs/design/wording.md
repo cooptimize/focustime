@@ -450,6 +450,15 @@ Every word below is in `plan/call-words.ts` (`POCKET_TEXT`, `CALL_ROW`) or, for 
 - Where a call's source is shown (Admin › Clients › Meetings): **"Pocket export uploaded by a reviewer Nov 17, 3:05 PM"**.
 - Refusals, by kind and count, never a name: **"That file isn't one FocusTime reads. FocusTime reads a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf)"**; **"That zip has no transcript in it (2 other files). …"**; **"That zip holds 2 PDFs. FocusTime reads one transcript at a time: upload a zip with one in it, or the file by itself"**; **"That zip has another archive inside it. FocusTime opens a zip with the transcript file directly in it"**; **"That zip holds 24 files. FocusTime opens a zip of at most 20, with the transcript in it"**; **"That zip is over 20 MB unpacked. …"**; **"That zip can't be opened: it may be damaged or locked with a password"**; **"That PDF has no text in it: it may be a scan. …"**; **"FocusTime found no transcript in that PDF. …"**; **"That PDF has 612 pages. FocusTime reads a PDF of up to 500"**; **"That PDF took over 10 seconds to read, so FocusTime stopped. Nothing was kept"**; **"That PDF is locked with a password. Export it from Pocket again without one"**; **"That PDF can't be opened: it may be damaged"**.
 
+## EV-1 words (Nov 17)
+
+Every word below is in `ui/appenv.ts` (`SITE_MARKS`, `SITE_WORDS`) or, for the page and the manifest, `server/site-env.ts`.
+
+- The top bar's mark: **"Dev"** on the dev site, **"Local"** in the developer loop; nothing on production. Its tip and what a screen reader says: **"This is FocusTime's dev site, not production."** and **"This is FocusTime's developer loop on this computer, not production."**
+- The browser tab: **"Dev · FocusTime"**, **"Local · FocusTime"**; production's stays **"FocusTime"**.
+- The installed app: **"FocusTime Dev"**, **"FocusTime Local"**; production's stays **"FocusTime"**.
+- About (Settings › About and the About dialog): **"Site: Dev · <address>"**, with **"Local"**, **"Production"** or **"Demo"** for the others.
+
 ## RQ-1 words (Nov 17)
 
 The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own buttons in `plan/call-words.ts` (`CALL_ROW`).
