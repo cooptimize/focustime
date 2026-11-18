@@ -26,6 +26,7 @@ import { callBatch, proposalWords, toReview, type Proposal, type Quote } from ".
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListedRecording, type ListFilter } from "../../plan/call-list.ts";
+import { pocketRows } from "../../plan/call-list-pocket.ts";
 import { gotLine, othersLeftOut, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
 import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
 import type { PocketView } from "../../actions/pocket-types.ts";
@@ -166,7 +167,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
   };
   // Without the calls FocusTime keeps there is no list: my calendar's calls alone would read as nothing to review.
-  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, pocket: pocket?.recordings ?? null }) : { rows: [], older: [] }), [data, others, today, zone, pocket]);
+  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, addPocket: pocketRows(pocket?.recordings ?? null, zone) }) : { rows: [], older: [] }), [data, others, today, zone, pocket]);
   const shown = useMemo(() => filterRows(rows, show, client), [rows, show, client]);
   const counts = useMemo(() => filterCounts(rows, client), [rows, client]);
   const chips = useMemo(() => chipClients(rows), [rows]);

@@ -3,6 +3,7 @@
 // Fictional data only (builders).
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
+import { pocketRows } from "./call-list-pocket.ts";
 import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen } from "./call-list.ts";
 
 const TODAY = "2026-11-05";
@@ -113,7 +114,7 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     rec("no-call", "2026-11-01T20:00:00Z", 25, "Call with the carrier"),
     rec("untitled", "2026-11-04T20:00:00Z", 10),
   ];
-  const { rows } = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, pocket });
+  const { rows } = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE, addPocket: pocketRows(pocket, ZONE) });
   const at = (k: string) => rows.find((r) => r.key === k)!;
 
   it("a call it goes with says Pocket recording found, with both recordings, the longer overlap first", () => {
