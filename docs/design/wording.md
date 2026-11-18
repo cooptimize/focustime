@@ -557,3 +557,14 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - **Saved**, **Saving…**, **Couldn't save. Retry** are the one saved mark.
 - Rewritten so no Renamed name shows: the Needs attention flags on Backlog's Gantt rows (was "readiness flags").
 - Renamed labels (each keeps its old name in `old` so search still finds it): Profile photos; Put new timeboxes on Outlook; Let urgent requests through during focus; Devices that get notifications; Offer Break down on features that need stories; Show Needs attention nudges; Carry over unfinished to-dos from the last (days); Offer DevOps updates at the end of the day; Add a Teams meeting to help sessions; Play a sound when focus or a break ends; Set my Teams status while I focus; Plain focus sets my status to; Pause music when focus ends; Stale after, Stalled after and Watch within with their units; Break down looks back (months); Show the catch-up day; Use the demo as; Send me reminders and Teams messages from this test site.
+
+## WK-6 words (Nov 18)
+
+The words are `CARD_MEETINGS` in `plan/call-words.ts`; the line's in `ui/meetingsLine.ts`.
+
+- The named meetings' heading: **"Meetings"**, then the meetings' time and the free time, **"2h 45m · 45m free"**. Its arrow: **"Fold the meetings to one line"**, **"Name the meetings"**.
+- A row: **"9:30 Northwind requirements workshop"**, and under the name while the call needs me, its type and state, **"Call · Review 10 proposals"**, **"Weekly status call · Upload the transcript"**. Its label: **"9:30, <name>: <state>. Open in Calls"**. A call with no meeting: **"Call: <name>, <state>. Open in Calls"**.
+- More than five: **"1 more"**, **"3 more"**; on hover **"Open the block's agenda"**.
+- The count on another day's line and a past day's card: **"1 call needs you"**, **"2 calls need you"**.
+- The switch: **"Meetings"**, on hover **"Name the meetings on every card. Off: only the day in focus names them"**.
+- The folded line, unchanged from WD-1: **"3 meetings · 2h 45m · 45m free"** (**"No meetings · 3h free"**).

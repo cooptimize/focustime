@@ -1709,3 +1709,13 @@ From the IT review (TD-1):
 - **From SA-2's walkthrough, unchanged from main and left alone** (nothing moves in SA-2): in the demo, DevOps Turn off says the PAT was removed but the client still reads On (the demo keeps its fictional write access); Download JSON says "Export isn't available here" in the demo; Pocket's demo connects while DevOps says nothing leaves the demo; the Undo toast can sit over the status bar and a control near the foot of the window; "Kat 🤖" shows with its emoji in the never-suggested list; Settings has no entry in the top bar's More menu (the avatar menu has it; the More menu is PH-2's and MC-3's to change). Which of these should a later step take?
 - **"Outlook calendar changes" and "Put new timeboxes on Outlook" are two sections apart.** The walkthrough looked for the switch in Accounts and calendars. SA-2 keeps both where they were and adds a link from the first to the second; should they sit together?
 - **A status line is shown whole.** A row whose help is a status (a check's answer, Feedback's setup line, Teams' connection, an action's result) isn't folded behind More about this, and the two-line limit doesn't count it (`status` on `Row`). Feedback's setup line takes three or four lines on a phone. Shorter status words, or fold them too?
+
+## WK-6: Meetings named on the day in focus, a call's state on its meeting, no call chips (Nov 18)
+
+- **A past day with the switch on.** The brief keeps a day before today on its quiet card; with the Meetings switch on it stays quiet too (the count only). Should the switch name a past day's meetings?
+- **Timeline view.** The switch is hidden in Timeline view (the rails already draw every meeting). A call that needs me whose meeting isn't titled on the rail shows as the count line under the card.
+- **A plain meeting row opens the meeting's menu** (as the rail's meetings do); only a row whose call needs me opens the call. Should a row whose call needs nothing open the call too?
+- **A call with no meeting shows only while it needs me** (a reviewed hand call disappears from the card). It stays in Calls.
+- **The demo's registered call** was registered by join link, so it has no series id; with no key on its occurrence it ties by time (exactly one meeting fits). Real calls registered by meeting gain their key on the next layout.
+- **Occurrences laid out before this step** have no key until the job lays them out again (it fills a missing key); until then they tie by time as before.
+- **The fallback by time** refuses a meeting that is another call's keyed meeting, and two meetings at the same time with no key. Is "exactly one fits" too strict for back-to-back series at the same slot?
