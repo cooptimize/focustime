@@ -473,3 +473,9 @@ The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own bu
 - A refusal at Confirm, or one stored from before: **"DevOps says Target Date is needed on a new Feature. Fill it in and try again."**, or **"DevOps refused one of this item's fields. Check the fields and try again."**. Never DevOps's own text (no "TF401320").
 - A call's feature-tier row: **"Create and break down"** beside **"Create in DevOps"**, its tooltip **"Creates it through the preview, then opens Break down on it and starts Run. Nothing more is created until you confirm the stories."**; a feature created from the call keeps **"Break down"**.
 - The three questions show at story level only. Above it the fold reads **"More: description and size"**.
+
+## NT-1 words (Nov 17)
+
+- Settings › Notifications › Quiet hours, the field **"Days off"** with the switch **"Quiet on days off"** and the hint **"PTO and company holidays from Dataverse."** (`DAYS_OFF_WORDS`, `plan/notify.ts`, the one place the screen and Settings search read). The stored setting is unchanged (`[notify] quiet_pto`); search still finds the old **"Quiet on PTO days"**.
+- A day off, wherever notices are described: **"a day off"**, said once as **"PTO or a company holiday"**. In Messages in Teams' hint: **"never in quiet hours, on days off or weekends"**.
+- Nothing new is shown or told: a day off quiets what it did before, and now holidays count.

@@ -25,7 +25,7 @@ import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
-import { KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
+import { DAYS_OFF_WORDS, KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "../plan/status-report.ts";
 import { CLOSEOUT_MINUTES, DEFAULT_TEAMS_RHYTHM, HM, TEAMS_KIND_HINT, TEAMS_KIND_LABEL, TEAMS_KINDS, type TeamsKind, type TeamsRhythm } from "../plan/teams-rhythm.ts";
 import { nextRituals } from "../plan/rituals.ts";
@@ -1159,7 +1159,7 @@ function NotifyForm(p: FormProps) {
     initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, fromTestSite: n.fromTestSite ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "fromTestSite" ? "From this test site" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : k === "fromTestSite" ? "From this test site" : k === "teams" ? "Teams messages" : k === "status" ? "Status report times" : DAYS_OFF_WORDS.label),
   });
   const [test, setTest] = useState<string | null>(null);
   // ENV-1: outside production nothing is sent on its own unless the person switches it on here (the server decides
@@ -1223,9 +1223,9 @@ function NotifyForm(p: FormProps) {
             <option value="off">Never quiet</option>
           </select>
         </AutoField>
-        <AutoField a={a} k="quietPto" label="Days off" hint="PTO days from Dataverse.">
+        <AutoField a={a} k="quietPto" label={DAYS_OFF_WORDS.field} hint={DAYS_OFF_WORDS.hint}>
           <label className="set-check">
-            <input type="checkbox" checked={a.v.quietPto} onChange={(e) => a.change("quietPto", e.target.checked)} /> Quiet on PTO days
+            <input type="checkbox" checked={a.v.quietPto} onChange={(e) => a.change("quietPto", e.target.checked)} /> {DAYS_OFF_WORDS.label}
           </label>
         </AutoField>
       </div>
@@ -1258,7 +1258,7 @@ function NotifyForm(p: FormProps) {
       </Group>
       <Group title="In Teams">
       <TeamsStatusLine />
-      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. On: it may send the kinds you turn on below, only in your own chat with it, never in quiet hours, on PTO days or weekends, and held while you focus.">
+      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. On: it may send the kinds you turn on below, only in your own chat with it, never in quiet hours, on days off or weekends, and held while you focus.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.teamsMessages} onChange={(e) => a.change("teamsMessages", e.target.checked)} /> Let FocusTime message me in Teams
         </label>
