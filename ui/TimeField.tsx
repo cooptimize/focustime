@@ -6,23 +6,23 @@ import { CellPopover } from "./CellPopover.tsx";
 import { nearestStep, parseTypedTime, quarterHours, time12 } from "./timeinput.ts";
 import { Icon } from "./icons.tsx";
 
-export function TimeField({ value, onChange, label, className = "" }: { value: string; onChange: (t: string) => void; label: string; className?: string }) {
+export function TimeField({ value, onChange, label, className = "", clearable = false, disabled = false }: { value: string; onChange: (t: string) => void; label: string; className?: string; /** SA-2: offers No time (an empty time: a nudge off). */ clearable?: boolean | undefined; disabled?: boolean | undefined }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const close = () => (setOpen(false), requestAnimationFrame(() => btn.current?.focus()));
   const save = (t: string) => (onChange(t), close());
   return (
     <>
-      <button ref={btn} type="button" className={`date-field time-field ${className}`} aria-label={`${label}: ${value ? time12(value) : "none"}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{value || "Choose"}</span>
+      <button ref={btn} type="button" className={`date-field time-field ${className}`} aria-label={`${label}: ${value ? time12(value) : "none"}`} aria-haspopup="dialog" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>
+        <span>{value || (clearable ? "No time" : "Choose")}</span>
         <span className="date-field-icon"><Icon name="open" /></span>
       </button>
-      {open && <TimePop anchor={btn.current} label={label} value={value} onSave={save} onCancel={close} />}
+      {open && <TimePop anchor={btn.current} label={label} value={value} onSave={save} onCancel={close} onClear={clearable ? () => save("") : undefined} />}
     </>
   );
 }
 
-function TimePop({ anchor, label, value, onSave, onCancel }: { anchor: HTMLElement | null; label: string; value: string; onSave: (t: string) => void; onCancel: () => void }) {
+function TimePop({ anchor, label, value, onSave, onCancel, onClear }: { anchor: HTMLElement | null; label: string; value: string; onSave: (t: string) => void; onCancel: () => void; onClear?: (() => void) | undefined }) {
   const [text, setText] = useState(value);
   const steps = useMemo(quarterHours, []);
   const typed = parseTypedTime(text);
@@ -59,6 +59,11 @@ function TimePop({ anchor, label, value, onSave, onCancel }: { anchor: HTMLEleme
         }}
       />
       {bad && <p className="dp-bad">That isn't a time FocusTime can read. Try 7pm or 19:30.</p>}
+      {onClear && (
+        <button type="button" className="mini quiet tp-clear" onClick={onClear}>
+          No time
+        </button>
+      )}
       <ul className="tp-list" ref={list} role="listbox" aria-label={`${label}, every 15 minutes`}>
         {steps.map((t) => (
           <li key={t} role="option" aria-selected={t === typed}>

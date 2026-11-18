@@ -66,7 +66,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
     await press(page, "v");
     await expect.poll(checked).toContain("Business hours");
     await go(page, "#/settings/display");
-    await expect(page.locator("fieldset", { hasText: "Timelines" }).getByRole("radio", { name: "Business hours" }).isChecked()).resolves.toBe(true);
+    await expect(page.locator('[data-setting="timelines"]').getByRole("radio", { name: "Business hours" }).isChecked()).resolves.toBe(true);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

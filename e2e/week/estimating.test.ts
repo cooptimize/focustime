@@ -88,11 +88,12 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
   it("SZ-1: Count unsized work as has its scale beside it, and an unsized to-do's chip follows it", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/settings/planning"));
-    const select = page.getByRole("combobox", { name: "Count unsized work as" });
-    await expect.poll(() => select.inputValue()).toBe("60");
-    await expect(select.locator("option").allTextContents()).resolves.toEqual(["30 min", "1h", "2h", "3h"]);
-    await expect(page.locator("[data-size-scale]").textContent()).resolves.toBe("XS 30 min · S 1h · M 2h · L 4h");
-    await select.selectOption("120");
+    // SA-2: one of four is a segmented control; the size scale is said under it.
+    const choice = page.getByRole("radiogroup", { name: "Count unsized work as" });
+    await expect.poll(() => choice.getByRole("radio", { name: "1h" }).getAttribute("aria-checked")).toBe("true");
+    await expect(choice.getByRole("radio").allTextContents()).resolves.toEqual(["30 min", "1h", "2h", "3h"]);
+    await page.locator('[data-setting="count-unsized"]').getByText("XS 30 min · S 1h · M 2h · L 4h", { exact: true }).waitFor();
+    await choice.getByRole("radio", { name: "2h" }).click();
     await page.getByText("Saved").first().waitFor();
     await page.keyboard.press("Escape");
     // A plain to-do from Add work's type box is unsized.
@@ -104,7 +105,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await expect.poll(() => unsized.getAttribute("title"), { timeout: 20_000 }).toMatch(/^Not sized: counts as 2h/);
     // Back to the default, for the tests after this one.
     await page.evaluate(() => (location.hash = "#/settings/planning"));
-    await page.getByRole("combobox", { name: "Count unsized work as" }).selectOption("60");
+    await page.getByRole("radiogroup", { name: "Count unsized work as" }).getByRole("radio", { name: "1h" }).click();
     await page.getByText("Saved").first().waitFor();
     expect(errors).toEqual([]);
     await page.close();

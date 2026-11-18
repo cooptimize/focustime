@@ -19,7 +19,7 @@ export type AnyKind = NotifyKind | "test" | "held";
 
 export const KIND_LABEL: Record<NotifyKind, string> = {
   plan_day: "Add work to today",
-  checkin: "Check-in",
+  checkin: "Midday check-in",
   closeout: "Close out",
   plan_week: "Add work to the week",
   look_ahead: "Look ahead",

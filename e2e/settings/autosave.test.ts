@@ -38,7 +38,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const sent = saves(page);
     await openSettings(page);
     await settingsSection(page, "focus");
-    const field = page.locator(".set-field", { hasText: "Focus length (minutes)" });
+    const field = page.locator('[data-setting="focus-length"]');
     const input = field.locator("input");
     await input.waitFor();
     await expect(page.locator(".ps-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
@@ -54,7 +54,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await input.fill(String(before + 5));
     await page.keyboard.press("Tab");
     await field.getByText("Saved").waitFor({ timeout: 5000 });
-    await expect(field.locator(".set-mark").getAttribute("aria-live")).resolves.toBe("polite");
+    await expect(field.locator(".sp-mark").getAttribute("aria-live")).resolves.toBe("polite");
     expect(sent.n).toBe(1);
     expect((await load(page)).planning.focusMinutes).toBe(before + 5);
     await shotBoth(page, "settings-planning-saved", field);
@@ -71,16 +71,16 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "planning");
-    const atRisk = page.locator(".set-field", { hasText: "At risk at" });
+    const atRisk = page.locator('[data-setting="risk-at-risk"]');
     const input = atRisk.locator("input");
     await input.waitFor();
     const before = (await load(page)).risk.meetingAtRiskMinutes;
     // At risk must be at least the Watch value.
     await input.fill("5");
     await input.press("Enter");
-    await atRisk.locator(".field-problem").waitFor({ timeout: 5000 });
+    await atRisk.locator(".sp-error").waitFor({ timeout: 5000 });
     // Plain words: no config key names.
-    await expect(atRisk.locator(".field-problem").textContent()).resolves.not.toMatch(/_|\(/);
+    await expect(atRisk.locator(".sp-error").textContent()).resolves.not.toMatch(/_|\(/);
     await expect(input.inputValue()).resolves.toBe("5");
     await expect(input.getAttribute("aria-invalid")).resolves.toBe("true");
     expect((await load(page)).risk.meetingAtRiskMinutes).toBe(before);
@@ -108,7 +108,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "ahead");
-    const input = page.locator(".set-field", { hasText: "Stalled after" }).locator("input");
+    const input = page.locator('[data-setting="stalled-days"]').locator("input");
     await input.waitFor();
     const before = (await load(page)).roadmap.stalledDays;
     await input.fill(String(before + 1));
@@ -123,12 +123,12 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "planning");
-    await page.locator(".set-field", { hasText: "Carry-over" }).waitFor();
+    await page.locator('[data-setting="carry-over"]').waitFor();
     const layout = await page.evaluate(() => {
       const body = document.querySelector<HTMLElement>(".ps-body")!;
       body.scrollTo({ top: body.scrollHeight });
       const nav = document.querySelector<HTMLElement>(".ps-side")!.getBoundingClientRect();
-      return { inner: getComputedStyle(body).overflowY, scrolled: body.scrollTop > 0, page: document.querySelector<HTMLElement>(".settings")!.scrollTop, navTop: nav.top, width: body.querySelector(".set-section")!.getBoundingClientRect().width };
+      return { inner: getComputedStyle(body).overflowY, scrolled: body.scrollTop > 0, page: document.querySelector<HTMLElement>(".settings")!.scrollTop, navTop: nav.top, width: body.querySelector(".sp-group")!.getBoundingClientRect().width };
     });
     expect(layout).toMatchObject({ inner: "auto", scrolled: true, page: 0 });
     expect(layout.navTop).toBeGreaterThanOrEqual(0);
@@ -141,7 +141,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     const { page } = await freshPage(h);
     await openSettings(page);
     await settingsSection(page, "devops");
-    const pat = page.locator("form.devops-write").first();
+    const pat = page.locator('form[aria-label^="DevOps write access for"]').first();
     await pat.waitFor({ timeout: 20_000 });
     await expect(pat.getByRole("button", { name: "Check and save" }).count()).resolves.toBe(1);
     await expect(page.locator(".ps-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);

@@ -1,0 +1,4796 @@
+{
+ "totals": {
+  "rowKinds": 10,
+  "helpKinds": 17,
+  "buttonKinds": 13,
+  "buttonHeights": [
+   "h17",
+   "h24",
+   "h28",
+   "h32"
+  ],
+  "tableKinds": 1,
+  "buttonRowKinds": 5,
+  "helpLines": 216,
+  "helpOverTwoAt1440": 1,
+  "helpOverOneAt1440": 10,
+  "helpOverTwoAt390": 13,
+  "foldedHelp": 35,
+  "under44At390": 27
+ },
+ "sections": {
+  "desk|you": {
+   "row": {
+    "count": 6,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 8,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 1,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "One Microsoft sign-in for you, your calendar and your Azure VM.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Your plan stays in your FocusTime account.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Photos show for you and Cooptimizers.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Cached for 7 days on this device, cleared when you sign out.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "From your Microsoft sign-in",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Setup isn't part of the demo.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 4,
+   "order": [
+    {
+     "id": "signed-in",
+     "group": ""
+    },
+    {
+     "id": "photos",
+     "group": ""
+    },
+    {
+     "id": "email",
+     "group": ""
+    },
+    {
+     "id": "dataverse-user",
+     "group": ""
+    },
+    {
+     "id": "environment",
+     "group": ""
+    },
+    {
+     "id": "setup",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|hours": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 5,
+    "kinds": [
+     "p.sp-intro|12px/400|mt12px mb8px|rgb(169, 180, 190)",
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 1,
+    "kinds": [
+     "span.sp-item-actions|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 8,
+    "kinds": [
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "quiet.sp-btn|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Like 09:00-17:00; a second span is an evening. Empty is a day off.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Like 12:00-12:30. Empty splits the day in the middle.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Where you work, as a Region/City name from the list.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "None. Set a day's own hours from its Actions menu on Week.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Shown when Dataverse has no focus block there.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 18,
+   "order": [
+    {
+     "id": "weekdays",
+     "group": ""
+    },
+    {
+     "id": "hours-mon",
+     "group": ""
+    },
+    {
+     "id": "hours-tue",
+     "group": ""
+    },
+    {
+     "id": "hours-wed",
+     "group": ""
+    },
+    {
+     "id": "hours-thu",
+     "group": ""
+    },
+    {
+     "id": "hours-fri",
+     "group": ""
+    },
+    {
+     "id": "hours-sat",
+     "group": ""
+    },
+    {
+     "id": "hours-sun",
+     "group": ""
+    },
+    {
+     "id": "lunch",
+     "group": ""
+    },
+    {
+     "id": "time-zone",
+     "group": ""
+    },
+    {
+     "id": "one-day-changes",
+     "group": ""
+    },
+    {
+     "id": "standing-blocks",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|notifications": {
+   "row": {
+    "count": 33,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 46,
+    "kinds": [
+     "p.sp-intro|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 7,
+    "kinds": [
+     "div.sp-buttons|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 14,
+    "kinds": [
+     "date-field.sp-time.time-field|h32|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|400|rgb(232, 237, 241)",
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "This is a test site. It sends nothing on its own…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…no reminders, notices, pushes or Teams messages, unless you switch them on here",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "On: you get reminders, notices…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…pushes and Teams messages from this test site as the real FocusTime sends them,",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Each is sent once; a click opens FocusTime there.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "At the start of a workday when nothing is on today yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "After lunch when today has to-dos and you haven't closed out.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Near the end of the workday until you close out.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Monday morning when nothing is on this week yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Thursday and Friday when nothing is on next week yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every other Thursday, once next week has work on it.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The first Thursday of each month.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "When a focus session or break ends.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "5 minutes before a meeting while a focus session runs.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "VM off at work start.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Once a workday when promises are due today or overdue.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Once a workday when a PAT or secret expires within 14 days.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "When AI sorts a request from a client chat you are in as needing someone now.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Friday afternoon (and Sunday evening if you like)…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…when some of your features have no update yet for Monday's report. Off until yo",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "After a client call you review, once…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…its proposals are ready, or its transcript needs uploading.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "When someone adds you to a deployment, moves its day or time…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…takes you off it or deletes it. Never for notes, items or links, and never for ",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Friday at this time, or an hour before your day ends if that comes first.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Sunday only when you turn it on. These times hold in Teams too.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Off: an urgent request waits until the focus session ends, with the others.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Focus timer and meeting warnings still come.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "PTO and company holidays from Dataverse.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "During a focus session only the timer…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…meeting warnings and (if you let them) urgent requests come; the rest wait and ",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Push isn't part of the demo. In-app notifications still work.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Off: a push says only what kind of thing it is (Promises due).",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "On: client names and work item titles too, on the lock screen.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Off: FocusTime only answers when you message it in Teams.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "On: it may send the kinds you turn on below, only in your own chat with it, neve",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Never on weekends or PTO days. A test comes now, whatever the switches say.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Today's blocks, meetings, to-dos, promises due and work sent to you.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "This morning's to-dos with Done and Not yet, and Move the rest.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "A promise due tonight that's still open…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…work sent to you waiting over half a day, and someone taking over an item assig",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Friday afternoon, when some of your features have no update yet for Monday's rep",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…with the list and Open Status. Sunday evening too when you turn it on in Status",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "After a client call you review, once…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…Update the plan when its proposals are ready, or Upload its transcript when non",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 56,
+   "order": [
+    {
+     "id": "test-site",
+     "group": ""
+    },
+    {
+     "id": "from-test-site",
+     "group": "This test site"
+    },
+    {
+     "id": "kinds",
+     "group": ""
+    },
+    {
+     "id": "notify-plan-day",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-checkin",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-closeout",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-plan-week",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-look-ahead",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-plan-ahead",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-direction",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-timer",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-meeting",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-vm",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-followups",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-expiry",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-asks",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-status-report",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-meeting-review",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-deployments",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "status-report-times",
+     "group": "Timing"
+    },
+    {
+     "id": "urgent-during-focus",
+     "group": "Timing"
+    },
+    {
+     "id": "quiet",
+     "group": "Quiet hours"
+    },
+    {
+     "id": "quiet-pto",
+     "group": "Quiet hours"
+    },
+    {
+     "id": "test-notification",
+     "group": "Test"
+    },
+    {
+     "id": "devices",
+     "group": ""
+    },
+    {
+     "id": "push-details",
+     "group": "On your devices"
+    },
+    {
+     "id": "teams-messages",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kinds",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-brief",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-checkin",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-closeout",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-nudges",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-status",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-meetings",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-friday",
+     "group": "In Teams"
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|display": {
+   "row": {
+    "count": 8,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 8,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 9,
+    "kinds": [
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Applies at once.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Ctrl + and Ctrl − change it; Ctrl 0 resets.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The default. V on Week changes it until you close FocusTime.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "On Week and Day. Hidden ones still count in risk and free time. G switches it.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "With Show weekend on, weekend days show when something is on them (or always…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…with Every weekend day under Week's View options). A hidden day with to-dos or ",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Friday, the catch-up day.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "No opening animation; the loader's mark holds still.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 14,
+   "order": [
+    {
+     "id": "theme",
+     "group": ""
+    },
+    {
+     "id": "text-size",
+     "group": ""
+    },
+    {
+     "id": "timelines",
+     "group": ""
+    },
+    {
+     "id": "personal-events",
+     "group": ""
+    },
+    {
+     "id": "week-days",
+     "group": ""
+    },
+    {
+     "id": "show-friday",
+     "group": ""
+    },
+    {
+     "id": "show-weekend",
+     "group": ""
+    },
+    {
+     "id": "reduce-motion",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|planning": {
+   "row": {
+    "count": 35,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 40,
+    "kinds": [
+     "p.sp-intro|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 10,
+    "kinds": [
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "date-field.sp-time.time-field|h32|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|400|rgb(232, 237, 241)",
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Your level changes emphasis only; none of these ever blocks anything.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "From your position in Dataverse.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "It changes suggestions only, never what you can do.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Team default: on.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The Needs attention flags on Backlog's Gantt rows. Team default: on.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Used wherever a to-do or story has no size yet, in every fit and budget.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Nothing is written to DevOps.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The same for M.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The same for L.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Unfinished to-dos offered again. 0 turns it off.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Today's and your next working day's empty blocks offer to-dos…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…unfinished ones first, then your backlog. Nothing is planned until you keep it.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Ask opens Wrap it up: Finished or Made progress, a comment…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…and one preview of what goes to DevOps. Only for items you can change, on clien",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "After Close out: Remaining Work where the process has it, else a short comment.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Always previewed; nothing is written without Confirm.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Each comes as a notification; switch the kinds in Notifications.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only while today has no to-dos.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "On a day with to-dos. 0 is the end of lunch.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only if Close out isn't done.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Empty turns a nudge off.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For next week.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For next week, if nothing is on it yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For this week, if nothing is on it yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Both open Backlog › Gantt; switch them in Notifications.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Off hides the time controls; timeboxes are kept.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every new event shows a preview first.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Off: no question; every change is still logged and can be undone.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For Ask to collaborate.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Where Ask to collaborate starts.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "You can turn it off per invite.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Workdays from today, for items not pinned to a day.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Never suggested as helpers or as Who. By name or email.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "When a block's meetings make it Watch or At risk.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "A block with this many minutes of meetings is marked Watch.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "At least the Watch value.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "With no free stretch this long, the block is at risk.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 36,
+   "order": [
+    {
+     "id": "level",
+     "group": "Guidance"
+    },
+    {
+     "id": "break-down-offered",
+     "group": "Guidance"
+    },
+    {
+     "id": "readiness-nudges",
+     "group": "Guidance"
+    },
+    {
+     "id": "count-unsized",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-useful-time",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-s",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-m",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-l",
+     "group": "To-dos"
+    },
+    {
+     "id": "carry-over",
+     "group": "To-dos"
+    },
+    {
+     "id": "suggest-empty-blocks",
+     "group": "To-dos"
+    },
+    {
+     "id": "devops-on-done",
+     "group": "To-dos"
+    },
+    {
+     "id": "progress-offer",
+     "group": "To-dos"
+    },
+    {
+     "id": "plan-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "checkin-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "closeout-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "week-nudges",
+     "group": ""
+    },
+    {
+     "id": "nudge-thu",
+     "group": ""
+    },
+    {
+     "id": "nudge-fri",
+     "group": ""
+    },
+    {
+     "id": "nudge-mon",
+     "group": ""
+    },
+    {
+     "id": "rituals",
+     "group": ""
+    },
+    {
+     "id": "timeboxing",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "outlook-default",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "confirm-own",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "help-length",
+     "group": "Help sessions"
+    },
+    {
+     "id": "help-teams",
+     "group": "Help sessions"
+    },
+    {
+     "id": "help-days",
+     "group": "Help sessions"
+    },
+    {
+     "id": "never-suggested",
+     "group": "Help sessions"
+    },
+    {
+     "id": "exclude",
+     "group": "Help sessions"
+    },
+    {
+     "id": "invite-domains",
+     "group": "Help sessions"
+    },
+    {
+     "id": "risk-rules",
+     "group": ""
+    },
+    {
+     "id": "risk-watch",
+     "group": ""
+    },
+    {
+     "id": "risk-at-risk",
+     "group": ""
+    },
+    {
+     "id": "risk-window",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|focus": {
+   "row": {
+    "count": 11,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 16,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.sp-intro|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-result|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 1,
+    "kinds": [
+     "div.sp-buttons|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 6,
+    "kinds": [
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "The default for a plain timer. A to-do suggests its size instead.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Offered when a session ends. 0 for none.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "With the notification when a session ends.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set while focus runs, back to automatic after. A change you make in Teams wins.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Logged in Settings › Activity › Teams status log.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Teams is connected: focus can set your status, and teammates' presence shows nex",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Deep focus always sets Do not disturb.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Plays only while focus runs. The focus screen can pick another.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Brown is deep, pink brighter, rain a slow swell.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "0 to 100.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "0 to 30.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The sound stops either way.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime can't pause or resume music players here.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Nothing is installed for you.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Keep up to 8 Spotify or YouTube links.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Choosing one on the focus screen opens it: in your default browser (the Spotify ",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 16,
+   "order": [
+    {
+     "id": "focus-length",
+     "group": "Focus timer"
+    },
+    {
+     "id": "break-length",
+     "group": "Focus timer"
+    },
+    {
+     "id": "end-sound",
+     "group": "Focus timer"
+    },
+    {
+     "id": "teams-status",
+     "group": "Teams status"
+    },
+    {
+     "id": "plain-focus-status",
+     "group": "Teams status"
+    },
+    {
+     "id": "sound",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "volume",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "fade",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "on-break",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "pause-media",
+     "group": "Music players"
+    },
+    {
+     "id": "playlists",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|ahead": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 3,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Open items with no change in DevOps for this long. 1 to 26.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Days with no story change. 3 to 60.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Forecast this close to the target. 0 to 4; 0 is never.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 3,
+   "order": [
+    {
+     "id": "stale-weeks",
+     "group": ""
+    },
+    {
+     "id": "stalled-days",
+     "group": ""
+    },
+    {
+     "id": "watch-weeks",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|clients": {
+   "row": {
+    "count": 2,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 7,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Clients stay followed this long after their focus time ends.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "From Dataverse (your Account Worker records and focus time).",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Open one to change how it shows.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 6,
+   "order": [
+    {
+     "id": "follow-grace",
+     "group": ""
+    },
+    {
+     "id": "client-list",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|client": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.dchat.set-field|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 18,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.dchat-hint.muted|12px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|13px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|12px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|11px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "p.dchat-poll.set-hint|12px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.set-hint|12px/400|mt0px mb0px|rgb(143, 156, 170)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 53,
+    "kinds": [
+     "mini.quiet|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "link-btn.mini|h17|rgba(0, 0, 0, 0)|0px rgb(111, 176, 227)|400|rgb(111, 176, 227)",
+     "dchat-purge.mini.quiet|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "on.seg-btn|h24|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h24|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "icon-btn.mini.quiet.small|h28|rgba(0, 0, 0, 0)|0px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "mini|h32|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Empty shows the Dataverse nickname.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The team color, set by your FocusTime admin. Pick another to use your own.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed: focus time is ongoing.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "As Alex Rivera on atlas-demo.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Teams group chats for Atlas, shared with everyone on them who follows Atlas. New",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Delivery team",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "· as of Nov 2, 9:30 AM",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "you@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "priya.shah@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "taylor.kim@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Added by Alex Rivera. Not read yet: every 5 minutes in working hours.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Which list a deployment for this client offers. Not set shows both, with nothing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Add this client's own, hide ones it doesn't use, reorder, and choose what's tick",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The default: too few features with stories to learn from yet.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 82,
+   "order": [
+    {
+     "id": "client-nickname",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-identity",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-shown-as",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-color",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-followed",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-open-states",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-writes",
+     "group": ""
+    },
+    {
+     "id": "client-chats",
+     "group": ""
+    },
+    {
+     "id": "client-ai",
+     "group": ""
+    },
+    {
+     "id": "client-platform",
+     "group": ""
+    },
+    {
+     "id": "client-house-style",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|chats": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 6,
+    "kinds": [
+     "p.sp-intro|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Each client chat registered below is read every 5 minutes in working hours…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…once for everyone who follows the client. A new message from someone outside Co",
+     "lines": 5,
+     "folded": true
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Added on top of the team's. Commas between them.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "A message that is only these (and emoji) is never checked.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "In your own messages: commas between them. Inbox › Promises.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 4,
+   "order": [
+    {
+     "id": "team-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-request-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-ack-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-promise-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "request-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "ack-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "promise-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "chats-read",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|connections": {
+   "row": {
+    "count": 8,
+    "kinds": [
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field.set-vm|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field.vm-auto|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 23,
+    "kinds": [
+     "p.muted.set-intro|13px/400|mt0px mb10px|rgb(143, 156, 170)",
+     "p.muted|13px/400|mt13px mb13px|rgb(143, 156, 170)",
+     "p.muted|13px/400|mt0px mb10px|rgb(143, 156, 170)",
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.muted.state|12px/500|mt0px mb0px|rgb(169, 180, 190)",
+     "span.muted|13px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.set-hint|12px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.sp-result|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 8,
+    "kinds": [
+     "span.sp-status-actions|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-buttons|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "span.set-actions|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 13,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "quiet.sp-btn|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "mini.primary|h28|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "mini|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "mini.quiet|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "mini|h32|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Any calendar with a subscription link (an .ics or webcal:// address): Google, Ou",
+     "lines": 3,
+     "folded": false
+    },
+    {
+     "text": "No calendars added by link yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The link works like a password: FocusTime keeps it encrypted, never shows it aga",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Connecting lets FocusTime count your Pocket recordings when you press a button h",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Pocket's guide to API keys",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Allowed: FocusTime can create…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…change and remove the Outlook events it created (timeboxes), each after a previ",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Every permission FocusTime asks Microsoft for, on your one sign-in.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Read only unless it says so.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "rg-demo-dev · eastus",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime reads this VM's status, starts it, and stops it only when you press St",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Found by the VM's Owner tag.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Pressing Start in the morning starts the VM at once.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime in Teams runs in the hosted app. Here it can't send anything.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set up: stories go under Feature #496 (FocusTime (demo feature)) as User Story…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…created as you with your DevOps write PAT for Internal.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Goes to the FocusTime backlog in Cooptimize's DevOps. 0 of 10 sent today.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 25,
+   "order": [
+    {
+     "id": "sources",
+     "group": ""
+    },
+    {
+     "id": "calendar-links",
+     "group": ""
+    },
+    {
+     "id": "pocket",
+     "group": ""
+    },
+    {
+     "id": "outlook-changes",
+     "group": ""
+    },
+    {
+     "id": "permissions",
+     "group": ""
+    },
+    {
+     "id": "vm",
+     "group": "My VM"
+    },
+    {
+     "id": "vm-start",
+     "group": "My VM"
+    },
+    {
+     "id": "vm-autostart",
+     "group": "My VM"
+    },
+    {
+     "id": "teams-app",
+     "group": ""
+    },
+    {
+     "id": "feedback",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|devops": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 6,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 8,
+    "kinds": [
+     "span.sp-status-actions|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-buttons|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 13,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "main.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "quiet.sp-btn|h28|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "FocusTime reads with the company PAT from Dataverse, only when fetching…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…it is never shown.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Your own PAT per client, with Work Items (Read & write).",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime checks it is yours, keeps it sealed and never shows it again.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Why an item isn't showing…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…whether FocusTime's last check of DevOps found it, the scope, and where it show",
+     "lines": 2,
+     "folded": true
+    }
+   ],
+   "small": 26,
+   "order": [
+    {
+     "id": "devops-read",
+     "group": ""
+    },
+    {
+     "id": "devops-write",
+     "group": ""
+    },
+    {
+     "id": "find-item",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|ai": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "tr.|12px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 10,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 1,
+    "kinds": [
+     "table.sp-table|12px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "button": {
+    "count": 2,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Examples come from the same client's features changed in this many months…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…1 to 36.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Sends one fixed request with no client data.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only what a task needs, about one client at a time…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…and only for clients a FocusTime admin allowed. Before anything goes, FocusTime",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "What you asked the assistant and its answers, kept 30 days.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only you see it; it is in Export my data.",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 6,
+   "order": [
+    {
+     "id": "ai-team",
+     "group": ""
+    },
+    {
+     "id": "ai-allowed",
+     "group": ""
+    },
+    {
+     "id": "ai-limit",
+     "group": ""
+    },
+    {
+     "id": "ai-month",
+     "group": ""
+    },
+    {
+     "id": "draft-months",
+     "group": ""
+    },
+    {
+     "id": "ai-test",
+     "group": ""
+    },
+    {
+     "id": "ai-sent",
+     "group": ""
+    },
+    {
+     "id": "ai-log",
+     "group": ""
+    },
+    {
+     "id": "assistant-history",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|activity": {
+   "row": {
+    "count": 1,
+    "kinds": [
+     "div.sp-row.sp-wide|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 9,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.muted|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "p.muted|12px/400|mt0px mb8px|rgb(143, 156, 170)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Every change FocusTime made in other apps.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every change FocusTime made in DevOps, with your write PAT, and the feedback you",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing written to DevOps yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every start and stop of your VM: when, who (you, or automatic before your day), ",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing written yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Each time focus set your Teams status (with how long it lasts at most) or put it",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Each update you sent from a promise: by Teams, email, a DevOps comment or a call",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing yet.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "write-log",
+     "group": ""
+    },
+    {
+     "id": "devops-log",
+     "group": ""
+    },
+    {
+     "id": "azure-log",
+     "group": ""
+    },
+    {
+     "id": "teams-log",
+     "group": ""
+    },
+    {
+     "id": "loop-log",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|data": {
+   "row": {
+    "count": 6,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 9,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.muted|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "p.sp-intro|12px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 2,
+    "kinds": [
+     "div.dx-actions|13px/400|mt8px mb8px|rgb(232, 237, 241)",
+     "div.sp-buttons|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 5,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "mini.primary|h28|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "main.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Your plans, promises, captures, logs and settings. Never a password or token.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Empties the plan store after a full backup. Settings and calendars stay.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Signs you out and deletes everything FocusTime keeps for you.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Counts for your own chats only, to answer \"why is a promise missing\" and \"why wa",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Fictional data; your own plan isn't touched.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Puts the demo back as it started…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…every change, write, capture and send since is gone. Takes a few seconds. Ficti",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "A teammate who uses FocusTime, with their own plan…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…a deployment you add them to shows there.",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 9,
+   "order": [
+    {
+     "id": "export",
+     "group": ""
+    },
+    {
+     "id": "reset-plan",
+     "group": ""
+    },
+    {
+     "id": "delete",
+     "group": ""
+    },
+    {
+     "id": "diagnostics",
+     "group": ""
+    },
+    {
+     "id": "demo-mode",
+     "group": "Demo"
+    },
+    {
+     "id": "demo-reset",
+     "group": "Demo"
+    },
+    {
+     "id": "demo-be",
+     "group": "Demo"
+    }
+   ],
+   "pageWide": false
+  },
+  "desk|about": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row|13px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 2,
+    "kinds": [
+     "span.sp-help|12px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 1,
+    "kinds": [
+     "plain.sp-btn|h28|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "How FocusTime works, the keys and the questions people ask.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Tokens and components in each theme (developer loop).",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 2,
+   "order": [
+    {
+     "id": "version",
+     "group": ""
+    },
+    {
+     "id": "guide",
+     "group": ""
+    },
+    {
+     "id": "style-guide",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|you": {
+   "row": {
+    "count": 6,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 8,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 1,
+    "kinds": [
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "One Microsoft sign-in for you, your calendar and your Azure VM.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Your plan stays in your FocusTime account.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Photos show for you and Cooptimizers.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Cached for 7 days on this device, cleared when you sign out.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "From your Microsoft sign-in",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Setup isn't part of the demo.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "signed-in",
+     "group": ""
+    },
+    {
+     "id": "photos",
+     "group": ""
+    },
+    {
+     "id": "email",
+     "group": ""
+    },
+    {
+     "id": "dataverse-user",
+     "group": ""
+    },
+    {
+     "id": "environment",
+     "group": ""
+    },
+    {
+     "id": "setup",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|hours": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 5,
+    "kinds": [
+     "p.sp-intro|14.9375px/400|mt12px mb8px|rgb(169, 180, 190)",
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 1,
+    "kinds": [
+     "span.sp-item-actions|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 9,
+    "kinds": [
+     "mini|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "quiet.sp-btn|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Like 09:00-17:00; a second span is an evening. Empty is a day off.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Like 12:00-12:30. Empty splits the day in the middle.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Where you work, as a Region/City name from the list.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "None. Set a day's own hours from its Actions menu on Week.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Shown when Dataverse has no focus block there.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 1,
+   "order": [
+    {
+     "id": "weekdays",
+     "group": ""
+    },
+    {
+     "id": "hours-mon",
+     "group": ""
+    },
+    {
+     "id": "hours-tue",
+     "group": ""
+    },
+    {
+     "id": "hours-wed",
+     "group": ""
+    },
+    {
+     "id": "hours-thu",
+     "group": ""
+    },
+    {
+     "id": "hours-fri",
+     "group": ""
+    },
+    {
+     "id": "hours-sat",
+     "group": ""
+    },
+    {
+     "id": "hours-sun",
+     "group": ""
+    },
+    {
+     "id": "lunch",
+     "group": ""
+    },
+    {
+     "id": "time-zone",
+     "group": ""
+    },
+    {
+     "id": "one-day-changes",
+     "group": ""
+    },
+    {
+     "id": "standing-blocks",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|notifications": {
+   "row": {
+    "count": 33,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 46,
+    "kinds": [
+     "p.sp-intro|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 7,
+    "kinds": [
+     "div.sp-buttons|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 14,
+    "kinds": [
+     "date-field.sp-time.time-field|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|400|rgb(232, 237, 241)",
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "This is a test site. It sends nothing on its own…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…no reminders, notices, pushes or Teams messages, unless you switch them on here",
+     "lines": 4,
+     "folded": true
+    },
+    {
+     "text": "On: you get reminders, notices…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…pushes and Teams messages from this test site as the real FocusTime sends them,",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "Each is sent once; a click opens FocusTime there.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "At the start of a workday when nothing is on today yet.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "After lunch when today has to-dos and you haven't closed out.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Near the end of the workday until you close out.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Monday morning when nothing is on this week yet.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Thursday and Friday when nothing is on next week yet.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Every other Thursday, once next week has work on it.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "The first Thursday of each month.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "When a focus session or break ends.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "5 minutes before a meeting while a focus session runs.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "VM off at work start.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Once a workday when promises are due today or overdue.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Once a workday when a PAT or secret expires within 14 days.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "When AI sorts a request from a client chat you are in as needing someone now.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Friday afternoon (and Sunday evening if you like)…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…when some of your features have no update yet for Monday's report. Off until yo",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "After a client call you review, once…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…its proposals are ready, or its transcript needs uploading.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "When someone adds you to a deployment, moves its day or time…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…takes you off it or deletes it. Never for notes, items or links, and never for ",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Friday at this time, or an hour before your day ends if that comes first.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Sunday only when you turn it on. These times hold in Teams too.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Off: an urgent request waits until the focus session ends, with the others.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Focus timer and meeting warnings still come.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "PTO and company holidays from Dataverse.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "During a focus session only the timer…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…meeting warnings and (if you let them) urgent requests come; the rest wait and ",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "Push isn't part of the demo. In-app notifications still work.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Off: a push says only what kind of thing it is (Promises due).",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "On: client names and work item titles too, on the lock screen.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Off: FocusTime only answers when you message it in Teams.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "On: it may send the kinds you turn on below, only in your own chat with it, neve",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "Never on weekends or PTO days. A test comes now, whatever the switches say.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Today's blocks, meetings, to-dos, promises due and work sent to you.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "This morning's to-dos with Done and Not yet, and Move the rest.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "What got done today: tick to-dos or tell me, then one Confirm closes the day.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "A promise due tonight that's still open…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…work sent to you waiting over half a day, and someone taking over an item assig",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "Friday afternoon, when some of your features have no update yet for Monday's rep",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…with the list and Open Status. Sunday evening too when you turn it on in Status",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "After a client call you review, once…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…Update the plan when its proposals are ready, or Upload its transcript when non",
+     "lines": 3,
+     "folded": true
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "test-site",
+     "group": ""
+    },
+    {
+     "id": "from-test-site",
+     "group": "This test site"
+    },
+    {
+     "id": "kinds",
+     "group": ""
+    },
+    {
+     "id": "notify-plan-day",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-checkin",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-closeout",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-plan-week",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-look-ahead",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-plan-ahead",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-direction",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-timer",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-meeting",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-vm",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-followups",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-expiry",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-asks",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-status-report",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-meeting-review",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "notify-deployments",
+     "group": "In FocusTime"
+    },
+    {
+     "id": "status-report-times",
+     "group": "Timing"
+    },
+    {
+     "id": "urgent-during-focus",
+     "group": "Timing"
+    },
+    {
+     "id": "quiet",
+     "group": "Quiet hours"
+    },
+    {
+     "id": "quiet-pto",
+     "group": "Quiet hours"
+    },
+    {
+     "id": "test-notification",
+     "group": "Test"
+    },
+    {
+     "id": "devices",
+     "group": ""
+    },
+    {
+     "id": "push-details",
+     "group": "On your devices"
+    },
+    {
+     "id": "teams-messages",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kinds",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-brief",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-checkin",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-closeout",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-nudges",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-status",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-meetings",
+     "group": "In Teams"
+    },
+    {
+     "id": "teams-kind-friday",
+     "group": "In Teams"
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|display": {
+   "row": {
+    "count": 8,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 8,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 9,
+    "kinds": [
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Applies at once.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Ctrl + and Ctrl − change it; Ctrl 0 resets.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The default. V on Week changes it until you close FocusTime.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "On Week and Day. Hidden ones still count in risk and free time. G switches it.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "With Show weekend on, weekend days show when something is on them (or always…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…with Every weekend day under Week's View options). A hidden day with to-dos or ",
+     "lines": 4,
+     "folded": true
+    },
+    {
+     "text": "Friday, the catch-up day.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "No opening animation; the loader's mark holds still.",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "theme",
+     "group": ""
+    },
+    {
+     "id": "text-size",
+     "group": ""
+    },
+    {
+     "id": "timelines",
+     "group": ""
+    },
+    {
+     "id": "personal-events",
+     "group": ""
+    },
+    {
+     "id": "week-days",
+     "group": ""
+    },
+    {
+     "id": "show-friday",
+     "group": ""
+    },
+    {
+     "id": "show-weekend",
+     "group": ""
+    },
+    {
+     "id": "reduce-motion",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|planning": {
+   "row": {
+    "count": 35,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 40,
+    "kinds": [
+     "p.sp-intro|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 10,
+    "kinds": [
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "date-field.sp-time.time-field|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|400|rgb(232, 237, 241)",
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Your level changes emphasis only; none of these ever blocks anything.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "From your position in Dataverse.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "It changes suggestions only, never what you can do.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Team default: on.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The Needs attention flags on Backlog's Gantt rows. Team default: on.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Used wherever a to-do or story has no size yet, in every fit and budget.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing is written to DevOps.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "The same for M.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The same for L.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Unfinished to-dos offered again. 0 turns it off.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Today's and your next working day's empty blocks offer to-dos…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…unfinished ones first, then your backlog. Nothing is planned until you keep it.",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "Ask opens Wrap it up: Finished or Made progress, a comment…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…and one preview of what goes to DevOps. Only for items you can change, on clien",
+     "lines": 3,
+     "folded": true
+    },
+    {
+     "text": "After Close out: Remaining Work where the process has it, else a short comment.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Always previewed; nothing is written without Confirm.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Each comes as a notification; switch the kinds in Notifications.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Only while today has no to-dos.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "On a day with to-dos. 0 is the end of lunch.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only if Close out isn't done.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Empty turns a nudge off.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For next week.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For next week, if nothing is on it yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "For this week, if nothing is on it yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Both open Backlog › Gantt; switch them in Notifications.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Off hides the time controls; timeboxes are kept.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every new event shows a preview first.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Off: no question; every change is still logged and can be undone.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "For Ask to collaborate.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Where Ask to collaborate starts.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "You can turn it off per invite.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Workdays from today, for items not pinned to a day.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Never suggested as helpers or as Who. By name or email.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "When a block's meetings make it Watch or At risk.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "A block with this many minutes of meetings is marked Watch.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "At least the Watch value.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "With no free stretch this long, the block is at risk.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 1,
+   "order": [
+    {
+     "id": "level",
+     "group": "Guidance"
+    },
+    {
+     "id": "break-down-offered",
+     "group": "Guidance"
+    },
+    {
+     "id": "readiness-nudges",
+     "group": "Guidance"
+    },
+    {
+     "id": "count-unsized",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-useful-time",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-s",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-m",
+     "group": "To-dos"
+    },
+    {
+     "id": "shortest-l",
+     "group": "To-dos"
+    },
+    {
+     "id": "carry-over",
+     "group": "To-dos"
+    },
+    {
+     "id": "suggest-empty-blocks",
+     "group": "To-dos"
+    },
+    {
+     "id": "devops-on-done",
+     "group": "To-dos"
+    },
+    {
+     "id": "progress-offer",
+     "group": "To-dos"
+    },
+    {
+     "id": "plan-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "checkin-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "closeout-reminder",
+     "group": "Reminders"
+    },
+    {
+     "id": "week-nudges",
+     "group": ""
+    },
+    {
+     "id": "nudge-thu",
+     "group": ""
+    },
+    {
+     "id": "nudge-fri",
+     "group": ""
+    },
+    {
+     "id": "nudge-mon",
+     "group": ""
+    },
+    {
+     "id": "rituals",
+     "group": ""
+    },
+    {
+     "id": "timeboxing",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "outlook-default",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "confirm-own",
+     "group": "Timeboxes"
+    },
+    {
+     "id": "help-length",
+     "group": "Help sessions"
+    },
+    {
+     "id": "help-teams",
+     "group": "Help sessions"
+    },
+    {
+     "id": "help-days",
+     "group": "Help sessions"
+    },
+    {
+     "id": "never-suggested",
+     "group": "Help sessions"
+    },
+    {
+     "id": "exclude",
+     "group": "Help sessions"
+    },
+    {
+     "id": "invite-domains",
+     "group": "Help sessions"
+    },
+    {
+     "id": "risk-rules",
+     "group": ""
+    },
+    {
+     "id": "risk-watch",
+     "group": ""
+    },
+    {
+     "id": "risk-at-risk",
+     "group": ""
+    },
+    {
+     "id": "risk-window",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|focus": {
+   "row": {
+    "count": 11,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 16,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.sp-intro|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-result|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 1,
+    "kinds": [
+     "div.sp-buttons|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 6,
+    "kinds": [
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "The default for a plain timer. A to-do suggests its size instead.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Offered when a session ends. 0 for none.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "With the notification when a session ends.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set while focus runs, back to automatic after. A change you make in Teams wins.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Logged in Settings › Activity › Teams status log.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Teams is connected: focus can set your status, and teammates' presence shows nex",
+     "lines": 3,
+     "folded": false
+    },
+    {
+     "text": "Deep focus always sets Do not disturb.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Plays only while focus runs. The focus screen can pick another.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Brown is deep, pink brighter, rain a slow swell.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "0 to 100.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "0 to 30.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The sound stops either way.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime can't pause or resume music players here.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Nothing is installed for you.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Keep up to 8 Spotify or YouTube links.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Choosing one on the focus screen opens it: in your default browser (the Spotify ",
+     "lines": 3,
+     "folded": true
+    }
+   ],
+   "small": 2,
+   "order": [
+    {
+     "id": "focus-length",
+     "group": "Focus timer"
+    },
+    {
+     "id": "break-length",
+     "group": "Focus timer"
+    },
+    {
+     "id": "end-sound",
+     "group": "Focus timer"
+    },
+    {
+     "id": "teams-status",
+     "group": "Teams status"
+    },
+    {
+     "id": "plain-focus-status",
+     "group": "Teams status"
+    },
+    {
+     "id": "sound",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "volume",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "fade",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "on-break",
+     "group": "Sound while focusing"
+    },
+    {
+     "id": "pause-media",
+     "group": "Music players"
+    },
+    {
+     "id": "playlists",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|ahead": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 3,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Open items with no change in DevOps for this long. 1 to 26.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Days with no story change. 3 to 60.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Forecast this close to the target. 0 to 4; 0 is never.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "stale-weeks",
+     "group": ""
+    },
+    {
+     "id": "stalled-days",
+     "group": ""
+    },
+    {
+     "id": "watch-weeks",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|clients": {
+   "row": {
+    "count": 2,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 7,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Clients stay followed this long after their focus time ends.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "From Dataverse (your Account Worker records and focus time).",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Open one to change how it shows.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Followed · DevOps writes on",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "follow-grace",
+     "group": ""
+    },
+    {
+     "id": "client-list",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|client": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.dchat.set-field|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 18,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.dchat-hint.muted|14.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|15.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|14.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.muted|13.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "p.dchat-poll.set-hint|14.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.set-hint|14.9375px/400|mt0px mb0px|rgb(143, 156, 170)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 53,
+    "kinds": [
+     "mini.quiet|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "link-btn.mini|h21|rgba(0, 0, 0, 0)|0px rgb(111, 176, 227)|400|rgb(111, 176, 227)",
+     "dchat-purge.mini.quiet|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "on.seg-btn|h44|oklab(0.348902 -0.0058041 -0.0144074)|0px rgb(232, 237, 241)|500|rgb(232, 237, 241)",
+     "seg-btn|h44|rgba(0, 0, 0, 0)|0px rgb(169, 180, 190)|500|rgb(169, 180, 190)",
+     "icon-btn.mini.quiet.small|h44|rgba(0, 0, 0, 0)|0px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "mini|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Change this in Dataverse",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Empty shows the Dataverse nickname.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The team color, set by your FocusTime admin. Pick another to use your own.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Followed: focus time is ongoing.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "As Alex Rivera on atlas-demo.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Teams group chats for Atlas, shared with everyone on them who follows Atlas. New",
+     "lines": 4,
+     "folded": false
+    },
+    {
+     "text": "Delivery team",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "· as of Nov 2, 9:30 AM",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "you@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "priya.shah@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "taylor.kim@example.com",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Added by Alex Rivera. Not read yet: every 5 minutes in working hours.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Which list a deployment for this client offers. Not set shows both, with nothing",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Add this client's own, hide ones it doesn't use, reorder, and choose what's tick",
+     "lines": 3,
+     "folded": false
+    },
+    {
+     "text": "The default: too few features with stories to learn from yet.",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 17,
+   "order": [
+    {
+     "id": "client-nickname",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-identity",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-shown-as",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-color",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-followed",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-open-states",
+     "group": "Atlas"
+    },
+    {
+     "id": "client-writes",
+     "group": ""
+    },
+    {
+     "id": "client-chats",
+     "group": ""
+    },
+    {
+     "id": "client-ai",
+     "group": ""
+    },
+    {
+     "id": "client-platform",
+     "group": ""
+    },
+    {
+     "id": "client-house-style",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|chats": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "li.sp-item|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 6,
+    "kinds": [
+     "p.sp-intro|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 0,
+    "kinds": []
+   },
+   "helps": [
+    {
+     "text": "Each client chat registered below is read every 5 minutes in working hours…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…once for everyone who follows the client. A new message from someone outside Co",
+     "lines": 13,
+     "folded": true
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Added on top of the team's. Commas between them.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "A message that is only these (and emoji) is never checked.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "In your own messages: commas between them. Inbox › Promises.",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "team-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-request-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-ack-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "team-promise-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "request-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "ack-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "promise-phrases",
+     "group": "Phrases"
+    },
+    {
+     "id": "chats-read",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|connections": {
+   "row": {
+    "count": 8,
+    "kinds": [
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field.set-vm|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.set-field.vm-auto|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 23,
+    "kinds": [
+     "p.muted.set-intro|15.9375px/400|mt0px mb10px|rgb(143, 156, 170)",
+     "p.muted|15.9375px/400|mt15.9375px mb15.9375px|rgb(143, 156, 170)",
+     "p.muted|15.9375px/400|mt0px mb10px|rgb(143, 156, 170)",
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.muted.state|14.9375px/500|mt0px mb0px|rgb(169, 180, 190)",
+     "span.muted|15.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.set-hint|14.9375px/400|mt0px mb0px|rgb(143, 156, 170)",
+     "span.sp-result|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 8,
+    "kinds": [
+     "span.sp-status-actions|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-buttons|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "span.set-actions|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 13,
+    "kinds": [
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "quiet.sp-btn|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)",
+     "mini.primary|h44|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "mini|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "mini.quiet|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Any calendar with a subscription link (an .ics or webcal:// address): Google, Ou",
+     "lines": 6,
+     "folded": false
+    },
+    {
+     "text": "No calendars added by link yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "The link works like a password: FocusTime keeps it encrypted, never shows it aga",
+     "lines": 4,
+     "folded": false
+    },
+    {
+     "text": "Connecting lets FocusTime count your Pocket recordings when you press a button h",
+     "lines": 5,
+     "folded": false
+    },
+    {
+     "text": "Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees",
+     "lines": 4,
+     "folded": false
+    },
+    {
+     "text": "Pocket's guide to API keys",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Allowed: FocusTime can create…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…change and remove the Outlook events it created (timeboxes), each after a previ",
+     "lines": 5,
+     "folded": true
+    },
+    {
+     "text": "Every permission FocusTime asks Microsoft for, on your one sign-in.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Read only unless it says so.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Missing",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "rg-demo-dev · eastus",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "FocusTime reads this VM's status, starts it, and stops it only when you press St",
+     "lines": 3,
+     "folded": false
+    },
+    {
+     "text": "Found by the VM's Owner tag.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Pressing Start in the morning starts the VM at once.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "FocusTime in Teams runs in the hosted app. Here it can't send anything.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Set up: stories go under Feature #496 (FocusTime (demo feature)) as User Story…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…created as you with your DevOps write PAT for Internal.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Goes to the FocusTime backlog in Cooptimize's DevOps. 0 of 10 sent today.",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 4,
+   "order": [
+    {
+     "id": "sources",
+     "group": ""
+    },
+    {
+     "id": "calendar-links",
+     "group": ""
+    },
+    {
+     "id": "pocket",
+     "group": ""
+    },
+    {
+     "id": "outlook-changes",
+     "group": ""
+    },
+    {
+     "id": "permissions",
+     "group": ""
+    },
+    {
+     "id": "vm",
+     "group": "My VM"
+    },
+    {
+     "id": "vm-start",
+     "group": "My VM"
+    },
+    {
+     "id": "vm-autostart",
+     "group": "My VM"
+    },
+    {
+     "id": "teams-app",
+     "group": ""
+    },
+    {
+     "id": "feedback",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|devops": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 6,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 8,
+    "kinds": [
+     "span.sp-status-actions|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-buttons|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 14,
+    "kinds": [
+     "mini|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "main.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "quiet.sp-btn|h44|rgba(0, 0, 0, 0)|1px rgba(0, 0, 0, 0)|500|rgb(169, 180, 190)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "FocusTime reads with the company PAT from Dataverse, only when fetching…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…it is never shown.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Your own PAT per client, with Work Items (Read & write).",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "FocusTime checks it is yours, keeps it sealed and never shows it again.",
+     "lines": 2,
+     "folded": true
+    },
+    {
+     "text": "Why an item isn't showing…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…whether FocusTime's last check of DevOps found it, the scope, and where it show",
+     "lines": 4,
+     "folded": true
+    }
+   ],
+   "small": 1,
+   "order": [
+    {
+     "id": "devops-read",
+     "group": ""
+    },
+    {
+     "id": "devops-write",
+     "group": ""
+    },
+    {
+     "id": "find-item",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|ai": {
+   "row": {
+    "count": 12,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-bare.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)",
+     "tr.|14.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 10,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 1,
+    "kinds": [
+     "table.sp-table|14.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "button": {
+    "count": 2,
+    "kinds": [
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Set by your FocusTime admin",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Examples come from the same client's features changed in this many months…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…1 to 36.",
+     "lines": 1,
+     "folded": true
+    },
+    {
+     "text": "Sends one fixed request with no client data.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Only what a task needs, about one client at a time…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…and only for clients a FocusTime admin allowed. Before anything goes, FocusTime",
+     "lines": 9,
+     "folded": true
+    },
+    {
+     "text": "What you asked the assistant and its answers, kept 30 days.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Only you see it; it is in Export my data.",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "ai-team",
+     "group": ""
+    },
+    {
+     "id": "ai-allowed",
+     "group": ""
+    },
+    {
+     "id": "ai-limit",
+     "group": ""
+    },
+    {
+     "id": "ai-month",
+     "group": ""
+    },
+    {
+     "id": "draft-months",
+     "group": ""
+    },
+    {
+     "id": "ai-test",
+     "group": ""
+    },
+    {
+     "id": "ai-sent",
+     "group": ""
+    },
+    {
+     "id": "ai-log",
+     "group": ""
+    },
+    {
+     "id": "assistant-history",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|activity": {
+   "row": {
+    "count": 1,
+    "kinds": [
+     "div.sp-row.sp-wide|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 9,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.muted|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "p.muted|14.9375px/400|mt0px mb8px|rgb(143, 156, 170)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 1,
+    "kinds": [
+     "mini|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Every change FocusTime made in other apps.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every change FocusTime made in DevOps, with your write PAT, and the feedback you",
+     "lines": 5,
+     "folded": false
+    },
+    {
+     "text": "Nothing written to DevOps yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Every start and stop of your VM: when, who (you, or automatic before your day), ",
+     "lines": 5,
+     "folded": false
+    },
+    {
+     "text": "Nothing written yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Each time focus set your Teams status (with how long it lasts at most) or put it",
+     "lines": 4,
+     "folded": false
+    },
+    {
+     "text": "Nothing yet.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Each update you sent from a promise: by Teams, email, a DevOps comment or a call",
+     "lines": 5,
+     "folded": false
+    },
+    {
+     "text": "Nothing yet.",
+     "lines": 1,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "write-log",
+     "group": ""
+    },
+    {
+     "id": "devops-log",
+     "group": ""
+    },
+    {
+     "id": "azure-log",
+     "group": ""
+    },
+    {
+     "id": "teams-log",
+     "group": ""
+    },
+    {
+     "id": "loop-log",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|data": {
+   "row": {
+    "count": 6,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 9,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)",
+     "p.muted|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "p.sp-intro|14.9375px/400|mt0px mb8px|rgb(169, 180, 190)",
+     "span.sp-more-text|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 2,
+    "kinds": [
+     "div.dx-actions|15.9375px/400|mt8px mb8px|rgb(232, 237, 241)",
+     "div.sp-buttons|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 5,
+    "kinds": [
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)",
+     "mini.primary|h44|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)",
+     "main.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.535259 -0.0283183 -0.0586598)|500|rgb(111, 176, 227)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "Your plans, promises, captures, logs and settings. Never a password or token.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Empties the plan store after a full backup. Settings and calendars stay.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Signs you out and deletes everything FocusTime keeps for you.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Counts for your own chats only, to answer \"why is a promise missing\" and \"why wa",
+     "lines": 3,
+     "folded": false
+    },
+    {
+     "text": "Fictional data; your own plan isn't touched.",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "Puts the demo back as it started…",
+     "lines": 1,
+     "folded": false
+    },
+    {
+     "text": "…every change, write, capture and send since is gone. Takes a few seconds. Ficti",
+     "lines": 6,
+     "folded": true
+    },
+    {
+     "text": "A teammate who uses FocusTime, with their own plan…",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "…a deployment you add them to shows there.",
+     "lines": 1,
+     "folded": true
+    }
+   ],
+   "small": 1,
+   "order": [
+    {
+     "id": "export",
+     "group": ""
+    },
+    {
+     "id": "reset-plan",
+     "group": ""
+    },
+    {
+     "id": "delete",
+     "group": ""
+    },
+    {
+     "id": "diagnostics",
+     "group": ""
+    },
+    {
+     "id": "demo-mode",
+     "group": "Demo"
+    },
+    {
+     "id": "demo-reset",
+     "group": "Demo"
+    },
+    {
+     "id": "demo-be",
+     "group": "Demo"
+    }
+   ],
+   "pageWide": false
+  },
+  "phone|about": {
+   "row": {
+    "count": 3,
+    "kinds": [
+     "div.sp-row|15.9375px/400|mt0px mb0px|rgb(232, 237, 241)"
+    ]
+   },
+   "help": {
+    "count": 2,
+    "kinds": [
+     "span.sp-help|14.9375px/400|mt0px mb0px|rgb(169, 180, 190)"
+    ]
+   },
+   "buttonRow": {
+    "count": 0,
+    "kinds": []
+   },
+   "table": {
+    "count": 0,
+    "kinds": []
+   },
+   "button": {
+    "count": 1,
+    "kinds": [
+     "plain.sp-btn|h44|rgba(0, 0, 0, 0)|1px oklab(0.292973 -0.0083088 -0.0212421)|500|rgb(232, 237, 241)"
+    ]
+   },
+   "helps": [
+    {
+     "text": "How FocusTime works, the keys and the questions people ask.",
+     "lines": 2,
+     "folded": false
+    },
+    {
+     "text": "Tokens and components in each theme (developer loop).",
+     "lines": 2,
+     "folded": false
+    }
+   ],
+   "small": 0,
+   "order": [
+    {
+     "id": "version",
+     "group": ""
+    },
+    {
+     "id": "guide",
+     "group": ""
+    },
+    {
+     "id": "style-guide",
+     "group": ""
+    }
+   ],
+   "pageWide": false
+  }
+ }
+}

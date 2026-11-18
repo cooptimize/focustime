@@ -91,7 +91,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
   it("Settings › Profile: signed in; Accounts and calendars: Find my VM by the Owner tag, the confirmed VM", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    const profile = page.locator(".set-account");
+    const profile = page.locator('[data-setting="signed-in"]');
     await expect(profile.textContent()).resolves.toContain("Alex Rivera");
     await expect(profile.getByRole("button", { name: "Sign out" }).count()).resolves.toBe(1);
     // ST-1: the VM is in Accounts and calendars.

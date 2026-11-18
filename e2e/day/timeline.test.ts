@@ -420,7 +420,7 @@ describe.skipIf(!CHROMIUM)("TY-1: Today's timeline", () => {
     // MB-1's layout by default; PH-2: the switch is Settings › Display › Show Day as a timeline, on the phone only.
     expect(await page.locator(".today-tl").count()).toBe(0);
     await open(page, "#/settings/display");
-    await page.getByRole("checkbox", { name: "Show Day as a timeline" }).check();
+    await page.getByRole("switch", { name: "Show Day as a timeline" }).check();
     await expect.poll(async () => (await call(page, "week.load", {})).data.ui.todayTimelinePhone).toBe(true);
     await open(page);
     await page.locator(".today-tl").waitFor();
