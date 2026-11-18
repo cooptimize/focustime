@@ -38,9 +38,18 @@ describe("Settings registry", () => {
       if (to.setting) expect(settingOf(to.setting)?.section, old).toBe(to.section);
     }
     expect(resolveSettings("risk")).toEqual({ section: "planning", setting: "risk-rules" });
-    expect(resolveSettings("roadmap")).toEqual({ section: "ahead", setting: null });
+    expect(resolveSettings("roadmap")).toEqual({ section: "planning", setting: "stale-weeks" });
     expect(resolveSettings("standing")).toEqual({ section: "hours", setting: "standing-blocks" });
-    expect(resolveSettings("devops", "devops-write")).toEqual({ section: "devops", setting: "devops-write" });
+    // SA-3: the four sections that went into others, and a setting that moved between sections.
+    expect(resolveSettings("devops", "devops-write")).toEqual({ section: "connections", setting: "devops-write" });
+    expect(resolveSettings("devops")).toEqual({ section: "connections", setting: "devops-read" });
+    expect(resolveSettings("ahead")).toEqual({ section: "planning", setting: "stale-weeks" });
+    expect(resolveSettings("chats")).toEqual({ section: "clients", setting: "request-phrases" });
+    expect(resolveSettings("activity", "loop-log")).toEqual({ section: "data", setting: "loop-log" });
+    expect(resolveSettings("planning", "plan-reminder")).toEqual({ section: "notifications", setting: "plan-reminder" });
+    expect(resolveSettings("planning", "level")).toEqual({ section: "you", setting: "level" });
+    expect(resolveSettings("connections", "feedback")).toEqual({ section: "about", setting: "feedback" });
+    expect(resolveSettings("client", "Atlas")).toEqual({ section: "client", setting: "Atlas" });
     expect(resolveSettings("nowhere")).toBeNull();
     expect(settingsHref("devops", "devops-write")).toBe("#/settings/devops/devops-write");
     expect(settingsHref("display")).toBe("#/settings/display");
@@ -48,11 +57,11 @@ describe("Settings registry", () => {
 
   it("search finds by new label first, then old label (named), then keyword", () => {
     const roadmap = searchSettings("roadmap");
-    expect(roadmap[0]).toMatchObject({ section: "ahead", setting: null, label: "Backlog", matched: "Roadmap" });
-    expect(searchSettings("ahead").find((h) => h.section === "ahead" && h.setting === null)).toMatchObject({ label: "Backlog", matched: "Ahead" });
+    expect(roadmap[0]).toMatchObject({ section: "planning", setting: null, label: "Planning", matched: "Roadmap" });
+    expect(searchSettings("ahead").find((h) => h.section === "planning" && h.setting === null)).toMatchObject({ label: "Planning", matched: "Ahead" });
     expect(searchSettings("risk rules")[0]).toMatchObject({ section: "planning" });
     expect(searchSettings("write log").some((h) => h.setting === "write-log")).toBe(true);
-    expect(searchSettings("Connections")[0]).toMatchObject({ section: "connections", label: "Accounts and calendars", matched: "Connections" });
+    expect(searchSettings("Accounts and calendars")[0]).toMatchObject({ section: "connections", label: "Connections", matched: "Accounts and calendars" });
     expect(searchSettings("time zone")[0]).toMatchObject({ section: "hours", setting: "time-zone", matched: null });
     expect(searchSettings("")).toEqual([]);
     expect(searchSettings("zzqx")).toEqual([]);
@@ -61,15 +70,17 @@ describe("Settings registry", () => {
   // NM-1: the renamed section and settings are found by their new names and by every old one.
   it("search finds each renamed section and setting by its old name and its new one", () => {
     const section = (q: string) => searchSettings(q).find((h) => h.setting === null);
-    expect(section("day and week")).toMatchObject({ section: "planning", label: "Day and Week", matched: null });
-    for (const old of ["today and week", "planning", "risk rules"]) expect(section(old), old).toMatchObject({ section: "planning", label: "Day and Week" });
+    expect(section("planning")).toMatchObject({ section: "planning", label: "Planning", matched: null });
+    for (const old of ["today and week", "day and week", "risk rules"]) expect(section(old), old).toMatchObject({ section: "planning", label: "Planning" });
     expect(section("Today and Week")!.matched).toBe("Today and Week");
+    expect(section("notifications")).toMatchObject({ section: "notifications", label: "Reminders and notices", matched: "Notifications" });
     const setting = (q: string, id: string) => searchSettings(q).find((h) => h.setting === id);
-    expect(setting("needs attention nudges", "readiness-nudges")).toMatchObject({ label: "Show Needs attention nudges", matched: null, where: "Day and Week › Guidance" });
+    expect(setting("needs attention nudges", "readiness-nudges")).toMatchObject({ label: "Show Needs attention nudges", matched: null, where: "Planning" });
     expect(setting("readiness nudges", "readiness-nudges")).toMatchObject({ label: "Show Needs attention nudges", matched: "Readiness nudges" });
     expect(setting("look-ahead rituals", "rituals")).toMatchObject({ label: "Look-ahead rituals", matched: null });
-    for (const old of ["plan ahead rituals", "look ahead 4 weeks", "direction review"]) expect(setting(old, "rituals"), old).toMatchObject({ label: "Look-ahead rituals" });
-    expect(setting("let urgent asks through", "urgent-during-focus")).toMatchObject({ label: "Let urgent requests through during focus" });
+    for (const old of ["plan ahead rituals", "look ahead 4 weeks"]) expect(setting(old, "rituals"), old).toMatchObject({ label: "Look-ahead rituals" });
+    expect(setting("direction review", "notify-direction")).toMatchObject({ label: "Direction review", matched: null });
+    expect(setting("let urgent asks through", "urgent-during-focus")).toMatchObject({ label: "Let urgent requests through while I focus" });
     // Old names live only in `old` (and keywords): no label or description carries one.
     for (const s of SECTIONS) expect(`${s.label} ${s.description}`, s.id).not.toMatch(/\bToday and\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b/);
     for (const s of SETTINGS) expect(s.label, s.id).not.toMatch(/\bToday\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b|\bGaps\b|\bFix next\b/);
@@ -94,8 +105,10 @@ describe("SA-2: one name per setting", () => {
     }
   });
   it("search shows a row's group beside its section, and never a client page's rows (they need the client)", () => {
-    expect(searchSettings("quiet on days off")[0]).toMatchObject({ setting: "quiet-pto", where: "Notifications › Quiet hours" });
-    expect(searchSettings("watch at").find((h) => h.setting === "risk-watch")).toMatchObject({ where: "Day and Week › At-risk blocks" });
+    expect(searchSettings("quiet on days off")[0]).toMatchObject({ setting: "quiet-pto", where: "Reminders and notices › Quiet" });
+    expect(searchSettings("watch at").find((h) => h.setting === "risk-watch")).toMatchObject({ where: "Planning › Fine tuning › At-risk blocks" });
+    expect(searchSettings("stale after")[0]).toMatchObject({ setting: "stale-weeks", where: "Planning › Fine tuning › Backlog" });
+    expect(searchSettings("someone took your story")[0]).toMatchObject({ setting: "notify-story-taken", where: "Reminders and notices › Each kind of notice" });
     expect(searchSettings("dataverse nickname").some((h) => h.section === "client")).toBe(false);
     expect(searchSettings("midday check-in").some((h) => h.setting === "notify-checkin")).toBe(true);
     expect(searchSettings("check-in").find((h) => h.setting === "notify-checkin")).toMatchObject({ label: "Midday check-in" });

@@ -1,4 +1,4 @@
-// PK-2: Settings › Accounts and calendars › Pocket recorder. A person connects their own Pocket with their own key:
+// PK-2: Settings › Connections › Pocket recorder. A person connects their own Pocket with their own key:
 // Check and save asks Pocket once for how many recordings it has from the last 7 days and keeps the key only when
 // Pocket answers; Check again asks once more; Disconnect forgets the key at once. Each acts on the signed-in person's
 // own secrets only (the port is built per person); there is no input naming anyone. The key goes in once and never

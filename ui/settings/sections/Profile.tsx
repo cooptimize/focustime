@@ -1,4 +1,5 @@
-// SA-2: Settings › Profile, drawn with the parts (ui/settings/parts.tsx).
+// SA-2: Settings › Profile, drawn with the parts (ui/settings/parts.tsx). SA-3: with Your level (from Day and Week);
+// the Dataverse lines and Start over only for admins, and for nobody on production.
 import { useContext, useEffect, useState } from "react";
 import { AuthCtx, usePhotosAccess } from "../../Account.tsx";
 import { call } from "../../api.ts";
@@ -6,11 +7,22 @@ import { useAppEnv, useDeveloperLoop } from "../../appenv.ts";
 import type { SetupView } from "../../../plan/setup.ts";
 import { Button, Buttons, GoLink, Group, Note, Page, Result, Row, Value } from "../parts.tsx";
 import type { BodyProps, Props } from "./types.ts";
+import { useAdmin } from "../use-admin.ts";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
+/** SA-3: admin-only lines show to admins, and to nobody on production (or before the environment is known). */
+export function useAdminLines(): boolean {
+  const admin = useAdmin();
+  const env = useAppEnv();
+  return admin === true && env !== null && env !== "prod";
+}
+
 export function ProfileSection(p: BodyProps) {
   const d = p.data;
+  const adminLines = useAdminLines();
+  const org = d.org;
+  const level = org?.levelName ? `${org.levelName}${org.levelSource === "override" ? " (set by an admin)" : ""}` : "No level from Dataverse yet";
   return (
     <Page>
       <Group>
@@ -20,17 +32,26 @@ export function ProfileSection(p: BodyProps) {
             <Row id="email" help={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"}>
               <Value>{d.you.email}</Value>
             </Row>
-            <Row id="dataverse-user" help="Change this in Dataverse">
-              <Value>{d.you.systemUserId ? "Found" : "Not found yet"}</Value>
-            </Row>
-            <Row id="environment" help={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : null} team={d.fromFile ? undefined : true}>
-              <Value>{d.you.environmentUrl}</Value>
-            </Row>
+            {adminLines && (
+              <>
+                <Row id="dataverse-user" help="Change this in Dataverse">
+                  <Value>{d.you.systemUserId ? "Found" : "Not found yet"}</Value>
+                </Row>
+                <Row id="environment" help={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : null} team={d.fromFile ? undefined : true}>
+                  <Value>{d.you.environmentUrl}</Value>
+                </Row>
+              </>
+            )}
           </>
+        )}
+        {org && (
+          <Row id="level" help="From your position in Dataverse. It changes suggestions only (Offer Break down and Needs attention nudges in Planning), never what you can do.">
+            <Value>{level}</Value>
+          </Row>
         )}
       </Group>
       <Note>
-        Your settings save as you change them, to {d.configPath}. Your time zone is under{" "}
+        {p.demo ? `Your settings save as you change them, to ${d.configPath}. ` : null}Your time zone is under{" "}
         <GoLink section="hours" setting="time-zone" go={p.go}>
           Working hours
         </GoLink>
@@ -103,9 +124,8 @@ function SignedIn() {
 function SetupRow(p: Props) {
   const [view, setView] = useState<SetupView | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const env = useAppEnv();
-  // Start over is for dev and local only (the server refuses it on prod too).
-  const prod = env === null || env === "prod";
+  // SA-3: Start over only for admins, never on production (the server refuses it on prod too).
+  const adminLines = useAdminLines();
   useEffect(() => {
     call<SetupView>("setup.load", {}).then(setView, () => setView(null));
   }, []);
@@ -124,7 +144,7 @@ function SetupRow(p: Props) {
           {left ? "Finish setup" : "Run setup again"}
         </Button>
         {left && <Button onClick={() => p.onSetup?.("day")}>Run setup from the start</Button>}
-        {!prod && (
+        {adminLines && (
           <Button
             kind="quiet"
             title="Forget your setup record, so the screens open by themselves next time (dev and local only)"

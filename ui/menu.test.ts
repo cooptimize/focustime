@@ -187,7 +187,7 @@ describe("NM-2: the command menu offers only what still exists", () => {
     const { e, calls } = env();
     const list = commandList({ ...e, showCode: (k) => calls.push(["code", k]) });
     for (const id of ["ui.set_code_sql_group", "draft.add_feature", "loop.sends", "ui.settings"]) await list.find((c) => c.id === id)!.run!();
-    expect(calls).toEqual([["code", null], ["view", "ahead"], ["settings", "activity"], ["settings", undefined]]);
+    expect(calls).toEqual([["code", null], ["view", "ahead"], ["settings", "data"], ["settings", undefined]]);
     expect(list.find((c) => c.id === "checkin.answer")!.disabled).toBe("At the top of the Midday check-in and Close out");
     // From the newcomer review: invites open Who's set up, the VM opens My VM, an admin's chat commands open Admin › Clients.
     // SA-4: Admin is its own place (#/admin/<path>).

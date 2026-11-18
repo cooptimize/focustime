@@ -24,7 +24,7 @@ function useSavedRow() {
   return { saved, mark };
 }
 
-const WEEK_DAYS_HELP = "With Show weekend on, weekend days show when something is on them (or always, with Every weekend day under Week's View options). A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.";
+const WEEK_DAYS_HELP = "The same choices as Week's View options. A hidden day with to-dos or promises due, or today, gets a note on Week with Show. Day still steps through every day.";
 
 export function DisplaySection(p: Props) {
   const { saved, mark } = useSavedRow();
@@ -39,7 +39,7 @@ export function DisplaySection(p: Props) {
         <Row id="text-size" help="Ctrl + and Ctrl − change it; Ctrl 0 resets." mark={mark("text-size")}>
           <Choice options={TEXT_SIZES.map((s) => ({ value: s, label: TEXT_SIZE_NAMES[s] }))} value={p.textSize} onChange={on("text-size", p.setTextSize)} />
         </Row>
-        <Row id="timelines" help="The default. V on Week changes it until you close FocusTime." mark={mark("timelines")}>
+        <Row id="timelines" help="The default. V on Week changes it until the page reloads." mark={mark("timelines")}>
           <Choice options={VIEW_RANGES.map((r) => ({ value: r, label: VIEW_RANGE_NAMES[r] }))} value={p.viewRange} onChange={on("timelines", p.setViewRange)} />
         </Row>
         <Row id="personal-events" help="On Week and Day. Hidden ones still count in risk and free time. G switches it." mark={mark("personal-events")}>
@@ -56,8 +56,21 @@ export function DisplaySection(p: Props) {
         <Row id="show-friday" help={`${p.catchUpName}, the catch-up day.`} mark={mark("show-friday")}>
           <Switch checked={p.weekDays.catchUp} onChange={on("show-friday", (v: boolean) => p.setWeekDays({ catchUp: v }))} />
         </Row>
-        <Row id="show-weekend" mark={mark("show-weekend")}>
-          <Switch checked={p.weekDays.weekend} onChange={on("show-weekend", (v: boolean) => p.setWeekDays({ weekend: v }))} />
+        {/* SA-3: the same three choices as Week's View options (Show weekend, then Every weekend day). */}
+        <Row id="show-weekend" help="Always is this browser's, as in Week's View options." mark={mark("show-weekend")}>
+          <Choice
+            options={[
+              { value: "never", label: "Never" },
+              { value: "some", label: "When something's on them" },
+              ...(p.setEveryWeekendDay ? [{ value: "always", label: "Always" }] : []),
+            ]}
+            value={!p.weekDays.weekend ? "never" : p.everyWeekendDay ? "always" : "some"}
+            onChange={on("show-weekend", (v: string) => {
+              if (v === "never") return p.setWeekDays({ weekend: false });
+              if (!p.weekDays.weekend) p.setWeekDays({ weekend: true });
+              p.setEveryWeekendDay?.(v === "always");
+            })}
+          />
         </Row>
       </Group>
       <Group>

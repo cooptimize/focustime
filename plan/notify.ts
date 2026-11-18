@@ -7,7 +7,7 @@ import { userZone } from "../week/zone.ts";
 import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
-/** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
+/** Every kind of notification FocusTime sends. Each has its own switch in Settings > Reminders and notices, except the test. */
 export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review", "deployments"] as const;
 /**
  * NM-1: kinds nothing sends any more (IB-4 took out what sent them; RM-1 took out Ask a lead to look's two). A person's saved choice for one stays in the store,
@@ -87,7 +87,7 @@ export type QuietMode = "outside_hours" | "off";
  */
 export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; fromTestSite: boolean; teams: TeamsRhythm; status: StatusTimes };
 /**
- * NT-1: the words of Settings › Notifications › Quiet hours' Days off field, in one place (docs/design/wording.md). The
+ * NT-1: the words of Settings › Reminders and notices › Quiet hours' Days off field, in one place (docs/design/wording.md). The
  * stored setting is still `quietPto` ([notify] quiet_pto): a day off is PTO or a company holiday since NT-1.
  */
 export const DAYS_OFF_WORDS = { field: "Days off", label: "Quiet on days off", hint: "PTO and company holidays from Dataverse." } as const;

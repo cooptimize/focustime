@@ -77,7 +77,7 @@ export type FixItem = GapItem & {
   mine: boolean;
   /** AH-7: DevOps's values when `start`, `target`, `size` and the assignee show my pending changes (what it had). */
   raw?: Pick<GapItem, "start" | "target" | "size" | "assigneeEmail">;
-  /** BL-1: no change in DevOps for the person's weeks (Settings › Backlog): something to look at, like a gap. */
+  /** BL-1: no change in DevOps for the person's weeks (Settings › Planning › Fine tuning): something to look at, like a gap. */
   stale?: boolean;
 };
 export type FixClient = { clientKey: string; /** The process's order field; null: rank by target date. */ orderField: string | null; gaps: readonly GapKind[]; items: readonly FixItem[] };

@@ -158,7 +158,7 @@ The words below are no longer shown: the New form, the draft editor and the card
 - **Keep**, **Keep all**: make the offer an ordinary to-do (a feature: placed on the block). The notice says "Kept <title>" or "Kept 3 to-dos for Tuesday", with Undo.
 - **Clear**: a row, "not this one this week"; a block, "no suggestions on this block for the rest of the day"; a day, "no suggestions on Tuesday". The notice says "Cleared …" with Undo.
 - **"3 suggestions are in your blocks."**: the morning card's line under "Nothing on today yet", with Keep all.
-- **Suggestions**: the switch under Day's and Week's View options; **Suggest work for empty blocks** in Settings › Day and Week.
+- **Suggestions**: the switch under Day's and Week's View options; **Suggest work for empty blocks** in Settings › Planning.
 - Retired: the dashed "From Mon" cards' Keep here, "N unfinished to-dos suggested in your next blocks · Keep all · Review".
 
 ## PS-1 words (Nov 11)
@@ -221,12 +221,12 @@ The words below are no longer shown: the New form, the draft editor and the card
 
 The app's own words use the names the screens use. A string a person reads never uses a name on the Renamed list (`ui/guide/retired.ts`) and never writes a control as a character (⋯ ‹ › × or a lone +): `npm run guards` fails on one. An old name lives on only where people search: a setting's `old` names, a command's `aka`, search `keywords`, and the Renamed list. A word that is also an ordinary word ("Today" the day, "Loop closed") is on the guard's short allow list with its reason (`NAMES_ALLOWED` in `scripts/words-guard.ts`).
 
-- A control is named: **More** (the top bar's menu, a to-do's or a row's menu), **View options** (Week's and Day's), **Actions** (a day's menu on Week, a suggestion's), **Previous**, **Next**, **Add**, **Close**. A path reads "More › Send feedback", "Settings › Activity".
+- A control is named: **More** (the top bar's menu, a to-do's or a row's menu), **View options** (Week's and Day's), **Actions** (a day's menu on Week, a suggestion's), **Previous**, **Next**, **Add**, **Close**. A path reads "More › Send feedback", "Settings › Your data".
 - Tab tooltips, one line each: **"Day: what's next, what's urgent and the day's blocks"**, **"Week: the week's blocks, with a block's panel beside them"**, **"Backlog: every client's DevOps on one screen: Grid, Gantt and Needs attention"**, **"Status: this week's feature updates for Monday's status report"**, **"Inbox: From chats, Promises and Captures"**.
-- Settings: the section **Day and Week** (was Today and Week); **Needs attention nudges** with the switch "Show Needs attention nudges" (was Readiness nudges); **Look-ahead rituals** (was Plan ahead rituals), "Both open Backlog › Gantt"; **"Let urgent requests through"** (was Let urgent asks through).
+- Settings: the section **Planning** (SA-3; was Day and Week, and Today and Week before that); **Needs attention nudges** with the switch "Show Needs attention nudges" (was Readiness nudges); **Look-ahead rituals** (was Plan ahead rituals), "Both open Backlog › Gantt"; **"Let urgent requests through"** (was Let urgent asks through).
 - Admin rules: **"Needs attention looks at the top N of each backlog"**, **"What Needs attention counts"**, **"Needs attention nudges"** (the level column).
 - **Back to Day** on the phone's Backlog notice, the Focus screen and Close out. The notice: "Grid, Gantt and Needs attention need room for the whole backlog."
-- Where a line points at Settings it names the section as it is today: **Settings › Activity** (Undo, Retry, what was logged), **Settings › Your data** (Export, Delete), **Settings › Accounts and calendars** (Outlook, Microsoft permissions), **Settings › DevOps** (a write PAT), **Settings › Focus** (break length), **Settings › Day and Week** (timeboxing, the level's defaults), **Settings › AI and assistant** (the assistant's history).
+- Where a line points at Settings it names the section as it is today: **Settings › Your data** (Undo, Retry, what was logged, Export, Delete), **Settings › Connections** (Outlook, Microsoft permissions), **Settings › Connections › DevOps** (a write PAT), **Settings › Focus** (break length), **Settings › Planning** (timeboxing, the level's defaults), **Settings › AI and assistant** (the assistant's history).
 - The key list's Inbox row: "Inbox: what needs you, in three lists: From chats, Promises and Captures". Its rows say "a block's panel", never "the block panel" or "Add work" for the panel.
 - Notices: "Click to open Day.", "Click to open Backlog's Gantt." with **Open Gantt**; the push title **"Promises due"**. Teams: "N more blocks on Day".
 - Client calls: the heading **Promises**; a commitment from the client's side reads **"noted with this call"** (was "in your Waiting on").
@@ -239,7 +239,7 @@ The app's own words use the names the screens use. A string a person reads never
 - **Client chats**, never Delivery chats; the kinds **Delivery team** and **Customer collaboration** keep their names.
 - The chat permission: **"Client chats: chat names and members, never messages"**; Chat.Read's later: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
 - Needs attention nudges' hint: **"The readiness flags on Backlog's Gantt rows."**
-- Pointers: **"It can show in Inbox › From chats again."**, **"Choose your VM first (Settings › Accounts and calendars)"**, **"Sign in with Microsoft (Settings › Profile) to use Teams status."**, **"Settings › Profile › Run setup again"**, **"Add it to a block on Week."**, **"sees it in To place, in a block's panel on Week"**. Notices: **"Click to open From chats."** with **Open From chats**; Ask to look and a Must that can't be taken: **Open Week**.
+- Pointers: **"It can show in Inbox › From chats again."**, **"Choose your VM first (Settings › Connections)"**, **"Sign in with Microsoft (Settings › Profile) to use Teams status."**, **"Settings › Profile › Run setup again"**, **"Add it to a block on Week."**, **"sees it in To place, in a block's panel on Week"**. Notices: **"Click to open From chats."** with **Open From chats**; Ask to look and a Must that can't be taken: **Open Week**.
 - The phone's day bar: **Previous day** and **Next day** as icons; Week's screen-reader name **"Week. Left and right arrows change the day, …"**.
 
 ## RB-2 words (Nov 14)
@@ -347,7 +347,8 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 ## VM-3 words (Nov 17)
 
 - The reasons, one list (`OUTCOMES`, `plan/vm-autostart.ts`), each "Left off today: …": **"it is PTO"**, **"it is a holiday"**, **"FocusTime couldn't read your PTO"**, **"your Azure sign-in needs renewing"**, **"FocusTime couldn't find your VM"**, **"Azure refused the start"**, **"FocusTime wasn't running at the time"**. Not told, only shown: **"Started today"**, **"Started today, after your day began"**, **"Already on today"**, **"Not a day you chose"**, **"Skipped today"**, **"Paused"**.
-- What to do next, after the reason: **"Start it from the VM menu if you need it today."**, **"Choose Allow Azure access in the VM menu, then start it if you need it."**, **"Choose your VM again in Settings › Accounts and calendars › My VM."**, **"Start it from the VM menu; if Azure refuses again, Settings › Activity has what it said."**
+- VM-5 words: a skip says why, **"Skipped today: you pressed Skip this one"**, **"Skipped today: you chose Not today on Day"**, **"Skipped today: you skipped it when you stopped the VM"** (`SKIP_WHY`, `plan/vm-autostart.ts`); a skip kept before VM-5 says only **"Skipped today"**. **"Don't skip"** takes today's back before its time. The Stop's preview, while today's start is still to come: **"It will start again today at 8:55 AM."** with the box **"Skip today's start too"**; the message after: **"Stopped. It will start again at 8:55 AM."**
+- What to do next, after the reason: **"Start it from the VM menu if you need it today."**, **"Choose Allow Azure access in the VM menu, then start it if you need it."**, **"Choose your VM again in Settings › Connections › My VM."**, **"Start it from the VM menu; if Azure refuses again, Settings › Your data has what it said."**
 - Notes: **"Holidays couldn't be checked."**, **"Your PTO couldn't be read just now, so FocusTime used what it read earlier."**
 - Settings' line after the planned time: **"Started today at 8:55 AM. Next: Tue, Nov 3 at 8:55 AM"**, **"Left off today: it is PTO. Next: …"**, **"Today's start (8:55 AM) hasn't run yet. Next: …"**. Unread days: **"Your PTO couldn't be read, so a day off may still show a time."**
 - The notice: **"Your VM was left off"** with the reason and what to do (Start is in the VM chip's menu). VM-2's **"Auto-start couldn't sign in to Azure"** and **"Auto-start couldn't start your VM"** are kept for those two.
@@ -422,7 +423,7 @@ Every word below is in `plan/call-words.ts`.
 
 Every word below is in `plan/pocket-words.ts` (the failures' too; the server and the page say the same).
 
-- The section: **"Pocket recorder"** in Settings › Accounts and calendars.
+- The section: **"Pocket recorder"** in Settings › Connections.
 - What connecting does: **"Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works; it reads nothing else here. To bring a recording in as a call's transcript, press Get my Pocket recordings in Calls."** (MC-2b; before it said bringing in a recording came later)
 - The steps, under **"How to connect"**: **"In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team."**, **"Choose what the key may do: tick only reading recordings (recordings:read). Pocket gives a key every permission when none is ticked. If Pocket asks for an expiry date, any date is fine; when the key expires, paste a new one here."**, **"Copy the whole key. It starts with pk_ (often pk_live_), and Pocket may show it only once."**, **"Paste it below and press Check and save. Nothing is saved unless Pocket accepts it."**, then **"Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees it or whether you connected, admins included, and it never goes to the AI or the logs."** and the link **"Pocket's guide to API keys"**.
 - The field: **"Your Pocket key"** (a password field), its hint **"pk_…"**; the button **"Check and save"**, **"Checking with Pocket…"** while it waits.
@@ -503,7 +504,7 @@ The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own bu
 
 ## NT-1 words (Nov 17)
 
-- Settings › Notifications › Quiet hours, the field **"Days off"** with the switch **"Quiet on days off"** and the hint **"PTO and company holidays from Dataverse."** (`DAYS_OFF_WORDS`, `plan/notify.ts`, the one place the screen and Settings search read). The stored setting is unchanged (`[notify] quiet_pto`); search still finds the old **"Quiet on PTO days"**.
+- Settings › Reminders and notices › Quiet hours, the field **"Days off"** with the switch **"Quiet on days off"** and the hint **"PTO and company holidays from Dataverse."** (`DAYS_OFF_WORDS`, `plan/notify.ts`, the one place the screen and Settings search read). The stored setting is unchanged (`[notify] quiet_pto`); search still finds the old **"Quiet on PTO days"**.
 - A day off, wherever notices are described: **"a day off"**, said once as **"PTO or a company holiday"**. In Messages in Teams' hint: **"never in quiet hours, on days off or weekends"**.
 - Nothing new is shown or told: a day off quiets what it did before, and now holidays count.
 
@@ -543,7 +544,7 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - Delete's question names the others: **"Delete it for everyone? Jordan Lee is on it too, and it comes off their plans."** (**"…Jordan Lee and Priya Shah are on it too…"**), then **"Delete it for everyone"** or **"Keep it"**.
 - My own Outlook only, one line and its one offer: **"Not on your Outlook"** · **"Put on my Outlook"**; **"On your Outlook"** · **"Take off my Outlook"**; **"Your Outlook still shows the old time"** · **"Update my Outlook"**; **"Going on your Outlook"**; **"Your hold was deleted in Outlook"** · **"Put it back"** (and **"Take me off"** with others on it); **"You moved your hold in Outlook"** · **"Move the deployment for everyone"** (with others on it) or **"Put my hold back"**.
 - A hold left on my Outlook: **"A hold for a deployment you're no longer on is still on your Outlook: Release 4.2"** · **"Remove it"**; several: **"2 holds for deployments you're no longer on are still on your Outlook"** · **"Remove them"**.
-- Notices (Settings › Notifications › **"Deployments you're on"**): **"Jordan added you to a deployment"**, **"Jordan moved a deployment you're on"**, **"Jordan took you off a deployment"**, **"Jordan deleted a deployment you were on"**; the body **"Northwind: Release 4.2, Sat, Nov 21, 9:00 to 11:00 AM."** then **"Click to see it in Week."** or **"It's off your plan. Check your Outlook if it was there."**
+- Notices (Settings › Reminders and notices › **"Deployments you're on"**): **"Jordan added you to a deployment"**, **"Jordan moved a deployment you're on"**, **"Jordan took you off a deployment"**, **"Jordan deleted a deployment you were on"**; the body **"Northwind: Release 4.2, Sat, Nov 21, 9:00 to 11:00 AM."** then **"Click to see it in Week."** or **"It's off your plan. Check your Outlook if it was there."**
 - The demo: Settings › Your data › **"See the demo as"**, **"Alex Rivera (you)"** and the teammates who use FocusTime.
 
 
@@ -557,6 +558,19 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - **Saved**, **Saving…**, **Couldn't save. Retry** are the one saved mark.
 - Rewritten so no Renamed name shows: the Needs attention flags on Backlog's Gantt rows (was "readiness flags").
 - Renamed labels (each keeps its old name in `old` so search still finds it): Profile photos; Put new timeboxes on Outlook; Let urgent requests through during focus; Devices that get notifications; Offer Break down on features that need stories; Show Needs attention nudges; Carry over unfinished to-dos from the last (days); Offer DevOps updates at the end of the day; Add a Teams meeting to help sessions; Play a sound when focus or a break ends; Set my Teams status while I focus; Plain focus sets my status to; Pause music when focus ends; Stale after, Stalled after and Watch within with their units; Break down looks back (months); Show the catch-up day; Use the demo as; Send me reminders and Teams messages from this test site.
+
+## SA-3 words (Nov 18)
+
+- The rail, eleven sections in four groups: **You** (Profile, Working hours, Display), **Your work** (Reminders and notices, Planning, Focus, Clients), **Connected** (Connections, AI and assistant), **Yours** (Your data, About). Was: Notifications, Day and Week, Backlog, Client chats, Accounts and calendars, DevOps, Activity.
+- Reminders and notices: the groups **"Where they reach you"** (**In FocusTime**, **On this device**, **In Teams**), **"Reminders"** with the intro "Each comes once, at its time, only while there is something to do.", **"Quiet"**, and the fold **"Each kind of notice"**.
+- A Teams switch while Teams messages are off: **"Also in Teams (Teams messages are off)"**.
+- The one-time note on Midday check-in and Close out: **"Teams used 12:00 PM. It now uses this time."** with **Got it**.
+- A fold: **"Fine tuning · 14 more"**, and with changes inside **"Fine tuning · 14 more · 2 changed"**. Search shows the path with the fold: **"Planning › Fine tuning › Backlog"**.
+- Connections: one card per connection, each with its name and what it is for in one line (**"Calendars added by link"**: "Any other calendar by its link (iCloud, a school's), busy only or with titles."; **"My VM"**: "The one Azure VM you confirmed: its status in the header, and Start."). Microsoft permissions in plain words; the scope names only under **More about this**.
+- Clients: **"What FocusTime looks for in chats"** and **"Chats FocusTime reads"** (were the Client chats section). A client's page: **"Team value: a change applies to everyone on <client>."** for a lead; **"Set by your FocusTime admin"** for everyone else.
+- Delete stored messages asks in the app's confirm (SA-4's words): "… This is for everyone on <client>'s chats, not only you. …"
+- Your data: **"What FocusTime keeps about you"** (each line's number read from the code's own constant, `ui/settings/keeps.ts`), then **"What FocusTime changed in other apps"** with one tab per app.
+- Display: **"Show weekend"** is one choice: **Never**, **"When something's on them"**, **Always** (this browser's, as in Week's View options).
 
 ## SA-4 words (Nov 18)
 
@@ -574,7 +588,7 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 The words are in one place, `POCKET_CALL_WORDS`, `othersLeftOut`, `gotLine` and `recordingLine` in `plan/pocket-words.ts`.
 
 - In Calls, under the filters, for someone with Pocket connected: the button **"Get my Pocket recordings"** (**"Asking Pocket…"** while it waits), then **"Got 4 recordings at 10:42 AM."** (**"Got 1 recording"**, or **"No recordings of yours in the last 14 days, at 10:42 AM."**), **"3 recordings by other people were left out."** (**"1 recording by other people was left out."**) and, when Pocket had more than FocusTime reads at once, **"Pocket has more recordings than FocusTime reads at once (300). The newest are here."**
-- Without Pocket connected: one quiet line, **"Record calls on a Pocket? Connect it in Settings."**, its last words a link to Settings › Accounts and calendars › Pocket recorder. No button.
+- Without Pocket connected: one quiet line, **"Record calls on a Pocket? Connect it in Settings."**, its last words a link to Settings › Connections › Pocket recorder. No button.
 - A call a recording goes with: its state reads **"Pocket recording found"**. Its source reads **"Your Pocket recording"**. A recording with no call is its own row: its title as its name (or **"Pocket recording"**), **"Not reviewed"** as its state and **"Your Pocket recording"** as its source.
 - The setup's third source: **"Use my Pocket recording"** with the recording's start and length (**"Mon, Nov 16 · 10:58 AM · 47 min"**), or **"Which recording"** when two go with the call. A recording more than 10 minutes longer than its call: **"This recording is 2 h 15 min; the call was 1 h. Which part comes in?"**, then **"Only the part during the call (5 minutes either side)"** and **"Bring in all of it"**. Without line times, after Continue: **"Pocket gave this recording's lines no times, so all of it comes in: 2 h 15 min."** and Continue again.
 - Who will see it, always before Continue: **"The Cooptimizers on this call's invite will be able to read it."** (a call from my calendar), **"This call's reviewers and attendees will be able to read it."** (a registered client call, as its upload card says), **"Only you will see it."** (a call I added or a recording's own call), each followed by **"Once it's in, the AI proposes updates from it if AI is on for this client. Nothing goes to DevOps until you confirm."** On a call's page with a recording offered, the upload card leaves out its tip to export from Pocket.
@@ -582,7 +596,18 @@ The words are in one place, `POCKET_CALL_WORDS`, `othersLeftOut`, `gotLine` and 
 - On a call I review with no transcript: **"Your Pocket recording of this call"** with **"Bring it in"** (**"Bringing it in…"**).
 - A call that already has a transcript: **"This call already has a transcript. Replace it with your Pocket recording?"** and **"Replace it"**.
 - On the call's page: **"From your Pocket recording. Speakers aren't named, and Pocket can mix them up."** to whoever brought it in, **"From a reviewer's Pocket recording. …"** to everyone else.
-- Refusals: **"Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes"**, **"That recording doesn't go with this call: they overlap for less than half the call"**, **"Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file"**, **"Pocket isn't connected. Connect it in Settings › Accounts and calendars › Pocket recorder"**, and PK-2's failure words (not accepted, didn't answer, busy, an answer FocusTime doesn't understand), plus **"Pocket's answer was too long for FocusTime to read"** for a recording over 20 MB.
+- Refusals: **"Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes"**, **"That recording doesn't go with this call: they overlap for less than half the call"**, **"Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file"**, **"Pocket isn't connected. Connect it in Settings › Connections › Pocket recorder"**, and PK-2's failure words (not accepted, didn't answer, busy, an answer FocusTime doesn't understand), plus **"Pocket's answer was too long for FocusTime to read"** for a recording over 20 MB.
+
+## WK-6 words (Nov 18)
+
+The words are `CARD_MEETINGS` in `plan/call-words.ts`; the line's in `ui/meetingsLine.ts`.
+
+- The named meetings' heading: **"Meetings"**, then the meetings' time and the free time, **"2h 45m · 45m free"**. Its arrow: **"Fold the meetings to one line"**, **"Name the meetings"**.
+- A row: **"9:30 Northwind requirements workshop"**, and under the name while the call needs me, its type and state, **"Call · Review 10 proposals"**, **"Weekly status call · Upload the transcript"**. Its label: **"9:30, <name>: <state>. Open in Calls"**. A call with no meeting: **"Call: <name>, <state>. Open in Calls"**.
+- More than five: **"1 more"**, **"3 more"**; on hover **"Open the block's agenda"**.
+- The count on another day's line and a past day's card: **"1 call needs you"**, **"2 calls need you"**.
+- The switch: **"Meetings"**, on hover **"Name the meetings on every card. Off: only the day in focus names them"**.
+- The folded line, unchanged from WD-1: **"3 meetings · 2h 45m · 45m free"** (**"No meetings · 3h free"**).
 
 ## CO-1 words (Nov 18)
 

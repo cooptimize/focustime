@@ -21,7 +21,7 @@ describe("places", () => {
     for (const t of BACKLOG_TOOLBAR) expect(bar, t).toMatch(new RegExp(`>\\s*${t}\\b|"${t}`));
   });
   it("Settings, Admin and Inbox come from their own lists", () => {
-    expect(PLACES.Settings).toContain("Accounts and calendars");
+    expect(PLACES.Settings).toContain("Connections");
     expect(PLACES.Settings).not.toContain("Client"); // a client's page sits under Clients
     expect(PLACES.Admin).toContain("Audit");
     expect(PLACES.Inbox).toEqual(["From chats", "Promises", "Captures"]);

@@ -15,6 +15,8 @@ import { SECTIONS } from "../ui/settings/registry.ts";
 const SIZES = {
   desk: { viewport: { width: 1440, height: 900 } },
   phone: { ...devices["iPhone 15"], viewport: { width: 390, height: 844 } },
+  // SA-3: the phone at the largest Text size, for SA-0's size table only.
+  larger: { ...devices["iPhone 15"], viewport: { width: 390, height: 844 } },
 } as const;
 
 /** Old and new class names for each pattern, so one run reads main and the branch alike. */
@@ -77,7 +79,7 @@ const out = process.argv[2] ?? "settings-audit.json";
 const h = await startDemo("chromium");
 const result: Record<string, unknown> = {};
 try {
-  for (const size of ["desk", "phone"] as const) {
+  for (const size of ["desk", "phone", "larger"] as const) {
     const ctx = await h.browser.newContext({ ...SIZES[size], colorScheme: "dark", reducedMotion: "reduce" });
     const page = await ctx.newPage();
     await page.goto(h.url);
@@ -87,15 +89,27 @@ try {
     const load = await page.evaluate(() =>
       fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": decodeURIComponent(document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "") }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()),
     );
+    if (size === "larger") {
+      await page.goto(`${base}#/settings/display`);
+      await page.locator('[data-setting="text-size"]').getByRole("radio", { name: "Larger" }).click();
+      await page.waitForTimeout(600);
+    }
     const client = (load.data.clients as { key: string; follow: { active: boolean } | null }[]).find((c) => c.follow?.active !== false && c.key !== "Cooptimize")!.key;
     const ids = SECTIONS.filter((s) => !s.parent).flatMap((s) => (s.id === "clients" ? [s.id, `client/${client}`] : [s.id]));
     for (const id of ids) {
       await page.goto(`${base}#/settings/${id}`);
       await page.reload();
-      if (size === "phone") await page.addStyleTag({ content: "html{font-size:17px}" });
+      if (size !== "desk") await page.addStyleTag({ content: "html{font-size:17px}" });
       await page.locator(".ps-body").waitFor({ timeout: 30_000 });
       await page.waitForTimeout(1200);
-      result[`${size}|${id.startsWith("client/") ? "client" : id}`] = await measure(page);
+      const key = `${size}|${id.startsWith("client/") ? "client" : id}`;
+      // SA-3: SA-0's size table: the page's full height, folds as they open, in screens of this window.
+      const screens = await page.evaluate(() => {
+        const b = document.querySelector<HTMLElement>(".ps-body")!;
+        return Math.round(((b.getBoundingClientRect().top + b.scrollHeight) / innerHeight) * 10) / 10;
+      });
+      if (size === "larger") result[key] = { screens };
+      else result[key] = { ...(await measure(page)), screens };
       process.stdout.write(`${size} ${id}\n`);
     }
     await ctx.close();
@@ -124,5 +138,9 @@ const totals = {
   foldedHelp: phone.reduce((n, m) => n + m.helps.filter((x) => x.folded).length, 0),
   under44At390: phone.reduce((n, m) => n + m.small, 0),
 };
-writeFileSync(out, JSON.stringify({ totals, sections: result }, null, 1));
+const screens = Object.fromEntries(
+  [...new Set(Object.keys(result).map((k) => k.split("|")[1]!))].map((id) => [id, ["desk", "phone", "larger"].map((z) => (result[`${z}|${id}`] as { screens: number } | undefined)?.screens ?? null)]),
+);
+writeFileSync(out, JSON.stringify({ totals, screens, sections: result }, null, 1));
+console.log(JSON.stringify(screens));
 console.log(JSON.stringify(totals, null, 1));

@@ -1,4 +1,4 @@
-// CAL-1: Settings › Accounts and calendars › Calendars added by link. Paste any calendar's ICS link, check it ("Found
+// CAL-1: Settings › Connections › Calendars added by link. Paste any calendar's ICS link, check it ("Found
 // 12 upcoming events"), name it, pick a color, Busy only or Show titles, Personal or Work, then Save. The link is
 // sent once to be checked and kept; it never comes back (only its host, "calendar.google.com/…"). Read only.
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";

@@ -1,6 +1,6 @@
 // Notifications (step 15.5): the one path every notification takes. Each checker (reminders, the timer, my VM,
 // follow-ups, expiring secrets) asks `allows(kind)` before it marks its occasion, then `offer`s the notification; the
-// notifier applies Settings > Notifications (switch, quiet hours, holding during focus), keeps held ones in the plan
+// notifier applies Settings > Reminders and notices (switch, quiet hours, holding during focus), keeps held ones in the plan
 // store until the session ends, collapses them into one, and routes a click: the notification itself opens FocusTime
 // on the right view, a button runs its action. Showing it is the host's job (notify-send today, browser
 // notifications in a hosted version), so nothing here is machine-specific.
@@ -28,7 +28,7 @@ export const isOpen = (key: string) => key === OPEN_KEY || key === "open";
 export type NotifierDeps = {
   plan: PlanStore;
   host: NotifyHost;
-  /** Settings > Notifications and the facts the gate needs now. */
+  /** Settings > Reminders and notices and the facts the gate needs now. */
   facts: () => Promise<GateFacts>;
   now: () => string;
   /** Opens (or focuses) FocusTime on a route. */
@@ -56,7 +56,7 @@ export type Notifier = {
   flush: () => Promise<number>;
   /** Shows one now, past every setting and mark (samples for the live check). */
   show: (n: Notice, onClick?: OnClick) => void;
-  /** Settings > Notifications > Send a test notification. */
+  /** Settings > Reminders and notices > Send a test notification. */
   test: () => Promise<void>;
   /** A click, as the host reported it (exported for tests and for hosts that report clicks separately). */
   click: (n: Notice, key: string, held?: readonly Notice[], onClick?: OnClick) => Promise<void>;
@@ -138,7 +138,7 @@ export function createNotifier(d: NotifierDeps): Notifier {
       return keep.length;
     },
     test: async () => {
-      deliver({ kind: "test", key: `test:${d.now()}`, title: "FocusTime", body: "Test notification. Click it to open Settings > Notifications.", buttons: [], route: "settings:notifications", at: d.now() });
+      deliver({ kind: "test", key: `test:${d.now()}`, title: "FocusTime", body: "Test notification. Click it to open Settings > Reminders and notices.", buttons: [], route: "settings:notifications", at: d.now() });
     },
     show: (n, onClick) => deliver(n, [], onClick),
     sweep: async () => {

@@ -40,7 +40,7 @@ table is gone. So step 2 is two releases:
 Not on the list yet:
 
 - **The `promises` table and `requests`** (HK-4's item 5): AP-1's rules pass still writes both on every poll and
-  Settings › Client chats and the command menu still read them. Waiting on the product owner's decision (D910,
+  Settings › Clients and the command menu still read them. Waiting on the product owner's decision (D910,
   Q-HK4-3).
 - **The person's old `[ai]` keys** (`use`, `monthly_cap_usd`, `allowed_clients`): settings text, not a column. Still
   parsed for the one-time org bootstrap; see D1043 (CL-1). Removing them from the settings model later needs no
@@ -70,7 +70,7 @@ owner's OK, and a user table needs release 2a's two-step (out of `USER_TABLES` f
 | `kv_state` key `inbox_last_looked` | User row | `inbox.looked` | `inbox.list` (`lastLooked`) | A delete of the rows |
 | `requests.ai_shown` | App column | `requests.show` | The requests list (`shown`), the daily requests cleanup's filter | Stop reading, then drop |
 | Org setting `devops_patterns` (Admin › People) | Rule | An admin, for the patterns page | `config/org.ts` still parses it (an old saved value loads with no error) | Remove the key from the model; no migration |
-| Notification kinds `look_ask`, `look_reply` | Saved settings text | Settings › Notifications | Parsed as retired (`RETIRED_KINDS`), kept in the text, unread | Nothing to drop |
+| Notification kinds `look_ask`, `look_reply` | Saved settings text | Settings › Reminders and notices | Parsed as retired (`RETIRED_KINDS`), kept in the text, unread | Nothing to drop |
 
 Still written, so not on this list: `draft_stories.brief` (TP-1b's answers on a draft), `week_commitments` (the
 status report reads them), and the one-time ownership backfill's columns above.

@@ -1,4 +1,4 @@
-// CAL-1: Settings › Accounts and calendars › Add a calendar by link. Every response is the person's own links, by
+// CAL-1: Settings › Connections › Add a calendar by link. Every response is the person's own links, by
 // name, color, host and their last check; never the link itself (it goes in, it never comes out). Read only: nothing
 // here writes to a calendar.
 import type { ActionResponse } from "./types.ts";

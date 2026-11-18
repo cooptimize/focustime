@@ -13,20 +13,20 @@ describe.skipIf(!CHROMIUM)("Meetings on Day and Week (browser, demo mode)", () =
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("WD-2: Day's cards show each block's meetings as one line that opens to the list in time order; the block panel's meetings line opens the agenda", async () => {
+  it("WD-2, WK-6: Day's cards name each block's meetings in time order under a Meetings heading with the free time; the block panel's meetings line opens the agenda", async () => {
     const { page, errors } = await freshPage(h);
     const card = page.locator('.day-view [data-drop="2026-11-02:AM"]');
-    const fold = card.locator(".card-agenda-fold");
-    await fold.waitFor({ timeout: 30_000 });
-    await expect(fold.textContent()).resolves.toMatch(/\d+ meetings? · .* free$/);
-    await fold.click();
-    const rows = card.locator(".card-events li");
+    const named = card.locator(".card-meetings");
+    await named.waitFor({ timeout: 30_000 });
+    await expect(named.locator(".cm-label").textContent()).resolves.toBe("Meetings");
+    await expect(named.locator(".cm-sum").textContent()).resolves.toMatch(/ free$/);
+    const rows = named.locator(".cm-row");
     await expect.poll(() => rows.count()).toBeGreaterThan(1);
     const texts = await rows.allTextContents();
-    expect(texts[0]).toMatch(/^9:00–9:15\s*Team standup/);
+    expect(texts[0]).toMatch(/^9:00\s*Team standup/);
     expect(texts.some((r) => /Proposal review with Jordan/.test(r))).toBe(true);
-    // The afternoon block has its own line.
-    await expect(page.locator('.day-view [data-drop="2026-11-02:PM"] .card-agenda-fold').count()).resolves.toBe(1);
+    // The afternoon block names its own.
+    await expect(page.locator('.day-view [data-drop="2026-11-02:PM"] .card-meetings').count()).resolves.toBe(1);
     // The panel: one meetings line, opening the agenda with its free gaps in place.
     await card.locator(".card-when").click();
     const panel = page.locator("aside.block-panel");
@@ -40,7 +40,7 @@ describe.skipIf(!CHROMIUM)("Meetings on Day and Week (browser, demo mode)", () =
     await page.close();
   }, T);
 
-  it("Week: a block's meetings are one line that opens to the list; its panel's meetings line opens the agenda with free gaps (WD-1, WD-2)", async () => {
+  it("Week: the day in focus names a block's meetings; its panel's meetings line opens the agenda with free gaps (WD-1, WD-2)", async () => {
     const { page, errors } = await freshPage(h);
     // With the Timeline off (WK-2): with it on, the meetings are on the card's rail.
     const showTimelines = (show: boolean) => page.evaluate((v) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "ui.set_show_timelines", input: { show: v } }) }).then((r) => r.ok), show);
@@ -50,10 +50,8 @@ describe.skipIf(!CHROMIUM)("Meetings on Day and Week (browser, demo mode)", () =
     await page.keyboard.press("2");
     await page.locator(".half.card").first().waitFor();
     const card = page.locator('[data-drop^="2026-11-02:"]', { has: page.locator(".card-client", { hasText: "Cooptimize" }) }).first();
-    const fold = card.locator(".card-agenda-fold");
-    await expect(fold.textContent()).resolves.toMatch(/\d+ meetings? · .* free$/);
-    await fold.click();
-    await expect.poll(() => card.locator(".card-events li", { hasText: "Proposal review" }).count()).toBe(1);
+    // WK-6: today is the day in focus, so its cards name their meetings.
+    await expect.poll(() => card.locator(".card-meetings .cm-row", { hasText: "Proposal review" }).count()).toBe(1);
     await card.locator(".card-when").click();
     await page.locator("aside.block-panel .bp-meet-line").click();
     const agenda = page.locator("aside.block-panel .bp-meetings");

@@ -133,14 +133,15 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   // the list once my calendar's calls are read (matched by its start and end).
   const [asked] = useState(takeReviewCall);
   // While it is matched against my calendar, nothing else opens by itself.
-  const wanted = useRef<{ start: string; end: string } | null>(asked);
+  const wanted = useRef<{ start: string; end: string; key?: string } | null>(asked);
   useEffect(() => {
     void loadMine();
     let live = true;
     void loadOthers().then((d) => {
       const want = asked;
       if (!live || !want) return;
-      const hit = d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
+      // WK-6: by the meeting itself when its key is known, else by its start and end.
+      const hit = (want.key ? d?.calls.find((c) => c.key === want.key) : undefined) ?? d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
       wanted.current = null;
       if (hit?.occurrenceId) go({ occurrence: hit.occurrenceId });
       else if (hit) setSetupKey(otherRowKey(hit));
@@ -1231,7 +1232,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
               )}
             </>
           ) : (
-            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › DevOps">Enable DevOps writes</button>
+            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › Connections › DevOps">Enable DevOps writes</button>
           ))}
           {live && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(true)}>{CALL_ROW.skip}</button>}
           {p.state === "skipped" && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(false)}>{CALL_ROW.bringBack}</button>}

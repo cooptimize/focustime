@@ -68,7 +68,7 @@ export function inviteTemplate(o: { appUrl: string; teamsAppLink: string | null;
     "",
     "To get started:",
     "1. Sign in with your Cooptimize Microsoft account.",
-    "2. Connect DevOps in Settings › DevOps.",
+    "2. Connect DevOps in Settings › Connections › DevOps.",
     "3. Look at Week to see your blocks and what's planned.",
   ];
   if (o.teamsAppLink) lines.push("", `You can also add FocusTime in Teams: ${o.teamsAppLink}`);

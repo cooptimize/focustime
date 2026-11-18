@@ -1,5 +1,5 @@
 // Was e2e/notify.test.ts until BT-1.
-// Step 15.5: Settings > Notifications (switches, quiet hours, saved), Settings > My VM's "Start without a preview"
+// Step 15.5, SA-3: Settings › Reminders and notices (each reminder's row, quiet, the kinds folded), Settings > My VM's "Start without a preview"
 // and the morning box: one click when on, the preview when off. Demo mode (fictional data; no desktop notifications).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness, openSettings, settingsSection } from "../harness.ts";
@@ -13,24 +13,56 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Settings > Notifications: a switch per kind and quiet hours, saved", async () => {
+  // SA-3 tests 3 and 6: each reminder is one row whose switch, time and Also in Teams write the keys they always did;
+  // Also in Teams keeps its value while In Teams is off; Quiet's switch stores what the old select stored.
+  it("Reminders and notices: each reminder's switch, time and Also in Teams save their own keys; Quiet stores its two values", async () => {
     const { page, errors } = await freshPage(h);
+    const load = () => page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()).then((j) => j.data));
     await openSettings(page);
     await settingsSection(page, "notifications");
-    const form = page.locator(".ps-body", { hasText: "Ritual reminders" });
-    await form.waitFor();
-    for (const name of ["Add work to today", "Midday check-in", "Close out", "Add work to the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
-      await expect(form.locator(".sp-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
-    // TB-2's In Teams kinds sit in the same page, also "Midday check-in": these are the app's own (SA-2: the kind's
-    // name is "Midday check-in" everywhere).
-    await form.locator('[data-setting="notify-checkin"]').getByRole("switch").uncheck();
-    await form.locator('[data-setting="quiet"]').getByRole("radio", { name: "Never quiet" }).check();
-    // Fix/settings-autosave: each change saves itself; no Save button.
-    await expect(form.getByRole("button", { name: "Save" }).count()).resolves.toBe(0);
-    await expect.poll(() => form.textContent(), { timeout: 5000 }).toContain("Saved");
-    const saved = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()));
-    expect(saved.data.notify).toMatchObject({ quiet: "off", kinds: { checkin: false, closeout: true } });
-    await expect(form.locator('[data-setting="test-notification"]').getByRole("button", { name: "Send now" }).count()).resolves.toBe(1);
+    await page.locator(".ps-head h2", { hasText: "Reminders and notices" }).waitFor();
+    const body = page.locator(".ps-body");
+    for (const id of ["teams-kind-brief", "notify-plan-day", "notify-checkin", "notify-closeout", "week-nudges", "notify-status-report", "notify-plan-ahead", "notify-direction"]) await body.locator(`[data-setting="${id}"]`).first().waitFor();
+    // The kinds are folded, with their count; the seven new switches are inside.
+    const fold = body.locator(".sp-fold > summary", { hasText: "Each kind of notice" });
+    await expect(fold.textContent()).resolves.toMatch(/Each kind of notice · 17 more/);
+    await fold.click();
+    for (const name of ["Someone took your story", "Someone assigned you an item", "Someone moved your dates", "Someone edited your item"]) await expect(body.locator(".sp-row", { hasText: name }).count(), name).resolves.toBeGreaterThan(0);
+
+    // The row's switch is the reminder's own kind; its time is the [plan] key.
+    const checkin = body.locator('[data-setting="notify-checkin"]');
+    await checkin.getByRole("switch").first().uncheck();
+    await expect.poll(async () => (await load()).notify.kinds.checkin, { timeout: 5000 }).toBe(false);
+    const minutes = checkin.locator('[data-setting="checkin-reminder"] input');
+    await minutes.fill("20");
+    await minutes.press("Enter");
+    await expect.poll(async () => (await load()).planning.checkinReminderMinutes, { timeout: 5000 }).toBe(20);
+    // Plan next week: two switches, three times.
+    await body.locator('[data-setting="notify-plan-week"]').getByRole("switch").uncheck();
+    await expect.poll(async () => (await load()).notify.kinds.plan_week, { timeout: 5000 }).toBe(false);
+
+    // Also in Teams: greyed with the reason while In Teams is off, its value kept; on, it saves teams_checkin.
+    const also = checkin.locator('[data-setting="teams-kind-checkin"] input');
+    await expect(also.isDisabled()).resolves.toBe(true);
+    await expect(checkin.textContent()).resolves.toContain("Teams messages are off");
+    await body.locator('[data-setting="teams-messages"]').getByRole("switch").check();
+    await expect(also.isDisabled()).resolves.toBe(false);
+    await also.check();
+    await expect.poll(async () => (await load()).notify.teams.checkin, { timeout: 5000 }).toBe(true);
+    await body.locator('[data-setting="teams-messages"]').getByRole("switch").uncheck();
+    await expect.poll(async () => (await load()).notify.teamsMessages, { timeout: 5000 }).toBe(false);
+    expect((await load()).notify.teams.checkin).toBe(true);
+    await expect(also.isChecked()).resolves.toBe(true);
+
+    // Quiet: off stores "off" (Never quiet), on stores "outside_hours".
+    const quiet = body.locator('[data-setting="quiet"]').getByRole("switch");
+    await quiet.uncheck();
+    await expect.poll(async () => (await load()).notify.quiet, { timeout: 5000 }).toBe("off");
+    await quiet.check();
+    await expect.poll(async () => (await load()).notify.quiet, { timeout: 5000 }).toBe("outside_hours");
+    // No Save button; one Send a test for this device.
+    await expect(body.getByRole("button", { name: "Save" }).count()).resolves.toBe(0);
+    await expect(body.locator('[data-setting="test-notification"]').getByRole("button", { name: "Send a test" }).count()).resolves.toBe(1);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

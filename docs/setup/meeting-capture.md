@@ -86,8 +86,8 @@ Upload a transcript. When the organizer's policy doesn't allow attendees to down
 
 ## 5. Nudges
 
-- In the app: Settings › Notifications › Client calls to review (on by default), one per call, to its reviewers.
-- In Teams: Settings › Notifications › In Teams › Client calls to review (off by default), with "Let FocusTime message
+- In the app: Settings › Reminders and notices › Client calls to review (on by default), one per call, to its reviewers.
+- In Teams: Settings › Reminders and notices › In Teams › Client calls to review (off by default), with "Let FocusTime message
   me in Teams" on. Not during focus, quiet hours, weekends or PTO days.
 
 ## 6. AI

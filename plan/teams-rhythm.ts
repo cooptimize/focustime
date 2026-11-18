@@ -11,13 +11,14 @@ import type { IsoDate } from "../week/types.ts";
 
 export const RHYTHM_KINDS = ["brief", "checkin", "closeout"] as const;
 export type RhythmKind = (typeof RHYTHM_KINDS)[number];
-/** Everything Settings › Notifications › In Teams switches: the three rhythm cards and the nudges. */
+/** Everything Settings › Reminders and notices › In Teams switches: the three rhythm cards and the nudges. */
 export type TeamsKind = RhythmKind | "nudges" | "status" | "meetings";
 export const TEAMS_KINDS: readonly TeamsKind[] = ["brief", "checkin", "closeout", "nudges", "status", "meetings"];
 
 /**
- * Settings › Notifications › In Teams, under "Let FocusTime message me in Teams" (`teamsMessages`). All off by
- * default. briefAt null: the start of my day. closeoutMinutes: before my day ends.
+ * Settings › Reminders and notices, under "Let FocusTime message me in Teams" (`teamsMessages`). All off by default.
+ * briefAt null: the start of my day. SA-3: `checkinAt` and `closeoutMinutes` stay stored and are never read, changed
+ * or deleted: the Midday check-in and Close out messages go at the app's own times (`AppTimes`).
  */
 export type TeamsRhythm = {
   brief: boolean;
@@ -38,6 +39,7 @@ export const CLOSEOUT_MINUTES = { min: 5, max: 120 } as const;
 export const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const TEAMS_KIND_LABEL: Record<TeamsKind, string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls to review" };
+/** What each Teams kind sends. */
 export const TEAMS_KIND_HINT: Record<TeamsKind, string> = {
   brief: "Today's blocks, meetings, to-dos, promises due and work sent to you.",
   checkin: "This morning's to-dos with Done and Not yet, and Move the rest.",
@@ -52,8 +54,53 @@ const toHm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${St
 
 export type Window = { at: string; until: string };
 
+/**
+ * SA-3: the app's own reminder times, which the Teams messages use too: the Midday check-in this many minutes after
+ * lunch ends ([plan] checkin_reminder_minutes), Close out this many before the day ends ([plan] closeout_reminder_minutes).
+ */
+export type AppTimes = { checkinMinutes: number; closeoutMinutes: number };
+
+/** SA-3: the app's reminder times from a person's [plan] settings. */
+export const appTimesOf = (c: { plan: { checkinReminderMinutes: number; closeoutReminderMinutes: number } }): AppTimes => ({ checkinMinutes: c.plan.checkinReminderMinutes, closeoutMinutes: c.plan.closeoutReminderMinutes });
+
+/** SA-3: the marker that says a person pressed Got it on a Teams time note ("checkin" or "closeout"), once. */
+export const TEAMS_NOTE_MARK = "teams_time_note";
+export type TeamsNote = { checkin: string | null; closeout: string | null };
+
+const clockWords = (hm: string) => {
+  const m = toMin(hm);
+  const h = Math.floor(m / 60) % 24;
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
+
+/**
+ * SA-3: what Teams used before the one time per reminder, for a person who has that Teams message on and whose Teams
+ * time was different from the app's: "12:30 PM", "30 minutes before your day ends"; null otherwise. The check-in
+ * compares the stored clock time with the app's on each day of the coming week that has hours.
+ */
+export function teamsTimeNotes(model: TimeModel, today: IsoDate, s: TeamsRhythm, app: AppTimes): TeamsNote {
+  const days = Array.from({ length: 7 }, (_, i) => Temporal.PlainDate.from(today).add({ days: i }).toString());
+  const appCheckins = days.map((d) => checkinAt(model, d, app)).filter((x): x is string => x !== null);
+  const checkin = s.checkin && appCheckins.some((x) => x !== s.checkinAt) ? clockWords(s.checkinAt) : null;
+  const closeout = s.closeout && s.closeoutMinutes !== app.closeoutMinutes ? `${s.closeoutMinutes} minutes before your day ends` : null;
+  return { checkin, closeout };
+}
+
+/** The fewest minutes before the day ends a Teams close out goes (Teams' own setting's minimum before SA-3). */
+export const TEAMS_CLOSEOUT_MIN = 5;
+
+/** The midday a day without a lunch split uses for the check-in (the old Teams default). */
+const MIDDAY = 12 * 60;
+
+/** SA-3: the Midday check-in's clock time on a date, as the app's reminder has it; null on a day without hours. */
+export function checkinAt(model: TimeModel, date: IsoDate, app: AppTimes): string | null {
+  const h = hoursOn(model, date);
+  if (!h.segments.length) return null;
+  return toHm((h.pm ? toMin(h.pm.start) : MIDDAY) + app.checkinMinutes);
+}
+
 /** Each kind's time and the end of its window on a date, from the person's hours; null on a day without hours. */
-export function rhythmTimes(model: TimeModel, date: IsoDate, s: TeamsRhythm): Record<RhythmKind, Window | null> {
+export function rhythmTimes(model: TimeModel, date: IsoDate, s: TeamsRhythm, app: AppTimes): Record<RhythmKind, Window | null> {
   const h = hoursOn(model, date);
   const first = h.segments[0];
   const last = h.segments.at(-1);
@@ -68,8 +115,11 @@ export function rhythmTimes(model: TimeModel, date: IsoDate, s: TeamsRhythm): Re
   const brief = s.briefAt ? toMin(s.briefAt) : start;
   // The brief is about the morning: worth sending until the morning ends (at least an hour after its time).
   const amEnd = h.am ? toMin(h.am.end) : end;
-  const checkin = toMin(s.checkinAt);
-  const closeout = end - s.closeoutMinutes;
+  // SA-3: the app's times, not the Teams ones (checkinAt and closeoutMinutes are kept, unread).
+  const checkin = toMin(checkinAt(model, date, app)!);
+  // The app's close out may be 0 minutes before the end; a Teams message needs a window inside the day, and Teams' own
+  // minutes were never under 5, so it goes at least 5 minutes before the end.
+  const closeout = end - Math.max(app.closeoutMinutes, TEAMS_CLOSEOUT_MIN);
   return {
     brief: win(brief, Math.max(amEnd, brief + 60)),
     checkin: win(checkin, Math.max(end - 120, checkin + 60)),
@@ -92,6 +142,8 @@ export type RhythmFacts = {
   /** The master switch, "Let FocusTime message me in Teams". */
   master: boolean;
   settings: TeamsRhythm;
+  /** SA-3: the app's reminder times, which the check-in and close out use. */
+  app: AppTimes;
   /** Quiet hours are "outside working hours" (the default) and now is outside them. */
   quietNow: boolean;
   pto: boolean;
@@ -110,7 +162,7 @@ export function rhythmDue(f: RhythmFacts, sent: ReadonlySet<string>): DueResult 
   const date = f.now.toPlainDate().toString();
   if (!rhythmDay(date, f.settings, f.pto)) return out;
   const t = f.now.toPlainTime().toString({ smallestUnit: "minute" });
-  const times = rhythmTimes(f.model, date, f.settings);
+  const times = rhythmTimes(f.model, date, f.settings, f.app);
   for (const kind of RHYTHM_KINDS) {
     const w = times[kind];
     if (!f.settings[kind] || !w || t < w.at || t >= w.until) continue;
@@ -137,7 +189,7 @@ export function nextRhythmWake(f: Omit<RhythmFacts, "pto" | "focusRunning" | "qu
     const date = today.add({ days: d }).toString();
     // PTO isn't known for later days here; a wake on a PTO day finds nothing due and plans the next.
     if (!rhythmDay(date, f.settings, false)) continue;
-    const times = rhythmTimes(f.model, date, f.settings);
+    const times = rhythmTimes(f.model, date, f.settings, f.app);
     for (const kind of RHYTHM_KINDS) {
       const w = times[kind];
       if (!f.settings[kind] || !w || sent.has(occasionOf(kind, date))) continue;

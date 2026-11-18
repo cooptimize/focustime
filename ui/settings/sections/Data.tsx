@@ -1,16 +1,21 @@
-// SA-2: Settings › Your data, drawn with the parts: Export, Reset, Delete, Diagnostics and the demo. Diagnostics is
-// its own panel (DX-1) and keeps its insides in a parts card (docs/open-questions.md, SA-2).
+// SA-3: Settings › Your data: What FocusTime keeps about you first, then what it changed in other apps (Activity's five
+// logs, as tabs), Export, Reset, Delete, Diagnostics and the demo. Diagnostics is its own panel (DX-1) and keeps its
+// insides in a parts card (docs/open-questions.md, SA-2).
 import { useEffect, useState } from "react";
 import { useDeveloperLoop } from "../../appenv.ts";
 import { call } from "../../api.ts";
 import { DiagnosticsPanel } from "../Diagnostics.tsx";
-import { Button, Buttons, Form, Group, Page, Row, Select, Switch, Text } from "../parts.tsx";
+import { Button, Buttons, Choice, Form, GoLink, Group, List, ListItem, Page, Row, Select, Switch, Text } from "../parts.tsx";
+import { KEEP_LINES } from "../keeps.ts";
+import { ActivityLog, LOG_TABS, type LogTab } from "./Activity.tsx";
 import type { BodyProps } from "./types.ts";
 
 export function DataSection(p: BodyProps) {
   const dev = useDeveloperLoop();
   return (
     <Page>
+      <WhatWeKeep go={p.go} />
+      <ChangedElsewhere {...p} />
       <Group>
         <ExportMine />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
@@ -32,6 +37,47 @@ export function DataSection(p: BodyProps) {
         </Group>
       )}
     </Page>
+  );
+}
+
+/** SA-3: what FocusTime keeps about me, how long, and where each is controlled (ui/settings/keeps.ts). */
+function WhatWeKeep({ go }: { go: BodyProps["go"] }) {
+  return (
+    <Group sid="what-we-keep" title="What FocusTime keeps about you">
+      <List label="What FocusTime keeps about you">
+        {KEEP_LINES.map((l) => (
+          <ListItem key={l.id}>
+            {l.what} {l.kept}{" "}
+            {l.link.section ? (
+              <GoLink section={l.link.section} setting={l.link.setting ?? null} go={go}>
+                {l.link.label}
+              </GoLink>
+            ) : (
+              <Button kind="quiet" onClick={() => (location.hash = l.link.href!)}>
+                {l.link.label}
+              </Button>
+            )}
+          </ListItem>
+        ))}
+      </List>
+    </Group>
+  );
+}
+
+/** SA-3: Activity's five logs as tabs; a link to one log opens its tab. */
+function ChangedElsewhere(p: BodyProps) {
+  const fromHash = (): LogTab => LOG_TABS.find((t) => decodeURIComponent(location.hash).endsWith(`/${t.id}`))?.id ?? "write-log";
+  const [tab, setTab] = useState<LogTab>(fromHash);
+  useEffect(() => {
+    const on = () => setTab((t) => (LOG_TABS.some((x) => decodeURIComponent(location.hash).endsWith(`/${x.id}`)) ? fromHash() : t));
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  return (
+    <Group title="What FocusTime changed in other apps" intro="Every change FocusTime made for you, with Undo where it can.">
+      <Choice label="Which log" options={LOG_TABS.map((t) => ({ value: t.id, label: t.label }))} value={tab} onChange={setTab} />
+      <ActivityLog tab={tab} {...p} />
+    </Group>
   );
 }
 

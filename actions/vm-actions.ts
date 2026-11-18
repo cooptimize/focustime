@@ -13,14 +13,14 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsDays, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.dismiss_prompt", "vm.log", "vm.start_now", "vm.autostart_skip", "vm.autostart_resume", "vm.autostart_seen"] as const;
+export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.dismiss_prompt", "vm.log", "vm.start_now", "vm.autostart_skip", "vm.autostart_unskip", "vm.autostart_resume", "vm.autostart_seen"] as const;
 export type VmAction = (typeof VM_ACTIONS)[number];
 
 export type VmContext = {
@@ -118,7 +118,7 @@ const nowMs = (ctx: VmContext) => Temporal.Instant.from(ctx.now()).epochMillisec
 
 /** Refuses a VM ID that isn't the confirmed one (a stale window, or anything else). */
 function guard(vm: ChosenVm | null, asked: unknown): ActionResponse | null {
-  if (!vm) return refuse("Choose your VM first (Settings › Accounts and calendars)");
+  if (!vm) return refuse("Choose your VM first (Settings › Connections)");
   if (asked !== undefined && (typeof asked !== "string" || !sameVm(asked, vm.id))) return refuse("FocusTime only acts on the VM you confirmed as yours", 403);
   return null;
 }
@@ -192,10 +192,10 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       const vm = (await chosen(ctx));
       const g = guard(vm, input.vmId);
       if (g) return g;
-      return preview(ctx, vm!, op);
+      return preview(ctx, vm!, op, cfg, today);
     }
     case "vm.confirm": {
-      if (!isObj(input) || Object.keys(input).some((k) => k !== "previewId") || typeof input.previewId !== "string") return bad("vm.confirm takes { previewId }");
+      if (!isObj(input) || Object.keys(input).some((k) => k !== "previewId" && k !== "skipToday") || typeof input.previewId !== "string" || (input.skipToday !== undefined && typeof input.skipToday !== "boolean")) return bad("vm.confirm takes { previewId, skipToday? }");
       const held = previews.get(input.previewId);
       previews.delete(input.previewId);
       if (!held || held.expiresAt < nowMs(ctx)) return refuse("That preview expired. Look again before confirming", 410);
@@ -205,15 +205,24 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       if (g) return g;
       // VM-2: the state is read again; a stop is refused unless the VM still runs (and a start unless it's still off).
       const r = await power(ctx, vm!, held.op, { recheck: true });
-      // VM-2 review: a Stop I pressed today also skips today's automatic start, so it never starts the VM I just stopped.
-      if (r.ok && held.op === "deallocate" && ctx.plan) await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, today])].slice(-30) }));
+      // VM-2 review, VM-5: a Stop at or after today's planned time ends today's automatic start, so FocusTime never
+      // starts again a VM I stopped during my day. One before it (the night before, after midnight) leaves it alone.
+      // VM-5: before it, "Skip today's start too" ticked skips today as Skip this one does (its reason: with a Stop).
+      if (r.ok && held.op === "deallocate" && ctx.plan && cfg) {
+        const ends = stopEndsDays({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes });
+        const days = [...new Set([...ends, ...(input.skipToday === true ? [today] : [])])];
+        if (days.length) await writeAutoStart(ctx.plan, (s) => days.reduce((x, d) => withSkip(x, d, "stop"), s));
+        // The message after says when it starts again, when it still does today.
+        const again = await startLaterToday(ctx, cfg, today);
+        if (again) return { ...r, data: { ...(r.data as object), startsAgainAt: again.toString(), startsAgain: clock(again, tz), said: `Stopped. It will start again at ${clock(again, tz)}.` } };
+      }
       return r;
     }
     case "vm.start_now": {
       // Step 15.5 (Q87): the morning box's (or notification's) Start, at once when Settings > You says so. The box
       // names the VM and says it starts; the start is still logged and followed until Azure shows it running.
       if (!onlyKeys(input, ["vmId"])) return bad("vm.start_now takes { vmId? }");
-      if (!cfg?.azure.startWithoutAsking) return { ok: false, status: 409, error: "Start asks first: Settings > Accounts and connections > My VM > Start without a preview is off", code: "ask_first" };
+      if (!cfg?.azure.startWithoutAsking) return { ok: false, status: 409, error: "Start asks first: Settings > Connections and connections > My VM > Start without a preview is off", code: "ask_first" };
       const vm = (await chosen(ctx));
       const g = guard(vm, isObj(input) ? input.vmId : undefined);
       if (g) return g;
@@ -230,7 +239,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       // VM-2: Day's "Not today" also skips today's automatic start.
       if (!onlyKeys(input, [])) return bad("vm.dismiss_prompt takes no input");
       (await ctx.plan?.markOnce(PROMPT_MARKER, today));
-      if (ctx.plan) await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, today])].slice(-30) }));
+      if (ctx.plan) await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "not_today"));
       return { ok: true, data: { dismissed: today } };
     }
     case "vm.autostart_skip": {
@@ -241,8 +250,19 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       if (!ctx.plan || !cfg) return refuse("Settings aren't available", 503);
       const date = (asked as string | undefined) ?? (await autoStartView(ctx, cfg, null)).next?.date ?? null;
       if (!date) return refuse("There's no automatic start coming up to skip");
-      await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, date])].slice(-30) }));
+      await writeAutoStart(ctx.plan, (s) => withSkip(s, date, "skip"));
       return { ok: true, data: { skipped: date } };
+    }
+    case "vm.autostart_unskip": {
+      // VM-5: Don't skip: today's skip is taken back while today's planned time is still ahead; after it, the way on is
+      // Start. Only today, only my own plan (the store is the signed-in person's); nothing is read from Azure.
+      if (!onlyKeys(input, [])) return bad("vm.autostart_unskip takes no input");
+      if (!ctx.plan || !cfg) return refuse("Settings aren't available", 503);
+      if (!(await readAutoStart(ctx.plan)).skipped.includes(today)) return refuse("Today's automatic start isn't skipped");
+      const at = plannedAt(cfg.week.hours, today, tz, cfg.azure.autoStart.minutes);
+      if (!at || Temporal.Instant.compare(Temporal.Instant.from(ctx.now()), at) >= 0) return refuse("Today's start time has passed, so it can't be put back. Start your VM from the VM menu if you need it");
+      await writeAutoStart(ctx.plan, (s) => withoutSkip(s, today));
+      return { ok: true, data: { unskipped: today } };
     }
     case "vm.autostart_resume": {
       // VM-2: Resume after it paused itself; counts as using FocusTime today.
@@ -358,6 +378,14 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
   }
   const n = nextAutoStart({ env: ctx.autoStartEnv, now, zone: tz, hours: cfg.week.hours, settings, state, pto: (d) => !!off?.pto?.has(d), holiday: (d) => !!off?.holidays?.has(d), on: chip === "running" || chip === "starting", ...(off ? { ptoRead: !!off.pto, holidaysRead: !!off.holidays } : {}) });
   const told = prod && settings.on ? outcomeToday(state, today) : null;
+  // VM-5: today skipped, on a day it would otherwise start (not PTO, a holiday or a day not chosen), whatever happened
+  // since isn't another outcome: how, the words, and Don't skip while its time is still ahead.
+  const at = plannedAt(cfg.week.hours, today, tz, settings.minutes);
+  const skippedToday =
+    prod && settings.on && n.kind !== "paused" && (!told || told.reason === "skipped") && state.attemptedOn !== today &&
+    dayReason({ date: today, settings, hours: cfg.week.hours, skipped: state.skipped, pto: !!off?.pto?.has(today), holiday: !!off?.holidays?.has(today) }) === "skipped"
+      ? { how: state.skipHow[today] ?? null, text: skipText(state.skipHow[today]), undo: !!at && Temporal.Instant.compare(now, at) < 0 }
+      : null;
   return {
     on: settings.on,
     minutes: settings.minutes,
@@ -370,6 +398,7 @@ export async function autoStartView(ctx: VmContext, cfg: AppConfig, chip: VmStat
     signInProblem: prod && settings.on && state.signInFailedOn === today ? { seen: state.signInSeen } : null,
     leftOff: told && OUTCOMES[told.reason].tell ? { reason: told.reason, short: OUTCOMES[told.reason].text, text: outcomeText(told), seen: told.seen } : null,
     days: workingWeekdays(cfg.week.hours),
+    skippedToday,
   };
 }
 
@@ -382,7 +411,19 @@ async function settleOrphans(ctx: VmContext, vm: ChosenVm, p: PowerState, t: num
   }
 }
 
-async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionResponse> {
+/**
+ * VM-5: today's automatic start, when it is still to come (on, production, a chosen day with working hours, not PTO or
+ * a holiday, not paused, skipped or tried already, and its time still ahead): the same answer as the "Next:" line, read
+ * as if the VM were off. Null otherwise, or when it can't be told.
+ */
+async function startLaterToday(ctx: VmContext, cfg: AppConfig, today: IsoDate): Promise<Temporal.Instant | null> {
+  const v = await autoStartView(ctx, cfg, "deallocated").catch(() => null);
+  if (!v?.next || v.next.date !== today) return null;
+  const at = Temporal.Instant.from(v.next.at);
+  return Temporal.Instant.compare(at, Temporal.Instant.from(ctx.now())) > 0 ? at : null;
+}
+
+async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp, cfg: AppConfig | null, today: IsoDate): Promise<ActionResponse> {
   try {
     const p = await client(ctx).power(refOf(vm));
     const chip = chipOf(p, transitions.get(vm.id.toLowerCase()) ?? null);
@@ -402,6 +443,10 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionRe
             notes: [`${vm.name} is deallocated: it shuts down and stops billing for compute.`, "Its auto-shutdown isn't changed.", "FocusTime follows it until Azure shows it stopped (deallocated)."],
             warning: "Anything running or unsaved on it ends: a remote session, Coop, open programs.", confirmLabel: "Stop",
           };
+    if (op === "deallocate" && cfg) {
+      const again = await startLaterToday(ctx, cfg, today);
+      if (again) out.startAgain = { at: again.toString(), text: `It will start again today at ${clock(again, userZone(cfg))}.`, box: "Skip today's start too" };
+    }
     return { ok: true, data: out };
   } catch (e) {
     return errResponse(e);

@@ -143,7 +143,9 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
 
   it("Find an item: out of the area, a fine one, and one DevOps doesn't have", async () => {
     await openSettings(page);
-    await settingsSection(page, "devops");
+    await settingsSection(page, "connections");
+    // SA-3: Find an item is in DevOps' card fold; its address opens it.
+    await page.evaluate(() => (location.hash = "#/settings/connections/find-item"));
     const group = page.locator('[data-setting="find-item"]');
     await group.scrollIntoViewIfNeeded();
     await group.getByRole("combobox").selectOption({ label: "Northwind" });

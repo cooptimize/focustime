@@ -1,7 +1,7 @@
 // VM-2: the auto-start's production-only gate and its rule (pure). Fictional data only.
 import { describe, expect, it } from "vitest";
 import type { TimeModel } from "../week/hours.ts";
-import { autoStartDue, autoStartEnvAllowed, DEFAULT_AUTOSTART, EMPTY_AUTOSTART_STATE, nextAutoStart, plannedAt, shouldPause, type AutoStartSettings, type AutoStartState, type DueFacts } from "./vm-autostart.ts";
+import { autoStartDue, autoStartEnvAllowed, autoStartStateOf, DEFAULT_AUTOSTART, EMPTY_AUTOSTART_STATE, nextAutoStart, plannedAt, shouldPause, skipText, stopEndsDays, stopEndsToday, withoutSkip, withSkip, type AutoStartSettings, type AutoStartState, type DueFacts } from "./vm-autostart.ts";
 
 const LA = "America/Los_Angeles";
 const BERLIN = "Europe/Berlin";
@@ -159,5 +159,81 @@ describe('the "Next:" line', () => {
     expect(nextAutoStart({ ...base, settings: { ...on, offDays: ["mon", "tue", "wed", "thu"] }, now: at("2026-11-11T12:00", LA) })).toMatchObject({ kind: "none" });
     for (const env of ["dev", "local", "demo", "", undefined, "Prod", "production", "prod "])
       expect(nextAutoStart({ ...base, env, now: at("2026-11-11T12:00", LA) }), String(env)).toEqual({ kind: "prod_only", text: "Auto-start runs only on the production FocusTime. Here it never starts your VM." });
+  });
+});
+
+describe("VM-5: a Stop and the day's start", () => {
+  const TOKYO = "Asia/Tokyo";
+  const ends = (local: string, zone: string, minutes = 5) => stopEndsToday({ now: at(local, zone), zone, hours: hours(zone), minutes });
+
+  it("before today's planned time it doesn't end today's start; at it and after it, it does", () => {
+    for (const zone of [LA, BERLIN, TOKYO]) {
+      expect(ends("2026-11-11T02:51", zone), zone).toBe(false);
+      expect(ends("2026-11-11T07:54", zone), zone).toBe(false);
+      expect(ends("2026-11-11T07:55", zone), zone).toBe(true);
+      expect(ends("2026-11-11T13:00", zone), zone).toBe(true);
+      // With 30 minutes: planned 7:30.
+      expect(ends("2026-11-11T07:29", zone, 30), zone).toBe(false);
+      expect(ends("2026-11-11T07:30", zone, 30), zone).toBe(true);
+    }
+  });
+
+  it("across midnight in my zone, east and west of the server's: the date is mine, not the server's", () => {
+    // Tokyo 12:30 AM Wed is still Tue in UTC: Wednesday's start is ahead, so it isn't ended.
+    expect(ends("2026-11-11T00:30", TOKYO)).toBe(false);
+    // Tokyo 11:50 PM Tue: past Tuesday's planned time (ends Tuesday's, which is over).
+    expect(ends("2026-11-10T23:50", TOKYO)).toBe(true);
+    // Los Angeles 11:50 PM Tue is already Wed in UTC: still Tuesday here, past its planned time.
+    expect(ends("2026-11-10T23:50", LA)).toBe(true);
+    // Los Angeles 12:10 AM Wed: before Wednesday's planned time.
+    expect(ends("2026-11-11T00:10", LA)).toBe(false);
+  });
+
+  it("review: hours that start at midnight put tomorrow's planned time this evening; a Stop after it ends tomorrow's too", () => {
+    const midnight = hours(LA, "00:00");
+    const days = (local: string) => stopEndsDays({ now: at(local, LA), zone: LA, hours: midnight, minutes: 15 });
+    // Thursday's start is planned Wed 11:45 PM: a Stop at 11:50 PM Wed ends Wednesday's and Thursday's.
+    expect(days("2026-11-11T23:50")).toEqual(["2026-11-11", "2026-11-12"]);
+    expect(days("2026-11-11T23:40")).toEqual(["2026-11-11"]);
+    // Ordinary hours: only today, as stopEndsToday says.
+    expect(stopEndsDays({ now: at("2026-11-11T23:50", LA), zone: LA, hours: hours(LA), minutes: 5 })).toEqual(["2026-11-11"]);
+    expect(stopEndsDays({ now: at("2026-11-11T02:51", LA), zone: LA, hours: hours(LA), minutes: 5 })).toEqual([]);
+  });
+
+  it("a day with no planned time (no working hours) is skipped as before: there is no start to keep", () => {
+    expect(ends("2026-11-13T06:00", LA)).toBe(true);
+  });
+});
+
+describe("VM-5: a skip says why", () => {
+  it("each way keeps its reason; an old skip with none says only Skipped today", () => {
+    let s = withSkip(state(), "2026-11-11", "stop");
+    s = withSkip(s, "2026-11-12", "skip");
+    s = withSkip(s, "2026-11-16", "not_today");
+    expect(s.skipHow).toEqual({ "2026-11-11": "stop", "2026-11-12": "skip", "2026-11-16": "not_today" });
+    // A day already skipped keeps its first reason.
+    expect(withSkip(s, "2026-11-11", "skip").skipHow["2026-11-11"]).toBe("stop");
+    expect(skipText("skip")).toBe("Skipped today: you pressed Skip this one");
+    expect(skipText("not_today")).toBe("Skipped today: you chose Not today on Day");
+    expect(skipText("stop")).toBe("Skipped today: you skipped it when you stopped the VM");
+    expect(skipText(undefined)).toBe("Skipped today");
+    // Read from storage: a state kept before VM-5 has no reasons; a reason for a day not skipped is dropped.
+    expect(autoStartStateOf({ skipped: ["2026-11-11"] }).skipHow).toEqual({});
+    expect(autoStartStateOf({ skipped: ["2026-11-11"], skipHow: { "2026-11-11": "stop", "2026-11-12": "skip", "2026-11-13": "nonsense" } }).skipHow).toEqual({ "2026-11-11": "stop" });
+    expect(autoStartStateOf({ skipped: ["2026-11-11"], skipHow: { "2026-11-11": "bogus" } }).skipHow).toEqual({});
+    // Don't skip takes the day and its reason away.
+    expect(withoutSkip(s, "2026-11-11")).toMatchObject({ skipped: ["2026-11-12", "2026-11-16"], skipHow: { "2026-11-12": "skip", "2026-11-16": "not_today" } });
+  });
+
+  it("the line says Skipped today and why, before its time and after it", () => {
+    const base = { env: "prod", zone: LA, hours: hours(LA), settings: on, pto: () => false, holiday: () => false, on: false } as const;
+    const skippedWed = (how?: "skip" | "not_today" | "stop") => state({ skipped: ["2026-11-11"], skipHow: how ? { "2026-11-11": how } : {} });
+    expect(nextAutoStart({ ...base, now: at("2026-11-11T06:00", LA), state: skippedWed("stop") })).toMatchObject({ text: "Skipped today: you skipped it when you stopped the VM. Next: Thu, Nov 12 at 7:55 AM" });
+    expect(nextAutoStart({ ...base, now: at("2026-11-11T06:00", LA), state: skippedWed() })).toMatchObject({ text: "Skipped today. Next: Thu, Nov 12 at 7:55 AM" });
+    // After its time, from the recorded outcome.
+    const after = { ...skippedWed("not_today"), outcome: { date: "2026-11-11", reason: "skipped" as const, at: at("2026-11-11T07:55", LA).toString(), notes: [], seen: false } };
+    expect(nextAutoStart({ ...base, now: at("2026-11-11T09:00", LA), state: after })).toMatchObject({ text: "Skipped today: you chose Not today on Day. Next: Thu, Nov 12 at 7:55 AM" });
+    // A PTO day says PTO, not skipped.
+    expect(nextAutoStart({ ...base, pto: (d: string) => d === "2026-11-11", now: at("2026-11-11T06:00", LA), state: skippedWed("skip") })).toMatchObject({ text: expect.stringMatching(/^Wed is PTO\./) });
   });
 });

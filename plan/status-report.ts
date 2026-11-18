@@ -198,7 +198,7 @@ export function countLine(c: { features: number; withUpdate: number; without: nu
 
 export type StatusNudgeSettings = { friday: boolean; fridayAt: string; sunday: boolean; sundayAt: string };
 export const DEFAULT_STATUS_NUDGE: StatusNudgeSettings = { friday: false, fridayAt: "15:00", sunday: false, sundayAt: "19:00" };
-/** Settings › Notifications: the times and the Sunday option, shared by the in-app kind and the Teams one (whose own switches are Friday). */
+/** Settings › Reminders and notices: the times and the Sunday option, shared by the in-app kind and the Teams one (whose own switches are Friday). */
 export type StatusTimes = Omit<StatusNudgeSettings, "friday">;
 export const DEFAULT_STATUS_TIMES: StatusTimes = { fridayAt: DEFAULT_STATUS_NUDGE.fridayAt, sunday: false, sundayAt: DEFAULT_STATUS_NUDGE.sundayAt };
 
