@@ -12,7 +12,7 @@ import type { Notice } from "../plan/notify.ts";
 import { IDENTITY_KEY, type MicrosoftAccount } from "./account.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import { AUTOSTART_MARK, autoStartCheck, autoStartTick, autoStartWake, recordUse, type AutoStartDeps } from "./vm-autostart.ts";
-import { AUTOSTART_KEY, clearVmState, settled, vmKey, vmAction, type VmContext, type VmStatus } from "./vm-actions.ts";
+import { AUTOSTART_KEY, clearVmState, readAutoStart, settled, vmKey, vmAction, type VmContext, type VmStatus } from "./vm-actions.ts";
 
 const SUB = "00000000-0000-4000-8000-0000000000ab";
 const VM = `/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachines/vm-sam-01`;
@@ -343,16 +343,14 @@ describe("from the review", () => {
     expect(w.starts()).toBe(0);
   });
 
-  it("a Stop I pressed today skips today's automatic start", async () => {
+  it("VM-5: a Stop at or after today's planned time still ends today's automatic start", async () => {
     const ws = workStart();
-    const w = await world({ start: nyAt(minus(ws, 20)) }).init();
+    const w = await world({ start: nyAt(minus(ws, 5)) }).init();
     w.arm.vms.get(VM.toLowerCase())!.power = "running";
     const p = await vmAction(w.vm(), "vm.preview", { op: "deallocate" });
-    expect(p.ok).toBe(true);
     const c = await vmAction(w.vm(), "vm.confirm", { previewId: (p as { data: { previewId: string } }).data.previewId });
     expect(c.ok).toBe(true);
     await settled();
-    w.clock.set(nyAt(minus(ws, 5)));
     expect(await autoStartTick(w.deps("prod"))).toBe("not_due");
     expect(w.starts()).toBe(0);
   });
@@ -392,6 +390,67 @@ describe("VM-5: a Stop before the day", () => {
     w.clock.set(nyAt(minus(ws, 5)));
     expect(await autoStartTick(w.deps("prod"))).toBe("started");
     expect(w.starts()).toBe(1);
+  });
+
+  it("one minute before the planned time doesn't skip; at it and after it end today's start, with its reason", async () => {
+    const ws = workStart();
+    const before = await world({ start: nyAt(minus(ws, 6)) }).init();
+    await stopAt(before);
+    expect((await readAutoStart(before.plan)).skipped).toEqual([]);
+    before.clock.set(nyAt(minus(ws, 5)));
+    expect(await autoStartCheck(before.deps("prod"))).toBe("started");
+
+    for (const when of [minus(ws, 5), minus(ws, 3), ws, "11:00"]) {
+      const w = await world({ start: nyAt(when) }).init();
+      await stopAt(w);
+      const st = await readAutoStart(w.plan);
+      expect(st.skipped, when).toEqual(["2026-11-11"]);
+      expect(st.skipHow, when).toEqual({ "2026-11-11": "stop" });
+      expect(await autoStartCheck(w.deps("prod")), when).toBe("skipped");
+      expect(w.starts(), when).toBe(0);
+      clearVmState();
+    }
+  });
+
+  for (const [zone, label] of [["Asia/Tokyo", "east"], ["America/Los_Angeles", "west"]] as const)
+    it(`in a zone ${label} of the server's (${zone}): a Stop just after midnight leaves the morning's start; one just before midnight doesn't skip the next day`, async () => {
+      const toml = ON.replace('time_zone = "America/New_York"', `time_zone = "${zone}"`);
+      expect(toml).toContain(zone);
+      const local = (hm: string, date = "2026-11-11") => Temporal.PlainDateTime.from(`${date}T${hm}`).toZonedDateTime(zone).toInstant().toString();
+      const ws = workStart(toml);
+      // Tue 11:58 PM: ends Tuesday's start (already past), never Wednesday's.
+      const late = await world({ start: local("23:58", "2026-11-10"), toml }).init();
+      await stopAt(late);
+      expect((await readAutoStart(late.plan)).skipped).toEqual(["2026-11-10"]);
+      late.clock.set(local(minus(ws, 5)));
+      expect(await autoStartCheck(late.deps("prod"))).toBe("started");
+      clearVmState();
+      // Wed 12:02 AM: before Wednesday's planned time, so Wednesday's start comes.
+      const early = await world({ start: local("00:02"), toml }).init();
+      await stopAt(early);
+      expect((await readAutoStart(early.plan)).skipped).toEqual([]);
+      early.clock.set(local(minus(ws, 5)));
+      expect(await autoStartCheck(early.deps("prod"))).toBe("started");
+      expect(early.starts()).toBe(1);
+    });
+
+  it("a Stop while a start is still being retried after an unreadable state ends the retries for today", async () => {
+    let now = 0;
+    const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: "busy" };
+    const arm = fakeArm({ now: () => now, transitionMs: 30_000, readFails });
+    const w = await world({ start: nyAt(minus(workStart(), 5)), arm }).init();
+    const pass = () => ((now = Date.parse(w.clock.now())), autoStartCheck(w.deps("prod")));
+    expect(await pass()).toBe("state_retry");
+    // The state reads again; the VM is on (someone started it), and I stop it from the chip.
+    readFails.kind = null;
+    w.clock.advance(60_000);
+    now = Date.parse(w.clock.now());
+    await stopAt(w);
+    w.clock.advance(60_000);
+    expect(await pass()).toBe("skipped");
+    w.clock.advance(10 * 60_000);
+    expect(await pass()).toBe("not_due");
+    expect(w.starts()).toBe(0);
   });
 });
 

@@ -13,7 +13,7 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, stopEndsToday, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
@@ -205,8 +205,10 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       if (g) return g;
       // VM-2: the state is read again; a stop is refused unless the VM still runs (and a start unless it's still off).
       const r = await power(ctx, vm!, held.op, { recheck: true });
-      // VM-2 review: a Stop I pressed today also skips today's automatic start, so it never starts the VM I just stopped.
-      if (r.ok && held.op === "deallocate" && ctx.plan) await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, today])].slice(-30) }));
+      // VM-2 review, VM-5: a Stop at or after today's planned time ends today's automatic start, so FocusTime never
+      // starts again a VM I stopped during my day. One before it (the night before, after midnight) leaves it alone.
+      if (r.ok && held.op === "deallocate" && ctx.plan && cfg && stopEndsToday({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes }))
+        await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "stop"));
       return r;
     }
     case "vm.start_now": {
@@ -230,7 +232,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       // VM-2: Day's "Not today" also skips today's automatic start.
       if (!onlyKeys(input, [])) return bad("vm.dismiss_prompt takes no input");
       (await ctx.plan?.markOnce(PROMPT_MARKER, today));
-      if (ctx.plan) await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, today])].slice(-30) }));
+      if (ctx.plan) await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "not_today"));
       return { ok: true, data: { dismissed: today } };
     }
     case "vm.autostart_skip": {
@@ -241,7 +243,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       if (!ctx.plan || !cfg) return refuse("Settings aren't available", 503);
       const date = (asked as string | undefined) ?? (await autoStartView(ctx, cfg, null)).next?.date ?? null;
       if (!date) return refuse("There's no automatic start coming up to skip");
-      await writeAutoStart(ctx.plan, (s) => ({ ...s, skipped: [...new Set([...s.skipped, date])].slice(-30) }));
+      await writeAutoStart(ctx.plan, (s) => withSkip(s, date, "skip"));
       return { ok: true, data: { skipped: date } };
     }
     case "vm.autostart_resume": {

@@ -36,8 +36,13 @@ export const DEFAULT_AUTOSTART: AutoStartSettings = { on: false, minutes: 0, off
 
 /** What FocusTime keeps for it (per person, in the plan store). Dates are local dates in my zone. */
 export type AutoStartState = {
-  /** Days I skipped (Skip this one, or Not today on Day's morning prompt). */
+  /** Days I skipped (Skip this one, Not today on Day's morning prompt, or with a Stop). */
   skipped: IsoDate[];
+  /**
+   * VM-5: how each skipped day was skipped, beside `skipped` (a date in `skipped` with none here was skipped before
+   * VM-5 and says only "Skipped today"). Kept in the same state row, so no migration; an older build drops it.
+   */
+  skipHow: Partial<Record<IsoDate, SkipHow>>;
   /** The day the tick first saw it on: pausing counts working days from here, not from before I opted in. */
   onSince: IsoDate | null;
   /** The last day I really used FocusTime (HK-3's signal). */
@@ -125,15 +130,49 @@ export function outcomeText(o: Pick<TodayOutcome, "reason" | "notes">, withNext 
   return parts.join(" ");
 }
 
-export const EMPTY_AUTOSTART_STATE: AutoStartState = { skipped: [], onSince: null, lastUseOn: null, pausedOn: null, pauseSeen: false, attemptedOn: null, signInFailedOn: null, signInSeen: false, notice: null, outcome: null, logged: null, ptoRead: null };
+/** VM-5: the ways a day is skipped: Skip this one, Not today on Day, or with a Stop. */
+export type SkipHow = "skip" | "not_today" | "stop";
+const SKIP_HOWS: readonly SkipHow[] = ["skip", "not_today", "stop"];
+/** VM-5: why it says "Skipped today" (docs/design/wording.md, VM-5 words). */
+export const SKIP_WHY: Record<SkipHow, string> = {
+  skip: "you pressed Skip this one",
+  not_today: "you chose Not today on Day",
+  stop: "you skipped it when you stopped the VM",
+};
+/** "Skipped today: you pressed Skip this one", or "Skipped today" for a skip kept with no reason (before VM-5). */
+export const skipText = (how: SkipHow | null | undefined): string => (how ? `${OUTCOMES.skipped.text}: ${SKIP_WHY[how]}` : OUTCOMES.skipped.text);
+
+/** VM-5: the state with a day skipped and how (the last 30 days kept, as before). A day skipped already keeps its first reason. */
+export function withSkip(s: AutoStartState, date: IsoDate, how: SkipHow): AutoStartState {
+  const skipped = [...new Set([...s.skipped, date])].slice(-30);
+  const skipHow: Partial<Record<IsoDate, SkipHow>> = {};
+  for (const d of skipped) {
+    const h = s.skipHow[d] ?? (d === date && !s.skipped.includes(date) ? how : undefined);
+    if (h) skipHow[d] = h;
+  }
+  return { ...s, skipped, skipHow };
+}
+/** VM-5: Don't skip: the day is no longer skipped (nor its reason kept). */
+export function withoutSkip(s: AutoStartState, date: IsoDate): AutoStartState {
+  const skipHow = { ...s.skipHow };
+  delete skipHow[date];
+  return { ...s, skipped: s.skipped.filter((d) => d !== date), skipHow };
+}
+
+export const EMPTY_AUTOSTART_STATE: AutoStartState = { skipped: [], skipHow: {}, onSince: null, lastUseOn: null, pausedOn: null, pauseSeen: false, attemptedOn: null, signInFailedOn: null, signInSeen: false, notice: null, outcome: null, logged: null, ptoRead: null };
 
 /** A state read from storage, with anything missing or malformed set to its empty value. */
 export function autoStartStateOf(v: unknown): AutoStartState {
   const o = typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
   const date = (x: unknown): IsoDate | null => (typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : null);
   const n = o.notice as { kind?: unknown; date?: unknown; at?: unknown; text?: unknown } | null | undefined;
+  const skipped = Array.isArray(o.skipped) ? o.skipped.map(date).filter((d): d is IsoDate => !!d).slice(-30) : [];
+  const how = typeof o.skipHow === "object" && o.skipHow !== null && !Array.isArray(o.skipHow) ? (o.skipHow as Record<string, unknown>) : {};
+  const skipHow: Partial<Record<IsoDate, SkipHow>> = {};
+  for (const d of skipped) if (SKIP_HOWS.includes(how[d] as SkipHow)) skipHow[d] = how[d] as SkipHow;
   return {
-    skipped: Array.isArray(o.skipped) ? o.skipped.map(date).filter((d): d is IsoDate => !!d).slice(-30) : [],
+    skipped,
+    skipHow,
     onSince: date(o.onSince),
     lastUseOn: date(o.lastUseOn),
     pausedOn: date(o.pausedOn),
@@ -191,6 +230,19 @@ export function workStart(hours: TimeModel, date: IsoDate, zone: string): Tempor
 /** When the automatic start is planned on a date: my day's start less my minutes (in real minutes, across a clock change). */
 export function plannedAt(hours: TimeModel, date: IsoDate, zone: string, minutes: number): Temporal.Instant | null {
   return workStart(hours, date, zone)?.subtract({ minutes }) ?? null;
+}
+
+/**
+ * VM-5: whether a Stop confirmed now ends today's automatic start. Before today's planned time (in my zone) it doesn't:
+ * the VM stopped at the end of the night before is the one the start is for. At or after it, it does, so a VM stopped
+ * during my day is never started again by FocusTime that day (VM-2's rule, kept; also while a start is still being
+ * retried after an unreadable state, VM-4). A day with no planned time (no working hours) is skipped as before; there
+ * is no start to keep.
+ */
+export function stopEndsToday(o: { now: Temporal.Instant; zone: string; hours: TimeModel; minutes: number }): boolean {
+  const today = o.now.toZonedDateTimeISO(o.zone).toPlainDate().toString();
+  const at = plannedAt(o.hours, today, o.zone, o.minutes);
+  return !at || Temporal.Instant.compare(o.now, at) >= 0;
 }
 
 /** The weekdays my working hours cover (the form offers these, each switchable off). */
@@ -336,7 +388,9 @@ export function nextAutoStart(o: {
       const at = plannedAt(o.hours, date, o.zone, o.settings.minutes);
       const done = outcomeToday(o.state, date);
       const chosen = !o.settings.offDays.includes(weekdayKey(date)) && !!start;
-      if (done) todayText = done.reason === "started" || done.reason === "started_late" ? [`Started today at ${clock(Temporal.Instant.from(done.at), o.zone)}.`, ...done.notes.map((n) => NOTE_TEXT[n])].join(" ") : outcomeText(done, false);
+      if (done) todayText = done.reason === "started" || done.reason === "started_late" ? [`Started today at ${clock(Temporal.Instant.from(done.at), o.zone)}.`, ...done.notes.map((n) => NOTE_TEXT[n])].join(" ") : done.reason === "skipped" ? `${skipText(o.state.skipHow[date])}.` : outcomeText(done, false);
+      // VM-5: today skipped, before its time too: "Skipped today" and why (it said "Wed is skipped." before).
+      else if (at && chosen && o.state.skipped.includes(date) && o.state.attemptedOn !== date && !o.pto(date) && !o.holiday(date)) todayText = `${skipText(o.state.skipHow[date])}.`;
       else if (at && chosen && Temporal.Instant.compare(o.now, at) >= 0 && !o.state.skipped.includes(date) && !o.on && o.state.attemptedOn !== date) {
         // Past the late limit with nothing recorded, the start's next pass records why (FocusTime wasn't running).
         todayText = Temporal.Instant.compare(o.now, start!.add({ minutes: LATE_LIMIT_MINUTES })) < 0 ? `Today's start (${clock(at, o.zone)}) hasn't run yet.` : null;
