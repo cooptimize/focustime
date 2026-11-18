@@ -64,7 +64,7 @@ const dayShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US
 const dateShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 const dayLong = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises, sub, read, onPrev, onNext, onThisWeek, onOpenDay }: {
+export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises, sub, read, busy = false, onPrev, onNext, onThisWeek, onOpenDay }: {
   week: Week;
   /** The week's dates, as the computer's header says them ("Nov 2–6, 2026"). */
   title: string;
@@ -80,6 +80,8 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
   sub: ReactNode;
   /** The week asked for is being read (or failed): the read line, from App. */
   read: ReactNode;
+  /** Another week is being read: the rows on screen are the last week's, so they're dimmed and can't be tapped. */
+  busy?: boolean;
   onPrev: () => void;
   onNext: () => void;
   onThisWeek: (() => void) | null;
@@ -200,7 +202,7 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
         {read}
         {sub}
       </header>
-      <ol className="pw-rows" aria-label={W.dayLabel}>
+      <ol className={`pw-rows${busy ? " busy" : ""}`} aria-label={W.dayLabel} aria-busy={busy || undefined} inert={busy || undefined}>
         {week.days.map((d, i) => (shown[i] ? row(d) : null))}
       </ol>
     </div>

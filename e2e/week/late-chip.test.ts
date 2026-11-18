@@ -154,7 +154,7 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     await page.close();
   }, T);
 
-  it("on the phone (390 px, 17 px root font): on the chips line beside the status, no taller with a status, a 44 px target, no sideways scroll", async () => {
+  it("on the phone (390 px, 17 px root font): PH-2's Week has no late chip, and no sideways scroll", async () => {
     const page = await h.browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, bypassCSP: true });
     const errors: string[] = [];
     page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
@@ -172,47 +172,11 @@ describe.skipIf(!CHROMIUM)("UI-9: the late chip on Week's cards", () => {
     // The app is up (the opening may not have started when the sign-in page went away).
     await page.waitForSelector(".bottom-bar", { timeout: 60_000 });
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
-    await board(page);
-    const c = chip(page, MON_AM);
-    await expect.poll(() => c.count()).toBe(1);
-    expect(await c.textContent()).toBe("1 late");
-    // MB-1: on the card's chips line (the status line), as on a computer.
-    expect(await c.evaluate((e) => !!e.closest(".card-status"))).toBe(true);
-    // Beside a status pill the chip adds no height (a card with no status: e2e/phone/polish.test.ts).
-    const card = page.locator(`main.grid ${MON_AM}`);
-    const withChip = await card.evaluate((e) => e.getBoundingClientRect().height);
-    const without = await card.evaluate((e) => {
-      const b = e.querySelector<HTMLElement>(".late-chip")!;
-      b.style.display = "none";
-      const hgt = e.getBoundingClientRect().height;
-      b.style.display = "";
-      return hgt;
-    });
-    if (await card.locator(".card-status .status-pill").count()) expect(withChip).toBe(without);
-    // The tap target: how far a tap still lands on the chip, up and down and across.
-    await c.scrollIntoViewIfNeeded();
-    const reach = await c.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const on = (x: number, y: number) => {
-        const t = document.elementFromPoint(x, y);
-        return !!t && (t === el || el.contains(t));
-      };
-      let up = 0, down = 0, left = 0, right = 0;
-      while (on(cx, cy - up - 1) && up < 60) up++;
-      while (on(cx, cy + down + 1) && down < 60) down++;
-      while (on(cx - left - 1, cy) && left < 80) left++;
-      while (on(cx + right + 1, cy) && right < 80) right++;
-      return { h: up + down + 1, w: left + right + 1 };
-    });
-    expect(reach.h).toBeGreaterThanOrEqual(44);
-    expect(reach.w).toBeGreaterThanOrEqual(44);
-    // No sideways scroll.
+    // PH-2: the phone's Week is day rows with no cards, so no late chip; late promises are the Inbox's (one at a time).
+    await page.evaluate(() => (location.hash = "#/week"));
+    await page.locator(".pw-row").first().waitFor({ timeout: 30_000 });
+    expect(await page.locator(".pw .late-chip").count()).toBe(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/week-phone.png`, fullPage: true });
-    await c.tap();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/inbox\/item\/f\d+$/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

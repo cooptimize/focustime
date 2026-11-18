@@ -76,6 +76,7 @@ Phone only. At 768 and wider nothing here changes.
 | ⋯ Day: Timeline | Settings › Display › Show Day as a timeline |
 | ⋯ Day: Close out <day> (a past day) | "A past day: … Close out <day>" under the day, as before; More › Everything else › Close out |
 | The day's suggestions line (SG-1) | The empty block's suggestions in its section |
+| How far the day is ("in 3 days", "yesterday") beside the date | Gone from the small header (the date says it); the day's rows on Week |
 | Block cards (as Week's, one day) | A section per block (B), described above |
 | A to-do's tick | The tick box (done at once, with Undo) |
 | A to-do's ⋯ (the to-do's sheet) | Tap the title (the same sheet: Move, Snooze, time, the story card, Copy link) |

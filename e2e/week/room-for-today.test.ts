@@ -265,21 +265,18 @@ describe.skipIf(!CHROMIUM)("WK-5: keyboard and phone (browser, demo Friday)", ()
     await page.close();
   }, T);
 
-  it("the phone: a day tab goes straight to its day; a hidden today is never the day shown", async () => {
+  it("the phone (PH-2): a day's row goes straight to its day; a hidden today has no row", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await page.evaluate(() => (location.hash = "#/week"));
-    await page.locator("main.grid.narrow").waitFor({ timeout: 60_000 });
-    const tabs = page.locator(".daybar .day-tab");
-    await tabs.filter({ hasText: /^Mon/ }).click();
-    await expect.poll(() => page.locator(".daybar .day-tab.current").innerText()).toMatch(/^Mon/);
-    await tabs.filter({ hasText: /^Thu/ }).click();
-    await expect.poll(() => page.locator(".daybar .day-tab.current").innerText()).toMatch(/^Thu/);
+    const rows = page.locator(".pw-row");
+    await rows.first().waitFor({ timeout: 60_000 });
+    await rows.filter({ has: page.locator(".pw-wd", { hasText: /^Mon$/ }) }).locator(".pw-day").click();
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/day/2026-11-09");
     await call(page, "ui.set_week_days", { catchUp: false, weekend: true });
+    await page.evaluate(() => (location.hash = "#/week"));
     await page.reload();
-    await page.locator("main.grid.narrow").waitFor({ timeout: 60_000 });
-    await expect(tabs.filter({ hasText: /^Fri/ }).count()).resolves.toBe(0);
-    await expect.poll(() => page.locator(".daybar .day-tab.current").count()).toBe(1);
-    await expect(page.locator(`main.grid.narrow [data-drop^="2026-11-13:"]`).count()).resolves.toBe(0);
+    await rows.first().waitFor({ timeout: 60_000 });
+    await expect(page.locator(".pw-wd", { hasText: /^Fri$/ }).count()).resolves.toBe(0);
     await call(page, "ui.set_week_days", { catchUp: true, weekend: true });
     expect(errors).toEqual([]);
     await page.close();

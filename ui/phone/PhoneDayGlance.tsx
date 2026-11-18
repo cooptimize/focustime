@@ -171,17 +171,20 @@ export function DayGlanceHead({ date, today, pill, read, onPrev, onNext, onWeek,
   const d = Temporal.PlainDate.from(date);
   return (
     <header className="dg-headbar day-bar">
-      <span className="pd-step-ph" role="group" aria-label="Day">
+      {/* Previous day, the date, Next day: the arrows on either side, as Week's header has them. */}
+      <span className="pd-step-ph">
         <button type="button" onClick={onPrev} aria-label={W.previousDay} title={`${W.previousDay} ([)`}>
           <Icon name="back" />
-        </button>
-        <button type="button" onClick={onNext} aria-label={W.nextDay} title={`${W.nextDay} (])`}>
-          <Icon name="next" />
         </button>
       </span>
       <h1 className="dg-date" title={d.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}>
         {d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}
       </h1>
+      <span className="pd-step-ph">
+        <button type="button" onClick={onNext} aria-label={W.nextDay} title={`${W.nextDay} (])`}>
+          <Icon name="next" />
+        </button>
+      </span>
       {pill}
       <span className="dg-headacts">
         {date !== today && (

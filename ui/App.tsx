@@ -2444,6 +2444,7 @@ export function App() {
                   shown={shown}
                   promises={inboxToday?.items ?? []}
                   read={<ReadLine read={read} what="week" onRetry={retryRead} />}
+                  busy={read !== null}
                   sub={<><div className="pw-chips">{weekChips}</div>{weekSub}</>}
                   onPrev={() => changeWeek(-1)}
                   onNext={() => changeWeek(1)}

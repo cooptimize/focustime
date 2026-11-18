@@ -42,7 +42,8 @@ describe.skipIf(!CHROMIUM)("NM-1: no now mark on a cell that isn't a block", () 
       await page.close();
       const phone = await phonePage(h, 390);
       for (const hash of ["#/week", "#/day"]) {
-        await go(phone, hash, hash === "#/week" ? cell : ".topbar, .phone-tabs, main");
+        // PH-2: the phone's Week is day rows (the catch-up day one tile).
+        await go(phone, hash, hash === "#/week" ? ".pw-tile.catchup" : ".topbar, .phone-tabs, main");
         expect(await phone.locator(MARK).count(), `phone ${hash}`).toBe(0);
       }
       await phone.close();

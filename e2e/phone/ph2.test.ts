@@ -157,6 +157,9 @@ describe.skipIf(!CHROMIUM)("PH-2: the phone's Week, a day at a glance, the Inbox
     await page.getByRole("button", { name: "Next", exact: true }).click();
     await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).not.toBe(first);
     expect(await page.locator(".io-of").textContent()).toBe(`2 of ${count}`);
+    // The address follows the item shown (a reload lands on it).
+    const second = await page.locator(".io-card").getAttribute("data-key");
+    await expect.poll(() => hash(page)).toBe(`#/inbox/one/${second}`);
     await page.getByRole("button", { name: "Previous", exact: true }).click();
     await expect.poll(() => page.locator(".io-card").getAttribute("data-key")).toBe(first);
     // Up next: a tap goes straight to it.

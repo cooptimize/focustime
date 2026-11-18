@@ -12,7 +12,7 @@ const W = PHONE_TEXT.one;
 export type OneAct = { id: string; label: string; primary?: boolean; more?: boolean; href?: string; run: () => void };
 export type OneLine = { key: string; client: string; color: string; title: string };
 
-export function InboxOne({ index, count, current, card, acts, form, notice, upNext, lists, onList, onPrev, onNext, onPick }: {
+export function InboxOne({ index, count, current, card, acts, form, notice, upNext, lists, onList, onPrev, onNext, onPick, onShown }: {
   index: number;
   count: number;
   current: OneLine;
@@ -28,6 +28,8 @@ export function InboxOne({ index, count, current, card, acts, form, notice, upNe
   onPrev: () => void;
   onNext: () => void;
   onPick: (key: string) => void;
+  /** The item shown changed (the address follows it). */
+  onShown?: (key: string) => void;
 }) {
   const [more, setMore] = useState(false);
   const head = useRef<HTMLHeadingElement>(null);
@@ -35,6 +37,7 @@ export function InboxOne({ index, count, current, card, acts, form, notice, upNe
   const first = useRef(true);
   useEffect(() => {
     setMore(false);
+    onShown?.(current.key);
     if (first.current) return void (first.current = false);
     head.current?.focus({ preventScroll: true });
   }, [current.key]);

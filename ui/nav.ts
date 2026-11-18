@@ -126,7 +126,7 @@ export const navOf = {
   /** UI-9: the Promises view, late ones only, for one client (#/inbox/promises/late/<client>; null: any client). */
   inboxLate: (client: string | null): Nav => ({ tab: "inbox", view: "promises", item: null, late: { client } }),
   /** PH-2: the phone's Inbox one at a time, at an item (#/inbox/one/<key>) or at the first (#/inbox/one). */
-  inboxOne: (key: string | null = null): Nav => ({ tab: "inbox", view: key ? listOfKey(key) : null, item: key, one: true }),
+  inboxOne: (key: string | null = null): Nav => (key?.startsWith("s") ? navOf.week() : { tab: "inbox", view: key ? listOfKey(key) : null, item: key, one: true }),
   /** IB-4: one row open in place (#/inbox/item/<key>), in its own list. A send opens Week, where To place answers it. */
   inboxItem: (key: string, _view: InboxPlace | InboxList | null = null): Nav => (key.startsWith("s") ? navOf.week() : { tab: "inbox", view: listOfKey(key), item: key }),
   /** Captures (was Captures and drafts). */

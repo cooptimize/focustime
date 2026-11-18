@@ -18,7 +18,7 @@ import { markSeen } from "../inboxcount.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { ASK_KEY_EVENT } from "../menu.ts";
 import { clientColor } from "../labels.ts";
-import { INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type LateFilter, type Nav } from "../nav.ts";
+import { hashOf, INBOX_LIST_NAMES, INBOX_LISTS, listOfKey, navOf, type InboxList, type LateFilter, type Nav } from "../nav.ts";
 import { Stamp } from "../Stamp.tsx";
 import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
@@ -135,9 +135,14 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     const k = i < 0 ? undefined : (old.slice(i + 1).find((x) => qKeys.includes(x)) ?? [...old.slice(0, i)].reverse().find((x) => qKeys.includes(x)));
     oneIdx = k ? qKeys.indexOf(k) : 0;
   }
-  const curRow = oneIdx >= 0 ? queue[oneIdx]! : null;
+  // While a form is open on the item shown, it stays, even if a reread drops it (a teammate's link): what I typed
+  // there is never taken away under me, as on the lists. It goes when the form closes.
+  const heldRef = useRef<(typeof queue)[number] | null>(null);
+  const holding = oneAsked && !!(form || sForm) && !!heldRef.current && heldRef.current.key === cur && !qKeys.includes(cur ?? "");
+  const curRow = holding ? heldRef.current : oneIdx >= 0 ? queue[oneIdx]! : null;
   useEffect(() => {
-    prevKeys.current = qKeys;
+    if (!holding) prevKeys.current = qKeys;
+    heldRef.current = curRow;
     if (oneAsked && curRow && curRow.key !== cur) setCur(curRow.key);
   });
   const curRef = useRef<string | null>(null);
@@ -230,9 +235,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const run = useCallback(
     async (action: string, input: Record<string, unknown>, msg: string, undo?: { action: string; input: Record<string, unknown> } | (() => Promise<unknown>)) => {
       try {
-        if (action !== "inbox.list") await call(action, input);
-        // PH-2: one at a time, Undo comes back to the item it undid.
+        // PH-2: one at a time, Undo comes back to the item it undid (read before the call: Next may be tapped meanwhile).
         const acted = curRef.current;
+        if (action !== "inbox.list") await call(action, input);
         if (oneRef.current) setWorked(true);
         setError(null);
         setForm(null);
@@ -327,7 +332,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   const acts = entry ? actsFor(entry, actEnv) : [];
   // PH-2: the item shown one at a time: its source, its actions (the same as on the lists) and its form.
   const oneEntry = curRow && curRow.kind === "promise" ? entryOf(curRow, src) : null;
-  const oneSug = curRow && curRow.kind === "conversation" ? (src.chats?.suggestions.find((x) => `v${x.id}` === curRow.key) ?? null) : null;
+  const sugRef = useRef<SuggestionRow | null>(null);
+  const oneSug = curRow && curRow.kind === "conversation" ? (src.chats?.suggestions.find((x) => `v${x.id}` === curRow.key) ?? (sForm && sugRef.current && `v${sugRef.current.id}` === curRow.key ? sugRef.current : null)) : null;
+  sugRef.current = oneSug;
   const oneActs = oneEntry ? actsFor(oneEntry, actEnv) : oneSug ? suggestionActs(oneSug, { form: setSForm, dismiss: () => dismiss(oneSug), promise: () => void asPromise(oneSug), notWork: () => notWork(oneSug) }).map((a) => ({ ...a })) : [];
   useEffect(() => {
     if (!oneAsked) return;
@@ -337,13 +344,16 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   }, [oneAsked, curRow?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- keys ----
-  const keyRef = useRef({ order, openKey, acts, open, form, sForm, openSuggestion, list });
-  keyRef.current = { order, openKey, acts, open, form, sForm, openSuggestion, list };
+  const showingOne = !!(oneAsked && PhoneM && curRow);
+  const keyRef = useRef({ order, openKey, acts, open, form, sForm, openSuggestion, list, one: showingOne });
+  keyRef.current = { order, openKey, acts, open, form, sForm, openSuggestion, list, one: showingOne };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = keyRef.current;
+      // PH-2: one at a time shows no list; its own buttons move and act (the keys stay the lists').
+      if (k.one) return;
       const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
       // The Inbox's keys win over the app's own (C is Capture elsewhere): this listener runs first and stops the rest.
       const done = () => (e.preventDefault(), e.stopImmediatePropagation());
@@ -628,6 +638,11 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
         onPrev={() => oneIdx > 0 && setCur(qKeys[oneIdx - 1]!)}
         onNext={() => oneIdx < qKeys.length - 1 && setCur(qKeys[oneIdx + 1]!)}
         onPick={setCur}
+        onShown={(key) => {
+          // The address follows the item shown, without a new history entry (a reload lands on it).
+          const h = hashOf({ nav: navOf.inboxOne(key), overlay: null });
+          if (location.hash !== h) history.replaceState(history.state, "", h);
+        }}
       />
     );
   }

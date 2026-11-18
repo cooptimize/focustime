@@ -237,21 +237,25 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     await page.close();
   }, T);
 
-  it("phone (390×844): + Add on a block opens the sheet; add a story from it", async () => {
+  it("phone (390×844): Week opens a day; Add on a block opens the sheet; add a story from it (PH-2)", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await page.evaluate(() => (location.hash = "#/week"));
-    const card = page.locator(".half.card", { has: page.locator(".add-work.add-row") }).nth(1);
-    await card.waitFor({ timeout: 30_000 });
-    await card.locator(".add-work.add-row").click();
+    // PH-2: Week is day rows that open a day; Add is on the day's sections.
+    const tile = page.locator(".pw-row:not(.past) .pw-tile:not(.whole):not(.eve)").nth(1);
+    await tile.waitFor({ timeout: 30_000 });
+    await tile.click();
+    const add = page.locator(".dg-block .dg-add").first();
+    await add.waitFor({ timeout: 30_000 });
+    await add.click();
     const sheet = page.locator("aside.block-panel.sheet");
     await sheet.waitFor();
-    const at = (await sheet.getAttribute("data-block-panel"))!.split("|");
     const row = sheet.locator(".aw-sec .aw-row:not(.placed)").filter({ has: page.locator("button.aw-plus") }).first();
     const title = (await row.locator(".aw-row-title").innerText()).trim();
     await row.locator("button.aw-plus").click();
     await expect.poll(() => sheet.locator(".aw-row.placed", { hasText: title }).count()).toBeGreaterThan(0);
     await page.keyboard.press("Escape");
-    await expect.poll(() => block(page, at[0]!, at[1]!).innerText()).toContain(title);
+    // On the day: in its section, or on today's Now card when it is the next to-do (never both).
+    await expect.poll(() => page.locator(".day-view").innerText()).toContain(title);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -362,16 +366,16 @@ describe.skipIf(!CHROMIUM)("WD-1: the To place line (browser, demo on Tuesday)",
       await page.close();
     }, T);
 
-  it("review fix: phone (390×844): the week title, + Add and ⋯ share one row; the notice is one line, \"N to place · Review\"", async () => {
+  it("review fix: phone (390×844): the week's dates and its arrows share one row; the notice is one line, \"N to place · Review\" (PH-2)", async () => {
     const { page, errors } = await freshPage(h, { width: 390, height: 844 });
     await page.evaluate(() => (location.hash = "#/week"));
-    await page.locator(".half.card").first().waitFor({ timeout: 30_000 });
-    const head = page.locator(".week-head.wd1-head");
-    const [t, add, more] = await Promise.all([head.locator("h2").boundingBox(), head.locator(".add-work-head").boundingBox(), head.getByRole("button", { name: "View options for Week" }).boundingBox()]);
+    await page.locator(".pw-tile").first().waitFor({ timeout: 30_000 });
+    const head = page.locator(".pw-head");
+    const [t, prev, next] = await Promise.all([head.locator(".pw-title").boundingBox(), head.getByRole("button", { name: "Previous week" }).boundingBox(), head.getByRole("button", { name: "Next week" }).boundingBox()]);
     const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
-    expect(Math.abs(mid(t!) - mid(add!))).toBeLessThan(t!.height);
-    expect(Math.abs(mid(add!) - mid(more!))).toBeLessThan(add!.height);
-    const notice = page.locator(".to-place-line");
+    expect(Math.abs(mid(t!) - mid(prev!))).toBeLessThan(prev!.height);
+    expect(Math.abs(mid(t!) - mid(next!))).toBeLessThan(next!.height);
+    const notice = head.locator(".to-place-line");
     await expect(notice.innerText()).resolves.toMatch(/^\d+ to place · Review$/);
     // One line: the text and Review sit on the same line box.
     const spread = await notice.evaluate((e) => {
