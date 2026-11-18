@@ -1406,9 +1406,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.kind":
     case "chats.reading":
     case "chats.refresh":
-    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin", "clients") : env.openSettings("chats", "chats-read")) };
+    case "chats.list": return { run: () => (env.admin ? env.openSettings("admin", "clients") : env.openSettings("clients", "chats-read")) };
     case "chats.social":
-    case "chats.registered": return { run: () => env.openSettings("chats", "chats-read") };
+    case "chats.registered": return { run: () => env.openSettings("clients", "chats-read") };
     // Requests are worked in Inbox › Requests; registering chats and deleting stored messages in Settings > Clients.
     case "requests.list":
       return { run: () => env.setView("conversations") };
@@ -1454,7 +1454,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "promises.link":
       return { run: () => env.setView("my_promises") };
     case "requests.purge":
-      return { run: () => env.openSettings("chats") };
+      return { run: () => env.openSettings("clients") };
     case "ai.status":
     case "ai.test":
       return { run: () => env.openSettings("ai") };
@@ -1497,7 +1497,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "permissions.status": return { run: () => env.openSettings("connections", "permissions") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Ask to collaborate, Who and Backlog" };
-    case "presence.log": return { run: () => env.openSettings("activity", "teams-log") };
+    case "presence.log": return { run: () => env.openSettings("data", "teams-log") };
     case "playlist.open": return { run: () => env.openSettings("focus", "playlists") };
     case "data.export": return { run: env.exportPlan };
     case "data.export_mine": return { run: () => env.openSettings("data", "export") };
@@ -1555,7 +1555,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "loop.undo_kept":
       return { run: () => void (window.location.hash = "#/inbox/promises") };
     case "loop.sends":
-      return { run: () => env.openSettings("activity", "loop-log") };
+      return { run: () => env.openSettings("data", "loop-log") };
     case "followups.list": return { run: env.openFollowUps };
     // Closing, not needed, snooze, edit, delete, who suggestions and the heads-up review are on each row in the Inbox.
     case "followup.close":
@@ -1680,18 +1680,18 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "write.confirm":
     case "write.retry":
     case "write.log":
-      return { run: () => env.openSettings("activity", "write-log") };
+      return { run: () => env.openSettings("data", "write-log") };
     // Step 14: DevOps write access is per client in Settings; changes start from follow-ups, drafts and Close out.
     case "devops.set_write_pat":
     case "devops.clear_write_pat":
     case "devops.write_status":
-      return { run: () => env.openSettings("devops", "devops-write") };
+      return { run: () => env.openSettings("connections", "devops-write") };
     // DV-2: Refresh checks DevOps now and says what changed; Find an item lives in Settings › Connections › DevOps.
     case "devops.versions":
     case "devops.refresh":
       return { run: env.refresh };
     case "devops.find":
-      return { run: () => env.openSettings("devops", "find-item") };
+      return { run: () => env.openSettings("connections", "find-item") };
     case "devops.states":
     case "devops.needed":
     case "devops.preview":
@@ -1699,7 +1699,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.confirm":
     case "devops.retry":
     case "devops.log":
-      return { run: () => env.openSettings("activity", "devops-log") };
+      return { run: () => env.openSettings("data", "devops-log") };
     // NM-2: the Midday check-in's and Close out's own buttons.
     case "checkin.sessions":
     case "checkin.answer":
@@ -1751,7 +1751,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "teams.status":
     case "teams.test":
       return { run: () => env.openSettings("notifications") };
-    case "vm.log": return { run: () => env.openSettings("activity", "azure-log") };
+    case "vm.log": return { run: () => env.openSettings("data", "azure-log") };
     // F1: Send feedback opens its dialog; the send is from its preview; the setup check is in Settings > Connections.
     case "feedback.preview": return { run: env.openFeedback };
     case "feedback.send": return { disabled: "Send it from the feedback preview" };

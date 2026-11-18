@@ -900,11 +900,11 @@ export function App() {
   const devopsWrites = useDevOpsWriteFlow({
     allowed: data?.devopsWrite ?? [],
     onDone: reloadQuiet,
-    openSettings: () => openSettingsRef.current?.("devops", "devops-write"),
+    openSettings: () => openSettingsRef.current?.("connections", "devops-write"),
     client: { name: (k) => (data ? captureClients(data).find((c) => c.clientKey === k)?.clientName : undefined) ?? k, color: (k) => (data ? clientColor(k, data.clients) : undefined) },
   });
   // FN-1 (was PK-1's offer): a story's to-do checked off opens Wrap it up (never writes on its own); unchecked, the Undo.
-  const doneOffer = useWrapUpFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet, notice: setNotice, openSettings: () => openSettingsRef.current?.("devops", "devops-write") });
+  const doneOffer = useWrapUpFlow({ allowed: data?.devopsWrite ?? [], ask: (data?.planning.devopsOnDone ?? "ask") === "ask", onDone: reloadQuiet, notice: setNotice, openSettings: () => openSettingsRef.current?.("connections", "devops-write") });
   const { ticked } = doneOffer.env;
   tickedRef.current = ticked;
   timerPickRef.current = data?.timer?.pickId ?? null;

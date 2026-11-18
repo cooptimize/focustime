@@ -122,7 +122,7 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     // Undo each from Settings › Activity's write log, newest first: the item reads as it did.
     await page.keyboard.press("Escape");
     await openSettings(page);
-    await settingsSection(page, "activity");
+    await page.evaluate(() => (location.hash = "#/settings/data/devops-log"));
     const wl = page.getByRole("region", { name: "DevOps write log" });
     for (let i = 0; i < 3; i++) {
       const row = wl.locator("tr", { hasText: "#1111" }).filter({ has: page.getByRole("button", { name: "Undo" }) }).first();
@@ -241,7 +241,7 @@ describe.skipIf(!CHROMIUM)("ED-1 edit an item on its story card (browser, demo m
     if (SHOTS) await shot(page, "backlog-moved");
     // Undo from the write log moves it back.
     await openSettings(page);
-    await settingsSection(page, "activity");
+    await page.evaluate(() => (location.hash = "#/settings/data/devops-log"));
     const wl = page.getByRole("region", { name: "DevOps write log" });
     await wl.locator("tr", { hasText: "#1113" }).getByRole("button", { name: "Undo" }).first().click();
     await confirmPreview(page);
