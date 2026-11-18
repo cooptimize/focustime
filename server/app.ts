@@ -3,7 +3,7 @@
 // (http://localhost:<port>) and the hosted app.
 import type { BuildInfo } from "./buildinfo.ts";
 import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
-import { markedEnv, sitePage } from "./site-env.ts";
+import { markedEnv, siteManifest, sitePage } from "./site-env.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { posix } from "node:path";
 import { writeJson } from "./compress-data.ts";
@@ -192,6 +192,8 @@ export function createApp(opts: AppOptions) {
   if (files && marked) {
     const page = files.get("/index.html");
     if (page) files.set("/index.html", makeStaticFile("/index.html", Buffer.from(sitePage(page.plain.toString("utf8"), marked)), page.cache, true));
+    const manifest = files.get("/manifest.webmanifest");
+    if (manifest) files.set("/manifest.webmanifest", makeStaticFile("/manifest.webmanifest", Buffer.from(siteManifest(manifest.plain.toString("utf8"), marked)), manifest.cache));
   }
   const https = opts.publicUrl.startsWith("https://");
   const redirect = (res: ServerResponse, to: string, cookies: string[] = []) => {
