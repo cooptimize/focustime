@@ -24,6 +24,25 @@ async function phoneBarWhole(page: Page) {
   });
 }
 
+/** DD-1: at a text size, the mark's center against each target's center (y, px; + is lower), and the bar on one row. */
+async function markLine(page: Page, size: string, targets: string[]) {
+  await page.evaluate((s) => (s === "default" ? document.documentElement.removeAttribute("data-text-size") : document.documentElement.setAttribute("data-text-size", s)), size);
+  await page.waitForTimeout(150);
+  return page.evaluate((ts) => {
+    const mid = (s: string) => {
+      const r = document.querySelector(s)!.getBoundingClientRect();
+      return { c: r.top + r.height / 2, h: r.height };
+    };
+    const mark = mid(".topbar .site-tag");
+    const off = ts.map((t) => Math.round((mark.c - mid(t).c) * 10) / 10);
+    const bar = document.querySelector(".topbar") as HTMLElement;
+    const kids = [...bar.querySelectorAll(":scope > *")].filter((e) => (e as HTMLElement).offsetParent !== null && e.getBoundingClientRect().height > 0);
+    const tops = kids.map((e) => e.getBoundingClientRect());
+    const oneRow = tops.every((a) => tops.every((b) => a.top < b.bottom && b.top < a.bottom)) && bar.scrollWidth <= bar.clientWidth;
+    return { off, oneRow, line: `mark ${mark.h.toFixed(1)} high, ${ts.map((t, i) => `${off[i]} px from ${t.split(" ").pop()}`).join(", ")}` };
+  }, targets);
+}
+
 describe.skipIf(!CHROMIUM)("EV-1 on dev", () => {
   let h: Harness;
   beforeAll(async () => {
@@ -78,6 +97,66 @@ describe.skipIf(!CHROMIUM)("EV-1 on dev", () => {
       const person = await phoneBarWhole(page);
       expect([person.page, person.bar, person.parts, person.vm]).toEqual([true, true, ["whole", "whole", "whole"], "whole"]);
       expect(errors).toEqual([]);
+      await page.close();
+    }, T);
+  }
+
+  // DD-1: the mark sits on the tabs' line (within 1 px of their center and the name's) at every width and text size,
+  // and on the phone on the date's. Its red is a solid pill with white letters; the demo's own mark is as it was.
+  it("a computer: the mark's center is on the tabs' and the name's line at 1280, 1366, 1440 and 1920, at every text size", async () => {
+    const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
+    await page.locator(".topbar .site-tag").waitFor();
+    const seen: string[] = [];
+    const off: string[] = [];
+    for (const width of [1280, 1366, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const size of ["default", "large", "larger"]) {
+        const m = await markLine(page, size, [".topbar .brand .name", ".topbar .view-tab"]);
+        seen.push(`${width} ${size}: ${m.line}${m.oneRow ? "" : ", NOT one row"}`);
+        if (Math.abs(m.off[0]!) > 1 || Math.abs(m.off[1]!) > 1 || !m.oneRow) off.push(`${width} ${size}: ${m.line}`);
+      }
+    }
+    console.log(`DD-1 computer:\n${seen.join("\n")}`);
+    // Within 1 px of the name's center and the tabs', and still one row, the same as EV-1 and RB-6 measure it.
+    expect(off).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("a phone at 390: the mark's center is on the date's line at every text size", async () => {
+    const { page, errors } = await freshPage(h, { width: 390, height: 844 });
+    await page.locator(".topbar .site-tag").waitFor();
+    const seen: string[] = [];
+    for (const size of ["default", "large", "larger"]) {
+      const m = await markLine(page, size, [".topbar .ph1-date"]);
+      seen.push(`390 ${size}: ${m.line}`);
+    }
+    console.log(`DD-1 phone:\n${seen.join("\n")}`);
+    expect(seen.filter((l) => Math.abs(Number(/(-?[\d.]+) px from/.exec(l)![1])) > 1)).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  for (const theme of ["cooptimize-dark", "cooptimize-light"]) {
+    it(`${theme}: the mark is a solid red pill with white letters, no line; the demo's mark is as it was`, async () => {
+      const { page } = await freshPage(h, { width: 1440, height: 900 });
+      await page.locator(".topbar .site-tag").waitFor();
+      await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+      const got = await page.evaluate(() => {
+        const s = getComputedStyle(document.querySelector(".site-tag")!);
+        const d = getComputedStyle(document.querySelector(".demo-tag")!);
+        const probe = (v: string) => {
+          const e = document.createElement("i");
+          e.style.color = v;
+          document.body.append(e);
+          const c = getComputedStyle(e).color;
+          e.remove();
+          return c;
+        };
+        return { bg: s.backgroundColor, fg: s.color, border: s.borderTopStyle, red: probe("var(--p-co-red-700)"), demoBg: d.backgroundColor, demoWas: probe("var(--sample, var(--watch))"), demoFg: d.color, onAction: probe("var(--on-action)") };
+      });
+      expect([got.bg, got.fg, got.border]).toEqual([got.red, "rgb(255, 255, 255)", "none"]);
+      expect([got.demoBg, got.demoFg]).toEqual([got.demoWas, got.onAction]);
       await page.close();
     }, T);
   }
