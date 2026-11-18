@@ -59,6 +59,12 @@ export type OccurrenceView = {
   hasTranscript: boolean;
   /** MC-1d: the transcript was found but couldn't be read (needs_upload, "Couldn't read the transcript"). */
   readFailed: boolean;
+  /**
+   * WK-6, meeting.mine only: the occurrence's meeting on the calendar, by its iCalUId (the same on every attendee's
+   * calendar), so Day, Week and the block panel tie the call to its meeting by the meeting itself; null when it isn't
+   * known (then the same start and end, when only one meeting fits).
+   */
+  eventKey?: string | null;
 };
 
 /** meeting.mine's nudges, with the client's name and the date in words. */

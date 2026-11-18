@@ -318,7 +318,10 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // The nudges (in-app and the Teams kind): ready to review, or a transcript to upload; once each by key.
         const nameOf = await namesOf(ctx, mine.map((s) => s.clientKey));
         const nudges = nudgesFor(me, mine, occs).map((n) => ({ ...n, clientName: nameOf(n.clientKey), dateLabel: Temporal.PlainDate.from(n.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" }) }));
-        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => occView(o, vo(o))), nudges } };
+        // WK-6: each occurrence's meeting by its iCalUId: kept on the occurrence (a registered call's, from its instances),
+        // or a calendar call's own (MC-2 keeps it as the call's event id). A call added by hand has none.
+        const calendarKey = new Map(mine.filter((s) => s.callKind === "calendar" && s.eventId).map((s) => [s.id, s.eventId!]));
+        return { ok: true, data: { meetings: mine.map((s) => viewOf(s, nameOf(s.clientKey), users, me)), occurrences: occs.map((o) => ({ ...occView(o, vo(o)), eventKey: o.eventKey ?? calendarKey.get(o.seriesId) ?? null })), nudges } };
       }
       case "meeting.review": return await review(ctx, store, cfg, me, input);
       case "meeting.transcript": return await transcriptOf(ctx, store, me, input);

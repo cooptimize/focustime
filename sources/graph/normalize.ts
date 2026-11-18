@@ -18,6 +18,8 @@ export type GraphEvent = {
   attendees?: unknown[];
   /** DY-1: singleInstance, occurrence, exception or seriesMaster; read only for `repeats`. */
   type?: string;
+  /** WK-6: the meeting's iCalUId, only to tie a kept call to its meeting. */
+  iCalUId?: string;
   /** FocusTime's marker, when the read token may expand it (Calendars.Read or more). */
   singleValueExtendedProperties?: { id?: unknown; value?: unknown }[];
 };
@@ -91,6 +93,7 @@ export function normalizeGraphEvents(items: readonly GraphEvent[], timeZone: str
     };
     if (response) ev.responseStatus = response;
     if (e.type === "occurrence" || e.type === "exception" || e.type === "seriesMaster") ev.repeats = true;
+    if (typeof e.iCalUId === "string" && e.iCalUId && e.iCalUId.length <= 2000) ev.key = e.iCalUId;
     const notMeeting = notMeetingOf(e);
     if (notMeeting) ev.notMeeting = notMeeting;
     events.push(ev);

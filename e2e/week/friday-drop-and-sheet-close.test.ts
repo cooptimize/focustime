@@ -69,7 +69,8 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
       await friday.waitFor();
       const mon = page.locator('.half[data-drop="2026-11-02:AM"]');
       // Open Monday AM's panel (Cooptimize): its stories are the drag source.
-      await mon.click({ position: { x: 60, y: 140 } });
+      // WK-6: Monday is the day in focus, so its card names its meetings; the header opens the panel.
+      await mon.locator(".card-client").first().click();
       const panel = page.locator("aside.block-panel");
       await panel.locator(".aw-features .aw-row[draggable=true]").first().waitFor();
       const box = await page.locator("aside.block-panel").boundingBox();

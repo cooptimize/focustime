@@ -63,11 +63,10 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await seed(page);
     await go(page, "#/today");
     await page.locator(".day-view .half.card").first().waitFor();
-    // WD-2: Day's cards are Week's: the meetings are one line that opens to the list.
-    for (const fold of await page.locator(".day-view .half.card .card-agenda-fold").all()) await fold.click();
+    // WD-2, WK-6: Day's cards are Week's, and every one names its meetings.
     await expect(page.locator(".day-view .half.card", { hasText: "Quarterly planning" }).count()).resolves.toBe(1);
     expect(await paintsOutside(page, ".day-view .half.card")).toEqual([]);
-    const meeting = page.locator(".day-view .card-events li", { hasText: "Quarterly planning" }).first();
+    const meeting = page.locator(".day-view .card-meetings .cm-hit", { hasText: "Quarterly planning" }).first();
     await expect(meeting.getAttribute("title")).resolves.toContain(LONG_MEETING);
     await expect(page.locator(".day-view .half.card .pr-title", { hasText: "Write the migration" }).getAttribute("title")).resolves.toBe(LONG_PICK);
     await go(page, `#/week/${MON}`);

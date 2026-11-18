@@ -72,7 +72,7 @@ export function meetingJob(d: MeetingJobDeps) {
               const xs = await p.graph.instances(s.eventId, from.toString(), to.add({ days: 1 }).toString());
               for (const x of xs.filter((i) => !i.cancelled)) {
                 const date = Temporal.Instant.from(x.startAt).toZonedDateTimeISO(s.zone).toPlainDate().toString();
-                await d.store.ensureOccurrence(s.id, date, x.startAt, x.endAt, "waiting", nextCheck(x.endAt, now.toString()));
+                await d.store.ensureOccurrence(s.id, date, x.startAt, x.endAt, "waiting", nextCheck(x.endAt, now.toString()), x.key);
                 const fresh = attendeeIds(x.homeAttendees.map((email) => ({ email })), users);
                 if (fresh.length && fresh.join() !== s.attendees.join()) await d.store.updateSeries(s.id, { attendees: fresh });
               }
