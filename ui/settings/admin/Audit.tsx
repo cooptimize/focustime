@@ -103,6 +103,9 @@ export function CodeViews() {
 
 
 /** SA-4: a client page's See changes: Settings changes opens filtered to that client (once, for this visit). */
+/** Who a change was for, in words: a team value is for everyone (a seeded row may carry its key as the target). */
+const forWhom = (e: { setting: string; target: string }) => (e.setting.startsWith("org/") ? "Everyone" : e.target);
+
 let pendingFilter: string | null = null;
 export const seeChangesFor = (clientKey: string) => void (pendingFilter = clientKey);
 
@@ -141,7 +144,7 @@ export function SettingsChanges() {
   return (
     <div className="set-form">
       <p className="muted">Every admin change: who, when, the setting and its old and new value. The last 200.</p>
-      <div className="set-inline adm-filter">
+      <div className="set-inline adm-audit-filter">
         <select aria-label="Area" value={area} onChange={(e) => setArea(e.target.value)}>
           {AREAS.map(([id, name]) => (
             <option key={id} value={id}>
@@ -172,7 +175,7 @@ export function SettingsChanges() {
                 <tr key={e.id} data-setting-key={e.setting}>
                   <td data-label="When">{when(e.at)}</td>
                   <td data-label="Who">{e.actorName}</td>
-                  <td data-label="For">{e.target}</td>
+                  <td data-label="For">{forWhom(e)}</td>
                   <td data-label="Setting">{auditSettingLabel(e.setting)}</td>
                   <td data-label="Was" className="adm-val">{shown(e.oldValue)}</td>
                   <td data-label="Now" className="adm-val">{shown(e.newValue)}</td>

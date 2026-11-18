@@ -126,7 +126,12 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     await audit.locator("tr", { hasText: "Allow AI" }).first().waitFor();
     await audit.locator("tr", { hasText: "States treated as open" }).first().waitFor();
     // Never a stored key or an id.
-    expect(await audit.textContent()).not.toMatch(/client:|allow_ai|open_states|org\/|person:/);
+    expect(await audit.textContent()).not.toMatch(/client:|allow_ai|open_states|org\/|person:|ai\.on|ai\.person_cap_usd/);
+    // Unfiltered too: the demo's seeded team rows say Everyone, never their key.
+    await page.getByLabel("Filter").fill("");
+    await audit.locator("tr", { hasText: "AI for FocusTime" }).first().waitFor();
+    const named = (await audit.locator('td[data-label="For"], td[data-label="Setting"]').allTextContents()).join(" | ");
+    expect(named).not.toMatch(/client:|org\/|person:|\b[a-z]+\.[a-z_]+\b|_|[0-9a-f]{8}-/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

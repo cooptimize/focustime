@@ -7823,3 +7823,5 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* The phone: a checkbox's label is the target (Deployments' Default); a bare one in a table cell gets a 44 px box. */
 .panel-shell.phone.admin .ps-body label:has(> input[type="checkbox"]) { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
 .panel-shell.phone.admin .ps-body td > input[type="checkbox"], .panel-shell.phone.admin .ps-body th > input[type="checkbox"] { width: 44px; height: 44px; margin: 0; }
+.adm-audit-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.adm-audit-filter input { flex: 1 1 16em; min-width: 0; max-width: 28em; }
