@@ -166,9 +166,9 @@ export function Value({ children }: { children?: ReactNode | undefined }) {
 }
 
 /** A line of its own in a group: a status, an empty state, a problem. */
-export function Note({ children, tone, live, sid }: { children: ReactNode; tone?: "problem" | "warn" | "ok" | undefined; live?: boolean | undefined; sid?: string | undefined }) {
+export function Note({ children, tone, live, sid, site }: { children: ReactNode; tone?: "problem" | "warn" | "ok" | undefined; live?: boolean | undefined; sid?: string | undefined; site?: boolean | undefined }) {
   return (
-    <p className={`sp-note${tone ? ` ${tone}` : ""}`} role={live ? "status" : tone === "problem" ? "alert" : undefined} data-setting={sid}>
+    <p className={`sp-note${tone ? ` ${tone}` : ""}`} role={live ? "status" : tone === "problem" ? "alert" : undefined} data-setting={sid} data-site-line={site || undefined}>
       {children}
     </p>
   );
@@ -185,7 +185,7 @@ export function Fold({ label, count, children, sid }: { label: string; count?: n
 }
 
 /** One table style: a head row, rows of cells, its own sideways scroll on a narrow screen. */
-export function Table({ label, head, rows, rowKey, rowTone }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string) | undefined }) {
+export function Table({ label, head, rows, rowKey, rowTone }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string | undefined) | undefined }) {
   return (
     <div className="sp-table-wrap">
       <table className="sp-table" aria-label={label}>
@@ -264,7 +264,8 @@ export function OutLink({ href, children }: { href: string; children: ReactNode 
 }
 
 /** A state word as a status pill (no line): live, cached, error, or plain. */
-export function State({ tone, children }: { tone?: "live" | "cached" | "error" | "signin" | "muted" | undefined; children: ReactNode }) {
+export function State({ tone, children, sr }: { tone?: "live" | "cached" | "error" | "signin" | "muted" | undefined; children: ReactNode; sr?: boolean | undefined }) {
+  if (sr) return <span className="sr-only">{children}</span>;
   return <span className={`state${tone ? ` ${tone}` : ""}`}>{children}</span>;
 }
 
@@ -341,7 +342,7 @@ export function Sub({ text, children }: { text: string; children: ReactNode }) {
 
 // ---- Controls, one per kind of choice ----
 
-type TextBind = { onBlur?: () => void; onKeyDown?: (e: KeyboardEvent) => void; "aria-invalid"?: boolean };
+type TextBind = { onBlur?: () => void; onKeyDown?: (e: KeyboardEvent) => void; "aria-invalid"?: boolean; autoFocus?: boolean };
 const named = (r: RowCtx | null, label?: string) => (label ? { "aria-label": label } : r ? { "aria-labelledby": r.labelId, "aria-describedby": r.helpId } : {});
 
 /** On or off. Its row's label says what on means; the switch has no words of its own. */
