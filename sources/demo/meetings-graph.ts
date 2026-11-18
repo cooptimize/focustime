@@ -56,7 +56,8 @@ function demoCalls(fromIso: string, toIso: string): CalendarMeeting[] {
 
 /**
  * PK-4 checks (FOCUSTIME_DEMO_CALLS=long): three one-off Teams calls on every weekday, organized inside Cooptimize, so
- * Calls' last two weeks hold about 30 more and its list is longer than any window. Each is known by its date and hour
+ * Calls' last two weeks hold about 30 more and its list is longer than any window. Teams says each has a transcript,
+ * so none folds into "calls with no transcript". Each is known by its date and hour
  * alone. Fictional names only.
  */
 function longCalls(fromIso: string, toIso: string): CalendarMeeting[] {
@@ -113,10 +114,11 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false },
       return [{ id: "t-1", createdAt: `${date}T20:02:00Z`, endAt: null }];
     },
     // MC-4: whether a call has a transcript, asked of the gate like the real client (the purpose "exists"): the data model
-    // review has one, the proposal review's organizer turned them off (no), the rest have none.
+    // review has one, the proposal review's organizer turned them off (no), the rest have none. PK-4: the long list's
+    // calls have one, so they stay in the week's list (a "no" folds a call away) before and after the check.
     transcriptsExist: async (asks) => {
       for (const a of asks) if (!(await gate.allowed({ joinUrl: a.joinUrl, purpose: "exists" }))) throw new MeetingRefused();
-      return new Map(asks.map((a): [string, ExistsAnswer] => [a.key, /call-demo-nwmodel-/.test(a.joinUrl) ? "yes" : "no"]));
+      return new Map(asks.map((a): [string, ExistsAnswer] => [a.key, /call-demo-nwmodel-|call-long-/.test(a.joinUrl) ? "yes" : "no"]));
     },
     transcriptVtt: async (onlineMeetingId) => {
       if (!(await gate.allowed({ onlineMeetingId }))) throw new MeetingRefused();

@@ -114,6 +114,8 @@ describe.skipIf(!CHROMIUM)("Calls with a long list of calendar calls (browser, d
       const { page, errors } = await freshPage(long, { width: w, height: hgt });
       await go(page, "#/calls");
       await page.locator(".calls-row.need-row").first().waitFor({ timeout: W });
+      // Measured once Teams' check has answered for every call (a "no" would fold a call away; the long list's say yes).
+      await expect.poll(() => page.locator("[data-calls-list]").textContent(), { timeout: W }).not.toMatch(/Checking…/);
       await expect.poll(() => page.locator("[data-calls-list] li .calls-about").count(), { timeout: W }).toBeGreaterThanOrEqual(30);
       const sizes = () => page.evaluate(() => ({ doc: document.scrollingElement!.scrollHeight, win: window.innerHeight, y: window.scrollY, bar: document.querySelector(".topbar")!.getBoundingClientRect().top }));
       expect(await sizes()).toEqual({ doc: hgt, win: hgt, y: 0, bar: 0 });
