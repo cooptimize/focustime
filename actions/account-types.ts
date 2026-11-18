@@ -29,6 +29,11 @@ export type VmPreview = {
   /** Shown prominently (none today). */
   warning: string | null;
   confirmLabel: string;
+  /**
+   * VM-5: a Stop while today's automatic start is still to come: the line ("It will start again today at 8:55 AM.") and
+   * the box under it ("Skip today's start too", unticked; ticked, vm.confirm's skipToday). Absent: no start to come.
+   */
+  startAgain?: { at: string; text: string; box: string } | null;
 };
 
 export type VmError = { kind: string; message: string; permission: string | null };
@@ -95,6 +100,12 @@ export type AutoStartView = {
   leftOff: { reason: string; short: string; text: string; seen: boolean } | null;
   /** The weekdays my working hours cover (mon…sun), each switchable off. */
   days: string[];
+  /**
+   * VM-5: today's start is skipped (production only, on, a day it would otherwise start): how ("skip", "not_today",
+   * "stop", or null for a skip kept before VM-5), the words ("Skipped today: you pressed Skip this one"), and whether
+   * Don't skip is offered (its time still ahead).
+   */
+  skippedToday?: { how: string | null; text: string; undo: boolean } | null;
 };
 
 /** One Azure write: a start. Older rows may be a deallocate, an auto-shutdown change or its restore (before D475). */

@@ -1743,6 +1743,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "vm.dismiss_prompt":
     case "vm.start_now":
     case "vm.autostart_skip":
+    case "vm.autostart_unskip":
     case "vm.autostart_seen":
       return { run: env.openVm };
     case "vm.autostart_resume":

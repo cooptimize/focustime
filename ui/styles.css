@@ -2421,6 +2421,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .vm-change dt { color: var(--text-muted); min-width: 110px; }
 .vm-change dd { margin: 0; }
 .vm-notes { margin: 6px 0 12px; padding-left: 18px; color: var(--text-muted); font-size: var(--fs-3); line-height: 1.5; }
+/* VM-5: a Stop while today's automatic start is still to come: the line, and the box under it. */
+.vm-again { margin: 0 0 12px; }
+.vm-again p { margin: 0 0 6px; font-weight: 600; }
 .commit.danger { background: var(--risk); border-color: var(--risk); color: var(--bg); }
 .set-account { display: grid; gap: 16px; margin-bottom: 20px; }
 .set-account .set-actions { display: flex; gap: 8px; flex-wrap: wrap; }
