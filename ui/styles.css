@@ -7749,6 +7749,23 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-pocket .mini { min-height: 32px; }
 .app.phone .calls-pocket { padding: 0 16px 8px; }
 .app.phone .calls-pocket .mini { min-height: 44px; }
+/* PK-4: Set my Pocket address, inline under the Pocket line. */
+.pocket-address { flex-basis: 100%; display: grid; gap: 6px; max-width: 520px; margin-top: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pocket-address label { display: grid; gap: 4px; font-weight: 500; }
+.pocket-address input { min-height: 32px; padding: 4px 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.pocket-address p { margin: 0; }
+.pocket-address-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.app.phone .pocket-address input, .app.phone .pocket-address .mini, .app.phone [data-pocket-failed] .link-btn { min-height: 44px; }
+/* PK-4: Settings › Pocket recorder: the last list's counts and my Pocket addresses. */
+.pocket-last, .pocket-addresses { margin-top: 12px; }
+.pocket-last > p, .pocket-addresses > p { margin: 4px 0; }
+.pocket-counts { display: grid; grid-template-columns: max-content auto; gap: 2px 16px; margin: 6px 0; }
+.pocket-counts > div { display: contents; }
+.pocket-counts dt { color: var(--text-muted); }
+.pocket-counts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.pocket-addresses ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.pocket-addresses li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app.phone .pocket-addresses .mini { min-height: 44px; }
 .mtg-pocket-pick { display: grid; gap: 6px; }
 .mtg-pocket-ask { padding: 6px 8px; border-radius: 8px; background: var(--sunken); }
 .mtg-pocket-who { font-size: var(--fs-2); }

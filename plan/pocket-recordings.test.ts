@@ -80,6 +80,12 @@ describe("which call a recording goes with", () => {
     expect(goesWith(rec("c", "2026-11-16T15:00:00Z", 180), c)).toBe(true); // covers it all
     expect(goesWith(rec("d", "2026-11-16T17:00:00Z", 30), c)).toBe(false); // after it
   });
+  it("PK-4: a recording started late or stopped early still finds its call when half of it, and 5 minutes, is inside", () => {
+    expect(goesWith(rec("late", "2026-11-16T16:35:00Z", 20), c)).toBe(true); // 20 minutes inside a 60 minute call
+    expect(goesWith(rec("tail", "2026-11-16T16:50:00Z", 18), c)).toBe(true); // 10 of 18 inside
+    expect(goesWith(rec("tiny", "2026-11-16T16:20:00Z", 4), c)).toBe(false); // 4 minutes inside: too little
+    expect(goesWith(rec("mostly-after", "2026-11-16T16:52:00Z", 20), c)).toBe(false); // 8 of 20 inside
+  });
   it("two recordings on one call: both, the longer overlap first", () => {
     const rs = [rec("short", "2026-11-16T16:25:00Z", 35), rec("long", "2026-11-16T15:55:00Z", 70)];
     expect(forCall(rs, c).map((r) => r.id)).toEqual(["long", "short"]);

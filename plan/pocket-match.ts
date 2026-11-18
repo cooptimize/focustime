@@ -16,10 +16,19 @@ export function overlapSeconds(r: RecordingSpan, c: Span): number {
   return Math.max(0, (Math.min(endOf(r), ms(c.endAt)) - Math.max(ms(r.startAt), ms(c.startAt))) / 1000);
 }
 
-/** A recording goes with a call when they overlap for at least half the call's length. */
+/** PK-4: the least of a recording inside its call for "half the recording" to count. */
+export const INSIDE_AT_LEAST_S = 5 * 60;
+
+/**
+ * A recording goes with a call when they overlap for at least half the call's length (MC-2b), or (PK-4) when at least
+ * half the recording's own length, and at least 5 minutes of it, falls inside the call: a recording started late or
+ * stopped early still finds its meeting.
+ */
 export function goesWith(r: RecordingSpan, c: Span): boolean {
   const len = (ms(c.endAt) - ms(c.startAt)) / 1000;
-  return len > 0 && overlapSeconds(r, c) >= len / 2;
+  if (len <= 0) return false;
+  const o = overlapSeconds(r, c);
+  return o >= len / 2 || (o >= r.seconds / 2 && o >= INSIDE_AT_LEAST_S);
 }
 
 /** The recordings that go with a call, the longer overlap first. */

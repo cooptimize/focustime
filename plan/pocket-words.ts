@@ -23,7 +23,7 @@ export const POCKET_WORDS = {
   title: "Pocket recorder",
   /** What connecting does, in one sentence. */
   intro:
-    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works; it reads nothing else here. To bring a recording in as a call's transcript, press Get my Pocket recordings in Calls.",
+    "Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. When you open Calls, FocusTime lists your own recordings of the last 14 days to show which calls have one; a recording's words are read only when you bring it in.",
   stepsLabel: "How to connect",
   steps: [
     "In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team.",
@@ -44,10 +44,10 @@ export const POCKET_WORDS = {
   replaceHint: "The new key replaces this one only if Pocket accepts it.",
   disconnect: "Disconnect",
   /** Disconnect asks first. */
-  disconnectAsk: "Disconnect Pocket? FocusTime forgets your key now. Your recordings stay in Pocket; you can also delete the key there.",
+  disconnectAsk: "Disconnect Pocket? FocusTime forgets your key and your Pocket addresses now. Your recordings stay in Pocket; you can also delete the key there.",
   keep: "Keep it",
   cancel: "Cancel",
-  kept: "FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here.",
+  kept: "FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket when you press a button here, and for your list of recordings when you open Calls.",
   notChecked: "Not checked yet",
   replaced: "New key checked and saved.",
   checkedNow: "Checked. Pocket answered.",
@@ -167,7 +167,7 @@ export const POCKET_COUNT_WORDS = {
   removeLabel: (a: string) => `Remove ${a}`,
 } as const;
 
-/** "Got 4 recordings at 10:42 AM." */
-export const gotLine = (n: number, time: string) => (n ? `Got ${n} ${n === 1 ? "recording" : "recordings"} at ${time}.` : `No recordings of yours in the last 14 days, at ${time}.`);
+/** PK-4: "4 of your recordings in the last 14 days." */
+export const yoursLine = (n: number) => (n ? (n === 1 ? "1 of your recordings in the last 14 days." : `${n} of your recordings in the last 14 days.`) : "No recordings of yours in the last 14 days.");
 /** A recording's start and length on the setup: "Mon 10:58 AM · 47 min". */
 export const recordingLine = (when: string, length: string) => `${when} · ${length}`;

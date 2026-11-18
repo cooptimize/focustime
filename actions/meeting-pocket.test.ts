@@ -384,3 +384,17 @@ describe("PK-4: at most one list in 5 minutes", () => {
     expect(t.reqs[ME]).toHaveLength(2);
   });
 });
+
+describe("PK-4: Hide a recording with no call", () => {
+  it("keeps only the recording's id and when; Put back removes it", async () => {
+    const t = await setup();
+    await t.act(ME, "meeting.pocket_list", {});
+    t.data(await t.act(ME, "meeting.call_hide", { keys: ["pocket:r-lone"] }));
+    const rows = (await t.db.conn.all("SELECT * FROM call_hides")) as Record<string, unknown>[];
+    expect(rows.map((r) => r.meeting_key)).toEqual(["pocket:r-lone"]);
+    expect(JSON.stringify(rows)).not.toMatch(/carrier|Pallet|sam@/i);
+    expect(t.data<{ keys: string[] }>(await t.act(ME, "meeting.call_hides", {})).keys).toEqual(["pocket:r-lone"]);
+    t.data(await t.act(ME, "meeting.call_unhide", { keys: ["pocket:r-lone"] }));
+    expect(await t.db.conn.all("SELECT * FROM call_hides")).toEqual([]);
+  });
+});

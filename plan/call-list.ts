@@ -87,7 +87,7 @@ export type CallListInput = {
   today: string;
   zone: string;
   /** MC-2b: adds my Pocket recordings to the rows (`pocketRows` in plan/call-list-pocket.ts); `takes` are the rows a recording may go on. */
-  addPocket?: ((all: CallRow[], takes: ReadonlySet<CallRow>) => void) | undefined;
+  addPocket?: ((all: CallRow[], takes: ReadonlySet<CallRow>, hides: CallHides | null) => void) | undefined;
   /** MC-4: the check's answers by calendar key (null: not asked yet on this visit, every Teams call "checking"). */
   check?: Readonly<Record<string, CheckState>> | null;
   /** MC-4: my hides (null: not read yet, nothing is hidden). */
@@ -173,7 +173,7 @@ export function callRows(x: CallListInput): CallRow[] {
     if (!hidden) takes.add(row);
   }
   // MC-2b: my Pocket recordings, matched by plan/call-list-pocket.ts (loaded with Calls, not in the first download).
-  x.addPocket?.(all, takes);
+  x.addPocket?.(all, takes, hides);
   for (const r of all) {
     r.mark = r.recording ? "pocket" : markOf(r.check === "yes", r.pocket.length > 0);
     // A call that closed with no transcript opens again when my Pocket recording goes with it: it can be reviewed now.
@@ -277,12 +277,21 @@ export function openList(rows: readonly CallRow[], client: string | null, today:
 export const closedList = (rows: readonly CallRow[], client: string | null) => forClient(rows, client).filter((r) => r.bucket === "closed");
 export const hiddenList = (rows: readonly CallRow[], client: string | null) => forClient(rows, client).filter((r) => r.bucket === "hidden");
 
-/** MC-4: my hides that match no call in the list's window: counted in one line with Put back. */
+/** PK-4: a Pocket recording's hide: only its id, as a meeting's hide keeps only the meeting's. */
+export const recordingHideKey = (id: string) => `pocket:${id}`;
+export const isRecordingHide = (key: string) => key.startsWith("pocket:");
+/** MC-4, PK-4: what Hide and Put back send for a row: the meeting's key, or the recording's. */
+export const hideKeyOf = (r: CallRow): string | null => (r.recording ? recordingHideKey(r.recording.id) : r.other && r.occurrenceId === null ? r.other.key : null);
+
+/**
+ * MC-4: my hides that match no call in the list's window: counted in one line with Put back. A hidden Pocket recording
+ * isn't counted (its row comes back with my list from Pocket; its hide goes at 60 days).
+ */
 export function hiddenMissing(rows: readonly CallRow[], hides: CallHides | null): { keys: string[]; series: string[] } {
   if (!hides) return { keys: [], series: [] };
-  const keys = new Set(rows.filter((r) => r.other).map((r) => r.other!.key));
+  const keys = new Set(rows.map(hideKeyOf).filter((k): k is string => !!k));
   const series = new Set(rows.filter((r) => r.other?.seriesKey).map((r) => r.other!.seriesKey!));
-  return { keys: [...hides.keys].filter((k) => !keys.has(k)), series: [...hides.series].filter((k) => !series.has(k)) };
+  return { keys: [...hides.keys].filter((k) => !keys.has(k) && !isRecordingHide(k)), series: [...hides.series].filter((k) => !series.has(k)) };
 }
 
 /** MC-4: a closed call's line: what came of it ("2 created · 1 promise · 5 skipped", or "Nothing taken"). */

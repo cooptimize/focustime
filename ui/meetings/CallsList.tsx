@@ -105,11 +105,12 @@ export function WeekRow({ r, open, zone, colors, ticked, onTick, onOpen, clients
   inSeries?: boolean;
 }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : client ? clientColor(client, colors) : null;
-  const canHide = !!r.other && r.occurrenceId === null;
+  // PK-4: a recording with no call hides too, by its id alone.
+  const canHide = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const nameOf = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
   return (
     <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
-      {canHide || r.recording ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
+      {canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
       <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
         <span className="calls-row-one">
           <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : whenOf(r.startAt, zone)}</span>
