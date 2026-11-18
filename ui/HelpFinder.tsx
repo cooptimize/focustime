@@ -8,7 +8,7 @@ import { TextBox } from "./TextBox.tsx";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import type { CandidatesData, CandidateView, CheckData, SlotView, SuggestData, WritePreview } from "../actions/types.ts";
-import { checkWords, zoneName } from "../plan/collab.ts";
+import { checkWords, clockRange, zoneName } from "../plan/collab.ts";
 import { DateField } from "./DatePicker.tsx";
 import { TimeField } from "./TimeField.tsx";
 import { COLLAB_LENGTHS, type CollabSettings } from "../config/schema.ts";
@@ -21,10 +21,8 @@ import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const dayShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const clockOf = (iso: string, tz: string) => {
-  const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
-  return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`;
-};
+/** A time in my zone as written there (for clockRange). */
+const isoMine = (iso: string, tz: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainDateTime().toString();
 const two = (n: number) => String(n).padStart(2, "0");
 const hmOf = (m: number) => `${two(Math.floor(m / 60))}:${two(m % 60)}`;
 const minOf = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
@@ -120,7 +118,6 @@ export function HelpFinder({ target, clientName, settings, tz, now, onPreview, o
     try {
       const r = await call<CheckData>("collab.check", { clientKey: target.clientKey, start: isoAt(w.day, w.start, tz), end: isoAt(w.day, w.end, tz), people });
       setAnswer({ ...r, key });
-      requestAnimationFrame(() => document.querySelector(".help-answer")?.scrollIntoView({ block: "nearest" }));
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -128,6 +125,10 @@ export function HelpFinder({ target, clientName, settings, tz, now, onPreview, o
     }
   };
   const current = answer && answer.key === keyOf(when, chosen) ? answer : null;
+  // A new answer comes into view (above the suggestions, or under the footer on a phone).
+  useEffect(() => {
+    if (answer) document.querySelector(".help-answer")?.scrollIntoView({ block: "nearest" });
+  }, [answer]);
   const words = current ? checkWords(current) : null;
   // Picking a suggestion fills When (and Who) with it and checks it at once.
   const pick = (s: SlotView) => {
@@ -289,7 +290,7 @@ export function HelpFinder({ target, clientName, settings, tz, now, onPreview, o
                     <label>
                       <input type="radio" name="help-slot" checked={slot === s} onChange={() => pick(s)} />{" "}
                       <strong>
-                        {dayShort(s.date)}, {clockOf(s.start, tz)}–{clockOf(s.end, tz)}
+                        {dayShort(s.date)}, {clockRange(isoMine(s.start, tz), isoMine(s.end, tz))}
                       </strong>{" "}
                       with{" "}
                       {s.people.map((p, i) => (

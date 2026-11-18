@@ -399,7 +399,7 @@ describe("CO-1: a time I set, checked, then the invite", () => {
     expect(c.people.map((x) => x.state)).toEqual(["free", "busy"]);
     const input = { clientKey: "T&W", title: "#4512 Import mapping", itemId: 4512, url: "https://dev.azure.com/tw/p/_workitems/edit/4512", start: T("10:30"), end: T("11:00"), people: [ANA, BEN], note: "Stuck on the lookup" };
     const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", input)).preview;
-    expect(p.notFree).toEqual(["Ben: Busy 10:30–11:00"]);
+    expect(p.notFree).toEqual(["Ben: Busy 10:30–11:00 AM"]);
     expect(JSON.stringify(p)).not.toMatch(/SECRET/);
     expect(p.attendees).toEqual([{ name: "Ana", email: ANA }, { name: "Ben", email: BEN }]);
     await t.confirm(p);

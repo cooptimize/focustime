@@ -43,7 +43,7 @@ describe("checking one time (CO-1)", () => {
     const c = checkTime(base());
     expect(c.me).toEqual({ state: "free" });
     expect(c.people.map((p) => p.state)).toEqual(["free", "free"]);
-    expect(checkWords(c)).toMatchObject({ me: "You: free", summary: "Everyone is free", notFree: [] });
+    expect(checkWords(c)).toMatchObject({ me: "You: Free", summary: "Everyone is free", notFree: [] });
     expect(checkWords(c).people.map((p) => p.text)).toEqual(["Ana: Free", "Ben: Free"]);
   });
 
@@ -51,7 +51,7 @@ describe("checking one time (CO-1)", () => {
     const c = checkTime(base({ availability: sched({ [ANA.email]: { view: view([["10:45", "11:30"]]) }, [BEN.email]: {} }) }));
     expect(c.people[0]).toEqual({ email: ANA.email, name: "Ana", state: "busy", busy: [{ start: `${D}T10:45:00-06:00`, end: `${D}T11:30:00-06:00` }] });
     const w = checkWords(c);
-    expect(w.people[0]!.text).toBe("Ana: Busy 10:45–11:30");
+    expect(w.people[0]!.text).toBe("Ana: Busy 10:45–11:30 AM");
     expect(w.summary).toBe("2 of 3 are free");
     expect(JSON.stringify(c)).not.toMatch(/SECRET/);
   });
@@ -60,7 +60,7 @@ describe("checking one time (CO-1)", () => {
     // Ben works 9:00 to 5:00 Pacific: 11:00 to 7:00 Chicago, so 10:30 Chicago is 8:30 for him.
     const c = checkTime(base({ availability: sched({ [ANA.email]: {}, [BEN.email]: { hours: { tz: "Pacific Standard Time" } } }) }));
     expect(c.people[1]).toMatchObject({ state: "outside", hours: { start: "09:00", end: "17:00", zone: "America/Los_Angeles", workday: true, mine: { start: `${D}T11:00:00-06:00`, end: `${D}T19:00:00-06:00` } } });
-    expect(checkWords(c).people[1]!.text).toBe("Ben: Outside their working hours (9:00–5:00 Pacific Time, 11:00–7:00 your time)");
+    expect(checkWords(c).people[1]!.text).toBe("Ben: Outside their working hours (9:00 AM–5:00 PM Pacific Time, 11:00 AM–7:00 PM your time)");
     // 11:00 to 11:30 Chicago is inside his day.
     expect(checkTime(base({ start: at("11:00"), end: at("11:30"), availability: sched({ [ANA.email]: {}, [BEN.email]: { hours: { tz: "Pacific Standard Time" } } }) })).people[1]!.state).toBe("free");
   });
@@ -82,23 +82,23 @@ describe("checking one time (CO-1)", () => {
   it("my own meeting in the way, by its own name and time", () => {
     const c = checkTime(base({ me: { ...base().me, busy: [{ title: "Design review", start: at("10:00"), end: at("10:45") }, { title: "Elsewhere", start: at("14:00"), end: at("15:00") }] } }));
     expect(c.me).toEqual({ state: "busy", things: [{ title: "Design review", start: `${D}T10:00:00-06:00`, end: `${D}T10:45:00-06:00` }] });
-    expect(checkWords(c)).toMatchObject({ me: "You: Design review 10:00–10:45", summary: "2 of 3 are free", notFree: ["You: Design review 10:00–10:45"] });
+    expect(checkWords(c)).toMatchObject({ me: "You: Design review 10:00–10:45 AM", summary: "2 of 3 are free", notFree: ["You: Design review 10:00–10:45 AM"] });
   });
 
   it("outside my hours", () => {
     const c = checkTime(base({ start: at("16:30"), end: at("17:30") }));
     expect(c.me).toMatchObject({ state: "outside" });
-    expect(checkWords(c).me).toBe("You: outside your working hours (8:00–5:00)");
+    expect(checkWords(c).me).toBe("You: Outside your working hours (8:00 AM–5:00 PM)");
   });
 
   it("across lunch: lunch is in the way, by name", () => {
     const c = checkTime(base({ start: at("11:30"), end: at("12:30") }));
     expect(c.me).toEqual({ state: "busy", things: [{ title: "Lunch", start: `${D}T12:00:00-06:00`, end: `${D}T13:00:00-06:00` }] });
-    expect(checkWords(c).me).toBe("You: Lunch 12:00–1:00");
+    expect(checkWords(c).me).toBe("You: Lunch 12:00–1:00 PM");
   });
 
   it("a day off", () => {
-    expect(checkWords(checkTime(base({ me: { ...base().me, off: true } }))).me).toBe("You: a day off");
+    expect(checkWords(checkTime(base({ me: { ...base().me, off: true } }))).me).toBe("You: A day off");
     expect(checkTime(base({ me: { ...base().me, windows: [] } })).me).toEqual({ state: "off" });
   });
 
@@ -107,7 +107,7 @@ describe("checking one time (CO-1)", () => {
     const c = checkTime(base({ start: at("10:30", sat), end: at("11:00", sat), people: [ANA], availability: parseSchedule({ value: [{ scheduleId: ANA.email, availabilityView: "0".repeat(QUARTERS), workingHours: { daysOfWeek: ["monday"], startTime: "09:00:00", endTime: "17:00:00", timeZone: { name: "Central Standard Time" } } }] }, Temporal.ZonedDateTime.from(`${sat}T00:00[${TZ}]`).toInstant().toString(), Temporal.ZonedDateTime.from(`2026-11-15T00:00[${TZ}]`).toInstant().toString(), 15, TZ) }));
     expect(checkWords(c).people[0]!.text).toBe("Ana: Outside their working hours (not a working day for them)");
     const u = checkTime(base({ people: [ANA], availability: sched({ [ANA.email]: { hours: null } }) }));
-    expect(checkWords(u).people[0]!.text).toBe("Ana: Free (hours not shared, 9:00–5:00 assumed)");
+    expect(checkWords(u).people[0]!.text).toBe("Ana: Free (hours not shared, 9:00 AM–5:00 PM assumed)");
   });
 
   it("hours that end at midnight in another zone read as midnight, in their zone and in mine", () => {

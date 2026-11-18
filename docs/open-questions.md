@@ -1748,7 +1748,14 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **Find times uses the length in When** (to the nearest 15 minutes, 15 minutes to 2 hours); its own Length row is gone.
 - **A quarter hour only when no hour or half hour fits anywhere in the range**, not per day.
 - **The preview reads free/busy again** for the chosen people that day (one more getSchedule read); Confirm checks only the time (start not passed, length), not free/busy.
-- **Times.** The answer uses the app's short form ("10:00–11:00", PS-1), in my zone; a teammate's hours show in their zone with the same hours in mine. The time field's button shows the 24 hour time it already showed ("14:00"); one format for both is for the time field's own step.
+- **Times.** The answer and the suggestions say AM and PM ("10:00–11:00 AM", the form of `formatRange`), not PS-1's short "10:00–11:00", because a teammate's hours converted from another zone ("11:00 AM–7:00 PM your time") were ambiguous without it (the demo review). Times are in my zone; a teammate's hours show in their zone with the same hours in mine. The time field's button shows the 24 hour time it already showed ("14:00"), and the invite's preview shows its time without a zone; one format for all three is for those fields' own step.
 - **The half-hour rule landed in commit A**, with the check, because the 10:06 test covers both; C's commit is the Find times words.
-- **From the review passes:** see the pull request.
+- **From the review passes, left as they are** (each the same on main, not this step's scope):
+  - The command menu's Ask to collaborate asks "Help on which to-do?" and is a dead end on a day with no planned to-dos.
+  - Not now in the invite's preview closes the whole dialog; the chosen people and time are gone.
+  - After Send invite the toast has no Undo (it is in Settings › Activity); the invite shows on the day card only as a count; the promise reads "<Name>: Help session with <Name> on …".
+  - Find times' range is the item's pinned day when it has one (today only, for this week's items).
+  - Each suggestion's tier word reads "(Cooptimize)" for anyone else at Cooptimize, which is odd under the Cooptimize client.
+  - On a phone, the invite's preview opens scrolled so its title can sit under the top edge.
+  - On the night clocks go back, a session between 1:00 and 2:00 AM measures its length on the wall clock in the dialog and in real time on the server.
 

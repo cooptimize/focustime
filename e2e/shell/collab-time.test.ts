@@ -48,12 +48,12 @@ describe.skipIf(!CHROMIUM)("Ask to collaborate: a time I set (browser, demo mode
     await expect(dlg.getByRole("button", { name: /^End: / }).innerText()).resolves.toMatch(/11:00/);
     await dlg.getByRole("button", { name: "Check who is free" }).click();
     const answer = dlg.locator(".help-answer");
-    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("2 of 3 are free\nYou: free\nJordan Lee: Free\nPriya Shah: Busy 10:00–11:00");
+    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("2 of 3 are free\nYou: Free\nJordan Lee: Free\nPriya Shah: Busy 10:00–11:00 AM");
     // A busy person doesn't block: the preview opens and says who isn't free, in the same words.
     await dlg.getByRole("button", { name: "Preview invite" }).click();
     const wd = page.getByRole("dialog", { name: "Send a help invite" });
     await wd.waitFor();
-    await expect(wd.getByRole("note", { name: "Who isn't free then" }).innerText()).resolves.toBe("Not everyone is free then. You can still send it.\nPriya Shah: Busy 10:00–11:00");
+    await expect(wd.getByRole("note", { name: "Who isn't free then" }).innerText()).resolves.toBe("Not everyone is free then. You can still send it.\nPriya Shah: Busy 10:00–11:00 AM");
     await expect(wd.innerText()).resolves.toMatch(/10:30/);
     await wd.getByRole("button", { name: "Send invite" }).click();
     await expect.poll(() => page.locator("body").innerText(), { timeout: 15_000 }).toMatch(/Invite sent to Jordan Lee, Priya Shah/);
@@ -68,7 +68,7 @@ describe.skipIf(!CHROMIUM)("Ask to collaborate: a time I set (browser, demo mode
     await person(dlg, "Taylor Kim").check();
     await dlg.getByRole("button", { name: "Check who is free" }).click();
     const answer = dlg.locator(".help-answer");
-    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("1 of 3 are free\nYou: free\nSam Ortiz: Outside their working hours (8:00–4:00 Pacific Time, 11:00–7:00 your time)\nTaylor Kim: Couldn't read their calendar");
+    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("1 of 3 are free\nYou: Free\nSam Ortiz: Outside their working hours (8:00 AM–4:00 PM Pacific Time, 11:00 AM–7:00 PM your time)\nTaylor Kim: Couldn't read their calendar");
     await dlg.getByRole("radio", { name: "1h", exact: true }).click();
     await expect(answer.count()).resolves.toBe(0);
     await expect(dlg.getByRole("button", { name: "Preview invite" }).isDisabled()).resolves.toBe(true);
@@ -94,19 +94,19 @@ describe.skipIf(!CHROMIUM)("Ask to collaborate: a time I set (browser, demo mode
     await slots.first().waitFor({ timeout: 15_000 });
     const starts = await slots.locator("strong").allInnerTexts();
     expect(starts.length).toBeGreaterThan(0);
-    for (const s of starts) expect(s).toMatch(/, \d{1,2}:(00|30)–/);
+    for (const s of starts) expect(s).toMatch(/, \d{1,2}:(00|30)( [AP]M)?–/);
     // Jordan is busy 1:00 to 2:00: 2:00 is offered, nothing that overlaps his busy time.
-    expect(starts.some((s) => /Nov 2, 1:\d\d–/.test(s))).toBe(false);
-    await slots.filter({ hasText: "Mon, Nov 2, 2:00–2:30" }).getByRole("radio").check();
+    expect(starts.some((s) => /Nov 2, 1:\d\d( PM)?–/.test(s))).toBe(false);
+    await slots.filter({ hasText: "Mon, Nov 2, 2:00–2:30 PM" }).getByRole("radio").check();
     const answer = dlg.locator(".help-answer");
-    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("Everyone is free\nYou: free\nJordan Lee: Free");
+    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toBe("Everyone is free\nYou: Free\nJordan Lee: Free");
     await expect(dlg.getByRole("button", { name: /^Start: / }).innerText()).resolves.toMatch(/14:00/);
     await expect(dlg.getByRole("button", { name: /^End: / }).innerText()).resolves.toMatch(/14:30/);
     // Nudged 15 minutes earlier: the answer clears, and checking again gives the new one.
     await setTime(page, "Start", "13:45");
     await expect(answer.count()).resolves.toBe(0);
     await dlg.getByRole("button", { name: "Check who is free" }).click();
-    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toMatch(/\nJordan Lee: Busy 1:00–2:00$/);
+    await expect.poll(() => answer.innerText(), { timeout: 15_000 }).toMatch(/\nJordan Lee: Busy 1:00–2:00 PM$/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

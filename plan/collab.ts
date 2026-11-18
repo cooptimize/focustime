@@ -337,18 +337,17 @@ export function checkTime(o: CheckInput): TimeCheck {
   return { start: isoIn(a, tz), end: isoIn(b, tz), me, people, free, of: people.length + 1 };
 }
 
-/** "9:00–10:30": a time range in the app's short form (PS-1), as the times read where they were written (my zone). */
+/** "10:00–11:00 AM", or "11:30 AM–12:30 PM" across noon, as the times read where they were written (my zone). */
 export function clockRange(start: string, end: string): string {
-  const c = (iso: string) => {
+  const p = (iso: string) => {
     const z = Temporal.PlainDateTime.from(iso);
-    return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`;
+    return { c: `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`, m: z.hour < 12 ? "AM" : "PM" };
   };
-  return `${c(start)}–${c(end)}`;
+  const a = p(start), b = p(end);
+  return a.m === b.m ? `${a.c}–${b.c} ${b.m}` : `${a.c} ${a.m}–${b.c} ${b.m}`;
 }
-const hmShort = (hm: string) => {
-  const h = Number(hm.slice(0, 2)) % 24;
-  return `${h % 12 || 12}:${hm.slice(3, 5)}`;
-};
+/** Working hours as written ("08:00", "17:00"): "8:00 AM–5:00 PM". */
+const hoursRange = (start: string, end: string) => clockRange(`2000-01-01T${start === "24:00" ? "00:00" : start}`, `2000-01-01T${end === "24:00" ? "00:00" : end}`);
 /** "Pacific Time" for a zone, or the zone's own name. */
 export function zoneName(zone: string): string {
   try {
@@ -363,18 +362,18 @@ export function checkWords(c: TimeCheck): { me: string; people: { email: string;
   // The check's times are written in my zone, so they are shown as written.
   const r = (x: { start: string; end: string }) => clockRange(x.start, x.end);
   const me =
-    c.me.state === "free" ? "You: free"
-    : c.me.state === "off" ? "You: a day off"
-    : c.me.state === "outside" ? `You: outside your working hours (${c.me.hours.map(r).join(", ")})`
+    c.me.state === "free" ? "You: Free"
+    : c.me.state === "off" ? "You: A day off"
+    : c.me.state === "outside" ? `You: Outside your working hours (${c.me.hours.map(r).join(", ")})`
     : `You: ${c.me.things.map((t) => `${t.title} ${r(t)}`).join(", ")}`;
   const people = c.people.map((p) => {
     const text =
-      p.state === "free" ? `${p.name}: Free${p.hoursUnknown ? " (hours not shared, 9:00–5:00 assumed)" : ""}`
+      p.state === "free" ? `${p.name}: Free${p.hoursUnknown ? " (hours not shared, 9:00 AM–5:00 PM assumed)" : ""}`
       : p.state === "busy" ? `${p.name}: Busy ${p.busy.map(r).join(", ")}`
       : p.state === "away" ? `${p.name}: Away that day`
       : p.state === "unknown" ? `${p.name}: Couldn't read their calendar`
       : !p.hours.workday ? `${p.name}: Outside their working hours (not a working day for them)`
-      : `${p.name}: Outside their working hours (${hmShort(p.hours.start)}–${hmShort(p.hours.end)} ${p.hoursUnknown ? "assumed" : zoneName(p.hours.zone)}${p.hours.mine ? `, ${r(p.hours.mine)} your time` : ""})`;
+      : `${p.name}: Outside their working hours (${hoursRange(p.hours.start, p.hours.end)} ${p.hoursUnknown ? "assumed" : zoneName(p.hours.zone)}${p.hours.mine ? `, ${r(p.hours.mine)} your time` : ""})`;
     return { email: p.email, text, free: p.state === "free" };
   });
   const summary = c.free === c.of ? "Everyone is free" : `${c.free} of ${c.of} are free`;
