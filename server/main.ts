@@ -106,6 +106,8 @@ import { createMeetingStore } from "../store/meeting-store.ts";
 import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
 import { canView, graphReadable } from "../plan/meetings.ts";
 import { createPressGrants } from "../actions/call-press.ts";
+import { createChatCallPresses } from "../actions/chat-call-press.ts";
+import { createAdhocCallsClient, type AdhocCallsClient } from "../sources/graph/adhoc-calls.ts";
 import { createExistsGrants, createExistsHold } from "../actions/call-exists.ts";
 import { MEETING_JOB, meetingJob } from "./meeting-job.ts";
 import { pdfReader } from "./pdf-text.ts";
@@ -278,6 +280,7 @@ const photoClients = new WeakMap<object, PhotoClient>();
 const chatsClients = new WeakMap<object, ChatsClient>();
 const messageClients = new WeakMap<object, ChatMessagesClient>();
 const meetingClients = new WeakMap<object, MeetingsClient>();
+const adhocClients = new WeakMap<object, AdhocCallsClient>();
 const sendClients = new WeakMap<object, SendClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
@@ -310,6 +313,17 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
       homeDomains: inviteDomains(cfg),
       log,
     })));
+  // MC-2c: a chat call's transcript on its own token (CallTranscripts.Read.All), apart from the meetings token, asked for
+  // only at a press; the gate lets a request through only while this person's press for that one call id is open.
+  let adhocCalls = adhocClients.get(src);
+  if (!adhocCalls)
+    adhocClients.set(src, (adhocCalls = createAdhocCallsClient({
+      fetch,
+      token: () => src.auth.accessToken("call_transcripts"),
+      invalidate: () => src.auth.invalidate(),
+      gate: { allowed: (callId) => chatCallPresses.allowed(who.userId, callId) },
+      log,
+    })));
   // LP-1: Close the loop's sends as me, each on its own consented token (sources/graph/send.ts).
   let sender = sendClients.get(src);
   if (!sender)
@@ -325,6 +339,7 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
   return {
     sender,
     meetings,
+    adhocCalls,
     presence,
     photos,
     chats,
@@ -456,6 +471,8 @@ const pollDeps: PollDeps = {
 const meetingStore = createMeetingStore(db, instantNow);
 // MC-2: the presses the meetings gate lets through, in memory only (one person, one call, one try).
 const callPresses = createPressGrants();
+// MC-2c: the presses the chat call transcript client lets through, in memory only (one person, one call id, two minutes).
+const chatCallPresses = createChatCallPresses();
 // MC-4: the "exists" allowances and their 15 minute answers, in this server's memory only.
 const callChecks = createExistsGrants();
 const callAnswers = createExistsHold();

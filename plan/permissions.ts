@@ -2,7 +2,7 @@
 // admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
 // infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
 /** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send" | "call_transcripts";
 
 export type Permission = {
   scope: string;

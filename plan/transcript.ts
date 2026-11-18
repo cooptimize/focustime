@@ -220,3 +220,47 @@ export function windowsOf(lines: readonly TranscriptLine[]): TranscriptLine[][] 
   }
   return out;
 }
+
+/**
+ * MC-2c: a chat call's transcripts (more than one when transcription stopped and started) as one transcript, in time
+ * order: each piece parsed (text/vtt, or Graph's format without speaker names, which has no WEBVTT header), its times
+ * moved on by how long after the first piece it started (or after the previous piece's last line when that isn't
+ * known), then numbered again. A piece with no spoken lines is skipped; none at all is a TranscriptError.
+ */
+export function joinTranscriptParts(parts: readonly { createdAt: string | null; text: string }[], named = true): TranscriptLine[] {
+  const first = parts.find((p) => p.createdAt)?.createdAt ?? null;
+  const out: TranscriptLine[] = [];
+  for (const p of parts) {
+    let text = /^﻿?\s*WEBVTT/.test(p.text) ? p.text : `WEBVTT\n\n${p.text}`;
+    // Without speaker names, nothing in a line is taken for a speaker ("Note: ..." stays words): an empty voice tag.
+    if (!named) text = unnamedCues(text);
+    let lines: TranscriptLine[];
+    try {
+      lines = parseVtt(text);
+    } catch (e) {
+      if (e instanceof TranscriptError) continue;
+      throw e;
+    }
+    const after = out.reduce((m, l) => Math.max(m, l.at ?? 0), 0);
+    const shift = first && p.createdAt ? Math.max(0, Math.round((Date.parse(p.createdAt) - Date.parse(first)) / 1000)) : out.length ? after + 1 : 0;
+    for (const l of lines) out.push({ ...l, at: l.at === null ? null : l.at + shift });
+  }
+  if (!out.length) throw new TranscriptError("That transcript has no spoken lines");
+  return out.slice(0, MAX_LINES).map((l, i) => ({ ...l, n: i + 1 }));
+}
+
+/**
+ * Graph's format without speaker names ("start --> end", then the words, sometimes after a blank line, as Microsoft's
+ * example shows) as WebVTT cues whose words sit behind an empty voice tag, so the "Name: words" reading never names a
+ * speaker from the words.
+ */
+function unnamedCues(text: string): string {
+  const cues: { time: string; words: string[] }[] = [];
+  for (const row of text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n")) {
+    const r = row.trim();
+    if (!r || /^WEBVTT/.test(r)) continue;
+    if (r.includes("-->")) cues.push({ time: r, words: [] });
+    else cues.at(-1)?.words.push(r);
+  }
+  return `WEBVTT\n\n${cues.filter((c) => c.words.length).map((c) => `${c.time}\n<v >${c.words.join(" ")}`).join("\n\n")}\n`;
+}
