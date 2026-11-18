@@ -63,7 +63,7 @@ export function NeedsRow({ r, open, zone, colors, ticked, onTick, onOpen, onSkip
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   const action = r.left?.open ? CALL_LIST.reviewButton : r.state.label === CALL_LIST.uploadState ? CALL_LIST.uploadButton : CALL_LIST.openButton;
   return (
-    <li className={`calls-row needs${open ? " open" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
+    <li className={`calls-row need-row${open ? " open" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {r.left?.open ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
       <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
         <span className="calls-row-one">

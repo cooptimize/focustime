@@ -7684,7 +7684,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-left { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
 .calls-left-bar { display: inline-block; width: 48px; height: 4px; border-radius: 2px; background: var(--wash-2, var(--border)); overflow: hidden; }
 .calls-left-bar > span { display: block; height: 100%; background: var(--c, var(--accent)); }
-.calls-row.needs .calls-row-two { grid-template-columns: auto minmax(0, 1fr) auto; }
+.calls-row.need-row .calls-row-two { grid-template-columns: auto minmax(0, 1fr) auto; }
 .calls-head-count { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .calls-head-note { margin-left: 8px; font-size: var(--fs-1); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
 .calls-head-note.link-btn { min-height: 0; padding: 0; }
