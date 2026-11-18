@@ -1,5 +1,5 @@
 // P1: the in-app notification list (⋯ › Notifications, its unread dot and the toasts while the app is open) and Web
-// Push per device (Settings › Notifications › Notify this device). The list holds what the notifier delivered, after
+// Push per device (Settings › Reminders and notices › Notify this device). The list holds what the notifier delivered, after
 // its gate; nothing here makes a notice. Push subscriptions are sealed on the server and never returned: the UI sees a
 // device's id, its coarse label and when it last got one.
 import type { PlanStore } from "../store/plan-store.ts";

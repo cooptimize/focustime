@@ -95,7 +95,8 @@ export function demoPatterns(): FocusPattern[] {
 export function demoOutlook(monday: IsoDate): CalEvent[] {
   const o = (id: string, day: number, title: string, from: string, to: string, extra: Partial<CalEvent> = {}): CalEvent => {
     const d = plus(monday, day);
-    return { id: `outlook:demo-${id}-${d}`, source: "outlook", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", ...extra };
+    // WK-6: the iCalUId the demo's calls know the meeting by (sources/demo/meetings-graph.ts).
+    return { id: `outlook:demo-${id}-${d}`, source: "outlook", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", key: `demo-ical-demo-${id}-${d}`, ...extra };
   };
   return [
     // DY-1: the standups, the weekly status and the refinement are series on the calendar (repeats); the rest are single.

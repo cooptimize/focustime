@@ -18,8 +18,9 @@ import { sharedDeployments } from "./deployments.ts";
  */
 export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices", "teams_bot_chats", "teams_bot_cards", "teams_bot_seen", "teams_rhythm", "calendar_links", "calendar_link_events"];
 
-/** How long a soft delete waits before everything is removed. */
-export const HARD_DELETE_AFTER_DAYS = 30;
+/** How long a soft delete waits before everything is removed (SA-3: in plan/retention-days.ts, which Settings reads). */
+import { HARD_DELETE_AFTER_DAYS } from "../plan/retention-days.ts";
+export { HARD_DELETE_AFTER_DAYS };
 
 /** The export's format name (store/import.ts reads it back). */
 export const EXPORT_FORMAT = "focustime-export-1";

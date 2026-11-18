@@ -191,7 +191,7 @@ export type ActionContext = {
   photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
-  /** TB-2: the bot's rhythm for this person (Settings › Notifications › In Teams); absent without the Teams bot. */
+  /** TB-2: the bot's rhythm for this person (Settings › Reminders and notices › In Teams); absent without the Teams bot. */
   teams?: { status: () => Promise<{ chat: boolean; blocked: boolean }>; test: (kind: TeamsKind) => Promise<{ ok: true } | { ok: false; message: string }> };
   /** P1: this person's Web Push (devices, the app's VAPID key). Absent: push isn't available (demo, tests). */
   push?: PushPort;
@@ -2007,7 +2007,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       return { ok: true, data: { sent: true } };
     }
     case "teams.status": {
-      // TB-2: Settings › Notifications › In Teams: is the bot here, has it a chat with me, did Teams refuse it.
+      // TB-2: Settings › Reminders and notices › In Teams: is the bot here, has it a chat with me, did Teams refuse it.
       if (!noInput(req.input)) return bad("teams.status takes no input");
       if (!ctx.teams) return { ok: true, data: { available: false, chat: false, blocked: false } };
       return { ok: true, data: { available: true, ...(await ctx.teams.status()) } };
@@ -2321,6 +2321,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "settings.load":
     case "settings.save":
+    case "settings.note_seen":
     case "data.export":
       return settingsAction(
         settingsCtx(raw, ctx),

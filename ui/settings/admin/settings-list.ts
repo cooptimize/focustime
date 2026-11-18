@@ -67,6 +67,7 @@ export const ADMIN_SETTINGS: readonly AdminSetting[] = [
   // Team defaults › Planning and new people › By level
   { scope: "level", key: "draft_stories", label: "Break down offered", part: "defaults", tab: "planning" },
   { scope: "level", key: "readiness_nudges", label: "Needs attention nudges", part: "defaults", tab: "planning" },
+  // SA-3: plan_share and keep_open are no longer settings (RETIRED_KEYS); their labels stay so older Audit rows read in words.
   { scope: "level", key: "plan_share", label: "Plan up to (% of free time)", part: null, tab: null },
   { scope: "level", key: "keep_open", label: "Keep open for walk-ins (% of block hours)", part: null, tab: null },
   // People › People
@@ -85,6 +86,8 @@ const scopeOf = (scope: string): SettingScope | null => (scope === "org" ? "org"
 export function settingLabel(scope: SettingScope, key: string): string {
   return ADMIN_SETTINGS.find((s) => s.scope === scope && s.key === key)?.label ?? key;
 }
+/** SA-3: keys that were settings once and are gone; only older Audit rows name them. */
+export const RETIRED_KEYS: readonly string[] = ["level/plan_share", "level/keep_open"];
 export const hasLabel = (scope: SettingScope, key: string) => ADMIN_SETTINGS.some((s) => s.scope === scope && s.key === key);
 
 /**

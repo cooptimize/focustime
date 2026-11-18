@@ -83,7 +83,7 @@ Where the code keeps a name people don't see, these pages use the screen's name 
 | `my_promises.*`, `promises` | Inbox › Promises: the promises found in chats and the ones I added, one list | `actions/conversation-actions.ts` |
 | `conversations.*`, `conversations`, `suggest.*` | Inbox › From chats | `actions/conversation-actions.ts` |
 | `requests.*`, `requests`, `asks` (a reminder kind) | Urgent requests | `actions/request-actions.ts`, `plan/notify.ts` |
-| `chats.*`, `client_chats` | Client chats (Settings › Client chats, Admin › Clients) | `actions/chat-actions.ts` |
+| `chats.*`, `client_chats` | Client chats (Settings › Clients, Admin › Clients) | `actions/chat-actions.ts` |
 | `loop.*`, `loop_sends` | Close the loop | `actions/loop-actions.ts` |
 | `wrapup.*` | Wrap it up, on the story card | `actions/wrapup-actions.ts` |
 | `checkin` | Midday check-in | `ui/nav.ts` |

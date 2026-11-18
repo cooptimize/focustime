@@ -17,7 +17,7 @@ import type { StatusLoad } from "../../plan/status-types.ts";
 import type { AppConfig } from "../../config/schema.ts";
 import type { LogRecord } from "../../log/logger.ts";
 import { nextBlockFor } from "../../plan/suggest.ts";
-import { doneFromWords, NUDGE_CHECK_MINUTES, NUDGE_MAX, nudgeAllowed, nudgeOccasion, nudges, nextRhythmWake, occasionOf, rhythmDay, rhythmDue, type Nudge, type NudgeFacts, type RhythmKind, type TeamsKind } from "../../plan/teams-rhythm.ts";
+import { appTimesOf as appTimes, doneFromWords, NUDGE_CHECK_MINUTES, NUDGE_MAX, nudgeAllowed, nudgeOccasion, nudges, nextRhythmWake, occasionOf, rhythmDay, rhythmDue, type Nudge, type NudgeFacts, type RhythmKind, type TeamsKind } from "../../plan/teams-rhythm.ts";
 import type { Pick as PlanPick } from "../../plan/types.ts";
 import type { PlanStore } from "../../store/plan-store.ts";
 import type { TeamsBotStore } from "../../store/teams-bot-store.ts";
@@ -308,7 +308,7 @@ export function createRhythm(d: RhythmDeps) {
     const now = t.toZonedDateTimeISO(tz);
     const quietNow = c.notify.quiet === "outside_hours" && !f.inHours;
     const sent = await store.occasions(t.subtract({ hours: 24 * 9 }).toString());
-    const due = rhythmDue({ now, model: c.week.hours, master: true, settings: s, quietNow, pto: f.pto, focusRunning: f.focusRunning }, sent);
+    const due = rhythmDue({ now, model: c.week.hours, master: true, settings: s, app: appTimes(c), quietNow, pto: f.pto, focusRunning: f.focusRunning }, sent);
     for (const wtg of due.waiting) log({ op: "rhythm", kind: `${wtg.kind}_waits_${wtg.why}` });
     for (const x of due.due) {
       if (!(await store.claim(x.occasion, x.kind))) continue;
@@ -423,7 +423,7 @@ export function createRhythm(d: RhythmDeps) {
     const t = d.now();
     const sent = await d.store(userId).occasions(t.subtract({ hours: 24 * 9 }).toString()).catch(() => new Set<string>());
     const st = s.status ? nextStatusNudge(t.toZonedDateTimeISO(userZone(c)), { ...c.notify.status, friday: true }, (x) => dayEndOf(c.week.hours, x), (o) => sent.has(o)) : null;
-    const w = nextRhythmWake({ now: t.toZonedDateTimeISO(userZone(c)), model: c.week.hours, master: true, settings: s }, sent, (s.nudges || s.meetings) && hoursOn(c.week.hours, t.toZonedDateTimeISO(userZone(c)).toPlainDate().toString()).segments.length ? NUDGE_CHECK_MINUTES : null);
+    const w = nextRhythmWake({ now: t.toZonedDateTimeISO(userZone(c)), model: c.week.hours, master: true, settings: s, app: appTimes(c) }, sent, (s.nudges || s.meetings) && hoursOn(c.week.hours, t.toZonedDateTimeISO(userZone(c)).toPlainDate().toString()).segments.length ? NUDGE_CHECK_MINUTES : null);
     return st && (!w || Temporal.Instant.compare(st, w) < 0) ? st : w;
   }
 
@@ -750,7 +750,7 @@ export function createRhythm(d: RhythmDeps) {
       log({ op: "rhythm", kind: "closeout_reply" });
       return next.proposal?.state === "open" ? "Here's your close out to confirm, on the Close out card above." : (next.notice ?? "Open FocusTime to close out.");
     },
-    /** Settings › Notifications › In Teams › Send me a test now: one of a kind, now, past the switches and the gate. */
+    /** Settings › Reminders and notices › In Teams › Send me a test now: one of a kind, now, past the switches and the gate. */
     async test(userId: string, kind: TeamsKind): Promise<{ ok: true } | { ok: false; message: string }> {
       const to = await address(userId);
       if (!to) return { ok: false, message: "Message FocusTime in Teams once first, so it knows where to reach you." };

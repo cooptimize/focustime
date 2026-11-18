@@ -182,7 +182,7 @@ Writes go only through the write framework (see [Architecture](architecture.md#a
 | Azure | Start the one VM you confirmed, and Stop (deallocate) it after a preview; the start before your day, when you turned it on, on production only | No |
 | Teams 1:1 chat | The bot's replies and cards in your own chat | Not applicable |
 
-Nothing writes to Dataverse, Google, calendar links, other Teams data, the standards repo or any other Azure resource. Every attempt is in Settings › Activity (the Outlook, DevOps, Azure and Teams status logs, and Close the loop's sends) with before and after values, result, Undo and Retry. A retry checks the target first, so a write that landed isn't done twice. Plan store changes from the Teams bot's buttons and "capture:" run at once with Undo, like the app's own buttons.
+Nothing writes to Dataverse, Google, calendar links, other Teams data, the standards repo or any other Azure resource. Every attempt is in Settings › Your data (the Outlook, DevOps, Azure and Teams status logs, and Close the loop's sends) with before and after values, result, Undo and Retry. A retry checks the target first, so a write that landed isn't done twice. Plan store changes from the Teams bot's buttons and "capture:" run at once with Undo, like the app's own buttons.
 
 ## The meeting rules
 
@@ -229,7 +229,7 @@ The one write without a preview is the start before your day, and only because y
 - **Global PATs retire on December 1, 2026.** A client PAT created as global stops working then; recreate it as organization-scoped (Q17).
 - **The DevOps identity check uses an undocumented endpoint.** `_apis/connectionData` isn't on Microsoft Learn (Q80).
 - **Public endpoints.** Azure SQL, Key Vault, the container registry and the bot are reachable on their public endpoints (`publicNetworkAccess: 'Enabled'` in `infra/modules/`); there are no private endpoints. Azure SQL's firewall allows only Azure services; every request still needs Entra or managed identity access.
-- **People can erase their own outside-write log.** Settings › Activity's rows (and `loop_sends`, which holds the text sent) are user rows, removed with Delete my data. `admin_audit` has no age limit.
+- **People can erase their own outside-write log.** Settings › Your data's rows (and `loop_sends`, which holds the text sent) are user rows, removed with Delete my data. `admin_audit` has no age limit.
 - **Data at rest.** Azure SQL encrypts its data at rest by default (transparent data encryption); `infra/` doesn't set it either way. **Not verified.**
 
 ## These docs

@@ -20,7 +20,7 @@ Both run in the same subscription and share the Entra tenant, the "FocusTime" ap
 
 **Not verified:** how long dev waits before scaling to zero. The Bicep sets no cooldown, so it is Container Apps' default; the runbook says 300 seconds.
 
-The VM's automatic start (Settings › Accounts and calendars › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm-stop-and-autostart.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
+The VM's automatic start (Settings › Connections › Start my VM before my day) runs only on the hosted app (`FOCUSTIME_HOST=azure`) where `FOCUSTIME_ENV` is exactly `prod`, which only `infra/prod.bicepparam` sets. Dev, the developer loop and the demo never start a VM on their own; the setting there says it runs only on production. Start and Stop pressed by a person work everywhere. To see the automatic start without prod, use the e2e demo (`e2e/shell/vm-stop-and-autostart.test.ts`, `FOCUSTIME_DEMO_AUTOSTART_ENV=prod` on the fake Azure); never set `FOCUSTIME_ENV=prod` anywhere else.
 
 ### Telling the sites apart (EV-1)
 
@@ -83,7 +83,7 @@ Admin › Health on a test site has a "This is a test site" row listing what run
 
 ## Reminders
 
-Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each kind has its own switch in Settings › Notifications › What to notify me about, nothing is sent outside working hours or on a day off (with Quiet hours and Quiet on days off on), and what comes due during focus is held and delivered as one after. The person's ticks (`server/ticks.ts`) send these now:
+Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each kind has its own switch in Settings › Reminders and notices › What to notify me about, nothing is sent outside working hours or on a day off (with Quiet hours and Quiet on days off on), and what comes due during focus is held and delivered as one after. The person's ticks (`server/ticks.ts`) send these now:
 
 | Reminder | When |
 |---|---|
@@ -95,7 +95,7 @@ Every reminder goes through one notifier (`plan/notify.ts`) and one gate: each k
 | VM | The morning prompt about the person's VM |
 | Promises due | A promise is due or late |
 | Expiring secret | A write PAT or another of the person's secrets is near its end |
-| Urgent request | A chat message picked out as needing the person now (Settings › Notifications › Urgent requests during focus decides whether it breaks through focus) |
+| Urgent request | A chat message picked out as needing the person now (Settings › Reminders and notices › Urgent requests during focus decides whether it breaks through focus) |
 | Story taken, Assigned, Dates moved, Item edited | Someone took my story, assigned me an item, moved my dates or edited my item in FocusTime |
 | Sent to you, Send answered, Can't lead | A teammate sent me work; my send was answered; someone I sent a Must to can't take it this week |
 | Look asked, Look replied | A teammate asked me to look at their week; my ask was answered |
@@ -164,7 +164,7 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 
 ## Diagnostics, logs and what is never logged
 
-- **For people:** Settings › Your data › Diagnostics (counts only, for their own chats), Settings › Activity (every outside write, with Undo and Retry) and Settings › DevOps › Find an item (why an item isn't showing).
+- **For people:** Settings › Your data › Diagnostics (counts only, for their own chats), Settings › Your data (every outside write, with Undo and Retry) and Settings › Connections › DevOps › Find an item (why an item isn't showing).
 - **For admins:** Admin › Health (sources, jobs, polling health) and Admin › Audit (every admin change). **Not verified:** each Status line against the code.
 - **Logs:** the console (`az containerapp logs show`), Application Insights and Log Analytics (30 days, `infra/modules/monitoring.bicep`). Queries in the runbook's [Read logs](../azure/runbook.md#read-logs). Each request is one operation with its own trace.
 - **Never logged:** tokens, secrets, PATs, Authorization headers, request or response bodies, message or transcript text, prompts and answers, people's ids or email addresses, chat ids, topics or members, and client keys except as a one-way reference. The logger has no field for them (`log/logger.ts`).
@@ -217,11 +217,11 @@ AppExceptions | where TimeGenerated > ago(2d) | summarize count() by where=tostr
 
 | What you see | Why | Fix |
 |---|---|---|
-| Someone says an item they made in DevOps isn't in FocusTime | Usually the area scope, a filter, or the item is in another project | Ask them to open Settings › DevOps › Find an item with the client and the number: it says which. Refresh checks DevOps now |
+| Someone says an item they made in DevOps isn't in FocusTime | Usually the area scope, a filter, or the item is in another project | Ask them to open Settings › Connections › DevOps › Find an item with the client and the number: it says which. Refresh checks DevOps now |
 | A deploy fails because a resource provider is `NotRegistered` | The deploy identity can only work in its resource group; it can't register a provider for the subscription | Run `infra/scripts/bootstrap.sh --env <env> --member <your upn> --dry-run`, then without `--dry-run`. It registers the providers and changes nothing else. **Not verified:** the exact error text Azure shows |
 | FocusTime doesn't show in Teams | Prod: the package isn't uploaded, isn't Allowed in Manage apps, or a permission policy blocks custom apps; it can take a few hours to reach people. Dev: the tester's setup policy hasn't applied yet (hours), or they haven't uploaded the package | Check Teams admin center › Manage apps and the policies ([teams-bot.md](../setup/teams-bot.md)) |
 | The bot doesn't answer the first message on dev | Dev wakes from zero in about 30 seconds; Teams gives a bot 10 to 15 | Send it again. Prod always runs |
-| A source shows as not live: Outlook, Google or DevOps writes say they aren't connected | That person hasn't connected it, their sign-in expired, or a consent is missing | The source's own message names the fix: Settings › Accounts and calendars (consents, Reconnect), Settings › DevOps (DevOps write access) |
+| A source shows as not live: Outlook, Google or DevOps writes say they aren't connected | That person hasn't connected it, their sign-in expired, or a consent is missing | The source's own message names the fix: Settings › Connections (consents, Reconnect), Settings › Connections › DevOps (DevOps write access) |
 | The webkit job fails at "Install WebKit's system packages" (or a browser job at another step before "Browser tests") with `Temporary failure resolving` or `Failed to fetch` | The Ubuntu package servers, npm or the Playwright CDN couldn't be reached; nothing is wrong with the code. The packages install from the cache with no network on the same runner image, so this happens only on a new image or Playwright version | Re-run the failed jobs once it's back: `gh run rerun <run id> --failed`. A deploy-dev that ran CI itself waits on it: re-run its failed jobs too. Runbook, [When CI's browser jobs fail before testing](../azure/runbook.md#when-cis-browser-jobs-fail-before-testing-ci-2) |
 | Dev is slow on the first request | A cold start: dev scales to zero | Wait a few seconds |
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |

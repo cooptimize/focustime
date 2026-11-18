@@ -75,7 +75,7 @@ function FocusForm(p: FormProps) {
       <Group title="Teams status" intro="Set while focus runs, back to automatic after. A change you make in Teams wins.">
         <Row
           id="teams-status"
-          help="Logged in Settings › Activity › Teams status log."
+          help="Logged in Settings › Your data › Teams status log."
           mark={markOf(a, "teamsStatus")}
           below={
             teams.text || teams.allow ? (

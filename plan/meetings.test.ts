@@ -5,7 +5,7 @@ const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
   weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: ["u1", "u2"], attendees: ["u3"], onlineMeetingId: null, callKind: null, createdAt: "2026-11-02T15:00:00Z", removedAt: null, ...p,
 });
-const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 10, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "ready", nextCheckAt: null, checks: 0, transcriptFrom: "automatic", transcriptAt: null, aiOutcome: "done", dismissedBy: null, reviewedBy: null, updatedAt: "2026-11-10T16:00:00Z", lastRead: null, ...p });
+const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 10, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "ready", nextCheckAt: null, checks: 0, transcriptFrom: "automatic", transcriptAt: null, aiOutcome: "done", dismissedBy: null, reviewedBy: null, updatedAt: "2026-11-10T16:00:00Z", lastRead: null, eventKey: null, ...p });
 
 describe("meeting capture rules (MC-1)", () => {
   // MC-2 changed this test (the rule gained its third way, the product owner's decision): the two old ways are as
@@ -86,7 +86,7 @@ describe("meeting capture rules (MC-1)", () => {
 
 describe("the last-read line (MC-1c)", () => {
   const S: Pick<MeetingSeries, "source" | "registrantId" | "weekday" | "start" | "minutes" | "zone" | "interval" | "createdAt"> = { source: "automatic", registrantId: "reg", weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, createdAt: "2026-11-01T12:00:00Z" };
-  const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 1, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "waiting", nextCheckAt: null, checks: 0, transcriptFrom: null, transcriptAt: null, aiOutcome: null, dismissedBy: null, reviewedBy: null, lastRead: null, updatedAt: "2026-11-10T15:00:00Z", ...p });
+  const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 1, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "waiting", nextCheckAt: null, checks: 0, transcriptFrom: null, transcriptAt: null, aiOutcome: null, dismissedBy: null, reviewedBy: null, lastRead: null, eventKey: null, updatedAt: "2026-11-10T15:00:00Z", ...p });
   const names = (id: string) => ({ reg: "Sam Admin", rev: "Kim Lead" })[id] ?? null;
   const line = (o: Occurrence[], now: string, s: Partial<typeof S> = {}) => lastReadLine({ ...S, ...s }, o, now, "America/New_York", names);
 

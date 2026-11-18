@@ -62,7 +62,7 @@ const exec = (label: string, data: RhythmTap | CaptureTap, style?: "positive" | 
 const tapOn = (m: { occasion: string }, op: RhythmOp, extra: Partial<RhythmTap> = {}): RhythmTap => ({ ft: "rhythm", occasion: m.occasion, op, ...extra });
 const actionSet = (actions: unknown[]) => ({ type: "ActionSet", actions });
 const header = (kind: RhythmModel["kind"], label: string | null, test?: boolean) => text(`FocusTime · ${NAME[kind]}${label ? ` · ${label}` : ""}${test ? " (test)" : ""}`, { weight: "Bolder", size: "Medium" });
-const footer = (publicUrl: string) => muted(`You turned this on in [Settings › Notifications › In Teams](${abs(publicUrl, "#/settings/notifications")}).`);
+const footer = (publicUrl: string) => muted(`You turned this on in [Settings › Reminders and notices › In Teams](${abs(publicUrl, "#/settings/notifications")}).`);
 const choices = (id: string, label: string, list: readonly Choice[], value?: string) => ({ type: "Input.ChoiceSet", id, label, style: "compact", isRequired: true, errorMessage: "Choose one", value: value ?? list[0]?.value, choices: list.map((c) => ({ title: c.label, value: c.value })) });
 
 function pickLine(p: PickRow, buttons: ("done" | "not_yet")[], m: { occasion: string }, settled: boolean): unknown {

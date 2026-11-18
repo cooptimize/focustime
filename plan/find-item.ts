@@ -1,4 +1,4 @@
-// DV-2: Find an item (Settings › DevOps). `devops.find` gathers the facts from FocusTime's store only (the poller fills
+// DV-2: Find an item (Settings › Connections › DevOps). `devops.find` gathers the facts from FocusTime's store only (the poller fills
 // it from the client's whole project), the scope, my plan, Ahead's filters and Status's features; this turns them into
 // plain lines, in order: DevOps, FocusTime's store, the scope, then Day, Week, Ahead and Status. Pure: no I/O, no clock.
 

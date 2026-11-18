@@ -67,6 +67,12 @@ export type OccurrenceView = {
   done?: CallOutcome;
   /** MC-4: when its last undecided proposal was decided (the latest decision), while nothing is undecided; else null. */
   closedAt?: string | null;
+  /**
+   * WK-6, meeting.mine only: the occurrence's meeting on the calendar, by its iCalUId (the same on every attendee's
+   * calendar), so Day, Week and the block panel tie the call to its meeting by the meeting itself; null when it isn't
+   * known (then the same start and end, when only one meeting fits).
+   */
+  eventKey?: string | null;
 };
 
 /** MC-4: what came of a call, counted from its proposals. */

@@ -1,4 +1,4 @@
-// PK-2: every word of Settings › Accounts and calendars › Pocket recorder, in one place (docs/design/wording.md,
+// PK-2: every word of Settings › Connections › Pocket recorder, in one place (docs/design/wording.md,
 // "PK-2 words"), the failures' too: the client (sources/pocket/client.ts) throws these, so the server and the page say
 // the same thing.
 import { POCKET_ROW } from "./call-words.ts";
@@ -76,7 +76,7 @@ export const POCKET_CALL_WORDS = {
   /** For someone without Pocket connected: one quiet line and its link, no button. */
   connectLine: "Record calls on a Pocket? Connect it in Settings.",
   connectLink: "Connect it in Settings",
-  notConnected: "Pocket isn't connected. Connect it in Settings › Accounts and calendars › Pocket recorder",
+  notConnected: "Pocket isn't connected. Connect it in Settings › Connections › Pocket recorder",
   getAgain: "Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes",
   notThisCall: "That recording doesn't go with this call: they overlap for less than half the call",
   noWords: "Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file",

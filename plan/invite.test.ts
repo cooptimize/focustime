@@ -12,7 +12,7 @@ describe("the invite message", () => {
     const m = inviteTemplate({ appUrl: APP, teamsAppLink: null, from: "Ada Admin" });
     expect(m).toContain(`Hi ${NAME_TOKEN},`);
     expect(m).toContain(`Open it here: ${APP}`);
-    expect(m).toMatch(/1\. Sign in.*\n2\. Connect DevOps in Settings › DevOps\.\n3\. Look at Week/s);
+    expect(m).toMatch(/1\. Sign in.*\n2\. Connect DevOps in Settings › Connections › DevOps\.\n3\. Look at Week/s);
     expect(m).not.toMatch(/teams\.microsoft\.com/);
     expect(m.trim().endsWith("Ada")).toBe(true);
     expect(m).not.toContain("—");

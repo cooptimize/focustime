@@ -1,4 +1,4 @@
-// P1: the browsers a person turned push on for (Settings › Notifications › Notify this device). A subscription's
+// P1: the browsers a person turned push on for (Settings › Reminders and notices › Notify this device). A subscription's
 // endpoint and keys are sealed with the app's data key (store/user-secrets.ts' seal, bound to the person and the device
 // id), so they are never readable from the database, the export or the UI, and never logged. The device's own random
 // id (kept in that browser) finds its row; the label is coarse ("iPhone · Safari"), from the browser's user agent.

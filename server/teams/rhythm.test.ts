@@ -266,7 +266,7 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect((await t.plan.getPick(xs.id))?.size).toBe("XS");
     const a = await t.add({ kind: "item", itemId: 500, title: "Import mapping", itemType: "Task", size: "M" });
     await t.plan.addTimebox({ date: MON, clientKey: a.clientKey, pickId: a.id, title: "Import mapping", start: `${MON}T09:00:00-05:00`, end: `${MON}T10:00:00-05:00`, outlook: false });
-    t.at("16:40");
+    t.at("16:46"); // SA-3: Close out goes at the app's time, 15 minutes before the day ends
     await t.rhythm.tick(ANA, await t.facts());
     const card = await t.tap(`closeout:${MON}`, "session_left", { pickId: a.id, left: 60 });
     expect(card).toContain("Update Remaining Work on 1 story? Review it in Close out.");
@@ -426,7 +426,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     const t = await setup(d);
     const a = await t.add({ title: "Fix the login timeout" });
     const b = await t.add({ title: "Write the release notes", half: "PM" });
-    t.at("16:40");
+    t.at("16:46"); // SA-3: Close out goes at the app's time, 15 minutes before the day ends
     await t.rhythm.tick(ANA, await t.facts());
     const occ = `closeout:${MON}`;
     expect(t.cardsSent().at(-1)).toContain("What got done today?");
@@ -493,7 +493,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     await t.add({ title: SECRET });
     await t.rhythm.tick(ANA, await t.facts());
     await t.rhythm.capture(ANA, `capture text ${SECRET}`);
-    t.at("16:40");
+    t.at("16:46"); // SA-3: Close out goes at the app's time, 15 minutes before the day ends
     await t.rhythm.tick(ANA, await t.facts());
     await t.rhythm.closeoutReply(ANA, SECRET);
     const all = JSON.stringify(t.logs);

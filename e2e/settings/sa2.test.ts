@@ -4,7 +4,6 @@
 // ticked when FocusTime asks; settings save the same values under the same keys; working hours read the three ways people
 // type them and refuse others; on a phone the Undo sits above the bottom bar, controls are tap sized, help is at most two
 // lines and nothing is clipped at the largest Text size. Edge cases are unit tests (ui/settings/*.test.ts).
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -12,7 +11,6 @@ import { call, phonePage } from "../mb1-helpers.ts";
 import { SECTIONS, SETTINGS, type SettingKind } from "../../ui/settings/registry.ts";
 
 const T = 300_000;
-const MAIN: Record<string, { id: string; group: string }[]> = JSON.parse(readFileSync(new URL("./sa2-order-main.json", import.meta.url), "utf8"));
 const go = (page: Page, h: string) => page.evaluate((x) => (location.hash = x), h);
 async function open(page: Page, section: string) {
   await go(page, `#/settings/${section}`);
@@ -42,19 +40,14 @@ describe.skipIf(!CHROMIUM)("SA-2: one way to draw a setting (browser, demo)", ()
     await h?.stop();
   }, T);
 
-  it("every section keeps main's order and groups; each kind uses its control; labels are the registry's", async () => {
+  // SA-3 regrouped the sections on purpose (main's ids, keys and defaults are checked by ui/settings/stored-keys.test.ts);
+  // this keeps SA-2's one control per kind and the registry's labels, in every section.
+  it("each kind uses its control; labels are the registry's", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
-    const moved: string[] = [];
     const wrong: string[] = [];
     const named: string[] = [];
-    for (const [section, before] of Object.entries(MAIN)) {
+    for (const section of SECTIONS.filter((s) => !s.parent).map((s) => s.id)) {
       await open(page, section);
-      const now = await page.evaluate(() =>
-        [...document.querySelectorAll<HTMLElement>(".ps-body [data-setting]")].map((el) => ({ id: el.dataset.setting!, group: el.parentElement?.closest("section[aria-label]")?.getAttribute("aria-label") ?? "" })),
-      );
-      // The settings main had, in main's order and group (rows SA-2 added, like a weekday of its own, are extra).
-      const kept = now.filter((x) => before.some((b) => b.id === x.id)).filter((x, i, all) => all.findIndex((y) => y.id === x.id) === i);
-      if (JSON.stringify(kept) !== JSON.stringify(before)) moved.push(`${section}: ${JSON.stringify(before.filter((b, i) => JSON.stringify(kept[i]) !== JSON.stringify(b)))}`);
       for (const d of SETTINGS.filter((x) => x.section === section)) {
         // A header row (its parts are the rows under it, like the three risk numbers) has no control of its own.
         const row = page.locator(`.ps-body .sp-row[data-setting="${d.id}"]:not(.sp-bare)`).first();
@@ -65,7 +58,6 @@ describe.skipIf(!CHROMIUM)("SA-2: one way to draw a setting (browser, demo)", ()
         if (want && !(await row.locator(want).count())) wrong.push(`${d.id} (${d.kind}) has no ${want}`);
       }
     }
-    expect(moved).toEqual([]);
     expect(named).toEqual([]);
     expect(wrong).toEqual([]);
     expect(errors).toEqual([]);

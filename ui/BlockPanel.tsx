@@ -13,7 +13,7 @@ import { CreateInDevOps, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { BreakDownButton } from "./BreakDownPanel.tsx";
 import { blockWord, removeRule, storiesUnder, toPlaceCount, toPlaceLine, toPlaceShort, type ToPlace as ToPlaceCounts } from "../plan/addwork.ts";
 import { watchTip } from "../plan/blockstatus.ts";
-import { assignedList, draftParents, hoverWords, looseDrafts, meetingsWords, moreCount, moreList, moveHighlight, onBlock, sizeHover, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
+import { assignedList, draftParents, hoverWords, looseDrafts, moreCount, moreList, moveHighlight, onBlock, sizeHover, panelClient, panelMode, panelTitle, panelWhen, placedMap, riskLine, searchPanel, takeOffRule, type AssignedGroup, type ListSort, type MoreGroup, type NewRow, type PanelMode, type Result } from "../plan/blockpanel.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planMinutes } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
@@ -47,6 +47,12 @@ import { FromLastWeek } from "./FromLastWeek.tsx";
 import { useProposal } from "./Watching.tsx";
 import { isTypingTarget, topOverlay } from "./keys.ts";
 import { Agenda } from "./Agenda.tsx";
+import { meetingsLine } from "./meetingsLine.ts";
+import { useBlockCalls } from "./meetings/calls.ts";
+import { CARD_MEETINGS } from "../plan/call-words.ts";
+
+/** WK-6: the block calls hook needs a slot even while the panel has none (a hook runs on every render). */
+const NO_SLOT = { start: "1970-01-01T00:00:00Z", end: "1970-01-01T00:00:00Z", events: [] as const };
 import { PickRow } from "./PickRow.tsx";
 import { userZone } from "../week/zone.ts";
 import { HalfScope } from "./scope.ts";
@@ -258,7 +264,7 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
   // ⋯: what isn't about adding. Start (or Join) a call in the client's chats, and Timebox this day.
   const menu = useMenu((env): MenuStep => {
-    const boxOff = mode !== "add" ? (mode === "past" ? "A past day keeps its record" : "Nothing to timebox on a day off") : data.timeboxSettings.enabled === false ? "Timeboxing is off in Settings › Day and Week" : null;
+    const boxOff = mode !== "add" ? (mode === "past" ? "A past day keeps its record" : "Nothing to timebox on a day off") : data.timeboxSettings.enabled === false ? "Timeboxing is off in Settings › Planning" : null;
     const timebox: MenuItem = { id: "timebox-day", label: "Timebox this day", hint: "a time for each to-do", ...(boxOff ? { disabled: boxOff } : {}), run: () => onTimebox?.(at.date) };
     const order: MenuItem = { id: "sort", label: sort === "backlog" ? "Sort by target date" : "Sort by backlog order", hint: sort === "backlog" ? "now: backlog order" : "now: target date", run: () => { const next: ListSort = sort === "backlog" ? "target" : "backlog"; setSort(next); writePanelSort(next); } };
     return { title, items: [...callItems(env, clientKey), timebox, ...(mode === "add" ? [order] : [])] };
@@ -280,8 +286,18 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
     el?.classList.add("dp-focused");
   }, [focusSel, at.date, at.half, listed1]);
 
-  const meetings = slot && !day?.pto ? meetingsWords(slot.events.map((e) => ({ minutes: Math.round((Date.parse(e.clipEnd) - Date.parse(e.clipStart)) / 60000), free: e.event.showAs === "free" }))) : null;
+  // WK-6: the line reads as the card's folded line (the free time, and the calls that need me counted at its end); it
+  // never carries a mark or a chip, so nothing runs past the panel's edge.
+  const calls = useBlockCalls(slot ?? NO_SLOT);
+  const meetings = slot && !day?.pto && (slot.events.length > 0 || calls.loose.some((c) => c.needsMe)) ? meetingsLine(slot) : null;
   const [agendaOpen, setAgendaOpen] = useState(false);
+  // WK-6: opened from a card's "N more" or its count of calls: the agenda open, in view.
+  const wantsMeetings = focus?.kind === "meetings";
+  useEffect(() => {
+    if (!wantsMeetings) return;
+    setAgendaOpen(true);
+    requestAnimationFrame(() => ref.current?.querySelector(".bp-meetings")?.scrollIntoView({ block: "nearest" }));
+  }, [wantsMeetings, at.date, at.half]);
   const firstPlanned = blockPicks.find((p) => p.status === "planned")?.id ?? null;
   const note = clientKey ? data.resumeNotes[clientKey] : undefined;
   const monday = mondayOf(at.date);
@@ -356,7 +372,17 @@ export function BlockPanel({ at, data, now, onClose, onChanged, onSelect, sheet 
 
         {meetings && slot && (
           <section className="bp-sec bp-meetings" aria-label="Meetings">
-            <FoldLine className="bp-meet-line" open={agendaOpen} onToggle={() => setAgendaOpen((o) => !o)} label={meetings} />
+            <FoldLine
+              className="bp-meet-line"
+              open={agendaOpen}
+              onToggle={() => setAgendaOpen((o) => !o)}
+              label={
+                <>
+                  <span className="ml-words">{meetings}</span>
+                  {calls.needs.length > 0 && <span className="ml-needs"> · {CARD_MEETINGS.needsYou(calls.needs.length)}</span>}
+                </>
+              }
+            />
             {agendaOpen && <Agenda slot={slot} now={now} tz={tz} clientName={(k) => (k ? name(k) : "")} pickRow={() => null} />}
           </section>
         )}

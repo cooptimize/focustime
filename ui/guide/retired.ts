@@ -58,10 +58,16 @@ export const RETIRED: readonly Retired[] = [
   { was: "In progress (the Inbox)", now: "Inbox › Promises" },
   { was: "Captures and drafts", now: "Inbox › Captures", match: /\bCaptures and drafts\b/ },
   { was: "Request type and the four lines", now: "The three questions, in the New form", match: /\b[Rr]equest types?\b|\bfour lines\b/ },
-  { was: "Settings › Data (Undo and logs)", now: "Settings › Activity", match: /Settings › Data\b/ },
-  { was: "Settings › Planning", now: "Settings › Day and Week", match: /Settings › Planning\b/ },
-  { was: "Settings › Today and Week", now: "Settings › Day and Week", match: /Settings › Today and Week\b/ },
-  { was: "Settings › Connections", now: "Settings › Accounts and calendars", match: /Settings › Connections\b/ },
+  { was: "Settings › Data (Undo and logs)", now: "Settings › Your data", match: /Settings › Data\b/ },
+  // SA-3: eleven sections. Planning and Connections are names again (they were Day and Week and Accounts and calendars).
+  { was: "Settings › Today and Week", now: "Settings › Planning", match: /Settings › Today and Week\b/ },
+  { was: "Settings › Day and Week", now: "Settings › Planning", match: /Settings › Day and Week\b/ },
+  { was: "Settings › Backlog", now: "Settings › Planning › Fine tuning", match: /Settings › Backlog\b/ },
+  { was: "Settings › Notifications", now: "Settings › Reminders and notices", match: /Settings › Notifications\b/ },
+  { was: "Settings › Client chats", now: "Settings › Clients", match: /Settings › Client chats\b/ },
+  { was: "Settings › Accounts and calendars", now: "Settings › Connections", match: /Settings › Accounts and calendars\b/ },
+  { was: "Settings › DevOps", now: "Settings › Connections › DevOps", match: /Settings › DevOps(?! first)\b/ },
+  { was: "Settings › Activity", now: "Settings › Your data", match: /Settings › Activity\b/ },
 ];
 
 /** Renamed's rows: [was, now]. */
@@ -70,7 +76,7 @@ export const RENAMED_ROWS: readonly (readonly [string, string])[] = RETIRED.map(
 /**
  * "Today" is still a word: the day that is today, the Today button and pill, a time ("Today 4:07 PM") and the quick
  * date. Only these uses are allowed outside Renamed; anything else is the old tab name. (NM-1: Settings' section is
- * Day and Week now, so its allowance is gone.)
+ * Planning now, so its allowance is gone.)
  */
 export const TODAY_ALLOWED: readonly RegExp[] = [/\{b:Today\}/g, /Today \d{1,2}:\d\d/g, /\(Today, Tomorrow/g, /\bToday pill\b/g];
 

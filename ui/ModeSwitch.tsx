@@ -4,6 +4,7 @@ import { usePhone } from "./viewport.ts";
 import type { ModeStatus } from "../plan/modes.ts";
 import { MODE_NAMES, MODES, TAB_NAMES, type ModeName, type Tab } from "./nav.ts";
 import { Icon } from "./icons.tsx";
+import { CARD_MEETINGS } from "../plan/call-words.ts";
 
 const STATUS_WORDS = { done: "done", due: "due now" } as const;
 
@@ -67,4 +68,38 @@ export function CardsTimelineSwitch({ shown, onToggle }: { shown: boolean; onTog
       </button>
     </span>
   );
+}
+
+/**
+ * WK-6: Week's Meetings switch, beside Cards and Timeline: on, every card names its meetings (with a call's state on its
+ * meeting's row); off, the start, only the day in focus does. A real switch (role switch, its state said to a screen
+ * reader, Tab and Space or Enter). Remembered in this browser as one word; not a Setting, nothing sent to the server.
+ */
+export function MeetingsSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} className={`meetings-switch${on ? " on" : ""}`} onClick={onToggle} title={CARD_MEETINGS.switchHint}>
+      <span className="ms-track" aria-hidden="true">
+        <span className="ms-knob" />
+      </span>
+      <span className="ms-label">{CARD_MEETINGS.switchLabel}</span>
+    </button>
+  );
+}
+
+/** WK-6: the switch's one word in this browser ("all" while on); unreadable or anything else reads as off. */
+const MEETINGS_KEY = "focustime.week.meetings";
+export function rememberedMeetingsAll(): boolean {
+  try {
+    return localStorage.getItem(MEETINGS_KEY) === "all";
+  } catch {
+    return false;
+  }
+}
+export function rememberMeetingsAll(on: boolean) {
+  try {
+    if (on) localStorage.setItem(MEETINGS_KEY, "all");
+    else localStorage.removeItem(MEETINGS_KEY);
+  } catch {
+    /* a convenience only */
+  }
 }

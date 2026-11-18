@@ -1710,6 +1710,21 @@ From the IT review (TD-1):
 - **"Outlook calendar changes" and "Put new timeboxes on Outlook" are two sections apart.** The walkthrough looked for the switch in Accounts and calendars. SA-2 keeps both where they were and adds a link from the first to the second; should they sit together?
 - **A status line is shown whole.** A row whose help is a status (a check's answer, Feedback's setup line, Teams' connection, an action's result) isn't folded behind More about this, and the two-line limit doesn't count it (`status` on `Row`). Feedback's setup line takes three or four lines on a phone. Shorter status words, or fold them too?
 
+## SA-3: Settings regrouped: eleven sections, Reminders and notices in one place (Nov 18)
+
+- **Midday check-in with no lunch in the day.** The time is the afternoon's start plus the check-in reminder's minutes; a day with no lunch split has no afternoon start, so 12:00 is used (`checkinAt`, `plan/teams-rhythm.ts`). The reading that changes less: the old Teams default was 12:00.
+- **A week nudge emptied to turn it off** still means that day is off, as before SA-3 (the review found that reading it as the default changed its meaning). The row says "A day with no time is off; pick a time to turn it on." Thursday and Friday share one switch (`look_ahead`), so a per-day switch would need a new setting; not in this step.
+- **Fine tuning's "changed" count for At-risk blocks** compares with the starter values (90, 150, 90 minutes), not with a team default, since the risk rules have no team default.
+- **AI and assistant is unchanged.** It got no commit of its own in C or D; nothing in it moved.
+- **A client's page for someone who isn't a lead** shows nothing of the data platform or deployment items' editing; they read the values with "Set by your FocusTime admin". Should they see them at all?
+- **`conv.closed_shown_days` is read but has no screen** ("Closed conversations stay shown", hidden since NM-2, read by `config/org.ts` and `actions/inbox-actions.ts`). Left as is: no new setting in this step. Give it a row in Admin's Team defaults or stop reading it?
+- **Display's Show weekend "Always" is per browser.** It is Week's "Every weekend day", which keeps its value in the browser (WK-3); Show weekend itself is the person's setting. A row that is half per person and half per browser; the help says so.
+- **The admin's view of a level's "Plan up to"** is gone with `plan_share`. Admin's Team defaults › Planning and new people (by level) never showed it after SA-4; a stored value is ignored and still exported.
+- **Teams close out under 5 minutes.** The app's Close out may be 0 to 4 minutes before the day ends; Teams' own setting never went under 5, so a Teams close out goes 5 minutes before the end then (`TEAMS_CLOSEOUT_MIN`). The in-app reminder keeps the exact time.
+- **Search's short names.** The pointer check knows "Settings › AI" and "Settings › Reminders" as short for their sections; "Settings › Accounts" is no longer one.
+- **Teams' own times are kept, not deleted.** `teams_checkin_at` and `teams_closeout_minutes` stay in a person's stored settings and Export (no migration, nothing removed); they are parsed but no time comes from them. Drop them in a later release?
+- **From the walkthrough, left for their owners (words outside SA-3's moves):** Pocket's card says recordings are "offered as captures" and also that FocusTime "never reads a recording's title, words or audio" (PK-2's words: it offers that a recording exists, not its content; a clearer line is PK's call). Your data says Delete my data removes everything "after 30 days" while the button's help says "deletes everything FocusTime keeps for you" (it signs you out at once and removes for good after 30 days). DevOps' read list says a client's full name ("Atlas Freight") and the write list its short name ("Atlas"). The demo's lunch "12:30-12:30" is SA-2's open question.
+
 ## SA-4: Admin as its own place, a list of clients, a page for each (Nov 18)
 
 Readings taken where the brief left room (the one that changes less), for the product owner to confirm or change:
@@ -1745,6 +1760,18 @@ Readings taken where the brief left room (the one that changes less), for the pr
 - **A second read when Pocket gives no times.** The first Continue reads the recording, finds no times and keeps nothing; the second reads it again. Asking Pocket once and holding the transcript for the second press would keep a transcript in memory longer than needed.
 - **Starting a calendar call before the recording is read.** Continue keeps the call first (as Upload does), so a failed read leaves it waiting for a transcript, with the offer on its page.
 - **From the consultant walkthrough, left as they are.** "1 recording by other people was left out." is the prompt's own wording, though a consultant asked why their Pocket holds others' recordings; a recording's own setup suggests the client of the focus block it fell in; the Settings link lands on the Pocket card, not its top; the security review's note that the one-recorder rule keeps a colleague's recordings when a shared key lists only theirs (the prompt's decision; a real key on dev should show whether a personal key can list anyone else's).
+
+## WK-6: Meetings named on the day in focus, a call's state on its meeting, no call chips (Nov 18)
+
+- **A past day with the switch on.** The brief keeps a day before today on its quiet card; with the Meetings switch on it stays quiet too (the count only). Should the switch name a past day's meetings?
+- **Timeline view.** The switch is hidden in Timeline view (the rails already draw every meeting). A call that needs me whose meeting isn't titled on the rail shows as the count line under the card.
+- **A plain meeting row opens the meeting's menu** (as the rail's meetings do); only a row whose call needs me opens the call. Should a row whose call needs nothing open the call too?
+- **A call with no meeting shows only while it needs me** (a reviewed hand call disappears from the card). It stays in Calls.
+- **The demo's registered call** was registered by join link, so it has no series id; with no key on its occurrence it ties by time (exactly one meeting fits). Real calls registered by meeting gain their key on the next layout.
+- **Occurrences laid out before this step** have no key until the job lays them out again (it fills a missing key); until then they tie by time as before.
+- **The fallback by time** refuses a meeting that is another call's keyed meeting, and two meetings at the same time with no key. Is "exactly one fits" too strict for back-to-back series at the same slot?
+- **From the review passes, left as they are (outside WK-6 or a choice for later):** the Meetings switch changes nothing visible when no other day has meetings (its hover says what it does); calls that need me aren't in Day's urgent strip, so at 1280x720 they can sit below the fold; the live-call banner and the rows both say "Call"; with the panel open and another day in focus a narrow day squeezes the live-call banner (it breaks inside words, from before WK-6); which day is in focus shows only by its selected card; the heading reads "2h 45m · 45m free" (two times) rather than "2h 45m in meetings"; a meeting across 12:30 is named in both halves; Review this call is offered on a meeting that hasn't started; the phone's day glance keeps its call mark (the phone is unchanged in WK-6); `ui/DayCalendar.tsx` still draws the mark but nothing imports it.
+- **The calendar snapshot holds the iCalUId.** The per-person week snapshot (in memory hosted, a 0600 file in the developer loop) keeps the normalized events as they are, now with `key`, beside the titles it already held. Nothing else stores it.
 
 ## MC-4: Calls you can scan, hide and close (Nov 18)
 
