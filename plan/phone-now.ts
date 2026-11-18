@@ -114,7 +114,8 @@ export const PHONE_TEXT = {
   timesUp: "Time's up",
   openFocus: "Open the focus screen",
   next: "Next",
-  needsYouHead: "Needs you",
+  /** PH-2: the one thing's heading is the Inbox's own name (was "Needs you"). */
+  needsYouHead: "Inbox",
   of: (n: number) => `1 of ${n}`,
   why: { late: "Late", due_today: "Due today", from_chat: "From a chat", other: "Needs you" } as Record<OneWhy, string>,
   today: "Today",

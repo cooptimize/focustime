@@ -12,6 +12,7 @@ import { blockGone, blockLine, PHONE_TEXT as W, type NextLine, type OneThing } f
 export { nextLines, oneThing, PHONE_TEXT } from "../../plan/phone-now.ts";
 // PH-2: the phone's Week, a day at a glance and the Inbox one at a time, in this same file's chunk.
 export { PhoneWeek } from "./PhoneWeek.tsx";
+export { DaySections, DayGlanceHead } from "./PhoneDayGlance.tsx";
 import { clientColor, startClock } from "../labels.ts";
 import { formatDuration } from "../../week/format.ts";
 import { countdown, timerLeft } from "../NowStrip.tsx";

@@ -2316,6 +2316,7 @@ export function App() {
           onRetryRead={retryRead}
           showWeekend={showWeekend}
           onDay={(d) => goNav(navOf.todayOn(d && d !== data.planDay.date ? d : null))}
+          onWeek={(d) => goNav(navOf.week("board", mondayOf(d) === data.today.weekStart ? null : mondayOf(d)))}
           onTimebox={(d) => void timeboxDay(d)}
           timeboxAsk={timeboxAsk}
           timeline={dayTimeline}
