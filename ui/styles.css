@@ -7898,3 +7898,8 @@ a.sp-btn:hover { background: var(--wash-1); }
 .sp-link-item .sp-help { flex: 1; min-width: 0; }
 .sp-swatch-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
 .sp-chev { color: var(--text-faint); display: inline-flex; }
+.sp-control > :is(.sp-status, .sp-list-wrap, .sp-links, .sp-form, .sp-text-input.wide) { flex: 1 1 100%; min-width: 0; }
+.sp-below > :is(.sp-status, .sp-list-wrap) { width: 100%; }
+.sp-buttons > .sp-text-input.wide { flex: 1 1 260px; width: auto; }
+.sp-group > .sp-status { margin-bottom: 8px; }
+.sp-group > .sp-status + .sp-status { margin-top: 6px; }

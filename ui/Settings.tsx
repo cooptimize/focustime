@@ -2,7 +2,6 @@
 // account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
-import { FindItem } from "./settings/FindItem.tsx";
 import { AzureWriteLog, LoopSendsLog, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
@@ -10,14 +9,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
 import { MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
-import type { ClientWork } from "../week/types.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
 import { CalendarLinks } from "./settings/CalendarLinks.tsx";
 import { PocketRecorder } from "./settings/Pocket.tsx";
 import { POCKET_WORDS } from "../plan/pocket-words.ts";
-import { shortDate } from "./labels.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -42,6 +39,7 @@ import { FocusSection } from "./settings/sections/Focus.tsx";
 import { BacklogSection } from "./settings/sections/Backlog.tsx";
 import { ChatsSection } from "./settings/sections/Chats.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
+import { DevOpsSection } from "./settings/sections/DevOps.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -51,7 +49,6 @@ export type SettingsSectionId = string;
 /** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
 const ADMIN = "Set by your FocusTime admin";
 
-const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
 /** ST-1: `sid` is the setting's id in the registry (ui/settings/registry.ts): search and deep links land on it. */
 function Field({ label, children, hint, sid }: { label: string; children: ReactNode; hint?: ReactNode; sid?: string | undefined }) {
@@ -404,54 +401,6 @@ function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
   return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
 }
 
-/** ST-1: DevOps: each client's read status (from the week's fetch) and my own write access per client. */
-function DevOpsSection(p: BodyProps) {
-  const d = p.data;
-  const withDevOps = d.clients.filter((c) => c.devops);
-  return (
-    <div className="set-form">
-      <Group title="Reading" sid="devops-read" intro="FocusTime reads with the company PAT from Dataverse, only when fetching; it is never shown.">
-        {p.devops && p.devops.length > 0 ? (
-          <ul className="set-list sources">
-            {p.devops.map((c) => {
-              const ok = c.status === "ok";
-              const cls = ok ? (c.fromCache ? "cached" : "live") : "error";
-              return (
-                <li key={c.clientKey} className={`source ${cls}`}>
-                  <span className="dot" aria-hidden="true" />
-                  <strong>{c.clientName}</strong>
-                  <span className={`state ${cls}`}>{ok ? (c.fromCache ? "Cached" : "Live") : DEVOPS_STATE[c.status]}</span>
-                  <span className="muted">
-                    {ok ? `${c.items.length} ${c.items.length === 1 ? "item" : "items"} assigned` : c.message}
-                    {c.status === "auth_failed" || c.status === "not_set_up" || c.status === "identity_missing" ? ". Change it in Dataverse" : ""}
-                  </span>
-                  <span className="row-actions">
-                    <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
-                      {p.loading ? "Retrying…" : "Retry"}
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="muted">No DevOps yet. It comes from each followed client's record in Dataverse.</p>
-        )}
-      </Group>
-      <Group title="Write access" sid="devops-write" intro="Your own PAT per client, with Work Items (Read & write). FocusTime checks it is yours, keeps it sealed and never shows it again.">
-        {withDevOps.length === 0 ? (
-          <p className="muted">No client has DevOps set up in Dataverse.</p>
-        ) : (
-          withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)
-        )}
-      </Group>
-      <Group title="Find an item" sid="find-item" intro="Why an item isn't showing: whether FocusTime's last check of DevOps found it, the scope, and where it shows. It answers from what FocusTime already read; Refresh checks DevOps now.">
-        <FindItem clients={withDevOps.map((c) => ({ key: c.key, name: c.setting.name ?? c.dataverseName ?? c.key }))} />
-      </Group>
-    </div>
-  );
-}
-
 type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
 
 /** AI-0, ADM-1: Settings › AI: the team's AI values read-only (Admin › AI sets them), this month's spend, Test AI, what is sent, and the last 20 requests. */
@@ -624,85 +573,6 @@ function Connections(p: BodyProps) {
       </Group>
       <div data-setting="feedback"><FeedbackRow go={p.go} /></div>
     </div>
-  );
-}
-
-/**
- * Step 14: DevOps write access per client. A masked field for my own PAT; the server checks it belongs to my DevOps
- * identity there before keeping it in the keyring. The PAT is never shown again, and never sent anywhere else.
- */
-function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][number]; onDone: () => Promise<void> }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [expires, setExpires] = useState(c.write?.expires ?? "");
-  const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const w = c.write;
-  const daysLeft = w?.expires ? Temporal.PlainDate.from(w.expires).since(Temporal.Now.plainDateISO()).days : null;
-  return (
-    <form
-      className="set-row secret devops-write"
-      autoComplete="off"
-      aria-label={`DevOps write access for ${c.setting.name ?? c.key}`}
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const value = ref.current?.value ?? "";
-        const input: Record<string, unknown> = { clientKey: c.key };
-        if (value) input.pat = value;
-        if (expires !== (w?.expires ?? "")) input.expires = expires || null;
-        if (Object.keys(input).length === 1) return setStatus("Nothing to save");
-        setBusy(true);
-        setStatus(value ? "Checking whose PAT this is…" : null);
-        try {
-          await call("devops.set_write_pat", input);
-          setStatus(value ? "Checked and saved to the keyring" : "Expiry date saved");
-          await onDone();
-        } catch (err) {
-          setStatus(err instanceof Error ? err.message : "Not saved");
-        } finally {
-          if (ref.current) ref.current.value = "";
-          setBusy(false);
-        }
-      }}
-    >
-      <strong>DevOps write access for {c.setting.name ?? c.dataverseName ?? c.key}</strong>
-      <span className={`state ${w ? "live" : "muted"}`}>{w ? "On" : "Off, read-only"}</span>
-      {w ? (
-        <span className="muted">
-          as {w.name} ({w.email}) on {w.org}
-          {w.expires ? `, expires ${shortDate(w.expires)}` : ""}
-        </span>
-      ) : (
-        <span className="muted">Your own PAT with Work Items (Read &amp; write).</span>
-      )}
-      {w?.expires && daysLeft !== null && daysLeft < 14 && <span className="field-problem">Expires in {Math.max(0, daysLeft)} days</span>}
-      <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={w ? "New PAT to replace it" : "Paste your PAT"} aria-label={`DevOps write PAT for ${c.setting.name ?? c.key} (masked)`} />
-      <label className="set-inline">
-        <span className="muted">Expires (optional)</span>
-        <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="DevOps doesn't tell FocusTime the expiry; copy it from the PAT page" />
-      </label>
-      <button type="submit" className="mini primary" disabled={busy}>
-        {busy ? "Checking…" : "Check and save"}
-      </button>
-      {w && (
-        <button
-          type="button"
-          className="mini quiet"
-          disabled={busy}
-          onClick={async () => {
-            await call("devops.clear_write_pat", { clientKey: c.key }).catch(() => null);
-            setStatus("Turned off. The PAT was removed from the keyring");
-            await onDone();
-          }}
-        >
-          Turn off
-        </button>
-      )}
-      {status && (
-        <span className="muted" role="status">
-          {status}
-        </span>
-      )}
-    </form>
   );
 }
 
