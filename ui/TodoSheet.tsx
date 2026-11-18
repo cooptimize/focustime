@@ -11,7 +11,7 @@ import { planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { COPY_LINK, deployForm, leaveDeployment, timeStep } from "./menu.ts";
 import { HoldLine, PeopleLine } from "./DeployPeople.tsx";
-import { deleteQuestion, forPeopleText } from "../plan/shared-deploy.ts";
+import { deleteQuestion, forPeopleText, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { PlanCtx } from "./planview.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { PhoneSheet } from "./PhoneShell.tsx";
@@ -129,12 +129,12 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
         {/* DP-3: only me off it (it stays for the others), or Delete for everyone after a question that names them. */}
         {pick.shared && pick.shared.people.length > 1 && editable && menu.env && (
           <>
-            <button type="button" onClick={() => (onClose(), void leaveDeployment(menu.env!, pick))}>Take me off</button>
+            <button type="button" onClick={() => (onClose(), void leaveDeployment(menu.env!, pick))}>{PEOPLE_WORDS.leave}</button>
             <button type="button" className="danger" onClick={() => {
               if (!window.confirm(deleteQuestion(pick.shared!.people, pick.shared!.me))) return;
               onClose();
-              void menu.env!.runPlan("deploy.delete", { id: pick.id }).then((ok) => ok && note(`Deleted "${pick.title}" for all ${pick.shared!.people.length} on it`, async () => void (await menu.env!.runPlan("deploy.restore", { id: pick.id }))));
-            }}>Delete for everyone</button>
+              void menu.env!.runPlan("deploy.delete", { id: pick.id }).then((ok) => ok && note(PEOPLE_WORDS.deleted(pick.title, pick.shared!.people.length), async () => void (await menu.env!.runPlan("deploy.restore", { id: pick.id }))));
+            }}>{PEOPLE_WORDS.deleteAll}</button>
           </>
         )}
         {/* FN-1: the story card instead of DevOps; its link is copied, never opened. */}

@@ -6,6 +6,7 @@ import type { DayPromise } from "../plan/conversation-views.ts";
 import { afterHours, windowHalf } from "../plan/deploy.ts";
 import { deployItemAction, type DeployItemAction } from "./deploy-item-actions.ts";
 import { sharedDeployAction, type PeopleResolver, type SharedDeployAction } from "./shared-deploy-actions.ts";
+import { PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { pickNeed } from "../plan/types.ts";
 import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
@@ -1548,8 +1549,8 @@ export function deployPeopleOf(ctx: ActionContext): PeopleResolver {
     for (const raw of ids) {
       const e = lv.people.entry(raw);
       const c = e && !e.notCooptimizer ? picker.isCooptimizer(e.id) : null;
-      if (!e || !c) return { ok: false, error: "Only Cooptimizers can be on a deployment. Choose someone from the list" };
-      if (!e.signedIn) return { ok: false, error: `${c.name} hasn't signed in to FocusTime yet, so it can't show in their plan` };
+      if (!e || !c) return { ok: false, error: PEOPLE_WORDS.onlyCooptimizers };
+      if (!e.signedIn) return { ok: false, error: PEOPLE_WORDS.notOnFocusTime(c.name) };
       if (!out.some((p) => p.id === e.id)) out.push({ id: e.id, name: c.name });
     }
     return { ok: true, people: out };

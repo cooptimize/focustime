@@ -4,7 +4,7 @@
 // on. Only ever my own Outlook state; another person's is never shown.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import { addedByText, HOLD_WORDS, LEFT_HOLD, namesText, othersOn } from "../plan/shared-deploy.ts";
+import { addedByText, HOLD_WORDS, LEFT_HOLD, namesText, othersOn, PEOPLE_WORDS as W } from "../plan/shared-deploy.ts";
 import type { Pick } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { Icon } from "./icons.tsx";
@@ -19,7 +19,7 @@ export function PeopleChip({ pick }: { pick: Pick }) {
   const n = sh.people.length;
   const names = namesText(sh.people.map((p) => p.name));
   return (
-    <span className="deploy-people" title={`On it: ${names}`} aria-label={`${n} people on it: ${names}`}>
+    <span className="deploy-people" title={W.countTitle(names)} aria-label={W.countLabel(n, names)}>
       <Icon name="people" /> {n}
     </span>
   );
@@ -30,11 +30,11 @@ export function PeopleLine({ pick, me }: { pick: Pick; me: string | null }) {
   const sh = pick.shared;
   if (!sh) return null;
   const mine = me?.toLowerCase() ?? "";
-  const names = sh.people.map((p) => (p.id === mine ? "You" : p.name));
+  const names = sh.people.map((p) => (p.id === mine ? W.me : p.name));
   const by = addedByText(sh);
   return (
     <p className="deploy-people-line">
-      <Icon name="people" /> <span>{sh.people.length === 1 ? "Only you are on it" : `On it: ${namesText(names)}`}</span>
+      <Icon name="people" /> <span>{sh.people.length === 1 ? W.onlyMe : W.onIt(namesText(names))}</span>
       {by && <span className="muted"> · {by}</span>}
     </p>
   );
@@ -75,17 +75,17 @@ export function DeployPeopleField({ name, clientKey, initial, onChange }: { name
     <span className="deploy-people-field">
       <input type="hidden" name={name} value={JSON.stringify(chosen.map((c) => c.id))} />
       <span className="deploy-people-chips">
-        <span className="dp-chip me">You</span>
+        <span className="dp-chip me">{W.me}</span>
         {chosen.map((c) => (
           <span key={c.id} className="dp-chip">
             {c.name}
-            <button type="button" className="dp-remove" aria-label={`Take ${c.name} off it`} title={`Take ${c.name} off it`} onClick={() => setChosen((x) => x.filter((y) => y.id !== c.id))}>
+            <button type="button" className="dp-remove" aria-label={W.removeOne(c.name)} title={W.removeOne(c.name)} onClick={() => setChosen((x) => x.filter((y) => y.id !== c.id))}>
               <Icon name="close" />
             </button>
           </span>
         ))}
       </span>
-      <PersonPicker label="Add someone" placeholder="Add someone at Cooptimize" clientKey={clientKey} value={who} onChange={add} people={people} strict />
+      <PersonPicker label={W.addLabel} placeholder={W.addPlaceholder} clientKey={clientKey} value={who} onChange={add} people={people} strict />
     </span>
   );
 }
@@ -128,14 +128,14 @@ export function HoldLine({ pick, onLeave }: { pick: Pick; onLeave?: () => void }
         {hold.state === "moved_in_outlook" ? (
           <>
             {(pick.shared?.people.length ?? 1) > 1 && (
-              <button type="button" className="mini" disabled={busy} onClick={() => void run(() => direct("deploy.hold_follow"))}>Move the deployment for everyone</button>
+              <button type="button" className="mini" disabled={busy} onClick={() => void run(() => direct("deploy.hold_follow"))}>{W.moveForEveryone}</button>
             )}
-            <button type="button" className="mini" disabled={busy} onClick={() => void run(() => direct("deploy.hold_back"))}>Put my hold back</button>
+            <button type="button" className="mini" disabled={busy} onClick={() => void run(() => direct("deploy.hold_back"))}>{W.holdBack}</button>
           </>
         ) : hold.state === "deleted_in_outlook" ? (
           <>
             <button type="button" className="mini" disabled={busy} onClick={() => void run(() => holdAction(env, pick, true))}>Put it back</button>
-            {onLeave && (pick.shared?.people.length ?? 1) > 1 && <button type="button" className="mini quiet" disabled={busy} onClick={onLeave}>Take me off</button>}
+            {onLeave && (pick.shared?.people.length ?? 1) > 1 && <button type="button" className="mini quiet" disabled={busy} onClick={onLeave}>{W.takeMeOffInstead}</button>}
           </>
         ) : hold.state === "behind" && hold.uid ? (
           <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => (await env.sync(hold.uid!), null))}>{words.offer}</button>
@@ -157,8 +157,8 @@ export function LeftHolds({ holds }: { holds: WeekLoadData["leftHolds"] }) {
   if (!holds?.length || !env) return null;
   return (
     <span className="status-chip left-holds" role="status">
-      {holds.length === 1 ? `${LEFT_HOLD}: ${holds[0]!.title}` : `${holds.length} holds for deployments you're no longer on are still on your Outlook`}
-      <button type="button" className="mini" onClick={() => void env.syncMany(holds.map((h) => h.uid))}>{holds.length === 1 ? "Remove it" : "Remove them"}</button>
+      {holds.length === 1 ? `${LEFT_HOLD}: ${holds[0]!.title}` : W.leftHolds(holds.length)}
+      <button type="button" className="mini" onClick={() => void env.syncMany(holds.map((h) => h.uid))}>{W.removeLeft(holds.length)}</button>
     </span>
   );
 }

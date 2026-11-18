@@ -23,7 +23,7 @@ import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek, type Size } from "../plan/types.ts";
 import { DEPLOYMENT, deploymentTitle, windowText } from "../plan/deploy.ts";
 import { firstName } from "../plan/loop.ts";
-import { changeForLine, deleteQuestion, forPeopleText, HOLD_WORDS, namesText, othersOn } from "../plan/shared-deploy.ts";
+import { changeForLine, deleteQuestion, forPeopleText, HOLD_WORDS, namesText, othersOn, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
@@ -474,11 +474,11 @@ function deployPeopleItems(env: MenuEnv, p: Pick): MenuItem[] {
   const planned = p.status === "planned";
   const hold = HOLD_WORDS[sh.hold.state];
   return [
-    { id: "deploy-people", label: "People on it…", hint: others.length ? `${sh.people.length} on it` : "only you", action: "deploy.people", ...(planned ? {} : { disabled: "Only a planned deployment", expected: true }), next: () => deployForm(env, { pick: p }) },
+    { id: "deploy-people", label: PEOPLE_WORDS.menuPeople, hint: PEOPLE_WORDS.menuPeopleHint(sh.people.length), action: "deploy.people", ...(planned ? {} : { disabled: "Only a planned deployment", expected: true }), next: () => deployForm(env, { pick: p }) },
     ...(planned && hold.offer && env.holdAction && (sh.hold.state === "off" || sh.hold.state === "on" || sh.hold.state === "deleted_in_outlook") ? [{ id: "deploy-hold", label: hold.offer, hint: hold.line, action: "deploy.hold", run: () => env.holdAction!(p, sh.hold.state !== "on") } satisfies MenuItem] : []),
     ...(others.length ? [
-      { id: "deploy-leave", label: "Take me off", hint: `stays for ${namesText(others.map((o) => firstName(o.name)))}`, action: "deploy.leave", run: () => leaveDeployment(env, p) } satisfies MenuItem,
-      { id: "deploy-delete", label: "Delete for everyone…", danger: true, action: "deploy.delete", next: () => deleteStep(env, p) } satisfies MenuItem,
+      { id: "deploy-leave", label: PEOPLE_WORDS.leave, hint: PEOPLE_WORDS.leaveHint(namesText(others.map((o) => firstName(o.name)))), action: "deploy.leave", run: () => leaveDeployment(env, p) } satisfies MenuItem,
+      { id: "deploy-delete", label: PEOPLE_WORDS.deleteAllMenu, danger: true, action: "deploy.delete", next: () => deleteStep(env, p) } satisfies MenuItem,
     ] : []),
   ];
 }
@@ -487,7 +487,7 @@ function deployPeopleItems(env: MenuEnv, p: Pick): MenuItem[] {
 export function leaveDeployment(env: MenuEnv, p: Pick): Promise<boolean> {
   return (env.planAction ? env.planAction("deploy.leave", { id: p.id }) : env.runPlan("deploy.leave", { id: p.id }).then((ok) => (ok ? {} : null))).then((r) => {
     const was = (r as { was?: unknown } | null)?.was;
-    if (r && was && env.undoable) env.undoable(`Took you off "${p.title}"`, () => env.runPlan("deploy.rejoin", { id: p.id, was }));
+    if (r && was && env.undoable) env.undoable(PEOPLE_WORDS.left(p.title), () => env.runPlan("deploy.rejoin", { id: p.id, was }));
     return !!r;
   });
 }
@@ -498,8 +498,8 @@ function deleteStep(env: MenuEnv, p: Pick): MenuStep {
   return {
     title: deleteQuestion(sh.people, sh.me),
     items: [
-      { id: "deploy-delete-yes", label: "Delete it for everyone", danger: true, action: "deploy.delete", run: () => void env.runPlan("deploy.delete", { id: p.id }).then((ok) => ok && env.undoable?.(`Deleted "${p.title}" for all ${sh.people.length} on it`, () => env.runPlan("deploy.restore", { id: p.id }))) },
-      { id: "deploy-delete-no", label: "Keep it", run: () => undefined },
+      { id: "deploy-delete-yes", label: PEOPLE_WORDS.deleteYes, danger: true, action: "deploy.delete", run: () => void env.runPlan("deploy.delete", { id: p.id }).then((ok) => ok && env.undoable?.(PEOPLE_WORDS.deleted(p.title, sh.people.length), () => env.runPlan("deploy.restore", { id: p.id }))) },
+      { id: "deploy-delete-no", label: PEOPLE_WORDS.deleteNo, run: () => undefined },
     ],
   };
 }
@@ -574,7 +574,7 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
       ...(p?.itemId == null ? [{ key: "item", label: "DevOps item", type: "item", client: "client", ...(p ? { clientKey: p.clientKey } : {}), optional: true, value: link ? String(link.id) : "" } satisfies FormField] : []),
       { key: "items", label: "What's going", type: "checks", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), ...(p?.todoKind === "deployment" ? { existing: p.deployItems ?? null } : {}) } satisfies FormField,
       { key: "note", label: "Note", type: "textbox", value: p?.notes ?? "", placeholder: "Anything else that's going", optional: true },
-      { key: "people", label: "People", type: "people", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), people: others.map((o) => ({ id: o.id, name: o.name })) },
+      { key: "people", label: PEOPLE_WORDS.field, type: "people", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), people: others.map((o) => ({ id: o.id, name: o.name })) },
     ],
     save: (v) => {
       // The server refuses a bad window in the same words (windowProblem); the form stays open with the notice.

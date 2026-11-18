@@ -1,6 +1,6 @@
 # Integrations
 
-For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `2f4c0ea` on Nov 13, 2026.
+For engineers working on a source and IT reviewing what FocusTime asks for. Checked against `2f4c0ea` on Nov 13, 2026; shared deployments against the DP-3 branch on Nov 18, 2026.
 
 Every outside system is read only, except the named writes listed for each one below. Each source reports its own status (`ok`, `auth_required`, `unreachable`, `misconfigured` or `error`, `week/types.ts`). When one fails, people see that source's last good data with its age, or a plain message and the fix ("Connect Google Calendar", "Open Settings"), and the rest of FocusTime keeps working. Nothing stands in for a failed source: a real session never shows demo data.
 
@@ -35,7 +35,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 |---|---|---|---|---|
 | `openid`, `profile`, `email`, `offline_access` | OpenID | No | Tenant grant | Who signed in, and a refresh token |
 | `User.Read` | Graph | No | Tenant grant | Who you are; whether you are in the FocusTime Admins group |
-| `Calendars.ReadWrite` | Graph | No | Tenant grant | Reading your calendar; writing only FocusTime's own events, your own events with no other attendees, help invites and your replies to invitations |
+| `Calendars.ReadWrite` | Graph | No | Tenant grant | Reading your calendar; writing only FocusTime's own events (a shared deployment's hold among them, on your own calendar, never an invite), your own events with no other attendees, help invites and your replies to invitations |
 | `MailboxSettings.Read` | Graph | No | Tenant grant | Your working hours and time zone |
 | `Presence.ReadWrite` | Graph | No | Tenant grant | Setting your own Teams status while focus runs |
 | `Presence.Read.All` | Graph | No | Tenant grant | Teammates' availability, as a word |

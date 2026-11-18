@@ -1610,3 +1610,18 @@ From the IT review (TD-1):
 - **Focus under a tall card header.** Tab's scroll-padding takes a block header as one line (38 px at the Text size); a card header that wraps to two lines can cover focus by a few pixels. Measuring every header would need an observer per block.
 - **The call's mark in a 30-minute event on the Timeline** sits on the event's second line (Outlook) and covers it, as before DY-1; with the type it is wider.
 - **The Dentist band.** An event that crosses into the next block draws there as an unlabeled band once the first block folds; its name is still in the block's risk. Unchanged by DY-1, but more noticeable.
+
+## DP-3
+
+- **Only the client's people, or everyone?** The picker offers the client's people first and then everyone at Cooptimize, as the brief says. Whether a deployment should be limited to the client's people is open.
+- **The first hold: a press, or the timebox setting?** Only a person's own press puts it on Outlook; `outlook_default` doesn't apply. A person who always wants holds might want the setting to apply.
+- **A change reaching Outlook without FocusTime open.** A hold that fell behind waits for the person's next visit. Updating it in the background would be a background Outlook write, which this step rules out.
+- **Seeing each other's Outlook state.** Nobody sees whether a deployment is on anyone else's Outlook. A team might want "on 2 of 3 calendars".
+- **The assistant and the Teams bot** don't add people, show who is on a deployment, or offer Take me off. Their deployment proposals make a deployment for the person alone, as before.
+- **People who don't use FocusTime** can't be added (refused by name). They could be added once they sign in, or be told some other way.
+- **A to-do or a block with people?** Only a deployment takes people.
+- **Whom to add when someone hasn't signed in yet.** The picker lists them; the server refuses with their name. The picker doesn't mark them beforehand, because the picker's data doesn't say who uses FocusTime; Send to… marks it from its own list.
+- **Undo after someone else's change.** An Undo of a details save puts back what it was without checking the version, so it can undo someone else's later change too; a move's Undo checks (it is refused if anyone changed it since).
+- **A person removed while their form is open** gets "That deployment isn't on your plan any more" on Save.
+- **An import into a database where the deployment still exists** makes the person's own copy rather than putting them back on the shared one (an export holds no ids of shared rows).
+- **The demo's second person.** `demo.be` switches the whole demo session to the teammate (their own plan), not a second window. It is the smallest way to see both sides; a side-by-side view would need two demo sessions on one database.

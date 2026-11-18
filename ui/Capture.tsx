@@ -21,6 +21,7 @@ import { DateField } from "./DatePicker.tsx";
 import { TimeField } from "./TimeField.tsx";
 import { DeployChecks } from "./DeployItems.tsx";
 import { DeployPeopleField } from "./DeployPeople.tsx";
+import { PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { itemsSummary, type DeployItem } from "../plan/deploy-items.ts";
 import { Icon } from "./icons.tsx";
 
@@ -542,7 +543,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
               <DeployChecks key={depRound} clientKey={client} clientName={client ? clientName(client) : ""} onChange={setDepItems} {...(onOpenedDraft ? { onLeave: onOpenedDraft } : {})} />
               <label className="wide">Note <TextBox aria-label="Note" minRows={1} maxRows={4} maxLength={2000} value={depNote} placeholder="Anything else that's going" onChange={(e) => setDepNote(e.target.value)} onEnter={() => void submit()} /></label>
               <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
-              <div className="wide cap-people"><span>People</span><DeployPeopleField key={depRound} name="dep-people" clientKey={client} initial={depPeople} onChange={setDepPeople} /></div>
+              <div className="wide cap-people"><span>{PEOPLE_WORDS.field}</span><DeployPeopleField key={depRound} name="dep-people" clientKey={client} initial={depPeople} onChange={setDepPeople} /></div>
             </>
           )}
           {kind === "draft_feature" && (

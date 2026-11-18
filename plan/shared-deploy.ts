@@ -117,6 +117,36 @@ export function addedByText(view: Pick<SharedView, "addedBy" | "people">): strin
   return `Added by ${by ? firstName(by.name) : "a teammate"}`;
 }
 
+/** DP-3: every other word the screens say about people on a deployment (docs/design/wording.md, "DP-3 words"). */
+export const PEOPLE_WORDS = {
+  field: "People",
+  me: "You",
+  addPlaceholder: "Add someone at Cooptimize",
+  addLabel: "Add someone",
+  removeOne: (name: string) => `Take ${name} off it`,
+  onlyMe: "Only you are on it",
+  onIt: (names: string) => `On it: ${names}`,
+  countTitle: (names: string) => `On it: ${names}`,
+  countLabel: (n: number, names: string) => `${n} people on it: ${names}`,
+  menuPeople: "People on it…",
+  menuPeopleHint: (n: number) => (n > 1 ? `${n} on it` : "only you"),
+  leave: "Take me off",
+  leaveHint: (firstNames: string) => `stays for ${firstNames}`,
+  left: (title: string) => `Took you off "${title}"`,
+  deleteAll: "Delete for everyone",
+  deleteAllMenu: "Delete for everyone…",
+  deleteYes: "Delete it for everyone",
+  deleteNo: "Keep it",
+  deleted: (title: string, n: number) => `Deleted "${title}" for all ${n} on it`,
+  moveForEveryone: "Move the deployment for everyone",
+  holdBack: "Put my hold back",
+  takeMeOffInstead: "Take me off",
+  leftHolds: (n: number) => `${n} holds for deployments you're no longer on are still on your Outlook`,
+  removeLeft: (n: number) => (n === 1 ? "Remove it" : "Remove them"),
+  notOnFocusTime: (name: string) => `${name} hasn't signed in to FocusTime yet, so it can't show in their plan`,
+  onlyCooptimizers: "Only Cooptimizers can be on a deployment. Choose someone from the list",
+} as const;
+
 /** The words for my own Outlook state on a deployment, and its offer. Only ever my own. */
 export const HOLD_WORDS: Record<HoldState, { line: string; offer: string | null }> = {
   off: { line: "Not on your Outlook", offer: "Put on my Outlook" },

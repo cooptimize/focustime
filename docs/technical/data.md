@@ -1,13 +1,13 @@
 # Data
 
-For engineers adding a table and IT checking what FocusTime keeps. Checked against `2f4c0ea` on Nov 13, 2026.
+For engineers adding a table and IT checking what FocusTime keeps. Checked against `2f4c0ea` on Nov 13, 2026; shared deployments against the DP-3 branch on Nov 18, 2026.
 
 ## One database, two kinds of table
 
 FocusTime keeps everything in one database, its plan store: Azure SQL in dev and prod, a SQL Server container in the developer loop, and SQLite only for the demo (in memory) and tests. The database comes from the app's config (`[database]` or `FOCUSTIME_DB_*`), never from a person. Schema changes go only through `store/sql/migrate.ts`, and migrations only add (tables, columns, indexes; `store/migrations/additive.test.ts`).
 
 - **User tables** hold one person's rows. `user_id` (their Entra object id) is the first key column, and every statement on them goes through `store/scope.ts`, which adds the session's person; code never writes SQL that names `user_id`. The list is `USER_TABLES` in `store/scope.ts` (60 tables).
-- **App tables** belong to the app as a whole: sign-in, shared chat polling, the admin console, DevOps reads, team views. Who may read their rows is decided in their store module (for example the chat viewer rule in `store/conversation-store.ts`). The list is `APP_TABLES` in `store/isolation.test.ts` (65 tables).
+- **App tables** belong to the app as a whole: sign-in, shared chat polling, the admin console, DevOps reads, team views. Who may read their rows is decided in their store module (for example the chat viewer rule in `store/conversation-store.ts`). The list is `APP_TABLES` in `store/isolation.test.ts` (68 tables).
 
 `store/isolation.test.ts` fails when a table is neither, or when a user table can leak between two people.
 
@@ -47,7 +47,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | `assistant_turns`, `assistant_proposals` | User | Proposals | The assistant's history and its open proposals |
 | `teams_bot_chats`, `teams_bot_cards`, `teams_bot_seen`, `teams_rhythm` | User | No | Where a person's bot chat is, card state, duplicates seen, the daily rhythm |
 
-**A to-do's columns** (`picks`): its kind (`todo_kind`: null, or `deployment` with a window `window_start`, `window_end` and ticked deployment items `deploy_items`, a snapshot of keys and names), linked DevOps items (`links`, the same client's only), its note (`notes`), time spent and left (`spent_minutes`, `remaining_minutes`, null until the first check-in answer), what a Done took off the plan (`done_removed`, ids only, so unticking puts it back) and XS (`size_xs`, with `size` holding S so an older reader sees S; also on `week_features` and `draft_stories`). A timebox's check-in answer is `timeboxes.settled_as` (`done`, `partly` or `none`), with `settled_at` and `settle_before` (numbers and a status, for Undo).
+**A to-do's columns** (`picks`): its kind (`todo_kind`: null, or `deployment` with a window `window_start`, `window_end` and ticked deployment items `deploy_items`, a snapshot of keys and names; since DP-3 the shared deployment it stands for, `deployment_id`, whose window it mirrors in the person's own zone), linked DevOps items (`links`, the same client's only), its note (`notes`), time spent and left (`spent_minutes`, `remaining_minutes`, null until the first check-in answer), what a Done took off the plan (`done_removed`, ids only, so unticking puts it back) and XS (`size_xs`, with `size` holding S so an older reader sees S; also on `week_features` and `draft_stories`). A timebox's check-in answer is `timeboxes.settled_as` (`done`, `partly` or `none`), with `settled_at` and `settle_before` (numbers and a status, for Undo).
 
 **First-run setup's end** is a `markers` row of kind `setup_through`; Start over deletes it with the setup rows.
 
@@ -61,6 +61,7 @@ FocusTime keeps everything in one database, its plan store: Azure SQL in dev and
 | `devops_identities`, `devops_item_clients` | User | Yes | A person's checked DevOps identity per client (never the PAT), item to client links |
 | `devops_items`, `devops_changes`, `devops_poll` | App | Yes | Central DevOps reads, the change log, the poll's watermarks |
 | `devops_takes`, `devops_notes`, `devops_edit_notes` | App | No | Quiet notes to someone whose item was taken, changed, edited (once a day per item) or moved |
+| `deployments`, `deployment_people`, `deployment_notes` | App | Yes | DP-3: a deployment several people share, once: its client, title, window as two instants (`start_at`, `end_at`, UTC; the maker's zone kept for reference), note, links, ticked items, done, a `version` for saves made at once, the last move (for its Undo) and soft delete; who is on it (`person_id`, the name shown, who added them, when); and the four notes to the others (added, moved, removed, deleted). Read only through `store/deployments.ts`, which answers a person only about deployments they are on. Each person on it has their own to-do for it (`picks.deployment_id`), made and kept in step only by their own session; a hold on their own Outlook is their own timebox for it. No Outlook state is kept in these tables |
 | `standards_articles`, `standards_sync` | App | No | Cooptimize's standards: active articles with their path, front matter, SHA-256 and the repo commit; the last sync and its error |
 | `ai_requests`, `app_ai_requests`, `ai_app_spend`, `chat_ai_days` | User and app | Yes | AI request log (counts, cost, outcome; never text), spend per month and per chat per day |
 
@@ -123,6 +124,7 @@ What is deleted by age, for everyone at once (`RETENTION_RULES` in `store/retent
 | `teams_bot_cards` | a week after it settles or expires |
 | `teams_rhythm` | 30 days |
 | `devops_takes`, `devops_notes`, `devops_edit_notes` | 14 days |
+| `deployment_notes` | 14 days (a deployment and who is on it stay while anyone is on it; the last one off deletes it) |
 | `devops_changes` | 30 days |
 | `delivery_snapshots` | 120 days |
 | `meeting_transcripts` | 30 days; the quotes in `meeting_proposals` go at 30 days too, the proposals stay. An uploaded file itself is never kept, only its lines (PK-1: a Pocket export's too); `meeting_occurrences.transcript_kind` says "pocket" or "teams" and stays |
