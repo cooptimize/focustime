@@ -7787,7 +7787,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .adm-remove-row > td { padding-top: 0; }
 /* Tabs: a row of links, the open one underlined; on a phone the row scrolls sideways. */
 .adm-tabs { display: flex; flex-direction: column; gap: 12px; }
-.adm-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.adm-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .adm-tab { flex: none; padding: 7px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); text-decoration: none; font-size: var(--fs-3); font-weight: 500; white-space: nowrap; }
 .adm-tab:hover { color: var(--text); }
 .adm-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent, var(--text)); }

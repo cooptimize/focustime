@@ -276,7 +276,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
         await page.locator(".ps-body").getByText("Admin is only for FocusTime admins", { exact: false }).waitFor();
         expect(await page.locator(".adm-client-page, .adm-client-list, .adm-status-group").count(), hash).toBe(0);
       }
-      await openSettings(page);
+      await page.evaluate(() => (location.hash = "#/settings/you"));
       await settingsClient(page, "Adatum");
       const card = page.locator(".set-client-wrap").filter({ has: page.getByRole("heading", { name: "Adatum" }) });
       await card.waitFor();
