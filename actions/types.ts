@@ -160,8 +160,13 @@ export type SettingsData = {
   timebox: AppConfig["timebox"];
   /** Settings > Planning > Help sessions (step 13); domains as used (config, else my work email's). */
   collab: AppConfig["collab"];
-  /** Settings > Notifications (step 15.5). */
+  /** Settings > Reminders and notices (step 15.5, SA-3). */
   notify: AppConfig["notify"];
+  /**
+   * SA-3: the one-time note on the Midday check-in and Close out rows: what Teams used before it moved to the app's
+   * time, while that Teams message is on, the times were different and Got it wasn't pressed; null otherwise.
+   */
+  teamsNote?: import("../plan/teams-rhythm.ts").TeamsNote;
   /** Settings > You > My VM (step 15.5, Q87). */
   vm: { startWithoutAsking: boolean; autoStart: AutoStartSettings };
   /** Settings > Roadmap (step 17): state thresholds. */

@@ -438,7 +438,9 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       const v = t?.[toml];
       if (v === undefined) continue;
       if (typeof v !== "string" || (v !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v))) err(`plan.${toml}`, 'Must be a time like "14:00", or "" for off');
-      else planOpts[key] = v;
+      // SA-3: a reminder that is on always has a time: a stored "" (once "off") reads as the default. Its switch in
+      // Reminders and notices turns it off.
+      else planOpts[key] = v === "" ? DEFAULT_PLAN[key] : v;
     }
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");

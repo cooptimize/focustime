@@ -37,9 +37,6 @@ const TEAMS_ALSO: Record<TeamsKind, { label: string; group: string; part: boolea
   meetings: { label: `${TEAMS_KIND_LABEL.meetings} in Teams`, group: "Each kind of notice", part: true },
 };
 
-/** Until B: the old Notifications page's list (B draws Reminders and notices). */
-export const NOTIFY_SHOWN: readonly (readonly [NotifyKind, string])[] = [...REMINDER_KINDS, ...NOTICE_KINDS_SHOWN].map((k) => [k, "Kinds"] as const);
-
 export type SettingsGroupId = "you" | "work" | "connected" | "yours";
 
 /** SA-3: the rail's four groups, by what a person is trying to do. */

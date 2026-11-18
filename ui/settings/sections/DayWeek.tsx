@@ -2,9 +2,8 @@
 import { useState } from "react";
 import { COLLAB_LENGTHS } from "../../../config/schema.ts";
 import { hoursText, STORY_SIZES, UNSIZED_CHOICES, unsizedText } from "../../../plan/estimate.ts";
-import { nextRituals } from "../../../plan/rituals.ts";
 import { useAutoSave } from "../autosave.tsx";
-import { Button, Choice, Group, List, ListItem, Note, Page, Row, Select, Text, TeamDefault, Time, Value } from "../parts.tsx";
+import { Button, Choice, Group, List, ListItem, Note, Page, Row, Select, Text, TeamDefault, Value } from "../parts.tsx";
 import { NumRow, SwitchRow } from "./fields.tsx";
 import { firstLine, labelBy, markOf, rest } from "./shared.ts";
 import type { FormProps } from "./types.ts";
@@ -26,7 +25,7 @@ const say = (t: string) => ({ help: firstLine(t), more: rest(t) });
 
 /** ST-1: Day and Week's to-dos, rituals and nudges (the focus timer is under Focus, following under Clients). */
 function PlanningForm(p: FormProps) {
-  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "suggest", "reminderOffsetMinutes", "devopsOnDone", "progressOffer", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
+  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "suggest", "devopsOnDone", "progressOffer"] as const);
   const sizes = p.data.planning.sizes;
   return (
     <>
@@ -52,44 +51,7 @@ function PlanningForm(p: FormProps) {
         </Row>
         <SwitchRow a={a} k="progressOffer" id="progress-offer" {...say("After Close out: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.")} />
       </Group>
-      <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">
-        <NumRow a={a} k="reminderOffsetMinutes" id="plan-reminder" help="Only while today has no to-dos." max={240} />
-        <NumRow a={a} k="checkinReminderMinutes" id="checkin-reminder" help="On a day with to-dos. 0 is the end of lunch." max={120} />
-        <NumRow a={a} k="closeoutReminderMinutes" id="closeout-reminder" help="Only if Close out isn't done." max={120} />
-      </Group>
-      <Group>
-        <Row id="week-nudges" help="Empty turns a nudge off." />
-        {(
-          [
-            ["weekNudgeThu", "nudge-thu", "For next week."],
-            ["weekNudgeFri", "nudge-fri", "For next week, if nothing is on it yet."],
-            ["weekNudgeMon", "nudge-mon", "For this week, if nothing is on it yet."],
-          ] as const
-        ).map(([k, id, help]) => (
-          <Row key={k} id={id} help={help} mark={markOf(a, k)}>
-            <Time clearable value={a.v[k]} onChange={(t) => a.change(k, t)} />
-          </Row>
-        ))}
-      </Group>
-      <Group>
-        <AheadRituals />
-      </Group>
     </>
-  );
-}
-
-/** Step 17: when the Look-ahead rituals come next. Their switches are in Settings > Notifications. */
-function AheadRituals() {
-  const today = Temporal.Now.plainDateISO().toString();
-  const n = nextRituals(today);
-  const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  return (
-    <Row id="rituals" wide help="Both open Backlog › Gantt; switch them in Notifications.">
-      <List>
-        <ListItem>Look ahead 4 weeks: every other Thursday, once next week has work on it. Next: {day(n.lookAhead)}.</ListItem>
-        <ListItem>Direction review (8 to 12 weeks): the first Thursday of each month. Next: {day(n.direction)}.</ListItem>
-      </List>
-    </Row>
   );
 }
 

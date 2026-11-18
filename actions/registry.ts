@@ -226,6 +226,7 @@ export const ACTIONS = [
   { name: "flex.remove", title: "Remove a flex session", group: "Time", target: "flex", summary: "Only before it has ended" },
   { name: "settings.load", title: "Open Settings", group: "Settings", target: "none", shortcut: ",", summary: "Working hours, clients, connections, display and data" },
   { name: "settings.save", title: "Change a setting", group: "Settings", target: "none", summary: "Saved to the config file with a backup; applies at once" },
+  { name: "settings.note_seen", title: "Reminders and notices", group: "Settings", target: "none", summary: "Opens Reminders and notices (Got it on a Teams time note is pressed there)" },
   { name: "plan.reset", title: "Reset my plan", group: "Settings", target: "none", summary: "Empties to-dos, drafts, time entries and follow-ups after a backup; asks you to confirm" },
   { name: "timer.start", title: "Start focus timer", group: "Focus", target: "none", shortcut: "F", summary: "A plain timer, a break, or a to-do from its More menu; lengths in 5-minute steps" },
   { name: "timer.pause", title: "Pause the timer", group: "Focus", target: "none", summary: "Focused time so far is kept" },

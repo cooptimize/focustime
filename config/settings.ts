@@ -214,7 +214,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         values.push(["asks_through_focus", v.asksThroughFocus]);
       }
       if (v.teams !== undefined) {
-        // TB-2: Settings › Notifications › In Teams. parseConfig checks the times and the minutes.
+        // TB-2: Settings › Reminders and notices, In Teams. parseConfig checks the times and the minutes.
         const t = obj(v.teams, "notify.teams");
         only(t, ["brief", "checkin", "closeout", "nudges", "status", "meetings", "friday", "briefAt", "checkinAt", "closeoutMinutes"], "notify.teams");
         for (const k of ["brief", "checkin", "closeout", "nudges", "status", "meetings", "friday"] as const) {
@@ -223,8 +223,8 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
           values.push([`teams_${k}`, t[k] as boolean]);
         }
         if (t.briefAt !== undefined) values.push(["teams_brief_at", t.briefAt === null ? "start" : str(t.briefAt, "notify.teams_brief_at", 5)]);
-        if (t.checkinAt !== undefined) values.push(["teams_checkin_at", str(t.checkinAt, "notify.teams_checkin_at", 5)]);
-        if (t.closeoutMinutes !== undefined) values.push(["teams_closeout_minutes", int(t.closeoutMinutes, "notify.teams_closeout_minutes")]);
+        // SA-3: teams_checkin_at and teams_closeout_minutes stay as they are stored: never changed or deleted (the
+        // messages go at the app's own times). An older page that still sends them is let through, and they are dropped.
       }
       if (v.status !== undefined) {
         // SR-1: the status nudge's Sunday option and times. parseConfig checks the times.

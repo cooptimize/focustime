@@ -14,6 +14,19 @@ const facts = (over: Partial<GateFacts> = {}, kinds: Partial<Record<NotifyKind, 
   ...over,
 });
 
+// SA-3 test 5: the seven kinds that had no switch before SA-3 are on for someone who changes nothing, and each stops
+// when its own switch is off (the server sends each through the notifier, which asks the gate).
+describe("SA-3: the seven kinds with a switch now", () => {
+  const SEVEN: NotifyKind[] = ["story_taken", "sent_to_you", "send_answered", "send_cant_lead", "assigned", "dates_moved", "item_edited"];
+  it("each goes by default and stops with its switch off", () => {
+    for (const k of SEVEN) {
+      expect(DEFAULT_NOTIFY.kinds[k], k).toBe(true);
+      expect(gate(k, facts()), k).toBe("send");
+      expect(gate(k, facts({}, { [k]: false })), k).toBe("off");
+    }
+  });
+});
+
 describe("gate", () => {
   it("sends by default, and nothing whose switch is off", () => {
     expect(gate("plan_day", facts())).toBe("send");

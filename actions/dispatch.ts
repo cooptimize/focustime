@@ -2310,6 +2310,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "settings.load":
     case "settings.save":
+    case "settings.note_seen":
     case "data.export":
       return settingsAction(
         settingsCtx(raw, ctx),

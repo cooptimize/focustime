@@ -33,6 +33,35 @@ function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@exam
   return { c, path, run, stored, dir };
 }
 
+// SA-3 test 4: the one-time note on Midday check-in and Close out, from what Teams used to use.
+describe("SA-3: the Teams time note", () => {
+  const withPlan = (notify: string) => {
+    const t = setup(`${STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')}\n[notify]\nteams_messages = true\nteams_checkin = true\nteams_closeout = true\n${notify}`);
+    t.c.plan = createPlanStore({ path: ":memory:", now: () => Temporal.Now.zonedDateTimeISO("UTC") });
+    return t;
+  };
+  it("shows once for a person whose Teams times differed, and Got it hides it for good; the stored times stay", async () => {
+    const t = withPlan('teams_checkin_at = "12:30"\nteams_closeout_minutes = 30\n');
+    const note = async () => ((await t.run("settings.load", {})) as { data: SettingsData }).data.teamsNote;
+    expect(await note()).toMatchObject({ checkin: "12:30 PM", closeout: "30 minutes before your day ends" });
+    expect((await t.run("settings.note_seen", { kind: "checkin" })).ok).toBe(true);
+    expect(await note()).toMatchObject({ checkin: null, closeout: "30 minutes before your day ends" });
+    expect((await t.run("settings.note_seen", { kind: "closeout" })).ok).toBe(true);
+    expect(await note()).toEqual({ checkin: null, closeout: null });
+    expect((await t.run("settings.note_seen", { kind: "brief" })).ok).toBe(false);
+    // Saving the section with the old fields still in it never changes the stored Teams times.
+    expect((await t.run("settings.save", { section: "notify", values: { teams: { checkin: true, checkinAt: "15:00", closeoutMinutes: 90 } } })).ok).toBe(true);
+    const text = readFileSync(t.path, "utf8");
+    expect(text).toContain('teams_checkin_at = "12:30"');
+    expect(text).toContain("teams_closeout_minutes = 30");
+  });
+  it("never shows for a person whose Teams times matched the app's", async () => {
+    const t = withPlan('teams_checkin_at = "12:00"\nteams_closeout_minutes = 15\n');
+    const r = (await t.run("settings.load", {})) as { data: SettingsData };
+    expect(r.data.teamsNote).toEqual({ checkin: null, closeout: null });
+  });
+});
+
 describe("Settings (step 6b)", () => {
   it("loads every section without any secret", async () => {
     const t = setup();
@@ -101,7 +130,7 @@ describe("Settings (step 6b)", () => {
     expect(cfg.config.week.hours.timeZone).toBe("America/Chicago");
     expect(cfg.config.week.hours.weekdays.thu).toHaveLength(2);
     expect(cfg.config.week.standingBlocks).toEqual([{ day: "Tue", half: "PM", clientKey: "Internal", clientName: "Internal" }]);
-    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { XS: 30, S: 60, M: 120, L: 240, unsized: 120 }, minSizes: { XS: 15, S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", progressOffer: true, suggest: true, followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:30" });
+    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { XS: 30, S: 60, M: 120, L: 240, unsized: 120 }, minSizes: { XS: 15, S: 30, M: 60, L: 120 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, devopsOnDone: "ask", progressOffer: true, suggest: true, followGraceDays: 21, closeoutReminderMinutes: 30, checkinReminderMinutes: 10, weekNudgeThu: "15:30", weekNudgeFri: "09:00", weekNudgeMon: "08:30" }); // SA-3: "" reads as its default
     expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h", showTimelines: false, todayTimeline: false, todayTimelinePhone: false, foldEnded: true, reduceMotion: false, textSize: "default", showPersonal: true, showCatchUpDay: true, showWeekendDays: true, codeSqlGroup: "schema", inbox: DEFAULT_INBOX });
     expect(readFileSync(t.path, "utf8")).toContain("# my own note at the top");
   });

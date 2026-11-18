@@ -2,18 +2,36 @@
 // idle wake, the nudges and their one-an-hour limit, "capture:", close out in my words and takeovers.
 import { describe, expect, it } from "vitest";
 import { aWeekConfig, ZONE } from "../test/builders/index.ts";
-import { captureText, DEFAULT_TEAMS_RHYTHM, doneFromWords, nextRhythmWake, nudgeAllowed, nudgeOccasion, nudges, rhythmDue, rhythmTimes, takeoversOf, type RhythmFacts, type TeamsRhythm } from "./teams-rhythm.ts";
+import { captureText, DEFAULT_TEAMS_RHYTHM, doneFromWords, teamsTimeNotes, type AppTimes, nextRhythmWake, nudgeAllowed, nudgeOccasion, nudges, rhythmDue, rhythmTimes, takeoversOf, type RhythmFacts, type TeamsRhythm } from "./teams-rhythm.ts";
 
 const hours = aWeekConfig().hours; // 9:00 to 17:00, lunch 12:30, New York
 const ALL: TeamsRhythm = { ...DEFAULT_TEAMS_RHYTHM, brief: true, checkin: true, closeout: true, nudges: true };
+// SA-3: the app's own defaults (Midday check-in 0 minutes after lunch, Close out 15 before the day ends).
+const APP: AppTimes = { checkinMinutes: 0, closeoutMinutes: 15 };
 const at = (local: string) => Temporal.ZonedDateTime.from(`${local}[${ZONE}]`);
-const facts = (local: string, o: Partial<RhythmFacts> = {}): RhythmFacts => ({ now: at(local), model: hours, master: true, settings: ALL, quietNow: false, pto: false, focusRunning: false, ...o });
+const facts = (local: string, o: Partial<RhythmFacts> = {}): RhythmFacts => ({ now: at(local), model: hours, master: true, settings: ALL, app: APP, quietNow: false, pto: false, focusRunning: false, ...o });
 const kinds = (f: RhythmFacts, sent: string[] = []) => rhythmDue(f, new Set(sent)).due.map((d) => d.kind);
 
 describe("rhythm times (TB-2)", () => {
-  it("brief at the day's start until the morning ends, check-in at 12:00, close out 30 minutes before the day ends", () => {
-    expect(rhythmTimes(hours, "2026-11-02", ALL)).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "12:00", until: "15:00" }, closeout: { at: "16:30", until: "17:00" } });
-    expect(rhythmTimes(hours, "2026-11-02", { ...ALL, briefAt: "08:00", checkinAt: "13:15", closeoutMinutes: 60 })).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "13:15", until: "15:00" }, closeout: { at: "16:00", until: "17:00" } });
+  it("brief at the day's start until the morning ends; check-in and close out at the app's times (SA-3)", () => {
+    expect(rhythmTimes(hours, "2026-11-02", ALL, APP)).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "12:30", until: "15:00" }, closeout: { at: "16:45", until: "17:00" } });
+    expect(rhythmTimes(hours, "2026-11-02", ALL, { checkinMinutes: 30, closeoutMinutes: 60 })).toEqual({ brief: { at: "09:00", until: "12:30" }, checkin: { at: "13:00", until: "15:00" }, closeout: { at: "16:00", until: "17:00" } });
+  });
+  // SA-3 test 4: Teams' own stored times are never read, whether they differ from the app's or match them.
+  it("Teams' stored check-in and close out times change nothing", () => {
+    const differ = { ...ALL, checkinAt: "13:15", closeoutMinutes: 60 };
+    const match = { ...ALL, checkinAt: "12:30", closeoutMinutes: 15 };
+    expect(rhythmTimes(hours, "2026-11-02", differ, APP)).toEqual(rhythmTimes(hours, "2026-11-02", ALL, APP));
+    expect(rhythmTimes(hours, "2026-11-02", match, APP)).toEqual(rhythmTimes(hours, "2026-11-02", ALL, APP));
+    expect(kinds(facts("2026-11-02T12:35", { settings: differ }))).toEqual(["checkin"]);
+    expect(kinds(facts("2026-11-02T13:20", { settings: differ }), ["checkin:2026-11-02"])).toEqual([]);
+    expect(kinds(facts("2026-11-02T16:50", { settings: differ }))).toEqual(["closeout"]);
+  });
+  it("the one-time note shows only when that Teams message is on and its time was different", () => {
+    const d = "2026-11-02";
+    expect(teamsTimeNotes(hours, d, { ...ALL, checkinAt: "12:00", closeoutMinutes: 30 }, APP)).toEqual({ checkin: "12:00 PM", closeout: "30 minutes before your day ends" });
+    expect(teamsTimeNotes(hours, d, { ...ALL, checkinAt: "12:30", closeoutMinutes: 15 }, APP)).toEqual({ checkin: null, closeout: null });
+    expect(teamsTimeNotes(hours, d, { ...ALL, checkin: false, closeout: false, checkinAt: "12:00", closeoutMinutes: 30 }, APP)).toEqual({ checkin: null, closeout: null });
   });
   it("each kind is due once inside its window, with the master switch and its own on", () => {
     expect(kinds(facts("2026-11-02T08:59"))).toEqual([]);
@@ -46,10 +64,10 @@ describe("rhythm times (TB-2)", () => {
     expect(kinds(facts("2026-11-02T10:40"))).toEqual(["brief"]);
   });
   it("wakes the idle scheduler at the next time, in 5 minutes while one waits, nothing when off", () => {
-    const base = { model: hours, master: true, settings: { ...ALL, nudges: false } };
+    const base = { model: hours, master: true, settings: { ...ALL, nudges: false }, app: APP };
     expect(nextRhythmWake({ ...base, now: at("2026-11-02T07:00") }, new Set(), null)?.toString()).toBe(at("2026-11-02T09:00").toInstant().toString());
     expect(nextRhythmWake({ ...base, now: at("2026-11-02T09:10") }, new Set(), null)?.toString()).toBe(at("2026-11-02T09:15").toInstant().toString());
-    expect(nextRhythmWake({ ...base, now: at("2026-11-02T09:10") }, new Set(["brief:2026-11-02"]), null)?.toString()).toBe(at("2026-11-02T12:00").toInstant().toString());
+    expect(nextRhythmWake({ ...base, now: at("2026-11-02T09:10") }, new Set(["brief:2026-11-02"]), null)?.toString()).toBe(at("2026-11-02T12:30").toInstant().toString());
     // Friday evening: Monday's brief (Friday and the weekend are skipped).
     expect(nextRhythmWake({ ...base, now: at("2026-11-06T18:00") }, new Set(), null)?.toString()).toBe(at("2026-11-09T09:00").toInstant().toString());
     expect(nextRhythmWake({ ...base, master: false, now: at("2026-11-02T07:00") }, new Set(), null)).toBeNull();
