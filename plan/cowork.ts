@@ -1,7 +1,8 @@
 // CW-1: co-working calls. Cooptimizers start a Teams call in a client's delivery chat and stay on it while they work;
 // FocusTime makes that visible ("Call live in <chat> · started 9:12 · Join") and one click away ("Start a call in
 // <chat>"). Pure: the call events read off the chat messages the shared poll already fetches (D514), the live rule,
-// the links and the card a live call shows on. Nothing here sends, records or transcribes anything.
+// the links and the card a live call shows on. Nothing here sends, records or transcribes anything. MC-2c adds the
+// transcript-is-ready event (below), read off the same messages, and which chat calls Calls lists.
 //
 // Graph (v1.0, delegated Chat.Read, the same GET /chats/{id}/messages the poll makes): a system event message
 // (messageType systemEventMessage, or unknownFutureValue without the Prefer header) whose eventDetail is
@@ -78,8 +79,64 @@ export function callEventOf(v: unknown, chatId: string): CallEvent | null {
   };
 }
 
+// ---- MC-2c: the transcript-is-ready event ----
+//
+// Graph (v1.0, the same read): a system event message whose eventDetail is
+//   #microsoft.graph.callTranscriptEventMessageDetail { callId, callTranscriptICalUid, meetingOrganizer }
+// "generated when transcript is available for a call". Only the call id, the event's time and the transcript's id are
+// kept; never meetingOrganizer, a name, the body or anything else. Like the other two it is never a message.
+const TRANSCRIPT = "#microsoft.graph.calltranscripteventmessagedetail";
+const TRANSCRIPT_ID = /^[0-9A-Za-z_\-.:=+/#@]{1,1000}$/;
+
+/** MC-2c: a transcript-is-ready event of a chat: the call it is for, when Teams posted it, and the transcript's id. */
+export type TranscriptEvent = { chatId: string; callId: string; at: string; transcriptId: string | null };
+
+/**
+ * MC-2c: a chat message from Graph as a transcript-is-ready event, or null for anything else (a person's message, a
+ * call started or ended event, another system event, a deleted or malformed one). Recognised by its eventDetail type,
+ * whatever messageType says, as callEventOf recognises the other two. Returns the three things kept and nothing more.
+ */
+export function transcriptEventOf(v: unknown, chatId: string): TranscriptEvent | null {
+  const m = obj(v);
+  const d = obj(m?.eventDetail);
+  if (!m || !d || m.deletedDateTime) return null;
+  const type = typeof d["@odata.type"] === "string" ? (d["@odata.type"] as string).toLowerCase() : "";
+  if (type !== TRANSCRIPT) return null;
+  const callId = str(d.callId, 128);
+  const created = str(m.createdDateTime, 40);
+  if (!callId || !CALL_ID.test(callId) || !created || Number.isNaN(Date.parse(created)) || !CHAT_ID.test(chatId)) return null;
+  const tid = str(d.callTranscriptICalUid, 1000);
+  return { chatId, callId, at: new Date(created).toISOString(), transcriptId: tid && TRANSCRIPT_ID.test(tid) ? tid : null };
+}
+
+/** MC-2c: a chat call with a transcript event is kept this long from its start (Calls' window, OTHER_CALL_DAYS). */
+export const TRANSCRIPT_CALL_DAYS = 14;
+/** CW-1: a chat call without one goes this long after it started. */
+export const CALL_KEEP_HOURS = 48;
+
 /** One call as stored (chat_calls): started, and ended once its end event came. */
 export type StoredCall = { chatId: string; callId: string; startedAt: string | null; endedAt: string | null; startedBy: string | null; startedByTenant: string | null };
+/** MC-2c: a stored call whose transcript-is-ready event came: when, and the transcript's id it carried. */
+export type TranscriptCall = StoredCall & { clientKey: string; transcriptAt: string; transcriptId: string | null };
+
+/**
+ * MC-2c: whether a chat call is one for Calls: a transcript event came, it has a known start, it isn't live (CW-1 shows
+ * a live one), and it started inside Calls' window (from `fromIso`, up to now).
+ */
+export function chatCallListed(c: Pick<TranscriptCall, "startedAt" | "endedAt" | "transcriptAt">, now: string, fromIso: string): boolean {
+  if (!c.transcriptAt || !c.startedAt) return false;
+  if (isLive(c, now)) return false;
+  const t = Date.parse(c.startedAt);
+  return t >= Date.parse(fromIso) && t < Date.parse(now);
+}
+
+/** MC-2c: a chat call's key in Calls (and its kept call's event id, and its hide): the call's id only. */
+export const chatCallKey = (callId: string) => `chat:${callId}`;
+/** The call id of a chat call's key, or null for any other key. */
+export const callIdOfKey = (key: string): string | null => {
+  const m = /^chat:(.+)$/.exec(key);
+  return m && CALL_ID.test(m[1]!) ? m[1]! : null;
+};
 
 /** Whether a stored call is live now: started, not ended, and started less than STALE_CALL_HOURS ago. */
 export function isLive(c: Pick<StoredCall, "startedAt" | "endedAt">, now: string, staleHours = STALE_CALL_HOURS): boolean {

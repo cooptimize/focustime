@@ -16,6 +16,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { backoffUntil, matchAsk } from "../plan/asks.ts";
 import { matchPromise } from "../plan/asks-ai.ts";
+import { CALL_KEEP_HOURS, TRANSCRIPT_CALL_DAYS } from "../plan/cowork.ts";
 import { chatDue, followersOf, inUnion, membersStale, nextPollDue, POLL_MINUTES, tokenOrder, type ClientChat, type FocusUser, type TeamsMessage } from "../plan/requests.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
 import type { ChatMessagesClient, ChatsClient, GraphMessage } from "../sources/graph/chats.ts";
@@ -73,9 +74,8 @@ export type PollDeps = {
 };
 
 /** CW-1: a call's row is kept this long after it started (long past the live limit, then gone). */
-const CALL_KEEP_HOURS = 48;
 
-export type CycleResult = { /** CW-1: call started and ended events recorded. */ calls?: number; polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; /** CV-4: images sent to the AI, and images in AI batches that weren't (switch off, a limit, unreadable). */ imagesSent?: number; imagesNotSent?: number };
+export type CycleResult = { /** CW-1: call started and ended events recorded. */ calls?: number; /** MC-2c: transcript-is-ready events joined to their call, and dropped (no call held). */ transcripts?: number; transcriptsDropped?: number; polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; /** CV-4: images sent to the AI, and images in AI batches that weren't (switch off, a limit, unreadable). */ imagesSent?: number; imagesNotSent?: number };
 
 const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -158,6 +158,14 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         // CW-1: call started and ended events, kept apart from messages (never a conversation, chatter or AI input).
         const calls = (read.calls ?? []).filter((e) => later(e.at, c.readSince));
         if (calls.length) out.calls = (out.calls ?? 0) + (await deps.teams.saveCalls(c.chatId, calls));
+        // MC-2c: transcript-is-ready events join the call already held for them; one with no call held is only counted.
+        // Nothing here reads or fetches a transcript.
+        const ready = (read.transcripts ?? []).filter((e) => later(e.at, c.readSince));
+        if (ready.length) {
+          const t = await deps.teams.saveTranscriptEvents(c.chatId, ready);
+          out.transcripts = (out.transcripts ?? 0) + t.joined;
+          out.transcriptsDropped = (out.transcriptsDropped ?? 0) + t.dropped;
+        }
         if (deps.conversations) await conversationsStep(deps, deps.conversations, c, saved.added, { p, home, users, person, out, now });
         else await rules(deps, c, added, { p, uid, home, users, person, out });
         // CV-4: images are no longer fetched here; they are read when someone views one, or for the AI step above.
@@ -179,11 +187,13 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   });
 
   if (out.polled) await deps.teams.expire(instant.subtract({ hours: live.retentionDays * 24 }).toString()).catch(() => 0);
-  if (out.polled) await deps.teams.expireCalls(instant.subtract({ hours: CALL_KEEP_HOURS }).toString()).catch(() => 0);
+  if (out.polled) await deps.teams.expireCalls(instant.subtract({ hours: CALL_KEEP_HOURS }).toString(), instant.subtract({ hours: TRANSCRIPT_CALL_DAYS * 24 }).toString()).catch(() => 0);
   deps.log({ source: "plan", op: "requests_poll", kind: o.force ? "refresh" : "cycle", count: out.polled });
   deps.log({ source: "plan", op: "requests_poll_messages", count: out.messages });
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });
   if (out.calls) deps.log({ source: "plan", op: "requests_poll_calls", count: out.calls });
+  if (out.transcripts) deps.log({ source: "plan", op: "requests_poll_transcripts", count: out.transcripts });
+  if (out.transcriptsDropped) deps.log({ source: "plan", op: "requests_poll_transcripts", kind: "no_call", count: out.transcriptsDropped });
   for (const [name, count] of tokenUsers) deps.log({ source: "plan", op: "requests_poll_token", kind: name, count });
   if (out.failures) deps.log({ source: "plan", op: "requests_poll_failures", count: out.failures });
   // CV-4: images sent to the AI and described, or not sent (switch off, over a limit, unreadable): counts only.

@@ -20,7 +20,7 @@ import { MAX_IMAGE_BYTES } from "../../plan/image-strip.ts";
 import { bodyKind } from "../../plan/sanitize.ts";
 import { CHAT_ID, type ChatMember, type ChatSummary } from "../../plan/chats.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
-import { callEventOf, type CallEvent } from "../../plan/cowork.ts";
+import { callEventOf, transcriptEventOf, type CallEvent, type TranscriptEvent } from "../../plan/cowork.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 /** Pages of 50 chats read at most (500 chats, the most recently changed first as Graph lists them). */
@@ -39,7 +39,7 @@ export type ChatsClient = {
 /** AP-1: the newest messages of one chat (Chat.Read), oldest first, and the newest lastModifiedDateTime among them. */
 export type ChatMessagesClient = {
   /** CW-1: `calls` are the call started and ended events among the same pages (never messages; no request of their own). */
-  messagesSince: (chatId: string, clientKey: string, sinceIso: string) => Promise<{ messages: GraphMessage[]; newest: string | null; calls?: CallEvent[] }>;
+  messagesSince: (chatId: string, clientKey: string, sinceIso: string) => Promise<{ messages: GraphMessage[]; newest: string | null; calls?: CallEvent[]; /** MC-2c: transcript-is-ready events. */ transcripts?: TranscriptEvent[] }>;
   /** CV-2: one image pasted into a message, its raw bytes (at most MAX_IMAGE_BYTES; "too big" past that). */
   hostedContent?: (chatId: string, messageId: string, hostedId: string) => Promise<{ bytes: Uint8Array } | { tooBig: true }>;
 };
@@ -253,6 +253,7 @@ export function createChatsClient(d: ChatsDeps): ChatsClient & ChatMessagesClien
       const since = new Date(sinceIso).toISOString();
       const out: GraphMessage[] = [];
       const calls: CallEvent[] = [];
+      const transcripts: TranscriptEvent[] = [];
       let newest: string | null = null;
       let url: string | null = `${GRAPH}/chats/${encodeURIComponent(chatId)}/messages?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt ${since}`;
       for (let page = 0; url && page < MESSAGE_PAGES; page++) {
@@ -260,6 +261,13 @@ export function createChatsClient(d: ChatsDeps): ChatsClient & ChatMessagesClien
         for (const v of Array.isArray(json.value) ? json.value : []) {
           const lm = str(obj(v)?.lastModifiedDateTime, 40);
           if (lm && !Number.isNaN(Date.parse(lm)) && (!newest || Date.parse(lm) > Date.parse(newest))) newest = new Date(lm).toISOString();
+          // MC-2c: a transcript-is-ready event is kept apart (the call's id, its time, the transcript's id), recognised
+          // by its eventDetail whatever messageType says, and is never a message.
+          const ready = transcriptEventOf(v, chatId);
+          if (ready) {
+            transcripts.push(ready);
+            continue;
+          }
           const msg = messageOf(v, chatId, clientKey);
           if (msg) out.push(msg);
           // CW-1: a call started or ended event (a system message messageOf drops) is kept apart, never as a message.
@@ -271,7 +279,8 @@ export function createChatsClient(d: ChatsDeps): ChatsClient & ChatMessagesClien
       }
       out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       calls.sort((a, b) => a.at.localeCompare(b.at));
-      return { messages: out, newest, calls };
+      transcripts.sort((a, b) => a.at.localeCompare(b.at));
+      return { messages: out, newest, calls, transcripts };
     },
     async groupChats() {
       const out: ChatSummary[] = [];
