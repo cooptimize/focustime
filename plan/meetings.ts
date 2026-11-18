@@ -435,3 +435,14 @@ export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | 
   if (o.state === "failed") return `${day}: the AI step failed. A reviewer can Propose again`;
   return `${day}: ${o.state === "reviewed" ? "reviewed" : "ready to review"}`;
 }
+
+/**
+ * MC-2c: who may see a kept call's shared promises (the conversation store's membership): a chat call's reviewers, and
+ * its attendees only while they're in its chat now (`inChat`, the chat's cached members); any other call, `canView`.
+ */
+export async function sharesWith(s: MeetingSeries, userId: string, inChat: (chatId: string, userId: string) => Promise<boolean>): Promise<boolean> {
+  if (s.callKind !== "chat") return canView(s, userId);
+  if (canConfirm(s, userId)) return true;
+  const chatId = s.joinUrl.startsWith("chat:") ? s.joinUrl.slice(5) : null;
+  return !!chatId && canView(s, userId) && (await inChat(chatId, userId).catch(() => false));
+}

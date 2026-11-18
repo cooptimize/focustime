@@ -104,7 +104,7 @@ import { teamsAppLink } from "../plan/invite.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
 import { createMeetingsClient, type MeetingsClient } from "../sources/graph/meetings.ts";
-import { canView, graphReadable } from "../plan/meetings.ts";
+import { graphReadable, sharesWith } from "../plan/meetings.ts";
 import { createPressGrants } from "../actions/call-press.ts";
 import { createChatCallPresses } from "../actions/chat-call-press.ts";
 import { createAdhocCallsClient, type AdhocCallsClient } from "../sources/graph/adhoc-calls.ts";
@@ -479,7 +479,7 @@ const callAnswers = createExistsHold();
 const meetingUsers = async (): Promise<MeetingUser[]> => (await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => ({ id: u.id, name: u.displayName || u.upn, emails: [u.email, u.upn].filter((e): e is string => !!e) }));
 const conversations = createConversationStore(db, instantNow, teams, async (chatId, userId) => {
   const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
-  return !!s && !s.removedAt && canView(s, userId);
+  return !!s && !s.removedAt && (await sharesWith(s, userId, async (c, u) => (await teams.viewer(u).chats()).some((x) => x.chatId === c)));
 });
 // PV-1: Take one's notices to the previous assignee (an app table).
 const takes = takesStore(db, instantNow);

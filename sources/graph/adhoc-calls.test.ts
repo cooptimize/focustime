@@ -64,6 +64,11 @@ describe("MC-2c: the two requests, only under /me, and nothing else", () => {
       `${G}/subscriptions`,
       `https://graph.microsoft.com/beta/me/adhocCalls/${CALL}/transcripts/abc/content`,
       `${G}/me/onlineMeetings/x/transcripts`,
+      // Dot segments fetch would resolve away.
+      `${G}/me/adhocCalls/../transcripts?$select=id,createdDateTime,endDateTime`,
+      `${G}/me/adhocCalls/./transcripts?$select=id,createdDateTime,endDateTime`,
+      `${G}/me/adhocCalls/${CALL}/transcripts/../content`,
+      `${G}/me/adhocCalls/${CALL}/transcripts/%2e%2e/content`,
     ])
       expect(allowedAdhocRequest(url), url).toBe(false);
   });

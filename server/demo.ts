@@ -27,7 +27,7 @@ import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
-import { canView, graphReadable } from "../plan/meetings.ts";
+import { graphReadable, sharesWith } from "../plan/meetings.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
@@ -151,7 +151,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const meetingStore = createMeetingStore(shared, instant);
   const conversations = createConversationStore(shared, instant, teams, async (chatId, userId) => {
     const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
-    return !!s && !s.removedAt && canView(s, userId);
+    return !!s && !s.removedAt && (await sharesWith(s, userId, async (c, u) => (await teams.viewer(u).chats()).some((x) => x.chatId === c)));
   });
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.

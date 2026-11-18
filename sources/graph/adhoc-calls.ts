@@ -58,12 +58,22 @@ export type AdhocCallsDeps = {
   timeoutMs?: number;
 };
 
-const SEGMENT = /^[^/?#\s]{1,2000}$/;
+/** One path segment: no slash, query, fragment or space, and never "." or ".." (fetch would resolve them away). */
+const SEGMENT = /^(?!\.+$)[^/?#\s]{1,2000}$/;
+/** A transcript id from the list, before it is put in a path. */
+export const okSegment = (v: string) => SEGMENT.test(v);
 const enc = (s: string) => encodeURIComponent(s);
 /** The two requests this client may send, and nothing else. */
 export function allowedAdhocRequest(url: string): boolean {
   const base = `${GRAPH}/me/adhocCalls/`;
-  if (!url.startsWith(base)) return false;
+  // As fetch will send it: a URL that normalizing changes (dot segments, a backslash) is never one of the two.
+  let href: string;
+  try {
+    href = new URL(url).href;
+  } catch {
+    return false;
+  }
+  if (href !== url || !url.startsWith(base)) return false;
   const rest = url.slice(base.length);
   const list = /^([^/?#]+)\/transcripts\?\$select=id,createdDateTime,endDateTime$/.exec(rest);
   if (list) return SEGMENT.test(list[1]!);
@@ -126,7 +136,7 @@ export function createAdhocCallsClient(d: AdhocCallsDeps) {
         throw e;
       }
       const str = (v: unknown, max: number) => (typeof v === "string" && v.length && v.length <= max ? v : null);
-      const refs = (j?.value ?? []).map((t) => ({ id: str(t.id, 2000), createdAt: str(t.createdDateTime, 40), endAt: str(t.endDateTime, 40) })).filter((t): t is TranscriptRef => !!t.id && !!t.createdAt);
+      const refs = (j?.value ?? []).map((t) => ({ id: str(t.id, 2000), createdAt: str(t.createdDateTime, 40), endAt: str(t.endDateTime, 40) })).filter((t): t is TranscriptRef => !!t.id && okSegment(t.id) && !!t.createdAt);
       d.log({ source: "outlook", op: "adhoc_transcripts", count: refs.length });
       return refs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
