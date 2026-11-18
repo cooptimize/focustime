@@ -26,7 +26,8 @@ describe.skipIf(!CHROMIUM)("RQ-1: a call's rows ask what the process needs (brow
   it("Needed on a story row and a feature row; the questions at story level only; Create and break down", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await page.evaluate(() => (location.hash = "#/week"));
-    const mark = page.locator(".call-mark").first();
+    // WK-6: Monday's card counts the call that needs me; the count opens it.
+    const mark = page.locator(".calls-need").first();
     await mark.waitFor({ timeout: 30_000 });
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });

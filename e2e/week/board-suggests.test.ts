@@ -124,7 +124,8 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
     await day(page);
     const am = block(page, TUE, "AM");
     await expect.poll(() => sugIn(am).count()).toBe(1);
-    const freeOn = await am.locator(".card-agenda-fold").innerText();
+    // WK-6: Day's cards name their meetings; the free time is in the Meetings heading.
+    const freeOn = await am.locator(".cm-sum").innerText();
     await expect.poll(() => page.locator(".moment-card.moment-plan h2").innerText().catch(() => "")).toBe("Nothing on today yet");
     await expect.poll(() => page.locator(".moment-card.moment-plan p").innerText().catch(() => "")).toMatch(/^\d+ suggestions? (is|are) in your blocks\.$/);
     // What the reminder reads: today's to-dos in the store. None while suggestions only show.
@@ -134,7 +135,7 @@ describe.skipIf(!CHROMIUM)("SG-1: the board suggests (browser, demo)", () => {
     await page.locator(".day-bar .more-btn, .day-bar [aria-label='View options for Day']").first().click();
     await page.getByRole("menuitemcheckbox", { name: /Suggestions/ }).or(page.getByRole("menuitem", { name: /Suggestions/ })).first().click();
     await expect.poll(() => sugIn(am).count()).toBe(0);
-    expect(await am.locator(".card-agenda-fold").innerText()).toBe(freeOn);
+    expect(await am.locator(".cm-sum").innerText()).toBe(freeOn);
   }, T);
 
   it("an unfinished to-do from yesterday is the first suggestion in its client's next block, saying so on hover", async () => {

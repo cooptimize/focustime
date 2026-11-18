@@ -99,9 +99,15 @@ describe("DY-1: whether an Outlook event repeats", () => {
   });
 });
 
-describe("DY-1: the calendar read asks for type and nothing more", async () => {
+describe("DY-1, WK-6: the calendar read asks for type and the iCalUId, and nothing more", async () => {
   const { GRAPH_SELECT } = await import("./source.ts");
-  it("selects exactly the fields it did before, plus type", () => {
-    expect(GRAPH_SELECT.split(",")).toEqual(["subject", "start", "end", "isAllDay", "showAs", "responseStatus", "isCancelled", "isOrganizer", "attendees", "type"]);
+  it("selects exactly the fields it did before, plus type (DY-1) and iCalUId (WK-6)", () => {
+    expect(GRAPH_SELECT.split(",")).toEqual(["subject", "start", "end", "isAllDay", "showAs", "responseStatus", "isCancelled", "isOrganizer", "attendees", "type", "iCalUId"]);
+  });
+  it("keeps the iCalUId as the event's key, and nothing when there is none", () => {
+    const ev = (type: string): GraphEvent => ({ id: `x-${type}`, subject: "Standup", isAllDay: false, isCancelled: false, showAs: "busy", responseStatus: null, start: { dateTime: "2026-11-02T09:00:00", timeZone: NY }, end: { dateTime: "2026-11-02T09:15:00", timeZone: NY }, type });
+    const { events } = normalizeGraphEvents([{ ...ev("occurrence"), iCalUId: "040000008200E00074C5B7101A82E008-1" }, { ...ev("singleInstance"), id: "b" }], NY);
+    expect(events[0]!.key).toBe("040000008200E00074C5B7101A82E008-1");
+    expect(events[1]!.key).toBeUndefined();
   });
 });

@@ -15,6 +15,34 @@ export const MEETING_WORDS = {
   typeHint: "Both types are read the same way. The type is how the call is named on Day, Week and the call's page.",
 } as const;
 
+/**
+ * WK-6: a block's meetings where a card names them (the day in focus on Week, every card on Day, every card with the
+ * Meetings switch on) and where it folds them to one line, and the block panel's line. A call shows only while it needs
+ * me (callLabel's needsMe, the rule Calls counts by): its state on its meeting's row, a count on the folded line.
+ */
+export const CARD_MEETINGS = {
+  /** The small heading over the named meetings (drawn in capitals as a section label). */
+  heading: "Meetings",
+  /** At the end of the folded line, in the link colour. */
+  needsYou: (n: number) => (n === 1 ? "1 call needs you" : `${n} calls need you`),
+  /** A call's state under its meeting's name: its kind (the call's type, or "Call" for one that isn't registered), then its state. */
+  state: (c: { role: string; label: string }) => `${c.role} · ${c.label}`,
+  /** Past five rows. */
+  more: (n: number) => `${n} more`,
+  moreHint: "Open the block's agenda",
+  fold: "Fold the meetings to one line",
+  unfold: "Name the meetings",
+  /** A row with a call that needs me: what pressing it does. */
+  openCall: "Open in Calls",
+  /** A call with no meeting on my calendar, as its row says it to a screen reader. */
+  callOnly: "Call",
+  /** Week's header switch. */
+  switchLabel: "Meetings",
+  switchHint: "Name the meetings on every card. Off: only the day in focus names them",
+} as const;
+/** WK-6: rows a card names before "N more". */
+export const CARD_MEETING_ROWS = 5;
+
 /** The states a person can see, as the mark and the list say them. */
 export const CALL_STATE = {
   waiting: "Waiting for the transcript",

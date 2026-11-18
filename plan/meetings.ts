@@ -102,6 +102,11 @@ export type Occurrence = {
   reviewedBy: string | null;
   /** MC-1c: the job's last look for the transcript (Automatic): what it found and through whose sign-in. */
   lastRead: LastRead | null;
+  /**
+   * WK-6: the occurrence's iCalUId on the calendar (the same on every attendee's calendar), so its meeting is found by
+   * the meeting itself, wherever it moved; null when it isn't known (kept before WK-6, laid out from a pattern).
+   */
+  eventKey: string | null;
   updatedAt: string;
 };
 

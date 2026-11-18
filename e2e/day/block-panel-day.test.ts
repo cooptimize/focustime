@@ -121,7 +121,7 @@ describe.skipIf(!CHROMIUM)("WD-2: one panel, one Day (browser, demo)", () => {
     await expect(panel(page).locator(".bp-title h2").innerText()).resolves.toBe("Cooptimize · Mon AM");
     await expect(panel(page).locator(".bp-when").innerText()).resolves.toMatch(/^9:00–12:30 · /);
     await expect.poll(() => onBlock(page)).toContain(onIt);
-    await expect(panel(page).locator(".bp-meet-line").innerText()).resolves.toMatch(/^\s*3 meetings · 1h 30m$/);
+    await expect(panel(page).locator(".bp-meet-line").innerText()).resolves.toMatch(/^\s*3 meetings · 1h 30m · \d+h( \d+m)? free$/); // WK-6: the card's folded line
     // RS-1: folded is the Closed chevron (it was the "▸" character).
     expect(await panel(page).locator(".bp-meet-line svg[data-icon=closed]").count()).toBe(1);
     // Opened by a click, the cursor is not put in the box.

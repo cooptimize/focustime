@@ -88,7 +88,9 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     // plus "N more in Inbox"; before, it was the late promise and SW-1's one sends line.
     // 114: TY-1's Timeline switch. 118: DV-2's "DevOps checked just now" in the status bar. PS-1: words only a
     // screen reader gets (.sr-only, the promise a due chip is about) aren't on screen.
-    expect(await uiWords(page)).toBeLessThanOrEqual(118);
+    // 129: WK-6 names the meetings on the day in focus (Day's cards: the Meetings heading and a row per meeting in
+    // place of the one "3 meetings · 2h 45m · 45m free" line).
+    expect(await uiWords(page)).toBeLessThanOrEqual(129);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

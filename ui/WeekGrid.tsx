@@ -3,7 +3,7 @@
 // block and opens the block panel; there is no Plan chip and no planning column any more.
 import { DaySuggestLine } from "./Suggest.tsx";
 import { offWord, ptoLabel } from "../plan/days.ts";
-import { useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useCallback, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { liveOf, useCoworkData } from "./cowork.tsx";
 import { liveCallCard, type CoworkChatView } from "../plan/cowork.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -32,7 +32,7 @@ import { useDropTarget } from "./WeekStories.tsx";
 import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
 import { NowLine } from "./NowLine.tsx";
 import { railNowOf, type RailNow } from "./Timeline.tsx";
-import { LiveOnCard, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, WeekendColumnCtx, type PanelFocus, type Selection } from "./weekctx.ts";
+import { LiveOnCard, NamedMeetingsCtx, RowFormCtx, RulerCtx, TierCtx, TimelineCtx, WeekendColumnCtx, type PanelFocus, type Selection } from "./weekctx.ts";
 import { BlockCard, CardPick, CardPicks } from "./BlockCard.tsx";
 import { Icon } from "./icons.tsx";
 export type { PanelFocus, Selection } from "./weekctx.ts";
@@ -75,6 +75,8 @@ type Props = {
   focusAt?: { panel: IsoDate | null; chosen: IsoDate | null } | undefined;
   /** WK-5: a folded day's click or Enter: it becomes the day in focus. */
   onFoldOpen?: ((dayIndex: number) => void) | undefined;
+  /** WK-6: Week's Meetings switch: every card names its meetings (off: only the day in focus). */
+  meetingsAll?: boolean | undefined;
 };
 
 /**
@@ -107,7 +109,16 @@ export function WeekGrid(props: Props) {
     const at = liveCallCard(todayCards, k, props.now);
     if (at) liveOn.set(at, [...(liveOn.get(at) ?? []), ...liveOf(cowork, k)]);
   }
+  // WK-6: which days' cards name their meetings: on Day (one day) and the narrow layout (the day shown) every card; on
+  // Week the day in focus (WK-5's: the panel's day, a folded day opened, else today), or every day with the switch on.
+  const shownDays = props.shown ?? props.week.days.map(() => true);
+  const focusAt = focusIndex(props.week.days, shownDays, { panel: props.focusAt?.panel ?? null, chosen: props.focusAt?.chosen ?? null, today: props.today });
+  const focusDate = focusAt >= 0 ? props.week.days[focusAt]!.date : null;
+  const oneDay = props.only !== undefined || props.layout === "narrow";
+  const meetingsAll = !!props.meetingsAll;
+  const namedFor = useCallback((date: IsoDate) => oneDay || meetingsAll || date === focusDate, [oneDay, meetingsAll, focusDate]);
   return (
+    <NamedMeetingsCtx.Provider value={namedFor}>
     <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise, onLate: props.onLate, today: props.today, now: props.now, home, late }}>
         <LiveOnCard.Provider value={liveOn}>
           <TimelineCtx.Provider value={props.timeline ?? true}>
@@ -118,6 +129,7 @@ export function WeekGrid(props: Props) {
           </TimelineCtx.Provider>
         </LiveOnCard.Provider>
     </RulerCtx.Provider>
+    </NamedMeetingsCtx.Provider>
   );
 }
 

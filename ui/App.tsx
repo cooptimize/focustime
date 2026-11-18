@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
-import type { Half, IsoDate } from "../week/types.ts";
+import type { CalEvent, Half, IsoDate } from "../week/types.ts";
 import { SignInAgainButton } from "./Reopen.tsx";
 import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
 import { call, connectSource, disconnectSource, endSession, planAction, SessionError, setThemeAction, startDemo, takeOpenRequest, weekLoad } from "./api.ts";
@@ -52,7 +52,7 @@ import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
-import { ModeArea, ModeSwitch, CardsTimelineSwitch } from "./ModeSwitch.tsx";
+import { ModeArea, ModeSwitch, CardsTimelineSwitch, MeetingsSwitch, rememberedMeetingsAll, rememberMeetingsAll } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { sound } from "./sound.ts";
 import type { TimerView, WeekLoadData } from "../actions/types.ts";
@@ -656,6 +656,13 @@ export function App() {
     }
   }, []);
   const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
+  // WK-6: the week's meetings, once each, for the one tie of calls to their meetings (ui/meetings/calls.ts).
+  const weekEvents = useMemo(() => {
+    if (!data) return undefined;
+    const seen = new Map<string, CalEvent>();
+    for (const d of data.week.days) for (const p of [...d.am.events, ...d.pm.events, ...(d.eve?.events ?? []), ...d.evening]) if (!seen.has(p.event.id)) seen.set(p.event.id, p.event);
+    return [...seen.values()];
+  }, [data]);
   /**
    * WK-5: the days Week shows: the catch-up day and weekend days, each the person's own setting (Week's ⋯ and Settings
    * › Display, [ui] show_catch_up_day and show_weekend_days). The note's Show brings hidden days back until the person
@@ -739,6 +746,9 @@ export function App() {
     return () => window.removeEventListener(TICK_REMOVED_EVENT, on);
   }, []);
   const [showTimelines, setShowTimelines] = useState(false);
+  // WK-6: Week's Meetings switch (this browser's one word; not a Setting).
+  const [meetingsAll, setMeetingsAll] = useState(rememberedMeetingsAll);
+  const toggleMeetingsAll = () => setMeetingsAll((on) => (rememberMeetingsAll(!on), !on));
   const showTimelinesRef = useRef(showTimelines);
   showTimelinesRef.current = showTimelines;
   useEffect(() => {
@@ -2043,7 +2053,7 @@ export function App() {
   return (
     <>
     {opening}
-    <CallsProvider mine={mine}>
+    <CallsProvider mine={mine} events={weekEvents}>
     <SampleSources.Provider value={samples}>
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>
@@ -2518,6 +2528,8 @@ export function App() {
             </div>
             <ModeArea>
               <CardsTimelineSwitch shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />
+              {/* WK-6: with Cards (the Timeline view is unchanged), every card names its meetings or only the day in focus. */}
+              {!showTimelines && <MeetingsSwitch on={meetingsAll} onToggle={toggleMeetingsAll} />}
               {!past && (
                 <button type="button" className="add-work-head" data-tour="wk-add" aria-pressed={!!addAt} onClick={() => (addAt ? closePanel() : addWork())} title="Add to a block (A)">
                   <Icon name="add" /> Add
@@ -2556,6 +2568,7 @@ export function App() {
         }}
         panelOpen={!!shownPanel && !phone}
         timeline={showTimelines}
+        meetingsAll={meetingsAll}
         shown={shown}
         // WK-5: the panel's day is in focus; the panel shown only as a drag's drop area (dragAt) never moves the focus,
         // so the columns don't jump under the pointer mid-drag.

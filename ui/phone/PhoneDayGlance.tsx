@@ -19,7 +19,7 @@ import { useTodoSheet } from "../TodoSheet.tsx";
 import { clientColor, startClock } from "../labels.ts";
 import { formatDuration } from "../../week/format.ts";
 import { userZone } from "../../week/zone.ts";
-import { callForEvent, useCallMarks } from "../meetings/calls.ts";
+import { useCallOf } from "../meetings/calls.ts";
 import { MeetingMark, titleOpensCall } from "../meetings/CallMark.tsx";
 import { eveningBand } from "../../plan/evening.ts";
 import { Icon } from "../icons.tsx";
@@ -59,13 +59,13 @@ function TodoRows({ picks, data, tickable, label, onTick }: { picks: readonly Pi
 
 /** A section's meetings and events, in time order: time, title (a call's opens the call), and its mark. */
 function Meetings({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
-  const marks = useCallMarks();
+  const callOf = useCallOf();
   if (!slot.events.length) return null;
   const events = [...slot.events].sort((a, b) => ms(a.clipStart) - ms(b.clipStart));
   return (
     <ul className="dg-meetings" aria-label={label}>
       {events.map((p) => {
-        const call = callForEvent(marks, p.event);
+        const call = callOf(p.event);
         return (
           <li key={p.event.id} className={`dg-meeting${p.event.isPersonal ? " personal" : ""}${p.event.unavailable ? " unavailable" : ""}`}>
             <span className="dg-at">
