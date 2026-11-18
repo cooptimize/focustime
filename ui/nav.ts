@@ -322,7 +322,7 @@ export function placeToKeep(l: Loc): string {
  * MC-3: Calls' address. #/calls, and a call beside the list: #/calls/<occurrence>, its Transcript view and a line in it
  * (/transcript/<line>), its upload (/upload), the Proposals filter (/new, /promises, /comments) and a proposal in view
  * (/proposal/<id>), as MC-1d and MC-1e had them under #/meetings. The list's filter and client chip are its query
- * (?show=review&client=<key>; client "" is No client yet). Never a call's name, link, words or key: only its id.
+ * (the query keys show and client; client "" is No client yet). Never a call's name, link, words or key: only its id.
  */
 export function callsHash(o: CallsAt): string {
   const q = new URLSearchParams();

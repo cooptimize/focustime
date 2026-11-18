@@ -1,4 +1,4 @@
-// MC-2: Calls, review any call you were on, in demo mode. Calls has both lists; a call on my calendar that isn't
+// MC-2: Calls, review any call you were on, in demo mode. MC-3: one list by day, the call or its setup beside it; a call on my calendar that isn't
 // registered opens its setup with the client suggested; Get it from Teams reads it on the press and the same page
 // follows, with its summary above the proposals; a call whose organizer turned transcripts off says so and points to
 // the upload; Add a call keeps one for me and opens on its upload. Clock: Thursday Nov 5, 2026 10:00 AM ET.
@@ -14,27 +14,31 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("both lists; Review with a suggested client and Get it from Teams; a refusal in plain words; Add a call; Review this call from Day", async () => {
+  it("one list (MC-3); Review with a suggested client and Get it from Teams; a refusal in plain words; Add a call; Review this call from Day", async () => {
     const { page, errors } = await freshPage(h);
+    // MC-3: the address before Calls was a tab lands on it.
     await page.evaluate(() => (location.hash = "#/meetings"));
     await page.getByRole("heading", { name: "Calls", exact: true }).waitFor({ timeout: 30_000 });
-    await page.getByRole("heading", { name: "Client calls" }).waitFor();
-    await page.getByRole("heading", { name: "Your other calls" }).waitFor();
-    const others = page.locator(".mtg-other");
-    await others.first().waitFor({ timeout: 30_000 });
-    // The registered call isn't listed twice.
-    await expect(others.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(0);
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls(\/|$)/);
+    const rows = page.locator("[data-calls-list] [data-call-row]");
+    await rows.first().waitFor({ timeout: 30_000 });
+    // The registered call is listed once, with its weekly mark.
+    await expect(rows.filter({ hasText: "Northwind weekly status" }).count()).resolves.toBe(1);
+    await expect(rows.filter({ hasText: "Northwind weekly status" }).textContent()).resolves.toContain("Weekly");
 
-    // Review a call on my calendar: the setup suggests Northwind from its title; Teams is the source.
-    // The newest first: this Monday's (last Monday's is further down).
-    const model = others.filter({ hasText: "Northwind data model review" }).first();
-    await expect(model.locator(".mtg-state").textContent()).resolves.toBe("Not reviewed");
-    // Keyboard: the setup opens under its row; Esc closes it and puts focus back on the row's Review.
-    await model.getByRole("button", { name: /^Review/ }).click();
+    // Review a call on my calendar: the setup opens beside the list, suggests Northwind from its title; Teams is the
+    // source. The newest first: this Monday's (last Monday's is further down).
+    const model = rows.filter({ hasText: "Northwind data model review" }).first();
+    const listedOnce = await rows.filter({ hasText: "Northwind data model review" }).count();
+    await expect(model.textContent()).resolves.toContain("Not reviewed");
+    // Keyboard: Esc closes the setup and puts focus back on the row; nothing about the call is in the address.
+    await model.click();
     await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
+    await expect(model.getAttribute("aria-current")).resolves.toBe("true");
+    await page.getByRole("region", { name: /^Review Northwind data model review/ }).getByLabel("Which client is this call about?").focus();
     await page.keyboard.press("Escape");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label"))).toBe("Review: Northwind data model review");
-    await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/meetings");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-call-row"))).toBe(await model.getAttribute("data-call-row"));
+    await expect(page.evaluate(() => location.hash)).resolves.not.toContain("Northwind");
     await page.keyboard.press("Enter");
     const setup = page.getByRole("region", { name: /^Review Northwind data model review/ });
     await setup.waitFor();
@@ -47,27 +51,27 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     const summary = page.getByRole("region", { name: "What was said" });
     await summary.waitFor({ timeout: 30_000 });
     expect(await summary.locator("li").count()).toBeLessThanOrEqual(5);
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Calls" }).click();
-    await expect.poll(() => page.locator(".mtg-other").filter({ hasText: "Northwind data model review" }).getByRole("button", { name: /^Open/ }).count(), { timeout: 30_000 }).toBe(1);
+    // Its row is now the call FocusTime keeps, marked open, listed once.
+    await expect.poll(() => rows.filter({ hasText: "Northwind data model review" }).first().getAttribute("aria-current"), { timeout: 30_000 }).toBe("true");
+    await expect(rows.filter({ hasText: "Northwind data model review" }).count()).resolves.toBe(listedOnce);
 
     // A call whose organizer turned transcripts off: plain words, pointing to the upload.
-    const prop = page.locator(".mtg-other").filter({ hasText: "Proposal review with Jordan" }).first();
-    await prop.getByRole("button", { name: /^Review/ }).click();
+    await rows.filter({ hasText: "Proposal review with Jordan" }).first().click();
     const s2 = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
     await s2.getByLabel("Which client is this call about?").selectOption({ index: 1 });
     await s2.getByRole("button", { name: "Continue" }).click();
     await expect.poll(() => page.getByText(/didn't let your sign-in read this call's transcript/).count(), { timeout: 30_000 }).toBe(1);
     await page.getByText(/Upload|Choose a file/).first().waitFor();
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Calls" }).click();
 
-    // Add a call: only I see it; it opens on its upload.
+    // Add a call: only I see it; it opens on its upload, beside the list.
     await page.getByRole("button", { name: "Add a call" }).click();
     const add = page.getByRole("form", { name: "Add a call" });
     await add.getByLabel("Name", { exact: true }).fill("Teammates' huddle on the export");
     await add.getByLabel("About", { exact: true }).selectOption({ index: 1 });
     await add.getByRole("button", { name: /^Add/ }).click();
-    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 30_000 }).toMatch(/^#\/meetings\/\d+\/upload$/);
+    await expect.poll(() => page.evaluate(() => location.hash), { timeout: 30_000 }).toMatch(/^#\/calls\/\d+\/upload$/);
     await page.getByText("It's kept 30 days, for you only.", { exact: false }).waitFor({ timeout: 30_000 });
+    await expect.poll(() => rows.filter({ hasText: "Teammates' huddle on the export" }).count(), { timeout: 30_000 }).toBe(1);
 
     // A meeting's menu on Day leads with Review this call (the 14 days count from the app's day, not the browser's
     // clock), and it opens that call's setup on Calls.

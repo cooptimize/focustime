@@ -208,7 +208,6 @@ export const CALL_LIST = {
   clientCalls: (n: number) => `Client calls (${n})`,
   clientCallsSub: "Weekly calls a FocusTime admin registered. Their calls from the last 14 days are in the list above.",
   reviewers: (names: readonly string[]) => `Reviewed by ${names.join(", ")}`,
-  earlier: "Earlier",
   /** Calls older than the list's days that don't need me, until their transcript is dropped. */
   older: (n: number) => `Earlier calls (${n})`,
   olderSub: "Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call.",

@@ -41,8 +41,10 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await expect(mark.getAttribute("aria-label")).resolves.toBe("Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals");
     await mark.click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
-    // MC-1e: Back returns to Day, where the call was opened from.
-    await page.locator(".mtg-view").getByRole("button", { name: "Back to Day" }).click();
+    // MC-3: the call opens on the Calls tab, beside the list; the browser's Back returns to Day.
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+$/);
+    await expect(page.locator(".topbar .view-tab[aria-current]").textContent()).resolves.toContain("Calls");
+    await page.goBack();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/day/);
     await ev.waitFor({ timeout: 30_000 });
     await ev.locator(".ev-title").click();

@@ -84,4 +84,58 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-3 screenshots", () => {
       await page.close();
     }, T);
   }
+
+  // After only: every row state in one picture, the filter with client chips, the folds at the foot, the list hidden,
+  // and two steps on a narrow window.
+  it.skipIf(!AFTER)("Calls' states, filters, folds and two steps", async () => {
+    const h = await startDemo("chromium", {}, CLOCK);
+    started.push(h);
+    const { page } = await freshPage(h, { width: 1440, height: 900 });
+    await setTheme(page, "cooptimize-dark");
+    await go(page, LIST);
+    const rows = page.locator("[data-calls-list] [data-call-row]");
+    try {
+      // A call added by hand waits for its upload; a calendar call read from Teams has proposals; one Teams refused.
+      await page.getByRole("button", { name: "Add a call" }).click();
+      const add = page.getByRole("form", { name: "Add a call" });
+      await add.getByLabel("Name", { exact: true }).fill("Teammates' huddle on the export");
+      await add.getByLabel("About", { exact: true }).selectOption({ index: 1 });
+      await add.getByRole("button", { name: /^Add/ }).click();
+      await page.waitForTimeout(1500);
+      await rows.filter({ hasText: "Northwind data model review" }).first().click();
+      await page.getByRole("region", { name: /^Review Northwind data model review/ }).getByRole("button", { name: "Continue" }).click();
+      await page.getByText(/^Got the transcript from Teams/).waitFor({ timeout: 30_000 });
+      await rows.filter({ hasText: "Proposal review with Jordan" }).first().click();
+      const s2 = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
+      await s2.getByLabel("Which client is this call about?").selectOption({ index: 1 });
+      await s2.getByRole("button", { name: "Continue" }).click();
+      await page.getByText(/didn't let your sign-in read this call's transcript/).waitFor({ timeout: 30_000 });
+    } catch (e) {
+      missed.push(`states setup: ${String((e as Error).message).split("\n")[0]}`);
+    }
+    await shot(page, "1440-05-row-states", async () => (await rows.first().scrollIntoViewIfNeeded()));
+    await shot(page, "1440-06-filter-chips", async () => {
+      await page.locator('[data-calls-filter="review"]').click();
+      await page.locator(".calls-chips .ib4-chip").filter({ hasText: "Northwind" }).click();
+    });
+    await shot(page, "1440-07-folds", async () => {
+      await page.locator('[data-calls-filter="all"]').click();
+      await page.locator(".calls-chips .ib4-chip").first().click();
+      for (const id of ["client-calls", "older"]) await page.locator(`[data-calls-fold="${id}"] > button`).click().catch(() => undefined);
+      await page.locator("[data-calls-list] .calls-scroll").evaluate((el) => (el.scrollTop = el.scrollHeight));
+    });
+    await shot(page, "1440-08-list-hidden", async () => {
+      await page.locator("[data-calls-hide]").click();
+    });
+    await page.locator("[data-calls-show]").click().catch(() => undefined);
+    await page.close();
+    const narrow = (await freshPage(h, { width: 820, height: 900 })).page;
+    await setTheme(narrow, "cooptimize-dark");
+    await shot(narrow, "820-09-two-steps-list", () => go(narrow, LIST));
+    await shot(narrow, "820-10-two-steps-call", async () => {
+      await narrow.locator('[data-calls-list] [data-call-row][data-bucket="review"]').first().click();
+      await narrow.getByRole("heading", { name: /^Update / }).first().waitFor({ timeout: 30_000 });
+    });
+    await narrow.close();
+  }, T);
 });

@@ -7780,8 +7780,8 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-weekly { grid-column: 2; display: inline-flex; align-items: center; gap: 4px; }
 .calls-note { margin: 8px 0; font-size: var(--fs-2); }
 .calls-privacy { margin: 12px 0 0; font-size: var(--fs-1); }
-.calls-fold { margin-top: 8px; }
-.calls-fold > .link-btn { display: inline-flex; align-items: center; gap: 4px; }
+.calls-fold { display: grid; margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--border); }
+.calls-fold > .link-btn { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); min-height: var(--target, 28px); }
 .calls-fold-body { display: grid; gap: 6px; padding: 4px 0; }
 .calls-fold-body > p { margin: 0; font-size: var(--fs-2); }
 .calls-series { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

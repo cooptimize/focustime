@@ -117,23 +117,25 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const atRef = useRef(at);
   atRef.current = at;
   const go = useCallback((next: Partial<CallsAt> & { occurrence: number | null }, replace = false) => onGo({ ...(atRef.current.show ? { show: atRef.current.show } : {}), ...(atRef.current.client !== undefined ? { client: atRef.current.client } : {}), ...next }, { replace }), [onGo]);
+  // Review this call from a meeting's menu: taken as Calls opens, so nothing else opens first; its setup opens beside
+  // the list once my calendar's calls are read (matched by its start and end).
+  const [asked] = useState(takeReviewCall);
+  const wanted = useRef<{ start: string; end: string } | OtherCallView | null>(asked);
   useEffect(() => {
     void loadMine();
     let live = true;
     void loadOthers().then((d) => {
-      // Review this call from a meeting's menu: its setup opens beside the list (matched by its start and end).
-      const want = takeReviewCall();
-      if (!live || !want || !d) return;
-      const hit = d.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
-      if (hit?.occurrenceId) go({ occurrence: hit.occurrenceId });
+      const want = asked;
+      if (!live || !want) return;
+      const hit = d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
+      if (hit?.occurrenceId) (wanted.current = null), go({ occurrence: hit.occurrenceId });
       else if (hit) wanted.current = hit;
-      else setMissing(true);
+      else (wanted.current = null), setMissing(true);
     });
     return () => {
       live = false;
     };
-  }, [loadMine, loadOthers, go]);
-  const wanted = useRef<OtherCallView | null>(null);
+  }, [loadMine, loadOthers, go, asked]);
 
   // The list's filter and client: the address's, else the ones this browser remembered (written into the address).
   const show: ListFilter = at.show ?? "all";
@@ -157,7 +159,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   // Review this call from a meeting's menu: once the list has the row, its setup opens.
   useEffect(() => {
     const w = wanted.current;
-    if (!w) return;
+    if (!w || !("startAt" in w)) return;
     const r = rows.find((x) => x.other && x.other.startAt === w.startAt && x.other.endAt === w.endAt);
     if (r) {
       wanted.current = null;
@@ -169,8 +171,10 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   // Calls with no call named: the newest call that needs me opens, else the newest call (side by side only; when
   // narrow the list is the first step).
   const loaded = !!data && (!!others || !!othersErr);
+  // After I close a call or a setup myself (Cancel, Esc, Back), nothing else opens in its place.
+  const closedByMe = useRef(false);
   useEffect(() => {
-    if (at.occurrence || setupKey || adding || !loaded || narrow || wanted.current) return;
+    if (at.occurrence || setupKey || adding || !loaded || narrow || wanted.current || closedByMe.current) return;
     const first = firstToOpen(rows);
     if (first?.occurrenceId) go({ occurrence: first.occurrenceId }, true);
     else if (first?.other) setSetupKey(first.key);
@@ -197,6 +201,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const besideOpen = !!at.occurrence || !!setupRow || adding;
   const backToList = useCallback(() => {
     const k = openKeyRef.current;
+    closedByMe.current = true;
     setSetupKey(null);
     setAdding(false);
     go({ occurrence: null });
@@ -301,21 +306,21 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </p>
         )}
         {!data && !error ? (
-          <p className="muted calls-note" role="status">Loading…</p>
+          <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>
         ) : data && !rows.length && (others || othersErr) ? (
           <p className="muted calls-note">{CALL_LIST.none(others?.days ?? OTHER_CALL_DAYS)}</p>
         ) : rows.length > 0 && !shown.length ? (
           <p className="muted calls-note">{CALL_LIST.noneHere}</p>
         ) : null}
         {byDay(shown).map((d) => (
-          <section key={d.day} className="calls-day" aria-labelledby={`calls-day-${d.day}`}>
+          <section key={d.day} className="calls-day" aria-labelledby={`calls-day-${d.day}`} data-day={d.day}>
             <h2 id={`calls-day-${d.day}`} className="calls-day-head">{dayHeading(d.day, today)}</h2>
             <ul className="calls-rows">
               {d.rows.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} onOpen={() => openRow(r)} />)}
             </ul>
           </section>
         ))}
-        {data && !othersErr && !others && <p className="muted calls-note">Loading…</p>}
+        {data && !othersErr && !others && <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>}
         {older.length > 0 && (
           <Fold id="older" title={CALL_LIST.older(older.length)} sub={CALL_LIST.olderSub}>
             <ul className="calls-rows">
@@ -332,7 +337,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                 return (
                   <li key={m.id} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} data-series="">
                     <span className="calls-series-name"><span className="swatch" aria-hidden="true" />{m.name}</span>
-                    <span className="muted">{m.clientName} · {m.roleLabel} · {m.when} · {m.source === "automatic" ? "Transcript read after the call" : "Transcript uploaded by a reviewer"}</span>
+                    <span className="muted">{m.clientName} · {m.roleLabel} · {m.when} · {m.source === "automatic" ? CALL_LIST.readAfter : CALL_LIST.uploadedByReviewer}</span>
                     <span className="muted">{CALL_LIST.reviewers(m.reviewers.map((x) => x.name))}</span>
                     {!occs.length && <span className="muted">Nothing in the last five weeks.</span>}
                   </li>
@@ -384,7 +389,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
             <button type="button" className="mini primary" onClick={() => setAdding(true)}>{CALLS_TEXT.add}</button>
           </>
         ) : !loaded ? (
-          <p className="muted" role="status">Loading…</p>
+          <p className="muted" role="status">{CALL_LIST.loading}</p>
         ) : null}
       </div>
     );
@@ -413,7 +418,7 @@ const pick = (a: CallsAt): Omit<CallsAt, "occurrence" | "show" | "client"> => ({
 function Fold({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mtg-fold calls-fold" data-calls-fold={id}>
+    <div className="calls-fold" data-calls-fold={id}>
       <button type="button" className="link-btn" aria-expanded={open} aria-controls={`calls-fold-${id}`} onClick={() => setOpen((o) => !o)}>
         <Icon name={open ? "open" : "closed"} /> {title}
       </button>

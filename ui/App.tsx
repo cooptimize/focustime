@@ -2317,6 +2317,9 @@ export function App() {
           zone={userZone(data)}
           undoable={(text, undo) => setUndoToast({ id: Date.now(), text, undo })}
           onGo={(next, opts) => {
+            // A step Calls takes by itself (opening the newest call, remembering a filter) never lands after the person
+            // has left Calls: Back to Week a moment before it would otherwise put Calls back in Week's place.
+            if (opts?.replace && parseHash(location.hash)?.nav.tab !== "calls") return;
             const to = { nav: navOf.calls(next.occurrence, next), overlay: null };
             if (opts?.replace) history.replaceState(null, "", hashOf(to));
             go(to);
