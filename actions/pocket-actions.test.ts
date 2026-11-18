@@ -159,3 +159,15 @@ describe("PK-4: my Pocket addresses at rest", () => {
     expect(await t.secretsOf(ADA).has("pocket-addresses")).toBe(false);
   });
 });
+
+describe("PK-4: a new key forgets the list held for the old one", () => {
+  it("Check and save calls forget; a failed one doesn't", async () => {
+    const t = await setup();
+    let forgot = 0;
+    const port = pocketPort({ secrets: t.secretsOf(ADA), client: createPocketClient({ fetch: createDemoPocketFetch({ now: () => NOW }), log: () => {} }), now: () => NOW });
+    await pocketAction(port, "pocket.connect", { key: "pk_demo_wrong" }, { forget: () => forgot++ });
+    expect(forgot).toBe(0);
+    await pocketAction(port, "pocket.connect", { key: GOOD }, { forget: () => forgot++ });
+    expect(forgot).toBe(1);
+  });
+});

@@ -67,7 +67,7 @@ function fakePocket(reqs: string[], recs: Rec[] = RECS): typeof fetch {
   }) as typeof fetch;
 }
 
-async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[] } = {}) {
+async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]; theirsFail?: boolean } = {}) {
   const db = sqliteDb();
   await addUsers(db.conn, ME, MATE, OUTSIDER);
   let nowMs = Date.parse(NOW);
@@ -124,7 +124,7 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]
     canWrite: async () => true,
     log: (r) => logs.push(r),
     cooptimizer: async (uid) => uid !== OUTSIDER,
-    pocket: { port: ports[me]!, hold, myEmails: async () => users.find((u) => u.id === me)!.emails, theirEmails: async () => users.filter((u) => u.id !== me).flatMap((u) => u.emails) },
+    pocket: { port: ports[me]!, hold, myEmails: async () => users.find((u) => u.id === me)!.emails, theirEmails: async () => { if (o.theirsFail) throw new Error("accounts down"); return users.filter((u) => u.id !== me).flatMap((u) => u.emails); } },
   });
   const act = (me: string, action: MeetingAction, input: unknown) => meetingAction(ctxAs(me), action, input);
   const data = <T,>(r: Awaited<ReturnType<typeof act>>) => {
@@ -368,6 +368,16 @@ describe("PK-4: Set my Pocket address", () => {
     expect(r).toMatchObject({ ok: true, data: { connected: false, addresses: [] } });
     expect(t.secretsOf[ME]!.has("pocket-addresses")).toBe(false);
     expect(t.hold.list(ME)).toBeNull();
+  });
+});
+
+describe("PK-4: fails closed when FocusTime can't read who else it knows", () => {
+  it("keeps no one-recorder list and accepts no address", async () => {
+    const solo: Rec[] = [{ ...RECS[2]!, id: "s-1", by: "lee@cooptimize.example" }];
+    const t = await setup({ recs: solo, theirsFail: true });
+    expect(t.data<List>(await t.act(ME, "meeting.pocket_list", {})).recordings).toEqual([]);
+    expect(await t.act(ME, "meeting.pocket_address_add", { address: "lee@cooptimize.example" })).toMatchObject({ ok: false, status: 503, code: "pocket_address_unchecked" });
+    expect(await t.ports[ME]!.addresses.get()).toEqual([]);
   });
 });
 

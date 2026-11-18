@@ -130,6 +130,7 @@ export const POCKET_CALL_WORDS = {
   addressMax: "You can set up to 3 Pocket addresses. Remove one in Settings › Connections › Pocket recorder first",
   addressTries: "That's too many tries for now. Check Pocket again in a few minutes",
   addressGone: "Pocket address removed.",
+  addressUnchecked: "FocusTime couldn't check that address just now. Try again in a few minutes",
 } as const;
 
 /** PK-4: "Pocket checked at 10:42 AM." */

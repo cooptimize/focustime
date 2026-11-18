@@ -72,6 +72,8 @@ export async function pocketAction(port: PocketPort | undefined, action: PocketA
       }
       await port.key.set(value);
       await port.check.set({ at: new Date(at).toISOString(), recordings: count.recordings });
+      // PK-4: a list held for the old key is forgotten with it.
+      side.forget?.();
       return { ok: true, data: await view(port) };
     }
     case "pocket.check": {

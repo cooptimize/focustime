@@ -65,6 +65,11 @@ describe("PK-4: whose listed items are kept", () => {
     expect(a.asked).toEqual([]);
   });
 
+  it("fails closed: when who else FocusTime knows can't be read, one recorder isn't kept", () => {
+    expect(whoseKept(["me@personal.example", "me@personal.example"], { ...ME, others: false }, asking().isRecording)).toEqual(["address", "address"]);
+    expect(whoseKept(["you@example.com", "sam@example.com"], { ...ME, others: false }, asking().isRecording)).toEqual(["mine", "address"]);
+  });
+
   it("the case of Nov 18: sixteen under one unknown address and two with no recorder are all kept", () => {
     const rs = [...Array.from({ length: 16 }, () => "me@personal.example"), null, null];
     const why = whoseKept(rs, ME, asking().isRecording);

@@ -24,13 +24,15 @@ const norm = (e: string | null) => (e === null ? null : e.trim().toLowerCase() |
 
 /**
  * PK-4: whose listed items are kept, from their recorders' addresses and, only where the addresses don't settle it, by
- * asking `isRecording` (its length and when it was recorded) of an item nobody is known to own. An item under someone
- * else's address is never asked about: of it only the recorder's address is read. Replaced MC-2b's rule, a guess that
- * kept nothing when one item had no recorder (Nov 18).
+ * asking `isRecording` (its length and when it was recorded). Asked of an item under an address FocusTime doesn't know
+ * anyone by only while no recording is mine by address and no other FocusTime person is listed (it may be mine); never
+ * of an item under another FocusTime person's address, nor of anyone else's once mine are found by address. Replaced
+ * MC-2b's rule, a guess that kept nothing when one item had no recorder (Nov 18). With `others` false (who else
+ * FocusTime knows couldn't be read) the one-recorder rule doesn't apply: it fails closed.
  */
 export function whoseKept(
   recorders: readonly (string | null)[],
-  o: { mine: readonly string[]; /** Addresses other FocusTime people are known by. */ theirs?: readonly string[] },
+  o: { mine: readonly string[]; /** Addresses other FocusTime people are known by. */ theirs?: readonly string[]; /** False: `theirs` couldn't be read. */ others?: boolean },
   isRecording: (i: number) => boolean,
 ): ListedWhy[] {
   const me = new Set(o.mine.map(norm).filter((e): e is string => !!e));
@@ -49,7 +51,7 @@ export function whoseKept(
     return rs.map((r, i): ListedWhy => (known(r) ? (rec(i) ? "mine" : "not_recording") : r !== null ? "address" : someoneElse ? "no_recorder" : rec(i) ? "mine" : "not_recording"));
   }
   // 2. One recorder: every recording that names a recorder names the same one, and nobody FocusTime knows as someone else.
-  const theirsListed = rs.some((r) => r !== null && them.has(r));
+  const theirsListed = o.others === false || rs.some((r) => r !== null && them.has(r));
   const named = new Set<string>();
   if (!theirsListed) rs.forEach((r, i) => r !== null && !known(r) && rec(i) && named.add(r));
   if (!theirsListed && named.size <= 1) return rs.map((r, i): ListedWhy => (known(r) || !rec(i) ? "not_recording" : "one"));

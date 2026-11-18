@@ -129,10 +129,12 @@ export async function pocketList(ctx: PocketCallContext, me: string, zone: strin
   const w = otherCallsWindow(ctx.now(), zone);
   const utc = (iso: string) => iso.slice(0, 10);
   const mine = [...(await p.myEmails()), ...addresses];
-  const theirs = p.theirEmails ? await p.theirEmails().catch(() => []) : [];
+  // Fails closed: when who else FocusTime knows can't be read, no one-recorder list is kept as mine.
+  let others = true;
+  const theirs = p.theirEmails ? await p.theirEmails().catch(() => ((others = false), [] as string[])) : [];
   let list;
   try {
-    list = await p.port.client.listRecordings(keyOf(p.port), utc(w.fromIso), utc(Temporal.Instant.from(w.toIso).toString()), (rs, isRecording) => whoseKept(rs, { mine, theirs }, isRecording));
+    list = await p.port.client.listRecordings(keyOf(p.port), utc(w.fromIso), utc(Temporal.Instant.from(w.toIso).toString()), (rs, isRecording) => whoseKept(rs, { mine, theirs, others }, isRecording));
   } catch (e) {
     return failed(ctx, e, "meeting_pocket_list");
   }
@@ -171,7 +173,14 @@ export async function pocketAddressAdd(ctx: PocketCallContext, me: string, input
   const held = p.hold.list(me);
   if (!held) return bad(POCKET_CALL_WORDS.addressListFirst, 409, "pocket_get_again");
   if (held.refused >= POCKET_ADDRESS_TRIES) return bad(POCKET_CALL_WORDS.addressTries, 429, "pocket_address_tries");
-  const theirs = p.theirEmails ? (await p.theirEmails().catch(() => [])).map(lower) : [];
+  // Fails closed: when who else FocusTime knows can't be read, nothing is accepted (and no try is spent).
+  let theirs: string[];
+  try {
+    theirs = p.theirEmails ? (await p.theirEmails()).map(lower) : [];
+  } catch {
+    ctx.log({ source: "plan", op: "meeting_pocket_address", kind: "unchecked" });
+    return bad(POCKET_CALL_WORDS.addressUnchecked, 503, "pocket_address_unchecked");
+  }
   if (theirs.includes(a) || !held.recorders.has(recorderHash(a))) {
     p.hold.refuse(me);
     ctx.log({ source: "plan", op: "meeting_pocket_address", kind: "refused" });
