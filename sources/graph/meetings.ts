@@ -6,13 +6,17 @@
 //   users; outside addresses are only counted.
 // - Teams meetings (the "meetings" token: OnlineMeetings.Read and OnlineMeetingTranscript.Read.All, delegated, admin
 //   consented): the online meeting of a registered join link, its transcripts, and one transcript's text/vtt.
-//   Every one of these asks `allowed` first: only a registered, Automatic, home-tenant meeting passes; anything else
-//   throws MeetingRefused before a request is sent.
+//   Every one of these asks `allowed` first: only a registered, Automatic, home-tenant meeting passes, or (MC-2) the
+//   one call a Cooptimizer on it pressed Review on, during that press (actions/call-press.ts); anything else throws
+//   MeetingRefused before a request is sent.
+// - MC-2, my own calendar only: my calls of the last 14 days (`recentCalls`, for Calls › Your other calls, kept
+//   nowhere), and one of them again at the press (`callAt`), to check I'm still on it. Never a teammate's calendar.
 // Logs carry the op, status, count and duration: never a subject, a link, an id, a person or transcript text.
 import type { Logger } from "../../log/logger.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
 import { AuthFailure } from "../oauth/oauth.ts";
 import { joinKey } from "../../plan/meetings.ts";
+import type { CalendarMeeting } from "../../plan/calls.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 /** The longest transcript read (a few hours of meeting is well under this). */
@@ -20,7 +24,7 @@ export const MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024;
 
 export class MeetingRefused extends Error {
   constructor() {
-    super("FocusTime reads only registered meetings");
+    super("FocusTime reads only registered meetings, or the one call you asked it to review");
     this.name = "MeetingRefused";
   }
 }
@@ -44,7 +48,10 @@ export function graphFailureOf(e: unknown): GraphFailure | null {
 }
 
 export type MeetingGate = {
-  /** True only for a join link or online meeting id of a registered, Automatic, home-tenant series. */
+  /**
+   * True only for a join link or online meeting id of a registered, Automatic, home-tenant series, or (MC-2) of the one
+   * call this sign-in's person pressed Review on, while that press is open.
+   */
   allowed: (q: { joinUrl?: string; onlineMeetingId?: string }) => Promise<boolean>;
 };
 
@@ -100,6 +107,10 @@ type GraphSeries = {
   isOnlineMeeting?: unknown;
   seriesMasterId?: unknown;
   isCancelled?: unknown;
+  iCalUId?: unknown;
+  isAllDay?: unknown;
+  isOrganizer?: unknown;
+  responseStatus?: { response?: unknown } | null;
 };
 
 export function createMeetingsClient(d: MeetingsDeps) {
@@ -174,6 +185,43 @@ export function createMeetingsClient(d: MeetingsDeps) {
   }
 
   const SELECT = "id,subject,organizer,attendees,onlineMeeting,start,end,recurrence,isOnlineMeeting,type";
+  const CALL_SELECT = "iCalUId,subject,organizer,attendees,onlineMeeting,start,end,isAllDay,isCancelled,isOrganizer,responseStatus";
+
+  /** MC-2: one event of my calendar as a call (times in UTC), or null when Graph's answer lacks what it needs. */
+  function callOf(e: GraphSeries): CalendarMeeting | null {
+    const key = str(e.iCalUId, 2000);
+    const s = str(e.start?.dateTime, 40);
+    const f = str(e.end?.dateTime, 40);
+    if (!key || !s || !f) return null;
+    const at = (x: string) => Temporal.PlainDateTime.from(x.replace(/(\.\d{3})\d*$/, "$1")).toZonedDateTime("UTC").toInstant().toString();
+    const org = str(e.organizer?.emailAddress?.address, 320)?.toLowerCase() ?? null;
+    const mine = e.isOrganizer === true;
+    const addrs = new Set((e.attendees ?? []).map((a) => str(a.emailAddress?.address, 320)?.toLowerCase()).filter((x): x is string => !!x));
+    // When I organize it, Graph lists only the others as attendees; when someone else does, I'm one of the attendees
+    // and the organizer is another person.
+    if (org && !mine) addrs.add(org);
+    const others = mine ? addrs.size : Math.max(0, addrs.size - 1);
+    return {
+      key, subject: str(e.subject, 400)?.trim() || "(No title)", startAt: at(s), endAt: at(f), isAllDay: e.isAllDay === true, isCancelled: e.isCancelled === true, isOrganizer: mine,
+      response: str(e.responseStatus?.response, 40) ?? "none", others, joinUrl: str(e.onlineMeeting?.joinUrl, 4000), organizerEmail: org,
+      homeAttendees: [...new Set([...homeAttendees(e.attendees), ...(org && home(org) ? [org] : [])])],
+    };
+  }
+
+  async function calendarCalls(op: string, fromIso: string, toIso: string, pages: number): Promise<CalendarMeeting[]> {
+    const out: CalendarMeeting[] = [];
+    let url: string | null = `${GRAPH}/me/calendarView?startDateTime=${fromIso}&endDateTime=${toIso}&$select=${CALL_SELECT}&$top=100`;
+    for (let page = 0; url && page < pages; page++) {
+      const j = (await request(op, url, d.calendarToken, { prefer: 'outlook.timezone="UTC"' })) as { value?: GraphSeries[]; "@odata.nextLink"?: unknown } | null;
+      for (const e of j?.value ?? []) {
+        const c = callOf(e);
+        if (c) out.push(c);
+      }
+      const next = str(j?.["@odata.nextLink"], 4000);
+      url = next && next.startsWith(`${GRAPH}/`) ? next : null;
+    }
+    return out;
+  }
 
   return {
     /**
@@ -232,6 +280,19 @@ export function createMeetingsClient(d: MeetingsDeps) {
       return null;
     },
 
+    /**
+     * MC-2: every event on my own calendar between two instants (up to 500), as calls; which ones count as my other
+     * calls is plan/calls.ts's `isOtherCall`. Read when Calls opens, kept nowhere.
+     */
+    recentCalls: (fromIso: string, toIso: string) => calendarCalls("meetings_my_calls", fromIso, toIso, 5),
+
+    /** MC-2: one call on my own calendar again (by its iCalUId, around its own time), at the press; null when it isn't there. */
+    async callAt(key: string, startAt: string, endAt: string): Promise<CalendarMeeting | null> {
+      const from = Temporal.Instant.from(startAt).subtract({ minutes: 1 }).toString();
+      const to = Temporal.Instant.from(endAt).add({ minutes: 1 }).toString();
+      return (await calendarCalls("meetings_my_call", from, to, 2)).find((c) => c.key === key) ?? null;
+    },
+
     /** A series' occurrences between two instants on my calendar, with their Cooptimize attendees. */
     async instances(eventId: string, fromIso: string, toIso: string): Promise<SeriesInstance[]> {
       const j = (await request("meetings_instances", `${GRAPH}/me/events/${encodeURIComponent(eventId)}/instances?startDateTime=${fromIso}&endDateTime=${toIso}&$select=start,end,isCancelled,attendees&$top=50`, d.calendarToken, { prefer: 'outlook.timezone="UTC"' })) as { value?: GraphSeries[] } | null;
@@ -246,7 +307,10 @@ export function createMeetingsClient(d: MeetingsDeps) {
       return out;
     },
 
-    /** The online meeting of a registered join link (OnlineMeetings.Read); refused for anything not registered. */
+    /**
+     * The online meeting of a registered join link (OnlineMeetings.Read; MC-2: or of the call I pressed Review on, which
+     * Microsoft answers for an invited attendee too); refused for anything else.
+     */
     async onlineMeetingId(joinUrl: string): Promise<string | null> {
       if (!(await d.gate.allowed({ joinUrl }))) throw new MeetingRefused();
       const j = (await request("meetings_online", `${GRAPH}/me/onlineMeetings?$filter=${encodeURIComponent(`JoinWebUrl eq '${joinUrl.replace(/'/g, "''")}'`)}&$select=id`, d.meetingsToken)) as { value?: { id?: unknown }[] } | null;

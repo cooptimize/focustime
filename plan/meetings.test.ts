@@ -3,16 +3,27 @@ import { callBatch, commentLevelOk, newOnly, sameProposal, toReview, type Propos
 
 const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
-  weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: ["u1", "u2"], attendees: ["u3"], onlineMeetingId: null, createdAt: "2026-11-02T15:00:00Z", removedAt: null, ...p,
+  weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: ["u1", "u2"], attendees: ["u3"], onlineMeetingId: null, callKind: null, createdAt: "2026-11-02T15:00:00Z", removedAt: null, ...p,
 });
 const occ = (p: Partial<Occurrence> = {}): Occurrence => ({ id: 10, seriesId: 1, date: "2026-11-10", startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", state: "ready", nextCheckAt: null, checks: 0, transcriptFrom: "automatic", transcriptAt: null, aiOutcome: "done", dismissedBy: null, reviewedBy: null, updatedAt: "2026-11-10T16:00:00Z", lastRead: null, ...p });
 
 describe("meeting capture rules (MC-1)", () => {
-  it("reads only registered (not removed) or FocusTime-scheduled meetings", () => {
+  // MC-2 changed this test (the rule gained its third way, the product owner's decision): the two old ways are as
+  // they were; a press reads only when all three of its facts hold; a call's row is never "registered".
+  it("reads only registered (not removed), FocusTime-scheduled, or pressed-for meetings (MC-2)", () => {
     expect(mayRead({ registered: series() })).toBe(true);
     expect(mayRead({ registered: null, scheduledByFocusTime: true })).toBe(true);
     expect(mayRead({ registered: null })).toBe(false);
     expect(mayRead({ registered: series({ removedAt: "2026-11-05T00:00:00Z" }) })).toBe(false);
+    const press = { cooptimizer: true, onInvite: true, thisCall: true };
+    expect(mayRead({ registered: null, press })).toBe(true);
+    expect(mayRead({ registered: null, press: { ...press, cooptimizer: false } })).toBe(false);
+    expect(mayRead({ registered: null, press: { ...press, onInvite: false } })).toBe(false);
+    expect(mayRead({ registered: null, press: { ...press, thisCall: false } })).toBe(false);
+    expect(mayRead({ registered: null, press: null })).toBe(false);
+    // A call that isn't registered is kept as a row like a series: that row alone never makes it readable.
+    expect(mayRead({ registered: series({ callKind: "calendar", source: "upload" }) })).toBe(false);
+    expect(mayRead({ registered: series({ callKind: "hand", source: "upload" }) })).toBe(false);
   });
 
   it("detects Automatic for Cooptimize's tenant and Upload for anyone else's", () => {
@@ -25,6 +36,9 @@ describe("meeting capture rules (MC-1)", () => {
     expect(graphReadable(series())).toBe(true);
     expect(graphReadable(series({ organizer: "other", source: "automatic" }))).toBe(false);
     expect(graphReadable(series({ source: "upload" }))).toBe(false);
+    // MC-2: never a call that isn't registered, whatever its row says: the job doesn't read it in the background.
+    expect(graphReadable(series({ callKind: "calendar" }))).toBe(false);
+    expect(graphReadable(series({ callKind: "hand" }))).toBe(false);
   });
 
   it("lets reviewers confirm and attendees only view", () => {
