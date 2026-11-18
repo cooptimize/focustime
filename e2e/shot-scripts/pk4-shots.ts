@@ -88,6 +88,30 @@ describe.skipIf(!CHROMIUM || !DIR)("PK-4 screenshots", () => {
     await shot(page, "08-quiet-failure", () => page.locator("[data-pocket-failed]").waitFor({ timeout: 30_000 }));
   }, T);
 
+  it("Calls' layout: a Needs you state on one line, and a page that doesn't scroll (1280 by 720, Default and Larger)", async () => {
+    for (const size of ["default", "larger"] as const) {
+      const page = await start(DEMO_POCKET_KEYS.shared, 1280, 720);
+      await call(page, "ui.set_text_size", { size });
+      await page.reload();
+      await page.locator("[data-pocket-line]").waitFor({ state: "attached", timeout: 30_000 });
+      await page.waitForTimeout(2500);
+      // The demo has no call waiting for an upload at this clock: the state is put in the real row, as the test does.
+      await page.evaluate(() => {
+        const el = document.querySelector(".calls-row.need-row .calls-row-two > .calls-left, .calls-row.need-row .calls-row-two > .calls-state");
+        const s = document.createElement("span");
+        s.className = "calls-state needs";
+        s.textContent = "Upload the transcript";
+        el?.replaceWith(s);
+      });
+      await shot(page, `12-needs-you-upload-1280-${size}`, async () => undefined);
+      await shot(page, `13-list-scrolled-1280-${size}`, async () => {
+        await page.evaluate(() => document.querySelector(".calls-scroll")?.scrollTo(0, 99_999));
+        await page.mouse.move(200, 500);
+        await page.mouse.wheel(0, 2000);
+      });
+    }
+  }, T);
+
   it("the list at 390 by 844, and one in light", async () => {
     const phone = await start(DEMO_POCKET_KEYS.shared, 390, 844);
     await shot(phone, "09-phone-left-out", async () => undefined);
