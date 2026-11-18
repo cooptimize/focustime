@@ -19,6 +19,7 @@ Every outside request has a time limit, after which it gives up and counts as fa
 | Google Calendar | Every read | 20 seconds |
 | Calendar links | Each request, and each of at most 3 redirects | 15 seconds |
 | Azure Resource Manager | Every request | 20 seconds |
+| Pocket | The one list call, tried once | 15 seconds |
 | OpenAI | Standard requests and push-to-talk | 30 seconds (`[ai] timeout_ms`) |
 | OpenAI | Flex requests | 120 seconds a try, 90 seconds of tries before falling back to standard |
 | GitHub | Every read | 20 seconds |
@@ -172,6 +173,20 @@ The organization and project come from the client's Dataverse account, never fro
 **Unattended start.** With Start my VM before my day on, the production server starts your VM before your day without you there, with your own delegated access: your stored Microsoft sign-in is redeemed for an Azure Resource Manager token held in memory for that call. No app-only access and no Azure role for FocusTime. When that sign-in can't be used, the VM stays off and FocusTime says so once.
 
 **Failure.** The VM chip says Unknown, with the reason kind; Azure's own messages are never shown (they can name principals).
+
+## Pocket (a person's own recorder)
+
+PK-2. Pocket's public API (`https://public.heypocketai.com/api/v1`, [docs.heypocketai.com/docs/api](https://docs.heypocketai.com/docs/api), read Nov 17, 2026).
+
+**Auth.** The person's own Pocket API key (`pk_…`), sent as `Authorization: Bearer`. Each person pastes their own in Settings › Accounts and calendars › Pocket recorder; there is no admin step and no key for the whole organization. The key is sealed in their `user_secrets` (account `pocket-key`) and never shown again. Pocket's docs describe organization API keys with scopes (`recordings:read` among them) and no way to tell a personal key from an organization one, so FocusTime can't refuse an organization key; the guide asks for a key made for the person alone, reading recordings only.
+
+**Read.** One call and no other: `GET /api/v1/public/recordings` with `start_date`, `end_date`, `page=1` and `limit=1` (`sources/pocket/client.ts`). FocusTime reads only `pagination.total`, the number of recordings in the last 7 days (UTC dates, as Pocket reads them); the one listed recording in the answer (Pocket sends its title, transcript and summaries with it) is dropped unread. Every other method, host, path or parameter is refused before the key is read or the network is used (`allowedPocketCall`). Only on a person's press: Check and save, Check again. Never in the background, on a schedule or on page load, in any environment.
+
+**Written.** Nothing, ever: no upload, no change.
+
+**Failure.** One try with a time limit; each failure in its own words with what to do: the key wasn't accepted (401, 403), Pocket didn't answer (a timeout, the network, a 5xx), Pocket is busy (429, 503), or Pocket answered in a way FocusTime doesn't understand (any other answer, or one without a total). A failed Check and save saves nothing; a failed Check again keeps the connection.
+
+**Next.** Choosing a recording for a client call will add reading that one recording's transcript, on a reviewer's press, as MC-1's upload does today.
 
 ## The AI provider
 

@@ -6505,6 +6505,21 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
 .cal-link-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .cal-link-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .cal-colors { gap: 8px; }
+/* PK-2: Settings › Pocket recorder. */
+.pocket-steps-label { margin: 0 0 4px; font-weight: 600; }
+.pocket-steps { margin: 0 0 6px; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
+.pocket-steps li { overflow-wrap: anywhere; }
+.pocket-guide > .muted { margin: 0 0 10px; }
+.pocket-form { display: flex; flex-direction: column; gap: 6px; }
+.pocket-form > label { font-weight: 600; }
+.pocket-input { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pocket-input input { width: min(360px, 100%); min-width: 0; flex: 1 1 220px; max-width: 360px; }
+.pocket-state { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 6px; }
+.pocket-state .muted { overflow-wrap: anywhere; }
+.pocket-actions, .pocket-ask { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.pocket-replace { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pocket-replace > .muted:first-child { margin-top: 0; }
+.pocket .field-problem, .pocket [role="status"] { margin: 8px 0 0; }
 .cal-swatch { position: relative; display: inline-flex; }
 .cal-swatch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .cal-swatch span { width: 22px; height: 22px; border-radius: 50%; background: var(--cal); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); }

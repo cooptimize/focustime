@@ -1502,3 +1502,14 @@ From the IT review (TD-1):
   - *No "all done" state:* a reviewed call shows "0 to review · 3 done · 8 skipped"; the mark on Week says Reviewed.
   - *The bar is at the foot* (the spec's choice); the Backlog's is at the top under its filters.
   - *Propose again asks first* (a browser confirm) when open proposals would be replaced; a headless browser dismisses it, so the reviewer saw no change there.
+
+## PK-2
+
+- **Can a personal key be told from an organization key?** Pocket's docs describe only organization API keys and no field, prefix or "who am I" call that tells them apart. FocusTime can't refuse an organization key, so the guide asks for a key made for the person alone. If an organization key works, it may list everyone's recordings in that organization, not only the person's. Ask Pocket; until then the count may include others' recordings.
+- **Does Pocket offer a read-only key, and does a person (not an admin) make one?** The docs show scopes (`recordings:read`) on organization keys made by an organization admin, and don't say where a person makes a key in the app, or which scope the list call needs. The guide's first two steps are written from that; they need checking against the real Pocket app by someone who has it.
+- **Rate limits and the terms.** Not documented: a 429 is shown with no numbers or headers, and no terms page is linked from the API docs. FocusTime calls Pocket only on a press, once, so it is far from any likely limit; the terms for use by another app need reading before the next step reads transcripts.
+- **Should an admin be able to turn Pocket off for everyone?** Taken as no for now (the step says no admin step). A Rule in Admin could hide the section if Cooptimize decides recordings shouldn't come in this way.
+- **The list call sends a recording's words with it.** Asking for one item still brings that recording's title, transcript and summaries to the server, where they are dropped unread. A count-only call or a field filter would avoid it; the docs offer neither.
+- **What the next step needs (choosing a recording for a call):** one recording with its transcript (`GET /public/recordings/:id`, not read here); whether its lines carry times and speaker labels (the list shows `speakers` as a map of names and ids and `transcript` as one field, shape not documented); how a recording's start is given (`recording_at`, ISO text) and in which time zone (the docs say all dates are UTC); how long a call's audio and words stay in Pocket.
+- **Found by the review passes:** see the pull request; rows are added here when they are left for later.
+
