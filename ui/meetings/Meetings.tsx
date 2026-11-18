@@ -24,7 +24,7 @@ import type { CaptureClient } from "../../plan/capture.ts";
 import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CLOSE_TEXT, FETCH_WORDS, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
@@ -40,7 +40,7 @@ import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -720,6 +720,13 @@ const whenLine = (startAt: string, endAt: string, zone: string) => {
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
 };
 
+/** MC-2c: a chat call's day, start and end ("Tue, Nov 10 · 2:00 PM to 2:45 PM"), or its start alone when its end isn't known. */
+const chatWhen = (c: Pick<OtherCallView, "startAt" | "endAt" | "endKnown">, zone: string) => {
+  const d = new Date(c.startAt);
+  const t = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
+  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${t(c.startAt)}${c.endKnown ? ` to ${t(c.endAt)}` : ""}`;
+};
+
 /** The client choices: my clients (Internal among them), the suggestion first and marked; a call is about one client. */
 function ClientPick({ clients, value, suggested, onChange, id }: { clients: CaptureClient[]; value: string; suggested: string | null; onChange: (k: string) => void; id: string }) {
   const sorted = [...clients].sort((a, b) => Number(b.clientKey === suggested) - Number(a.clientKey === suggested) || a.clientName.localeCompare(b.clientName));
@@ -771,7 +778,8 @@ function CallSetup({ call: c, clients, suggested, zone, pocket = [], onCancel, o
   return (
     <div className="mtg-setup" role="region" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), e.stopPropagation(), onCancel())}>
       <h3 id="mtg-setup-title" tabIndex={-1}>{CALLS_TEXT.setupTitle(c.name)}</h3>
-      <p className="muted">{whenLine(c.startAt, c.endAt, zone)} · {CALLS_TEXT.people(c.people)}</p>
+      {/* MC-2c: a chat call: its start and end (or its start alone), where it came from, never a people count. */}
+      <p className="muted">{c.chat ? `${chatWhen(c, zone)} · ${CALL_LIST.fromChat}` : `${whenLine(c.startAt, c.endAt, zone)} · ${CALLS_TEXT.people(c.people)}`}</p>
       <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
       <ClientPick id="mtg-setup-client" clients={clients} value={client} suggested={suggested} onChange={setClient} />
       <p className="muted mtg-setup-hint">{CALLS_TEXT.setupClientHint}</p>
@@ -1210,6 +1218,7 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
         </div>
       ))}
       {r.pocket && <p className="mtg-pocket-note" role="note">{r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note}</p>}
+      {r.noSpeakers && <p className="mtg-pocket-note" role="note" data-no-speakers="">{CHAT_NO_SPEAKERS}</p>}
       {view !== "transcript" && r.summary && r.summary.length > 0 && (
         // MC-2: what was discussed and decided, above the proposals, on every call.
         <section className="mtg-summary" aria-labelledby="mtg-summary-head">
@@ -1218,9 +1227,9 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
         </section>
       )}
       {view !== "transcript" && <p className="muted mtg-intro">
-        {r.transcript ? (r.pocket ? `From the transcript (${r.transcript.lines} lines). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
+        {r.transcript ? (r.pocket || r.noSpeakers ? `From the transcript (${r.transcript.lines} ${r.transcript.lines === 1 ? "line" : "lines"}). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
         {editable && r.proposals.length === 0 ? "" : editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
-        {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : CALLS_TEXT.whoSees}` : ""}
+        {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : m.call === "chat" ? CALLS_TEXT.whoSeesChat : CALLS_TEXT.whoSees}` : ""}
       </p>}
       {editable && !r.transcript && pocketRecs.length > 0 && <PocketBringBox key={pocketRecs.map((x) => x.id).join()} recs={pocketRecs} occ={o} series={m} zone={zone} onDone={load} />}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
@@ -1706,7 +1715,13 @@ function UploadBox({ series, occ, onDone, dragging = false, pocketOffered = fals
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+        {series.call === "chat" ? (
+          `${CALLS_TEXT.uploadChat}${pocketOffered ? "" : ` ${POCKET_TEXT.pocketHow}`}`
+        ) : (
+          <>
+            {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+          </>
+        )}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (

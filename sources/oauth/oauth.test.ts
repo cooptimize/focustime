@@ -395,7 +395,8 @@ describe("the web registration's calendar scope (A2)", () => {
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
     // AP-1 (D490): Chat.Read isn't on the registration: each person allows it when they switch Read for asks on.
     // LP-1: Close the loop's send, mail and mail_send are asked the same way, per person, when first needed.
-    const incremental = new Set(["messages", "send", "mail", "mail_send"]);
+    // MC-2c: call_transcripts (CallTranscripts.Read.All) is admin consented in the portal and asked only at a press.
+    const incremental = new Set(["messages", "send", "mail", "mail_send", "call_transcripts"]);
     const asked = [web.scope, web.writeScope, ...Object.entries(web.kinds ?? {}).filter(([k]) => !incremental.has(k)).map(([, v]) => v)].join(" ").split(" ").filter(Boolean);
     for (const s of asked) {
       const name = s.split("/").pop()!;
@@ -412,5 +413,22 @@ describe("Chat.Read is asked for by each person (AP-1, D490)", () => {
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
     expect(web.kinds?.messages).toBe("offline_access https://graph.microsoft.com/Chat.Read");
     expect(/GRAPH_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").not.toMatch(/\bChat\.Read\b(?!Basic)/);
+  });
+});
+
+describe("MC-2c: CallTranscripts.Read.All is its own scope set", () => {
+  const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
+  it("holds only that permission, apart from the meetings token, whose request is unchanged", () => {
+    expect(web.kinds?.call_transcripts).toBe("offline_access https://graph.microsoft.com/CallTranscripts.Read.All");
+    // The meetings token's scope, byte for byte what main asks for.
+    expect(web.kinds?.meetings).toBe("offline_access https://graph.microsoft.com/OnlineMeetings.Read https://graph.microsoft.com/OnlineMeetingTranscript.Read.All");
+    for (const [k, v] of Object.entries(web.kinds ?? {})) if (k !== "call_transcripts") expect(v, k).not.toContain("CallTranscripts");
+    expect(`${web.scope} ${web.writeScope}`).not.toContain("CallTranscripts");
+  });
+
+  it("isn't on the app registration script (Entra is the product owner's)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const script = readFileSync(new URL("../../infra/scripts/app-registration.sh", import.meta.url), "utf8");
+    expect(script).not.toContain("CallTranscripts");
   });
 });

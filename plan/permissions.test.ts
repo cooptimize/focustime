@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS, permissionRows } from "./permissions.ts";
 
@@ -58,5 +59,18 @@ describe("UC-2: the missing chat permission's line", () => {
     const read = PERMISSIONS.find((p) => p.scope === "Chat.Read")!;
     expect(read.later).toBe("A FocusTime admin adds a client's chats in Admin › Clients");
     for (const p of PERMISSIONS) expect(`${p.why} ${p.later ?? ""}`).not.toMatch(/Delivery chats?|Settings › Clients/);
+  });
+});
+
+describe("MC-2c: CallTranscripts.Read.All in Settings › Connections", () => {
+  const row = (rows: ReturnType<typeof permissionRows>) => rows.find((r) => r.scope === "CallTranscripts.Read.All")!;
+  it("is its own scope set, admin consented, asked only at a press: missing until a token holds it, never probed", () => {
+    const base = [{ kind: "read" as const, state: "granted" as const, granted: ["Calendars.ReadWrite"] }];
+    expect(row(permissionRows(base, true))).toMatchObject({ kind: "call_transcripts", admin: true, state: "missing" });
+    expect(row(permissionRows([{ ...base[0]!, granted: ["Calendars.ReadWrite", "CallTranscripts.Read.All"] }], true)).state).toBe("granted");
+    expect(row(permissionRows([], false)).state).toBe("signed_out");
+    // Settings never asks for a token for it (a token is asked only at a press).
+    const src = readFileSync(new URL("../actions/chat-actions.ts", import.meta.url), "utf8");
+    expect(/mapSeq\(\[([^\]]*)\]/.exec(src)![1]).not.toContain("call_transcripts");
   });
 });

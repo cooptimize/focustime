@@ -8,6 +8,7 @@
 import type { ParseResult } from "../config/schema.ts";
 import { workEmail, type IdClaims } from "../sources/oauth/idtoken.ts";
 import type { MeetingsClient } from "../sources/graph/meetings.ts";
+import type { AdhocCallsClient } from "../sources/graph/adhoc-calls.ts";
 import { AuthFailure, type ConnectOptions, type ConnectResult, type ScopeProbe, type TokenKind, type WriteAccess } from "../sources/oauth/oauth.ts";
 import type { ChatMessagesClient, ChatsClient } from "../sources/graph/chats.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -38,6 +39,11 @@ export type MicrosoftAccount = {
   chatMessages?: ChatMessagesClient;
   /** MC-1: registered meetings' series, instances and transcripts, behind the registered-meeting gate. Absent: not available here. */
   meetings?: MeetingsClient;
+  /**
+   * MC-2c: the transcript of a call started in a registered client chat, on its own token (CallTranscripts.Read.All),
+   * behind this person's own press for that one call. Absent: not available here.
+   */
+  adhocCalls?: AdhocCallsClient;
   /** LP-1: Close the loop's sends as me (Teams, Outlook drafts and mail), each on its own consented token. Absent: not available here. */
   sender?: SendClient;
   /** T-2: whether a token for one scope set can be had, for Settings > Connections. Absent: can't tell here. */

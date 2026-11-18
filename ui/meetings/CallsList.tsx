@@ -113,9 +113,11 @@ export function WeekRow({ r, open, zone, colors, ticked, onTick, onOpen, clients
       {canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
       <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
         <span className="calls-row-one">
-          <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : whenOf(r.startAt, zone)}</span>
+          <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : whenOf(r.startAt, zone)}{r.other?.chat && r.other.endKnown ? ` to ${timeOf(r.endAt, zone)}` : ""}</span>
           <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
           {r.occurrenceId !== null && <span className="calls-state">{r.state.label}</span>}
+          {/* MC-2c: where a chat call came from. */}
+          {r.other?.chat && r.occurrenceId === null && <span className="calls-source muted" data-call-source="chat">{CALL_LIST.fromChat}</span>}
         </span>
       </button>
       <span className="calls-row-acts">

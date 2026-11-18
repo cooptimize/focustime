@@ -29,7 +29,7 @@ export type OAuthProvider = {
    * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
    * One token request covers one resource, so each set names one resource plus OpenID scopes.
    */
-  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send", string>>;
+  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send" | "call_transcripts", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -64,6 +64,13 @@ export const SEND_SCOPE = "https://graph.microsoft.com/ChatMessage.Send https://
 export const MAIL_SCOPE = "https://graph.microsoft.com/Mail.ReadWrite";
 export const MAIL_SEND_SCOPE = "https://graph.microsoft.com/Mail.Send";
 export const MEETINGS_SCOPE = "https://graph.microsoft.com/OnlineMeetings.Read https://graph.microsoft.com/OnlineMeetingTranscript.Read.All";
+/**
+ * MC-2c: the transcript of a call started in a client's registered delivery chat (an ad hoc call in Graph), read only on
+ * a Cooptimizer's own press, for that one call (sources/graph/adhoc-calls.ts). Delegated only, admin consented in the
+ * portal, its own scope set apart from the meetings token, so nothing about it can change or break a registered
+ * meeting's read. A token for it is asked only at a press; it isn't on the app registration script (D490's reason).
+ */
+export const CALL_TRANSCRIPTS_SCOPE = "https://graph.microsoft.com/CallTranscripts.Read.All";
 
 /**
  * `calendars`: the Graph calendar scope reads ask for. The old desktop registration has Calendars.ReadBasic; the A2
@@ -82,7 +89,7 @@ export function microsoftProvider(cfg: OutlookConfig, o: { calendars?: "Calendar
     clientId: cfg.clientId,
     scope: `offline_access ${read}`,
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}`, meetings: `offline_access ${MEETINGS_SCOPE}`, send: `offline_access ${SEND_SCOPE}`, mail: `offline_access ${MAIL_SCOPE}`, mail_send: `offline_access ${MAIL_SEND_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}`, messages: `offline_access ${CHAT_READ_SCOPE}`, meetings: `offline_access ${MEETINGS_SCOPE}`, send: `offline_access ${SEND_SCOPE}`, mail: `offline_access ${MAIL_SCOPE}`, mail_send: `offline_access ${MAIL_SEND_SCOPE}`, call_transcripts: `offline_access ${CALL_TRANSCRIPTS_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -163,7 +170,7 @@ export type ConnectOptions = {
 export type ScopeProbe = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send" | "call_transcripts";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">

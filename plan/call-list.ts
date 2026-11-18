@@ -161,12 +161,15 @@ export function callRows(x: CallListInput): CallRow[] {
     if (c.occurrenceId && kept.has(c.occurrenceId)) continue;
     const hidden = !!hides && (hides.keys.has(c.key) || (!!c.seriesKey && hides.series.has(c.seriesKey)));
     // A call Teams can't be asked about (not a Teams meeting, organized outside Cooptimize) counts as no transcript.
-    const check: CheckState = !c.teams || c.outside ? "no" : x.check ? (x.check[c.key] ?? "unchecked") : "checking";
+    // MC-2c: a chat call is listed only once Teams said its transcript is ready (its event), so it is never asked about.
+    const check: CheckState = c.chat ? "yes" : !c.teams || c.outside ? "no" : x.check ? (x.check[c.key] ?? "unchecked") : "checking";
     const row: CallRow = {
       key: otherRowKey(c), occurrenceId: c.occurrenceId, other: c, name: c.name, startAt: c.startAt, endAt: c.endAt, day: dayOf(c.startAt, x.zone),
-      minutes: c.minutes, people: c.people, clientKey: null, clientName: null, source: c.teams ? CALL_LIST.teamsOrFile : CALL_LIST.fileOnly, weekly: null,
+      minutes: c.minutes, people: c.chat ? null : c.people, clientKey: null, clientName: null, source: c.chat ? CALL_LIST.fromChat : c.teams ? CALL_LIST.teamsOrFile : CALL_LIST.fileOnly, weekly: null,
       state: { label: CALLS_TEXT.notReviewed, needsMe: false }, bucket: hidden ? "hidden" : "open", place: "week", review: true, pocket: [], recording: null,
-      mark: null, check, left: null, closed: null, seriesKey: c.seriesKey, suggested: x.suggest ? x.suggest(c) : null,
+      mark: null, check, left: null, closed: null, seriesKey: c.seriesKey,
+      // MC-2c: a chat call's client is its chat's registration's: a suggestion, confirmed by pressing Review.
+      suggested: c.chat ? c.chat.clientKey : x.suggest ? x.suggest(c) : null,
     };
     all.push(row);
     // A hidden meeting shows nowhere as a call that could be reviewed: no recording goes on it.

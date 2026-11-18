@@ -27,7 +27,7 @@ import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
-import { canView, graphReadable } from "../plan/meetings.ts";
+import { graphReadable, sharesWith } from "../plan/meetings.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
@@ -47,6 +47,7 @@ import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
 import { createPressGrants } from "../actions/call-press.ts";
+import { createChatCallPresses } from "../actions/chat-call-press.ts";
 import { createExistsGrants, createExistsHold } from "../actions/call-exists.ts";
 import { createDemoFeedbackDevOps, demoFeedbackBackend, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
@@ -150,7 +151,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const meetingStore = createMeetingStore(shared, instant);
   const conversations = createConversationStore(shared, instant, teams, async (chatId, userId) => {
     const s = await meetingStore.series(Number(chatId.slice("meeting:".length)));
-    return !!s && !s.removedAt && canView(s, userId);
+    return !!s && !s.removedAt && (await sharesWith(s, userId, async (c, u) => (await teams.viewer(u).chats()).some((x) => x.chatId === c)));
   });
   // ADM-1: the demo's own team settings, people and audit, on the same in-memory database (never the real ones). The
   // demo's person is an admin inside their own demo and nowhere else.
@@ -295,7 +296,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const press = createPressGrants();
   // MC-4: whether a call has a transcript (never its text), only for my own check while Calls opens.
   const checks = createExistsGrants();
-  const demoAzure = createDemoAzure({ ...(opts.calls ? { calls: opts.calls } : {}), meetingsGate: { allowed: async (q) => (q.purpose === "exists" ? checks.allowed(DEMO_PERSON.oid, q) : press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false))) } });
+  // MC-2c: the press for a call started in a client's chat, and its gate (the demo person's, that one call, two minutes).
+  const chatPress = createChatCallPresses(() => instant().epochMilliseconds);
+  const demoAzure = createDemoAzure({ ...(opts.calls ? { calls: opts.calls } : {}), adhocGate: { allowed: (callId) => chatPress.allowed(DEMO_PERSON.oid, callId) }, meetingsGate: { allowed: async (q) => (q.purpose === "exists" ? checks.allowed(DEMO_PERSON.oid, q) : press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false))) } });
   /** VM-4: verification runs only: the action whose next call fails unexpectedly. */
   let failNext: string | null = null;
   // DM-1: the demo's AI. The app's spend gets what real calls cost (its cap counts them); the service reads the app's
@@ -342,7 +345,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     },
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, readPdf: pdfReader(), press, exists: { grants: checks, hold: createExistsHold(() => instant().epochMilliseconds) }, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), press, chatPress, exists: { grants: checks, hold: createExistsHold(() => instant().epochMilliseconds) }, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.

@@ -7,7 +7,7 @@ import { parseConfig, type AppConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { CoworkData } from "../plan/cowork.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
-import { aCallEventMessage, aChatMember, HOME_TENANT } from "../test/builders/index.ts";
+import { aCallEventMessage, aChatMember, aTranscriptEventMessage, HOME_TENANT } from "../test/builders/index.ts";
 import { BLAKE, CHAT, EVAN, LENA, SAM, world } from "../test/conversations.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { pollCycle, type PollDeps } from "./request-poll.ts";
@@ -141,5 +141,33 @@ describe("CW-1: a co-working call in a registered delivery chat", () => {
     expect(await s.w.conn.all("SELECT call_id FROM chat_calls")).toEqual([{ call_id: "second" }]);
     await s.w.teams.removeChat(CHAT.chatId, EVAN.userId!);
     expect(await s.w.conn.all("SELECT call_id FROM chat_calls")).toEqual([]);
+  });
+});
+
+describe("MC-2c: the transcript-is-ready event comes through the same read", () => {
+  it("joins its call, is never a message, and one with no call held is only counted in the log", async () => {
+    const s = await setup();
+    const logs: Record<string, unknown>[] = [];
+    s.deps.log = (r) => void logs.push(r as Record<string, unknown>);
+    s.pages.value = [
+      aCallEventMessage({ at: STARTED, initiator: EVAN.userId!, callId: CALL }),
+      aCallEventMessage({ kind: "ended", at: "2026-11-04T14:50:00Z", callId: CALL, duration: "PT38M" }),
+      aTranscriptEventMessage({ at: "2026-11-04T14:52:00Z", callId: CALL, transcriptId: "tr-0001", organizer: "Evan Ford" }),
+      aTranscriptEventMessage({ at: "2026-11-04T14:53:00Z", callId: "11111111-2222-4333-8444-555555555555" }),
+    ];
+    expect(await s.poll("2026-11-04T14:55:00Z")).toMatchObject({ polled: 1, messages: 0, transcripts: 1, transcriptsDropped: 1 });
+    // The same one read: nothing new is asked of Graph, and no transcript is read.
+    expect(s.g.urls).toHaveLength(1);
+    expect(s.g.urls.join(" ")).not.toMatch(/adhocCalls|transcripts/);
+    const rows = await s.w.conn.all("SELECT * FROM chat_calls");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ call_id: CALL, transcript_id: "tr-0001" });
+    // Never the organizer's name, never a message, a conversation or anything for the AI.
+    expect(JSON.stringify(rows)).not.toContain("Evan Ford");
+    expect(await s.w.conn.all("SELECT * FROM teams_messages")).toEqual([]);
+    expect(await s.w.conn.all("SELECT * FROM conversations")).toEqual([]);
+    // Logged as counts only.
+    const t = logs.filter((l) => l.op === "requests_poll_transcripts");
+    expect(t).toEqual([{ source: "plan", op: "requests_poll_transcripts", count: 1 }, { source: "plan", op: "requests_poll_transcripts", kind: "no_call", count: 1 }]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callBatch, commentLevelOk, newOnly, sameProposal, toReview, type ProposalBody, lastReadLine, attendeeIds, canConfirm, canView, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
+import { callBatch, commentLevelOk, newOnly, sameProposal, toReview, type ProposalBody, lastReadLine, attendeeIds, canConfirm, canView, sharesWith, defaultReviewers, detectSource, graphReadable, mayRead, nextCheck, nudgesFor, occurrencesBetween, type MeetingSeries, type Occurrence } from "./meetings.ts";
 
 const series = (p: Partial<MeetingSeries> = {}): MeetingSeries => ({
   id: 1, clientKey: "contoso", name: "Contoso sync", role: "status", source: "automatic", detected: "automatic", organizer: "home", joinUrl: "https://teams.microsoft.com/l/meetup-join/x", eventId: "AAA", registrantId: "u1",
@@ -158,5 +158,19 @@ describe("MC-1e: the bar's DevOps batch", () => {
     expect(b.later.map((p) => p.id)).toEqual([12, 13, 14]);
     expect(b.waiting.map((p) => p.id)).toEqual([3]);
     expect(callBatch(rows.slice(0, 4), () => true)).toEqual({ now: rows.slice(0, 4), later: [], waiting: [] });
+  });
+});
+
+describe("MC-2c: who sees a chat call's shared promises", () => {
+  it("its reviewers; its attendees only while they're in its chat now; any other call as before", async () => {
+    const chat = series({ callKind: "chat", joinUrl: "chat:19:demo@thread.v2", reviewers: ["r1"], attendees: ["a1"] });
+    const inChat = (who: string[]) => async (chatId: string, uid: string) => chatId === "19:demo@thread.v2" && who.includes(uid);
+    expect(await sharesWith(chat, "r1", inChat([]))).toBe(true);
+    expect(await sharesWith(chat, "a1", inChat(["a1"]))).toBe(true);
+    expect(await sharesWith(chat, "a1", inChat([]))).toBe(false);
+    expect(await sharesWith(chat, "x9", inChat(["x9"]))).toBe(false);
+    expect(await sharesWith(chat, "a1", async () => { throw new Error("down"); })).toBe(false);
+    const cal = series({ callKind: "calendar", reviewers: ["r1"], attendees: ["a1"] });
+    expect(await sharesWith(cal, "a1", inChat([]))).toBe(true);
   });
 });
