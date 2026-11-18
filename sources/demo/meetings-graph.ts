@@ -12,7 +12,7 @@
 import { HttpError } from "../calendar/http.ts";
 import { MeetingRefused, type ExistsAnswer, type MeetingGate, type MeetingsClient, type SeriesCandidate } from "../graph/meetings.ts";
 import type { CalendarMeeting } from "../../plan/calls.ts";
-import { DEMO_PEOPLE, demoOutlook } from "./data.ts";
+import { DEMO_PEOPLE, DEMO_TZ, demoOutlook } from "./data.ts";
 import { DEMO_MEETING } from "./meetings.ts";
 
 const person = (name: string) => DEMO_PEOPLE.find((p) => p.name === name)!;
@@ -64,7 +64,7 @@ function longCalls(fromIso: string, toIso: string): CalendarMeeting[] {
   const a = Temporal.Instant.from(fromIso);
   const b = Temporal.Instant.from(toIso);
   const out: CalendarMeeting[] = [];
-  const zone = "America/New_York";
+  const zone = DEMO_TZ;
   for (let day = a.toZonedDateTimeISO(zone).toPlainDate(); Temporal.PlainDate.compare(day, b.toZonedDateTimeISO(zone).toPlainDate()) <= 0; day = day.add({ days: 1 })) {
     if (day.dayOfWeek > 5) continue;
     for (const hour of [8, 12, 16]) {
