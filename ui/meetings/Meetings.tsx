@@ -168,10 +168,11 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       if (!live || !want) return;
       // WK-6: by the meeting itself when its key is known, else by its start and end.
       const hit = (want.key ? d?.calls.find((c) => c.key === want.key) : undefined) ?? d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
-      wanted.current = null;
+      // Found: wanted stays set, so nothing opens by itself in its place. A render already committed (the calendar's
+      // calls arriving) can run its effects after this and before the setup's own render; it must still see a call wanted.
       if (hit?.occurrenceId) go({ occurrence: hit.occurrenceId });
       else if (hit) setSetupKey(otherRowKey(hit));
-      else setMissing(true);
+      else (wanted.current = null), setMissing(true);
     });
     return () => {
       live = false;
