@@ -220,7 +220,7 @@ FocusTime reads Cooptimize's public standards repo (`cooptimize/coop-standards` 
 
 **Read.** The messages people send it in their own 1:1 chat.
 
-**Written.** Only in the person's own 1:1 chat: replies, card updates, and, with "Let FocusTime message me in Teams" and that kind on, the morning brief, check-in, close out, nudges and client calls to review. Never a group chat or channel. Every outside write it offers is a proposal card that runs only on Confirm.
+**Written.** Only in the person's own 1:1 chat: replies, card updates, and, with "Let FocusTime message me in Teams" and that kind on, the morning brief, check-in, close out, nudges and client calls to review. Never a group chat or channel. Every outside write it offers is a proposal card that runs only on Confirm. Since SA-3 the check-in and close out come at the app's own times (the afternoon's start plus the check-in reminder's minutes, the day's end less the close out reminder's); Teams no longer has its own (`plan/teams-rhythm.ts`, `appTimesOf`).
 
 **Who.** Cooptimizers who have signed in to FocusTime once, matched by Entra object id. Guests, automation accounts and addresses outside the Cooptimize domains get "FocusTime is for Cooptimize accounts." (`server/teams/gate.ts`).
 

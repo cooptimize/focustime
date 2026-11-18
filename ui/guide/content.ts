@@ -598,7 +598,7 @@ export const AREAS: Record<"day" | "week" | "backlog" | "status" | "inbox" | "wr
   settings: {
     lead: "Settings are yours. They save as you change them, and search at the top of the list finds any of them.",
     does: [
-      { title: "Search settings", text: "Type at the top of Settings' list: it finds a setting by its name or its old name. {icon:close} Close or Esc closes it.", go: { href: "#/settings", label: "Open Settings" } },
+      { title: "Search settings", text: "Type at the top of Settings' list: it finds a setting by its name or its old name, and opens a folded one. Each reminder is one row with one time, in Reminders and notices. {icon:close} Close or Esc closes it.", go: { href: "#/settings", label: "Open Settings" } },
       { title: "On your phone", text: "Day, Week, the round {icon:add} Capture button, Inbox and More in the bar at the bottom; Ask at the top right. Day shows the block you're in, then the one thing waiting in the Inbox, then each block. Week is a row per day; tap one to open it. The Inbox shows one thing at a time. More has everything else, Desktop version included. {icon:add} Add on a block opens its panel as a sheet; Backlog asks first.", go: { href: "#/day", label: "Open Day" } },
       { title: "Invite teammates", text: "Admins only: Admin › People shows who's set up, and Invite opens a message to send from FocusTime or in Teams or Outlook.", go: { href: "#/settings/admin-people/whos-set-up", label: "Open Who's set up" } },
       { title: "Send feedback", text: "{icon:more} More › Send feedback: an idea, a problem or a question, as a story in the FocusTime backlog, after a preview." },
@@ -615,9 +615,9 @@ export const FIRST_DAY = {
   checks: {
     hours: { title: "Your working hours", text: "FocusTime fits work into your hours and time zone. Standing blocks, like Monday morning for Internal, are on the same page.", go: { href: "#/settings/hours/weekdays", label: "Open Working hours" } },
     clients: { title: "Your clients", text: "They come from Focus Time in Dataverse. Check the list and each client's color.", go: { href: "#/settings/clients/client-list", label: "Open Clients" } },
-    calendars: { title: "Your personal calendar", text: "Optional. Connect Google Calendar, or add any calendar by its link (iCloud, Outlook, school apps), so personal events count against your free time.", go: { href: "#/settings/connections/sources", label: "Open Accounts and calendars" } },
-    devops: { title: "DevOps write access", text: "A personal access token per client lets FocusTime update DevOps when you confirm. Without one, that client stays read only.", go: { href: "#/settings/connections/devops-write", label: "Open DevOps" } },
-    notify: { title: "Notifications", text: "Turn on Notify this device, or let FocusTime message you in Teams.", go: { href: "#/settings/notifications/devices", label: "Open Notifications" } },
+    calendars: { title: "Your personal calendar", text: "Optional. Connect Google Calendar, or add any calendar by its link (iCloud, Outlook, school apps), so personal events count against your free time.", go: { href: "#/settings/connections/sources", label: "Open Connections" } },
+    devops: { title: "DevOps write access", text: "A personal access token per client lets FocusTime update DevOps when you confirm. Without one, that client stays read only.", go: { href: "#/settings/connections/devops-write", label: "Open Connections" } },
+    notify: { title: "Reminders and notices", text: "Turn on Notify this device, or let FocusTime message you in Teams. Each reminder is one row with one time, for the app and Teams alike.", go: { href: "#/settings/notifications/devices", label: "Open Reminders and notices" } },
     week: { title: "Add work to your week", text: "Week with a block's panel open: place features and stories on your blocks.", go: { href: "#/week/add", label: "Open Week" }, tour: "plan-week" },
     today: { title: "Add work to your day", text: "Add on one of the day's blocks puts stories on it.", go: { href: "#/day", label: "Open Day" }, tour: "today" },
   } satisfies Record<string, { title: string; text: string; go: { href: string; label: string }; tour?: string }>,

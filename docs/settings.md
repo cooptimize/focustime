@@ -5,10 +5,12 @@ from before ST-1; only where and how it is shown moved. The before and after map
 
 ## The pieces
 
-- **`ui/settings/registry.ts`** is the one list: the groups (You, Planning, Clients, Connections, Data), the sections in
-  each (id, label, a one-line description, old labels, `phoneReadOnly`, `parent` for a sub-page) and every setting a
+- **`ui/settings/registry.ts`** is the one list: the groups (SA-3: You, Your work, Connected, Yours; Admin for admins),
+  the eleven sections in (id, label, a one-line description, old labels, `phoneReadOnly`, `parent` for a sub-page) and every setting a
   person looks for (id, section, label, old labels, keywords, `devOnly`, `demoOnly`). The rail, search, deep links, the
-  command menu and the Guide read it. `OLD_SECTIONS` maps section ids from before ST-1 to where they open now.
+  command menu and the Guide read it. `OLD_SECTIONS` maps section ids from before ST-1 and SA-3 to where they open now,
+  and a setting addressed under the section it had before opens in the section it is in now (`resolveSettings`).
+  `FOLDS` names the two folds (Fine tuning, Each kind of notice); a setting with `fold` sits inside one.
 - **`ui/PanelShell.tsx`** is the shell: the rail with its groups on the left (a list page of its own on a phone), the
   title, description, Back (only on a sub-page or a phone page) and × at the top, and the body that scrolls on its own.
   Esc closes. Focus goes to the title on every page and back to what opened the panel when it closes.
@@ -83,6 +85,26 @@ The Guide sits on the same shell (`ui/guide/GuideFrame.tsx`), and so can any oth
 
 The shell owns Esc (after the controls inside it: a picker or menu that handles Esc and stops it keeps it), the ×,
 focus on the title, focus return and the phone layout. Styles are `.panel-shell` and `.ps-*` in `ui/styles.css`.
+
+## Where a setting goes (SA-3)
+
+Eleven sections, by what a person is doing, not by which system stores it:
+
+| Group | Section | What goes there |
+|---|---|---|
+| You | Profile, Working hours, Display | who I am, my hours and zone, how FocusTime looks |
+| Your work | Reminders and notices | every reminder as one row with one time (app and Teams alike), where notices reach me, Quiet, each kind of notice (folded) |
+| | Planning | how planning behaves; the numbers few people change under Fine tuning (folded) |
+| | Focus | the focus timer, sounds, Teams status |
+| | Clients | the clients list, Keep following, what FocusTime looks for in chats, the chats it reads, a client's own page |
+| Connected | Connections | one card per connection: Microsoft, Google, calendars by link, Pocket, DevOps (read, write access, Find an item), My VM |
+| | AI and assistant | unchanged |
+| Yours | Your data | What FocusTime keeps (numbers from constants), What FocusTime changed in other apps, Export and Delete, Diagnostics |
+| | About | the app, Send feedback |
+
+A setting a person changes rarely, and that has a safe default, goes in its section's fold, which says how many it holds
+and how many the person changed. A link or search result inside a fold opens it. Admin-only lines (the Dataverse
+environment and user, Start over) show only to admins on a test site; the test-site switch only on a test site.
 
 ## Settings added since (a record)
 
