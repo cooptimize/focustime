@@ -15,11 +15,15 @@ import { autoStartDue, autoStartEnvAllowed, clock, NOTE_TEXT, OUTCOMES, outcomeT
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
-import { AUTOSTART_KEY, power, readAutoStart, writeAutoStart, type VmContext } from "./vm-actions.ts";
+import { AUTOSTART_KEY, power, readAutoStart, readPower, writeAutoStart, type VmContext } from "./vm-actions.ts";
+import type { PowerState } from "../plan/vm.ts";
 import { AzureError, parseVmId } from "../sources/azure/client.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { storedIdentity } from "./account.ts";
 import type { ChosenVm } from "./account-types.ts";
+
+/** VM-4: how long the state read before the claim may stand in for the start's own read. */
+export const BEFORE_FRESH_MS = 5_000;
 
 /** The once-mark that claims a day's automatic start. */
 export const AUTOSTART_MARK = "vm_autostart_day";
@@ -54,7 +58,7 @@ export type AutoStartResult = "env" | "no_config" | "off" | "paused" | "not_due"
 const LEGACY: Record<AutoStartOutcome, AutoStartResult> = {
   env: "env", no_config: "no_config", off: "off", not_due: "not_due", claimed_elsewhere: "claimed_elsewhere", paused: "paused", no_vm: "no_vm", sign_in: "sign_in",
   started: "started", started_late: "started", already_on: "not_stopped", refused: "failed",
-  not_chosen: "not_due", skipped: "not_due", pto: "not_due", holiday: "not_due", pto_unreadable: "not_due", not_running: "not_due",
+  not_chosen: "not_due", skipped: "not_due", pto: "not_due", holiday: "not_due", pto_unreadable: "not_due", not_running: "not_due", state_retry: "not_due", state_unreadable: "not_due",
 };
 
 /** One pass, by VM-2's words. */
@@ -99,7 +103,8 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
   }
   // Today settled already (any outcome but unreadable PTO, which is looked at again until the late limit): nothing new.
   const settledToday = outcomeToday(state, today);
-  if (settledToday && settledToday.reason !== "pto_unreadable") return "not_due";
+  // VM-4: nor a VM state that couldn't be read (state_retry), which is read again until the late limit too.
+  if (settledToday && settledToday.reason !== "pto_unreadable" && settledToday.reason !== "state_retry") return "not_due";
   // The cheap answers first (no PTO, holiday or Azure read until the time has come).
   const base = { now, zone, hours: cfg.week.hours, settings, state };
   const first = autoStartDue({ ...base, pto: false, holiday: false, chip: null });
@@ -118,7 +123,12 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
       }
       case "too_late": {
         // The late limit passed with nothing tried: PTO or a holiday if that's what it was, else FocusTime wasn't running.
-        if (settledToday) return "not_due";
+        if (settledToday && settledToday.reason !== "state_retry") return "not_due";
+        // VM-4: the VM's state was never read in time: left off, and now the person is told.
+        if (settledToday?.reason === "state_retry") {
+          await settle(d, today, now, "state_unreadable", settledToday.notes);
+          return "state_unreadable";
+        }
         const vc = await d.vm();
         const off = await daysOffToday(vc, cfg, today);
         const why: OutcomeReason = off.pto?.has(today) ? "pto" : off.holidays?.has(today) ? "holiday" : "not_running";
@@ -157,13 +167,38 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
   }
   const second = autoStartDue({ ...base, pto, holiday, chip: null });
   if (!second.due) return "not_due";
+  const me = await storedIdentity(d.plan);
+  const vm = me ? ((await d.plan.accountState<ChosenVm>(`vm:${me.oid}`)) ?? null) : null;
+  // VM-4: the VM's state is read before the day is claimed. A read that fails (Azure busy, unreachable, or refusing
+  // the read, as one read in four did on Nov 17) isn't the day's try: logged once, read again on later passes until
+  // the late limit. A sign-in that can't be used is still VM-2's sign_in (it claims the day and says so).
+  let before: PowerState | undefined;
+  /** When it was read (real time): reused for the start only within FRESH_MS, else the start reads Azure again. */
+  let readAtMs = 0;
+  let signInFailed: { status: number; error: string; code: string } | null = null;
+  if (vm && parseVmId(vm.id)) {
+    try {
+      before = await readPower(vc, vm);
+      readAtMs = Date.now();
+    } catch (e) {
+      const kind = e instanceof AzureError || e instanceof AuthFailure ? e.kind : "failed";
+      // Azure answering that there is no such VM (deleted or moved) is an answer, not a failed read: VM-2's refusal,
+      // the day's try, said once (the start below reads it again and records it).
+      if (kind === "not_found") before = undefined;
+      else if (!signInKinds.has(kind)) {
+        if (settledToday?.reason !== "state_retry") await settle(d, today, now, "state_retry", notes);
+        return "state_retry";
+      }
+      else signInFailed = { status: 401, error: e instanceof Error ? e.message : "failed", code: kind };
+    }
+  }
   // Claim the day: one automatic start (or attempt) a day, whichever pass or instance gets here first.
   if (!(await d.plan.markOnce(AUTOSTART_MARK, today))) return "claimed_elsewhere";
   // A Skip that landed after this pass read the state still counts.
   const fresh = await writeAutoStart(d.plan, (s) => ({ ...s, attemptedOn: today }));
   if (fresh.skipped.includes(today) || fresh.pausedOn) return "not_due";
-  const me = await storedIdentity(d.plan);
-  const vm = me ? ((await d.plan.accountState<ChosenVm>(`vm:${me.oid}`)) ?? null) : null;
+  // Nothing acts on an old reading: a claim that waited on the database (a slow wake) means the start reads again.
+  if (before && Date.now() - readAtMs > BEFORE_FRESH_MS) before = undefined;
   if (!vm || !parseVmId(vm.id)) {
     // VM-3: the try is in the write log too, as one that didn't start, with why.
     const row = await d.plan.logAzureWrite({ op: "start", vmId: vm?.id ?? "", vmName: vm?.name ?? "Your VM", before: { power: "unknown", by: "automatic" }, after: { power: "running" }, auto: true });
@@ -171,7 +206,7 @@ export async function autoStartCheck(d: AutoStartDeps): Promise<AutoStartOutcome
     await settle(d, today, now, "no_vm", notes);
     return "no_vm";
   }
-  const r = await power(vc, vm, "start", { auto: true }).catch((e: unknown) => ({ ok: false as const, status: 500, error: e instanceof AzureError || e instanceof AuthFailure ? e.message : "failed", code: e instanceof AzureError || e instanceof AuthFailure ? e.kind : "failed" }));
+  const r = signInFailed ? ({ ok: false as const, ...signInFailed }) : await power(vc, vm, "start", { auto: true, ...(before ? { before } : {}) }).catch((e: unknown) => ({ ok: false as const, status: 500, error: e instanceof AzureError || e instanceof AuthFailure ? e.message : "failed", code: e instanceof AzureError || e instanceof AuthFailure ? e.kind : "failed" }));
   const at = now.toString();
   if (r.ok) {
     const why = second.afterStart ? "started_late" : "started";

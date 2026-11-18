@@ -12,7 +12,7 @@ import { localToday } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
-import { canStart, canStop, chipOf, CHIP_LABEL, chipText, morningPrompt, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
+import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
 import { autoStartEnvAllowed, autoStartStateOf, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
@@ -71,8 +71,10 @@ export type { ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus };
 const previews = new Map<string, Held>();
 const transitions = new Map<string, VmTransition & { entryId: number }>();
 const memo = new Map<string, { at: number; power: PowerState; schedule: Shutdown | null; scheduleError: VmError | null }>();
+/** VM-4: since when each VM's state reads have failed (cleared by the next good read). */
+const failing = new Map<string, number>();
 const following = new Set<Promise<void>>();
-export const clearVmState = () => (previews.clear(), transitions.clear(), memo.clear());
+export const clearVmState = () => (previews.clear(), transitions.clear(), memo.clear(), failing.clear());
 /** Waits for background polling to finish (tests). */
 export async function settled(): Promise<void> {
   while (following.size) await Promise.all([...following]);
@@ -82,6 +84,9 @@ const bad = (error: string): ActionResponse => ({ ok: false, status: 400, error 
 const refuse = (error: string, status = 409): ActionResponse => ({ ok: false, status, error });
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const onlyKeys = (v: unknown, keys: string[]) => v === undefined || v === null || (isObj(v) && Object.keys(v).every((k) => keys.includes(k)));
+
+/** VM-4: the chip's reason for a failed read (plan/vm.ts readProblemOf), from the failure as thrown. */
+export const problemOf = (e: unknown): ReadProblem => (e instanceof AzureError ? readProblemOf(e.kind, e.status) : e instanceof AuthFailure ? readProblemOf(e.kind) : "refused");
 
 function errOf(e: unknown): VmError {
   if (e instanceof AzureError) return { kind: e.kind, message: e.message, permission: e.permission };
@@ -117,6 +122,9 @@ function guard(vm: ChosenVm | null, asked: unknown): ActionResponse | null {
   if (asked !== undefined && (typeof asked !== "string" || !sameVm(asked, vm.id))) return refuse("FocusTime only acts on the VM you confirmed as yours", 403);
   return null;
 }
+
+/** VM-4: one read of my VM's power state, for the automatic start to read before it claims the day. Throws as Azure fails. */
+export const readPower = (ctx: VmContext, vm: ChosenVm): Promise<PowerState> => client(ctx).power(refOf(vm));
 
 async function readSchedule(c: AzureClient, vm: ChosenVm): Promise<Shutdown | null> {
   const raw = await c.getSchedule(refOf(vm));
@@ -260,7 +268,8 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
 
 async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fresh: boolean): Promise<VmStatus> {
   const tz = userZone(cfg);
-  const me = storedIdentity(ctx.plan);
+  // VM-4: awaited (before, the promise itself stood for "signed in", and a failing store was an unhandled rejection).
+  const me = await storedIdentity(ctx.plan);
   const vm = (await chosen(ctx));
   const base: VmStatus = {
     signedIn: !!me, vm, chip: null, label: null, text: null, power: null, transition: null, canStart: false, canStop: false, schedule: null, prompt: false, startWithoutAsking: cfg?.azure.startWithoutAsking ?? true, refreshMs: 60_000, needsConsent: false, error: null, autoStart: null,
@@ -268,8 +277,11 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   if (!vm || !me) return base;
   const key = vm.id.toLowerCase();
   const t = nowMs(ctx);
+  base.answeredAt = new Date(t).toISOString();
   let m = memo.get(key);
   const live = transitions.get(key) ?? null;
+  // VM-4: a read that fails keeps the last state known (and its time), marked checking; after 2 minutes, the reason.
+  let checking: { since: number; problem: ReadProblem; err: VmError } | null = null;
   if (fresh || !m || t - m.at > (live ? 4_000 : 8_000)) {
     try {
       const c = client(ctx);
@@ -283,11 +295,31 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
       }
       m = { at: t, power: p, schedule, scheduleError };
       memo.set(key, m);
+      failing.delete(key);
     } catch (e) {
-      const err = errOf(e);
-      return { ...base, chip: "unknown", label: CHIP_LABEL.unknown, text: CHIP_LABEL.unknown, error: err, needsConsent: err.kind === "consent", refreshMs: 60_000, autoStart: cfg ? await autoStartView(ctx, cfg, null).catch(() => null) : null };
+      const since = failing.get(key) ?? t;
+      failing.set(key, since);
+      checking = { since, problem: problemOf(e), err: errOf(e) };
     }
   }
+  if (checking) {
+    const long = t - checking.since >= PROBLEM_AFTER_MS;
+    const problem = long ? { kind: checking.problem, ...READ_PROBLEM[checking.problem] } : null;
+    const told = { checking: { since: new Date(checking.since).toISOString() }, problem, needsConsent: checking.err.kind === "consent", error: long || checking.err.kind === "consent" ? checking.err : null, refreshMs: long ? CHECK_LATER_MS : CHECK_AGAIN_MS };
+    const autoStart = cfg ? await autoStartView(ctx, cfg, m ? chipOf(m.power, live) : null).catch(() => null) : null;
+    // No state read since FocusTime started (a restart): "Checking…", never Unknown.
+    if (!m) return { ...base, ...told, text: CHECKING, readAt: null, autoStart };
+    const chip = chipOf(m.power, live);
+    const label = shutdownLabel(m.schedule, tz, today);
+    // Start and Stop stay offered: each reads Azure afresh before it acts (preview, and again at Confirm), so nothing
+    // is started or stopped on this older reading. The morning "VM is off" prompt waits for a good read.
+    return {
+      ...base, ...told, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
+      schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
+      noShutdown: !m.schedule && !m.scheduleError, prompt: false, readAt: new Date(m.at).toISOString(), autoStart,
+    };
+  }
+  m = m!;
   if (!live) await settleOrphans(ctx, vm, m.power, t);
   const chip = chipOf(m.power, live);
   const workStart = cfg ? (hoursOn(cfg.week.hours, today).segments[0]?.start ?? null) : null;
@@ -300,7 +332,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
     // VM-2: no schedule read and no read error means Azure has none for this VM.
     noShutdown: !m.schedule && !m.scheduleError,
-    prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null,
+    prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null, readAt: new Date(m.at).toISOString(), checking: null, problem: null,
     autoStart: cfg ? await autoStartView(ctx, cfg, chip).catch(() => null) : null,
   };
 }
@@ -381,14 +413,14 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionRe
  * automatic start), the call, then followed until Azure shows the result. `recheck`: refuse when the state no longer
  * allows it (a preview confirmed after the VM changed).
  */
-export async function power(ctx: VmContext, vm: ChosenVm, op: VmOp, o: { recheck?: boolean; auto?: boolean } = {}): Promise<ActionResponse> {
+export async function power(ctx: VmContext, vm: ChosenVm, op: VmOp, o: { recheck?: boolean; auto?: boolean; /** VM-4: the state the automatic start read just now, before it claimed the day. */ before?: PowerState } = {}): Promise<ActionResponse> {
   const plan = ctx.plan;
   if (!plan) return refuse("The local plan store isn't available, so there's no audit log to write to", 503);
   let c: AzureClient;
   let before: PowerState;
   try {
     c = client(ctx);
-    before = await c.power(refOf(vm));
+    before = o.before ?? (await c.power(refOf(vm)));
   } catch (e) {
     return errResponse(e);
   }

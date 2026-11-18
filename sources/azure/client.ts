@@ -121,6 +121,9 @@ export function allowedCall(method: string, url: string): AzureCall | null {
   return call;
 }
 
+/** VM-4: Azure's error code as a log kind: one plain code word (AuthorizationFailed), else "other"; none: "none". */
+export const azureCodeWord = (code: string): string => (!code ? "none" : /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(code) ? code : "other");
+
 export type VmCandidate = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; power: PowerState };
 export type VmInfo = { id: string; name: string; location: string };
 /** Where to poll a start or stop: Azure-AsyncOperation (status in the body) or Location (202 until done). */
@@ -158,10 +161,15 @@ export function createAzureClient(d: AzureDeps) {
       d.log({ source: "azure", op: call, kind: "network" });
       throw new AzureError("network", 0, "Azure unreachable");
     }
-    d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started });
-    if (res.ok) return res;
+    if (res.ok) {
+      d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started });
+      return res;
+    }
     // Only Azure's error code is read (AuthorizationFailed, ResourceNotFound, ...); its message is never kept.
     const code = await res.json().then((j: { error?: { code?: unknown } }) => (typeof j?.error?.code === "string" ? j.error.code : ""), () => "");
+    // VM-4: the code goes in the log as the failure's kind (a word Azure defines, never its message), so a refusal
+    // like Nov 17's 403s says which kind of no it was. Anything that isn't one plain code word is "other".
+    d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started, kind: azureCodeWord(code) });
     throw failure(call, res.status, code);
   }
 

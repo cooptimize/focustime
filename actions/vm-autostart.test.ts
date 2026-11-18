@@ -11,7 +11,7 @@ import { createPlanStore } from "../store/plan-store.ts";
 import type { Notice } from "../plan/notify.ts";
 import { IDENTITY_KEY, type MicrosoftAccount } from "./account.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
-import { autoStartTick, autoStartWake, recordUse, type AutoStartDeps } from "./vm-autostart.ts";
+import { AUTOSTART_MARK, autoStartCheck, autoStartTick, autoStartWake, recordUse, type AutoStartDeps } from "./vm-autostart.ts";
 import { AUTOSTART_KEY, clearVmState, settled, vmKey, vmAction, type VmContext, type VmStatus } from "./vm-actions.ts";
 
 const SUB = "00000000-0000-4000-8000-0000000000ab";
@@ -399,5 +399,81 @@ describe("the status's auto-start part", () => {
     expect((await autoStartWake({ env: "prod", now, config: cfg }))?.toString()).toBe(nyAt(minus(ws, 5)));
     expect(await autoStartWake({ env: "prod", now, config: cfgOf(tomlWith("auto_start = false")) })).toBeNull();
     expect(await autoStartWake({ env: undefined, now, config: cfg })).toBeNull();
+  });
+});
+
+// VM-4: a read of the VM's state that fails at the planned time isn't the day's one try. Before, the day was claimed
+// first and a failed read (Nov 17: one read in four answered 403) ended it as "Azure refused the start".
+describe("VM-4: a failed state read at the planned time", () => {
+  const failingWorld = async () => {
+    let now = 0;
+    const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: "refused" };
+    const arm = fakeArm({ now: () => now, transitionMs: 30_000, readFails });
+    const w = await world({ start: nyAt(minus(workStart(), 5)), arm }).init();
+    // The fake's clock follows the world's.
+    const tick = () => void (now = Date.parse(w.clock.now()));
+    const logs: { op: string; kind?: string }[] = [];
+    const deps = () => ({ ...w.deps("prod"), log: (r: { op: string; kind?: string }) => void logs.push(r) });
+    const pass = async () => (tick(), autoStartCheck(deps()));
+    return { w, arm, readFails, logs, pass };
+  };
+
+  it("is not the day's try: logged once, read again on later passes, and a read that works then starts it", async () => {
+    const t = await failingWorld();
+    expect(await t.pass()).toBe("state_retry");
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("state_retry");
+    expect(t.w.starts()).toBe(0);
+    expect(await t.w.plan.marked(AUTOSTART_MARK, "2026-11-11")).toBe(false);
+    expect(t.logs.filter((l) => l.op === "vm_autostart").map((l) => l.kind)).toEqual(["state_unreadable"]);
+    // Not told yet: a later pass may still start it.
+    expect(t.w.sent).toEqual([]);
+    t.readFails.kind = null;
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("started");
+    expect(t.w.starts()).toBe(1);
+    await settled();
+    // Started: the day is tried, and the next pass does nothing more.
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("not_due");
+    expect(t.w.starts()).toBe(1);
+  });
+
+  for (const kind of ["network", "busy"] as const)
+    it(`(${kind}) still unreadable at the late limit: left off, said once, never started`, async () => {
+      const t = await failingWorld();
+      t.readFails.kind = kind;
+      expect(await t.pass()).toBe("state_retry");
+      t.w.clock.advance(66 * 60_000);
+      expect(await t.pass()).toBe("state_unreadable");
+      t.w.clock.advance(60_000);
+      expect(await t.pass()).toBe("not_due");
+      expect(t.w.starts()).toBe(0);
+      expect(t.w.sent).toHaveLength(1);
+      expect(t.logs.filter((l) => l.op === "vm_autostart").map((l) => l.kind)).toEqual(["state_unreadable", "state_unreadable_late"]);
+    });
+
+  it("a start sent to Azure is the day's try, as VM-2 has it (Azure failing the start isn't retried)", async () => {
+    let now = 0;
+    const arm = fakeArm({ now: () => now, transitionMs: 30_000, forbid: new Set(["start"]) });
+    const w = await world({ start: nyAt(minus(workStart(), 5)), arm }).init();
+    now = Date.parse(w.clock.now());
+    expect(await autoStartCheck(w.deps("prod"))).toBe("refused");
+    expect(await w.plan.marked(AUTOSTART_MARK, "2026-11-11")).toBe(true);
+    w.clock.advance(30_000);
+    expect(await autoStartCheck(w.deps("prod"))).toBe("not_due");
+    expect(arm.calls.filter((c) => c.method === "POST" && c.path.endsWith("/start"))).toHaveLength(1);
+  });
+
+  it("with the gate closed nothing is read, failing or not", async () => {
+    const t = await failingWorld();
+    for (const env of ["dev", undefined, "demo"]) expect(await autoStartCheck(t.w.deps(env))).toBe("env");
+    expect(t.arm.calls).toEqual([]);
+  });
+
+  it("a sign-in that can't be used is still VM-2's sign_in: the day is used and the person told", async () => {
+    const w = await world({ start: nyAt(minus(workStart(), 5)), armToken: async () => { throw new AuthFailure("consent", "x"); } }).init();
+    expect(await autoStartCheck(w.deps("prod"))).toBe("sign_in");
+    expect(await w.plan.marked(AUTOSTART_MARK, "2026-11-11")).toBe(true);
   });
 });

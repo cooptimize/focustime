@@ -67,7 +67,7 @@ One pure module decides it: `config/background-policy.ts`. `server/main.ts` comp
 | Retention purge (`retention_purge`), ownership backfill (`conversation_ownership_backfill`), maintenance (`maintenance`), notice sweep (`notice_sweep`), old chat rows (`chat_text_cleanup`) | App jobs and ticks | None | That database only | Runs | Runs |
 | Start-up moves (`startup_upkeep`) | Once at start | None | One-time database moves: team settings, the Who repair, old requests to conversations, guest sessions, cancelled VM restores | Runs | Runs |
 
-**The automatic VM start (VM-3):** in production, from the person's planned time on, each outcome is logged once a day as `azure vm_autostart <word>` (started, started_late, already_on, not_chosen, skipped, paused, pto, holiday, pto_unreadable, sign_in, no_vm, refused, not_running; and holidays_unchecked, pto_earlier). The words and what each person is told are one list, `OUTCOMES` in `plan/vm-autostart.ts`. When it leaves the VM off for a reason that isn't their own choice, the person sees it on the VM chip, in its menu, in one notice and in Settings. A try with no VM record is in their Azure write log. The scheduler's own lines: `scheduler <pass>_over_limit`, `<pass>_finished_late`, `<pass>_slow`, `<job>_over_limit`, `early_over_limit`; a person's parts: `tick_part <name>_failed`, `<name>_over_limit`. Admin › Status › Background passes shows the same.
+**The automatic VM start (VM-3):** in production, from the person's planned time on, each outcome is logged once a day as `azure vm_autostart <word>` (started, started_late, already_on, not_chosen, skipped, paused, pto, holiday, pto_unreadable, sign_in, no_vm, refused, not_running, and since VM-4 state_unreadable (a read failed at the planned time; tried again later) and state_unreadable_late (still unreadable at the late limit); and holidays_unchecked, pto_earlier). The words and what each person is told are one list, `OUTCOMES` in `plan/vm-autostart.ts`. When it leaves the VM off for a reason that isn't their own choice, the person sees it on the VM chip, in its menu, in one notice and in Settings. A try with no VM record is in their Azure write log. The scheduler's own lines: `scheduler <pass>_over_limit`, `<pass>_finished_late`, `<pass>_slow`, `<job>_over_limit`, `early_over_limit`; a person's parts: `tick_part <name>_failed`, `<name>_over_limit`. Admin › Status › Background passes shows the same.
 
 Admin › Status on a test site has a "This is a test site" row listing what runs there only on a button (`server/background-status.ts`), and a second row while a watch period is on. What a test site's database already holds stays; the usual retention rules still expire old chat text and transcripts.
 
@@ -157,6 +157,50 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 - **Logs:** the console (`az containerapp logs show`), Application Insights and Log Analytics (30 days, `infra/modules/monitoring.bicep`). Queries in the runbook's [Read logs](../azure/runbook.md#read-logs). Each request is one operation with its own trace.
 - **Never logged:** tokens, secrets, PATs, Authorization headers, request or response bodies, message or transcript text, prompts and answers, people's ids or email addresses, chat ids, topics or members, and client keys except as a one-way reference. The logger has no field for them (`log/logger.ts`).
 
+## The VM chip's states
+
+- **A state** (Running, Stopped (deallocated), Starting… and the rest): the last read worked.
+- **The state with a hollow mark**: the last read failed; FocusTime keeps the last state it read, says how long ago in the chip's title and menu ("Read 1 minute ago"), and asks again in about 10 seconds.
+- **The state and a reason** (Can't reach Azure, Azure is busy, Sign in to Azure again, Azure refused, Can't reach FocusTime): reads have failed for 2 minutes; asked again every 30 seconds. The menu's first line has the same words and what to do.
+- **Checking…** alone: FocusTime restarted and hasn't read the VM yet.
+- **Unknown**: Azure answered without a state.
+- Start and Stop always read Azure afresh before they act (the preview and the confirm each read it), so nothing is started or stopped on an old reading.
+- In the log, each failed read is `azure instanceView` with its HTTP status and Azure's error code as `kind` (`AuthorizationFailed`, `TooManyRequests`, `none`, or `other` when it isn't one plain word).
+
+## Find an unexpected failure by its reference
+
+When an action fails in a way the server didn't expect, the person sees "That didn't work … (reference K7QH2M)". The answer is a 500. In the log the same reference is on two lines: `server action_failed` (the action's name in `action`, the error's type in `kind`) and the exception item (`ref` in its properties, with the redacted message and FocusTime's own frames). The reference is random and says nothing about the person or their data.
+
+```kusto
+AppTraces | where TimeGenerated > ago(7d) | where Properties['ref'] == 'K7QH2M' | project TimeGenerated, Message, Properties
+AppExceptions | where TimeGenerated > ago(7d) | where Properties['ref'] == 'K7QH2M' | project TimeGenerated, ExceptionType, OuterMessage, Details
+```
+
+## The VM-4 queries
+
+How VM-4 read production (read only, Log Analytics `ft-prod-log`; `docs/ux/vm4/what-happened.md`). `kind` and `first` are reserved words in KQL: use `Properties['kind']` and other names.
+
+```kusto
+// Reads of the VM's state per day: count, failures, median
+AppDependencies | where TimeGenerated > ago(3d) | where Name startswith 'azure instanceView'
+| summarize n=count(), failed=countif(Success == false), p50=percentile(DurationMs, 50), maxMs=max(DurationMs) by bin(TimeGenerated, 1d)
+// Failures by status and Azure's code, per 15 minutes
+AppDependencies | where TimeGenerated > ago(1d) | where Name startswith 'azure' and Success == false
+| summarize n=count() by bin(TimeGenerated, 15m), ResultCode, code=tostring(Properties['kind'])
+// Deploys and restarts: revisions and the background policy line
+ContainerAppSystemLogs_CL | where TimeGenerated > ago(1d) | project TimeGenerated, RevisionName_s, Reason_s
+ContainerAppConsoleLogs_CL | where TimeGenerated > ago(1d) | where Log_s has 'background_policy' | project TimeGenerated, RevisionName_s, Log_s
+// Token refreshes by source and status
+AppDependencies | where TimeGenerated > ago(2d) | where Name has 'token' | summarize count() by Name, ResultCode, bin(TimeGenerated, 1d)
+// Sign-ins and sign-outs
+AppRequests | where TimeGenerated > ago(1d) | where Name has 'sign' | project TimeGenerated, Name, ResultCode
+// Background passes that ran long or a part that failed
+AppTraces | where TimeGenerated > ago(2d) | where Message startswith 'scheduler' or Message startswith 'server tick_part'
+| summarize count() by Message, k=tostring(Properties['kind'])
+// Unexpected failures of actions
+AppExceptions | where TimeGenerated > ago(2d) | summarize count() by where=tostring(Properties['where']), ExceptionType, bin(TimeGenerated, 1h)
+```
+
 ## Troubleshooting
 
 | What you see | Why | Fix |
@@ -171,6 +215,8 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |
 | A call says the AI step failed | The pass for that call didn't finish: the page names why (the AI service, a timeout, AI not allowed for the client, the budget, FocusTime couldn't read the client's items) and, for a call sent in parts, which part. In production FocusTime tries it again by itself 3 times, 15 minutes apart, unless a retry can't fix it | Fix what the page names (Admin › AI for AI or Allow AI, the budget), then a reviewer presses Propose again. Last 20 requests (Settings, AI and assistant) shows the provider's HTTP status for a failed request ("Failed · HTTP 400"); App Insights has the same as `status` on `op: "request"`, with the tier in `kind`. On dev nothing retries by itself |
 | Push notifications aren't set up | No `ft-vapid-key` | `infra/scripts/vapid-key.sh` |
-| My VM didn't start before my day | The person's chip, its menu and Settings say why (PTO, a holiday, PTO unreadable, the Azure sign-in, no VM, Azure refused, or FocusTime wasn't running). Nothing at all: it wasn't production, or auto-start is off, or it was their own choice (a day not chosen, skipped, paused) | Ask what the chip's menu says. In the log, `azure vm_autostart` lines that day (one per reason). Admin › Status › Background passes: a warning means a pass is stuck; the log names the work (`tick_part`, `scheduler … over_limit`). It doesn't try again that day: Start in the chip's menu |
+| The VM chip shows a reason (Azure refused, Can't reach Azure, …) | Reads of the VM's state have failed for 2 minutes. The chip keeps the last state it read and keeps asking | Ask what the chip's menu says. In the log, `azure instanceView` lines with a failed status: `kind` is Azure's error code. Azure refused (403): check the person can still see the VM in the Azure portal, and the subscription's activity log for role assignment changes |
+| Someone was told "That didn't work … (reference ABC123)" | An action failed in a way the server didn't expect | Find the reference ([above](#find-an-unexpected-failure-by-its-reference)): the action, the error's type and the exception |
+| My VM didn't start before my day | The person's chip, its menu and Settings say why (PTO, a holiday, PTO unreadable, the Azure sign-in, no VM, Azure refused, or FocusTime wasn't running). Nothing at all: it wasn't production, or auto-start is off, or it was their own choice (a day not chosen, skipped, paused). VM-4: a state that couldn't be read at the planned time isn't the day's try; FocusTime reads again on later passes until the late limit, then says "couldn't read your VM's state" | Ask what the chip's menu says. In the log, `azure vm_autostart` lines that day (one per reason). Admin › Status › Background passes: a warning means a pass is stuck; the log names the work (`tick_part`, `scheduler … over_limit`). It doesn't try again that day: Start in the chip's menu |
 
 History: environments, deploys and the background policy are recorded in [docs/decisions.md](../decisions.md).

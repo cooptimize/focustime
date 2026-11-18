@@ -50,6 +50,60 @@ export function chipOf(power: PowerState, transition: VmTransition | null): VmCh
 }
 
 export const isTransition = (c: VmChip) => c === "starting" || c === "stopping";
+
+// ---- VM-4: a read that failed ----
+
+/**
+ * Why FocusTime couldn't read the VM's state, in the four words the chip uses: it can't reach Azure (no network, a
+ * time-out, or FocusTime itself didn't answer the page), Azure is busy (it asked to wait, or had a fault of its own),
+ * the Azure sign-in needs doing again, or Azure refused (permission, not found, any other no).
+ */
+export type ReadProblem = "network" | "busy" | "sign_in" | "refused";
+/** While a read fails the chip keeps the last state it knew and asks again this often. */
+export const CHECK_AGAIN_MS = 10_000;
+/** After failing this long it says the reason on its face. */
+export const PROBLEM_AFTER_MS = 2 * 60_000;
+/** After that, it keeps asking, a little less often. */
+export const CHECK_LATER_MS = 30_000;
+
+/** The reason from a failure's kind (AzureError or AuthFailure kinds) and, for Azure, its HTTP status. */
+export function readProblemOf(kind: string, status = 0): ReadProblem {
+  if (kind === "network" || kind === "timeout" || kind === "keyring") return "network";
+  if (kind === "throttled" || status >= 500) return "busy";
+  if (kind === "not_signed_in" || kind === "consent" || kind === "expired" || kind === "not_connected" || kind === "misconfigured" || kind === "error") return "sign_in";
+  return "refused";
+}
+
+/** The words: `short` on the chip's face, `text` in its menu with what to do. One place (docs/design/wording.md). */
+/** VM-4: what to do, one line in the chip's menu under the reason (sign_in's is the item itself: Sign in to Azure). */
+export const READ_NEXT: Record<ReadProblem | "app", string | null> = {
+  network: "Check your connection; FocusTime keeps trying",
+  busy: "Nothing to do; FocusTime keeps trying",
+  sign_in: null,
+  refused: "Your access may have changed: check the Azure portal or ask an admin",
+  app: "Check your connection; FocusTime keeps trying",
+};
+export const READ_PROBLEM: Record<ReadProblem | "app", { short: string; text: string }> = {
+  network: { short: "Can't reach Azure", text: "FocusTime can't reach Azure to read your VM's state. It keeps trying; nothing to do unless this lasts." },
+  busy: { short: "Azure is busy", text: "Azure is busy and asked FocusTime to wait. It keeps trying; nothing to do." },
+  sign_in: { short: "Sign in to Azure again", text: "Azure wants you to sign in again before FocusTime can read your VM. Choose Allow Azure access." },
+  refused: { short: "Azure refused", text: "Azure refused to show your VM's state. If this lasts, check in the Azure portal that you can still see the VM, or tell an admin." },
+  // The page couldn't reach FocusTime itself (the request for the status failed).
+  app: { short: "Can't reach FocusTime", text: "FocusTime isn't answering, so it can't check your VM. It keeps trying; nothing to do unless this lasts." },
+};
+export const CHECKING = "Checking…";
+
+/** "just now", "40 seconds ago", "1 minute ago", "3 minutes ago", "2 hours ago": how old the state shown is. */
+export function agoText(at: string | null, nowMs: number): string | null {
+  if (!at) return null;
+  const s = Math.max(0, Math.round((nowMs - Date.parse(at)) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return `${Math.round(s / 10) * 10} seconds ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return m === 1 ? "1 minute ago" : `${m} minutes ago`;
+  const h = Math.floor(m / 60);
+  return h === 1 ? "1 hour ago" : `${h} hours ago`;
+}
 /** Refresh every 60 s while visible, every 10 s during a transition. */
 export const refreshMs = (c: VmChip) => (isTransition(c) ? 10_000 : 60_000);
 /** Whether a start has reached running, or a stop deallocated (not merely stopped: that still bills). */
