@@ -7,8 +7,8 @@ import { labelOf } from "../parts.tsx";
 export const markOf = <V,>(a: AutoSave<V>, k: keyof V) => ({ s: a.status(k), retry: () => a.commit(k) });
 
 /** The Undo message's name for a field: its registry label, from a field key → setting id map. */
-export const labelBy = <V,>(ids: Partial<Record<keyof V & string, string>>) => (k: keyof V) => {
-  const id = ids[k as keyof V & string];
+export const labelBy = (ids: Readonly<Record<string, string>>) => (k: PropertyKey) => {
+  const id = ids[String(k)];
   return id ? labelOf(id) : "Setting";
 };
 

@@ -3,7 +3,6 @@
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { FindItem } from "./settings/FindItem.tsx";
-import { hoursText, STORY_SIZES, UNSIZED_CHOICES, unsizedText } from "../plan/estimate.ts";
 import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
@@ -11,7 +10,6 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import type { SettingsClient, SettingsData } from "../actions/types.ts";
 import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
-import { COLLAB_LENGTHS } from "../config/schema.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { call } from "./api.ts";
@@ -23,7 +21,6 @@ import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
-import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -45,6 +42,7 @@ import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
+import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -304,15 +302,7 @@ function SectionBody(p: BodyProps) {
     case "hours":
       return <HoursSection {...p} />;
     case "planning":
-      return (
-        <>
-          <GuidanceForm {...p} />
-          <PlanningForm {...p} />
-          <TimeboxForm {...p} />
-          <CollabForm {...p} />
-          <RiskForm {...p} />
-        </>
-      );
+      return <DayWeekSection {...p} />;
     case "focus":
       return (
         <>
@@ -456,80 +446,6 @@ function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: s
   );
 }
 
-/** ST-1: Today and Week's to-dos, rituals and nudges (the focus timer is under Focus, following under Clients). */
-function PlanningForm(p: FormProps) {
-  const a = usePlan(p, ["unsizedMinutes", "minS", "minM", "minL", "carryDays", "suggest", "reminderOffsetMinutes", "devopsOnDone", "progressOffer", "checkinReminderMinutes", "closeoutReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"] as const);
-  return (
-    <>
-      <Group title="To-dos">
-        <div className="set-grid">
-          <AutoField a={a} k="unsizedMinutes" sid="count-unsized" label="Count unsized work as" hint="Used wherever a to-do or story has no size yet, in every fit and budget. Nothing is written to DevOps.">
-            <span className="set-unsized">
-              <select aria-label="Count unsized work as" value={a.v.unsizedMinutes} onChange={(e) => a.change("unsizedMinutes", Number(e.target.value))}>
-                {UNSIZED_CHOICES.map((m) => (
-                  <option key={m} value={m}>{unsizedText({ ...p.data.planning.sizes, unsized: m })}</option>
-                ))}
-              </select>
-              <span className="set-hint" data-size-scale>{STORY_SIZES.map((z) => `${z} ${p.data.planning.sizes[z] < 60 ? `${p.data.planning.sizes[z]} min` : hoursText(p.data.planning.sizes[z])}`).join(" · ")}</span>
-            </span>
-          </AutoField>
-        </div>
-        <div className="set-grid" data-setting="shortest-useful-time">
-          {numField(a, "minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S to-do (S is 1h, M 2h, L 4h).")}
-          {numField(a, "minM", "Shortest useful time, M (minutes)", "The same for M.")}
-          {numField(a, "minL", "Shortest useful time, L (minutes)", "The same for L.")}
-        </div>
-        <div className="set-grid">
-          {numField(a, "carryDays", "Carry-over (days back)", "Unfinished to-dos offered again. 0 turns it off.", 1, 30)}
-        </div>
-        <AutoField a={a} k="suggest" label="Suggest work for empty blocks" hint="Today's and your next working day's empty blocks offer to-dos: unfinished ones first, then your backlog. Nothing is planned until you keep it. Also under Week's and Day's View options as Suggestions.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.suggest} onChange={(e) => a.change("suggest", e.target.checked)} /> Suggest
-          </label>
-        </AutoField>
-        <AutoField a={a} k="devopsOnDone" label="When I tick a story" hint="Ask opens Wrap it up: Finished or Made progress, a comment, and one preview of what goes to DevOps. Only for items you can change, on clients with DevOps writes. Nothing is written without Confirm.">
-          <div className="set-radios" role="radiogroup" aria-label="When I tick a story">
-            <label className="set-check">
-              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "ask"} onChange={() => a.change("devopsOnDone", "ask")} /> Ask (Wrap it up)
-            </label>
-            <label className="set-check">
-              <input type="radio" name="devops-on-done" checked={a.v.devopsOnDone === "never"} onChange={() => a.change("devopsOnDone", "never")} /> Always skip DevOps
-            </label>
-          </div>
-        </AutoField>
-        <AutoField a={a} k="progressOffer" label="Offer DevOps updates at end of day" hint="After Close out: Remaining Work where the process has it, else a short comment. Always previewed; nothing is written without Confirm.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.progressOffer} onChange={(e) => a.change("progressOffer", e.target.checked)} /> Offer
-          </label>
-        </AutoField>
-      </Group>
-      <Group title="Reminders" intro="Each comes as a notification; switch the kinds in Notifications.">
-        <div className="set-grid">
-          {numField(a, "reminderOffsetMinutes", "Add work reminder (minutes after the day starts)", "Only while today has no to-dos.", 5, 240)}
-          {numField(a, "checkinReminderMinutes", "Midday check-in reminder (minutes after lunch)", "On a day with to-dos. 0 is the end of lunch.", 5, 120)}
-          {numField(a, "closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
-        </div>
-      </Group>
-      <Group title="Week nudges" sid="week-nudges" intro="Empty turns a nudge off.">
-        <div className="set-grid">
-          {([
-            ["weekNudgeThu", "Thursday", "For next week."],
-            ["weekNudgeFri", "Friday", "For next week, if nothing is on it yet."],
-            ["weekNudgeMon", "Monday", "For this week, if nothing is on it yet."],
-          ] as const).map(([k, label, hint]) => (
-            <AutoField key={k} a={a} k={k} label={label} hint={hint}>
-              <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
-            </AutoField>
-          ))}
-        </div>
-      </Group>
-      <Group title="Look-ahead rituals" sid="rituals">
-        <AheadRituals />
-      </Group>
-    </>
-  );
-}
-
 /** ST-1: Focus › Focus timer (these are [plan] keys; they lived under Planning before). */
 function FocusTimerForm(p: FormProps) {
   const a = usePlan(p, ["focusMinutes", "breakMinutes", "endSound"] as const);
@@ -552,162 +468,6 @@ function FocusTimerForm(p: FormProps) {
 function FollowGraceForm(p: FormProps) {
   const a = usePlan(p, ["followGraceDays"] as const);
   return <div className="set-grid">{numField(a, "followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after their focus time ends.", 1, 90)}</div>;
-}
-
-/**
- * ADM-1: guidance with a team default by level (Admin › Organization): your own choice over it, and Reset to team
- * default. Levels change emphasis only: none of these ever blocks anything.
- */
-function GuidanceForm(p: FormProps) {
-  const org = p.data.org;
-  const mine = p.data.guidance;
-  const a = useAutoSave<{ draftStories: boolean | null; readinessNudges: boolean | null; planShare: number | null }>({
-    section: "guidance",
-    initial: { draftStories: mine.draftStories ?? null, readinessNudges: mine.readinessNudges ?? null, planShare: mine.planShare ?? null },
-    payload: (v) => v,
-    onSaved: p.onSavedData,
-    label: (k) => (k === "draftStories" ? "Break down offered" : k === "readinessNudges" ? "Needs attention nudges" : "Plan up to"),
-  });
-  if (!org) return null;
-  const team = org.levelGuidance;
-  const level = org.levelName ? `${org.levelName}${org.levelSource === "override" ? " (set by an admin)" : ""}` : "No level from Dataverse yet";
-  const reset = (k: "draftStories" | "readinessNudges" | "planShare") =>
-    a.v[k] !== null && (
-      <button type="button" className="link-btn" onClick={() => a.change(k, null)}>
-        Reset to team default
-      </button>
-    );
-  const onOff = (b: boolean) => (b ? "on" : "off");
-  return (
-    <Group title="Guidance" intro="Your level changes emphasis only; none of these ever blocks anything.">
-      <div className="set-grid set-guidance">
-        <ReadOnly sid="level" label="Your level" value={level} where="From your position in Dataverse. It changes suggestions only, never what you can do." />
-        {/* QT-1: "Plan up to (% of free time)" is gone from the screen (it moved the over line on Week's client chips, which are gone). The stored value stays. */}
-        <AutoField a={a} k="draftStories" label="Break down" hint={<>Team default: {onOff(team.draftStories)}. {reset("draftStories")}</>}>
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.draftStories ?? team.draftStories} onChange={(e) => a.change("draftStories", e.target.checked)} /> Offer Break down on features that need stories
-          </label>
-        </AutoField>
-        <AutoField a={a} k="readinessNudges" label="Needs attention nudges" hint={<>The readiness flags on Backlog's Gantt rows. Team default: {onOff(team.readinessNudges)}. {reset("readinessNudges")}</>}>
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.readinessNudges ?? team.readinessNudges} onChange={(e) => a.change("readinessNudges", e.target.checked)} /> Show Needs attention nudges
-          </label>
-        </AutoField>
-      </div>
-    </Group>
-  );
-}
-
-/** Step 17: when the Plan ahead rituals come next. Their switches are in Settings > Notifications. */
-function AheadRituals() {
-  const today = Temporal.Now.plainDateISO().toString();
-  const n = nextRituals(today);
-  const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  return (
-    <ul className="set-rituals">
-      <li>
-        <strong>Look ahead 4 weeks</strong> every other Thursday, once next week has work on it. Next: {day(n.lookAhead)}.
-      </li>
-      <li>
-        <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.
-      </li>
-      <li className="muted">Both open Backlog › Gantt; switch them in Notifications.</li>
-    </ul>
-  );
-}
-
-/** Settings > Planning > Timeboxes (step 12): Put on Outlook by default, and asking before changing my own events. */
-function TimeboxForm(p: FormProps) {
-  const t = p.data.timebox;
-  const a = useAutoSave({
-    section: "timebox",
-    initial: { ...t },
-    payload: (v) => v,
-    onSaved: p.onSavedData,
-    label: (k) => (k === "enabled" ? "Use timeboxing" : k === "outlookDefault" ? "Put on Outlook" : "Asking about my own timeboxes"),
-  });
-  return (
-    <Group title="Timeboxes">
-      <div className="set-grid">
-        <AutoField a={a} k="enabled" label="Use timeboxing" hint="Off hides the time controls; timeboxes are kept.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.enabled} onChange={(e) => a.change("enabled", e.target.checked)} /> Use timeboxing
-          </label>
-        </AutoField>
-        <AutoField a={a} k="outlookDefault" label="Put on Outlook" hint="Every new event shows a preview first.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.outlookDefault} onChange={(e) => a.change("outlookDefault", e.target.checked)} /> On by default
-          </label>
-        </AutoField>
-        <AutoField a={a} k="confirmOwn" label="Changes to my own timebox events" hint="Off: no question; every change is still logged and can be undone.">
-          <label className="set-check">
-            <input type="checkbox" checked={!a.v.confirmOwn} onChange={(e) => a.change("confirmOwn", !e.target.checked)} /> Don't ask again for my own timeboxes
-          </label>
-        </AutoField>
-      </div>
-    </Group>
-  );
-}
-
-/** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Ask to collaborate" searches. */
-function CollabForm(p: FormProps) {
-  const c = p.data.collab;
-  const a = useAutoSave({
-    section: "collab",
-    initial: { meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead, exclude: [...c.exclude] },
-    payload: (v) => v,
-    onSaved: p.onSavedData,
-    label: (k) => (k === "meetingMinutes" ? "Default length" : k === "teams" ? "Teams meeting" : k === "daysAhead" ? "Days to search" : "People to exclude"),
-  });
-  const [adding, setAdding] = useState("");
-  const add = () => {
-    if (!adding.trim()) return;
-    a.change("exclude", [...a.v.exclude, adding.trim()]);
-    setAdding("");
-  };
-  return (
-    <Group title="Help sessions" intro="For Ask to collaborate.">
-      <div className="set-grid">
-        <AutoField a={a} k="meetingMinutes" label="Default length" hint="Where Ask to collaborate starts.">
-          <select value={a.v.meetingMinutes} onChange={(e) => a.change("meetingMinutes", Number(e.target.value))}>
-            {COLLAB_LENGTHS.map((m) => (
-              <option key={m} value={m}>{m} minutes</option>
-            ))}
-          </select>
-        </AutoField>
-        <AutoField a={a} k="teams" label="Teams meeting" hint="You can turn it off per invite.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.teams} onChange={(e) => a.change("teams", e.target.checked)} /> On by default
-          </label>
-        </AutoField>
-        <AutoField a={a} k="daysAhead" label="Days to search" hint="Workdays from today, for items not pinned to a day.">
-          <input type="number" min={1} max={10} step={1} value={a.v.daysAhead} onChange={(e) => a.set("daysAhead", Number(e.target.value))} {...a.text("daysAhead")} />
-        </AutoField>
-        {p.data.org && <ReadOnly sid="never-suggested" label="Never suggested, for everyone" value={p.data.org.rules.neverSuggest.join(", ") || "Nobody"} where={ADMIN} />}
-        <AutoField a={a} k="exclude" label={p.data.org ? "People I exclude" : "People to exclude"} hint="Never suggested as helpers or as Who. By name or email.">
-          <ul className="set-list">
-            {a.v.exclude.map((x, i) => (
-              <li key={`${x}:${i}`}>
-                <span>{x}</span>
-                <button type="button" className="mini quiet" aria-label={`Remove ${x}`} onClick={() => a.change("exclude", a.v.exclude.filter((_, j) => j !== i))}>Remove</button>
-              </li>
-            ))}
-          </ul>
-          <span className="set-inline">
-            <input value={adding} maxLength={200} placeholder="Name or email" aria-label="Add a person to exclude" onChange={(e) => setAdding(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  add();
-                }
-              }} />
-            <button type="button" className="mini" disabled={!adding.trim()} onClick={add}>Add</button>
-          </span>
-        </AutoField>
-        <ReadOnly sid="invite-domains" label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
-      </div>
-    </Group>
-  );
 }
 
 const FOCUS_LABELS: Record<string, string> = { sound: "Default sound", volume: "Volume", fadeSeconds: "Fade", onBreak: "When a break starts", pauseMedia: "Pause music", teamsStatus: "Teams status", plainFocusStatus: "Plain focus status", playlists: "Playlists" };
@@ -917,35 +677,6 @@ function TeamsStatusLine({ always = false }: { always?: boolean } = {}) {
   if (st.blocked) return <p className="set-warn" role="status">FocusTime can't message you in Teams. Add the app again.</p>;
   if (!st.chat) return <p className="muted">Message FocusTime in Teams once, so it knows where to reach you.</p>;
   return always ? <p>Connected: FocusTime can reach you in your chat with it.</p> : null;
-}
-
-function RiskForm(p: FormProps) {
-  if (!p.data.risk) return null;
-  return <RiskFields {...p} />;
-}
-function RiskFields(p: FormProps) {
-  const r = p.data.risk!;
-  const a = useAutoSave({
-    section: "risk",
-    initial: { meetingWatchMinutes: r.meetingWatchMinutes, meetingAtRiskMinutes: r.meetingAtRiskMinutes, minFocusWindowMinutes: r.minFocusWindowMinutes },
-    payload: (v) => v,
-    onSaved: p.onSavedData,
-    label: (k) => (k === "meetingWatchMinutes" ? "Watch at" : k === "meetingAtRiskMinutes" ? "At risk at" : "Shortest useful focus window"),
-  });
-  const num = (k: keyof typeof a.v, label: string, hint: string) => (
-    <AutoField a={a} k={k} label={label} hint={hint}>
-      <input type="number" min={0} max={600} step={5} value={a.v[k]} onChange={(e) => a.set(k, Number(e.target.value))} {...a.text(k)} />
-    </AutoField>
-  );
-  return (
-    <Group title="At-risk blocks" sid="risk-rules" intro="When a block's meetings make it Watch or At risk.">
-      <div className="set-grid">
-        {num("meetingWatchMinutes", "Watch at (minutes of meetings)", "A block with this many minutes of meetings is marked Watch.")}
-        {num("meetingAtRiskMinutes", "At risk at (minutes of meetings)", "At least the Watch value.")}
-        {num("minFocusWindowMinutes", "Shortest useful focus window (minutes)", "With no free stretch this long, the block is at risk.")}
-      </div>
-    </Group>
-  );
 }
 
 const fullDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
