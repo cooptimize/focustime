@@ -79,7 +79,7 @@ left: change the reviewers.
 ## 4. Upload calls (client-hosted)
 
 After the call, an attendee opens the meeting's recap in Teams (the chat or the calendar event, Recap, Transcript)
-and downloads the transcript as .vtt or .docx. Then, in FocusTime: the call's mark on Week, or ⋯ › Client calls,
+and downloads the transcript as .vtt or .docx. Then, in FocusTime: the call's mark on Week, or ⋯ › Calls,
 Upload a transcript. When the organizer's policy doesn't allow attendees to download it, ask the organizer to send it.
 
 "No transcript this week" dismisses the call's nudge when there was no transcript, for every reviewer.

@@ -214,9 +214,9 @@ describe.skipIf(!CHROMIUM)("PH-1: the phone's bar, Day and More (Monday)", () =>
     await screen.waitFor();
     expect(await bar(page).locator('[aria-current="page"]').getAttribute("data-tab")).toBe("more");
     const rows = await screen.locator(".mr-row").evaluateAll((els) => els.map((e) => [e.querySelector(".mr-name")?.textContent, e.querySelector(".mr-line")?.textContent ?? null, Math.round(e.getBoundingClientRect().height)] as const));
-    expect(rows.map((r) => r[0])).toEqual(["Backlog", "Status", "Client calls", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
+    expect(rows.map((r) => r[0])).toEqual(["Backlog", "Status", "Calls", "Code", "My VM", "Settings", "Guide", "Everything else", "Desktop version"]);
     for (const r of rows) expect(r[2], r[0]!).toBeGreaterThanOrEqual(56);
-    expect(Object.fromEntries(rows.map((r) => [r[0], r[1]]))).toMatchObject({ Status: "2 features need your update", "Client calls": "1 call to review", "My VM": "Stopped (deallocated)" });
+    expect(Object.fromEntries(rows.map((r) => [r[0], r[1]]))).toMatchObject({ Status: "2 features need your update", Calls: "1 call to review", "My VM": "Stopped (deallocated)" });
     await shot(page, "ph1-more");
     await screen.getByRole("button", { name: /Everything else/ }).click();
     const inner = page.getByRole("main", { name: "Everything else" });

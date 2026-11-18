@@ -8,7 +8,7 @@ import { DEFAULT_TEAMS_RHYTHM, type TeamsRhythm } from "./teams-rhythm.ts";
 import { DEFAULT_STATUS_TIMES, type StatusTimes } from "./status-report.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "assigned", "dates_moved", "item_edited", "status_report", "meeting_review", "deployments"] as const;
 /**
  * NM-1: kinds nothing sends any more (IB-4 took out what sent them; RM-1 took out Ask a lead to look's two). A person's saved choice for one stays in the store,
  * unread: the settings reader skips these keys instead of calling them unknown.
@@ -40,6 +40,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   item_edited: "Someone edited your item",
   status_report: "Monday's status report",
   meeting_review: "Client calls to review",
+  deployments: "Deployments you're on",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when nothing is on today yet.",
@@ -64,9 +65,10 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   item_edited: "When a teammate changes the title, description or acceptance criteria of a DevOps item you own on its story card in FocusTime, once a day per item.",
   status_report: "Friday afternoon (and Sunday evening if you like) when some of your features have no update yet for Monday's report. Off until you turn it on.",
   meeting_review: "After a client call you review, once: its proposals are ready, or its transcript needs uploading.",
+  deployments: "When someone adds you to a deployment, moves its day or time, takes you off it or deletes it. Never for notes, items or links, and never for your own changes.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
-export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved", "item_edited"]);
+export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved", "item_edited", "deployments"]);
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
@@ -300,6 +302,19 @@ export const notices = {
   sendCantLead: (id: number, stamp: string, who: string, title: string, reason: string, at: string): Notice => ({ kind: "send_cant_lead", key: `send_cant_lead:${id}:${stamp}`.slice(0, 200), title: `${who} can't take a Must this week`, body: `${title}\n${reason}`, buttons: [open("Open Week")], route: "team", at }),
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
+  /**
+   * DP-3: someone else changed a deployment I'm on (or was on): added me, moved its day or time, took me off or deleted
+   * it. Once each; in FocusTime only. `when` is the window in my own words ("Sat, Nov 21, 9:00 to 11:00 AM").
+   */
+  deployment: (id: number, what: "added" | "moved" | "removed" | "deleted", byName: string, clientName: string, title: string, when: string, at: string): Notice => ({
+    kind: "deployments",
+    key: `deployment:${id}`,
+    title: { added: `${byName} added you to a deployment`, moved: `${byName} moved a deployment you're on`, removed: `${byName} took you off a deployment`, deleted: `${byName} deleted a deployment you were on` }[what],
+    body: `${clientName}: ${title}, ${when}.\n${what === "added" || what === "moved" ? "Click to see it in Week." : "It's off your plan. Check your Outlook if it was there."}`,
+    buttons: [open("Open Week")],
+    route: "week",
+    at,
+  }),
   itemEdited: (key: string, byName: string, itemId: number, at: string): Notice => ({ kind: "item_edited", key, title: `${byName} edited #${itemId}`, body: `The title, description or acceptance criteria of #${itemId} changed in DevOps.\nClick to see it in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemId}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Backlog.`, buttons: [open("Open Backlog")], route: `aheaditem:${itemIds[0]}`, at }),
   /** SR-1: Friday afternoon or Sunday evening, once per occasion, when features have no update yet. */

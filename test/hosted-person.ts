@@ -29,6 +29,8 @@ export const ANSWER = JSON.stringify({
   gaps: [{ type: "User Story", parentId: 1201, title: "Holiday calendar import", description: "Import the client's holidays.", lines: [2] }],
   commitments: [],
   comments: [],
+  // MC-2: the answer has a summary now (the schema requires one).
+  summary: [],
 });
 
 export type Reads = { devops: (string | null)[]; myClients: (string | null)[] };

@@ -179,6 +179,10 @@
 
   /* 3. Domain tokens: Cooptimize Dark */
   --risk: var(--p-co-red-300);
+  /* DD-1: the Dev (or Local) mark: a solid pill in the app's deep red (light's --risk) with white letters, in every
+     theme, so it reads in dark and in light and is never mistaken for a status wash. */
+  --site-mark: var(--p-co-red-700);
+  --on-site-mark: var(--p-white);
   --watch: var(--p-co-amber-300);
   --ok: var(--p-co-green-300);
   /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
@@ -265,6 +269,8 @@
 
   /* 3. Domain tokens: Cooptimize Light */
   --risk: var(--p-co-red-700);
+  --site-mark: var(--p-co-red-700);
+  --on-site-mark: var(--p-white);
   --watch: var(--p-co-amber-700);
   --ok: var(--p-co-green-700);
   /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
@@ -337,6 +343,8 @@
 
   /* 3. Domain tokens: Neutral light */
   --risk: var(--p-red-700);
+  --site-mark: var(--p-red-700);
+  --on-site-mark: var(--p-white);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
   /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
@@ -512,7 +520,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   gap: 18px;
   padding: 0 24px;
 }
-.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
 .brand .name { font-weight: 600; font-size: var(--fs-4); letter-spacing: -0.01em; }
 .brand .sub { color: var(--text-faint); font-size: var(--fs-3); }
 
@@ -2216,10 +2224,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   margin-left: 10px; padding: 2px 10px; border-radius: 99px; font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: 0.02em;
   color: var(--on-action); background: var(--sample, var(--watch)); border: 0; cursor: pointer;
 }
-/* EV-1: the top bar's "Dev" or "Local": a quiet status pill (a wash, no line, muted words), never a button look. */
+/* EV-1: the top bar's "Dev" or "Local", never a button look. DD-1: a solid red pill with white letters (not a state's
+   pale wash), so nobody mistakes dev for production; the brand row is centered, so it sits on the tabs' line. */
 .site-tag {
   flex: none; margin-left: 10px; padding: 2px 8px; border-radius: 99px; font-size: var(--fs-2); font-weight: 500; line-height: 1.4;
-  color: var(--text-muted); background: var(--wash-2); white-space: nowrap; cursor: default; user-select: none;
+  color: var(--on-site-mark); background: var(--site-mark); white-space: nowrap; cursor: default; user-select: none;
 }
 .feat-link { font-size: inherit; text-align: left; }
 
@@ -5040,6 +5049,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ib-phone .ib-row-sub { display: flex; flex-wrap: wrap; gap: 4px 8px; white-space: normal; align-items: center; }
 .ib-phone .ib-row-sub .muted { overflow-wrap: anywhere; }
 .ib-phone .ib-group-head { margin: 14px 0 4px; }
+/* DP-3: a write preview opened from the phone's to-do sheet (Put on my Outlook) shows above the sheet. */
+.cap-backdrop:has(> .write-dialog) { z-index: 72; }
 .ib-sheet-back { position: fixed; inset: 0 0 var(--bb-h, 0px) 0; z-index: 58; background: color-mix(in srgb, var(--bg) 92%, transparent); display: flex; flex-direction: column; justify-content: flex-end; }
 .ib-sheet-title { margin: 16px; }
 .ib-sheet { display: flex; flex-direction: column; gap: 12px; max-height: min(92dvh, 100%); padding: 8px 16px 16px; border-radius: 16px 16px 0 0; background: var(--surface); border-top: 1px solid var(--border-strong); overflow-y: auto; overflow-x: hidden; }
@@ -5402,7 +5413,7 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-intro { margin: 0; font-size: var(--fs-2); max-width: 70em; }
 .mtg-series, .mtg-group, .mtg-upload, .mtg-done { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border-strong)); border-radius: 10px; background: var(--surface); }
 .mtg-series-head { display: grid; gap: 2px; }
-.mtg-series-head h3, .mtg-group h3, .mtg-upload h3, .mtg-done h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.mtg-series-head h3, .mtg-series-head h4, .mtg-group h3, .mtg-upload h3, .mtg-done h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .mtg-series-head .swatch { background: var(--c, var(--border-strong)); }
 .mtg-series-head .muted { font-size: var(--fs-2); }
 .mtg-occs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
@@ -5449,6 +5460,45 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .mtg-date-ask:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mtg-date-ask p { margin: 0; font-size: var(--fs-3); }
 /* PK-1: a Pocket export's one note, above the proposals and the Transcript; its lines have no time column. */
+/* MC-2: Calls: its two lists, Add a call and a call's setup; a call's summary above its proposals. */
+.mtg-head-actions { display: inline-flex; gap: 8px; margin-left: auto; }
+.mtg-calls { display: grid; gap: 8px; }
+.mtg-calls-head { display: grid; gap: 2px; margin-top: 4px; }
+.mtg-calls-head h3 { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mtg-calls-head .muted { font-size: var(--fs-2); }
+.mtg-others { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.mtg-others:empty { display: none; }
+.mtg-other { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name state act" "when state act"; gap: 2px 12px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); border-left: 3px solid var(--c, transparent); }
+.mtg-other:first-child { border-top: 0; }
+.mtg-other-name { grid-area: name; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.mtg-other-name .swatch { background: var(--c, var(--border-strong)); }
+.mtg-other-when { grid-area: when; font-size: var(--fs-2); }
+.mtg-other .mtg-state { grid-area: state; flex: none; font-size: var(--fs-2); text-align: right; }
+.mtg-other.needs .mtg-state { color: var(--text); font-weight: 600; }
+.mtg-other > button { grid-area: act; }
+.phone .mtg-other { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name act" "when act" "state act"; }
+.phone .mtg-other .mtg-state { text-align: left; }
+.mtg-setup { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-1, none); }
+.mtg-other-setup { list-style: none; padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.mtg-setup h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; overflow-wrap: anywhere; }
+.mtg-setup h3:focus { outline: none; }
+.mtg-setup p { margin: 0; }
+.mtg-setup-field { font-weight: 500; }
+.mtg-setup select, .mtg-add input { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; max-width: 100%; box-sizing: border-box; }
+.mtg-setup-hint { font-size: var(--fs-2); }
+.mtg-setup-source { margin: 0; padding: 0; border: 0; display: grid; gap: 6px; }
+.mtg-setup-source legend { font-weight: 500; padding: 0; margin-bottom: 4px; }
+.mtg-setup-source label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.mtg-setup-source label > span { display: grid; gap: 2px; }
+.mtg-setup-source label .muted { font-size: var(--fs-2); }
+.mtg-setup-source label.disabled { opacity: 0.7; cursor: default; }
+.mtg-setup-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.mtg-add-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11em, 1fr)); gap: 8px 12px; }
+.mtg-add-grid > label, .mtg-add-field { display: grid; gap: 4px; font-weight: 500; min-width: 0; }
+.mtg-add-grid label:first-child { grid-column: 1 / -1; }
+.mtg-summary { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--sunken); }
+.mtg-summary h3 { margin: 0 0 4px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.mtg-summary ul { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
 .mtg-pocket-note { margin: 0; padding: 6px 10px; border-left: 3px solid var(--border-strong); border-radius: 6px; background: var(--sunken); font-size: var(--fs-2); color: var(--text); }
 .mtg-lines.untimed li { grid-template-columns: minmax(6em, 8em) minmax(0, 1fr) auto; }
 .phone .mtg-lines.untimed li { grid-template-columns: minmax(0, 1fr); }
@@ -6244,6 +6294,32 @@ textarea::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, 
   .tp-step { min-height: 44px; align-items: center; }
   .dep-list li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dep-list li > button { grid-column: 3; }
+}
+
+/* DP-3: who is on a deployment (a count on a row, names where it opens), the People field, and my own hold's line. */
+.deploy-people { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-1); color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.deploy-people-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0; font-size: var(--fs-2); overflow-wrap: anywhere; }
+.deploy-people-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.deploy-people-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.dp-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 1px 4px 1px 9px; font-size: var(--fs-2); border: 1px solid var(--border); border-radius: 999px; overflow-wrap: anywhere; }
+.dp-chip.me { padding-right: 9px; color: var(--text-muted); }
+.dp-remove { display: inline-grid; place-items: center; min-width: 24px; min-height: 24px; padding: 0; border: 0; background: none; color: var(--text-muted); cursor: pointer; border-radius: 999px; }
+.dp-remove:hover, .dp-remove:focus-visible { color: var(--text); background: var(--border); }
+.menu-form-intro { grid-column: 1 / -1; margin: 0; font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
+.menu-form .field.people { grid-column: 1 / -1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.deploy-hold { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; font-size: var(--fs-2); }
+.deploy-hold-line { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.deploy-hold.behind .deploy-hold-line, .deploy-hold.moved_in_outlook .deploy-hold-line, .deploy-hold.deleted_in_outlook .deploy-hold-line { color: var(--watch); }
+.deploy-hold-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.deploy-hold-error { flex-basis: 100%; color: var(--watch); }
+.left-holds { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 8px; font-size: var(--fs-2); color: var(--watch); max-width: 100%; overflow-wrap: anywhere; }
+.cap-people { display: flex; flex-direction: column; gap: 4px; }
+.deploy-people-field .person-picker input { width: min(20em, 100%); }
+.weekend-cell .pick-row:not(.ph-row) .deploy-people { order: 3; }
+@media (max-width: 600px) {
+  .dp-remove { min-width: 44px; min-height: 44px; }
+  .deploy-hold-acts .mini { min-height: 44px; }
+  .left-holds .mini { min-height: 44px; }
 }
 
 /* IB-2: the Everything timeline. Day headings stick while their day scrolls; rows wait to be laid out until near the view. */

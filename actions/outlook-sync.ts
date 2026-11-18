@@ -12,6 +12,9 @@ import type { OutlookWrite } from "../sources/graph/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { clientName, localOf, wantFields } from "./timebox-actions.ts";
 import { userZone } from "../week/zone.ts";
+import { windowHalf, windowProblem } from "../plan/deploy.ts";
+import { localOf as localWindow } from "../plan/shared-deploy.ts";
+import { hoursOn } from "../week/hours.ts";
 
 /** `earlier`: FocusTime-marked events this person's store has no record of (D470): left alone, shown as ordinary events. */
 export type SyncResult = { facts: Record<string, EditFacts>; changed: number; conflicts: number; earlier: number };
@@ -106,7 +109,28 @@ async function apply(o: { plan: PlanStore; cfg: AppConfig; now: () => string }, 
     log(tb, "delete", "From Outlook: deleted there; the timebox is kept with Put on Outlook off", tb, next, own.eventId, last, null);
     return 1;
   }
-  if (d.kind === "adopt") {
+  // DP-3: a deployment's hold. Moved in my Outlook while others are on it: never moved for them by itself; I choose
+  // (Move the deployment for everyone, or Put my hold back) from the conflict. Alone on it: the deployment follows, as a
+  // timebox does today. Only its window travels; a subject changed in Outlook is the deployment's own title again.
+  const dep = d.kind === "adopt" && tb.pickId !== null ? await plan.getPick(tb.pickId) : null;
+  if (d.kind === "adopt" && dep?.shared) {
+    const t = timeboxFrom(d.fields, name, tz);
+    const l = localWindow(d.fields.start, d.fields.end, tz);
+    const timeMoved = d.fields.start !== last.start || d.fields.end !== last.end;
+    if (!timeMoved) {
+      (await plan.recordOwnEvent(tb.uid, tb.id, ev!.id, d.fields));
+      return 0;
+    }
+    if (dep.shared.people.length === 1 && t && !l.clipped && !windowProblem(l.window)) {
+      await plan.deployFollow(dep.id, instant(d.fields.start).toString(), instant(d.fields.end).toString(), windowHalf(hoursOn(cfg.week.hours, l.date), l.window));
+      const next = (await plan.updateTimebox(tb.id, { date: t.date, start: t.start, end: t.end, outlookNote: `Changed in Outlook: ${d.changed.join(", ")}`, conflict: null }));
+      (await plan.recordOwnEvent(tb.uid, tb.id, ev!.id, d.fields));
+      log(tb, "update", "From Outlook: the deployment moved to your hold's time", tb, next, ev!.id, last, d.fields);
+      return 1;
+    }
+    // Others on it (or a time that can't be a deployment's): ask.
+  }
+  if (d.kind === "adopt" && !dep?.shared) {
     const t = timeboxFrom(d.fields, name, tz);
     if (t) {
       const next = (await plan.updateTimebox(tb.id, { ...t, pickId: t.date === tb.date ? tb.pickId : null, outlookNote: `Changed in Outlook: ${d.changed.join(", ")}`, conflict: null }));

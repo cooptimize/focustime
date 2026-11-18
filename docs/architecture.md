@@ -47,7 +47,7 @@ The Inbox: `InboxPage.tsx` is the screen with its three lists (From chats, Promi
 
 ### `ui/meetings/`
 
-Client calls (`#/meetings`): `Meetings.tsx` lists a person's registered calls and opens a call's review; `calls.ts` is its model and remembers the place each call is opened from, for Back; `GapFields.tsx` is a new item's row in the New form's fields. Its DevOps writes go only through `ui/DevOpsWrite.tsx` (`one-door.test.ts`).
+Calls (`#/meetings`; Client calls before): `Meetings.tsx` lists a person's registered client calls, then Your other calls (their own calendar's last 14 days, `meeting.calls`) and the calls they added (Add a call), opens a call's setup (`CallSetup`: the client, suggested by `plan/calls.ts`, and the source) and a call's review, with its summary; `actions/call-press.ts` is the press the Graph gate asks for an unregistered call; `calls.ts` is its model and remembers the place each call is opened from, for Back; `GapFields.tsx` is a new item's row in the New form's fields. Its DevOps writes go only through `ui/DevOpsWrite.tsx` (`one-door.test.ts`).
 
 The one DevOps preview: `ui/DevOpsWrite.tsx` is the only file in `ui/` that previews, confirms or retries a change to a client's DevOps (`ui/one-preview.test.ts`, with its named exceptions); `plan/preview-parts.ts` splits a screen's changes into one client and 10 at most per preview and holds the words they say; browser tests drive it with `e2e/one-preview.ts`. Registering a call is in Admin (`ui/settings/AdminMeetings.tsx`).
 
@@ -67,6 +67,7 @@ Every named, validated operation. The UI, the command menu, the assistant, the T
 - `dispatch.ts` takes an action name and its input, rejects an unknown name or unexpected input, and calls the action. Its switch is exhaustive, so a registered action with no handler fails the type check.
 - `types.ts` holds the response shapes the server and the UI share (types only).
 - One file per area holds that area's actions (`plan-actions.ts` for to-dos and days, `weekplan-actions.ts`, `ahead-actions.ts`, `status-actions.ts`, `conversation-actions.ts`, `code-actions.ts` and the rest); a `*-types.ts` beside one holds its shapes.
+- `shared-deploy-actions.ts`: who is on a shared deployment, Take me off, Delete for everyone and their Undos, and a person's own hold (its Outlook event goes through `timebox-actions.ts`).
 - External writes live only in their named files: `timebox-actions.ts` (Outlook), `devops-write-actions.ts` (DevOps), `loop-actions.ts` (Close the loop), `presence-actions.ts` (Teams status), `vm-actions.ts` (the VM; the chip keeps the last state while a read fails, and `ui/vm-status.ts` does the same in the page). Each follows the write framework, with `readback.ts` the shared read back. How to add one is in [Adding an external write safely](technical/development.md#adding-an-external-write-safely).
 - `admin.ts` is the one `isAdmin()` check; `org.ts` reads the team's values.
 - The background readers the scheduler calls live here too: `devops-poll.ts` (DevOps), `request-poll.ts` and `conversations-pipeline.ts` (client chats), `notifier.ts` (the one notifier).
@@ -108,6 +109,7 @@ The plan store: everything FocusTime keeps for people.
 - `open.ts` opens the database from the app config (SQL Server, or SQLite for the demo, the fallback and tests). `sql/` holds the SQL Server driver (`sqlserver.ts`, `conn.ts`), the SQLite one (`sqlite.ts`), the T-SQL translation (`tsql.ts`), SQL Server's baseline schema (`baseline.ts`) and the migration runner (`migrate.ts`).
 - `scope.ts` adds the signed-in person to every statement, so no other code writes `user_id`. `isolation.test.ts` fails when a table is neither a user table (with `user_id` first in its keys) nor an app table.
 - `plan-store.ts` is a person's plan (to-dos, days, weeks, follow-ups, captures, markers); each other `*-store.ts` file holds one area (conversations, DevOps, Teams, meetings, admin, code views, standards).
+- `deployments.ts` is a deployment several people share (app tables), answering a person only about the ones they are on; `plan-store.ts` keeps each person's own to-do for one in step with it, in their zone, and their own hold.
 - `user-secrets.ts` seals a person's secrets under the app data key; `user-settings.ts` holds their settings rows; `accounts.ts` the users and sessions; `user-data.ts`, `export-local.ts` and `import.ts` Export and import; `retention.ts` what is deleted after how long.
 - `migrations/`: one timestamped file per schema change (`<UTC timestamp>_<what>.ts`), listed in `migrations/index.ts`; `migrations/named.ts` says how the runners apply them, after the frozen numbered migrations (in `plan-store.ts` for SQLite, `sql/migrate.ts` for SQL Server), in name order. `migrations/additive.test.ts` fails on a migration that renames or drops without a `safe-drop:` reason.
 

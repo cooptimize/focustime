@@ -39,7 +39,7 @@ Phone only. At 768 and wider nothing here changes.
 | A block card: name, hours, status pill and its reason | The tile: name, and its line ("At risk · Dentist 12:00"); the day's section in full |
 | A block card: Now marker on the block under way | The tile says "Now" and has an outline |
 | A block card: late chip and due badges | The row's promise line in the due badge's words ("Due today", "Due tomorrow · 2"); late ones are the Inbox's (one at a time, and Promises) |
-| A block card: a client call's mark (MC-1) | The day: the meeting's call mark (opens the call); More › Client calls |
+| A block card: a client call's mark (MC-1) | The day: the meeting's call mark (opens the call); More › Calls |
 | A block card: live call in the client's chat (CW-1) | Today's Now card; the block's sheet |
 | A block card: flex sessions | Desktop version |
 | A block card: "3 meetings · 2h 30m · 1h 45m free", opening the meetings | The day: the block's meetings in time order, then the same line |

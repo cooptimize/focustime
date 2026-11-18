@@ -27,12 +27,12 @@ import { DEMO_SEEDS, type DemoSeedEnv } from "../sources/demo/seeds/index.ts";
 import { demoDevOpsPeople, demoItems, demoPto } from "../sources/demo/data.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { createMeetingStore } from "../store/meeting-store.ts";
-import { canView } from "../plan/meetings.ts";
+import { canView, graphReadable } from "../plan/meetings.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
 import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
-import { createPlanStore, openPlanDb, planStoreOn, SOLO_USER, type PlanStore } from "../store/plan-store.ts";
+import { openPlanDb, planStoreOn, SOLO_USER, type PlanStore } from "../store/plan-store.ts";
 import { exportUser } from "../store/user-data.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
@@ -45,6 +45,7 @@ import { createDemoIcsGet } from "../sources/demo/links.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
+import { createPressGrants } from "../actions/call-press.ts";
 import { createDemoFeedbackDevOps, demoFeedbackBackend, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { clientScope } from "../config/org.ts";
@@ -111,7 +112,32 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // store can be read back with Export my data, so the tours' "the plan store is unchanged" check runs on the demo.
   // Unset (everywhere else), nothing changes: the demo has no export.
   const readBack = !opts.plan && process.env.FOCUSTIME_TEST_DEMO_EXPORT === "1" ? sqliteConn(openPlanDb({ path: ":memory:", now: zoned })) : null;
-  const plan = opts.plan ?? (readBack ? planStoreOn(readBack, { now: zoned, userId: SOLO_USER }) : createPlanStore({ path: ":memory:", now: zoned }));
+  // DP-3: the demo's plan database is one connection, so a teammate can be a second signed-in person on it (demo.be):
+  // their own plan store beside mine, the way two people share the hosted database. The demo's person is themselves on
+  // a shared deployment (DEMO_PERSON.oid), as they are in the people picker.
+  const planConn = opts.plan ? null : (readBack ?? sqliteConn(openPlanDb({ path: ":memory:", now: zoned })));
+  const plan = opts.plan ?? planStoreOn(planConn!, { now: zoned, userId: SOLO_USER, personId: DEMO_PERSON.oid });
+  let current: PlanStore = plan;
+  const teammates = new Map<string, PlanStore>();
+  /** DP-3: be one of the demo's signed-in teammates (their own plan, empty but for what is shared with them), or me again. */
+  const people = () => [{ id: "me", name: DEMO_PERSON.name }, ...DEMO_PEOPLE.slice(0, 3).map((x) => ({ id: x.aadId, name: x.name }))];
+  let currentId = "me";
+  const be = async (who: string | null): Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> => {
+    if (who === null) return { ok: true, current: currentId, people: people() };
+    if (who === "me") return (current = plan), (currentId = "me"), { ok: true, current: currentId, people: people() };
+    const p = DEMO_PEOPLE.slice(0, 3).find((x) => x.aadId === who.toLowerCase());
+    if (!p || !planConn) return { ok: false, error: "That isn't a demo teammate who uses FocusTime" };
+    let s = teammates.get(p.aadId);
+    if (!s) {
+      s = planStoreOn(planConn, { now: zoned, userId: `demo-${p.aadId}`, personId: p.aadId });
+      await s.setAccountState("ms_identity", { oid: p.aadId, tid: DEMO_PERSON.tid, name: p.name, username: p.email, email: p.email, signedInAt: opts.now(), systemUserId: null, systemUserEmail: null });
+      teammates.set(p.aadId, s);
+    }
+    current = s;
+    currentId = p.aadId;
+    return { ok: true, current: currentId, people: people() };
+  };
+
   // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
   // The demo reads no messages, so Refresh has nothing to do.
   const instant = () => Temporal.Instant.from(opts.now());
@@ -263,7 +289,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     return { ...parsed, config: await org.apply(parsed.config, DEMO_PERSON.oid) };
   };
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
-  const demoAzure = createDemoAzure();
+  // MC-2: the press (Get it from Teams) and the gate the real client asks before every transcript read.
+  const press = createPressGrants();
+  const demoAzure = createDemoAzure({ meetingsGate: { allowed: async (q) => press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false)) } });
   /** VM-4: verification runs only: the action whose next call fails unexpectedly. */
   let failNext: string | null = null;
   // DM-1: the demo's AI. The app's spend gets what real calls cost (its cap counts them); the service reads the app's
@@ -305,10 +333,12 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     makeDevOps: () => sources.devops,
     saveSystemUserId: async () => {},
     now: opts.now,
-    plan,
+    get plan() {
+      return current;
+    },
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, readPdf: pdfReader(), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), press, cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.
@@ -330,6 +360,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
           }
         : {}),
       status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }),
+      be,
       devopsChange: (clientKey, change) => (isDemoClient(clientKey) ? devops.teammate(clientKey, parseTeammate(change)) : { ok: false, error: "That isn't a demo client" }),
     },
     // DM-1: every AI feature runs in the demo: the app's real provider on this fictional data, else the stored samples.

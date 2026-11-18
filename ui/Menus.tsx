@@ -4,6 +4,7 @@ import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { DeployChecks } from "./DeployItems.tsx";
+import { DeployPeopleField } from "./DeployPeople.tsx";
 import { TextBox } from "./TextBox.tsx";
 import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuItem, type MenuStep } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -107,7 +108,14 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
           if (r !== false) onDone();
         }}
       >
-        {step.fields.map((f) => f.type === "checks" ? (
+        {step.intro && <p className="menu-form-intro" role="note">{step.intro}</p>}
+        {step.fields.map((f) => f.type === "people" ? (
+          // DP-3: who else is on it: chips and the shared picker, Cooptimizers only.
+          <div key={f.key} className="field people">
+            <span>{f.label}</span>
+            <DeployPeopleField name={f.key} clientKey={clientOf(f)} initial={f.people ?? []} />
+          </div>
+        ) : f.type === "checks" ? (
           // DP-2: a group of checkboxes can't sit inside one label.
           <div key={f.key} className="field checks">
             <DeployChecks name={f.key} clientKey={clientOf(f)} clientName={clientOf(f) ?? ""} {...(f.existing !== undefined ? { existing: f.existing } : {})} onLeave={onDone} />

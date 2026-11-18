@@ -36,7 +36,8 @@ export function demoMeetingAnswer(input: string): unknown {
   // PK-1: a line from a Pocket export has no time ("L4 Speaker 2: words").
   const lines = [...input.matchAll(/^L(\d+)(?: \[[^\]]*\])? ([^:]+): (.*)$/gm)].map((m) => ({ n: Number(m[1]), who: m[2]!, text: m[3]! }));
   const find = (words: string) => lines.filter((l) => l.text.toLowerCase().includes(words)).map((l) => l.n).slice(0, 1);
-  const date = /\), (\d{4}-\d{2}-\d{2}) \(/.exec(input)?.[1] ?? null;
+  // MC-2: "Meeting: <name> (<role>), <date> (<weekday>)", or with no role for a call that isn't registered.
+  const date = /, (\d{4}-\d{2}-\d{2}) \(/.exec(input)?.[1] ?? null;
   // "by Thursday": the next Thursday on or after the meeting.
   const thursday = date ? (() => { const d = Temporal.PlainDate.from(date); return d.add({ days: (4 - d.dayOfWeek + 7) % 7 }).toString(); })() : null;
   const keep = <T extends { lines: number[] }>(xs: T[]) => xs.filter((x) => x.lines.length);
@@ -52,6 +53,15 @@ export function demoMeetingAnswer(input: string): unknown {
       { who: "Priya Shah", what: "Add the row limit warning before the export ships", toName: null, due: null, lines: find("row limit") },
       { who: "Alex Rivera", what: "Book a session with Northwind's accountants to walk through the statements", toName: "Dana Brooks", due: null, lines: find("book a session") },
     ]),
+    // MC-2: what was discussed and decided, from the lines this part of the call has.
+    summary: [
+      ...(find("csv only").length ? ["Northwind decided on CSV only for the order history export; Excel waits until next quarter."] : []),
+      ...(find("monthly statement").length ? ["Northwind's accountants asked for a monthly statement as a PDF, which nothing covers yet."] : []),
+      ...(find("history table").length ? ["The team agreed the statement reads from the same order history table, with no second copy."] : []),
+      ...(find("file name").length ? ["The export's file name should carry the date range."] : []),
+      ...(find("row limit").length ? ["Priya adds a row limit warning to the export before it ships."] : []),
+      ...(find("on track").length ? ["The CSV export is on track on Northwind's side, with no blockers."] : []),
+    ].slice(0, 5),
     // MC-1e: comments on stories only. The status said about the export (a feature) goes on the story under it.
     comments: keep([
       { itemId: 1111, note: "decision", text: "Decided with Northwind: CSV only for now; an Excel export waits until next quarter.", lines: find("csv only") },

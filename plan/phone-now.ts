@@ -74,7 +74,7 @@ const ORDER: readonly OneWhy[] = ["late", "due_today", "from_chat", "other"];
  * The most pressing thing that needs me: a late promise, then one due today, then a suggestion from a chat, then
  * anything else the Inbox lists for today. Inside one kind, the Inbox's own order. None when the Needs you count is 0
  * or nothing is listed. A client call to review (MC-1) isn't one of the Inbox's rows or in its count, so it isn't here
- * (docs/open-questions.md); it is on More's Client calls line.
+ * (docs/open-questions.md); it is on More's Calls line.
  */
 export function oneThing(rows: readonly InboxItemView[], needsYou: number, today: string): OneThing | null {
   if (needsYou <= 0) return null;
@@ -147,7 +147,7 @@ export const PHONE_TEXT = {
     backlog: "Backlog",
     status: "Status",
     statusLine: (n: number) => `${n} ${n === 1 ? "feature needs" : "features need"} your update`,
-    calls: "Client calls",
+    calls: "Calls",
     callsLine: (n: number) => `${n} ${n === 1 ? "call" : "calls"} to review`,
     code: "Code",
     vm: "My VM",

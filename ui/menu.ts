@@ -2,7 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { CALL_ACTIONS } from "../plan/call-words.ts";
-import { openCall, requestRerun, type CallMark } from "./meetings/calls.ts";
+import { openCall, requestRerun, requestReviewCall, reviewableMeeting, type CallMark } from "./meetings/calls.ts";
 import { takeOffRule } from "../plan/blockpanel.ts";
 import type { CheckinGhost } from "../plan/carry.ts";
 import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
@@ -22,6 +22,8 @@ import { isPickable } from "../plan/rules.ts";
 import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek, type Size } from "../plan/types.ts";
 import { DEPLOYMENT, deploymentTitle, windowText } from "../plan/deploy.ts";
+import { firstName } from "../plan/loop.ts";
+import { addedByText, changeForLine, deleteMenuWords, forPeopleText, HOLD_WORDS, namesText, othersOn, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
@@ -87,6 +89,8 @@ export type MenuStep =
       title: string;
       /** A small form (step 6b: hours for a day, unavailable time, flex sessions). */
       fields: FormField[];
+      /** DP-3: one line under the title (who else a change is for). */
+      intro?: string | null;
       button?: string;
       /** Resolves false to keep the form open (the reason is shown as a notice). */
       save: (values: Record<string, string>) => void | Promise<unknown>;
@@ -97,7 +101,9 @@ export type FormField = {
   label: string;
   /** "item": the shared work item lookup (step 15.2) for the client chosen in the field named by `client`. */
   /** DP-2: "checks" is a deployment's item checkboxes (saved as a JSON list of keys); "textbox" UI-10's growing text box. */
-  type: "text" | "time" | "select" | "date" | "item" | "checks" | "textbox";
+  type: "text" | "time" | "select" | "date" | "item" | "checks" | "textbox" | "people";
+  /** DP-3, a "people" field: who else is on the deployment now (saved as a JSON list of their ids). */
+  people?: { id: string; name: string }[];
   /** For an item field: the key of the select that holds its client. Saved as `<key>` (the id, or "") and `<key>Text`. */
   client?: string;
   /** The client when the form has no select for it (a to-do's own). */
@@ -115,6 +121,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** MC-2: Calls is here (meeting.mine answered), so a meeting I was on offers Review this call. */
+  callsHere?: boolean;
   /** CW-1: my clients' registered chats with their live calls (absent or null: not loaded, or not available here). */
   cowork?: CoworkData | null;
   /** CW-1: open a chat in Teams (Join, Start a call). */
@@ -145,6 +153,8 @@ export type MenuEnv = {
   openBlock: (date: IsoDate, half: Half, add?: boolean) => void;
   /** WD-2: Take off the plan for a to-do (off its block, back to not placed, with Undo). */
   takeOff?: (p: Pick) => void;
+  /** DP-3: put a deployment on my own Outlook (on) or take it off, with my own preview. */
+  holdAction?: (p: Pick, on: boolean) => void;
   openLink: (clientKey: string, url: string) => void;
   /** FN-1: copy a work item's DevOps link, with a "Link copied" toast (announced). */
   copyLink: (clientKey: string, url: string) => void;
@@ -425,6 +435,8 @@ const DEPLOY_HIDDEN = new Set(["size", "timebox", "makeup"]);
 
 export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
   const past = isPast(env, p.date);
+  // DP-3: a deployment others are on (or could be): People, my own hold, Take me off and Delete for everyone instead of Drop.
+  const shared = p.todoKind === "deployment" && !!p.shared;
   return {
     title: p.title,
     head: rowHead({ id: p.itemId, title: p.title, client: clientNameOf(env, p.clientKey) }),
@@ -451,8 +463,47 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned to-do can be made up" } : {}), next: () => makeUpStep(env, p) },
       // WD-2: off its block and back to not placed (never marked dropped); the same as dropping it on the block panel.
       { id: "takeoff", label: "Take off the plan", hint: "back to not placed", action: "pick.take_off", ...(() => { const r = takeOffRule(p, env.today); return r.ok ? {} : { disabled: r.why, expected: true }; })(), run: () => (env.takeOff ? env.takeOff(p) : void env.runPlan("pick.take_off", { id: p.id })) },
+      ...(shared ? deployPeopleItems(env, p) : []),
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned to-do can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
-    ].filter((it) => !(p.todoKind === "deployment" && DEPLOY_HIDDEN.has(it.id))),
+    ].filter((it) => !(p.todoKind === "deployment" && DEPLOY_HIDDEN.has(it.id)) && !(shared && (it.id === "drop" || it.id === "takeoff"))),
+  };
+}
+
+/** DP-3: People, my own Outlook hold, Take me off and Delete for everyone, on a deployment's ⋯. */
+function deployPeopleItems(env: MenuEnv, p: Pick): MenuItem[] {
+  const sh = p.shared!;
+  const others = othersOn(sh.people, sh.me);
+  const planned = p.status === "planned";
+  const hold = HOLD_WORDS[sh.hold.state];
+  return [
+    { id: "deploy-people", icon: "people", label: PEOPLE_WORDS.menuPeople, hint: PEOPLE_WORDS.menuPeopleHint(sh.people.length), action: "deploy.people", ...(planned ? {} : { disabled: "Only a planned deployment", expected: true }), next: () => deployForm(env, { pick: p }) },
+    ...(planned && hold.offer && env.holdAction && (sh.hold.state === "off" || sh.hold.state === "on" || sh.hold.state === "deleted_in_outlook") ? [{ id: "deploy-hold", icon: "calendar", label: hold.offer, hint: hold.line, action: "deploy.hold", run: () => env.holdAction!(p, sh.hold.state !== "on") } satisfies MenuItem] : []),
+    ...(others.length ? [
+      { id: "deploy-leave", icon: "personal", label: PEOPLE_WORDS.leave, hint: PEOPLE_WORDS.leaveHint(namesText(others.map((o) => firstName(o.name)))), action: "deploy.leave", run: () => leaveDeployment(env, p) } satisfies MenuItem,
+      { id: "deploy-delete", label: PEOPLE_WORDS.deleteAllMenu, danger: true, action: "deploy.delete", next: () => deleteStep(env, p) } satisfies MenuItem,
+    ] : []),
+  ];
+}
+
+/** DP-3: Take me off: only me; it stays for the others. Undo puts me back (the app's usual undo). */
+export function leaveDeployment(env: MenuEnv, p: Pick): Promise<boolean> {
+  return (env.planAction ? env.planAction("deploy.leave", { id: p.id }) : env.runPlan("deploy.leave", { id: p.id }).then((ok) => (ok ? {} : null))).then((r) => {
+    const was = (r as { was?: unknown } | null)?.was;
+    if (r && was && env.undoable) env.undoable(PEOPLE_WORDS.left(p.title), () => env.runPlan("deploy.rejoin", { id: p.id, was }));
+    return !!r;
+  });
+}
+
+/** DP-3: Delete for everyone asks first and names the others; Undo puts it back for everyone. */
+function deleteStep(env: MenuEnv, p: Pick): MenuStep {
+  const sh = p.shared!;
+  const words = deleteMenuWords(sh.people, sh.me);
+  return {
+    title: words.title,
+    items: [
+      { id: "deploy-delete-yes", label: PEOPLE_WORDS.deleteYes, ...(words.hint ? { hint: words.hint } : {}), danger: true, action: "deploy.delete", run: () => void env.runPlan("deploy.delete", { id: p.id }).then((ok) => ok && env.undoable?.(PEOPLE_WORDS.deleted(p.title, sh.people.length), () => env.runPlan("deploy.restore", { id: p.id }))) },
+      { id: "deploy-delete-no", label: PEOPLE_WORDS.deleteNo, run: () => undefined },
+    ],
   };
 }
 
@@ -472,10 +523,12 @@ export function kindStep(env: MenuEnv, p: Pick): MenuStep {
 function setKind(env: MenuEnv, p: Pick, input: Record<string, unknown>, done: string) {
   return env.runPlan("pick.set_kind", { id: p.id, ...input }).then((ok) => {
     if (ok && env.undoable) {
+      // DP-3: the undo puts back what it was for everyone on it (and who was on it); the line counts them.
       const back = p.todoKind === "deployment" && p.window
-        ? { kind: "deployment", start: p.window.start, end: p.window.end, itemIds: (p.links ?? []).map((l) => l.id), items: (p.deployItems ?? []).map((i) => i.key), note: p.notes ?? "" }
+        ? { kind: "deployment", start: p.window.start, end: p.window.end, itemIds: (p.links ?? []).map((l) => l.id), items: (p.deployItems ?? []).map((i) => i.key), note: p.notes ?? "", ...(p.shared && "people" in input ? { people: othersOn(p.shared.people, p.shared.me).map((o) => o.id) } : {}) }
         : { kind: "todo", note: p.notes ?? "" };
-      env.undoable(done, () => env.runPlan("pick.set_kind", { id: p.id, ...back }));
+      const count = forPeopleText(Math.max(p.shared?.people.length ?? 1, Array.isArray(input.people) ? input.people.length + 1 : 1));
+      env.undoable(count ? `${done} · ${count}` : done, () => env.runPlan("pick.set_kind", { id: p.id, ...back }));
     }
     return ok;
   });
@@ -505,8 +558,13 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
   const clients = deployClients(env);
   const client = p?.clientKey ?? o.clientKey ?? env.selection.clientKey ?? clients[0]?.value ?? "";
   const link = p?.links?.find((l) => l.id !== p.itemId) ?? null;
+  // DP-3: who else is on it now, and the one line that says who a change is for.
+  const others = p?.shared ? othersOn(p.shared.people, p.shared.me) : [];
+  // A save refused because someone else changed it shows what it is now; saving again after that is my choice.
+  const seen = { stale: false };
   return {
     title: p ? (p.todoKind === "deployment" ? `Deployment: ${p.title}` : `Make "${p.title}" a deployment`) : "Plan a deployment",
+    intro: p?.shared ? [changeForLine(p.shared.people, p.shared.me), addedByText(p.shared)].filter(Boolean).join(". ") || null : null,
     button: p ? "Save" : "Add it",
     fields: [
       ...(p ? [] : [
@@ -519,26 +577,36 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
       ...(p?.itemId == null ? [{ key: "item", label: "DevOps item", type: "item", client: "client", ...(p ? { clientKey: p.clientKey } : {}), optional: true, value: link ? String(link.id) : "" } satisfies FormField] : []),
       { key: "items", label: "What's going", type: "checks", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), ...(p?.todoKind === "deployment" ? { existing: p.deployItems ?? null } : {}) } satisfies FormField,
       { key: "note", label: "Note", type: "textbox", value: p?.notes ?? "", placeholder: "Anything else that's going", optional: true },
+      { key: "people", label: PEOPLE_WORDS.field, type: "people", client: "client", optional: true, ...(p ? { clientKey: p.clientKey } : {}), people: others.map((o) => ({ id: o.id, name: o.name })) },
     ],
     save: (v) => {
       // The server refuses a bad window in the same words (windowProblem); the form stays open with the notice.
       const itemIds = v.item ? [Number(v.item)] : [];
       // DP-2: the ticks, once the list has loaded (else the server keeps what it has, or uses the client's defaults).
       const items = v.items ? { items: JSON.parse(v.items) as string[] } : {};
+      const peopleIds = v.people ? (JSON.parse(v.people) as string[]) : [];
+      const people = p && !p.shared && !peopleIds.length ? {} : { people: peopleIds };
       // UC-2: with no What the deployment is titled as capture titles it ("Deployment - <client> - <date>").
       const title = p ? "" : deploymentTitle(v.title, clients.find((c) => c.value === v.client)?.label ?? v.client ?? "", v.date!);
       if (p) {
-        const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}), ...items };
-        return setKind(env, p, input, p.todoKind === "deployment" ? `Deployment saved · ${windowText({ start: v.start!, end: v.end! })}` : `Now a deployment · ${windowText({ start: v.start!, end: v.end! })}`);
+        const version = p.shared && !seen.stale ? { version: p.shared.version } : {};
+        const input = { kind: "deployment", start: v.start, end: v.end, note: v.note ?? "", ...(p.itemId == null ? { itemIds } : {}), ...items, ...people, ...version };
+        return setKind(env, p, input, p.todoKind === "deployment" ? `Deployment saved · ${windowText({ start: v.start!, end: v.end! })}` : `Now a deployment · ${windowText({ start: v.start!, end: v.end! })}`).then((ok) => {
+          // Refused as changed by someone else: the notice says what it is now; the next Save is deliberate.
+          if (!ok && version.version !== undefined) seen.stale = true;
+          return ok;
+        });
       }
       return env.planAction
-        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items }).then((r) => {
+        ? env.planAction("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items, ...people }).then((r) => {
             const id = (r as { pick?: { id: number } } | null)?.pick?.id;
             const note = (r as { note?: string | null } | null)?.note;
-            if (id && env.undoable) env.undoable(`Deployment planned for ${weekdayLong(v.date!)} ${windowText({ start: v.start!, end: v.end! })}${note ? ` · ${note}` : ""}`, () => env.runPlan("pick.remove", { id }));
+            // DP-3: with others on it, Undo deletes it for them too (it was just made).
+            const count = forPeopleText(peopleIds.length + 1);
+            if (id && env.undoable) env.undoable(`Deployment planned for ${weekdayLong(v.date!)} ${windowText({ start: v.start!, end: v.end! })}${note ? ` · ${note}` : ""}${count ? ` · ${count}` : ""}`, () => env.runPlan(peopleIds.length ? "deploy.delete" : "pick.remove", { id }));
             return !!r;
           })
-        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items });
+        : env.runPlan("deploy.add", { clientKey: v.client, date: v.date, start: v.start, end: v.end, title, ...(v.note ? { note: v.note } : {}), ...(itemIds.length ? { itemIds } : {}), ...items, ...people });
     },
   };
 }
@@ -783,6 +851,10 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
   // DY-1: the call's type heads its menu (its items' group) and is in the title.
   if (call) return { title: `${e.title} · ${call.role} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
+  // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup. The 14 days count
+  // from the app's today (the person's day, and the demo's), not the browser's clock.
+  if (env.callsHere === true && reviewableMeeting(e, Date.now(), (env.today ? Temporal.PlainDate.from(env.today).toZonedDateTime({ timeZone: tz }) : Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay()).epochMilliseconds))
+    return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items: [{ id: "call-review", label: CALL_ACTIONS.reviewCall, group: "Call", hint: "choose its client first", run: () => requestReviewCall(e) }, ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
 
   function item(a: (typeof x.actions)[number]): MenuItem {
@@ -1222,6 +1294,14 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!on.length) return { disabled: "No calendar is connected" };
       return { next: () => ({ title: "Disconnect which calendar?", items: on.map((c) => ({ id: c, label: c === "outlook" ? "Outlook" : "Google", danger: true, run: () => env.disconnect(c) })) }) };
     }
+    case "deploy.people":
+    case "deploy.leave":
+    case "deploy.delete":
+    case "deploy.hold": return { next: () => choosePick(env, "Which deployment?", (p) => deployForm(env, { pick: p })) };
+    case "deploy.rejoin":
+    case "deploy.restore":
+    case "deploy.hold_back":
+    case "deploy.hold_follow": return { disabled: "From a deployment's panel, or Undo" };
     case "planday.start": return { next: () => planDayStep(env) };
     case "planday.carry": return { run: () => env.setView("week") };
     case "pick.add": return { next: () => chooseItem(env, "Add which work item?", isPickable, (k, i) => addStep(env, k, i)) };
@@ -1304,6 +1384,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "demo.vm_fail": return { disabled: "Runs from a demo check" };
     case "demo.fail_next": return { disabled: "Runs from a demo check" };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Reset demo is only in the demo" };
+    case "demo.be": return env.demo ? { run: () => env.openSettings("data", "demo-be") } : { disabled: "Only in the demo" };
     case "demo.status": return env.demo ? { run: () => env.openSettings("data", "demo-reset") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
@@ -1563,6 +1644,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.keep":
     case "meeting.unkeep":
     case "meeting.rerun":
+    case "meeting.calls":
+    case "meeting.call_start":
+    case "meeting.call_fetch":
+    case "meeting.call_add":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":

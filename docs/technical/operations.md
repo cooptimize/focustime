@@ -24,7 +24,7 @@ The VM's automatic start (Settings › Accounts and calendars › Start my VM be
 
 ### Telling the sites apart (EV-1)
 
-- **Dev** says so: a small "Dev" beside the FocusTime name in the top bar on a computer, and beside the date on a phone; the browser tab's title starts with "Dev · "; the installed app is named "FocusTime Dev". The developer loop says "Local" the same way.
+- **Dev** says so: a small red "Dev" (white letters) beside the FocusTime name in the top bar on a computer, and beside the date on a phone; the browser tab's title starts with "Dev · "; the installed app is named "FocusTime Dev". The developer loop says "Local" the same way.
 - **Production** shows none of this: no mark, the title "FocusTime", the installed app "FocusTime".
 - **About** (Settings › About, or More › About) says the site in a word and its address on every site, for example "Site: Dev · " and the address you opened.
 - How: the server rewrites the page and the manifest once when it starts where `FOCUSTIME_ENV` is `dev` (or the developer loop), from the same value `/version` reports (`server/site-env.ts`). Only that marked page asks `/version` for the top bar's mark, so production asks nothing new. One image serves both: no second build.

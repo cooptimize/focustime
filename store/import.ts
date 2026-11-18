@@ -120,7 +120,9 @@ export async function importUser(conn: Conn, userId: string, json: unknown, o: {
         }
         count.added++;
         if (o.dryRun) continue;
-        const put = cols.map((c) => (self.includes(c) ? null : value(row[c])));
+        // DP-3: a to-do for a shared deployment points at a row the export doesn't hold (the deployment is everyone's on
+        // it): cleared, so the person's own FocusTime takes it up again as their own deployment, as it did before DP-3.
+        const put = cols.map((c) => (self.includes(c) || (table === "picks" && c === "deployment_id") ? null : value(row[c])));
         await conn.run(`INSERT INTO ${table} (user_id, ${cols.join(", ")}) VALUES (?, ${cols.map(() => "?").join(", ")})`, [userId, ...put], { keepIds: true });
         if (self.some((c) => row[c] !== null && row[c] !== undefined)) links.push({ table, key: keyCols, row });
       }

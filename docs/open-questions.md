@@ -1619,6 +1619,51 @@ From the IT review (TD-1):
 - **Other code that could come inside the dispatcher.** The upload and push-to-talk take raw bodies, so they can't be actions as the API stands; a chat's image is a GET. The Teams hub's `transcribe` duplicates the panel's route. If the action API ever takes binary bodies, all three could be dispatched actions and the routes would go away.
 - **The guard reads source text.** It matches calls by name and the first argument as written, so a context passed through a helper with another name, or held in a variable not bound to `signedContext` in the same file, is flagged (safe) and a context that reaches an action some other way than a named function in `actions/` isn't seen. Good enough for the current shape of `server/`; a type-level brand would be stronger but changes every action's signature. The review found two more limits: a name bound to `signedContext` counts as signed in the whole file, so a second `const ctx = await runtimeFor(..)` in the same file would pass; and an action function handed over as a callback, rather than called, isn't checked. Neither is in the code today.
 
+## MC-2: Calls, review any call you were on (Nov 17)
+
+- **What needs the real tenant.** A non-organizer's read: the docs say an attendee on the invite can read `onlineMeetings` by join link and its transcripts with the permissions FocusTime has, but only the demo and tests have shown it. The product owner will press Get it from Teams on a call someone else organized. If it refuses, the words already point to the upload.
+- **A call about two clients.** One client per call (as decided). A call that covers two would need two reviews or a split transcript; for now the person picks the main one, and the other client's names are kept out of the summary and proposals.
+- **Should other invitees confirm?** Only the presser acts; the Cooptimizers on the invite look. A second presser gets the same call as a viewer, not their own. Should the presser be able to hand it over, or anyone on it take it over (like a conversation)?
+- **Should a hand-added call be shareable?** It is its adder's only, and can't be removed from the list. Adding people to it (by name, from the client's Cooptimizers) would let a teammates' huddle be reviewed together.
+- **Is 14 days right?** Long enough for a week back plus a weekend; a call older than that can still be added by hand only within the same 14 days. Transcripts in Teams last longer.
+- **Removing a call.** A call once reviewed stays in Calls (its proposals and results are kept like a client call's). There's no Remove; a reviewed call nobody needs just sits as Reviewed.
+- **The notification group.** Settings › Notifications still says "Client calls to review" and a call that isn't registered never notifies (it is reviewed on the press). Should calls left half reviewed nudge their presser?
+- **What the next two steps need.** Pocket recordings in Calls: the Pocket connection (PK-2) can list recordings by day and length, so matching one to a call in Your other calls by start and length would let the upload pick it. Calls noticed in chats: the co-working calls (`chat_calls`) give a call's start and length but no transcript or invite; those would come in as a hand-added call with its start filled in.
+- **A forged invite (security review).** "On the invite" is checked against the presser's own calendar, and a person can put any event there (a forwarded invite, an .ics with any join link and organizer). What then stops the read is Microsoft's own check: `/me/onlineMeetings` by join link and the transcripts answer only for a meeting the signed-in person can see. The same trick could make the first kept row of a real meeting (the iCalUId shared across calendars) carry a made-up name and attendee list. Should the press also read the online meeting's participants and refuse unless the presser is one? It needs no new permission; it was left for the tenant test, since only a real tenant shows what an attendee's read of participants returns.
+- **Any client on the server (security review).** The setup offers only my clients and Internal, but `meeting.call_start` and `meeting.call_add` accept any organization client, as registration does. Should the server check the person follows it?
+- **A proposal's state by its id (security review, from MC-1).** `meeting.edit` answers "already done" or "Bring it back first" before checking who is asking. Older than MC-2 and left as is; worth a fix of its own.
+- **Your other calls is long (consultant walkthrough).** 14 days of a calendar is about 20 rows, with a daily standup repeated. Should repeats fold into one row ("Team standup · 6"), or should the list have Hide and a filter?
+- **The page before a transcript (consultant walkthrough).** On a call waiting for its upload the actions' Upload a transcript and the box's Choose a file both show, as on a client call today; left as client calls have it (they're unchanged in this step). The phone shows the switch, summary and buttons before the first proposal.
+- **Add a call's start (consultant walkthrough).** It starts at 10:00 whatever the time; a call later than now is refused on Add. Should it default to the last full hour?
+- **Esc from a setup opened from Day** returns to Calls, not Day (the setup is on Calls). Back to Day would need the place it came from, as a call's page has.
+
+## DP-3
+
+- **Only the client's people, or everyone?** The picker offers the client's people first and then everyone at Cooptimize, as the brief says. Whether a deployment should be limited to the client's people is open.
+- **The first hold: a press, or the timebox setting?** Only a person's own press puts it on Outlook; `outlook_default` doesn't apply. A person who always wants holds might want the setting to apply.
+- **A change reaching Outlook without FocusTime open.** A hold that fell behind waits for the person's next visit. Updating it in the background would be a background Outlook write, which this step rules out.
+- **Seeing each other's Outlook state.** Nobody sees whether a deployment is on anyone else's Outlook. A team might want "on 2 of 3 calendars".
+- **The assistant and the Teams bot** don't add people, show who is on a deployment, or offer Take me off. Their deployment proposals make a deployment for the person alone, as before.
+- **People who don't use FocusTime** can't be added (refused by name). They could be added once they sign in, or be told some other way.
+- **A to-do or a block with people?** Only a deployment takes people.
+- **Whom to add when someone hasn't signed in yet.** The picker lists them; the server refuses with their name. The picker doesn't mark them beforehand, because the picker's data doesn't say who uses FocusTime; Send to… marks it from its own list.
+- **Undo after someone else's change.** An Undo of a details save puts back what it was without checking the version, so it can undo someone else's later change too; a move's Undo checks (it is refused if anyone changed it since).
+- **A person removed while their form is open** gets "That deployment isn't on your plan any more" on Save.
+- **An import into a database where the deployment still exists** makes the person's own copy rather than putting them back on the shared one (an export holds no ids of shared rows).
+- **The demo's second person.** `demo.be` switches the whole demo session to the teammate (their own plan), not a second window. It is the smallest way to see both sides; a side-by-side view would need two demo sessions on one database.
+- **Being added, seen in the demo.** The notice comes from each person's ticks, which the demo doesn't run, so a teammate trying it in the demo learns who added them only from "Added by" where it opens (now on the computer's details too). In the hosted app it is a notice by the person's switch.
+- **Move, Done and the phone's Move to <day> don't say who else they change.** Only Deployment details has the line; the undo line after each counts everyone ("for all 2 on it"). A line on the Move step would be one more place for the same words.
+- **A deployment's narrow weekend card shows no title** (the client and the window, the title on hover, UC-2), and clicking the column's empty space opens the catch-up day's panel. Both before DP-3.
+- **The window's times read three ways** (19:00 on cards, 7:00 PM in the form, 7:00 on the phone's sheet with no AM or PM) and none names a zone. Before DP-3; with people in other zones a zone name might help.
+- **Saves to the hold timebox after someone else's change reach my Outlook without a question when I turned off previews for my own events** (my confirm_own rule, as the brief asks). Whether a shared deployment's hold should always ask is open.
+- **A removed person's notice names the deployment as it is when the notice is sent**, not when they were removed (a rename in between shows the new title). Keeping the title on the note needs a column.
+
+## DD-1: The dev deploy's check looks for the dev site's title (Nov 18)
+
+- **Should the deploy's smoke test run against a local server in CI?** A change like EV-1's (what the page says on dev) passed every pull request check and only failed after the merge, in deploy-dev. `scripts/deploy-title.test.ts` now catches the title, but not the rest of the step (the sign-in redirect, the security headers). The step could move into a script that CI also runs against the image it already starts (with `FOCUSTIME_ENV=dev`), so it fails in the pull request. Not in this step: no new smoke test was in scope.
+- **`docs/technical/operations.md` names the wrong smoke test.** It says deploy-dev's smoke test is `infra/scripts/smoke.sh`; the workflow runs its own inline Smoke test step (health, the commit served, the title, sign-in, headers) and smoke.sh is a by-hand check after a deploy. Not the title's cause, so not changed here.
+- **The style guide's light `--risk` reads #C0311F; the stylesheet's is #B42F1D** (`--p-co-red-700`). DD-1's row gives the stylesheet's value. Which one should the table show?
+
 ## PH-2
 
 - **Should the phone place or move work on Week?** Not in this step: Week on the phone only opens a day. Placing is a day's Add (the block's sheet) and moving is the to-do's sheet. A long-press on a tile could open the block's sheet later.

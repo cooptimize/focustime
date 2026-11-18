@@ -632,5 +632,5 @@ export function viewName(loc: Loc): string {
     : n.tab === "code" ? TAB_NAMES.code
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Client calls" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Calls" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }
