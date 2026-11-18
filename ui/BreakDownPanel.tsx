@@ -26,10 +26,24 @@ import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { Icon } from "./icons.tsx";
+import { DateField } from "./DatePicker.tsx";
+import { NEEDED_WORDS, type NeededField, type NeededFill } from "../plan/needed.ts";
+import { useNeeded } from "./needed.ts";
 
 type Size = "XS" | "S" | "M" | "L" | null;
 type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; url: string | null } | { state: "pending" | "unconfirmed" | "failed" | "refused" | "undone"; message: string; writeId: number };
-type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
+/** RQ-1: the fields the client's process needs on each story, set in Review and written at publish. */
+type Values = { date?: string | null; start?: string | null; size?: number | null };
+type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string; values?: Values };
+
+/** RQ-1: the fields a story card has a control for in Review: its own text, and a date, a start date and a size when the process needs them. */
+const CARD_FILLS: readonly NeededFill[] = ["title", "description", "check", "date", "start", "size"];
+/** The value fields Review shows on each card only when the client's process needs them. */
+const VALUE_FILLS = ["date", "start", "size"] as const;
+type ValueFill = (typeof VALUE_FILLS)[number];
+const hasValue = (c: Card, f: NeededFill): boolean =>
+  f === "title" ? !!c.title.trim() : f === "description" ? !!c.description.trim() : f === "check" ? c.acceptance.some((a) => a.trim()) : f === "date" ? !!c.values?.date : f === "start" ? !!c.values?.start : f === "size" ? c.values?.size !== undefined && c.values?.size !== null : true;
+const todayIso = () => new Date().toLocaleDateString("en-CA");
 type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; /** GD-2: the AI's answer named another client and the check replaced it. */ namesRemoved?: boolean; /** KB-1. */ standards?: StandardsUsed | null; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; published: number; left: number };
 type Prepared = {
   clientKey: string; clientName: string; featureId: number; featureTitle: string; featureType: string; storyType: string; childTypes: string[]; url: string;
@@ -178,6 +192,36 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   }, []);
 
   const canRun = !!prep && prep.ai === "on" && prep.write;
+  // RQ-1: what the client's process needs on a new story under this item, as DevOps says when it checks one without
+  // saving it: asked once the draft is there, and at Preview each story is checked with its own values.
+  const need = useNeeded(clientKey, prep?.write && draft ? { kind: "new_item", type: draft.storyType, parentId: draft.featureId, title: "" } : null);
+  const cardNeeds: NeededField[] = need.needed.filter((f) => f.fill && CARD_FILLS.includes(f.fill));
+  const cardCant: NeededField[] = need.needed.filter((f) => !f.fill || !CARD_FILLS.includes(f.fill));
+  const shortOf = (c: Card) => cardNeeds.filter((f) => !hasValue(c, f.fill!));
+  const waiting = draft?.cards.filter((c) => c.keep && c.status.state === "not_sent" && shortOf(c).length > 0).length ?? 0;
+  // The stories start from the feature's own value for a needed date (once, for the cards that have none).
+  const seeded = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draft || !need.parent || seeded.current === draft.id) return;
+    const from: Values = {};
+    for (const f of cardNeeds) {
+      if (f.fill === "date" && need.parent.date) from.date = need.parent.date;
+      if (f.fill === "start" && need.parent.start) from.start = need.parent.start;
+    }
+    if (!Object.keys(from).length) return;
+    seeded.current = draft.id;
+    const next = draft.cards.map((c) => (c.status.state !== "not_sent" ? c : { ...c, values: { ...from, ...Object.fromEntries(Object.entries(c.values ?? {}).filter(([, v]) => v !== null && v !== undefined)) } }));
+    if (next.some((c, i) => JSON.stringify(c.values ?? {}) !== JSON.stringify(draft.cards[i]!.values ?? {}))) edit(next, true);
+  }, [draft?.id, need.parent, cardNeeds.map((f) => f.fill).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** "Use for all": one value on every story not yet sent. */
+  const useForAll = (f: ValueFill, v: string | number | null) => draft && edit(draft.cards.map((c) => (c.status.state !== "not_sent" ? c : { ...c, values: { ...(c.values ?? {}), [f]: v } })), true);
+  // RQ-1: Create and break down opens here with Run started, once; Break down is given what it is for any item.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!item.autoRun || autoRan.current || !canRun || busy) return;
+    autoRan.current = true;
+    void run();
+  }, [canRun, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = async () => {
     if (!canRun || busy) return;
     const d = await act("Breaking it down…", () => call<Draft>("stories.run", { clientKey, featureId: item.id, note, ...(childType ? { storyType: childType } : {}) }));
@@ -190,7 +234,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   // Edits are kept on the server as you go (a short pause after typing), so closing the panel loses nothing.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const save = useCallback(async (cards: Card[], d: Draft) => {
-    const r = await call<Draft>("stories.save", { draftId: d.id, cards: cards.map((c) => ({ id: c.id, keep: c.keep, title: c.title, description: c.description, acceptance: c.acceptance.filter((a) => a.trim()), size: c.size })) });
+    const r = await call<Draft>("stories.save", { draftId: d.id, cards: cards.map((c) => ({ id: c.id, keep: c.keep, title: c.title, description: c.description, acceptance: c.acceptance.filter((a) => a.trim()), size: c.size, ...(c.values ? { values: c.values } : {}) })) });
     setDraft((cur) => (cur && cur.id === r.id ? { ...r, cards: cur.cards.map((c) => ({ ...c, after: r.cards.find((x) => x.id === c.id)?.after ?? c.after, sizeText: r.cards.find((x) => x.id === c.id)?.sizeText ?? c.sizeText })) } : cur));
     return r;
   }, []);
@@ -236,6 +280,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
         setBusy(null);
         if (!end.results.length && !end.refused.length) {
           // Not now (or a preview that couldn't be made): nothing was sent and the draft is as it was.
+          if (end.needed.length) need.add(end.needed);
           if (end.errors.length) setError(end.errors.join(" "));
           then?.();
           return;
@@ -245,6 +290,8 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
           changed.current = changed.current || r.published > d.published;
           setDraft(r);
           setFailed([...end.refused.map((x) => x.error), ...end.results.filter((x) => !x.confirmed).map((x) => x.message), ...end.errors]);
+          // RQ-1: DevOps named fields at Preview: each story shows them Needed in Review.
+          if (end.needed.length) need.add(end.needed);
           setStep("publish");
           then?.();
         });
@@ -336,7 +383,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
         <section className="bd-main" aria-label={STEPS.find(([s]) => s === step)![1]}>
           <div className="bd-body">
             {step === "prepare" && <PrepareStep prep={prep} childType={childType} setChildType={setChildType} onOpenLatest={prep?.latest ? () => (setDraft(prep.latest), setNote(prep.latest!.note), setStep("review")) : null} />}
-            {step === "review" && draft && <ReviewStep clientKey={clientKey} draft={draft} busy={!!busy} onEdit={edit} onRegenerate={regenerate} />}
+            {step === "review" && draft && <ReviewStep clientKey={clientKey} draft={draft} busy={!!busy} onEdit={edit} onRegenerate={regenerate} needs={cardNeeds} cant={cardCant} projectName={need.projectName ?? prep?.clientName ?? clientKey} parent={need.parent} onUseForAll={useForAll} />}
             {step === "publish" && draft && <PublishStep clientKey={clientKey} draft={draft} failed={failed} parentUrl={prep?.url ?? null} />}
             {busy && <p className="bd-busy" role="status">{busy}</p>}
             {error && <p className="set-problem" role="alert">{error}</p>}
@@ -401,7 +448,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
                       </button>
                     </>
                   )}
-                  <button type="button" className="commit" disabled={!!busy || kept === 0} onClick={() => void preview()}>
+                  <button type="button" className="commit" disabled={!!busy || kept === 0 || waiting > 0 || cardCant.length > 0} title={waiting ? NEEDED_WORDS.holdPublish(waiting) : undefined} onClick={() => void preview()}>
                     {kept === 0 ? "Nothing to create" : `Preview ${plural(kept, "item", "items")}…`}
                   </button>
                 </>
@@ -565,7 +612,11 @@ function PrepareStep({ prep, childType, setChildType, onOpenLatest }: { prep: Pr
 
 const SIZES: Size[] = ["XS", "S", "M", "L", null];
 
-function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKey: string; draft: Draft; busy: boolean; onEdit: (cards: Card[], now?: boolean) => void; onRegenerate: (note: string, id?: string) => Promise<boolean> }) {
+function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate, needs, cant, projectName, parent, onUseForAll }: { clientKey: string; draft: Draft; busy: boolean; onEdit: (cards: Card[], now?: boolean) => void; onRegenerate: (note: string, id?: string) => Promise<boolean>; /** RQ-1 */ needs: NeededField[]; cant: NeededField[]; projectName: string; parent: { date: string | null; start: string | null } | null; onUseForAll: (f: ValueFill, v: string | number | null) => void }) {
+  const today = todayIso();
+  const valueNeeds = needs.filter((f): f is NeededField & { fill: ValueFill } => (VALUE_FILLS as readonly string[]).includes(f.fill ?? ""));
+  const [all, setAll] = useState<Record<string, string>>({});
+  const waiting = draft.cards.filter((c) => c.keep && c.status.state === "not_sent" && needs.some((f) => !hasValue(c, f.fill!))).length;
   const { sizes } = useContext(PlanCtx);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [regen, setRegen] = useState<{ id: string; note: string } | null>(null);
@@ -616,6 +667,30 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
         </details>
       )}
       {draft.cards.length === 0 && <p className="muted">The AI found nothing new to add under this item.</p>}
+      {/* RQ-1: the fields this client's process needs on every new story, with one value for all. */}
+      {(valueNeeds.length > 0 || cant.length > 0) && (
+        <section className="bd-needs" aria-label="Needed on every story">
+          {valueNeeds.map((f) => {
+            const fromFeature = (f.fill === "date" && parent?.date) || (f.fill === "start" && parent?.start);
+            const v = all[f.fill] ?? (f.fill === "date" ? (parent?.date ?? "") : f.fill === "start" ? (parent?.start ?? "") : "");
+            return (
+              <div key={f.fill} className="bd-need-row">
+                <span className="set-label">{f.name}<span className="mtg-needed">{NEEDED_WORDS.needed}</span></span>
+                {f.fill === "size" ? (
+                  <input inputMode="decimal" aria-label={`${f.name} for every story`} value={v} placeholder="None" onChange={(e) => setAll((a) => ({ ...a, [f.fill]: e.target.value }))} />
+                ) : (
+                  <DateField value={v || null} onChange={(d) => setAll((a) => ({ ...a, [f.fill]: d ?? "" }))} label={`${f.name} for every story`} today={today} placeholder="Choose a date" />
+                )}
+                <button type="button" className="mini" disabled={busy || !v} onClick={() => onUseForAll(f.fill, f.fill === "size" ? (Number.isFinite(Number(v)) ? Number(v) : null) : v)}>
+                  {NEEDED_WORDS.useForAll}
+                </button>
+                <span className="muted bd-need-why">{fromFeature ? NEEDED_WORDS.fromFeature(f.name) : NEEDED_WORDS.why}</span>
+              </div>
+            );
+          })}
+          {cant.length > 0 && <p className="mtg-need" role="status">{NEEDED_WORDS.cant(projectName, cant.map((f) => f.name), draft.storyType)}</p>}
+        </section>
+      )}
       <ol className="bd-cards" ref={list}>
         {draft.cards.map((c, i) => {
           const sent = c.status.state !== "not_sent";
@@ -673,6 +748,24 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
                 <TextBox minRows={2} maxRows={10} value={c.description} disabled={sent} onChange={(e) => set(c.id, { description: e.target.value })} />
               </label>
               <Acceptance items={c.acceptance} disabled={sent} onChange={(acceptance) => set(c.id, { acceptance })} />
+              {valueNeeds.length > 0 && (
+                <div className="bd-card-needs">
+                  {valueNeeds.map((f) => {
+                    const short = !sent && !hasValue(c, f.fill);
+                    return (
+                      <span key={f.fill} className="bd-field bd-need-field">
+                        <span>{f.name}{short && <span className="mtg-needed">{NEEDED_WORDS.needed}</span>}</span>
+                        {f.fill === "size" ? (
+                          <input inputMode="decimal" aria-label={`${f.name} for ${c.title || c.id}${short ? ", needed" : ""}`} disabled={sent} value={c.values?.size ?? ""} placeholder="None" onChange={(e) => set(c.id, { values: { ...(c.values ?? {}), size: e.target.value.trim() && Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : null } })} />
+                        ) : (
+                          <DateField value={c.values?.[f.fill] ?? null} onChange={(d) => set(c.id, { values: { ...(c.values ?? {}), [f.fill]: d } }, true)} label={`${f.name} for ${c.title || c.id}${short ? ", needed" : ""}`} today={today} placeholder="Choose a date" />
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {!sent && needs.some((f) => !hasValue(c, f.fill!) && !(VALUE_FILLS as readonly string[]).includes(f.fill!)) && <p className="mtg-need">{NEEDED_WORDS.storyNeeds(needs.filter((f) => !hasValue(c, f.fill!) && !(VALUE_FILLS as readonly string[]).includes(f.fill!)).map((f) => f.name))}</p>}
               <div className="bd-card-foot">
                 <span className="bd-sizes" role="group" aria-label="Size">
                   {SIZES.map((s) => (
@@ -728,6 +821,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate }: { clientKe
         })}
       </ol>
       <p className="bd-total" aria-live="polite">{reviewTotal(draft.cards, sizes)}</p>
+      {waiting > 0 && <p className="mtg-need" role="status" aria-live="polite">{NEEDED_WORDS.holdPublish(waiting)}</p>}
     </>
   );
 }

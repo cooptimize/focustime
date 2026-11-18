@@ -27,12 +27,12 @@ const NOW = "2026-11-04T15:00:00Z";
 const COOP = "Cooptimize";
 const FEATURE = 437;
 
-function setup(o: { standards?: StandardsPort; client?: string; allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string } = {}) {
+function setup(o: { standards?: StandardsPort; client?: string; allowed?: string[]; teamStyle?: string; signals?: Partial<FeatureSignals>; answer?: (c: ProviderCall) => string; parentType?: string; /** RQ-1: fields a process rule requires on a new item, per type. */ rules?: Record<string, readonly string[]>; /** RQ-1: the feature's own target date. */ featureTarget?: string } = {}) {
   clearDevopsPreviews();
   // GD-1: Cooptimize Internal by default; `client` runs the same Break down for a client.
   const K = o.client ?? COOP;
-  const dv = fakeDevOpsWrite({ now: () => NOW, recurring: true });
-  dv.add(FEATURE, { "System.WorkItemType": o.parentType ?? "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+  const dv = fakeDevOpsWrite({ now: () => NOW, recurring: true, ...(o.rules ? { rules: o.rules } : {}) });
+  dv.add(FEATURE, { "System.WorkItemType": o.parentType ?? "Feature", "System.Title": "Monthly export for the finance team", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" }, ...(o.featureTarget ? { "Microsoft.VSTS.Scheduling.TargetDate": o.featureTarget } : {}) });
   dv.add(441, { "System.WorkItemType": "User Story", "System.Title": "Pick the columns for the export", "System.State": "Closed" }, FEATURE);
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const toml = `${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.Northwind]\nname = "Northwind"\n${K === COOP ? "" : `[clients.${K}]\nname = "${K}"\n`}`;
@@ -79,7 +79,8 @@ function setup(o: { standards?: StandardsPort; client?: string; allowed?: string
   const enable = () => run("devops.set_write_pat", { clientKey: K, pat: WRITE_PAT });
   const draft = () => run<DraftView>("stories.run", { clientKey: K, featureId: FEATURE, note: "split by report" });
   const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE && i.id !== 441);
-  return { dv, plan, run, fail, enable, draft, calls, created, client: K };
+  const raw = (action: string, input: unknown) => dispatch(c, { action, input });
+  return { dv, plan, run, raw, fail, enable, draft, calls, created, client: K };
 }
 
 const cardsInput = (d: DraftView, f: (c: DraftView["cards"][number]) => Partial<DraftView["cards"][number]> = () => ({})) => d.cards.map((c) => { const x = { ...c, ...f(c) }; return { id: x.id, keep: x.keep, title: x.title, description: x.description, acceptance: x.acceptance, size: x.size }; });
@@ -387,5 +388,56 @@ describe("Break down with the standards (KB-1)", () => {
     const d = await s.run<DraftView & { standards?: unknown }>("stories.run", { clientKey: "Contoso", featureId: FEATURE });
     expect(d.standards ?? null).toBeNull();
     expect(s.calls.at(-1)!.input).not.toContain('"standards"');
+  });
+});
+
+describe("RQ-1: Break down sends the fields the client's process needs", () => {
+  const TARGET = "Microsoft.VSTS.Scheduling.TargetDate";
+  type Needed = { checked: boolean; needed: { fill: string | null; name: string }[]; parent: { date: string | null } | null; level: string | null };
+
+  it("each story needs the target date, starts from the feature's, Publish is held until all have it, and the batch carries it", async () => {
+    const s = setup({ rules: { "User Story": [TARGET] }, featureTarget: "2026-11-27T05:00:00Z" });
+    await s.enable();
+    const d = await s.draft();
+    const early = await s.run<Needed>("devops.needed", { clientKey: COOP, change: { kind: "new_item", type: d.storyType, parentId: FEATURE, title: "" } });
+    expect(early).toMatchObject({ checked: true, needed: [{ fill: "date", name: "Target Date" }], parent: { date: "2026-11-27" }, level: "story" });
+    // Without the date the batch's preview is held: nothing is previewed or sent.
+    const held = await s.raw("stories.publish_preview", { draftId: d.id });
+    expect(held).toMatchObject({ ok: false, code: "required_field" });
+    expect(s.created()).toHaveLength(0);
+    expect(s.dv.checks().length).toBeGreaterThan(0);
+    // Review sets one value for all (here: the feature's), then the one preview and Create all.
+    const cards = d.cards.map((c) => ({ id: c.id, keep: c.keep, title: c.title, description: c.description, acceptance: c.acceptance, size: c.size, values: { date: "2026-11-27" } }));
+    const saved = await s.run<DraftView>("stories.save", { draftId: d.id, cards });
+    expect(saved.cards.every((c) => c.values?.date === "2026-11-27")).toBe(true);
+    const pv = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    expect(pv.previews.length).toBe(d.cards.filter((c) => c.keep).length);
+    expect(pv.previews[0]!.fields.find((f) => f.label === "Target date")?.after).toBe("2026-11-27");
+    const r = await s.run<{ created: number; failed: string[] }>("stories.publish", { draftId: d.id, previewIds: pv.previews.map((p) => p.previewId) });
+    expect(r.failed).toEqual([]);
+    const made = s.created();
+    expect(made.length).toBe(pv.previews.length);
+    for (const i of made) expect(String(i.fields[TARGET])).toMatch(/^2026-11-27/);
+  });
+
+  it("without such a rule Break down is as before: nothing asked, nothing extra written", async () => {
+    const s = setup();
+    await s.enable();
+    const d = await s.draft();
+    expect((await s.run<Needed>("devops.needed", { clientKey: COOP, change: { kind: "new_item", type: d.storyType, parentId: FEATURE, title: "" } })).needed).toEqual([]);
+    const pv = await s.run<{ previews: DevOpsPreview[] }>("stories.publish_preview", { draftId: d.id });
+    expect(pv.previews[0]!.fields.some((f) => f.label === "Target date")).toBe(false);
+  });
+
+  it("a card's values are checked: a date, a start no later than it, a size from 0 to 10000", async () => {
+    const s = setup();
+    await s.enable();
+    const d = await s.draft();
+    const with_ = (values: unknown) => s.raw("stories.save", { draftId: d.id, cards: d.cards.map((c) => ({ id: c.id, keep: c.keep, title: c.title, description: c.description, acceptance: c.acceptance, size: c.size, values })) });
+    expect(await with_({ date: "next week" })).toMatchObject({ ok: false });
+    expect(await with_({ date: "2026-11-20", start: "2026-11-27" })).toMatchObject({ ok: false });
+    expect(await with_({ size: -1 })).toMatchObject({ ok: false });
+    expect(await with_({ secret: 1 })).toMatchObject({ ok: false });
+    expect(await with_({ size: 3 })).toMatchObject({ ok: true });
   });
 });
