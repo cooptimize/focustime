@@ -2,7 +2,7 @@
 // write log, undo, the marker). Two people on one database; only Alex's Outlook is connected, and only Alex's own
 // press puts it there. Never attendees, never anyone else's calendar.
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "../config/schema.ts";
+import { parseConfig, type AppConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { fakeGraph, FAKE_WRITE_TOKEN } from "../sources/graph/test-fakes.ts";
 import { createGraphWriter } from "../sources/graph/write.ts";
@@ -49,7 +49,7 @@ async function setup() {
   const preview = async (uid: string) => (await run<{ preview?: WritePreview; nothing?: true }>("write.preview", { uid })).preview;
   const confirm = (p: WritePreview) => run<WriteResult>("write.confirm", { previewId: p.previewId });
   const dep = await alex.addDeployment({ date: SAT, half: "EVE", clientKey: "Adatum", kind: "intention", title: "Release 4.2", itemType: "Deployment", size: null, minutes: 120, todoKind: "deployment", window: { start: "09:00", end: "11:00" }, links: [{ id: 101, title: "Export stories" }], notes: "Warehouse first, then the reports" } as never, [{ id: JORDAN, name: "Jordan Lee" }]);
-  const sync = () => (clearSyncMemo(), syncWeek({ plan: alex, ow: { access: async () => ({ status: "write" }), writer }, cfg: parseConfig(base).config!, weekStart: "2026-11-16", refresh: true, now: () => NOW, clients: [{ key: "Adatum", name: "Adatum" }] }));
+  const sync = () => (clearSyncMemo(), syncWeek({ plan: alex, ow: { access: async () => ({ status: "write" }), writer }, cfg: (parseConfig(base) as { config: AppConfig }).config, weekStart: "2026-11-16", refresh: true, now: () => NOW, clients: [{ key: "Adatum", name: "Adatum" }] }));
   return { g, alex, jordan, run, preview, confirm, dep, sync };
 }
 

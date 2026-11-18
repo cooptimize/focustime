@@ -237,6 +237,11 @@ export function sharedDeployments(conn: Conn, now: () => Temporal.Instant) {
         });
       },
       /** My notices since an instant, oldest first. */
+      /** The title, for a note to me about it (so a person taken off, or one it was deleted for, is told which). */
+      titleForNote: async (id: number): Promise<string | null> => {
+        const r = (await conn.get("SELECT d.title FROM deployments d WHERE d.id = ? AND EXISTS (SELECT 1 FROM deployment_notes n WHERE n.deployment_id = d.id AND n.to_person = ?)", [id, me])) as Row | undefined;
+        return r ? String(r.title) : null;
+      },
       notes: async (since: string): Promise<DeployNote[]> => ((await conn.all("SELECT * FROM deployment_notes WHERE to_person = ? AND at > ? ORDER BY at, id", [me, since])) as Row[]).map(toNote),
     };
   }

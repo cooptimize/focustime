@@ -10,6 +10,8 @@ import { openPlanDb, planStoreOn, PlanError } from "./plan-store.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
 import { sharedDeployments } from "./deployments.ts";
 import { exportUser, recordSoftDelete } from "./user-data.ts";
+import { notices } from "../plan/notify.ts";
+import { windowWords } from "../plan/shared-deploy.ts";
 
 const NOW = "2026-11-17T15:00:00Z"; // Tue 10:00 New York
 const SAT = "2026-11-21";
@@ -182,5 +184,32 @@ describe("a shared deployment", () => {
     await recordSoftDelete(w.conn, JORDAN, Temporal.Instant.from(NOW));
     expect((await alex.s.getPick(a.id))!.shared!.people.map((p) => p.id)).toEqual([ALEX]);
     expect(await sharedDeployments(w.conn, () => Temporal.Instant.from(NOW)).of(JORDAN)).toEqual([]);
+  });
+
+  it("tells the others when it is added, moved, taken off or deleted; never for notes, items or links, never the one who changed it", async () => {
+    const w = world();
+    const alex = await w.person(ALEX, "America/New_York", "Alex Rivera").init();
+    const jordan = await w.person(JORDAN, "America/New_York", "Jordan Lee").init();
+    const a = await alex.s.addDeployment(saturday() as never, [{ id: JORDAN, name: "Jordan Lee" }]);
+    const j = (await jordan.s.picksFor(SAT))[0]!;
+    const kinds = async (who: typeof alex) => (await who.s.deployNotes("2026-01-01T00:00:00Z")).map((n) => [n.kind, n.byName]);
+    // Notes, items and links: quiet.
+    await jordan.s.setTodoKind(j.id, { todoKind: "deployment", window: { start: "09:00", end: "11:00" }, links: [{ id: 102, title: "Reports" }], notes: "Reports too", version: j.shared!.version });
+    expect(await kinds(alex)).toEqual([]);
+    // The time, then the day: Alex is told each time; Jordan, who changed it, never.
+    const j2 = (await jordan.s.getPick(j.id))!;
+    await jordan.s.setTodoKind(j.id, { todoKind: "deployment", window: { start: "10:00", end: "12:00" }, links: null, version: j2.shared!.version });
+    await jordan.s.move(j.id, "2026-11-22", "EVE");
+    expect(await kinds(alex)).toEqual([["moved", "Jordan Lee"], ["moved", "Jordan Lee"]]);
+    await alex.s.deployDeleteAll(a.id);
+    expect(await kinds(jordan)).toEqual([["added", "Alex Rivera"], ["deleted", "Alex Rivera"]]);
+    expect(await jordan.s.deploymentTitle(j.id === a.id ? a.shared!.id : j.shared!.id)).toBe("Release 4.2");
+    const note = (await jordan.s.deployNotes("2026-01-01T00:00:00Z"))[1]!;
+    const n = notices.deployment(note.id, note.kind, "Alex", "Contoso", "Release 4.2", windowWords(note.startAt, note.endAt, "America/New_York"), NOW);
+    expect([n.kind, n.title, n.body, n.route]).toEqual(["deployments", "Alex deleted a deployment you were on", "Contoso: Release 4.2, Sun, Nov 22, 10:00 AM to 12:00 PM.\nIt's off your plan. Check your Outlook if it was there.", "week"]);
+    expect(windowWords("2026-11-21T14:00:00Z", "2026-11-21T16:00:00Z", "America/New_York")).toBe("Sat, Nov 21, 9:00 to 11:00 AM");
+    // Someone not on it can't read its title by a note's id.
+    const outsider = await w.person(OUTSIDER, "America/New_York", "Sam Ortiz").init();
+    expect(await outsider.s.deploymentTitle(note.deploymentId)).toBeNull();
   });
 });

@@ -133,3 +133,13 @@ export const timeChanged = (a: { startAt: string; endAt: string }, b: { startAt:
 
 /** The refusal when two people save at once. */
 export const STALE_SAVE = "Someone else on this deployment changed it while you had it open. Nothing of yours was saved. Look at what changed and save again";
+
+/** The window in a person's own words: "Sat, Nov 21, 9:00 to 11:00 AM", "Sat, Nov 21, 11:30 AM to 1:00 PM". */
+export function windowWords(startAt: string, endAt: string, zone: string): string {
+  const s = zdt(startAt, zone);
+  const e = zdt(endAt, zone);
+  const day = s.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const t = (z: Temporal.ZonedDateTime, ampm: boolean) => `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}${ampm ? (z.hour < 12 ? " AM" : " PM") : ""}`;
+  const same = s.hour < 12 === e.hour < 12 && s.toPlainDate().equals(e.toPlainDate());
+  return `${day}, ${t(s, !same)} to ${t(e, true)}`;
+}

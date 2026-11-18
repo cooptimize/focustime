@@ -2255,6 +2255,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** My deployment notices since an instant (added, moved, removed, deleted), oldest first. */
     deployNotes: (since: string) => shared.notes(since),
+    /** A deployment's title for a note to me: only one I'm on, or was on when the note was written (deleted too). */
+    async deploymentTitle(id: number): Promise<string | null> {
+      return (await shared.titleForNote(id)) ?? null;
+    },
     /** Who I am on a shared deployment. */
     deployPerson: () => personId,
     /** DP-3: my holds left on my Outlook for deployments I'm no longer on: removed here, their event still live. */

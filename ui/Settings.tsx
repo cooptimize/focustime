@@ -1196,6 +1196,7 @@ function NotifyForm(p: FormProps) {
         {group("Other", ["vm", "followups", "expiry", "asks"])}
         {group("Monday's status report", ["status_report"])}
         {group("Client calls", ["meeting_review"])}
+        {group("Deployments", ["deployments"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
       </Group>
