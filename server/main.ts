@@ -9,6 +9,8 @@ import { createChatsClient, type ChatMessagesClient, type ChatsClient } from "..
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
+import { createPocketClient } from "../sources/pocket/client.ts";
+import { pocketPort } from "../actions/pocket-actions.ts";
 import { createPushDevices } from "../store/push-devices.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
@@ -328,6 +330,8 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
     signOut: () => src.disconnect(),
   };
 };
+/** PK-2: the Pocket client (one list call and no other); each call takes the person's own key from their secrets. */
+const pocketClient = createPocketClient({ fetch, log });
 const azureFor = (token: () => Promise<string>) => createAzureClient({ fetch, token, log });
 const googleFor = (who: Person) => (cfg: GoogleConfig, timeZone: string) =>
   memo(who, "google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(who, timeZone), config: cfg, web: { login: () => "/auth/google/login", redirectUri: urls.google } }));
@@ -945,6 +949,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),
     makeGoogle: googleFor(who),
+    // PK-2: this person's Pocket, in their own sealed secrets; called only from their press (pocket.connect, pocket.check).
+    pocket: pocketPort({ secrets: who.secrets, client: pocketClient, now: () => Date.now() }),
     linkCalendars: createLinkCalendars({ store: createCalendarLinks({ db, userId, keys: host.keys, now: instantNow }), get: icsGet, log, timeZone: () => who.zone, now: instantNow }),
     makeDevOps: devopsFor(who),
     feedback: {

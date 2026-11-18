@@ -38,7 +38,7 @@ export type Telemetry = {
   stop: () => void;
 };
 
-const EXTERNAL = new Set(["dataverse", "outlook", "google", "devops", "azure"]);
+const EXTERNAL = new Set(["dataverse", "outlook", "google", "devops", "azure", "pocket"]);
 
 /** "InstrumentationKey=…;IngestionEndpoint=https://…/" → the key and the track URL; null when it isn't one. */
 export function parseConnectionString(s: string): { iKey: string; url: string } | null {

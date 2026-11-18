@@ -391,6 +391,24 @@ Every word below is in `plan/call-words.ts`.
 - Propose again: **"7 new proposals to review. 3 left out: the same as ones already done, skipped or failed here."**, or **"Nothing new to propose."**.
 - Back: **"Week"**, **"Day"**, **"Calls"** and the rest, named **"Back to Week"** or **"Back to client calls"**.
 
+## PK-2 words (Nov 17)
+
+Every word below is in `plan/pocket-words.ts` (the failures' too; the server and the page say the same).
+
+- The section: **"Pocket recorder"** in Settings › Accounts and calendars.
+- What connecting does: **"Connecting lets FocusTime count your Pocket recordings when you press a button here, so you know the key works. It never reads a recording's title, words or audio. Bringing in a recording for a client call comes later."**
+- The steps, under **"How to connect"**: **"In Pocket, make an API key for yourself, from your own Pocket account. Don't use a key someone shares with a team."**, **"Choose what the key may do: tick only reading recordings (recordings:read). Pocket gives a key every permission when none is ticked. If Pocket asks for an expiry date, any date is fine; when the key expires, paste a new one here."**, **"Copy the whole key. It starts with pk_ (often pk_live_), and Pocket may show it only once."**, **"Paste it below and press Check and save. Nothing is saved unless Pocket accepts it."**, then **"Your key stays on FocusTime's server, encrypted, for you alone. Nobody else sees it or whether you connected, admins included, and it never goes to the AI or the logs."** and the link **"Pocket's guide to API keys"**.
+- The field: **"Your Pocket key"** (a password field), its hint **"pk_…"**; the button **"Check and save"**, **"Checking with Pocket…"** while it waits.
+- Connected: **"Connected"**, then **"checked just now"** (**"checked 5 min ago"**, **"checked 2 h ago"**, **"checked Nov 12"**) and **"6 recordings in the last 7 days"** (**"1 recording"**); **"FocusTime keeps your key encrypted, only for you, and never shows it again. It asks Pocket only when you press a button here."** Buttons **"Check again"**, **"Use a new key"** (**"The new key replaces this one only if Pocket accepts it."**, with **"Cancel"**) and **"Disconnect"**.
+- Disconnect asks first (the row's buttons step aside while it asks): **"Disconnect Pocket? FocusTime forgets your key now. Your recordings stay in Pocket; you can also delete the key there."** with **"Disconnect"** and **"Keep it"**.
+- After a press: nothing more after connecting (the Connected line says it), **"New key checked and saved."**, **"Checked. Pocket answered."**, **"Disconnected. FocusTime forgot your key."**
+- The failures, each ending **"Nothing was saved."** (Check and save) or **"Your connection is kept as it was."** (Check again):
+  - **"Pocket didn't accept this key. Check that you copied all of it, or make a new one in Pocket and paste that."**
+  - **"Pocket didn't answer in time. Try again in a few minutes."**
+  - **"Pocket is busy right now. Try again in a few minutes."**
+  - **"Pocket answered in a way FocusTime doesn't understand; Pocket may have changed how it answers. Try again later, and tell your FocusTime admin if it keeps happening."**
+  - Before Pocket is asked: **"Paste your Pocket key first"**, **"That doesn't look like a Pocket key: it is one line with no spaces"**, **"That doesn't look like a Pocket key: Pocket's keys start with pk_"**.
+
 ## PK-1 words (Nov 17)
 
 Every word below is in `plan/call-words.ts` (`POCKET_TEXT`, `CALL_ROW`) or, for refusals, `actions/transcript-file.ts`.

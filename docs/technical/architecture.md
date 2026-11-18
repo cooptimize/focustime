@@ -2,7 +2,7 @@
 
 For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `2f4c0ea` on Nov 13, 2026.
 
-FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI and public GitHub. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
+FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI, public GitHub and, for a person who connects it, their own Pocket recorder. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
 ## The parts
 
