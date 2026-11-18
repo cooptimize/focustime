@@ -32,7 +32,7 @@ async function openStatus(page: Page) {
   await page.evaluate(() => (location.hash = "#/admin/audit"));
   await page.locator('.ps-rail [data-settings-section="audit"][aria-current="page"]').waitFor();
   await page.evaluate(() => (location.hash = "#/admin/health"));
-  const table = page.locator('table[data-status="passes"]');
+  const table = page.getByRole("table", { name: "Background passes" });
   await table.waitFor({ timeout: 15_000 });
   return table;
 }
@@ -47,10 +47,10 @@ describe.skipIf(!CHROMIUM)("VM-3: Admin › Health's background passes", () => {
   it("each pass with when it finished, how long and its limit; a held pass past its limit warns until it lets go", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     let table = await openStatus(page);
-    const slow = table.locator('tr[data-pass="slow"]');
-    await expect(table.locator('tr[data-pass="fast"]').textContent()).resolves.toMatch(/Fast pass.*Nov 2.*(under a second|\d+ seconds).*2 minutes/);
+    const slow = table.locator("tr", { hasText: "Slow pass" });
+    await expect(table.locator("tr", { hasText: "Fast pass" }).textContent()).resolves.toMatch(/Fast pass.*Nov 2.*(under a second|\d+ seconds).*2 minutes/);
     await expect(slow.textContent()).resolves.toMatch(/Slow pass.*Nov 2.*10 minutes$/);
-    expect(await page.locator(".adm-warnings").filter({ hasText: "slow pass" }).count()).toBe(0);
+    expect(await page.getByRole("list", { name: "To look at" }).filter({ hasText: "slow pass" }).count()).toBe(0);
     await table.scrollIntoViewIfNeeded();
     await shot(page, "admin-passes");
 
@@ -59,17 +59,17 @@ describe.skipIf(!CHROMIUM)("VM-3: Admin › Health's background passes", () => {
     await openStatus(page);
     expect((await post(page, "demo.vm_tick", { advanceMinutes: 11 })).ok).toBe(true);
     table = await openStatus(page);
-    await expect.poll(() => table.locator('tr[data-pass="slow"]').textContent(), { timeout: 10_000 }).toMatch(/has been running for 11 minutes, past its 10 minutes limit\. The next pass runs anyway/);
-    await page.locator(".adm-warnings", { hasText: "The slow pass" }).waitFor();
-    expect(await page.locator(".adm-warnings li").count()).toBe(1);
+    await expect.poll(() => table.locator("tr", { hasText: "Slow pass" }).textContent(), { timeout: 10_000 }).toMatch(/has been running for 11 minutes, past its 10 minutes limit\. The next pass runs anyway/);
+    await page.getByRole("list", { name: "To look at" }).filter({ hasText: "The slow pass" }).waitFor();
+    expect(await page.getByRole("list", { name: "To look at" }).locator("li").count()).toBe(1);
     await table.scrollIntoViewIfNeeded();
     await shot(page, "admin-passes-warning");
 
     // Let go: the warning goes.
     expect((await post(page, "demo.pass_stall", { on: false })).ok).toBe(true);
     table = await openStatus(page);
-    await expect.poll(() => table.locator('tr[data-pass="slow"]').textContent(), { timeout: 10_000 }).not.toMatch(/limit\. The next/);
-    expect(await page.locator(".adm-warnings", { hasText: "The slow pass" }).count()).toBe(0);
+    await expect.poll(() => table.locator("tr", { hasText: "Slow pass" }).textContent(), { timeout: 10_000 }).not.toMatch(/limit\. The next/);
+    expect(await page.getByRole("list", { name: "To look at" }).filter({ hasText: "The slow pass" }).count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -9,6 +9,7 @@ import { PanelShell, useNarrow, type RailGroup } from "../PanelShell.tsx";
 import { usePhone } from "../viewport.ts";
 import { AutoSaveProvider } from "./autosave.tsx";
 import { colorVar, useAdminChanged } from "./admin/shared.tsx";
+import "./admin/admin.css";
 import { ClientsPart } from "./admin/Clients.tsx";
 import { PeoplePart } from "./admin/People.tsx";
 import { AiTab, ChatsTab, PlanningTab, StandardsTab, type AiClient } from "./admin/TeamDefaults.tsx";

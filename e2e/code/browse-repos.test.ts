@@ -299,7 +299,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     expect(await card.locator("[data-code-check]").textContent()).toMatch(/^Code: readable · 3 repos/);
     await field.selectOption("team");
     await page.waitForTimeout(600);
-    await card.locator(".adm-code").scrollIntoViewIfNeeded();
+    await card.getByRole("region", { name: "Code" }).scrollIntoViewIfNeeded();
     await shotThemes(page, "14-admin-rule");
     // Harbor's token can't read code yet.
     await page.evaluate(() => (location.hash = "#/admin/clients/Harbor/code"));
@@ -312,7 +312,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     await views.locator("tbody tr").first().waitFor();
     const first = await views.locator("tbody tr").first().locator("td").allTextContents();
     expect(first.slice(2)).toEqual(["Northwind", "sales-analytics", "Opened a file", "/README.md"]);
-    expect(await views.locator(".adm-code-counts").textContent()).toMatch(/Northwind \d+/);
+    expect(await views.locator("[data-code-counts]").textContent()).toMatch(/Northwind \d+/);
     await shotThemes(page, "15-admin-code-views");
 
     // The person is on Northwind's team in the demo, so it still opens for them.

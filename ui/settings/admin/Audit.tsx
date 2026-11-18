@@ -1,10 +1,12 @@
 // SA-4: Admin › Audit, two tabs: Settings changes (every admin change, the setting by its label and the client's or
 // person's name, never a code name or an id) and Code views (who opened which client's code). What is stored doesn't
-// change: the labels come from the one list of Admin's settings (settings-list.ts).
+// change: the labels come from the one list of Admin's settings (settings-list.ts). SA-4 F: groups, the filters as a
+// button row and the one table style (SA-2's parts).
 import { useEffect, useState } from "react";
 import { call } from "../../api.ts";
 import { plain } from "../autosave.tsx";
-import { useSection, when } from "./shared.tsx";
+import { Buttons, Group, Note, Page, Select, Table, Text } from "../parts.tsx";
+import { Problem, useSection, when } from "./shared.tsx";
 import { ADMIN_SETTINGS, auditSettingLabel } from "./settings-list.ts";
 
 // ---------- Audit ----------
@@ -47,59 +49,25 @@ export function CodeViews() {
   }, [clientKey, personId]);
   const clients = data ? [...new Set([...data.counts.map((c) => c.clientKey), ...data.views.map((v) => v.clientKey)])].sort((a, b) => a.localeCompare(b)) : [];
   return (
-    <section className="set-form adm-code-views" data-setting="code-views" aria-labelledby="code-views-h">
-      <h3 id="code-views-h" className="sr-only">Code views</h3>
-      <p className="muted">Who opened which client's code in Code, and when: the repo, the file, Find, or a report's pages and a model's tables or measures listed for Where is it? Never any of the code. The newest {data?.shown ?? 200}; kept 12 months.</p>
-      {data && data.counts.length > 0 && (
-        <p className="adm-code-counts">
-          Last 30 days: {data.counts.map((c) => `${c.clientKey} ${c.views}`).join(" · ")}
-        </p>
-      )}
-      <div className="adm-code-filter">
-        <select aria-label="Client" value={clientKey} onChange={(e) => setClientKey(e.target.value)}>
-          <option value="">Every client</option>
-          {clients.map((k) => (
-            <option key={k} value={k}>{k}</option>
-          ))}
-        </select>
-        <select aria-label="Person" value={personId} onChange={(e) => setPersonId(e.target.value)}>
-          <option value="">Everyone</option>
-          {(data?.people ?? []).map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
-      {error && <p className="field-problem">{error}</p>}
-      {data && data.views.length === 0 && <p className="muted">Nothing yet.</p>}
-      {data && data.views.length > 0 && (
-        <div className="adm-scroll">
-          <table className="adm-table adm-code-table">
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">Who</th>
-                <th scope="col">Client</th>
-                <th scope="col">Repo</th>
-                <th scope="col">What</th>
-                <th scope="col">File</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.views.map((v) => (
-                <tr key={v.id}>
-                  <td>{when(v.at)}</td>
-                  <td>{v.actorName}</td>
-                  <td>{v.clientKey}</td>
-                  <td>{v.repoName || (v.event === "kinds_listed" || v.event === "names_searched" || v.event === "inside_searched" || v.event === "where_new_form" || v.event === "where_draft_editor" ? "All its repos" : "")}</td>
-                  <td>{CODE_EVENT_WORDS[v.event]}</td>
-                  <td className="adm-val">{CODE_EVENT_PATH.has(v.event) ? v.path : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+    <Page>
+      <Group label="Code views" intro={`Who opened which client's code in Code, and when: the repo, the file, Find, or a report's pages and a model's tables or measures listed for Where is it? Never any of the code. The newest ${data?.shown ?? 200}; kept 12 months.`} sid="code-views">
+        {data && data.counts.length > 0 && <Note>Last 30 days: <span data-code-counts="">{data.counts.map((c) => `${c.clientKey} ${c.views}`).join(" · ")}</span></Note>}
+        <Buttons>
+          <Select label="Client" value={clientKey} options={[{ value: "", label: "Every client" }, ...clients.map((k) => ({ value: k, label: k }))]} onChange={setClientKey} />
+          <Select label="Person" value={personId} options={[{ value: "", label: "Everyone" }, ...(data?.people ?? []).map((p) => ({ value: p.id, label: p.name }))]} onChange={setPersonId} />
+        </Buttons>
+        {error && <Problem>{error}</Problem>}
+        {data && data.views.length === 0 && <Note>Nothing yet.</Note>}
+        {data && data.views.length > 0 && (
+          <Table
+            label="Code views"
+            head={["When", "Who", "Client", "Repo", "What", "File"]}
+            rowKey={(i) => data.views[i]!.id}
+            rows={data.views.map((v) => [when(v.at), v.actorName, v.clientKey, v.repoName || (v.event === "kinds_listed" || v.event === "names_searched" || v.event === "inside_searched" || v.event === "where_new_form" || v.event === "where_draft_editor" ? "All its repos" : ""), CODE_EVENT_WORDS[v.event], CODE_EVENT_PATH.has(v.event) ? v.path : ""])}
+          />
+        )}
+      </Group>
+    </Page>
   );
 }
 
@@ -144,50 +112,18 @@ export function SettingsChanges() {
   for (const e of [...(data?.entries ?? []), ...more]) byId.set(e.id, e);
   const entries = [...byId.values()].sort((x, y) => y.id - x.id).slice(0, 200);
   return (
-    <div className="set-form">
-      <p className="muted">Every admin change: who, when, the setting and its old and new value. The last 200.</p>
-      <div className="set-inline adm-audit-filter">
-        <select aria-label="Area" value={area} onChange={(e) => setArea(e.target.value)}>
-          {AREAS.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <input type="search" aria-label="Filter" placeholder="Filter by who, setting or client" value={text} onChange={(e) => setText(e.target.value)} />
-      </div>
-      {error && <p className="field-problem">{plain(error)}</p>}
-      {data && entries.length === 0 && <p className="muted">Nothing yet.</p>}
-      {data && entries.length > 0 && (
-        <div className="adm-scroll">
-          <table className="adm-table adm-audit adm-rows-phone">
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">Who</th>
-                <th scope="col">For</th>
-                <th scope="col">Setting</th>
-                <th scope="col">Was</th>
-                <th scope="col">Now</th>
-                <th scope="col">Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} data-setting-key={e.setting}>
-                  <td data-label="When">{when(e.at)}</td>
-                  <td data-label="Who">{e.actorName}</td>
-                  <td data-label="For">{forWhom(e)}</td>
-                  <td data-label="Setting">{auditSettingLabel(e.setting)}</td>
-                  <td data-label="Was" className="adm-val">{shown(e.oldValue)}</td>
-                  <td data-label="Now" className="adm-val">{shown(e.newValue)}</td>
-                  <td data-label="Note">{e.note ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <Page>
+      <Group label="Settings changes" intro="Every admin change: who, when, the setting and its old and new value. The last 200.">
+        <Buttons>
+          <Select label="Area" value={area} options={AREAS.map(([id, name]) => ({ value: id, label: name }))} onChange={setArea} />
+          <Text label="Filter" placeholder="Filter by who, setting or client" value={text} onChange={setText} />
+        </Buttons>
+        {error && <Problem>{plain(error)}</Problem>}
+        {data && entries.length === 0 && <Note>Nothing yet.</Note>}
+        {data && entries.length > 0 && (
+          <Table label="Settings changes" head={["When", "Who", "For", "Setting", "Was", "Now", "Note"]} rowKey={(i) => entries[i]!.id} rows={entries.map((e) => [when(e.at), e.actorName, forWhom(e), auditSettingLabel(e.setting), shown(e.oldValue), shown(e.newValue), e.note ?? ""])} />
+        )}
+      </Group>
+    </Page>
   );
 }

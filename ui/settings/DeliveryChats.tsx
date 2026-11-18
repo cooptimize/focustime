@@ -10,7 +10,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
-import type { RequestChatStatus, RequestsData } from "../../plan/asks.ts";
+import type { RequestChatStatus } from "../../plan/asks.ts";
 import { AdminConfirm } from "./admin/shared.tsx";
 
 /** The chat add waiting for the Chat.Read consent to come back (this tab only): "<clientKey> <chatId>". */

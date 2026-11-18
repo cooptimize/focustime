@@ -7,7 +7,7 @@
 // result said on the row. A row's label, help and unit come from the registry (ui/settings/registry.ts), so the page,
 // search, links to it and the Undo message read one name. docs/design/style-guide.md section 12 has the rules;
 // ui/settings/sections.guard.test.ts keeps the sections on them.
-import { createContext, useContext, useId, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { createContext, Fragment, useContext, useId, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import type { FieldStatus } from "./autosave.tsx";
 import { settingOf, settingsHref, type SettingDef } from "./registry.ts";
 import { TimeField } from "../TimeField.tsx";
@@ -56,6 +56,10 @@ export function Group({ title, intro, more, sid, children, label }: { more?: Rea
 type RowProps = {
   /** The registry id: the row's label, help, "More about this" and unit come from there, and its deep link lands here. */
   id: string;
+  /** SA-4: Admin's rows name themselves (Admin's settings are its own list, ui/settings/admin/settings-list.ts). */
+  def?: { label: string; help?: string | undefined; more?: string | undefined; unit?: string | undefined } | undefined;
+  /** SA-4: a small word beside the label (Admin's Rule, Default, Default by level). */
+  badge?: ReactNode;
   /** Help that depends on the data (in place of the registry's); null for none. */
   help?: ReactNode;
   more?: ReactNode;
@@ -100,8 +104,8 @@ export function splitHelp(t: string, max = 80): [string, string | null] {
 }
 
 /** One setting. */
-export function Row({ id, help, more, mark, team, wide, below, noSid, status, children }: RowProps) {
-  const d = defOf(id);
+export function Row({ id, def, badge, help, more, mark, team, wide, below, noSid, status, children }: RowProps) {
+  const d = def ?? defOf(id);
   const labelId = useId();
   const helpId = useId();
   const given = help === undefined ? d.help : help;
@@ -115,6 +119,7 @@ export function Row({ id, help, more, mark, team, wide, below, noSid, status, ch
         <div className="sp-text">
           <span className="sp-label-line">
             <span className="sp-label" id={labelId}>{d.label}</span>
+            {badge}
             {mark && <Mark s={mark.s} retry={mark.retry} />}
           </span>
           {(shownHelp || team) && (
@@ -166,6 +171,16 @@ export function Mark({ s, retry }: { s: FieldStatus; retry: () => void }) {
   );
 }
 
+/** SA-4: a small word beside a row's label: Admin's kind of setting (Rule, Default, Default by level), with what it means for screen readers and on hover. */
+export function Badge({ children, title }: { children: ReactNode; title?: string | undefined }) {
+  return (
+    <span className="sp-badge" title={title}>
+      {children}
+      {title && <span className="sr-only">: {title}</span>}
+    </span>
+  );
+}
+
 /** A value the team set: one line, the same everywhere. */
 export function TeamLine() {
   return <span className="sp-team">{TEAM_LINE}</span>;
@@ -186,6 +201,11 @@ export function TeamDefault({ value, onReset }: { value: string; onReset: (() =>
       )}
     </span>
   );
+}
+
+/** SA-4: quieter words inside a cell or a line (an email under a name, how a value was found); `block` on its own line. */
+export function Faint({ children, block }: { children: ReactNode; block?: boolean | undefined }) {
+  return <span className={`sp-faint${block ? " sp-block" : ""}`}>{children}</span>;
 }
 
 /** A read-only value; "not set" when there is none. */
@@ -213,7 +233,7 @@ export function Fold({ label, count, children, sid }: { label: string; count?: n
 }
 
 /** One table style: a head row, rows of cells, its own sideways scroll on a narrow screen. */
-export function Table({ label, head, rows, rowKey, rowTone }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string | undefined) | undefined }) {
+export function Table({ label, head, rows, rowKey, rowTone, after }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string | undefined) | undefined; /** SA-4: a full-width line under a row (a confirm at that row), or nothing. */ after?: ((i: number) => ReactNode) | undefined }) {
   return (
     <div className="sp-table-wrap">
       <table className="sp-table" aria-label={label}>
@@ -227,13 +247,23 @@ export function Table({ label, head, rows, rowKey, rowTone }: { label: string; h
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={rowKey ? rowKey(i) : i} className={rowTone?.(i)}>
-              {r.map((c, j) => (
-                <td key={j}>{c}</td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((r, i) => {
+            const more = after?.(i);
+            return (
+              <Fragment key={rowKey ? rowKey(i) : i}>
+                <tr className={rowTone?.(i)}>
+                  {r.map((c, j) => (
+                    <td key={j}>{c}</td>
+                  ))}
+                </tr>
+                {more && (
+                  <tr className="sp-after">
+                    <td colSpan={head.length}>{more}</td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -373,6 +403,15 @@ export function Sub({ text, children }: { text: string; children: ReactNode }) {
 type TextBind = { onBlur?: () => void; onKeyDown?: (e: KeyboardEvent) => void; "aria-invalid"?: boolean; autoFocus?: boolean };
 const named = (r: RowCtx | null, label?: string) => (label ? { "aria-label": label } : r ? { "aria-labelledby": r.labelId, "aria-describedby": r.helpId } : {});
 
+/** SA-4: picking rows (a table's select boxes), not a setting: a plain box with its own name. */
+export function Check({ checked, onChange, label, disabled }: { checked: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean | undefined }) {
+  return (
+    <label className="sp-check-box">
+      <input type="checkbox" className="sp-check" checked={checked} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
+
 /** On or off. Its row's label says what on means; the switch has no words of its own. */
 export function Switch({ checked, onChange, disabled, label, text }: { checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; text?: string | undefined }) {
   const r = useRow();
@@ -385,7 +424,7 @@ export function Switch({ checked, onChange, disabled, label, text }: { checked: 
 }
 
 /** One of two to four: the app's segmented control (a radio group; arrows move between the sides). */
-export function Choice<T extends string | number>({ options, value, onChange, disabled, label }: { options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void; disabled?: boolean | undefined; label?: string | undefined }) {
+export function Choice<T extends string | number>({ options, value, onChange, disabled, label }: { options: readonly { value: T; label: string; /** SA-4: one side not offered now (it says why in its title). */ disabled?: boolean | undefined; title?: string | undefined }[]; value: T; onChange: (v: T) => void; disabled?: boolean | undefined; label?: string | undefined }) {
   const r = useRow();
   return (
     <span className="seg sp-choice" role="radiogroup" {...named(r, label)} aria-disabled={disabled || undefined}>
@@ -396,7 +435,8 @@ export function Choice<T extends string | number>({ options, value, onChange, di
           role="radio"
           aria-checked={value === o.value}
           tabIndex={value === o.value || (i === 0 && !options.some((x) => x.value === value)) ? 0 : -1}
-          disabled={disabled}
+          disabled={disabled || o.disabled}
+          title={o.title}
           className={`seg-btn${value === o.value ? " on" : ""}`}
           onClick={() => onChange(o.value)}
           onKeyDown={(e) => {
@@ -527,10 +567,10 @@ export function Links({ children, label }: { children: ReactNode; label?: string
     </ul>
   );
 }
-export function LinkItem({ href, onGo, color, name, detail }: { href: string; onGo: () => void; color?: string | undefined; name: string; detail: string }) {
+export function LinkItem({ href, onGo, color, name, detail, data }: { href: string; onGo: () => void; color?: string | undefined; name: string; detail: ReactNode; data?: Record<string, string> | undefined }) {
   return (
     <li>
-      <a className="sp-link-item" href={href} onClick={(e) => (e.preventDefault(), onGo())} style={color === undefined ? undefined : ({ "--c": colorVar(color) } as CSSProperties)}>
+      <a className="sp-link-item" {...data} href={href} onClick={(e) => (e.preventDefault(), onGo())} style={color === undefined ? undefined : ({ "--c": colorVar(color) } as CSSProperties)}>
         {color !== undefined && <span className="sp-swatch-dot" aria-hidden="true" />}
         <span className="sp-label">{name}</span>
         <span className="sp-help">{detail}</span>

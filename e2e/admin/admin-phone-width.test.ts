@@ -7,9 +7,9 @@ import { CHROMIUM, startDemo, type Harness } from "../harness.ts";
 const T = 120_000;
 /** Each section, and what shows once its data is in (the screenshots' own marks). */
 const SECTIONS = [
-  ["clients", ".adm-client-row"],
+  ["clients", ".sp-link-item[data-client]"],
   ["clients/Atlas/overview", '[role="radiogroup"]'],
-  ["people/levels", ".adm-positions"],
+  ["people/levels", 'table[aria-label="Positions to levels"]'],
   ["health", 'h3:has-text("Jobs")'],
 ] as const;
 

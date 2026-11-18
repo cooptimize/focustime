@@ -2,10 +2,12 @@
 // admin.set). Automatic until set; or the whole project; or DevOps teams (their own area paths, with sub-areas as each
 // team's settings say); or area paths with "Include sub-areas". The project's own teams and area paths come from the
 // central store's daily read, each with its open items and how many are Cooptimize's (assigned to a Cooptimizer or
-// under an epic or feature one owns), so the BI part of a bigger program can be picked by its numbers.
+// under an epic or feature one owns), so the BI part of a bigger program can be picked by its numbers. SA-4 F: SA-2's
+// parts: the row with its Rule and saved mark, the choice, the one table style, the button row with its preview.
 import { useEffect, useMemo, useState } from "react";
 import { inArea, type AreaRule, type ClientScopeFacts, type DevOpsScope, type ScopeCounts } from "../../plan/devops-scope.ts";
-import { SaveMark, type FieldStatus } from "./autosave.tsx";
+import type { FieldStatus } from "./autosave.tsx";
+import { Badge, Button, Buttons, Check, Choice, Note, Row, Switch, Table } from "./parts.tsx";
 
 export type ClientScopeRow = { rule: DevOpsScope | null; words: string; facts: ClientScopeFacts | null; polled: boolean };
 type Mode = "automatic" | "whole" | "teams" | "areas";
@@ -49,125 +51,92 @@ export function ScopeField({ clientKey, project, s, save, status, retry }: { cli
   };
   const depth = (p: string) => p.split("\\").length - 1;
 
+  const modes = [
+    ["automatic", "Automatic", counts ? of(counts.automatic, counts.total) : null, "Items assigned to Cooptimizers, everything under epics and features a Cooptimizer owns, and the area paths where Cooptimizers have items (never the root area when there are others)."],
+    ["whole", "Whole project", counts ? items(counts.total) : null, "Every item in the project."],
+    ["teams", "By team", null, "The area paths of the DevOps teams you choose, as each team's settings say."],
+    ["areas", "By area path", null, "The area paths you choose, with or without the areas under them."],
+  ] as const;
   return (
-    <div className="set-form adm-scope">
-      <h4>
-        Cooptimize's work in this project{" "}
-        <span className="adm-kind" title="Applies to everyone">
-          Rule
-        </span>
-      </h4>
-      <p className="muted">
-        Backlog, Needs attention and Week's lists show only these items of {name}, plus anything assigned to the person. Now: {s.words}
-        {rule === null ? " (until an admin sets it)" : ""}.{counts ? ` Automatic: ${of(counts.automatic, counts.total)} open items.` : ""}
-      </p>
-      {!s.polled && <p className="muted">DevOps isn't read centrally here, so there are no counts.</p>}
-      {s.polled && !counts && <p className="muted">FocusTime hasn't read {name}'s DevOps yet. Counts show after the first read.</p>}
-      <div className="adm-scope-modes" role="radiogroup" aria-label={label}>
-        {(
-          [
-            ["automatic", "Automatic", counts ? of(counts.automatic, counts.total) : null, "Items assigned to Cooptimizers, everything under epics and features a Cooptimizer owns, and the area paths where Cooptimizers have items (never the root area when there are others)."],
-            ["whole", "Whole project", counts ? items(counts.total) : null, "Every item in the project."],
-            ["teams", "By team", null, "The area paths of the DevOps teams you choose, as each team's settings say."],
-            ["areas", "By area path", null, "The area paths you choose, with or without the areas under them."],
-          ] as const
-        ).map(([m, word, n, hint]) => (
-          <label key={m} className="adm-scope-mode" title={hint}>
-            <input type="radio" name={`scope-${clientKey}`} checked={mode === m} onChange={() => choose(m)} disabled={m === "teams" && !counts?.teams?.length} />
-            <span>
-              {word}
-              {n && <span className="muted"> · {n}</span>}
-            </span>
-          </label>
-        ))}
-      </div>
+    <>
+      <Row
+        id="devops-scope"
+        def={{ label: "Which items count" }}
+        noSid
+        wide
+        badge={<Badge title="applies to everyone">Rule</Badge>}
+        help={`Backlog, Needs attention and Week's lists show only these items of ${name}, plus anything assigned to the person. Now: ${s.words}${rule === null ? " (until an admin sets it)" : ""}.${counts ? ` Automatic: ${of(counts.automatic, counts.total)} open items.` : ""}`}
+        status
+        mark={{ s: status, retry }}
+      >
+        <Choice label={label} value={mode} onChange={choose} options={modes.map(([m, word, n, hint]) => ({ value: m, label: n ? `${word} · ${n}` : word, title: hint, disabled: m === "teams" && !counts?.teams?.length }))} />
+      </Row>
+      {!s.polled && <Note>DevOps isn't read centrally here, so there are no counts.</Note>}
+      {s.polled && !counts && <Note>FocusTime hasn't read {name}'s DevOps yet. Counts show after the first read.</Note>}
       {mode === "teams" && counts && (
         <>
-          {s.facts?.teamsProblem && <p className="muted">{s.facts.teamsProblem}.</p>}
+          {s.facts?.teamsProblem && <Note>{s.facts.teamsProblem}.</Note>}
           {counts.teams && counts.teams.length > 0 && (
-            <div className="adm-scroll adm-scope-list">
-              <table className="adm-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Team</th>
-                    <th scope="col">Its area paths</th>
-                    <th scope="col" className="num">Open items</th>
-                    <th scope="col" className="num">Cooptimize's</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {counts.teams.map((t) => (
-                    <tr key={t.name}>
-                      <th scope="row">
-                        <label className="adm-switch">
-                          <input
-                            type="checkbox"
-                            checked={teams.has(t.name.toLowerCase())}
-                            disabled={t.otherField}
-                            onChange={(e) => setTeams((x) => (e.target.checked ? new Set(x).add(t.name.toLowerCase()) : new Set([...x].filter((y) => y !== t.name.toLowerCase()))))}
-                          />{" "}
-                          {t.name}
-                        </label>
-                      </th>
-                      <td className="muted">{t.otherField ? "Uses a field other than Area Path" : t.areas.map((a) => `${a.path}${a.sub ? " and sub-areas" : ""}`).join("; ") || "None"}</td>
-                      <td className="num">{t.items}</td>
-                      <td className="num">{t.coop}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              label={`${clientKey}: teams`}
+              head={["Team", "Its area paths", "Open items", "Cooptimize's"]}
+              rowKey={(i) => counts.teams![i]!.name}
+              rows={counts.teams.map((t) => [
+                <span key="t">
+                  <Check label={t.name} checked={teams.has(t.name.toLowerCase())} disabled={t.otherField} onChange={(on) => setTeams((x) => (on ? new Set(x).add(t.name.toLowerCase()) : new Set([...x].filter((y) => y !== t.name.toLowerCase()))))} /> {t.name}
+                </span>,
+                t.otherField ? "Uses a field other than Area Path" : t.areas.map((a) => `${a.path}${a.sub ? " and sub-areas" : ""}`).join("; ") || "None",
+                String(t.items),
+                String(t.coop),
+              ])}
+            />
           )}
         </>
       )}
       {mode === "areas" && counts && (
         <>
-          {s.facts?.areasProblem && <p className="muted">{s.facts.areasProblem}.</p>}
-          <div className="adm-scroll adm-scope-list">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th scope="col">Area path</th>
-                  <th scope="col">Include sub-areas</th>
-                  <th scope="col" className="num">Open items</th>
-                  <th scope="col" className="num">Cooptimize's</th>
-                </tr>
-              </thead>
-              <tbody>
-                {counts.areas.map((a) => {
-                  const k = a.path.toLowerCase();
-                  const on = areas.get(k);
-                  return (
-                    <tr key={a.path}>
-                      <th scope="row" style={{ paddingLeft: `calc(${depth(a.path)} * 16px + 8px)` }}>
-                        <label className="adm-switch">
-                          <input type="checkbox" checked={!!on} onChange={(e) => setAreas((x) => { const n = new Map(x); if (e.target.checked) n.set(k, { path: a.path, sub: true }); else n.delete(k); return n; })} /> {a.path.split("\\").pop()}
-                        </label>
-                      </th>
-                      <td>
-                        <label className="adm-switch">
-                          <input type="checkbox" role="switch" aria-label={`${a.path}: include sub-areas`} disabled={!on} checked={!!on?.sub} onChange={(e) => setAreas((x) => new Map(x).set(k, { path: a.path, sub: e.target.checked }))} /> {on ? (on.sub ? "Yes" : "No") : ""}
-                        </label>
-                      </td>
-                      <td className="num">{a.items}</td>
-                      <td className="num">{a.coop}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {s.facts?.areasProblem && <Note>{s.facts.areasProblem}.</Note>}
+          <Table
+            label={`${clientKey}: area paths`}
+            head={["Area path", "Include sub-areas", "Open items", "Cooptimize's"]}
+            rowKey={(i) => counts.areas[i]!.path}
+            rows={counts.areas.map((a) => {
+              const k = a.path.toLowerCase();
+              const on = areas.get(k);
+              return [
+                <span key="a">
+                  {"\u2003".repeat(depth(a.path))}
+                  <Check
+                    label={a.path}
+                    checked={!!on}
+                    onChange={(v) =>
+                      setAreas((x) => {
+                        const n = new Map(x);
+                        if (v) n.set(k, { path: a.path, sub: true });
+                        else n.delete(k);
+                        return n;
+                      })
+                    }
+                  />{" "}
+                  {a.path.split("\\").pop()}
+                </span>,
+                <Switch key="s" label={`${a.path}: include sub-areas`} disabled={!on} checked={!!on?.sub} onChange={(v) => setAreas((x) => new Map(x).set(k, { path: a.path, sub: v }))} />,
+                String(a.items),
+                String(a.coop),
+              ];
+            })}
+          />
         </>
       )}
-      <div className="set-row-actions">
-        {(mode === "teams" || mode === "areas") && (
-          <button type="button" className="primary" disabled={draft === "incomplete" || same} onClick={() => draft !== "incomplete" && void save(draft ?? undefined)}>
-            Save scope
-          </button>
-        )}
-        {preview !== null && counts && <span className="muted">Shows {of(preview, counts.total)} open items, plus each person's own.</span>}
-        <SaveMark s={status} retry={retry} />
-      </div>
-    </div>
+      {(mode === "teams" || mode === "areas" || (preview !== null && counts)) && (
+        <Buttons result={preview !== null && counts ? `Shows ${of(preview, counts.total)} open items, plus each person's own.` : undefined}>
+          {(mode === "teams" || mode === "areas") && (
+            <Button kind="main" disabled={draft === "incomplete" || same} onClick={() => draft !== "incomplete" && void save(draft ?? undefined)}>
+              Save scope
+            </Button>
+          )}
+        </Buttons>
+      )}
+    </>
   );
 }

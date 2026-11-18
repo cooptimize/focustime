@@ -139,13 +139,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.waitForFunction(() => location.hash.startsWith("#/admin"));
       const body = page.locator(".ps-body");
       await page.locator(".ps-head").getByRole("heading", { name: "Clients" }).waitFor();
-      await body.locator('.adm-client-row[data-client="Adatum"]').waitFor();
+      await body.locator('[data-client="Adatum"]').waitFor();
       // CV-3b: account types not read here, so the fallback says so; only active accounts are clients.
       await body.getByText("Account types aren't read from Dataverse yet", { exact: false }).waitFor();
       await shotBoth(page, "admin-clients-list", page.locator(".ps-head").getByRole("heading", { name: "Clients" }));
 
       // Adatum's page: the client's own tabs.
-      await body.locator('.adm-client-row[data-client="Adatum"]').click();
+      await body.locator('[data-client="Adatum"]').click();
       await page.waitForFunction(() => location.hash === "#/admin/clients/Adatum");
       await page.locator(".ps-head").getByRole("heading", { name: "Adatum" }).waitFor();
       const adatum = body.locator(".adm-client-page");
@@ -196,13 +196,13 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.locator(".ps-head").getByRole("heading", { name: "Team defaults" }).waitFor();
       await body.getByRole("switch", { name: "AI for FocusTime" }).check();
       await expect.poll(async () => (await team.org.rules()).ai).toMatchObject({ on: true, allowedClients: ["Adatum"] });
-      await body.getByText(/1 of \d+ clients allow AI/).waitFor();
+      await expect.poll(() => body.locator("[data-allow-ai-count]").textContent()).toMatch(/^1 of \d+$/);
       await shotBoth(page, "admin-ai", body);
       // AI-F1: background tasks on Flex; an admin puts one back on standard. Interactive tasks have no switch.
-      const tiers = body.locator(".adm-ai-tiers");
+      const tiers = body.getByRole("region", { name: "Processing tier" });
       await tiers.getByRole("switch", { name: "Use Flex for Checking client messages" }).uncheck();
       await expect.poll(async () => (await team.org.rules()).ai.standardTasks).toEqual(["asks.classify"]);
-      await tiers.getByRole("row", { name: /Break down/ }).getByText("Standard", { exact: true }).waitFor();
+      await tiers.locator(".sp-row", { hasText: "Break down" }).getByText("Standard", { exact: true }).waitFor();
       expect(await tiers.getByRole("switch").count()).toBe(4);
       await shotBoth(page, "admin-ai-tiers", tiers);
       // Turning AI off for everyone asks first; Cancel keeps it on.
@@ -219,11 +219,11 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
 
       // Admin › People: Kim becomes a lead of Adatum (an override, marked).
       await page.locator('.ps-rail [data-settings-section="people"]').click();
-      const kim = body.locator("tr", { has: page.getByRole("rowheader", { name: /Kim Person/ }) });
+      const kim = body.getByRole("table", { name: "People" }).locator("tr", { hasText: "Kim Person" });
       await kim.getByRole("combobox", { name: "Kim Person: add as lead of" }).selectOption("Adatum");
       await kim.getByRole("button", { name: "Add" }).click();
       await kim.getByText("Added by an admin").waitFor();
-      await kim.locator(".adm-mark", { hasText: "Override" }).first().waitFor();
+      await kim.locator(".sp-badge", { hasText: "Override" }).first().waitFor();
       expect(await team.org.isClientLead(KIM, "Adatum")).toBe(true);
       await shotBoth(page, "admin-people", body);
 
@@ -235,16 +235,16 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await page.locator('.ps-rail [data-settings-section="health"]').click();
       await body.getByText("Adatum Delivery Team").waitFor();
       // DV-1: one row per client; Check now reads DevOps once for it, and a refused token says so in plain words.
-      const adatumRow = body.locator(".adm-status-group tr", { hasText: "Adatum" });
+      const adatumRow = body.locator("tr", { hasText: "Adatum", has: page.getByRole("button", { name: /Check now|Checking/ }) });
       await adatumRow.getByRole("button", { name: "Check now" }).click();
       await adatumRow.getByText(/every minute/).waitFor();
-      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByRole("button", { name: "Check now" }).click();
-      await body.locator(".adm-status-group tr", { hasText: "Fabrikam" }).getByText("Token not valid").waitFor();
+      await body.locator("tr", { hasText: "Fabrikam", has: page.getByRole("button", { name: /Check now|Checking/ }) }).getByRole("button", { name: "Check now" }).click();
+      await body.locator("tr", { hasText: "Fabrikam", has: page.getByRole("button", { name: /Check now|Checking/ }) }).getByText("Token not valid").waitFor();
       expect(devops.fake.calls.filter((c) => c.org === "Adatum" && c.op === "wiql").length).toBeGreaterThan(0);
       await shotBoth(page, "admin-status", body);
       // Audit names each setting as the page does, never by its stored key.
       await page.locator('.ps-rail [data-settings-section="audit"]').click();
-      const audit = body.locator(".adm-audit");
+      const audit = body.getByRole("table", { name: "Settings changes" });
       await audit.locator("tr", { hasText: "Team color" }).filter({ hasText: "violet" }).filter({ hasNotText: "suggested" }).waitFor();
       await audit.locator("tr", { hasText: "Allow AI" }).filter({ hasText: "Adatum" }).first().waitFor();
       await audit.getByText("Kim Person").first().waitFor();
@@ -274,7 +274,7 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       for (const hash of ["#/admin", "#/admin/clients/Adatum/ai", "#/admin/health", "#/settings/admin-clients"]) {
         await page.evaluate((x) => (location.hash = x), hash);
         await page.locator(".ps-body").getByText("Admin is only for FocusTime admins", { exact: false }).waitFor();
-        expect(await page.locator(".adm-client-page, .adm-client-list, .adm-status-group").count(), hash).toBe(0);
+        expect(await page.locator(".adm-client-page, [data-client], .adm-tabs, .sp-table").count(), hash).toBe(0);
       }
       await page.evaluate(() => (location.hash = "#/settings/you"));
       await settingsClient(page, "Adatum");

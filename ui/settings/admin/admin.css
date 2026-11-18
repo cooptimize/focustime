@@ -1,0 +1,55 @@
+/* SA-4: Admin as its own place. Its pages draw with SA-2's parts (ui/settings/parts.css); these are only Admin's own
+   pieces: the rail's foot lines and client swatches, the tabs, and the phone's tables drawn as rows. Loaded with Admin,
+   so nothing here is in the first download. */
+
+/* The rail: Admin's line at the foot of Settings' rail, and Settings' at the foot of Admin's; a client's color. */
+.panel-shell .ps-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.adm-rail-swatch { align-self: center; flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.ps-item .adm-rail-swatch + span { flex: 1; min-width: 0; }
+.panel-shell.admin .ps-group[aria-labelledby="ps-g-admin"] .ps-item { flex-wrap: nowrap; }
+.panel-shell.admin .ps-group[aria-labelledby="ps-g-admin"] .ps-item .ps-hint { margin-left: auto; }
+/* Admin's wrapper (for the phone's row labels) takes no box: the shell stays the app's flex child and scrolls in itself. */
+.adm-place { display: contents; }
+
+/* Tabs: a row of links, the open one underlined; on a phone the row scrolls sideways, its edge fading to say so. */
+.adm-tabs { display: flex; flex-direction: column; gap: var(--space-card, 12px); max-width: 1160px; }
+.adm-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+/* A page with a wide table (People, Health, Audit, a client's types) takes the room it needs; rows stay SA-2's. */
+.panel-shell.admin .ps-body .sp-page:has(.sp-table-wrap) { max-width: 1160px; }
+.panel-shell.admin .sp-table .sp-list-wrap { min-width: 13em; }
+.panel-shell.admin .sp-table .sp-item { padding: 0 0 0 6px; min-height: 0; }
+.panel-shell.admin .sp-table .sp-item-main { font-size: var(--fs-2); }
+.panel-shell.admin .sp-table .sp-select { max-width: 13em; }
+.adm-tab { flex: none; display: inline-flex; align-items: center; min-height: var(--target, 28px); padding: 0 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); text-decoration: none; font-size: var(--fs-3); font-weight: 500; white-space: nowrap; }
+.adm-tab:hover { color: var(--text); }
+.adm-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent, var(--text)); }
+.adm-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.adm-tabpanel:focus { outline: none; }
+.panel-shell.phone.admin .adm-tablist { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+.panel-shell.phone.admin .adm-tab { min-height: var(--tap, 44px); }
+
+/* A client chat that can't be registered here says why on its row before any press. */
+.dchat-picker li.refused { cursor: not-allowed; opacity: 0.85; }
+.dchat-why, .dchat-refusal { display: block; }
+
+/* The phone: a table is drawn as rows, each cell under its column's name (Admin.tsx writes data-label). */
+.panel-shell.phone.admin .sp-table-wrap { overflow: visible; }
+.panel-shell.phone.admin .sp-table { display: block; }
+.panel-shell.phone.admin .sp-table thead { display: none; }
+.panel-shell.phone.admin .sp-table :is(tbody, tr) { display: block; }
+.panel-shell.phone.admin .sp-table tbody tr { padding: 8px 0; border-top: 1px solid var(--border); }
+.panel-shell.phone.admin .sp-table tbody tr:first-child, .panel-shell.phone.admin .sp-table tr.sp-after { border-top: 0; }
+.panel-shell.phone.admin .sp-table td { display: block; min-width: 0; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
+.panel-shell.phone.admin .sp-table td[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); }
+.panel-shell.phone.admin .sp-table td[data-label=""]::before { content: none; }
+.panel-shell.phone.admin .sp-table td:empty { display: none; }
+/* The phone: every control a full target (the parts already make buttons, switches and checks 44 px). */
+.panel-shell.phone.admin .ps-body :is(select, input:not([type="checkbox"]):not([type="radio"])) { min-height: var(--tap, 44px); }
+.panel-shell.phone.admin .ps-body .sp-swatch { min-width: var(--tap, 44px); min-height: var(--tap, 44px); }
+.panel-shell.phone.admin .ps-body .sp-link-item { min-height: var(--tap, 44px); }
+.panel-shell.phone.admin .ps-body :is(.sp-go, .sp-more > summary, .sp-fold > summary) { min-height: var(--tap, 44px); display: inline-flex; align-items: center; }
+.panel-shell.phone.admin .ps-body .sp-help .sp-go { display: inline-flex; }
+/* Client chats, meetings and deployments keep their insides (shared with Settings, as SA-2 left them); their targets. */
+.panel-shell.phone.admin .ps-body :is(button, .mini, .link-btn) { min-height: var(--tap, 44px); box-sizing: border-box; }
+.panel-shell.phone.admin .ps-body label:has(> input[type="checkbox"]) { min-height: var(--tap, 44px); display: inline-flex; align-items: center; gap: 6px; }
+.panel-shell.phone.admin .ps-body .dchat-members summary { min-height: var(--tap, 44px); display: inline-flex; align-items: center; }

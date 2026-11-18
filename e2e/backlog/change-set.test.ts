@@ -394,7 +394,7 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     // SA-4: on Northwind's page in Admin › Clients, its Backlog rules tab.
     await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/backlog"));
     const card = page.locator(".adm-client-page");
-    const scope = card.locator(".adm-scope");
+    const scope = card.getByRole("region", { name: "Cooptimize's work in this project" });
     await scope.waitFor({ timeout: 30_000 });
     await expect(scope.textContent()).resolves.toContain("Automatic: 14 of 19 open items.");
     await scope.getByRole("radio", { name: /By area path/ }).check();
@@ -541,7 +541,7 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     const sw = card.getByRole("switch", { name: "Northwind: count Needs stories" });
     await sw.waitFor({ timeout: 30_000 });
     await sw.uncheck();
-    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
+    await expect.poll(() => card.locator(".sp-row", { hasText: "What Needs attention counts" }).textContent()).toMatch(/Saved/);
     await page.evaluate(() => (location.hash = "#/backlog"));
     await nw.waitFor({ timeout: 30_000 });
     await expect.poll(() => breakDowns(nw)).toBe(0);
@@ -551,7 +551,7 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/backlog"));
     await sw.waitFor({ timeout: 30_000 });
     await sw.check();
-    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
+    await expect.poll(() => card.locator(".sp-row", { hasText: "What Needs attention counts" }).textContent()).toMatch(/Saved/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

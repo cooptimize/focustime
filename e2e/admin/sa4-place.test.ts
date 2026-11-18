@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/admin/clients");
     const list = page.getByRole("list", { name: "Clients" });
-    const row = (k: string) => list.locator(`.adm-client-row[data-client="${k}"]`);
+    const row = (k: string) => list.locator(`[data-client="${k}"]`);
     await row("Atlas").waitFor({ timeout: 30_000 });
     // Marks follow the stored value: Tailspin's Allow AI on, then off again.
     const before = await row("Tailspin").textContent();
@@ -78,17 +78,17 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     expect(await list.locator("input, select, button, textarea").count()).toBe(0);
     // The box finds by name or other name.
     await page.getByLabel("Find a client by name or other name").fill("harb");
-    await expect.poll(() => list.locator(".adm-client-row").count()).toBe(1);
+    await expect.poll(() => list.locator("[data-client]").count()).toBe(1);
     await page.getByLabel("Find a client by name or other name").fill("");
     // All accounts shows more than Customers.
-    const customers = await list.locator(".adm-client-row").count();
+    const customers = await list.locator("[data-client]").count();
     await page.getByRole("radio", { name: /^All accounts/ }).click();
     await page.getByRole("switch", { name: /^Treat .* as a client$/ }).first().waitFor();
     // Every account, client or not, links to its own page (its AI switches are there).
-    const accounts = page.locator(".adm-accounts tbody th a");
+    const accounts = page.getByRole("table", { name: "All accounts" }).locator("tbody a");
     await expect.poll(() => accounts.count()).toBeGreaterThan(customers);
     await page.getByRole("radio", { name: /^Customers/ }).click();
-    await expect.poll(() => list.locator(".adm-client-row").count()).toBe(customers);
+    await expect.poll(() => list.locator("[data-client]").count()).toBe(customers);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -140,7 +140,7 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     await page.getByRole("link", { name: "See changes" }).click();
     await page.waitForFunction(() => location.hash === "#/admin/audit/changes");
     await expect.poll(() => page.getByLabel("Filter").inputValue()).toBe("Tailspin");
-    const audit = page.locator(".adm-audit");
+    const audit = page.getByRole("table", { name: "Settings changes" });
     await audit.locator("tr", { hasText: "Allow AI" }).first().waitFor();
     await audit.locator("tr", { hasText: "States treated as open" }).first().waitFor();
     // Never a stored key or an id.
@@ -177,7 +177,7 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
   it("Admins shows the signed-in admin; Health and Audit carry no Changes save line; tabs work by keyboard", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/admin/people/admins");
-    const admins = page.locator(".adm-admins");
+    const admins = page.getByRole("list", { name: "Admins" });
     await admins.locator("li").first().waitFor({ timeout: 30_000 });
     expect(await admins.textContent()).not.toContain("Nobody seen yet");
     for (const hash of ["#/admin/health", "#/admin/audit"]) {
@@ -187,7 +187,7 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     await go(page, "#/admin/defaults");
     expect(await page.locator(".ps-head").textContent()).toMatch(/Changes save/);
     // A part longer than the window scrolls inside the panel; the panel never runs past the window.
-    await page.locator(".adm-ai-tiers").waitFor({ timeout: 30_000 });
+    await page.getByRole("region", { name: "Processing tier" }).waitFor({ timeout: 30_000 });
     expect(await page.evaluate(() => {
       const b = document.querySelector(".ps-body")!;
       return [b.scrollHeight > b.clientHeight, document.querySelector(".panel-shell")!.getBoundingClientRect().bottom <= innerHeight];

@@ -1,10 +1,12 @@
 // SA-4: what every part of Admin shares: saving one team value at a time (Saved, Retry, Undo), a part's data from
 // admin.load, the field row with its kind badge, the small inputs, and the Customers or All accounts choice.
-// Moved from ui/settings/Admin.tsx unchanged.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+// SA-4 F: every one of them is drawn with SA-2's parts (ui/settings/parts.tsx); Admin draws no row, group, table,
+// button row or saved mark of its own (ui/settings/admin/admin.guard.test.ts).
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call } from "../../api.ts";
 import { useReturnFocus } from "../../CloseButton.tsx";
-import { SaveMark, plain, useSaveContext, type FieldStatus } from "../autosave.tsx";
+import { plain, useSaveContext, type FieldStatus } from "../autosave.tsx";
+import { Badge, Button, Buttons, Choice, Note, Num, Row, Switch, Text } from "../parts.tsx";
 import type { SourceSystem } from "../../../plan/standards.ts";
 import type { ClientProcess } from "../../../actions/types.ts";
 import type { ClientScopeRow } from "../AdminScope.tsx";
@@ -100,29 +102,39 @@ export function useSection<T>(section: string, extra: Record<string, unknown> = 
   return { data, error, load, loadWith };
 }
 
-export function Kind({ kind }: { kind: "Rule" | "Default" | "Default by level" }) {
-  const hint = kind === "Rule" ? "Applies to everyone" : kind === "Default" ? "People may change it for themselves" : "Per level; people may change it for themselves";
+const KIND_HINT = { Rule: "applies to everyone", Default: "people may change it for themselves", "Default by level": "per level; people may change it for themselves" } as const;
+export type SettingKind = keyof typeof KIND_HINT;
+/** The kind of a team value, beside its label: Rule, Default, Default by level. */
+export function Kind({ kind }: { kind: SettingKind }) {
+  return <Badge title={KIND_HINT[kind]}>{kind}</Badge>;
+}
+
+/** SA-4 F: one Admin setting is SA-2's row: its label and kind, the help, the saved mark, the control on the right. */
+export function AField({ label, kind, hint, more, s, retry, wide, below, children }: { label: string; kind: SettingKind; hint?: ReactNode; more?: ReactNode; s: FieldStatus; retry: () => void; wide?: boolean | undefined; below?: ReactNode; children?: ReactNode }) {
   return (
-    <span className="adm-kind" title={hint}>
-      {kind}
-    </span>
+    <Row id={label} def={{ label }} noSid badge={<Kind kind={kind} />} help={hint ?? null} more={more} mark={{ s, retry }} wide={wide} below={below}>
+      {children}
+    </Row>
   );
 }
 
-export function AField({ label, kind, hint, s, retry, children }: { label: string; kind: "Rule" | "Default" | "Default by level"; hint?: ReactNode; s: FieldStatus; retry: () => void; children: ReactNode }) {
+/** A read-only line in Admin, as a row: a label and what it says (Last synced, Budget). */
+export function ARead({ label, children, help, wide }: { label: string; children: ReactNode; help?: ReactNode; wide?: boolean | undefined }) {
   return (
-    <div className="set-field adm-field">
-      <span className="set-label">
-        {label} <Kind kind={kind} />
-      </span>
+    <Row id={label} def={{ label }} noSid help={help ?? null} wide={wide}>
       {children}
-      <SaveMark s={s} retry={retry} />
-      {hint && <span className="set-hint">{hint}</span>}
-    </div>
+    </Row>
   );
+}
+
+/** A switch saved as it changes, with the same accessible name it always had. */
+export function ASwitch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean | undefined }) {
+  return <Switch checked={checked} onChange={onChange} label={label} disabled={disabled} />;
 }
 
 export const csv = (v: string) => [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))];
+
+const enter = (commit: () => void) => (e: { key: string; preventDefault: () => void }) => e.key === "Enter" && (e.preventDefault(), commit());
 
 /** A comma list saved on blur or Enter (only when changed). */
 export function ListInput({ value, onSave, label, placeholder }: { value: readonly string[]; onSave: (v: string[]) => void; label: string; placeholder?: string }) {
@@ -132,18 +144,18 @@ export function ListInput({ value, onSave, label, placeholder }: { value: readon
     const next = csv(text);
     if (next.join("\u0000") !== value.join("\u0000")) onSave(next);
   };
-  return <input aria-label={label} value={text} placeholder={placeholder ?? "none"} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit())} />;
+  return <Text wide label={label} value={text} placeholder={placeholder ?? "none"} onChange={setText} bind={{ onBlur: commit, onKeyDown: enter(commit) }} />;
 }
 
-/** A number saved on blur or Enter. */
-export function NumInput({ value, onSave, label, min, max, step = 1 }: { value: number; onSave: (v: number) => void; label: string; min: number; max: number; step?: number }) {
+/** A number saved on blur or Enter, its unit beside it. */
+export function NumInput({ value, onSave, label, min, max, step = 1, unit }: { value: number; onSave: (v: number) => void; label: string; min: number; max: number; step?: number; unit?: string | undefined }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
   const commit = () => {
     const n = Number(text);
     if (text.trim() !== "" && n !== value) onSave(n);
   };
-  return <input type="number" aria-label={label} min={min} max={max} step={step} value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit())} />;
+  return <Num label={label} value={text.trim() === "" ? Number.NaN : Number(text)} min={min} max={max} step={step} unit={unit} onChange={(n) => setText(Number.isFinite(n) ? String(n) : "")} bind={{ onBlur: commit, onKeyDown: enter(commit) }} />;
 }
 
 /** A line of text saved on blur or Enter. */
@@ -151,7 +163,16 @@ export function TextInput({ value, onSave, label, placeholder, maxLength = 100 }
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   const commit = () => text.trim() !== value && onSave(text.trim());
-  return <input aria-label={label} value={text} maxLength={maxLength} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit())} />;
+  return <Text label={label} value={text} maxLength={maxLength} placeholder={placeholder} onChange={setText} bind={{ onBlur: commit, onKeyDown: enter(commit) }} />;
+}
+
+/** A problem or a warning line, in the problem color. */
+export function Problem({ children, live }: { children: ReactNode; live?: boolean | undefined }) {
+  return (
+    <Note tone="problem" live={live}>
+      {children}
+    </Note>
+  );
 }
 
 export const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--client-${c})`) : "var(--client-none)");
@@ -163,18 +184,10 @@ export type ClientFilterValue = "customers" | "all";
 export type ClientCounts = { customers: number; all: number };
 export type ClientsData = { palette: string[]; suggested: string[]; filter: ClientFilterValue; accountsRead: boolean; counts: ClientCounts; clients: ClientRow[] };
 
-/** ADM-2: Customers (the default) or All accounts, on Admin › Clients and AI. */
+/** ADM-2: Customers (the default) or All accounts, on Admin › Clients: SA-2's segmented control. */
 export function ClientFilter({ value, counts, onChange }: { value: ClientFilterValue; counts: ClientCounts | undefined; onChange: (v: ClientFilterValue) => void }) {
-  return (
-    <span className="adm-filter" role="radiogroup" aria-label="Which accounts">
-      {(["customers", "all"] as const).map((v) => (
-        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}>
-          {v === "customers" ? "Customers" : "All accounts"}
-          {counts ? <span className="muted"> {v === "customers" ? counts.customers : counts.all}</span> : null}
-        </button>
-      ))}
-    </span>
-  );
+  const n = (v: number | undefined) => (v === undefined ? "" : ` ${v}`);
+  return <Choice label="Which accounts" value={value} onChange={onChange} options={[{ value: "customers", label: `Customers${n(counts?.customers)}` }, { value: "all", label: `All accounts${n(counts?.all)}` }]} />;
 }
 
 /** A moment in the admin's own words ("Nov 18, 9:05 AM"), or "never". */
@@ -186,18 +199,30 @@ export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(
  */
 export function AdminConfirm({ label, text, confirm, onConfirm, onCancel, disabled = false, children }: { label: string; text: ReactNode; confirm: string; onConfirm: () => void; onCancel: () => void; disabled?: boolean; children?: ReactNode }) {
   useReturnFocus();
+  // The one element Admin keeps of its own: the confirm's dialog role, so Esc and the screen reader know what it is.
   return (
-    <div className="adm-confirm" role="alertdialog" aria-label={label} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), e.preventDefault(), onCancel())}>
-      <p>{text}</p>
+    <div className="sp-confirm" role="alertdialog" aria-label={label} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), e.preventDefault(), onCancel())}>
+      <Note>{text}</Note>
       {children}
-      <span className="set-inline">
-        <button type="button" className="mini danger" disabled={disabled} onClick={onConfirm}>
+      <Buttons>
+        <Button kind="danger" disabled={disabled} onClick={onConfirm}>
           {confirm}
-        </button>
-        <button type="button" className="mini quiet" autoFocus={!children} onClick={onCancel}>
-          Cancel
-        </button>
-      </span>
+        </Button>
+        <CancelFirst focus={!children} onCancel={onCancel} />
+      </Buttons>
     </div>
+  );
+}
+
+/** Cancel, focused when the confirm opens (nothing to type first). */
+function CancelFirst({ focus, onCancel }: { focus: boolean; onCancel: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.focus();
+  }, [focus]);
+  return (
+    <Button kind="quiet" buttonRef={ref} onClick={onCancel}>
+      Cancel
+    </Button>
   );
 }
