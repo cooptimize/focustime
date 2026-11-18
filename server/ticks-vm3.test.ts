@@ -151,8 +151,9 @@ describe("VM-3 review: a gate still running sends no notices on old facts", () =
     await p.ticks.slow();
     await settled();
     expect(p.starts()).toBe(1);
-    // 9:01: the gate's PTO read hangs, so no notice goes out.
-    p.advance(7);
+    // 9:26: the gate's PTO read hangs, so no notice goes out. (NT-1: the start's read at 8:55 is shared for 30 minutes,
+    // so the gate's own read is the first one after that.)
+    p.advance(31);
     await p.ticks.slow();
     expect(p.logs).toContainEqual({ source: "plan", op: "tick_part", kind: "gate_over_limit" });
     const before = p.shown.length;
