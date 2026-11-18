@@ -1663,6 +1663,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "outlook.open": return { run: () => env.openOutlook(outlookDay(env.selection.date)) };
     case "collab.candidates":
     case "collab.suggest":
+    case "collab.check":
     case "collab.preview_invite":
       return { next: () => choosePick(env, "Help on which to-do?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
     case "timebox.add": return { next: () => choosePick(env, "Timebox which to-do?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };

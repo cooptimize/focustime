@@ -345,6 +345,8 @@ export type WritePreview = {
   visibility: string;
   /** Help invites: every person who will receive it (or its cancellation). */
   attendees: { name: string; email: string }[];
+  /** CO-1, help invites: who isn't free then and why, checked again at the preview (never blocks it). */
+  notFree?: string[];
 };
 export type WriteResult = { entry: import("../plan/timebox.ts").WriteEntry; confirmed: boolean; message: string };
 export type WriteState = { access: "write" | "read_only" | "not_connected" | "unavailable" | "not_set_up"; message: string; outlookDefault: boolean; confirmOwn: boolean };
@@ -358,6 +360,8 @@ export type TimeboxView = import("../plan/timebox.ts").Timebox & { sync: "create
 // ---- Step 13: calendar editing tiers and the collaboration finder ----
 /** A help invite as the UI shows it on its item. */
 export type InviteView = { uid: string; clientKey: string; itemId: number | null; pickId: number | null; timeboxId: number | null; title: string; start: string; end: string; names: string[]; teams: boolean; status: "pending" | "sent" | "cancelled"; writeId: number | null };
+/** CO-1: who is free at one time (free/busy and working hours only), and reads that failed. */
+export type CheckData = import("../plan/collab.ts").TimeCheck & { problems: string[] };
 export type CandidateView = { name: string; email: string; tier: 1 | 2 | 3; onClient: string[]; away: string[] };
 export type CandidatesData = { clientKey: string; from: string; to: string; candidates: CandidateView[]; problems: string[] };
 export type SlotView = import("../plan/collab.ts").Slot;

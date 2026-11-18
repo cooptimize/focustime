@@ -1884,6 +1884,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     }
     case "collab.candidates":
     case "collab.suggest":
+    case "collab.check":
     case "collab.preview_invite":
       return collabAction(
         {

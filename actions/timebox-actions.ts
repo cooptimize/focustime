@@ -236,6 +236,13 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       const now = syncNeed(tb, (await plan.ownEvent(held.uid)), w);
       if (now !== held.op || JSON.stringify(w) !== JSON.stringify(held.after)) return bad("The timebox changed since the preview. Review the change again", 409);
     }
+    // CO-1: a help invite's time is checked again: not started yet, 15 minutes to 2 hours.
+    if (held.kind === "invite" && held.op === "create" && held.after) {
+      const s = Temporal.Instant.from(held.after.start), e = Temporal.Instant.from(held.after.end);
+      const minutes = s.until(e).total("minutes");
+      if (Temporal.Instant.compare(s, Temporal.Instant.from(ctx.now())) < 0) return bad("That start has passed. Pick a later start and preview again", 409);
+      if (minutes < 15 || minutes > 120) return bad("A help session is 15 minutes to 2 hours. Change the end or the length", 409);
+    }
     // Invites go only to allowed domains: checked at preview, here, and again in the writer.
     if (held.kind === "invite" && held.op === "create" && (held.after?.attendees ?? []).some((a) => !domainAllowed(a.email, inviteDomains(cfg)))) return bad(new DomainError().message, 422);
     const ow = cfg.outlook ? ctx.outlook(cfg) : null;

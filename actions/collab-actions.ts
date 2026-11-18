@@ -3,7 +3,7 @@
 // from Graph getSchedule (availability and working hours only). The one write, the invite, is held as a preview in
 // the write framework (actions/timebox-actions.ts) and sent only on confirm.
 import { inviteDomains, type AppConfig } from "../config/schema.ts";
-import { defaultRange, domainAllowed, inviteFields, rankCandidates, suggestSlots, type Availability, type Candidate } from "../plan/collab.ts";
+import { checkTime, checkWords, defaultRange, domainAllowed, inviteFields, rankCandidates, suggestSlots, type Availability, type Candidate, type TimeCheck } from "../plan/collab.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -15,10 +15,10 @@ import { hoursOn } from "../week/hours.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
 import type { Week, CalEvent, IsoDate } from "../week/types.ts";
 import { hold, type InviteMeta } from "./timebox-actions.ts";
-import type { ActionResponse, CandidatesData, CandidateView, SuggestData } from "./types.ts";
+import type { ActionResponse, CandidatesData, CandidateView, CheckData, SuggestData } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const COLLAB_ACTIONS = ["collab.candidates", "collab.suggest", "collab.preview_invite"] as const;
+export const COLLAB_ACTIONS = ["collab.candidates", "collab.suggest", "collab.check", "collab.preview_invite"] as const;
 export type CollabAction = (typeof COLLAB_ACTIONS)[number];
 
 export type CollabContext = {
@@ -148,9 +148,94 @@ function myWindows(cfg: AppConfig, dates: readonly IsoDate[], away: ReadonlySet<
 }
 
 const BUSY_SHOW = new Set(["busy", "tentative", "oof", "unknown", undefined]);
+const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
+
+/**
+ * My own calendar over some dates, from the usual reads: my meetings, personal events, calendars added by link and
+ * unavailable time (busy, with their own titles: it is my calendar), and my timeboxes (soft). FocusTime's own timebox
+ * events are left out of busy.
+ */
+async function myCalendar(ctx: CollabContext, cfg: AppConfig, ol: { source: CalendarSource }, from: IsoDate, to: IsoDate) {
+  const plan = ctx.plan;
+  const weeks = [...new Set(datesOf(from, to).map(mondayOf))];
+  const own = plan ? ownEventIds((await plan.ownEvents())) : new Set<string>();
+  const google = ctx.google(cfg);
+  const linked = ctx.links ? (await Promise.all(weeks.map((w) => ctx.links!.load(w).catch(() => [])))).flat() : [];
+  const loads = [...(await Promise.all(weeks.flatMap((w) => [ol.source.load(w).catch(() => null), google ? google.load(w).catch(() => null) : Promise.resolve(null)]))), ...linked];
+  const problems: string[] = [];
+  if (loads.some((l) => l && l.status !== "ok" && !l.fromCache)) problems.push("A calendar of yours didn't load, so your own busy time may be missing");
+  const mine: CalEvent[] = withoutOwn(loads.flatMap((l) => l?.items ?? []), own);
+  const busy = mine.filter((e) => !e.allDay && BUSY_SHOW.has(e.showAs) && e.responseStatus !== "declined").map((e) => ({ title: e.title, start: ms(e.start), end: ms(e.end) }));
+  for (const u of (await plan?.unavailableBetween(from, to)) ?? []) busy.push({ title: u.title, start: ms(u.start), end: ms(u.end) });
+  const boxes: [number, number][] = ((await plan?.timeboxesBetween(from, to)) ?? []).filter((t) => !t.removedAt).map((t) => [ms(t.start), ms(t.end)]);
+  return { busy, boxes, problems };
+}
+
+/** A help session's time: whole minutes, 15 minutes to 2 hours, not started yet. Refusals say what to change. */
+export function sessionTime(startIn: unknown, endIn: unknown, now: string): { start: string; end: string } {
+  let start: Temporal.Instant, end: Temporal.Instant;
+  try {
+    start = Temporal.Instant.from(String(startIn));
+    end = Temporal.Instant.from(String(endIn));
+  } catch {
+    throw new Invalid("start and end must be ISO times with offset");
+  }
+  const minutes = start.until(end).total("minutes");
+  if (minutes <= 0) throw new Invalid("The end is before the start. Pick a later end");
+  if (!Number.isInteger(minutes)) throw new Invalid("Times are to the minute");
+  if (minutes < 15 || minutes > 120) throw new Invalid("A help session is 15 minutes to 2 hours. Change the end or the length");
+  if (Temporal.Instant.compare(start, Temporal.Instant.from(now)) < 0) throw new Invalid("That start has passed. Pick a later start");
+  return { start: start.toString(), end: end.toString() };
+}
+
+/**
+ * CO-1: who is free at one time, with the same reads Find times makes: my calendar and hours for that day, my PTO,
+ * and free/busy and working hours for the chosen people on that day only (kept nowhere). People not on the list are
+ * refused. `problems` are reads that failed; they never block.
+ */
+async function checkFor(ctx: CollabContext, cfg: AppConfig, clientKey: string, time: { start: string; end: string }, people: readonly string[]): Promise<{ check: TimeCheck; problems: string[] } | { refuse: string; status: number }> {
+  const tz = userZone(cfg);
+  const date = Temporal.Instant.from(time.start).toZonedDateTimeISO(tz).toPlainDate().toString();
+  const c = await candidatesFor(ctx, cfg, clientKey, date, date);
+  if ("refuse" in c) return c;
+  const byEmail = new Map(c.candidates.map((x) => [x.email, x]));
+  if (people.some((e) => !byEmail.has(e))) return { refuse: "Pick people from the list (Cooptimize staff only)", status: 422 };
+  const ol = cfg.outlook ? ctx.outlook(cfg) : null;
+  if (!ol?.schedule) return { refuse: "Outlook isn't set up, so free/busy can't be checked", status: 409 };
+  const problems = [...c.problems];
+  const pto = await ctx.dataverse(cfg).pto(date, date).catch(() => null);
+  if (!pto) problems.push("Your PTO couldn't be read, so a day off may not show");
+  const off = (pto?.items ?? []).some((e) => e.date === date);
+  const at = (d: IsoDate, hm: string) => Temporal.PlainDate.from(d).toZonedDateTime({ timeZone: tz, plainTime: hm === "24:00" ? "00:00" : hm }).add({ days: hm === "24:00" ? 1 : 0 }).epochMilliseconds;
+  const h = hoursOn(cfg.week.hours, date);
+  const windows = h.segments.map((x) => [at(date, x.start), at(date, x.end)] as [number, number]);
+  const lunch: [number, number] | null = h.lunch && h.lunch.start !== h.lunch.end ? [at(date, h.lunch.start), at(date, h.lunch.end)] : null;
+  const cal = await myCalendar(ctx, cfg, ol, date, date);
+  problems.push(...cal.problems);
+  // Free/busy for my whole day (so a busy stretch shows its own start and end), for the chosen people only.
+  const dayStart = Temporal.PlainDate.from(date).toZonedDateTime({ timeZone: tz }).toInstant();
+  const dayEnd = Temporal.PlainDate.from(date).add({ days: 1 }).toZonedDateTime({ timeZone: tz }).toInstant();
+  const asked = people.filter((e) => !byEmail.get(e)!.away.includes(date));
+  let availability: Availability[] = [];
+  if (asked.length) {
+    try {
+      availability = await ol.schedule.schedule(asked, dayStart.toString(), dayEnd.toString(), tz);
+    } catch (e) {
+      if (e instanceof NetworkError) return { refuse: "Outlook unreachable, so free/busy can't be checked", status: 503 };
+      availability = [];
+      problems.push("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings › Accounts and calendars");
+    }
+  }
+  const check = checkTime({
+    start: ms(time.start), end: ms(time.end), tz,
+    me: { off, windows, lunch, busy: cal.busy },
+    people: people.map((e) => ({ email: e, name: byEmail.get(e)!.name, away: byEmail.get(e)!.away.includes(date) })),
+    availability,
+  });
+  return { check, problems };
+}
 
 async function run(ctx: CollabContext, action: CollabAction, input: unknown): Promise<ActionResponse> {
-  const plan = ctx.plan;
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
   const tz = userZone(cfg);
@@ -183,17 +268,10 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const windows = myWindows(cfg, dates, myPto);
       if (!windows.length) return { ok: true, data: { slots: [], checked: 0, problems: [...c.problems, "No working hours of yours in that range"] } satisfies SuggestData };
       const weeks = [...new Set(dates.map(mondayOf))];
-      const own = plan ? ownEventIds((await plan.ownEvents())) : new Set<string>();
-      const google = ctx.google(cfg);
-      const linked = ctx.links ? (await Promise.all(weeks.map((w) => ctx.links!.load(w).catch(() => [])))).flat() : [];
-      const loads = [...(await Promise.all(weeks.flatMap((w) => [ol.source.load(w).catch(() => null), google ? google.load(w).catch(() => null) : Promise.resolve(null)]))), ...linked];
-      const problems = [...c.problems];
-      if (loads.some((l) => l && l.status !== "ok" && !l.fromCache)) problems.push("A calendar of yours didn't load, so your own busy time may be missing");
-      const mine: CalEvent[] = withoutOwn(loads.flatMap((l) => l?.items ?? []), own);
-      const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
-      const myBusy: [number, number][] = mine.filter((e) => !e.allDay && BUSY_SHOW.has(e.showAs) && e.responseStatus !== "declined").map((e) => [ms(e.start), ms(e.end)]);
-      for (const u of (await plan?.unavailableBetween(r.from, r.to)) ?? []) myBusy.push([ms(u.start), ms(u.end)]);
-      const myBoxes: [number, number][] = ((await plan?.timeboxesBetween(r.from, r.to)) ?? []).filter((t) => !t.removedAt).map((t) => [ms(t.start), ms(t.end)]);
+      const cal = await myCalendar(ctx, cfg, ol, r.from, r.to);
+      const problems = [...c.problems, ...cal.problems];
+      const myBusy: [number, number][] = cal.busy.map((e) => [e.start, e.end]);
+      const myBoxes = cal.boxes;
       // Free/busy for the chosen people, or the best-ranked candidates (not those away the whole range).
       const ask = chosen ?? c.candidates.filter((x) => x.away.length < dates.length).slice(0, MAX_CHECKED).map((x) => x.email);
       if (!ask.length) return { ok: true, data: { slots: [], checked: 0, problems: [...problems, "Nobody to check"] } satisfies SuggestData };
@@ -216,6 +294,15 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const slots = suggestSlots({ minutes: o.minutes, myWindows: windows, myBusy, myBoxes, focus, candidates: c.candidates.filter((x) => ask.includes(x.email)), availability, chosen, now: Temporal.Instant.from(ctx.now()).epochMilliseconds, tz });
       return { ok: true, data: { slots, checked: availability.length, problems } satisfies SuggestData };
     }
+    case "collab.check": {
+      const o = fields(input, ["clientKey", "start", "end", "people"]);
+      const clientKey = text(o.clientKey, "clientKey", 100);
+      const time = sessionTime(o.start, o.end, ctx.now());
+      const people = emails(o.people, MAX_INVITED);
+      const r = await checkFor(ctx, cfg, clientKey, time, people);
+      if ("refuse" in r) return bad(r.refuse, r.status);
+      return { ok: true, data: { ...r.check, problems: r.problems } satisfies CheckData };
+    }
     case "collab.preview_invite": {
       const o = fields(input, ["clientKey", "title", "start", "end", "people"], ["itemId", "pickId", "timeboxId", "url", "note", "teams"]);
       const clientKey = text(o.clientKey, "clientKey", 100);
@@ -224,16 +311,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const note = optText(o.note, "note", 500);
       if (o.teams !== undefined && typeof o.teams !== "boolean") throw new Invalid("teams must be true or false");
       const teams = typeof o.teams === "boolean" ? o.teams : cfg.collab.teams;
-      let start: string, end: string;
-      try {
-        start = Temporal.Instant.from(String(o.start)).toString();
-        end = Temporal.Instant.from(String(o.end)).toString();
-      } catch {
-        throw new Invalid("start and end must be ISO times with offset");
-      }
-      const minutes = Temporal.Instant.from(start).until(Temporal.Instant.from(end)).total("minutes");
-      if (minutes < 15 || minutes > 120) throw new Invalid("A help session is 15 minutes to 2 hours");
-      if (Temporal.Instant.compare(Temporal.Instant.from(start), Temporal.Instant.from(ctx.now())) < 0) throw new Invalid("That time has passed");
+      const { start, end } = sessionTime(o.start, o.end, ctx.now());
       const domains = inviteDomains(cfg);
       if (people.some((e) => !domainAllowed(e, domains))) return bad("Invites go only to Cooptimize addresses", 422);
       // Teammates from the list, or me (a test invite to myself).
@@ -256,8 +334,14 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const url = devopsUrl(o.url);
       const f = inviteFields({ clientName, itemTitle: title, url, note, start, end, people: named, teams });
       const meta: InviteMeta = { clientKey, itemId: optId(o.itemId, "itemId"), pickId: optId(o.pickId, "pickId"), timeboxId: optId(o.timeboxId, "timeboxId"), title, url, note };
+      // CO-1: the time is checked again here; who isn't free is said above the preview's fields and never blocks it.
+      let notFree: string[] = [];
+      if (others.length) {
+        const ck = await checkFor(ctx, cfg, clientKey, { start, end }, others).catch(() => null);
+        notFree = ck && !("refuse" in ck) ? checkWords(ck.check).notFree : ["Couldn't check who is free just now"];
+      }
       const preview = await hold(ol.write, { kind: "invite", uid: `inv-${crypto.randomUUID()}`, op: "create", eventId: null, before: null, after: f, localBefore: null, localAfter: null, undoOf: null, auto: false, invite: meta }, tz);
-      return { ok: true, data: { preview } };
+      return { ok: true, data: { preview: { ...preview, notFree } } };
     }
   }
 }
