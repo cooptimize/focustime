@@ -33,6 +33,13 @@ describe("MC-1d: which drawn meeting is a call", () => {
     expect(callForEvent(callMarks(null), ev())).toBeNull();
     expect(callForEvent(callMarks({ meetings: [], occurrences: [], nudges: [] }), ev())).toBeNull();
   });
+  it("MC-2: a reviewed call that isn't registered gets the same mark, and its menu says Call", () => {
+    const d = mine("ready", 2, true);
+    (d.meetings[0] as unknown as { call: string; roleLabel: string }).call = "calendar";
+    (d.meetings[0] as unknown as { roleLabel: string }).roleLabel = "Call";
+    const m = callForEvent(callMarks(d), ev({ title: "Design review" }));
+    expect(m).toMatchObject({ occurrenceId: 7, kind: "calendar", role: "Call", label: "Review 2 proposals" });
+  });
   it("the count in More is what needs me: a reviewer's review, never an attendee's", () => {
     expect(callsNeedingMe(callMarks(mine("ready", 6, true)))).toBe(1);
     expect(callsNeedingMe(callMarks(mine("ready", 6, false)))).toBe(0);

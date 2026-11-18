@@ -2,7 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { CALL_ACTIONS } from "../plan/call-words.ts";
-import { openCall, requestRerun, type CallMark } from "./meetings/calls.ts";
+import { openCall, requestRerun, requestReviewCall, reviewableMeeting, type CallMark } from "./meetings/calls.ts";
 import { takeOffRule } from "../plan/blockpanel.ts";
 import type { CheckinGhost } from "../plan/carry.ts";
 import { aboutText, hoursText, namedSize, parseHours, sizeChipText, storyMinutes, unsizedText, type SizeScale, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
@@ -115,6 +115,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** MC-2: Calls is here (meeting.mine answered), so a meeting I was on offers Review this call. */
+  callsHere?: boolean;
   /** CW-1: my clients' registered chats with their live calls (absent or null: not loaded, or not available here). */
   cowork?: CoworkData | null;
   /** CW-1: open a chat in Teams (Join, Start a call). */
@@ -754,11 +756,13 @@ const outlookDay = (date: IsoDate) => {
  */
 function registeredCallItems(c: CallMark): MenuItem[] {
   const review = c.state === "ready" && c.open > 0 && c.review;
+  // MC-2: a call that isn't registered has the same items, under "Call".
+  const group = c.kind ? "Call" : "Client call";
   return [
-    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group: "Client call", run: () => openCall(c.occurrenceId) },
-    ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group: "Client call", run: () => openCall(c.occurrenceId, "transcript") }] : []),
-    ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group: "Client call", run: () => requestRerun(c.occurrenceId) }] : []),
-    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group: "Client call", ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
+    { id: "call-open", label: review ? CALL_ACTIONS.review : CALL_ACTIONS.open, group, run: () => openCall(c.occurrenceId) },
+    ...(c.hasTranscript ? [{ id: "call-transcript", label: CALL_ACTIONS.transcript, group, run: () => openCall(c.occurrenceId, "transcript") }] : []),
+    ...(c.review && c.hasTranscript && c.state !== "waiting" && c.state !== "fetching" ? [{ id: "call-rerun", label: CALL_ACTIONS.rerun, group, run: () => requestRerun(c.occurrenceId) }] : []),
+    ...(c.review ? [{ id: "call-upload", label: CALL_ACTIONS.upload, group, ...(c.hasTranscript ? { hint: "in place of this one" } : {}), run: () => openCall(c.occurrenceId, "upload") }] : []),
   ];
 }
 
@@ -779,6 +783,9 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
     : x.actions.filter((a) => a.id !== "rsvp").map(item);
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
   if (call) return { title: `${e.title} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
+  // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup.
+  if (env.callsHere === true && reviewableMeeting(e, Date.now(), Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay().epochMilliseconds))
+    return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items: [{ id: "call-review", label: CALL_ACTIONS.reviewCall, group: "Call", hint: "choose its client first", run: () => requestReviewCall(e) }, ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
 
   function item(a: (typeof x.actions)[number]): MenuItem {
@@ -1558,6 +1565,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.keep":
     case "meeting.unkeep":
     case "meeting.rerun":
+    case "meeting.calls":
+    case "meeting.call_start":
+    case "meeting.call_fetch":
+    case "meeting.call_add":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":

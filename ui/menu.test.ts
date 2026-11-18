@@ -1,5 +1,5 @@
 import { legacyHours } from "../config/schema.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { menuIcon } from "./menu-icons.ts";
 import { ACTION_NAMES } from "../actions/registry.ts";
 import type { Pick } from "../plan/types.ts";
@@ -416,6 +416,30 @@ describe("event menus by editing tier (step 13)", () => {
     expect(items(attendee)[0]!.label).toBe("Open the call");
     // Not a call: the menu is as before.
     expect(ids(eventMenu(env(web2).e, ev("outlook:B", "Contoso weekly status"))).some((i) => i.startsWith("call-"))).toBe(false);
+  });
+  it("MC-2: a meeting I was on in my last 14 days leads with Review this call when Calls is here; never a future, declined or all-day one", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-03T20:00:00Z"));
+    try {
+      const web2 = { eventEdit: { "outlook:B": { isOrganizer: false, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } };
+      const first = (o: Partial<MenuEnv>, x: Partial<import("../week/types.ts").CalEvent> = {}) => items(eventMenu(env({ ...web2, ...o }).e, { ...ev("outlook:B", "Design review"), ...x }))[0]!;
+      const review = first({ callsHere: true });
+      expect([review.id, review.label, review.group]).toEqual(["call-review", "Review this call", "Call"]);
+      const loc = { hash: "" };
+      vi.stubGlobal("location", loc);
+      review.run!();
+      expect(loc.hash).toBe("#/meetings");
+      vi.unstubAllGlobals();
+      // Without Calls (a demo of an older build, or no sign-in), a future meeting, a declined one, all day, a personal event: as before.
+      expect(first({}).id).not.toBe("call-review");
+      expect(first({ callsHere: true }, { start: "2026-11-04T14:00:00-05:00", end: "2026-11-04T15:00:00-05:00" }).id).not.toBe("call-review");
+      expect(first({ callsHere: true }, { responseStatus: "declined" } as never).id).not.toBe("call-review");
+      expect(first({ callsHere: true }, { allDay: true }).id).not.toBe("call-review");
+      expect(first({ callsHere: true }, { start: "2026-10-20T14:00:00-05:00", end: "2026-10-20T15:00:00-05:00" }).id).not.toBe("call-review");
+      expect(first({ callsHere: true }, { source: "google", isPersonal: true }).id).not.toBe("call-review");
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("a meeting with other attendees: only Open in Outlook; every edit off with a reason", () => {
     const { e, calls } = env({ eventEdit: { "outlook:B": { isOrganizer: true, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } });
