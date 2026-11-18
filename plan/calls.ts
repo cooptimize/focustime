@@ -29,6 +29,10 @@ export type CalendarMeeting = {
   organizerEmail: string | null;
   /** Cooptimize addresses on it (lowercase), for matching FocusTime users; never returned to the page. */
   homeAttendees: string[];
+  /** MC-4: the series it is one of on my calendar (Graph's seriesMasterId), or null for a single meeting. */
+  seriesKey?: string | null;
+  /** MC-4: everyone on it is at Cooptimize by address (the organizer and every attendee who isn't a room). */
+  allHome?: boolean;
 };
 
 /** A meeting that counts as one of my calls: someone else on it, not declined, not cancelled, not all day, not a hold. */

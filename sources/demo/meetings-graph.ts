@@ -10,7 +10,7 @@
 // lunch and learn isn't found, the proposal review's organizer turned transcripts off (403), and the client-organized
 // ones are never asked. The same gate as the real client is asked before every transcript request.
 import { HttpError } from "../calendar/http.ts";
-import { MeetingRefused, type MeetingGate, type MeetingsClient, type SeriesCandidate } from "../graph/meetings.ts";
+import { MeetingRefused, type ExistsAnswer, type MeetingGate, type MeetingsClient, type SeriesCandidate } from "../graph/meetings.ts";
 import type { CalendarMeeting } from "../../plan/calls.ts";
 import { DEMO_PEOPLE, demoOutlook } from "./data.ts";
 import { DEMO_MEETING } from "./meetings.ts";
@@ -46,6 +46,9 @@ function demoCalls(fromIso: string, toIso: string): CalendarMeeting[] {
         key: callKey(id), subject: e.title, startAt: start.toString(), endAt: end.toString(), isAllDay: e.allDay, isCancelled: false, isOrganizer: false,
         response: e.responseStatus === "tentative" ? "tentativelyAccepted" : "accepted", others: /standup/.test(id) ? 3 : 5, joinUrl: callLink(id), organizerEmail: org,
         homeAttendees: [...new Set([...coop, ...(org.endsWith("@example.com") ? [org] : [])])],
+        // MC-4: a meeting that repeats is one series (its id without the day and the weekday's number).
+        seriesKey: e.repeats ? `demo-series-${id.replace(/-\d{4}-\d{2}-\d{2}$/, "").replace(/\d+$/, "")}` : null,
+        allHome: /standup|allhands|lunch|prop/.test(id),
       });
     }
   return out;
@@ -80,6 +83,12 @@ export function demoMeetings(gate: MeetingGate = { allowed: async () => false })
       if (!/nwmodel/.test(onlineMeetingId)) return [];
       const date = /(\d{4}-\d{2}-\d{2})$/.exec(onlineMeetingId)?.[1] ?? "2026-11-02";
       return [{ id: "t-1", createdAt: `${date}T20:02:00Z`, endAt: null }];
+    },
+    // MC-4: whether a call has a transcript, asked of the gate like the real client (the purpose "exists"): the data model
+    // review has one, the proposal review's organizer turned them off (no), the rest have none.
+    transcriptsExist: async (asks) => {
+      for (const a of asks) if (!(await gate.allowed({ joinUrl: a.joinUrl, purpose: "exists" }))) throw new MeetingRefused();
+      return new Map(asks.map((a): [string, ExistsAnswer] => [a.key, /call-demo-nwmodel-/.test(a.joinUrl) ? "yes" : "no"]));
     },
     transcriptVtt: async (onlineMeetingId) => {
       if (!(await gate.allowed({ onlineMeetingId }))) throw new MeetingRefused();

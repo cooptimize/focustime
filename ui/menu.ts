@@ -1651,6 +1651,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.pocket_list":
     case "meeting.pocket_bring":
     case "meeting.pocket_add":
+    case "meeting.calls_check":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":

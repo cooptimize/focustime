@@ -45,6 +45,10 @@ export type OtherCallView = {
   outside: boolean;
   /** Its kept call's occurrence once someone on it pressed Review (that I can see), else null. */
   occurrenceId: number | null;
+  /** MC-4: the series it is one of on my calendar, or null for a single meeting (what Hide every one keeps). */
+  seriesKey: string | null;
+  /** MC-4: everyone on it is at Cooptimize: no client is suggested from the focus block it started in. */
+  allHome: boolean;
 };
 
 export type OccurrenceView = {

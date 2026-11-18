@@ -47,6 +47,7 @@ import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
 import { createPressGrants } from "../actions/call-press.ts";
+import { createExistsGrants, createExistsHold } from "../actions/call-exists.ts";
 import { createDemoFeedbackDevOps, demoFeedbackBackend, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { clientScope } from "../config/org.ts";
@@ -292,7 +293,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   // MC-2: the press (Get it from Teams) and the gate the real client asks before every transcript read.
   const press = createPressGrants();
-  const demoAzure = createDemoAzure({ meetingsGate: { allowed: async (q) => press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false)) } });
+  // MC-4: whether a call has a transcript (never its text), only for my own check while Calls opens.
+  const checks = createExistsGrants();
+  const demoAzure = createDemoAzure({ meetingsGate: { allowed: async (q) => (q.purpose === "exists" ? checks.allowed(DEMO_PERSON.oid, q) : press.allowed(DEMO_PERSON.oid, q) || (await meetingStore.registered(q).then((x) => !!x && graphReadable(x), () => false))) } });
   /** VM-4: verification runs only: the action whose next call fails unexpectedly. */
   let failNext: string | null = null;
   // DM-1: the demo's AI. The app's spend gets what real calls cost (its cap counts them); the service reads the app's
@@ -339,7 +342,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     },
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, readPdf: pdfReader(), press, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), press, exists: { grants: checks, hold: createExistsHold(() => instant().epochMilliseconds) }, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.

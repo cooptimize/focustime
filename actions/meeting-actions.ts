@@ -23,6 +23,7 @@ import { AnswersError, parseAnswers, type Answers } from "../plan/three-question
 import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
+import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
 import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
 import { pocketAdd, pocketBring, pocketList, type MeetingPocket } from "./meeting-pocket.ts";
 
@@ -32,7 +33,7 @@ import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { HttpError } from "../sources/calendar/http.ts";
-import { graphFailureOf, MeetingRefused, pressTranscript, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
+import { graphFailureOf, MeetingRefused, pressTranscript, TranscriptsOff, type ExistsAsk, type GraphFailure, type MeetingsClient, type SeriesCandidate } from "../sources/graph/meetings.ts";
 import { MEETING_CHAT, type ConversationStore } from "../store/conversation-store.ts";
 import type { MeetingStore } from "../store/meeting-store.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -45,7 +46,7 @@ import type { OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.calls_check"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -104,6 +105,8 @@ export type MeetingContext = {
   cooptimizer?: (userId: string) => Promise<boolean>;
   /** MC-2b: my own Pocket (my key, the one client), the shared 5 minute hold and my addresses; absent: not here. */
   pocket?: MeetingPocket;
+  /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute memory of answers; absent: not checked here. */
+  exists?: { grants: ExistsGrants; hold: ExistsHold };
 };
 
 class Invalid extends Error {}
@@ -364,6 +367,8 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         return await fetchFromTeams(ctx, store, cfg, me, series, occ);
       }
       case "meeting.call_add": return await addCall(ctx, store, cfg, me, input);
+      // MC-4: only from Calls' own opening and its Refresh (ui/meetings/Meetings.tsx), never a job, the assistant or the bot.
+      case "meeting.calls_check": return await checkCalls(ctx, store, cfg, me, input);
       // MC-2b: only from the person's two presses in Calls (Get my Pocket recordings; Continue on a setup).
       case "meeting.pocket_list": {
         obj(input, []);
@@ -870,11 +875,84 @@ async function otherCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConf
     const kept = await store.callByKey(c.key);
     const seen = kept ? await v.occurrence(kept.occurrence.id) : null;
     const outside = detectSource(c.organizerEmail, home).organizer === "other";
-    rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null });
+    rows.push({ key: c.key, name: c.subject, startAt: c.startAt, endAt: c.endAt, minutes: Math.round((Date.parse(c.endAt) - Date.parse(c.startAt)) / 60_000), people: c.others + 1, teams: !!c.joinUrl && !outside, outside, occurrenceId: seen ? seen.o.id : null, seriesKey: c.seriesKey ?? null, allHome: c.allHome === true });
   }
   rows.sort((a, b) => b.startAt.localeCompare(a.startAt));
   ctx.log({ source: "plan", op: "meeting_other_calls", count: rows.length });
   return { ok: true, data: { calls: rows, days: OTHER_CALL_DAYS } };
+}
+
+/** MC-4: what one check answers for a call: a transcript in Teams, none, the tenant's setting off, or not checked yet. */
+export type CheckAnswer = HeldAnswer | "unchecked";
+
+/**
+ * MC-4: which calls on my own calendar have a transcript in Teams, asked when I open Calls and on Refresh (`refresh`
+ * forgets what is held), or for the next CHECK_CAP with `more`. Only a Teams meeting organized at Cooptimize that
+ * nobody asked FocusTime to read yet, in the list's window, not hidden, is asked; with my own sign-in, the newest
+ * first, at most CHECK_CAP a press. Answers are held in the server's memory for 15 minutes and in the page while Calls
+ * is open: never stored, logged or exported. The answer is each call's key and yes, no, off or unchecked: nothing else.
+ */
+async function checkCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
+  const o = obj(input, [], ["refresh", "more"]);
+  if (o.refresh !== undefined && typeof o.refresh !== "boolean") throw new Invalid("refresh must be true or false");
+  if (o.more !== undefined && typeof o.more !== "boolean") throw new Invalid("more must be true or false");
+  if (!ctx.exists) return { ok: true, data: { answers: {}, unchecked: 0, failed: false, unavailable: true } };
+  const g = ctx.graph(cfg);
+  if (!g) return { ok: false, status: 409, error: GRAPH_WORDS.signin.error, code: "signin" };
+  const zone = userZone(cfg);
+  const w = otherCallsWindow(ctx.now(), zone);
+  let all: CalendarMeeting[];
+  try {
+    all = await g.recentCalls(w.fromIso, w.toIso);
+  } catch (e) {
+    const p = graphProblem(ctx, e);
+    if (p) return p;
+    throw e;
+  }
+  if (o.refresh) ctx.exists.hold.clear(me);
+  const taken = await registeredLinks(store);
+  const home = await ctx.homeDomains();
+  const asks: ExistsAsk[] = [];
+  for (const c of all) {
+    if (!isOtherCall(c) || !inWindow(c.startAt, w) || !c.joinUrl || taken.has(joinKey(c.joinUrl))) continue;
+    if (detectSource(c.organizerEmail, home).organizer === "other") continue;
+    if (await store.callByKey(c.key)) continue;
+    asks.push({ key: c.key, joinUrl: c.joinUrl, startAt: c.startAt, endAt: c.endAt });
+  }
+  asks.sort((a, b) => b.startAt.localeCompare(a.startAt));
+  const answers: Record<string, CheckAnswer> = {};
+  const toAsk: ExistsAsk[] = [];
+  for (const a of asks) {
+    const h = ctx.exists.hold.get(me, a.key);
+    if (h) answers[a.key] = h;
+    else if (toAsk.length < CHECK_CAP) toAsk.push(a);
+    else answers[a.key] = "unchecked";
+  }
+  let failed = false;
+  if (toAsk.length) {
+    const grant = ctx.exists.grants.open(me, toAsk.map((a) => a.joinUrl));
+    try {
+      const got = await g.transcriptsExist(toAsk);
+      for (const a of toAsk) {
+        const v = got.get(a.key) ?? "failed";
+        if (v === "failed") (failed = true), (answers[a.key] = "unchecked");
+        else ctx.exists.hold.set(me, a.key, v), (answers[a.key] = v);
+      }
+    } catch (e) {
+      if (e instanceof MeetingRefused) throw e;
+      if (e instanceof TranscriptsOff) for (const a of toAsk) ctx.exists.hold.set(me, a.key, "off"), (answers[a.key] = "off");
+      else {
+        if (!graphFailureOf(e)) throw e;
+        failed = true;
+        for (const a of toAsk) answers[a.key] = "unchecked";
+      }
+    } finally {
+      grant.done();
+    }
+  }
+  const n = (v: CheckAnswer) => Object.values(answers).filter((x) => x === v).length;
+  ctx.log({ source: "plan", op: "meeting_calls_check", count: toAsk.length, kind: failed ? "failed" : "ok" });
+  return { ok: true, data: { answers, yes: n("yes"), unchecked: n("unchecked"), off: n("off") > 0, failed } };
 }
 
 /** The Cooptimizers among FocusTime users on a call's invite (never a guest, an automation account or anyone outside). */
@@ -1005,6 +1083,7 @@ async function fetchFromTeams(ctx: MeetingContext, store: MeetingStore, cfg: App
     return { ok: true, data: { ...r, aiOutcome: r.outcome, outcome: "found", message: fetchFound(lines.length, r.proposals, r.outcome === "done"), lines: lines.length } };
   } catch (e) {
     if (e instanceof MeetingRefused) return say("not_on_invite", 403);
+    if (e instanceof TranscriptsOff) return say("tenant_off");
     if (e instanceof TranscriptError) return say("unreadable");
     if (e instanceof HttpError && e.status === 413) return say("unreadable");
     const k = graphFailureOf(e);

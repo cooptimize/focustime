@@ -1,6 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import type { PressGrants } from "./call-press.ts";
+import type { ExistsGrants, ExistsHold } from "./call-exists.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
@@ -1423,6 +1424,8 @@ export type MeetingsPort = {
   cooptimizer?: (userId: string) => Promise<boolean>;
   /** MC-2b: each person's last Pocket list, 5 minutes, in this server's memory (actions/meeting-pocket.ts). */
   pocketHold?: PocketHold;
+  /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute answers (actions/call-exists.ts). */
+  exists?: { grants: ExistsGrants; hold: ExistsHold };
 };
 
 /**
@@ -1464,6 +1467,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.retriesHere ? { retriesHere: true } : {}),
     ...(ctx.meetings?.readPdf ? { readPdf: ctx.meetings.readPdf } : {}),
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
+    ...(ctx.meetings?.exists ? { exists: ctx.meetings.exists } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
     // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
     ...(ctx.pocket && ctx.meetings?.pocketHold
@@ -2739,6 +2743,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.pocket_list":
     case "meeting.pocket_bring":
     case "meeting.pocket_add":
+    case "meeting.calls_check":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

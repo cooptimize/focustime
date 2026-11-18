@@ -225,12 +225,14 @@ export const CALL_LIST = {
 } as const;
 
 /** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */
-export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable"] as const;
+export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "tenant_off", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable"] as const;
 export type FetchOutcome = (typeof FETCH_OUTCOMES)[number];
 export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   none: "Teams has no transcript for this call. Transcription may not have been on. Upload a file instead.",
   outside: "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. Download the transcript from the meeting's recap in Teams, or ask the organizer for it, and upload it here.",
   not_allowed: "Microsoft didn't let your sign-in read this call's transcript. The organizer may have turned transcripts off for attendees. Ask the organizer for the file and upload it here.",
+  // MC-4: Microsoft says it is the organization's own setting (GraphAccessToTranscriptsDisabled), not the organizer's.
+  tenant_off: "Your organization's Microsoft settings don't let apps read Teams transcripts. That's the organization's setting, not the organizer's choice. Download the transcript from the meeting's recap in Teams and upload it here.",
   not_on_invite: "This call isn't on your calendar now, so FocusTime can't ask Teams for it. Upload the transcript instead.",
   not_online: "This isn't a Teams meeting, so there's no transcript to get. Upload one instead.",
   signin: "Sign in with Microsoft again, then try once more. Or upload the file.",
