@@ -1663,3 +1663,17 @@ From the IT review (TD-1):
 - **Should the deploy's smoke test run against a local server in CI?** A change like EV-1's (what the page says on dev) passed every pull request check and only failed after the merge, in deploy-dev. `scripts/deploy-title.test.ts` now catches the title, but not the rest of the step (the sign-in redirect, the security headers). The step could move into a script that CI also runs against the image it already starts (with `FOCUSTIME_ENV=dev`), so it fails in the pull request. Not in this step: no new smoke test was in scope.
 - **`docs/technical/operations.md` names the wrong smoke test.** It says deploy-dev's smoke test is `infra/scripts/smoke.sh`; the workflow runs its own inline Smoke test step (health, the commit served, the title, sign-in, headers) and smoke.sh is a by-hand check after a deploy. Not the title's cause, so not changed here.
 - **The style guide's light `--risk` reads #C0311F; the stylesheet's is #B42F1D** (`--p-co-red-700`). DD-1's row gives the stylesheet's value. Which one should the table show?
+
+## SA-4: Admin as its own place, a list of clients, a page for each (Nov 18)
+
+Readings taken where the brief left room (the one that changes less), for the product owner to confirm or change:
+
+- **SA-2 isn't on main yet.** Admin's rows are moved, not restyled (STEP 0.2); F (SA-2's parts, then the words) waits for it. The draft pull request says so on its first line.
+- **Commits.** A to E were built as one piece in one worktree; split after the fact, the middle commits wouldn't build (the shell imports every part, Audit reads the settings list, the rail reads Search Admin). They landed as one commit for the screens, one for the words that point at Admin's places, and one for the tests, in that order.
+- **A client's last tab and the address.** A rail click or a list row opens a client's page on the tab last used on a client this visit, and the address is `#/admin/clients/<client>` without the tab (a reload opens Overview). Writing the tab into the address on every rail click would make Back step through tabs. Should a reload keep the tab?
+- **This client's DevOps check is on two pages.** The brief puts the client's row from Health on its Backlog rules tab, Check now included, so that button is on Health and on the client's page. It runs the same action (`admin.status_action`) for the same client either way.
+- **The per-chat AI cap on a client's Chats tab is read-only.** It is the team's one value (`conv.chat_ai_daily_cap`), set in Team defaults › Client chats; the line links there.
+- **Allow AI's count on Team defaults › AI counts Customers.** "N of M clients allow AI" uses the Customers list (the one the old per-client table showed by default); clients only under All accounts aren't counted.
+- **The phone's title.** On the phone a part's page says its name ("Health") with Back to Admin; a client's page says the client's name with Back to Clients. "Admin ›" isn't repeated in the title because the rail heading already says Admin.
+- **Delete stored messages** now asks with the app's own confirm under the button; what it says (every message FocusTime stored for this client that didn't become a request, for everyone on its chats) is main's text in plainer words. The action and its check are unchanged.
+- **Keep people's data (years)** left the screen. Its stored value is kept and still exported; Health's Jobs row still says deleting old data isn't enforced. When deleting people's data is built, the setting comes back on Team defaults › Planning and new people.

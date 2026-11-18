@@ -92,7 +92,7 @@ Upload a transcript. When the organizer's policy doesn't allow attendees to down
 
 ## 6. AI
 
-The proposals come from one AI request per call, only with AI for FocusTime and the client's Allow AI on (Admin › AI),
+The proposals come from one AI request per call, only with AI for FocusTime and the client's Allow AI on (Admin › Team defaults › AI),
 under the person's and the app's monthly caps. Other clients' names, projects and item ids are masked as
 "[another client]" and spoken email addresses as "[email]" before anything is sent. Background reads run on Flex;
 an upload or Propose again runs on standard, because someone is waiting.
