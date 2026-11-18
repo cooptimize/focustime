@@ -21,7 +21,7 @@ function setup() {
   const store = createMeetingStore(db.conn, () => now);
   const calls: { who: string; op: string }[] = [];
   let transcripts: TranscriptRef[] = [];
-  const instances: SeriesInstance[] = [{ startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", cancelled: false, homeAttendees: ["lee@cooptimize.example"] }];
+  const instances: SeriesInstance[] = [{ startAt: "2026-11-10T15:00:00Z", endAt: "2026-11-10T16:00:00Z", cancelled: false, homeAttendees: ["lee@cooptimize.example"], key: "ical-occ-1" }];
   const signedOut = new Set<string>();
   const calendarOut = new Set<string>();
   let transcriptsFail: Error | null = null;
@@ -65,6 +65,8 @@ describe("meeting capture job (MC-1)", () => {
     await t.job.run();
     const [occ] = await t.store.occurrencesOf(s.id);
     expect(occ).toMatchObject({ date: "2026-11-10", state: "waiting", nextCheckAt: "2026-11-10T16:05:00.000Z" });
+    // WK-6: the occurrence keeps its meeting's iCalUId, so Day and Week find the meeting wherever it moves.
+    expect(occ!.eventKey).toBe("ical-occ-1");
     expect((await t.store.series(s.id))!.attendees).toEqual(["33333333-3333-4333-8333-333333333333"]);
     expect(await t.job.wake()).toEqual(Temporal.Instant.from("2026-11-10T16:05:00Z"));
     // Due, not ready yet: checked again in 15 minutes.
@@ -161,7 +163,13 @@ describe("meeting capture job (MC-1)", () => {
     t.signedOut.add(REG);
     t.setTranscripts([{ id: "tr-1", createdAt: "2026-11-10T16:02:00Z", endAt: null }]);
     await t.job.run();
-    expect((await t.store.occurrencesOf(s.id))[0]).toMatchObject({ date: "2026-11-10", state: "waiting" });
+    expect((await t.store.occurrencesOf(s.id))[0]).toMatchObject({ date: "2026-11-10", state: "waiting", eventKey: null });
+    // WK-6: once the calendar is read again, the occurrence laid out from its pattern gets its meeting's key (only
+    // filled in where there is none; nothing else of it changes).
+    const kept = (await t.store.occurrencesOf(s.id))[0]!;
+    await t.store.ensureOccurrence(s.id, "2026-11-10", "2026-11-10T15:00:00Z", "2026-11-10T16:00:00Z", "waiting", null, "ical-occ-1");
+    await t.store.ensureOccurrence(s.id, "2026-11-10", "2026-11-10T15:00:00Z", "2026-11-10T16:00:00Z", "waiting", null, "another-key");
+    expect((await t.store.occurrencesOf(s.id))[0]).toEqual({ ...kept, eventKey: "ical-occ-1" });
     t.setNow("2026-11-10T16:06:00Z");
     await t.job.run();
     expect((await t.store.occurrencesOf(s.id))[0]).toMatchObject({ transcriptFrom: "automatic", lastRead: { kind: "found", by: REV } });

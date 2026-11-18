@@ -7,7 +7,7 @@
 import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDayFold } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
-import { callForEvent, callHref, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
+import { callHref, useBlockCalls, useCallFor } from "./meetings/calls.ts";
 import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
 import { MEETING_WORDS } from "../plan/call-words.ts";
 import { LiveCalls } from "./cowork.tsx";
@@ -178,13 +178,10 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
   // MC-1d: a call whose meeting this card draws with its title (the wide timeline, or the open list) carries its mark on
   // the meeting itself; the card's line keeps the others (the slim rail, a folded list, a call missing from the calendar).
-  const marks = useCallMarks();
-  const drawnCalls = new Set(slot.events.flatMap((p) => {
-    const c = callForEvent(marks, p.event);
-    return c ? [c.occurrenceId] : [];
-  }));
+  // WK-6: from the week's one tie: each meeting's own call, and the calls with no meeting in this block's hours.
+  const bc = useBlockCalls(slot);
   const drawsTitles = (!compact && !folded) || (listEvents && agendaOpen);
-  const calls = callsIn(marks, slot.start, slot.end).filter((c) => !(drawsTitles && drawnCalls.has(c.occurrenceId)));
+  const calls = [...(drawsTitles ? [] : [...bc.byEvent.values()]), ...bc.loose];
   // CW-1: a call live in this client's delivery chat (only on today's first card for the client that hasn't ended).
   const liveCalls = useContext(LiveOnCard).get(`${slot.date}|${slot.half}`) ?? [];
 
@@ -289,7 +286,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
       {listEvents && slot.events.length > 0 && agendaOpen && (
         <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
           {slot.events.map((p) => {
-            const call = callForEvent(marks, p.event);
+            const call = bc.byEvent.get(p.event.id) ?? null;
             return (
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : call ? "is-call" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>

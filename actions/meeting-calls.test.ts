@@ -183,6 +183,8 @@ describe("Review on a call that isn't registered (MC-2)", () => {
     expect(call).toMatchObject({ callKind: "calendar", clientKey: "contoso", reviewers: [ME], attendees: [MATE], source: "upload" });
     // The mate who was on it sees it (its mark, its row) but can't act; a mate pressing Review gets the same call.
     expect(t.data<{ meetings: { call: string }[] }>(await t.act(MATE, "meeting.mine", {})).meetings.map((m) => m.call)).toEqual(["calendar"]);
+    // WK-6: each of us is told the call's meeting by its iCalUId (the same on every calendar), to tie it on Day and Week.
+    for (const who of [ME, MATE]) expect(t.data<{ occurrences: { eventKey: string | null }[] }>(await t.act(who, "meeting.mine", {})).occurrences.map((o) => o.eventKey)).toEqual(["ical-1"]);
     expect(t.data<{ occurrenceId: number; existed: boolean }>(await t.start(MATE))).toEqual({ occurrenceId: s.occurrenceId, existed: true });
     expect(await t.act(MATE, "meeting.call_fetch", { occurrenceId: s.occurrenceId })).toMatchObject({ ok: false, status: 403 });
     for (const who of [GUEST, BOT, OUTSIDER]) expect(t.data<{ meetings: unknown[] }>(await t.act(who, "meeting.mine", {})).meetings).toEqual([]);
@@ -306,6 +308,8 @@ describe("Add a call (MC-2)", () => {
     const r = t.data<{ occurrenceId: number }>(await t.act(ME, "meeting.call_add", { name: "Teammates' Contoso huddle", date: "2026-11-06", start: "11:00", minutes: 30, clientKey: "contoso" }));
     const [s] = await t.meetings.callsSince("2026-10-01");
     expect(s).toMatchObject({ callKind: "hand", reviewers: [ME], attendees: [], eventId: null });
+    // WK-6: no meeting to tie it to; Day and Week show it as a call of its own.
+    expect(t.data<{ occurrences: { eventKey: string | null }[] }>(await t.act(ME, "meeting.mine", {})).occurrences.map((o) => o.eventKey)).toEqual([null]);
     expect(t.data<{ meetings: unknown[] }>(await t.act(MATE, "meeting.mine", {})).meetings).toEqual([]);
     expect(await t.act(MATE, "meeting.review", { occurrenceId: r.occurrenceId })).toMatchObject({ ok: false, status: 404 });
     expect(t.data<{ meeting: { call: string; teams: boolean } }>(await t.act(ME, "meeting.review", { occurrenceId: r.occurrenceId })).meeting).toMatchObject({ call: "hand", teams: false });

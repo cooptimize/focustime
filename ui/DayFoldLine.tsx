@@ -6,7 +6,7 @@ import type { Pick } from "../plan/types.ts";
 import type { Half, Slot } from "../week/types.ts";
 import { Icon } from "./icons.tsx";
 import { CallMarkButton } from "./meetings/CallMark.tsx";
-import { callsIn, useCallMarks } from "./meetings/calls.ts";
+import { useBlockCalls } from "./meetings/calls.ts";
 import type { DayFold } from "./dayFold.tsx";
 
 export function FoldArrow({ fold, half, name, folded, tabIndex }: { fold: DayFold; half: Half; name: string; folded: boolean; tabIndex?: number }) {
@@ -27,10 +27,9 @@ export function FoldArrow({ fold, half, name, folded, tabIndex }: { fold: DayFol
 }
 
 export function FoldSummary({ slot, picks, ended, tabIndex }: { slot: Slot; picks: readonly Pick[]; ended: boolean; tabIndex?: number }) {
-  const marks = useCallMarks();
   const c = foldCounts(picks, slot.half, slot.events);
   const w = foldWords(c);
-  const toReview = callsIn(marks, slot.start, slot.end).filter((m) => m.needsMe);
+  const toReview = useBlockCalls(slot).needs;
   return (
     <span className="day-fold-sum">
       {w.done && <span className="dfs-done">{w.done}</span>}

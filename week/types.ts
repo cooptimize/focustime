@@ -97,6 +97,11 @@ export type CalEvent = {
    * boolean is kept; nothing is guessed from a title. Unset: a single event, or a calendar that doesn't say.
    */
   repeats?: true;
+  /**
+   * WK-6: the meeting's iCalUId (Outlook; the same on every attendee's calendar, different for each occurrence of a
+   * series), only to tie a kept call to its meeting by the meeting itself. Never shown, logged or kept.
+   */
+  key?: string;
 };
 
 /** Time blocked in FocusTime for things on no calendar (step 6b). Counts against capacity like a meeting. */

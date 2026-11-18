@@ -64,6 +64,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
   lastRead: json<Occurrence["lastRead"]>(r.last_read, null),
+  eventKey: s(r.event_key),
   updatedAt: r.updated_at as string,
 });
 
@@ -203,13 +204,22 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async occurrencesOf(seriesId: number, o: { from?: string } = {}): Promise<Occurrence[]> {
       return (await db.all(`SELECT * FROM meeting_occurrences WHERE series_id = ?${o.from ? " AND day >= ?" : ""} ORDER BY day DESC`, o.from ? [seriesId, o.from] : [seriesId])).map(toOccurrence);
     },
-    /** The occurrence of a series on a day, made (as `state`) when there is none yet. */
-    async ensureOccurrence(seriesId: number, day: string, startAt: string, endAt: string, state: OccurrenceState, nextCheckAt: string | null): Promise<Occurrence> {
+    /**
+     * The occurrence of a series on a day, made (as `state`) when there is none yet. WK-6: `eventKey` (its iCalUId on the
+     * calendar) is kept on a new one and filled in on one that has none, so its meeting is found wherever it moves.
+     */
+    async ensureOccurrence(seriesId: number, day: string, startAt: string, endAt: string, state: OccurrenceState, nextCheckAt: string | null, eventKey: string | null = null): Promise<Occurrence> {
       return db.tx(async () => {
         const have = await db.get("SELECT * FROM meeting_occurrences WHERE series_id = ? AND day = ?", [seriesId, day]);
-        if (have) return toOccurrence(have);
+        if (have) {
+          if (eventKey && !have.event_key) {
+            await db.run("UPDATE meeting_occurrences SET event_key = ? WHERE id = ?", [eventKey, have.id as number]);
+            return toOccurrence({ ...have, event_key: eventKey });
+          }
+          return toOccurrence(have);
+        }
         const t = stamp();
-        const r = await db.run("INSERT INTO meeting_occurrences (series_id, day, start_at, end_at, state, next_check_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [seriesId, day, startAt, endAt, state, nextCheckAt, t, t]);
+        const r = await db.run("INSERT INTO meeting_occurrences (series_id, day, start_at, end_at, state, next_check_at, created_at, updated_at, event_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [seriesId, day, startAt, endAt, state, nextCheckAt, t, t, eventKey]);
         return (await occurrenceById(r.lastId!))!;
       });
     },

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
-import type { Half, IsoDate } from "../week/types.ts";
+import type { CalEvent, Half, IsoDate } from "../week/types.ts";
 import { SignInAgainButton } from "./Reopen.tsx";
 import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
 import { call, connectSource, disconnectSource, endSession, planAction, SessionError, setThemeAction, startDemo, takeOpenRequest, weekLoad } from "./api.ts";
@@ -656,6 +656,13 @@ export function App() {
     }
   }, []);
   const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
+  // WK-6: the week's meetings, once each, for the one tie of calls to their meetings (ui/meetings/calls.ts).
+  const weekEvents = useMemo(() => {
+    if (!data) return undefined;
+    const seen = new Map<string, CalEvent>();
+    for (const d of data.week.days) for (const p of [...d.am.events, ...d.pm.events, ...(d.eve?.events ?? []), ...d.evening]) if (!seen.has(p.event.id)) seen.set(p.event.id, p.event);
+    return [...seen.values()];
+  }, [data]);
   /**
    * WK-5: the days Week shows: the catch-up day and weekend days, each the person's own setting (Week's ⋯ and Settings
    * › Display, [ui] show_catch_up_day and show_weekend_days). The note's Show brings hidden days back until the person
@@ -2043,7 +2050,7 @@ export function App() {
   return (
     <>
     {opening}
-    <CallsProvider mine={mine}>
+    <CallsProvider mine={mine} events={weekEvents}>
     <SampleSources.Provider value={samples}>
     <CoworkCtx.Provider value={cowork}>
     <DevOpsWork.Provider value={work}>

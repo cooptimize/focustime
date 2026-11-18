@@ -1,6 +1,6 @@
 // The block agenda (step 13.6, D244): a block's meetings, personal events, unavailable time and timeboxes in time order,
 // with the free gaps between. Moved out of Plan the day (WD-1) for the detail panel.
-import { callForEvent, useCallMarks } from "./meetings/calls.ts";
+import { useCallOf } from "./meetings/calls.ts";
 import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { agendaOf } from "../plan/agenda.ts";
@@ -23,7 +23,7 @@ const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.fr
 export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: ReadonlyMap<string, DayEventWhen>; slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
   const env = useTimeboxes();
   const [open, setOpen] = useState<number | null>(null);
-  const calls = useCallMarks();
+  const callOf = useCallOf();
   if (!env) return null;
   // With timeboxing off (D261), timeboxes stay but the agenda shows only the calendar and free time.
   const rows = agendaOf(slot, env.settings.enabled ? env.timeboxes : [], isTodayIn(slot.date, now, tz) ? now : undefined);
@@ -59,7 +59,7 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
     const w = r.eventId ? whens?.get(r.eventId) : undefined;
     // MC-1d: a registered call's meeting carries its mark here too (matched on the meeting's own start, not the clipped one).
     const ev = r.eventId ? slot.events.find((p) => p.event.id === r.eventId)?.event : undefined;
-    const call = ev && r.kind === "meeting" ? callForEvent(calls, ev) : null;
+    const call = ev && r.kind === "meeting" ? callOf(ev) : null;
     return (
       <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
         <span className="ag-time">{when}</span>
