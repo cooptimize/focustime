@@ -172,6 +172,7 @@ function TeamsApp({ go }: { go: (section: string, setting?: string | null) => vo
     <Row
       id="teams-app"
       wide
+      status
       help={line}
       below={
         <Buttons>
@@ -193,7 +194,7 @@ function FeedbackRow({ go }: { go: (section: string, setting?: string | null) =>
   const load = (fresh: boolean) => call<FeedbackStatus>("feedback.status", fresh ? { fresh: true } : {}).then((r) => (setSt(r), setError(null)), (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check"));
   useEffect(() => void load(false), []);
   return (
-    <Row id="feedback" wide help={error ?? (st ? st.line : "Checking…")} below={st ? <Result>{`${st.destination}. ${st.sentToday} of ${st.limit} sent today.`}</Result> : undefined}>
+    <Row id="feedback" wide status help={error ?? (st ? st.line : "Checking…")} below={st ? <Result>{`${st.destination}. ${st.sentToday} of ${st.limit} sent today.`}</Result> : undefined}>
       <Buttons>
         {st?.setup.state === "no_pat" && (
           <GoLink kind="button" section="devops" setting="devops-write" go={go}>

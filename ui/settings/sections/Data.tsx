@@ -39,7 +39,7 @@ export function DataSection(p: BodyProps) {
 function ExportMine() {
   const [status, setStatus] = useState<string | null>(null);
   return (
-    <Row id="export" help={status ?? "Your plans, promises, captures, logs and settings. Never a password or token."}>
+    <Row id="export" status={status !== null} help={status ?? "Your plans, promises, captures, logs and settings. Never a password or token."}>
       <Button
         onClick={async () => {
           try {
@@ -86,7 +86,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
     }
   };
   return (
-    <Row id="reset-plan" help={status ?? "Empties the plan store after a full backup. Settings and calendars stay."}>
+    <Row id="reset-plan" status={status !== null} help={status ?? "Empties the plan store after a full backup. Settings and calendars stay."}>
       {asking ? (
         <Form label="Reset my plan" onSubmit={() => void reset()}>
           <Text value={typed} placeholder='Type "reset"' label='Type "reset" to confirm' onChange={setTyped} bind={{ autoFocus: true }} />
@@ -120,6 +120,7 @@ function DeleteMine() {
   return (
     <Row
       id="delete"
+      status={status !== null}
       help={status ?? (asking ? "Export first if you want a copy. You'll be signed out and can't sign in again." : "Signs you out and deletes everything FocusTime keeps for you.")}
       more={!status && asking ? "Everything is removed for good after 30 days. Outlook events, DevOps changes and your VM's schedule that FocusTime already made stay as they are." : undefined}
     >
@@ -189,7 +190,7 @@ function DemoPerson() {
     }
   };
   return (
-    <Row id="demo-be" help={error ?? "A teammate who uses FocusTime, with their own plan: a deployment you add them to shows there."}>
+    <Row id="demo-be" status={error !== null} help={error ?? "A teammate who uses FocusTime, with their own plan: a deployment you add them to shows there."}>
       <Select
         disabled={!st}
         options={(st?.people ?? []).map((x) => ({

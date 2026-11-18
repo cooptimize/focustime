@@ -68,6 +68,8 @@ type RowProps = {
   below?: ReactNode;
   /** No data-setting here (a group or an outer element already carries the id). */
   noSid?: boolean | undefined;
+  /** The help is a status the row reports (a check's answer, a connection's state): shown whole, never folded. */
+  status?: boolean | undefined;
   children?: ReactNode;
 };
 
@@ -97,13 +99,13 @@ export function splitHelp(t: string, max = 80): [string, string | null] {
 }
 
 /** One setting. */
-export function Row({ id, help, more, mark, team, wide, below, noSid, children }: RowProps) {
+export function Row({ id, help, more, mark, team, wide, below, noSid, status, children }: RowProps) {
   const d = defOf(id);
   const labelId = useId();
   const helpId = useId();
   const given = help === undefined ? d.help : help;
   const givenMore = more === undefined ? d.more : more;
-  const [shownHelp, spill] = typeof given === "string" ? splitHelp(given) : [given, null];
+  const [shownHelp, spill] = typeof given === "string" && !status ? splitHelp(given) : [given, null];
   const shownMore = spill ? (givenMore ? <>{spill} {givenMore}</> : spill) : givenMore;
   const error = mark?.s?.kind === "error" ? mark.s.messages.join("; ") : null;
   return (
@@ -115,7 +117,7 @@ export function Row({ id, help, more, mark, team, wide, below, noSid, children }
             {mark && <Mark s={mark.s} retry={mark.retry} />}
           </span>
           {(shownHelp || team) && (
-            <span className="sp-help" id={helpId}>
+            <span className="sp-help" id={helpId} data-status={status ? "" : undefined}>
               {shownHelp}
               {team && (shownHelp ? " " : "")}
               {team === true ? <TeamLine /> : team}

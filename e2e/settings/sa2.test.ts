@@ -196,7 +196,7 @@ describe.skipIf(!CHROMIUM)("SA-2: one way to draw a setting (browser, demo)", ()
             const b = c.getBoundingClientRect();
             if (b.width && b.height && b.height < 43.5) out.small.push(`${c.closest("[data-setting]")?.getAttribute("data-setting")}: ${c.textContent?.trim() || c.getAttribute("aria-label") || c.tagName} ${Math.round(b.height)}px`);
           }
-          for (const p of document.querySelectorAll<HTMLElement>(".sp-row > .sp-text > .sp-help")) {
+          for (const p of document.querySelectorAll<HTMLElement>(".sp-row > .sp-text > .sp-help:not([data-status])")) {
             const lh = parseFloat(getComputedStyle(p).lineHeight) || 16;
             if (p.getBoundingClientRect().height > lh * 2 + 2) out.long.push(`${p.closest("[data-setting]")?.getAttribute("data-setting") ?? "?"}: ${p.textContent?.slice(0, 50)}`);
           }

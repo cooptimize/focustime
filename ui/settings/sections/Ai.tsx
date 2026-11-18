@@ -151,7 +151,7 @@ function ClearAssistant() {
   const [asking, setAsking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   return (
-    <Row id="assistant-history" help={status ?? "What you asked the assistant and its answers, kept 30 days. Only you see it; it is in Export my data."}>
+    <Row id="assistant-history" status={status !== null} help={status ?? "What you asked the assistant and its answers, kept 30 days. Only you see it; it is in Export my data."}>
       {asking ? (
         <Buttons>
           <Button
