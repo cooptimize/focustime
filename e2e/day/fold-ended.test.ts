@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("DY-1: Day at the time it is (browser, demo mode, 3:5
     await page.close();
   }, T);
 
-  it("the folded line counts done and not done (late), the meetings, and a call to review whose mark opens it", async () => {
+  it("the folded line counts done and not done (late), the meetings, and a call to review, counted in words (WK-6: no mark)", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     const a = await call(page, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Tidy the release notes", size: "S" });
     await call(page, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", intention: "Answer the sizing question", size: "S" });
@@ -70,12 +70,10 @@ describe.skipIf(!CHROMIUM)("DY-1: Day at the time it is (browser, demo mode, 3:5
     await expect(line.locator(".dfs-done").textContent()).resolves.toBe("1 done");
     await expect(line.locator(".dfs-left.late").textContent()).resolves.toBe("1 not done");
     await expect(line.locator(".dfs-meetings").textContent()).resolves.toMatch(/^\d+ meetings?$/);
-    // The afternoon has the weekly call to review: fold it by hand and its mark is on the line, and opens the call.
+    // The afternoon has the weekly call to review: fold it by hand and the line counts it in words, with no mark.
     await page.locator(`${PM} .day-fold-arrow`).click();
-    const mark = page.locator(`${PM} .day-fold-sum .call-mark`);
-    await mark.waitFor();
-    await mark.click();
-    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+/);
+    await expect(page.locator(`${PM} .day-fold-sum .dfs-calls`).textContent()).resolves.toBe("1 call needs you");
+    expect(await page.locator(`${PM} .day-fold-sum .call-mark`).count()).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

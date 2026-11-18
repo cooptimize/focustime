@@ -9,8 +9,8 @@ import type { Layout } from "./viewport.ts";
 import type { Tier } from "./weekfit.ts";
 
 export type Selection = { dayIndex: number; half: Half };
-/** U3: where the detail panel opens: the features list, one follow-up or one pick. */
-export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number } | { kind: "pick"; id: number };
+/** U3: where the detail panel opens: the features list, one follow-up or one pick. WK-6: or its agenda, open. */
+export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number } | { kind: "pick"; id: number } | { kind: "meetings" };
 
 /** WK-1: the Board's tier (weekfit.ts), null outside the medium layout (the wide timeline, the one-day view). */
 export const TierCtx = createContext<Tier | null>(null);
@@ -46,3 +46,9 @@ export const AddPanelCtx = createContext<AddPanelApi>({ at: null, open: () => {}
  */
 export type NextTodo = { id: number | null; actions: (p: import("../plan/types.ts").Pick) => import("react").ReactNode };
 export const NextTodoCtx = createContext<NextTodo | null>(null);
+
+/**
+ * WK-6: whether a day's cards name their meetings (with a call's state on its meeting's row) or fold them to one line.
+ * Week: the day in focus, or every day with the Meetings switch on; Day: every card. None by default.
+ */
+export const NamedMeetingsCtx = createContext<(date: IsoDate) => boolean>(() => false);

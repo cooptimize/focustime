@@ -4,16 +4,19 @@
 // a feature placed with no stories as "Needs stories · Break down"; "+ Add" as the last row of every block, which
 // selects it and opens the block panel with the cursor in its Add box (WD-2); meetings as one summary line that opens into the list when there is no
 // rail. With the Timeline switch on the hour rail is a slim strip (about 56 px) so titles keep their width.
+// WK-6: with no rail, the day in focus (every card on Day, every card with Week's Meetings switch on) names its
+// meetings, a call's state on its meeting's row; other days fold them to one line that counts the calls needing me.
+// A card never draws a call chip.
 import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDayFold } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
-import { callForEvent, callHref, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
-import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
-import { MEETING_WORDS } from "../plan/call-words.ts";
+import { callHref, useBlockCalls, useCallFor, type CallMark } from "./meetings/calls.ts";
+import { RepeatMark } from "./meetings/CallMark.tsx";
+import { CARD_MEETING_ROWS, CARD_MEETINGS, MEETING_WORDS } from "../plan/call-words.ts";
 import { LiveCalls } from "./cowork.tsx";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
-import { freeMinutes } from "../week/free.ts";
+import { meetingsLine, meetingsSum } from "./meetingsLine.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { chipFold, foldDone } from "../plan/cardfold.ts";
 import type { CalEvent, Slot } from "../week/types.ts";
@@ -46,20 +49,12 @@ import { OriginPick, useIsOrigin } from "./Carry.tsx";
 import { BlockSuggestions } from "./Suggest.tsx";
 import { NowLine, NowMark, NowPast, NowTick } from "./NowLine.tsx";
 import { Timeline, ms, offHours, pct, useEventMenu, type RailNow } from "./Timeline.tsx";
-import { AddPanelCtx, LiveOnCard, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
+import { AddPanelCtx, LiveOnCard, NamedMeetingsCtx, NextTodoCtx, RulerCtx, TierCtx, TimelineCtx, type PanelFocus } from "./weekctx.ts";
 import { PlacedFeatures } from "./BlockPanel.tsx";
 import { Icon } from "./icons.tsx";
 
-/**
- * WD-1 (MB-1's agenda line on every card with no rail): "3 meetings · 2h 30m · 1h 45m free", the block's meetings and
- * personal events (shown as free left out), their time inside the block, and the free time.
- */
-export function meetingsLine(slot: Slot): string {
-  const busy = slot.events.filter((e) => e.event.showAs !== "free");
-  const minutes = busy.reduce((m, e) => m + Math.max(0, Math.round((ms(e.clipEnd) - ms(e.clipStart)) / 60000)), 0);
-  const n = busy.length;
-  return [n ? `${n} meeting${n === 1 ? "" : "s"}` : "No meetings", n && minutes ? formatDuration(minutes) : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ");
-}
+// WK-6: the meetings line's words are in ./meetingsLine.ts (the block panel reads them too); exported here as before.
+export { meetingsLine, meetingsSum } from "./meetingsLine.ts";
 export type BlockCardProps = {
   /** Ids of events drawn in the block before this one on the same day (labelHere, D271). */
   earlier: ReadonlySet<string>;
@@ -121,7 +116,11 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   const rail = railTier === "rail" ? "slim" : railTier;
   // WK-2: with no time rail (the phone, or the timeline hidden) the card lists its meetings and events as lines.
   const listEvents = phone || !timeline;
-  const [agendaOpen, setAgendaOpen] = useState(false);
+  // WK-6: named on the day in focus (Week), on every card (Day, or the Meetings switch on); a card's own fold or
+  // unfold holds for this visit.
+  const namedFor = useContext(NamedMeetingsCtx);
+  const [ownNamed, setOwnNamed] = useState<boolean | null>(null);
+  const named = ownNamed ?? (!phone && namedFor(slot.date));
   const [doneOpen, setDoneOpen] = useState(false);
   const panel = useContext(AddPanelCtx);
   const adding = panel.at?.date === slot.date && panel.at.half === slot.half;
@@ -175,16 +174,15 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
   useEffect(() => {
     if (dFolded && dragHere) dayFold?.dragOver(slot.half);
   }, [dFolded, dragHere, dayFold, slot.half]);
-  // MC-1: a registered call starting in this card's hours: its name and what it needs, opening its review.
-  // MC-1d: a call whose meeting this card draws with its title (the wide timeline, or the open list) carries its mark on
-  // the meeting itself; the card's line keeps the others (the slim rail, a folded list, a call missing from the calendar).
-  const marks = useCallMarks();
-  const drawnCalls = new Set(slot.events.flatMap((p) => {
-    const c = callForEvent(marks, p.event);
-    return c ? [c.occurrenceId] : [];
-  }));
-  const drawsTitles = (!compact && !folded) || (listEvents && agendaOpen);
-  const calls = callsIn(marks, slot.start, slot.end).filter((c) => !(drawsTitles && drawnCalls.has(c.occurrenceId)));
+  // WK-6 (MC-1, MC-1d before: chips): from the week's one tie, each meeting's own call and the calls with no meeting in
+  // this block's hours. A call shows only while it needs me: its state on its meeting's row where meetings are named, a
+  // count where they fold. With a rail (Timeline), the calls needing me that no titled meeting shows are counted.
+  const bc = useBlockCalls(slot);
+  const needs = bc.needs;
+  const looseRows = bc.loose.filter((c) => c.needsMe);
+  const hasMeetings = slot.events.length > 0 || looseRows.length > 0;
+  const unseen = compact ? needs : needs.filter((c) => bc.loose.includes(c));
+  const openMeetings = () => onOpen({ kind: "meetings" });
   // CW-1: a call live in this client's delivery chat (only on today's first card for the client that hasn't ended).
   const liveCalls = useContext(LiveOnCard).get(`${slot.date}|${slot.half}`) ?? [];
 
@@ -236,18 +234,10 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         <>
           {drop.tip}
           <PastRows picks={[...ticks, ...movedOn]} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} onMore={() => onOpen()} />
-          {/* What still needs me stays: a past call to review, and late promises (beside the line, not in the header). */}
+          {/* What still needs me stays: late promises (beside the line, not in the header), and WK-6: a count of the calls
+              that need me (no chip). */}
           {lateChip && !chipInHead && <div className="card-status">{lateChip}</div>}
-          {calls.length > 0 && (
-            <div className="card-calls">
-              {calls.map((c) => (
-                <a key={c.occurrenceId} href={callHref(c.occurrenceId)} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
-                  <span className="call-name">{c.role}</span>
-                  <span className="call-what">· {c.label}</span>
-                </a>
-              ))}
-            </div>
-          )}
+          <CallsNeedLine needs={needs} tabIndex={selected ? 0 : -1} onSeveral={openMeetings} />
         </>
       ) : (
         <>
@@ -271,34 +261,28 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         </div>
       )}
       <LiveCalls chats={liveCalls} zone={tz} tabIndex={selected ? 0 : -1} className="card-live" />
-      {calls.length > 0 && (
-        <div className="card-calls">
-          {calls.map((c) => (
-            <a key={c.occurrenceId} href={callHref(c.occurrenceId)} className={`call-mark${c.needsMe ? " needs" : ""}`} tabIndex={selected ? 0 : -1} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${c.label}`} aria-label={`${c.name}: ${c.label}. Open the call`}>
-              <span className="call-name">{c.role}</span>
-              <span className="call-what">· {c.label}</span>
-            </a>
-          ))}
-        </div>
-      )}
+      {/* WK-6: with a rail, the calls needing me that no titled meeting on the card shows, as one count (never a chip). */}
+      {!listEvents && <CallsNeedLine needs={unseen} tabIndex={selected ? 0 : -1} onSeveral={openMeetings} />}
       {flexList}
-      {listEvents && slot.events.length > 0 && (
-        // MB-1, WD-1: with no rail the card's meetings are one line ("3 meetings · 2h 30m · 1h 45m free"); it opens into the list.
-        <FoldLine className="card-agenda-fold" tabIndex={selected ? 0 : -1} open={agendaOpen} onToggle={() => setAgendaOpen(!agendaOpen)} label={meetingsLine(slot)} />
+      {listEvents && hasMeetings && !named && (
+        // MB-1, WD-1: with no rail the card's meetings are one line ("3 meetings · 2h 30m · 1h 45m free"); it opens into
+        // the list. WK-6: the calls that need me are counted at its end, in the link colour.
+        <FoldLine
+          className="card-agenda-fold"
+          tabIndex={selected ? 0 : -1}
+          open={false}
+          onToggle={() => setOwnNamed(true)}
+          title={CARD_MEETINGS.unfold}
+          label={
+            <>
+              <span className="ml-words">{meetingsLine(slot)}</span>
+              {needs.length > 0 && <span className="ml-needs"> · {CARD_MEETINGS.needsYou(needs.length)}</span>}
+            </>
+          }
+        />
       )}
-      {listEvents && slot.events.length > 0 && agendaOpen && (
-        <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
-          {slot.events.map((p) => {
-            const call = callForEvent(marks, p.event);
-            return (
-            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : call ? "is-call" : undefined} title={p.event.title}>
-              <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
-              <span className="ce-title" {...titleOpensCall(call)}>{p.event.title}</span>
-              <MeetingMark e={p.event} call={call} tabIndex={selected ? 0 : -1} />
-            </li>
-            );
-          })}
-        </ul>
+      {listEvents && hasMeetings && named && (
+        <CardMeetings slot={slot} tz={tz} calls={bc.byEvent} loose={looseRows} label={`Meetings, ${dayLabel} ${eve ? "evening" : slot.half}`} tabIndex={selected ? 0 : -1} onFold={() => setOwnNamed(false)} onMore={openMeetings} />
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
       {!eve && primary && <PlacedFeatures clientKey={primary.clientKey} date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
@@ -371,6 +355,117 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
         )}
       </HalfScope.Provider>
     </div>
+  );
+}
+
+/**
+ * WK-6: "1 call needs you" ("2 calls need you"), where a card shows no meeting rows (a day before today, a rail): one
+ * call opens it in Calls, several open the block panel's agenda, where each carries its state. Nothing when none does.
+ */
+export function CallsNeedLine({ needs, tabIndex, onSeveral }: { needs: readonly CallMark[]; tabIndex: number; onSeveral: () => void }) {
+  if (!needs.length) return null;
+  const words = CARD_MEETINGS.needsYou(needs.length);
+  if (needs.length === 1) {
+    const c = needs[0]!;
+    return (
+      <a className="calls-need" href={callHref(c.occurrenceId)} tabIndex={tabIndex} onClick={(e) => e.stopPropagation()} title={`${c.name}: ${CARD_MEETINGS.state(c)}`} aria-label={`${words}: ${c.name}, ${CARD_MEETINGS.state(c)}. ${CARD_MEETINGS.openCall}`}>
+        {words}
+      </a>
+    );
+  }
+  return (
+    <button type="button" className="calls-need" tabIndex={tabIndex} onClick={(e) => (e.stopPropagation(), onSeveral())} title={needs.map((c) => `${c.name}: ${CARD_MEETINGS.state(c)}`).join("\n")} aria-label={`${words}: ${CARD_MEETINGS.moreHint}`}>
+      {words}
+    </button>
+  );
+}
+
+type MeetingRowItem = { at: string; kind: "event"; p: Slot["events"][number] } | { at: string; kind: "call"; c: CallMark };
+
+/**
+ * WK-6: a card's named meetings: "MEETINGS" with the meetings' time and the free time, then one row per meeting in
+ * time order (and a call with no meeting at its own time), five at most, then "N more", which opens the block panel's
+ * agenda. The heading folds them to the card's one line, for this visit.
+ */
+function CardMeetings({ slot, tz, calls, loose, label, tabIndex, onFold, onMore }: { slot: Slot; tz: string; calls: ReadonlyMap<string, CallMark>; loose: readonly CallMark[]; label: string; tabIndex: number; onFold: () => void; onMore: () => void }) {
+  const rows: MeetingRowItem[] = [...slot.events.map((p) => ({ at: p.event.start, kind: "event" as const, p })), ...loose.map((c) => ({ at: c.startAt, kind: "call" as const, c }))].sort((a, b) => ms(a.at) - ms(b.at));
+  const shown = rows.length > CARD_MEETING_ROWS ? rows.slice(0, CARD_MEETING_ROWS) : rows;
+  const more = rows.length - shown.length;
+  return (
+    <section className="card-meetings" aria-label={label}>
+      <div className="cm-head">
+        <button type="button" className="cm-fold" aria-expanded={true} tabIndex={tabIndex} title={CARD_MEETINGS.fold} onClick={(e) => (e.stopPropagation(), onFold())}>
+          <span aria-hidden="true"><Icon name="open" /></span>
+          <span className="cm-label">{CARD_MEETINGS.heading}</span>
+        </button>
+        <span className="cm-sum">{meetingsSum(slot)}</span>
+      </div>
+      <ul className="cm-list">
+        {shown.map((r) => (r.kind === "event" ? <MeetingRow key={r.p.event.id} p={r.p} call={calls.get(r.p.event.id) ?? null} tz={tz} tabIndex={tabIndex} /> : <CallOnlyRow key={`call-${r.c.occurrenceId}`} c={r.c} tz={tz} tabIndex={tabIndex} />))}
+      </ul>
+      {more > 0 && (
+        <button type="button" className="link-btn cm-more" tabIndex={tabIndex} title={CARD_MEETINGS.moreHint} onClick={(e) => (e.stopPropagation(), onMore())}>
+          {CARD_MEETINGS.more(more)}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/**
+ * WK-6: one named meeting: its start, its name, DY-1's repeating mark, and under the name its call's state while the
+ * call needs me (the row then opens the call in Calls). Otherwise a meeting as a card draws one: it opens its menu
+ * (with the call's items when it has a call, Review this call when it could have one).
+ */
+function MeetingRow({ p, call, tz, tabIndex }: { p: Slot["events"][number]; call: CallMark | null; tz: string; tabIndex: number }) {
+  const e = p.event;
+  const menu = useEventMenu(e);
+  const needs = call?.needsMe ? call : null;
+  const kind = e.isPersonal ? " personal" : e.unavailable ? " unavailable" : "";
+  const body = (
+    <>
+      <span className="cm-time">{startClock(ms(e.start) < ms(p.clipStart) ? e.start : p.clipStart, tz)}</span>
+      <span className="cm-main">
+        <span className="cm-name-line">
+          <span className="cm-name">{e.title}</span>
+          {e.repeats && <RepeatMark />}
+        </span>
+        {needs && <span className="cm-call">{CARD_MEETINGS.state(needs)}</span>}
+      </span>
+    </>
+  );
+  if (needs)
+    return (
+      <li className="cm-row is-call needs">
+        <a className="cm-hit" href={callHref(needs.occurrenceId)} tabIndex={tabIndex} title={`${e.title}\n${shortRange(e, tz)} · ${CARD_MEETINGS.state(needs)}`} aria-label={`${startClock(e.start, tz)}, ${e.title}: ${CARD_MEETINGS.state(needs)}. ${CARD_MEETINGS.openCall}`} onClick={(ev) => ev.stopPropagation()} {...("onContextMenu" in menu ? { onContextMenu: menu.onContextMenu } : {})}>
+          {body}
+        </a>
+      </li>
+    );
+  return (
+    <li className={`cm-row${kind}${call ? " is-call" : ""}`}>
+      <span className="cm-hit" title={`${e.title}\n${e.allDay ? "All day" : shortRange(e, tz)}`} {...menu} {...("role" in menu ? { tabIndex } : {})}>
+        {body}
+      </span>
+    </li>
+  );
+}
+
+/** WK-6: a call that needs me with no meeting on my calendar (added by hand, or from a recording): a row of its own. */
+function CallOnlyRow({ c, tz, tabIndex }: { c: CallMark; tz: string; tabIndex: number }) {
+  return (
+    <li className="cm-row is-call needs call-only">
+      <a className="cm-hit" href={callHref(c.occurrenceId)} tabIndex={tabIndex} title={`${c.name}\n${CARD_MEETINGS.state(c)}`} aria-label={`${startClock(c.startAt, tz)}, ${CARD_MEETINGS.callOnly}: ${c.name}, ${CARD_MEETINGS.state(c)}. ${CARD_MEETINGS.openCall}`} onClick={(ev) => ev.stopPropagation()}>
+        <span className="cm-time">{startClock(c.startAt, tz)}</span>
+        <span className="cm-main">
+          <span className="cm-name-line">
+            <span className="cm-icon" aria-hidden="true"><Icon name="calls" /></span>
+            <span className="cm-name">{c.name}</span>
+          </span>
+          <span className="cm-call">{CARD_MEETINGS.state(c)}</span>
+        </span>
+      </a>
+    </li>
   );
 }
 

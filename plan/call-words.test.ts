@@ -67,7 +67,7 @@ describe("MC-1d: a call's state in words", () => {
 
   it("a reviewer hears about a failed step once FocusTime stopped trying; an attendee never", () => {
     const s = { id: 1, clientKey: "contoso", name: "Contoso sync", reviewers: ["rev"], attendees: ["att"], removedAt: null } as unknown as MeetingSeries;
-    const o = (p: Partial<Occurrence>): Occurrence => ({ id: 7, seriesId: 1, date: "2026-11-10", startAt: "", endAt: "", state: "failed", nextCheckAt: null, checks: 3, transcriptFrom: "upload", transcriptAt: null, aiOutcome: "timeout", dismissedBy: null, reviewedBy: null, lastRead: null, updatedAt: "", ...p });
+    const o = (p: Partial<Occurrence>): Occurrence => ({ id: 7, seriesId: 1, date: "2026-11-10", startAt: "", endAt: "", state: "failed", nextCheckAt: null, checks: 3, transcriptFrom: "upload", transcriptAt: null, aiOutcome: "timeout", dismissedBy: null, reviewedBy: null, lastRead: null, eventKey: null, updatedAt: "", ...p });
     expect(nudgesFor("rev", [s], [o({ nextCheckAt: "2026-11-10T17:15:00Z" })])).toEqual([]);
     expect(nudgesFor("rev", [s], [o({})]).map((n) => [n.kind, n.key])).toEqual([["failed", "meeting_failed:7"]]);
     expect(nudgesFor("att", [s], [o({})])).toEqual([]);

@@ -26,7 +26,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Day's Timeline: the mark and the title open the call; the menu leads with the call; other meetings are unchanged", async () => {
+  it("Day's Timeline: the call's state on its meeting (WK-6: no mark) and the title open the call; the menu leads with the call; other meetings are unchanged", async () => {
     const { page, errors } = await freshPage(h);
     await call(page, "ui.set_today_timeline", { show: true });
     await open(page, MON);
@@ -34,12 +34,10 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await ev.waitFor({ timeout: 30_000 });
     if (process.env.FOCUSTIME_SHOTS) await ev.screenshot({ path: `${process.env.FOCUSTIME_SHOTS}/door-event.png` });
     await expect(page.locator(".today-tl .event.is-call").count()).resolves.toBe(1);
-    const mark = ev.locator(".ev-call");
-    // DY-1: the mark names the call's type, then its state.
-    await expect(mark.textContent()).resolves.toBe("Weekly status callReview 11 proposals");
-    await expect(mark.locator(".call-what").textContent()).resolves.toBe("Review 11 proposals");
-    await expect(mark.getAttribute("aria-label")).resolves.toBe("Weekly status call, Northwind weekly status call: Review 11 proposals. Review proposals");
-    await mark.click();
+    // WK-6: no chip; the call's type and state on the meeting's second line, the title opens it.
+    expect(await ev.locator(".call-mark, .ev-call").count()).toBe(0);
+    await expect(ev.locator(".ev-call-state").textContent()).resolves.toBe("Weekly status call · Review 11 proposals");
+    await ev.locator(".ev-title").click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     // MC-3: the call opens on the Calls tab, beside the list; the browser's Back returns to Day.
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+$/);
@@ -68,27 +66,24 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await page.close();
   }, T);
 
-  it("Day's Cards and the block panel: one mark for the call, opening it", async () => {
+  it("Day's Cards and the block panel: the call's state on its meeting's row, which opens it; no mark", async () => {
     const { page, errors } = await freshPage(h);
     await call(page, "ui.set_today_timeline", { show: false });
     await open(page, MON);
     const card = page.locator('.day-view [data-drop="2026-11-02:PM"]');
     await card.waitFor({ timeout: 30_000 });
-    // Folded list: the card's line carries the call.
-    await expect(card.locator(".call-mark").count()).resolves.toBe(1);
-    await card.locator(".card-agenda-fold").click();
-    const row = card.locator(".card-events li", { hasText: "Northwind weekly status" });
+    // WK-6: the named meetings: the call's state under its meeting's name, once; no chip or mark anywhere on the card.
+    const row = card.locator(".card-meetings .cm-row", { hasText: "Northwind weekly status" });
     await row.waitFor();
-    // Open list: the meeting itself carries the mark, once.
-    await expect(card.locator(".call-mark").count()).resolves.toBe(1);
-    await expect(row.locator(".ev-call .call-what").textContent()).resolves.toBe("Review 11 proposals");
-    await expect(card.locator(".card-events li", { hasText: "Northwind data model review" }).locator(".ev-call").count()).resolves.toBe(0);
+    await expect(card.locator(".call-mark, .card-calls").count()).resolves.toBe(0);
+    await expect(row.locator(".cm-call").textContent()).resolves.toBe("Weekly status call · Review 11 proposals");
+    await expect(card.locator(".cm-row", { hasText: "Northwind data model review" }).locator(".cm-call").count()).resolves.toBe(0);
     // The block panel's agenda.
     await card.locator(".card-when").click();
     const panel = page.locator("aside.block-panel");
     await panel.locator(".bp-meet-line").click();
     const agRow = panel.locator(".bp-meetings li", { hasText: "Northwind weekly status" });
-    await agRow.locator(".ev-call").click();
+    await agRow.locator("a.ag-main").click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
     expect(errors).toEqual([]);
     await page.close();

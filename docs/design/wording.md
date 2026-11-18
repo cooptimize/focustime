@@ -584,3 +584,14 @@ The words are in one place, `POCKET_CALL_WORDS`, `othersLeftOut`, `gotLine` and 
 - A call that already has a transcript: **"This call already has a transcript. Replace it with your Pocket recording?"** and **"Replace it"**.
 - On the call's page: **"From your Pocket recording. Speakers aren't named, and Pocket can mix them up."** to whoever brought it in, **"From a reviewer's Pocket recording. …"** to everyone else.
 - Refusals: **"Get your Pocket recordings again first: FocusTime keeps the list for 5 minutes"**, **"That recording doesn't go with this call: they overlap for less than half the call"**, **"Pocket has no transcript for this recording yet. Try again once Pocket has made it, or upload a file"**, **"Pocket isn't connected. Connect it in Settings › Accounts and calendars › Pocket recorder"**, and PK-2's failure words (not accepted, didn't answer, busy, an answer FocusTime doesn't understand), plus **"Pocket's answer was too long for FocusTime to read"** for a recording over 20 MB.
+
+## WK-6 words (Nov 18)
+
+The words are `CARD_MEETINGS` in `plan/call-words.ts`; the line's in `ui/meetingsLine.ts`.
+
+- The named meetings' heading: **"Meetings"**, then the meetings' time and the free time, **"2h 45m · 45m free"**. Its arrow: **"Fold the meetings to one line"**, **"Name the meetings"**.
+- A row: **"9:30 Northwind requirements workshop"**, and under the name while the call needs me, its type and state, **"Call · Review 10 proposals"**, **"Weekly status call · Upload the transcript"**. Its label: **"9:30, <name>: <state>. Open in Calls"**. A call with no meeting: **"Call: <name>, <state>. Open in Calls"**.
+- More than five: **"1 more"**, **"3 more"**; on hover **"Open the block's agenda"**.
+- The count on another day's line and a past day's card: **"1 call needs you"**, **"2 calls need you"**.
+- The switch: **"Meetings"**, on hover **"Name the meetings on every card. Off: only the day in focus names them"**.
+- The folded line, unchanged from WD-1: **"3 meetings · 2h 45m · 45m free"** (**"No meetings · 3h free"**).

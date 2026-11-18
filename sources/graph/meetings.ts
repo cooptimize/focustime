@@ -86,7 +86,8 @@ export type SeriesCandidate = {
   homeAttendees: string[];
 };
 
-export type SeriesInstance = { startAt: string; endAt: string; cancelled: boolean; homeAttendees: string[] };
+/** WK-6: `key` is the occurrence's iCalUId (the same on every attendee's calendar), only to tie the call to its meeting. */
+export type SeriesInstance = { startAt: string; endAt: string; cancelled: boolean; homeAttendees: string[]; key: string | null };
 export type TranscriptRef = { id: string; createdAt: string; endAt: string | null };
 
 const WEEKDAY: Record<string, number> = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
@@ -296,14 +297,14 @@ export function createMeetingsClient(d: MeetingsDeps) {
 
     /** A series' occurrences between two instants on my calendar, with their Cooptimize attendees. */
     async instances(eventId: string, fromIso: string, toIso: string): Promise<SeriesInstance[]> {
-      const j = (await request("meetings_instances", `${GRAPH}/me/events/${encodeURIComponent(eventId)}/instances?startDateTime=${fromIso}&endDateTime=${toIso}&$select=start,end,isCancelled,attendees&$top=50`, d.calendarToken, { prefer: 'outlook.timezone="UTC"' })) as { value?: GraphSeries[] } | null;
+      const j = (await request("meetings_instances", `${GRAPH}/me/events/${encodeURIComponent(eventId)}/instances?startDateTime=${fromIso}&endDateTime=${toIso}&$select=start,end,isCancelled,attendees,iCalUId&$top=50`, d.calendarToken, { prefer: 'outlook.timezone="UTC"' })) as { value?: GraphSeries[] } | null;
       const out: SeriesInstance[] = [];
       for (const e of j?.value ?? []) {
         const s = str(e.start?.dateTime, 40);
         const f = str(e.end?.dateTime, 40);
         if (!s || !f) continue;
         const at = (x: string) => Temporal.PlainDateTime.from(x.replace(/(\.\d{3})\d*$/, "$1")).toZonedDateTime("UTC").toInstant().toString();
-        out.push({ startAt: at(s), endAt: at(f), cancelled: e.isCancelled === true, homeAttendees: homeAttendees(e.attendees) });
+        out.push({ startAt: at(s), endAt: at(f), cancelled: e.isCancelled === true, homeAttendees: homeAttendees(e.attendees), key: str(e.iCalUId, 2000) });
       }
       return out;
     },
