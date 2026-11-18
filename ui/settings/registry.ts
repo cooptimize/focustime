@@ -148,7 +148,7 @@ export const SETTINGS: readonly SettingDef[] = [
   ...(["thu", "fri", "mon"] as const).map((d) => ({ id: `nudge-${d}`, section: "planning", label: `${({ thu: "Thursday", fri: "Friday", mon: "Monday" } as const)[d]} nudge at`, group: "Week nudges", kind: "time" as const, part: true })),
   { id: "rituals", section: "planning", label: "Look-ahead rituals", old: ["Plan ahead rituals", "Look ahead 4 weeks", "Direction review"], kind: "status" },
   { id: "timeboxing", section: "planning", label: "Use timeboxing", old: ["Timeboxes"], group: "Timeboxes", kind: "switch" },
-  { id: "outlook-default", section: "planning", label: "Put timeboxes on Outlook", old: ["Put on Outlook"], group: "Timeboxes", kind: "switch" },
+  { id: "outlook-default", section: "planning", label: "Put new timeboxes on Outlook", old: ["Put on Outlook", "Put timeboxes on Outlook"], group: "Timeboxes", kind: "switch" },
   { id: "confirm-own", section: "planning", label: "Ask before changing my own timebox events", old: ["Changes to my own timebox events", "Don't ask again for my own timeboxes"], group: "Timeboxes", kind: "switch" },
   { id: "help-length", section: "planning", label: "Help session length", old: ["Default length", "Help sessions"], group: "Help sessions", kind: "select", keywords: ["ask to collaborate"] },
   { id: "help-teams", section: "planning", label: "Add a Teams meeting to help sessions", old: ["Teams meeting", "Teams meeting for help sessions"], group: "Help sessions", kind: "switch" },

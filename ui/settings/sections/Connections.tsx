@@ -60,7 +60,7 @@ export function ConnectionsSection(p: BodyProps) {
         <PocketRecorder timeZone={Temporal.Now.timeZoneId()} />
       </Group>
       <Group>
-        <OutlookWriteRow />
+        <OutlookWriteRow go={p.go} />
       </Group>
       <Group>
         <Permissions />
@@ -80,7 +80,7 @@ export function ConnectionsSection(p: BodyProps) {
 }
 
 /** Settings > Accounts and calendars (step 12): whether FocusTime may change its own Outlook events, and how to allow it. */
-function OutlookWriteRow() {
+function OutlookWriteRow({ go }: { go: (section: string, setting?: string | null) => void }) {
   const env = useTimeboxes();
   useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!env) return null;
@@ -90,6 +90,11 @@ function OutlookWriteRow() {
       id="outlook-changes"
       help={!a ? "Checking…" : a.access === "write" ? "Allowed: FocusTime can create, change and remove the Outlook events it created (timeboxes), each after a preview." : a.message}
       more={a?.access === "write" ? "It can't change any other event. Asks for Calendars.ReadWrite only when you reconnect here." : "Asks for Calendars.ReadWrite only when you reconnect here."}
+      below={
+        <GoLink section="planning" setting="outlook-default" go={go}>
+          Put new timeboxes on Outlook
+        </GoLink>
+      }
     >
       {a && a.access !== "write" && a.access !== "not_set_up" && (
         <Button kind="main" onClick={env.connectWrite}>

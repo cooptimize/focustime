@@ -47,7 +47,7 @@ From `ui/settings/registry.ts` (STEP 0.4). The page draws each kind with its one
 | Day and Week | Week nudges | A time | The app's time field |
 | Day and Week | Look-ahead rituals | Read only | A value or a status line |
 | Day and Week | Use timeboxing | On or off | Switch |
-| Day and Week | Put timeboxes on Outlook | On or off | Switch |
+| Day and Week | Put new timeboxes on Outlook | On or off | Switch |
 | Day and Week | Ask before changing my own timebox events | On or off | Switch |
 | Day and Week | Help session length | One of more | Select |
 | Day and Week | Add a Teams meeting to help sessions | On or off | Switch |

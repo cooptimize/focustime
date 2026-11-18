@@ -219,7 +219,9 @@ function TeamsKinds(p: { v: TeamsRhythm; on: boolean; last: string; mark: Return
           below={
             <Buttons result={test?.kind === k ? test.text : null}>
               {time(k)}
-              <Button onClick={() => send(k)}>Send me a test now</Button>
+              <Button disabled={off} onClick={() => send(k)}>
+                Send me a test now
+              </Button>
             </Buttons>
           }
         >

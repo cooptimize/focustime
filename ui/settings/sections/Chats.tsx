@@ -4,7 +4,7 @@ import type { RequestsData } from "../../../plan/asks.ts";
 import { call } from "../../api.ts";
 import { useAutoSave } from "../autosave.tsx";
 import { pollText } from "../DeliveryChats.tsx";
-import { Group, List, ListItem, Page, Row, Text, Value } from "../parts.tsx";
+import { Group, List, ListItem, Page, Row, State, Text, Value } from "../parts.tsx";
 import { labelBy, markOf } from "./shared.ts";
 import type { FormProps } from "./types.ts";
 
@@ -78,7 +78,7 @@ function ChatsRead() {
           <List>
             {d.chats.map((c) => (
               <ListItem key={c.chatId}>
-                {c.clientName} · {c.chatName} · {pollText(c, null)}
+                {c.clientName} · {c.chatName} · {c.state === "reconnect" || c.state === "retry" ? <State tone="error">{pollText(c, null)}</State> : pollText(c, null)}
               </ListItem>
             ))}
           </List>

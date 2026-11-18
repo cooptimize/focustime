@@ -78,7 +78,8 @@ export function Subhead({ children }: { children: ReactNode }) {
 
 /**
  * SA-2: a help line keeps to about two lines on a phone: past `max` characters it ends at a sentence (or, failing
- * that, a clause) and the rest goes behind "More about this", word for word.
+ * that, a clause) and the rest goes behind "More about this", word for word. Cut inside a sentence, the shown part
+ * ends with "…" and the rest starts with it, so neither reads as finished (SA-2 review).
  */
 export function splitHelp(t: string, max = 80): [string, string | null] {
   if (t.length <= max) return [t, null];
@@ -86,11 +87,11 @@ export function splitHelp(t: string, max = 80): [string, string | null] {
   if (dot > 20) return [t.slice(0, dot + 1), t.slice(dot + 2)];
   for (const sep of [": ", "; ", ", "]) {
     const j = t.lastIndexOf(sep, max);
-    if (j > 20) return [t.slice(0, j + 1), t.slice(j + 2)];
+    if (j > 20) return [`${t.slice(0, j)}…`, `…${t.slice(j + 2)}`];
   }
   for (const word of [" (", " when ", " with "]) {
     const j = t.lastIndexOf(word, max);
-    if (j > 20) return [t.slice(0, j), t.slice(j + 1)];
+    if (j > 20) return [`${t.slice(0, j)}…`, `…${t.slice(j + 1)}`];
   }
   return max < 90 ? splitHelp(t, max + 12) : [t, null];
 }

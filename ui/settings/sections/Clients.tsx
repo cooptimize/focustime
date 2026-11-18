@@ -188,7 +188,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
         id="client-color"
         wide
         mark={markOf(a, "color")}
-        help={color.startsWith("#") ? `Custom color ${color} (pick a palette color to use theme-aware colors)` : own || !team ? (team ? undefined : "No team color yet.") : "The team color, set by your FocusTime admin. Pick another to use your own."}
+        help={[color.startsWith("#") ? `Custom color ${color} (pick a palette color to use theme-aware colors).` : null, own ? (team ? null : "Your own color.") : team ? "The team color, set by your FocusTime admin. Pick another to use your own." : "No team color yet."].filter(Boolean).join(" ") || undefined}
         team={own && team ? <TeamDefault value={team} onReset={() => a.change("color", "")} /> : undefined}
       >
         <Swatches name={`color-${c.key}`} values={data.palette} value={color} onChange={(slot) => a.change("color", slot)} />

@@ -78,7 +78,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
     setStatus(value ? "Checking whose PAT this is…" : null);
     try {
       await call("devops.set_write_pat", input);
-      setStatus(value ? "Checked and saved to the keyring" : "Expiry date saved");
+      setStatus(value ? "Checked and saved. It is never shown again" : "Expiry date saved");
       await onDone();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Not saved");
@@ -106,7 +106,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
         }
         below={
           <Form label={`DevOps write access for ${c.setting.name ?? c.key}`} onSubmit={() => void save()}>
-          <Buttons result={status}>
+          <Buttons>
             <Secret inputRef={ref} placeholder={w ? "New PAT to replace it" : "Paste your PAT"} label={`DevOps write PAT for ${c.setting.name ?? c.key} (masked)`} />
             <Sub text="Expires (optional)">
               <DateInput value={expires} onChange={setExpires} label="Expires (optional)" title="DevOps doesn't tell FocusTime the expiry; copy it from the PAT page" />
@@ -120,7 +120,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
                 disabled={busy}
                 onClick={async () => {
                   await call("devops.clear_write_pat", { clientKey: c.key }).catch(() => null);
-                  setStatus("Turned off. The PAT was removed from the keyring");
+                  setStatus("Turned off. Your PAT was removed");
                   await onDone();
                 }}
               >
@@ -128,6 +128,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
               </Button>
             )}
           </Buttons>
+          {status && <Result>{status}</Result>}
           </Form>
         }
       />
