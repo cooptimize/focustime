@@ -1,12 +1,14 @@
 // ST-1: which FocusTime this page runs in, from /version.
 import { useEffect, useState } from "react";
 
-/** The app's environment from /version, asked once per page ("prod" when it can't be read). */
-let envCache: Promise<string> | null = null;
-const askEnv = (): Promise<string> =>
+/** The app's environment from /version, asked once per page: null when it can't be read (EV-1 says nothing then). */
+let envCache: Promise<string | null> | null = null;
+const askKnownEnv = (): Promise<string | null> =>
   (envCache ??= fetch("/version", { credentials: "same-origin" })
     .then((r) => (r.ok ? (r.json() as Promise<{ env?: string }>) : Promise.reject(new Error(String(r.status)))))
-    .then((b) => b.env ?? "prod", () => "prod"));
+    .then((b) => b.env ?? null, () => null));
+/** As before EV-1: "prod" when it can't be read. */
+const askEnv = (): Promise<string> => askKnownEnv().then((e) => e ?? "prod");
 
 /** The app's environment from /version ("local" is the developer loop; "dev" and "prod" are hosted), null while asking. */
 export function useAppEnv(): string | null {
@@ -38,7 +40,7 @@ export function useSiteMark(): SiteMark | null {
   useEffect(() => {
     if (!testSite()) return;
     let live = true;
-    void askEnv().then((e) => live && setEnv(e));
+    void askKnownEnv().then((e) => live && setEnv(e));
     return () => void (live = false);
   }, []);
   return siteMarkOf(env);
@@ -46,6 +48,16 @@ export function useSiteMark(): SiteMark | null {
 
 /** EV-1: About's line: the environment in a word and the site's address ("Dev · focustime-dev.example.com"). */
 export const SITE_WORDS: Record<string, string> = { dev: "Dev", local: "Local", prod: "Production", demo: "Demo" };
+/** The environment for About's line: null while asking and when /version can't be read, never a guess. */
+export function useKnownEnv(): string | null {
+  const [env, setEnv] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void askKnownEnv().then((e) => live && setEnv(e));
+    return () => void (live = false);
+  }, []);
+  return env;
+}
 export function siteLine(env: string, host: string): string {
   return `${SITE_WORDS[env] ?? env} · ${host}`;
 }

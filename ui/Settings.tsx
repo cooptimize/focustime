@@ -43,7 +43,7 @@ import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
-import { siteLine, useAppEnv, useDeveloperLoop } from "./appenv.ts";
+import { siteLine, useAppEnv, useDeveloperLoop, useKnownEnv } from "./appenv.ts";
 import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
 import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
@@ -1944,9 +1944,9 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
   );
 }
 
-/** EV-1: which site this is, in a word, and its address ("Site: Dev · focustime-dev.example.com"); nothing until /version answers. */
+/** EV-1: which site this is, in a word, and its address ("Site: Dev · focustime-dev.example.com"); nothing until /version answers, nothing when it fails. */
 function SiteLine() {
-  const env = useAppEnv();
+  const env = useKnownEnv();
   if (!env) return null;
   return <p className="set-hint" data-site-line>Site: {siteLine(env, location.host)}</p>;
 }

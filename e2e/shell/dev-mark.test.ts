@@ -105,6 +105,11 @@ describe.skipIf(!CHROMIUM)("EV-1 on dev", () => {
     await page.locator(".topbar").waitFor({ timeout: 30_000 });
     await page.waitForTimeout(1500);
     await expect(page.locator(".site-tag").count()).resolves.toBe(0);
+    // Nor does Settings › About guess a site.
+    await page.evaluate(() => (location.hash = "#/settings/about"));
+    await page.locator('[data-setting="version"]').waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(500);
+    await expect(page.locator("[data-site-line]").count()).resolves.toBe(0);
     await page.close();
   }, T);
 
