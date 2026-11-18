@@ -37,6 +37,8 @@ const LOADERS = {
   tour: () => import("./guide/tour/Tour.tsx"),
   docs: () => import("./docs/TechDocs.tsx"),
   meetings: () => import("./meetings/Meetings.tsx"),
+  // CO-1: Ask to collaborate, opened from a ⋯ menu or the command menu.
+  help: () => import("./HelpFinder.tsx"),
   // PH-1: the phone's own screens; asked for at start only on a phone (ui/main.tsx), never in the background.
   phone: () => import("./phone/PhoneScreens.tsx"),
 } as const satisfies Record<ScreenName, () => Promise<unknown>>;
@@ -46,7 +48,7 @@ export { SCREENS };
 export type ScreenModule<K extends ScreenName> = Awaited<ReturnType<(typeof LOADERS)[K]>>;
 
 /** Fetched in the background once the first screen is usable, in this order: the tabs as the top bar lists them, then what a key opens from any of them. The Guide and the Technical docs wait until they are opened. */
-export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "meetings", "code", "capture", "card", "assistant", "checkin", "closeout", "focus", "newItem", "draft", "settings"];
+export const BACKGROUND: readonly ScreenName[] = ["ahead", "status", "inbox", "meetings", "code", "capture", "card", "assistant", "checkin", "closeout", "focus", "newItem", "draft", "help", "settings"];
 
 /** Why a screen's file didn't load: no connection, or it can't be had from the server (after the one reload). */
 export type Failed = "offline" | "missing";

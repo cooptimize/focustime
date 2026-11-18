@@ -22,7 +22,6 @@ import { DoneOfferCtx } from "./DoneOffer.tsx";
 import { useWrapUpFlow } from "./WrapUp.tsx";
 import { itemIdOfUrl } from "../plan/item-card.ts";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
-import { HelpFinder } from "./HelpFinder.tsx";
 import { SendHost } from "./Team.tsx";
 import { useStatusNeeds } from "./status-needs.ts";
 import { StatusMark } from "./StatusMark.tsx";
@@ -883,6 +882,7 @@ export function App() {
   const [tbTarget, setTbTarget] = useState<TimeboxTarget | null>(null);
   // Step 13: the collaboration finder's target, and the timebox env for menus built before render.
   const [helpTarget, setHelpTarget] = useState<HelpTarget | null>(null);
+  const HelpFinder = useScreen("help", !!helpTarget)?.HelpFinder;
   const tbEnvRef = useRef<TimeboxEnv | null>(null);
   // DP-3: my holds that fell behind after someone else's change, brought in step on a visit by my own confirm_own rule.
   useHoldsInStep(data, data ? tbEnvRef.current : null);
@@ -2776,12 +2776,13 @@ export function App() {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).find((p) => p.id === tbTarget.pickId) : null;
         return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "To-do"} defaultMinutes={pick ? pickNeed(pick, data.planning.sizes) : 60} onClose={() => setTbTarget(null)} />;
       })()}
-      {helpTarget && (
+      {helpTarget && HelpFinder && (
         <HelpFinder
           target={helpTarget}
           clientName={data.planClients.find((c) => c.clientKey === helpTarget.clientKey)?.clientName ?? helpTarget.clientKey}
           settings={data.collab}
           tz={userZone(week)}
+          now={() => zonedNow(userZone(week))}
           onPreview={(p) => writes.show(p)}
           onClose={() => setHelpTarget(null)}
         />

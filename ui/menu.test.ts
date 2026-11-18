@@ -7,7 +7,7 @@ import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
-import { callItems, eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm, deployForm } from "./menu.ts";
+import { callItems, eventMenu, timeboxMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm, deployForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -644,5 +644,30 @@ describe("RS-1: an icon before every item", () => {
     const plain: string[] = [];
     for (const s of steps) if ("items" in s) for (const it of s.items) if (menuIcon(it) === "dot") plain.push(`${s.title}: ${it.label} (${it.action ?? it.id})`);
     expect(plain).toEqual([]);
+  });
+});
+
+describe("CO-1: every door into Ask to collaborate opens it with what it passed before", () => {
+  it("a to-do, a work item, a timebox and the command menu (Find help session times and Check who is free too)", async () => {
+    const t = env({ selection: { date: "2026-11-03", half: "AM" } });
+    await find(pickMenu(t.e, pick), "Ask to collaborate").run!();
+    await find(itemMenu(t.e, "internal", item(1)), "Ask to collaborate").run!();
+    const tb = { id: 5, uid: "tb-5", date: "2026-11-03", clientKey: "internal", pickId: 7, itemId: 1, title: "Item 1", url: "https://dev.azure.com/org/p/_workitems/edit/1", start: "2026-11-03T10:00:00-05:00", end: "2026-11-03T11:00:00-05:00", outlook: false, removedAt: null, conflict: null, sync: null, onOutlook: false };
+    await find(timeboxMenu(t.e, tb as never), "Ask to collaborate").run!();
+    const helps = () => t.calls.filter((c) => c[0] === "help").map((c) => c[1]);
+    expect(helps()).toEqual([
+      { clientKey: "internal", title: "Item 1", url: pick.itemUrl, itemId: 1, pickId: 7, pinned: "2026-11-03" },
+      { clientKey: "internal", title: "#1 Item 1", url: item(1).url, itemId: 1, pinned: null },
+      { clientKey: "internal", title: "Item 1", url: tb.url, itemId: 1, pickId: 7, timeboxId: 5, pinned: "2026-11-03" },
+    ]);
+    const list = commandList(t.e);
+    for (const action of ["collab.candidates", "collab.suggest", "collab.check", "collab.preview_invite"]) {
+      const c = list.find((x) => x.action === action)!;
+      const step = c.next!() as MenuStep;
+      expect(step.title, action).toBe("Help on which to-do?");
+    }
+    const step = list.find((x) => x.action === "collab.check")!.next!() as MenuStep;
+    await items(step)[0]!.run!();
+    expect(helps().at(-1)).toEqual({ clientKey: "internal", title: "Item 1", url: pick.itemUrl, itemId: 1, pickId: 7, pinned: "2026-11-03" });
   });
 });
