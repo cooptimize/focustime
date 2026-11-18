@@ -224,9 +224,11 @@ describe.skipIf(!CHROMIUM)("SA-2: one way to draw a setting (browser, demo)", ()
     const place = await page.evaluate(() => {
       const u = document.querySelector(".set-undo-box")!.getBoundingClientRect();
       const bar = document.querySelector(".bottom-bar")?.getBoundingClientRect();
-      return { bottom: u.bottom, barTop: bar?.top ?? innerHeight, left: u.left, right: u.right, width: innerWidth };
+      const cap = document.querySelector(".bb-capture")?.getBoundingClientRect();
+      return { bottom: u.bottom, barTop: bar?.top ?? innerHeight, capTop: cap?.top ?? innerHeight, left: u.left, right: u.right, width: innerWidth };
     });
     expect(place.bottom).toBeLessThanOrEqual(place.barTop);
+    expect(place.bottom).toBeLessThanOrEqual(place.capTop);
     expect(place.left).toBeGreaterThanOrEqual(16);
     expect(place.right).toBeLessThanOrEqual(place.width - 16);
     await undo.click();
