@@ -106,7 +106,7 @@ export const POCKET_CALL_WORDS = {
   bringing: "Bringing it in…",
   pick: "Which recording",
   /** Said beside Continue: the transcript goes to the AI only from here, and nothing goes to DevOps yet. */
-  ai: "Continue brings it in and, if AI is on for this client, the AI proposes updates from it. Nothing goes to DevOps until you confirm.",
+  ai: "Once it's in, the AI proposes updates from it if AI is on for this client. Nothing goes to DevOps until you confirm.",
   /** The part question for a recording much longer than its call. */
   partAsk: (rec: string, call: string) => `This recording is ${rec}; the call was ${call}. Which part comes in?`,
   /** A row's source when a recording of mine goes with it. */

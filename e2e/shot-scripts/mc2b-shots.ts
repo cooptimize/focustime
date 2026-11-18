@@ -67,18 +67,18 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-2b screenshots", () => {
         if (phone) await page.locator("[data-pocket-who]").scrollIntoViewIfNeeded();
       });
       await shot(page, `4-${tag}-setup-longer-recording`, async () => {
-        if (phone) await calls(), await getList();
+        if (phone) await page.locator("[data-calls-back]").click(), await page.locator("[data-calls-list]").waitFor({ timeout: 30_000 });
         await row(page, "Harbor sprint planning").click();
         await page.locator("[data-pocket-part]").waitFor({ timeout: 30_000 });
         if (phone) await page.locator("[data-pocket-who]").scrollIntoViewIfNeeded();
       });
       await shot(page, `5-${tag}-recording-own-call`, async () => {
-        if (phone) await calls(), await getList();
+        if (phone) await page.locator("[data-calls-back]").click(), await page.locator("[data-calls-list]").waitFor({ timeout: 30_000 });
         await row(page, "Call with the carrier").click();
         await page.locator("[data-pocket-add]").waitFor({ timeout: 30_000 });
       });
       await shot(page, `6-${tag}-call-from-my-pocket`, async () => {
-        if (phone) await calls(), await getList();
+        if (phone) await page.locator("[data-calls-back]").click(), await page.locator("[data-calls-list]").waitFor({ timeout: 30_000 });
         await row(page, "Proposal review with Jordan").click();
         await page.locator(".mtg-setup select").first().selectOption({ index: 1 });
         await page.locator(".mtg-setup").getByRole("button", { name: "Continue" }).click();

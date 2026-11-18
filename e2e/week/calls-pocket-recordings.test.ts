@@ -82,7 +82,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await row(page, "Proposal review with Jordan").click();
     const setup = page.locator(".mtg-setup");
     await expect(setup.locator('[data-source="pocket"]').isChecked()).resolves.toBe(true);
-    await expect(setup.locator("[data-pocket-who]").textContent()).resolves.toMatch(/^The Cooptimizers on this call's invite will be able to read it\. Continue brings it in and, if AI is on for this client, the AI proposes updates from it\. Nothing goes to DevOps until you confirm\.$/);
+    await expect(setup.locator("[data-pocket-who]").textContent()).resolves.toMatch(/^The Cooptimizers on this call's invite will be able to read it\. Once it's in, the AI proposes updates from it if AI is on for this client\. Nothing goes to DevOps until you confirm\.$/);
     await expect(setup.locator("[data-pocket-part]").count()).resolves.toBe(0);
     await setup.locator("select").selectOption({ index: 1 });
     await setup.getByRole("button", { name: "Continue" }).click();
