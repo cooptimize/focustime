@@ -26,7 +26,8 @@ describe("Settings registry", () => {
   });
 
   it("App secrets are gone from Settings (secrets only through the scripts)", () => {
-    expect(SETTINGS.find((d) => /secret/i.test(`${d.id} ${d.label}`))).toBeUndefined();
+    // The one row that says "secrets" is the notice kind about a person's own expiring PATs, not an app secret.
+    expect(SETTINGS.find((d) => /secret/i.test(`${d.id} ${d.label}`) && d.id !== "notify-expiry")).toBeUndefined();
     expect(searchSettings("app secrets", { dev: true, demo: true })).toEqual([]);
   });
 
@@ -64,11 +65,11 @@ describe("Settings registry", () => {
     for (const old of ["today and week", "planning", "risk rules"]) expect(section(old), old).toMatchObject({ section: "planning", label: "Day and Week" });
     expect(section("Today and Week")!.matched).toBe("Today and Week");
     const setting = (q: string, id: string) => searchSettings(q).find((h) => h.setting === id);
-    expect(setting("needs attention nudges", "readiness-nudges")).toMatchObject({ label: "Needs attention nudges", matched: null, where: "Day and Week" });
-    expect(setting("readiness nudges", "readiness-nudges")).toMatchObject({ label: "Needs attention nudges", matched: "Readiness nudges" });
+    expect(setting("needs attention nudges", "readiness-nudges")).toMatchObject({ label: "Show Needs attention nudges", matched: null, where: "Day and Week › Guidance" });
+    expect(setting("readiness nudges", "readiness-nudges")).toMatchObject({ label: "Show Needs attention nudges", matched: "Readiness nudges" });
     expect(setting("look-ahead rituals", "rituals")).toMatchObject({ label: "Look-ahead rituals", matched: null });
     for (const old of ["plan ahead rituals", "look ahead 4 weeks", "direction review"]) expect(setting(old, "rituals"), old).toMatchObject({ label: "Look-ahead rituals" });
-    expect(setting("let urgent asks through", "urgent-during-focus")).toMatchObject({ label: "Urgent requests during focus" });
+    expect(setting("let urgent asks through", "urgent-during-focus")).toMatchObject({ label: "Let urgent requests through during focus" });
     // Old names live only in `old` (and keywords): no label or description carries one.
     for (const s of SECTIONS) expect(`${s.label} ${s.description}`, s.id).not.toMatch(/\bToday and\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b/);
     for (const s of SETTINGS) expect(s.label, s.id).not.toMatch(/\bToday\b|\bRoadmap\b|\bAhead\b|\bReadiness\b|\bPlan ahead\b|\bGaps\b|\bFix next\b/);
@@ -80,5 +81,23 @@ describe("Settings registry", () => {
     expect(searchSettings("reset demo").some((h) => h.setting === "demo-reset")).toBe(false);
     expect(searchSettings("reset demo", { demo: true }).some((h) => h.setting === "demo-reset")).toBe(true);
     expect(searchSettings("show demo data", { demo: true }).some((h) => h.setting === "demo-mode")).toBe(false);
+  });
+});
+
+// SA-2: the registry is the one home of a setting's name.
+describe("SA-2: one name per setting", () => {
+  it("every row has a kind of choice; every part row names its group; labels carry no unit in brackets", () => {
+    for (const d of SETTINGS) {
+      expect(d.kind, d.id).toBeTruthy();
+      if (d.part && d.section !== "client" && d.id !== "saving") expect(d.group, d.id).toBeTruthy();
+      expect(d.label, d.id).not.toMatch(/\((minutes|days|weeks|months|seconds)[^)]*\)/);
+    }
+  });
+  it("search shows a row's group beside its section, and never a client page's rows (they need the client)", () => {
+    expect(searchSettings("quiet on days off")[0]).toMatchObject({ setting: "quiet-pto", where: "Notifications › Quiet hours" });
+    expect(searchSettings("watch at").find((h) => h.setting === "risk-watch")).toMatchObject({ where: "Day and Week › At-risk blocks" });
+    expect(searchSettings("dataverse nickname").some((h) => h.section === "client")).toBe(false);
+    expect(searchSettings("midday check-in").some((h) => h.setting === "notify-checkin")).toBe(true);
+    expect(searchSettings("check-in").find((h) => h.setting === "notify-checkin")).toMatchObject({ label: "Midday check-in" });
   });
 });
