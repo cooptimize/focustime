@@ -57,7 +57,7 @@ Four small planning components shared by Week's and Day's cards, the block panel
 
 ### `ui/settings/`
 
-Settings and Admin. `registry.ts` is the one list of Settings' groups, sections and addresses; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. Each other file is one section (Admin, client chats, calendar links, the Pocket recorder, Diagnostics, Find an item, client calls). `ui/Settings.tsx` is the panel that holds them, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
+Settings and Admin. `registry.ts` is the one list of Settings' groups, sections, addresses and every setting's one name, help and kind; `admin-sections.ts` is Admin's; `autosave.tsx` saves a field as it changes. `parts.tsx` is the one set of parts every Settings section draws with (a page, a group, a row, a fold, a table, a button row, the saved mark, the team line and the controls by kind), shown on the style guide page by `PartsGuide.tsx`; `sections/` has one file per Settings section, drawn only through the parts (`sections.guard.test.ts`), with `sections/types.ts`, `shared.ts`, `fields.tsx` and `usePlan.ts` beside them; `hours-text.ts` reads working hours as typed. The other files are components a section or Admin uses (Admin, client chats, calendar links, the Pocket recorder, Diagnostics, client calls). `ui/Settings.tsx` keeps the shell, the rail, search and routing, on the shared `ui/PanelShell.tsx`. How to add a setting is in `docs/settings.md`.
 
 ## `actions/`
 

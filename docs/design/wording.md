@@ -521,3 +521,14 @@ The screen words are in one place in code: `PEOPLE_WORDS`, `HOLD_WORDS`, `LEFT_H
 - Notices (Settings › Notifications › **"Deployments you're on"**): **"Jordan added you to a deployment"**, **"Jordan moved a deployment you're on"**, **"Jordan took you off a deployment"**, **"Jordan deleted a deployment you were on"**; the body **"Northwind: Release 4.2, Sat, Nov 21, 9:00 to 11:00 AM."** then **"Click to see it in Week."** or **"It's off your plan. Check your Outlook if it was there."**
 - The demo: Settings › Your data › **"See the demo as"**, **"Alex Rivera (you)"** and the teammates who use FocusTime.
 
+
+## SA-2 words (Nov 18)
+
+- **One name per setting.** A setting's label lives in `ui/settings/registry.ts`; its row, search, links and the Undo message ("Focus length saved.") read it. A label makes sense without its help; a switch's label says what on means and isn't repeated beside the switch.
+- **Ask before changing my own timebox events** is the timebox switch: ticked when FocusTime asks first (it stores `confirm_own` as it always did).
+- **Midday check-in** is the notice kind (was "Check-in"), as on Today and in Teams.
+- **Team values:** "Set by your FocusTime admin". A team default the person changed: "Team default: <value>." with **Reset** (its name for a screen reader: Reset to team default).
+- **More about this** holds the rest of a help line, word for word.
+- **Saved**, **Saving…**, **Couldn't save. Retry** are the one saved mark.
+- Rewritten so no Renamed name shows: the Needs attention flags on Backlog's Gantt rows (was "readiness flags").
+- Renamed labels (each keeps its old name in `old` so search still finds it): Profile photos; Let urgent requests through during focus; Devices that get notifications; Offer Break down on features that need stories; Show Needs attention nudges; Carry over unfinished to-dos from the last (days); Offer DevOps updates at the end of the day; Add a Teams meeting to help sessions; Play a sound when focus or a break ends; Set my Teams status while I focus; Plain focus sets my status to; Pause music when focus ends; Stale after, Stalled after and Watch within with their units; Break down looks back (months); Show the catch-up day; Use the demo as; Send me reminders and Teams messages from this test site.

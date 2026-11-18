@@ -65,7 +65,7 @@ ui/guide/          the in-app Guide
 ui/inbox/          the Inbox: its three lists and the detail pane
 ui/meetings/       Calls (#/meetings): client calls and your other calls
 ui/plan/           four small planning components still used (AddPane, Estimate, FoldLine, PlanRow)
-ui/settings/       Settings and Admin sections
+ui/settings/       Settings parts, registry and Admin; sections/ draws each Settings section with the parts
 actions/           named, validated actions (registry.ts is the one list); every write path
 assistant/         the assistant service for the panel and the Teams bot; allowlist.ts is what it may reach
 ai/                the AI provider (OpenAI adapter, stub), guards, budget, request log

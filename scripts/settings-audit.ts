@@ -50,7 +50,8 @@ async function measure(page: Page) {
     const helps = [...root.querySelectorAll(PICK.help)].filter(vis).map((el) => {
       const cs = getComputedStyle(el);
       const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
-      return { text: txt(el).slice(0, 80), lines: Math.round(el.getBoundingClientRect().height / lh) };
+      // Text behind "More about this" (SA-2) is opened to be measured; it isn't a help line, so it is counted apart.
+      return { text: txt(el).slice(0, 80), lines: Math.round(el.getBoundingClientRect().height / lh), folded: el.matches(".sp-more-text") };
     });
     // The hit box of a checkbox, radio or switch is its label when it has one.
     const small = [...root.querySelectorAll("input, select, textarea, button, a[href], summary")].filter(vis).filter((el) => {
@@ -104,7 +105,7 @@ try {
 }
 
 // The totals SA-0 reported: distinct kinds over every section at 1440, help lines over two lines at 390.
-type M = { row: { kinds: string[]; count: number }; help: { kinds: string[]; count: number }; buttonRow: { kinds: string[]; count: number }; table: { kinds: string[]; count: number }; button: { kinds: string[]; count: number }; helps: { lines: number }[]; small: number };
+type M = { row: { kinds: string[]; count: number }; help: { kinds: string[]; count: number }; buttonRow: { kinds: string[]; count: number }; table: { kinds: string[]; count: number }; button: { kinds: string[]; count: number }; helps: { lines: number; folded?: boolean }[]; small: number };
 const of = (size: string) => Object.entries(result).filter(([k]) => k.startsWith(`${size}|`)).map(([, v]) => v as M);
 const union = (ms: M[], k: "row" | "help" | "buttonRow" | "table" | "button") => new Set(ms.flatMap((m) => m[k].kinds)).size;
 const desk = of("desk");
@@ -117,9 +118,10 @@ const totals = {
   tableKinds: union(desk, "table"),
   buttonRowKinds: union(desk, "buttonRow"),
   helpLines: desk.reduce((n, m) => n + m.helps.length, 0),
-  helpOverTwoAt1440: desk.reduce((n, m) => n + m.helps.filter((x) => x.lines > 2).length, 0),
-  helpOverOneAt1440: desk.reduce((n, m) => n + m.helps.filter((x) => x.lines > 1).length, 0),
-  helpOverTwoAt390: phone.reduce((n, m) => n + m.helps.filter((x) => x.lines > 2).length, 0),
+  helpOverTwoAt1440: desk.reduce((n, m) => n + m.helps.filter((x) => !x.folded && x.lines > 2).length, 0),
+  helpOverOneAt1440: desk.reduce((n, m) => n + m.helps.filter((x) => !x.folded && x.lines > 1).length, 0),
+  helpOverTwoAt390: phone.reduce((n, m) => n + m.helps.filter((x) => !x.folded && x.lines > 2).length, 0),
+  foldedHelp: phone.reduce((n, m) => n + m.helps.filter((x) => x.folded).length, 0),
   under44At390: phone.reduce((n, m) => n + m.small, 0),
 };
 writeFileSync(out, JSON.stringify({ totals, sections: result }, null, 1));
