@@ -3,7 +3,7 @@
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { FindItem } from "./settings/FindItem.tsx";
-import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
+import { AzureWriteLog, LoopSendsLog, TeamsStatusLog, VmStartForm, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -19,8 +19,6 @@ import { CalendarLinks } from "./settings/CalendarLinks.tsx";
 import { PocketRecorder } from "./settings/Pocket.tsx";
 import { POCKET_WORDS } from "../plan/pocket-words.ts";
 import { shortDate } from "./labels.ts";
-import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
-import { sound } from "./sound.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -43,6 +41,7 @@ import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
 import { DisplaySection } from "./settings/sections/Display.tsx";
 import { DayWeekSection } from "./settings/sections/DayWeek.tsx";
+import { FocusSection } from "./settings/sections/Focus.tsx";
 import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
@@ -304,12 +303,7 @@ function SectionBody(p: BodyProps) {
     case "planning":
       return <DayWeekSection {...p} />;
     case "focus":
-      return (
-        <>
-          <FocusTimerForm {...p} />
-          <FocusForm {...p} />
-        </>
-      );
+      return <FocusSection {...p} />;
     case "notifications":
       return <NotificationsSection {...p} />;
     case "ahead":
@@ -446,161 +440,10 @@ function numField<V>(a: AutoSave<V>, k: NumKey & keyof V, label: string, hint: s
   );
 }
 
-/** ST-1: Focus › Focus timer (these are [plan] keys; they lived under Planning before). */
-function FocusTimerForm(p: FormProps) {
-  const a = usePlan(p, ["focusMinutes", "breakMinutes", "endSound"] as const);
-  return (
-    <Group title="Focus timer">
-      <div className="set-grid">
-        {numField(a, "focusMinutes", "Focus length (minutes)", "The default for a plain timer. A to-do suggests its size instead.", 5, 240)}
-        {numField(a, "breakMinutes", "Break length (minutes)", "Offered when a session ends. 0 for none.", 5, 60)}
-        <AutoField a={a} k="endSound" label="End sound" hint="With the notification when a session ends.">
-          <label className="set-check">
-            <input type="checkbox" checked={a.v.endSound} onChange={(e) => a.change("endSound", e.target.checked)} /> Play a sound
-          </label>
-        </AutoField>
-      </div>
-    </Group>
-  );
-}
-
 /** ST-1: Clients › Keep following after focus time ends (a [plan] key; under Planning before). */
 function FollowGraceForm(p: FormProps) {
   const a = usePlan(p, ["followGraceDays"] as const);
   return <div className="set-grid">{numField(a, "followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after their focus time ends.", 1, 90)}</div>;
-}
-
-const FOCUS_LABELS: Record<string, string> = { sound: "Default sound", volume: "Volume", fadeSeconds: "Fade", onBreak: "When a break starts", pauseMedia: "Pause music", teamsStatus: "Teams status", plainFocusStatus: "Plain focus status", playlists: "Playlists" };
-
-/** Settings > Focus (step 10): the default sound, volume, fade, what a break sounds like, media pause, playlists. */
-function FocusForm(p: FormProps) {
-  const f = p.data.focus;
-  const a = useAutoSave({
-    section: "focus",
-    initial: { sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia, teamsStatus: f.teamsStatus, plainFocusStatus: f.plainFocusStatus, playlists: f.playlists as Playlist[] },
-    payload: (v) => ({ ...v, playlists: v.playlists.filter((l) => l.name.trim() || l.url.trim()) }),
-    onSaved: p.onSavedData,
-    label: (k) => FOCUS_LABELS[k as string] ?? "Focus",
-  });
-  const v = a.v;
-  const lists = v.playlists;
-  const [media, setMedia] = useState<{ players: boolean; spotify: boolean } | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  useEffect(() => {
-    call<{ players: boolean; spotify: boolean }>("media.status", {}).then(setMedia, () => setMedia(null));
-  }, []);
-  const preview = async () => {
-    if (v.sound === "none") return;
-    await sound.unlock();
-    sound.setVolume(v.volume);
-    sound.play(v.sound, 1);
-    setPreviewing(true);
-    setTimeout(() => {
-      sound.stop(1);
-      setPreviewing(false);
-    }, 6000);
-  };
-  const badLink = (u: string) => !!u.trim() && !playlistLink(u);
-  // A playlist row saves when you leave it, and only once its link is a good one (or empty).
-  const editList = (i: number, patch: Partial<Playlist>) => a.set("playlists", lists.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const leaveList = () => {
-    if (!lists.some((l) => badLink(l.url))) a.commit("playlists");
-  };
-  return (
-    <>
-    <Group title="Teams status" intro="Set while focus runs, back to automatic after. A change you make in Teams wins.">
-      <div className="set-grid">
-        <AutoField a={a} k="teamsStatus" label="Set Teams status during focus" hint="Logged in Settings › Activity › Teams status log.">
-          <label className="set-check">
-            <input type="checkbox" checked={v.teamsStatus} onChange={(e) => a.change("teamsStatus", e.target.checked)} /> Set my status while I focus
-          </label>
-          <TeamsAccessLine />
-        </AutoField>
-        <AutoField a={a} k="plainFocusStatus" label="Plain focus sets" hint="Deep focus always sets Do not disturb.">
-          <select value={v.plainFocusStatus} disabled={!v.teamsStatus} onChange={(e) => a.change("plainFocusStatus", e.target.value as "busy" | "none")}>
-            <option value="busy">Busy</option>
-            <option value="none">Nothing: leave my status alone</option>
-          </select>
-        </AutoField>
-      </div>
-    </Group>
-    <Group title="Sound while focusing" intro="Plays only while focus runs. The focus screen can pick another.">
-      <div className="set-grid">
-        <AutoField a={a} k="sound" label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones." : "Brown is deep, pink brighter, rain a slow swell."}>
-          <span className="set-inline">
-            <select value={v.sound} onChange={(e) => a.change("sound", e.target.value as SoundKind)}>
-              {SOUNDS.map((k) => (
-                <option key={k} value={k}>{SOUND_NAMES[k]}</option>
-              ))}
-            </select>
-            <button type="button" className="mini" disabled={v.sound === "none" || previewing} onClick={() => void preview()}>
-              {previewing ? "Playing…" : "Try it"}
-            </button>
-          </span>
-        </AutoField>
-        <AutoField a={a} k="volume" label={`Volume (${v.volume})`} hint="0 to 100.">
-          <input type="range" min={0} max={100} step={5} value={v.volume}
-            onChange={(e) => { a.set("volume", Number(e.target.value)); sound.setVolume(Number(e.target.value)); }}
-            onPointerUp={() => a.commit("volume")} onKeyUp={() => a.commit("volume")} onBlur={() => a.commit("volume")} />
-        </AutoField>
-        <AutoField a={a} k="fadeSeconds" label="Fade in and out (seconds)" hint="0 to 30.">
-          <input type="number" min={0} max={30} step={1} value={v.fadeSeconds} onChange={(e) => a.set("fadeSeconds", Number(e.target.value))} {...a.text("fadeSeconds")} />
-        </AutoField>
-        <AutoField a={a} k="onBreak" label="When a break starts" hint="The sound stops either way.">
-          <select value={v.onBreak} onChange={(e) => a.change("onBreak", e.target.value as "silence" | "chime")}>
-            <option value="silence">Silence</option>
-            <option value="chime">A soft chime</option>
-          </select>
-        </AutoField>
-      </div>
-    </Group>
-    <Group title="Music players">
-      <div className="set-grid">
-        <AutoField
-          a={a}
-          k="pauseMedia"
-          label="Pause and resume music"
-          hint={
-            media === null
-              ? "Checking for music players…"
-              : media.players
-                ? "Pauses what is playing when focus ends or a break starts, and resumes it when the next focus starts."
-                : "FocusTime can't pause or resume music players here. Nothing is installed for you."
-          }
-        >
-          <label className="set-check">
-            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.players && !v.pauseMedia} onChange={(e) => a.change("pauseMedia", e.target.checked)} /> Pause music when focus ends
-          </label>
-        </AutoField>
-      </div>
-    </Group>
-    <Group title="Playlists" sid="playlists">
-      <p className="muted set-intro">
-        Keep up to {MAX_PLAYLISTS} Spotify or YouTube links. Choosing one on the focus screen opens it: {media?.spotify ? "Spotify links in the Spotify app" : "in your default browser (the Spotify app isn't installed)"}.
-      </p>
-      <ul className="set-playlists">
-        {lists.map((l, i) => (
-          <li key={i}>
-            <input value={l.name} placeholder="Name" aria-label={`Playlist ${i + 1} name`} maxLength={60} onChange={(e) => editList(i, { name: e.target.value })} onBlur={leaveList} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), leaveList())} />
-            <input value={l.url} placeholder="https://open.spotify.com/playlist/… or https://www.youtube.com/playlist?list=…" aria-label={`Playlist ${i + 1} link`} maxLength={500} aria-invalid={badLink(l.url)} onChange={(e) => editList(i, { url: e.target.value })} onBlur={leaveList} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), leaveList())} />
-            <button type="button" className="mini quiet" onClick={() => a.change("playlists", lists.filter((_, j) => j !== i))} aria-label={`Remove playlist ${l.name || i + 1}`}>
-              Remove
-            </button>
-            {badLink(l.url) && <span className="field-problem">Only Spotify or YouTube links (https)</span>}
-          </li>
-        ))}
-      </ul>
-      <span className="set-inline">
-        {lists.length < MAX_PLAYLISTS && (
-          <button type="button" className="mini" onClick={() => a.set("playlists", [...lists, { name: "", url: "" }])}>
-            Add a playlist
-          </button>
-        )}
-        <SaveMark s={a.status("playlists")} retry={() => a.commit("playlists")} />
-      </span>
-    </Group>
-    </>
-  );
 }
 
 /** Settings > Backlog (was Ahead, was Roadmap; step 17, BL-1): when a row reads Stalled or Watch, and (BH-1) when Backlog calls an item stale. Whole numbers. */

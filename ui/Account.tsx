@@ -784,14 +784,15 @@ export function usePhotosAccess(): { text: string; allow: (() => void) | null; b
   return { text, allow, busy, message };
 }
 
-export function TeamsAccessLine() {
+/** SA-2: what Focus › Teams status says about Teams access and its one action (drawn there with the parts). */
+export function useTeamsAccess(): { text: string; allow: (() => void) | null; busy: boolean; message: string | null } {
   const { signIn } = useContext(AuthCtx);
   const [v, setV] = useState<TeamsStatusView | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const check = useCallback(() => void call<TeamsStatusView>("presence.status", { check: true }).then(setV, () => setV(null)), []);
   useEffect(check, [check]);
-  if (!v) return <span className="set-hint">Checking Teams…</span>;
+  if (!v) return { text: "Checking Teams…", allow: null, busy, message };
   const words: Record<string, string> = {
     ok: "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
     consent: "FocusTime needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
@@ -799,21 +800,17 @@ export function TeamsAccessLine() {
     unavailable: "Teams can't be reached right now.",
     off: "",
   };
-  return (
-    <span className="set-teams-access">
-      <span className="set-hint">{words[v.access ?? "unavailable"]}</span>
-      {v.access === "consent" && (
-        <button type="button" className="mini primary" disabled={busy} onClick={async () => {
-          setBusy(true);
-          const m = await signIn(true, true).catch((e: unknown) => errText(e));
+  const allow = v.access === "consent"
+    ? () => {
+        setBusy(true);
+        void signIn(true, true).catch((e: unknown) => errText(e)).then((m) => {
           setMessage(m);
           setBusy(false);
           check();
-        }}>Allow Teams status</button>
-      )}
-      {message && <span className="set-problem" role="alert">{message}</span>}
-    </span>
-  );
+        });
+      }
+    : null;
+  return { text: words[v.access ?? "unavailable"] ?? "", allow, busy, message };
 }
 
 // ---- VM-2: Start without a preview, and Start my VM before my day ----
