@@ -868,7 +868,7 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
       case "show_as":
         return { ...base, hint: SHOW_AS_LABEL[(e.showAs ?? "busy") as OutlookShowAs] ?? e.showAs, next: () => ({ title: `Show "${e.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: (e.showAs ?? "busy") === v, run: () => env.editEvent({ id, showAs: v }) })) }) };
       case "cancel":
-        return invite?.writeId ? { ...base, hint: `${invite.names.join(", ")} get a cancellation; preview first`, danger: true, run: () => env.undoWrite(invite.writeId!) } : { ...base, disabled: "Cancel it from Settings › Activity (Undo)" };
+        return invite?.writeId ? { ...base, hint: `${invite.names.join(", ")} get a cancellation; preview first`, danger: true, run: () => env.undoWrite(invite.writeId!) } : { ...base, disabled: "Cancel it from Settings › Your data (Undo)" };
       case "open":
         return { ...base, run: () => env.openOutlook(x.webLink ?? outlookDay(date)) };
       default:
@@ -1400,7 +1400,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!chats.length) return { disabled: "None of your clients has a client chat you're in" };
       return { next: () => ({ title: "Start a call", items: chats.map((c) => ({ ...callItem(env, c), hint: c.live ? `live now · ${clientNameOf(env, c.clientKey)}` : clientNameOf(env, c.clientKey) })) }) };
     }
-    // NM-2: a client's chats are added, labelled, read and removed in Admin › Clients; others see them in Settings › Client chats.
+    // NM-2: a client's chats are added, labelled, read and removed in Admin › Clients; others see them in Settings › Clients.
     case "chats.add":
     case "chats.remove":
     case "chats.kind":
@@ -1675,7 +1675,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "timebox.set_outlook":
     case "write.preview":
       return { run: () => env.openPlanDay() };
-    // Write access, the log, confirm and retry live in Settings › Activity (ST-1).
+    // Write access, the log, confirm and retry live in Settings › Your data (ST-1).
     case "write.status":
     case "write.confirm":
     case "write.retry":
@@ -1686,7 +1686,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.clear_write_pat":
     case "devops.write_status":
       return { run: () => env.openSettings("devops", "devops-write") };
-    // DV-2: Refresh checks DevOps now and says what changed; Find an item lives in Settings › DevOps.
+    // DV-2: Refresh checks DevOps now and says what changed; Find an item lives in Settings › Connections › DevOps.
     case "devops.versions":
     case "devops.refresh":
       return { run: env.refresh };
@@ -1730,7 +1730,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "auth.sign_in":
     case "auth.sign_out":
       return { run: () => env.openSettings("you") };
-    // NM-2: My VM is in Settings › Accounts and calendars.
+    // NM-2: My VM is in Settings › Connections.
     case "vm.find":
     case "vm.choose":
       return { run: () => env.openSettings("connections", "vm") };
@@ -1744,10 +1744,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: env.openVm };
     case "vm.autostart_resume":
       return { run: () => env.openSettings("you") };
-    // Step 15.5: Settings > Notifications has the test button; samples are for the live check.
+    // Step 15.5: Settings > Reminders and notices has the test button; samples are for the live check.
     case "notify.test":
     case "notify.sample":
-    // TB-2: Settings > Notifications > In Teams has the switches and each kind's test.
+    // TB-2: Settings > Reminders and notices > In Teams has the switches and each kind's test.
     case "teams.status":
     case "teams.test":
       return { run: () => env.openSettings("notifications") };

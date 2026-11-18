@@ -115,7 +115,7 @@ function TuningForm(p: FormProps) {
   );
 }
 
-/** Fine tuning › Backlog (was Settings › Backlog; step 17, BH-1). Whole numbers. */
+/** Fine tuning › Backlog (was the Backlog section; step 17, BH-1). Whole numbers. */
 function BacklogFields(p: FormProps) {
   const r = p.data.roadmap;
   const a = useAutoSave({ section: "roadmap", initial: { stalledDays: r.stalledDays, watchWeeks: r.watchWeeks }, payload: (v) => v, onSaved: p.onSavedData, label: labelBy({ stalledDays: "stalled-days", watchWeeks: "watch-weeks" }) });

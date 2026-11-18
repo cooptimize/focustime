@@ -160,7 +160,7 @@ async function twinOf(plan: PlanStore, c: { clientKey: string; title: string; ty
   }
   const e = (await plan.devopsWriteLog(200)).find((x) => x.op === "create" && x.clientKey === c.clientKey && x.undoneBy === null && ((c.draftId !== null && x.draftId === c.draftId && x.status !== "failed" && x.status !== "refused") || (x.title === c.title && x.after.Type === c.type && x.parentId === c.parentId && (x.status === "pending" || x.status === "unconfirmed" || (x.status === "confirmed" && nowMs - msOf(x.updatedAt) < TWIN_MS)))));
   if (!e) return null;
-  return { message: e.status === "confirmed" ? `"${e.title}" is already in DevOps as #${e.itemId}` : `"${e.title}" may already be in DevOps. Retry it in Settings › Activity: it checks first and won't make a second one` };
+  return { message: e.status === "confirmed" ? `"${e.title}" is already in DevOps as #${e.itemId}` : `"${e.title}" may already be in DevOps. Retry it in Settings › Your data: it checks first and won't make a second one` };
 }
 type Held = {
   id: string; expiresAt: number; clientKey: string; org: string; project: string; projectName: string; op: WriteOp; itemId: number | null; parentId: number | null; title: string;
@@ -223,7 +223,7 @@ const isoDate = (v: unknown, name: string): string => {
   }
 };
 
-const NO_PAT = (client: string) => `DevOps writes aren't enabled for ${client}. Enter your own DevOps PAT in Settings › DevOps › Write access`;
+const NO_PAT = (client: string) => `DevOps writes aren't enabled for ${client}. Enter your own DevOps PAT in Settings › Connections › DevOps`;
 const SUMMARY: Record<WriteOp, string> = {
   state: "Change the state of a DevOps item", comment: "Add a comment to a DevOps item", create: "Create a DevOps item", target_date: "Set a target date in DevOps",
   undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
@@ -275,8 +275,8 @@ async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, 
   const target = t.targets.find((x) => x.clientKey === clientKey);
   if (!target || target.problem || !validOrg(target.org) || !target.project) throw new Refused(`DevOps isn't set up for ${clientName(clientKey)}`, 409);
   // The PAT was checked on one org; a client whose org changed since must be checked again.
-  if (target.org.toLowerCase() !== me.org.toLowerCase()) throw new Refused(`${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings › DevOps`, 409, "no_write_pat");
-  if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings › DevOps`, 409, "no_write_pat");
+  if (target.org.toLowerCase() !== me.org.toLowerCase()) throw new Refused(`${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings › Connections › DevOps`, 409, "no_write_pat");
+  if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings › Connections › DevOps`, 409, "no_write_pat");
   let pat: Pat;
   try {
     pat = await ctx.pats.get(clientKey);
@@ -1298,7 +1298,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if ((await plan.storyDraftWrites(draftId)).has(proposalId)) return `"${p.title}" was already sent to DevOps`;
       // A create of the same title under the same feature that may have landed (or did): never another one.
       const same = (await plan.devopsWriteLog(1000)).find((e) => e.op === "create" && e.parentId === draft.featureId && e.title === p.title && e.undoneBy === null && e.status !== "failed" && e.status !== "refused");
-      if (same) return same.status === "confirmed" ? `"${p.title}" is already in DevOps as #${same.itemId}` : `"${p.title}" may already be in DevOps. Retry it in Settings › Activity`;
+      if (same) return same.status === "confirmed" ? `"${p.title}" is already in DevOps as #${same.itemId}` : `"${p.title}" may already be in DevOps. Retry it in Settings › Your data`;
       const once = <T,>(k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
       const parent = await once(`item:${draft.featureId}`, () => writer.item(org, pat, project, draft.featureId));
       const pc = await once("pc", () => writer.processConfig(org, pat, project));
@@ -1346,7 +1346,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       if (ask.status !== "open") throw new Refused("This request is already resolved. Undo that first", 409);
       // Idempotent: a create from this request that may have landed is retried (it checks first), never made again.
       const open = (await plan.devopsWriteLog(1000)).find((e) => e.op === "create" && e.ask?.chatId === chatId && e.ask.messageId === messageId && (e.status === "pending" || e.status === "unconfirmed" || (e.status === "confirmed" && e.undoneBy === null)));
-      if (open) throw new Refused(open.status === "confirmed" ? `This request is already in DevOps as #${open.itemId}` : "A create from this request may already be in DevOps. Retry it in Settings › Activity: it checks first and won't make a second one", 409, "pending_write");
+      if (open) throw new Refused(open.status === "confirmed" ? `This request is already in DevOps as #${open.itemId}` : "A create from this request may already be in DevOps. Retry it in Settings › Your data: it checks first and won't make a second one", 409, "pending_write");
       const stored = await shared.teams.message(chatId, messageId);
       if (!stored) throw new PlanError("The message for this request isn't stored any more");
       const message = { text: stored.text, createdAt: stored.createdAt };
@@ -1409,7 +1409,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         if (k.state !== "open") return "That promise is already handled";
       }
       const open = (await plan.devopsWriteLog(1000)).find((e) => e.op === "create" && e.conv?.conversationId === c.id && (e.status === "pending" || e.status === "unconfirmed" || (e.status === "confirmed" && e.undoneBy === null)));
-      if (open) throw new Refused(open.status === "confirmed" ? `This conversation is already in DevOps as #${open.itemId}` : "A create from this conversation may already be in DevOps. Retry it in Settings › Activity: it checks first and won't make a second one", 409, "pending_write");
+      if (open) throw new Refused(open.status === "confirmed" ? `This conversation is already in DevOps as #${open.itemId}` : "A create from this conversation may already be in DevOps. Retry it in Settings › Your data: it checks first and won't make a second one", 409, "pending_write");
       const level = o.level as ItemLevel;
       if (level !== "bug" && level !== "story" && level !== "feature") throw new Invalid("level must be bug, story or feature");
       const title = str(o.title, "title", 255)!;

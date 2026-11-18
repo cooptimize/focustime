@@ -8,7 +8,7 @@ Under 600 px wide FocusTime is for checking and doing; planning a week and Ahead
 
 At the bottom: **Today**, **Week**, the round **+** (Capture: one line saved at once), **Inbox** (with the Needs you count) and **Ask** (the assistant, over the whole screen). At the top: the FocusTime mark, the **status dot** and **⋯**.
 
-- The dot is green when every source is live, amber when some data is older, red when a source needs attention. Tap it for each source, Retry or Reconnect, the VM, Refresh, and Connect or disconnect in Settings (Settings › Accounts and calendars › Sources).
+- The dot is green when every source is live, amber when some data is older, red when a source needs attention. Tap it for each source, Retry or Reconnect, the VM, Refresh, and Connect or disconnect in Settings (Settings › Connections › Sources).
 - Ahead isn't in the bar. A link to Ahead shows "Ahead is made for a bigger screen"; Open anyway shows it read only for the rest of the session.
 
 ## Today

@@ -31,7 +31,7 @@ export type WrapTarget = { pickId: number; clientKey?: string | null | undefined
  * Owned by App. `env` is what every tick site already calls (PK-1's `ticked`); `open` is the card's Wrap it up.
  * `allowed`: clients with my write PAT. `ask`: Settings' "When I tick a story" is "ask".
  */
-export function useWrapUpFlow(o: { allowed: readonly string[]; ask: boolean; onDone: () => void; notice: (text: string) => void; /** Settings › DevOps, where a client's write PAT is set. */ openSettings: () => void }) {
+export function useWrapUpFlow(o: { allowed: readonly string[]; ask: boolean; onDone: () => void; notice: (text: string) => void; /** Settings › Connections › DevOps, where a client's write PAT is set. */ openSettings: () => void }) {
   const [target, setTarget] = useState<{ t: WrapTarget; data: OfferData } | null>(null);
   const [writesOff, setWritesOff] = useState(false);
   const [undo, setUndo] = useState<UndoOffer | null>(null);
@@ -118,7 +118,7 @@ function WritesOffHint({ onClose, onSettings }: { onClose: () => void; onSetting
       <p className="do-title">
         DevOps updates are off for this client.{" "}
         <button type="button" className="link-btn" onClick={onSettings}>
-          Turn them on in Settings › DevOps
+          Turn them on in Settings › Connections › DevOps
         </button>
       </p>
       <button type="button" className="mini wrap-off-x icon-btn small" aria-label="Dismiss" onClick={onClose}>
@@ -436,7 +436,7 @@ export function WrapUpSheet({ data, onClose, onDone, notice, progressLeft = null
                   ))}
                 </ul>
                 <p className="muted wrap-as">
-                  As {preview.previews[0]!.identity.replace(/\s*<[^>]*>$/, "")}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Activity.
+                  As {preview.previews[0]!.identity.replace(/\s*<[^>]*>$/, "")}, in {offer.clientName}'s DevOps ({preview.previews[0]!.visibility}). Each only if the item hasn't changed since. Undo is in Settings › Your data.
                 </p>
               </>
             ) : (

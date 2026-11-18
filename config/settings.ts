@@ -180,7 +180,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "focus", k, val, i === 0 ? "Focus sounds and playlists (step 10). Sounds are made in the app; playlists open in Spotify or the browser." : undefined), text);
     }
     case "notify": {
-      // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
+      // Step 15.5: Settings > Reminders and notices. Written as given; parseConfig checks each value.
       only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus", "teamsMessages", "fromTestSite", "teams", "status"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {

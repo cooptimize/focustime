@@ -1,4 +1,4 @@
-// SA-3: Clients' two chat groups (was Settings › Client chats): what FocusTime looks for in chats, and the chats it reads.
+// SA-3: Clients' two chat groups (was the Client chats section): what FocusTime looks for in chats, and the chats it reads.
 import { useEffect, useState } from "react";
 import type { RequestsData } from "../../../plan/asks.ts";
 import { call } from "../../api.ts";

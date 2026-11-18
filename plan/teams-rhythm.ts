@@ -11,7 +11,7 @@ import type { IsoDate } from "../week/types.ts";
 
 export const RHYTHM_KINDS = ["brief", "checkin", "closeout"] as const;
 export type RhythmKind = (typeof RHYTHM_KINDS)[number];
-/** Everything Settings › Notifications › In Teams switches: the three rhythm cards and the nudges. */
+/** Everything Settings › Reminders and notices › In Teams switches: the three rhythm cards and the nudges. */
 export type TeamsKind = RhythmKind | "nudges" | "status" | "meetings";
 export const TEAMS_KINDS: readonly TeamsKind[] = ["brief", "checkin", "closeout", "nudges", "status", "meetings"];
 

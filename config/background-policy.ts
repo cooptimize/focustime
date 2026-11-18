@@ -48,9 +48,9 @@ export const BACKGROUND = {
   conversation_ownership_backfill: { what: "The one-time move of conversations to shared owners", touches: "none", effect: "db", kind: "job", outside: "always" },
   maintenance: { what: "Hard deletes after 30 days and ended sessions, hourly", touches: "none", effect: "db", kind: "job", outside: "always" },
   // Each person's ticks (server/ticks.ts).
-  notices: { what: "Timed reminders and notices (plan today, check-in, close out, the week, promises, the VM, sends, notes, calls)", touches: "none (the in-app list)", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Notifications: Send a test notification and the samples" },
-  web_push: { what: "Web Push to a person's devices", touches: "Web Push services", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Notifications: the test send" },
-  teams_rhythm: { what: "The Teams bot's brief, check-in, close out, nudges and client calls to review", touches: "Teams (the bot, the person's 1:1 chat)", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Notifications › In Teams: Send me a test now" },
+  notices: { what: "Timed reminders and notices (plan today, check-in, close out, the week, promises, the VM, sends, notes, calls)", touches: "none (the in-app list)", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Reminders and notices: Send a test notification and the samples" },
+  web_push: { what: "Web Push to a person's devices", touches: "Web Push services", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Reminders and notices: the test send" },
+  teams_rhythm: { what: "The Teams bot's brief, check-in, close out, nudges and client calls to review", touches: "Teams (the bot, the person's 1:1 chat)", effect: "messages", kind: "tick", outside: "opt_in", onDemand: "Settings › Reminders and notices › In Teams: Send me a test now" },
   teams_status: { what: "Teams status following the focus timer (set, refresh, clear)", touches: "Teams presence (the person's own)", effect: "writes", kind: "tick", outside: "never" },
   focus_timer: { what: "The focus timer ending on time (the person started it here)", touches: "none", effect: "db", kind: "tick", outside: "always" },
   calendar_refresh: { what: "Today's calendars reloaded every 5 minutes while a focus timer runs", touches: "Outlook, Google (the person's own, read)", effect: "reads", kind: "tick", outside: "always" },

@@ -1,4 +1,4 @@
-// PK-2: every word of Settings › Accounts and calendars › Pocket recorder, in one place (docs/design/wording.md,
+// PK-2: every word of Settings › Connections › Pocket recorder, in one place (docs/design/wording.md,
 // "PK-2 words"), the failures' too: the client (sources/pocket/client.ts) throws these, so the server and the page say
 // the same thing.
 

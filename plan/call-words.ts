@@ -93,7 +93,7 @@ export const CALL_BAR = {
   skip: "Skip",
   clear: "Clear",
   tenAtATime: (n: number) => `DevOps changes go 10 at a time: the first 10 of ${n} now, the rest stay ticked.`,
-  noPat: "Enable DevOps writes for this client in Settings › DevOps first",
+  noPat: "Enable DevOps writes for this client first, in Settings › Connections › DevOps",
   /** Ticked DevOps rows that still need a field: neither sent nor unticked. */
   waiting: (n: number) => (n === 1 ? "1 needs something on its row first" : `${n} need something on their rows first`),
 } as const;

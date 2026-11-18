@@ -750,7 +750,7 @@ export function createRhythm(d: RhythmDeps) {
       log({ op: "rhythm", kind: "closeout_reply" });
       return next.proposal?.state === "open" ? "Here's your close out to confirm, on the Close out card above." : (next.notice ?? "Open FocusTime to close out.");
     },
-    /** Settings › Notifications › In Teams › Send me a test now: one of a kind, now, past the switches and the gate. */
+    /** Settings › Reminders and notices › In Teams › Send me a test now: one of a kind, now, past the switches and the gate. */
     async test(userId: string, kind: TeamsKind): Promise<{ ok: true } | { ok: false; message: string }> {
       const to = await address(userId);
       if (!to) return { ok: false, message: "Message FocusTime in Teams once first, so it knows where to reach you." };

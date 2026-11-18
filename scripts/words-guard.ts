@@ -277,7 +277,7 @@ export const POINTERS_ALLOWED: readonly Allowed[] = [
 
 const POINTER = /\b(Settings|Admin|More|Inbox|Backlog) (?:›|>|&gt;) (?=([^›>]*))/g;
 /** A place's name in a sentence may be shortened to these, each standing for one place. */
-const SHORT: Readonly<Record<string, string>> = { Accounts: "Accounts and calendars", AI: "AI and assistant" };
+const SHORT: Readonly<Record<string, string>> = { AI: "AI and assistant", Reminders: "Reminders and notices" };
 /** The name, then anything but more of a word: "Activity's rows" and "Clients' scope" are the place's. */
 const startsWithName = (rest: string, name: string) => rest.startsWith(name) && !/^[A-Za-z0-9]|^['’](?!s\b|\s|$)/.test(rest.slice(name.length));
 

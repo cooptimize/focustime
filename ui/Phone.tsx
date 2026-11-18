@@ -146,7 +146,7 @@ export function InstallHowTo({ onClose }: { onClose: () => void }) {
             Tap <strong>Add</strong>, then open FocusTime from your home screen.
           </li>
         </ol>
-        <p className="howto-foot muted">On iPhone, notifications come only to FocusTime on the home screen. Open it from there, then Settings › Notifications › Notify this device.</p>
+        <p className="howto-foot muted">On iPhone, notifications come only to FocusTime on the home screen. Open it from there, then Settings › Reminders and notices › Notify this device.</p>
       </div>
     </div>
   );

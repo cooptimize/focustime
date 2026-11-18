@@ -6,7 +6,7 @@ import { isCompleted, isProposed, isResolved, isRemoved, isOpen } from "./proces
 
 export type WrapOutcome = "finished" | "progress";
 
-/** The person's pick in Settings › Today and Week: ask (the sheet) or always skip DevOps (a plain tick). */
+/** The person's pick in Settings › Planning: ask (the sheet) or always skip DevOps (a plain tick). */
 export type WrapSetting = "ask" | "never";
 
 /**

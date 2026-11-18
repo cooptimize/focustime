@@ -1023,7 +1023,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
               )}
             </>
           ) : (
-            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › DevOps">Enable DevOps writes</button>
+            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › Connections › DevOps">Enable DevOps writes</button>
           ))}
           {live && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(true)}>{CALL_ROW.skip}</button>}
           {p.state === "skipped" && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(false)}>{CALL_ROW.bringBack}</button>}

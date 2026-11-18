@@ -709,7 +709,7 @@ function AdminConversations() {
   );
   return (
     <div className="set-form">
-      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Client chats, but never removes the team's.</p>
+      <p className="muted">The team's phrase lists. Each person may add their own phrases on top in Settings › Clients, but never removes the team's.</p>
       <div className="set-grid">
         {list("conv.request_phrases", "Asking phrases", data.requestPhrases, "A client's message with one of these is checked for what it asks. Commas between them.")}
         {list("conv.ack_phrases", "Thanks and short replies", data.ackPhrases, "A message that is only these (and emoji) is never checked.")}
@@ -1269,7 +1269,7 @@ function AdminOrganization() {
       <SaveMark s={saver.status(o, "org.new_person")} retry={() => saveNp({})} />
       {saver.status(o, "org.feedback") && <SaveMark s={saver.status(o, "org.feedback")} retry={() => saveFb({})} />}
       <h3>By level</h3>
-      <p className="muted">Each level's defaults; a person may change any of these for themselves (Settings › Day and Week, Reset to team default). They never block anything.</p>
+      <p className="muted">Each level's defaults; a person may change any of these for themselves (Settings › Planning, Reset to team default). They never block anything.</p>
       <table className="adm-table">
         <thead>
           <tr>
@@ -1369,7 +1369,7 @@ function AdminStatus() {
         </div>
         <div className="set-field">
           <span className="set-label">Teams and DevOps permissions</span>
-          <span className="set-value">Per person: Microsoft permissions in Settings › Accounts and calendars, DevOps write access in Settings › DevOps.</span>
+          <span className="set-value">Per person: Microsoft permissions in Settings › Connections, DevOps write access in Settings › Connections › DevOps.</span>
         </div>
       </div>
       {data.jobs && data.jobs.length > 0 && (

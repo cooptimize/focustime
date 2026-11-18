@@ -11,7 +11,7 @@ import { PHONE_TEXT } from "../plan/phone-now.ts";
  * The computer's ⋯ menu's rows (ui/App.tsx; ui/places.test.ts checks every label here is drawn there). Install app
  * shows only where the browser can install.
  */
-export const MORE_ITEMS = ["About", "Admin", "Commands", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Technical docs"] as const;
+export const MORE_ITEMS = ["About", "Admin", "Commands", "Guide", "Install app", "Keyboard shortcuts", "Notifications", "Send feedback", "Settings", "Technical docs"] as const;
 
 /** PH-1: the phone's More screen's rows and Everything else's, by their words (plan/phone-now.ts). */
 const R = PHONE_TEXT.rows;

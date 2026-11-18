@@ -318,7 +318,7 @@ sequenceDiagram
 - **Confirm** sends only the preview id. A preview that expired or whose target changed is refused.
 - **Write.** DevOps patches start with a `test` on `/rev`, so a change someone made since the preview fails instead of being overwritten. Outlook updates re-read the event and refuse it unless FocusTime's marker is on it.
 - **Read back.** The target is read again and compared with what was meant before the write counts as done.
-- **Audit log.** Every attempt with when, where, before and after, and its result (`write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`, `loop_sends`), shown in Settings › Activity with Undo and Retry where they apply.
+- **Audit log.** Every attempt with when, where, before and after, and its result (`write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`, `loop_sends`), shown in Settings › Your data with Undo and Retry where they apply.
 - **Undo** is itself a previewed, confirmed and logged write, refused when the target changed after FocusTime's change.
 
 One write end to end, a DevOps state change: the button in `ui/DevOpsWrite.tsx` calls `devops.preview`, which `actions/dispatch.ts` hands to `actions/devops-write-actions.ts`; the patch (with its `test /rev`) is built by `stateOps` in `plan/devopswrite.ts`; `devops.confirm` sends it as a PATCH from `sources/devops/write.ts` with the person's write PAT (`sources/devops/pat.ts`). An Outlook write goes the same way through `actions/timebox-actions.ts` and `sources/graph/write.ts`.

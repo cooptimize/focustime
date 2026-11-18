@@ -585,7 +585,7 @@ function ReportSection({ r, color, mode, readOnly, lines, ops, sugg, suggNote, o
       </header>
       {r.window.note && <p className="muted st-sent">{r.window.note}</p>}
       {r.message && <p className="set-problem">{r.message}</p>}
-      {!r.canWrite && r.status === "ok" && <p className="muted st-note">Read only: add your DevOps write access for {r.clientName} in <a href="#/settings/devops/devops-write">Settings › DevOps</a> to add lines here.</p>}
+      {!r.canWrite && r.status === "ok" && <p className="muted st-note">Read only: add your DevOps write access for {r.clientName} in <a href="#/settings/connections/devops-write">Settings › Connections › DevOps</a> to add lines here.</p>}
       {r.needsYou.length > 0 && <NeedsGroup c={c} features={r.needsYou} lines={lines} ops={ops} sugg={sugg} note={suggNote} writable={writable} report={owner} />}
       {r.status === "ok" && !body.length && !r.needsYou.length && <p className="muted">No feature has a comment since Kat's last send yet, so Monday's report has no features so far.</p>}
       <div className="st-features">
@@ -712,7 +712,7 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, 
       {sent && <p className="muted st-sent">{sent}</p>}
       {c.status !== "ok" ? <p className="set-problem">{c.message}</p> : c.message && <p className="set-problem">{c.message}</p>}
       {draftNote && <p className="muted st-note" role="status">{draftNote}</p>}
-      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/devops/devops-write">Settings › DevOps</a> to write here.</p>}
+      {mode === "edit" && !c.canWrite && c.features.length > 0 && <p className="muted st-note">Read only: add your DevOps write access for {c.clientName} in <a href="#/settings/connections/devops-write">Settings › Connections › DevOps</a> to write here.</p>}
       {c.status === "ok" && !c.features.length && <p className="muted">Nothing planned or worked on for {c.clientName} this week.</p>}
       {needs.length > 0 && <NeedsGroup c={c} features={needs} lines={lines} ops={ops} sugg={sugg} note={suggNote} writable={c.canWrite} drafting={drafting} onDraft={(ids) => onDraft(ids)} />}
       <div className="st-features">

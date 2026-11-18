@@ -428,7 +428,7 @@ function PreviewDialog({ flow, client, onConfirm, onReplace, onReload, onImages,
           {error}
         </p>
       )}
-      <PreviewActions closeLabel={tried ? "Close" : "Not now"} onClose={onClose} busy={busy} note="Logged in Settings › Activity, with Undo.">
+      <PreviewActions closeLabel={tried ? "Close" : "Not now"} onClose={onClose} busy={busy} note="Logged in Settings › Your data, with Undo.">
         {!tried ? (
           <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
             {busy ? "Writing and checking…" : flagged ? "Save as written" : rows.length === 1 ? confirmLabel(p0) : `Make all ${rows.length} changes in DevOps`}
@@ -570,7 +570,7 @@ export function DevOpsAction({ clientKey, label, onRun, className = "mini" }: { 
   if (!env) return null;
   if (!env.can(clientKey))
     return (
-      <button type="button" className={`${className} quiet dw-enable`} onClick={() => env.enable(clientKey)} title={`DevOps is read-only for this client until you add your own write PAT in Settings › DevOps`}>
+      <button type="button" className={`${className} quiet dw-enable`} onClick={() => env.enable(clientKey)} title={`DevOps is read-only for this client until you add your own write PAT in Settings › Connections › DevOps`}>
         Enable DevOps writes
       </button>
     );

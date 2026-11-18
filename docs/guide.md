@@ -7,7 +7,7 @@ UI-5, rebuilt by GU-1. The Guide is `#/guide`: one section at a time on ST-1's p
 ## Names, controls and the ledger (GU-1)
 
 - `{icon:name}` in any Guide text (`content.ts`, a tour's `text`) draws that icon from `ui/icons.tsx`, kept on the line with the first word of the control's name. Follow it with the name: `{icon:add} Add`, `{icon:more} View options`. An unknown name, or an icon with no name after it, fails `ui/guide/app-names.test.ts`.
-- `{b:Label}` is a control's label in bold. It, and the last label of every path ("Settings › Activity"), must be a string the app shows; the same test reads the app's source for it.
+- `{b:Label}` is a control's label in bold. It, and the last label of every path ("Settings › Your data"), must be a string the app shows; the same test reads the app's source for it.
 - `ui/guide/retired.ts` is the one list of names FocusTime no longer uses: `was`, `now` (where it lives now, in the app's words, never another old name) and `match` (how the old name is recognised in text). Renamed is this list, one row per old name; the Guide's search finds every one; and a Guide sentence outside Renamed that uses one fails the test. When a step renames something: add its old name here, and fix every sentence the test then names.
 - A control written as a character (⋯ ‹ › × ✓ ✕, a lone +) fails the same test. Arrows inside a sentence ("→ Thu") and the › between path labels are text.
 - No answer is over 120 words (`MAX_ANSWER_WORDS`). Cut it, or split it into two questions. No "Where did X go?" questions: that is Renamed's job.

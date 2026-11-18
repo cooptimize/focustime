@@ -54,7 +54,7 @@ export type AppConfig = {
   collab: CollabSettings;
   /** My VM (step 15.4): the tag that marks a VM as mine. The chosen VM itself is per signed-in person, in the plan store. */
   azure: AzureSettings;
-  /** Settings > Notifications (step 15.5): a switch per kind, quiet hours. */
+  /** Settings > Reminders and notices (step 15.5): a switch per kind, quiet hours. */
   notify: NotifySettings;
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
@@ -721,7 +721,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
           if (typeof t.asks_through_focus !== "boolean") err("notify.asks_through_focus", "Must be true or false");
           else notify.asksThroughFocus = t.asks_through_focus;
         } else if (TEAMS_SWITCH[k]) {
-          // TB-2: Settings › Notifications › In Teams.
+          // TB-2: Settings › Reminders and notices › In Teams.
           if (typeof t[k] !== "boolean") err(`notify.${k}`, "Must be true or false");
           else notify.teams[TEAMS_SWITCH[k]] = t[k] as boolean;
         } else if (k === "teams_brief_at") {

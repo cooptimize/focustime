@@ -509,7 +509,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
   const lines = await store.transcript(r.o.id);
   const users = await ctx.users();
   const reviewer = canConfirm(r.series, me);
-  // MC-1e: a failed write that the preview's Retry (or Settings › Activity) later confirmed counts as done here too.
+  // MC-1e: a failed write that the preview's Retry (or Settings › Your data) later confirmed counts as done here too.
   if (reviewer && ctx.plan) {
     let changed = false;
     for (const p of ps.filter((x) => x.state === "failed" && x.result?.writeId)) {

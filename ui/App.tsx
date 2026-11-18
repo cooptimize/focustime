@@ -2734,6 +2734,8 @@ export function App() {
               { id: "docs", label: "Technical docs", run: () => openDocs() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
+              // SA-3: Settings in More too (it was only in the account menu on the computer).
+              { id: "settings", label: "Settings", hint: ",", run: () => setSettingsAt("you") },
               // ADM-1: only for FocusTime admins (the server checks every admin action again).
               ...(isAdmin ? [{ id: "admin", label: "Admin", run: () => setSettingsAt("admin-clients") }] : []),
               ...installItem,

@@ -2,7 +2,7 @@
 // throwaway demo server (e2e/harness.ts: fictional data, its own temp folder and port, the clock pinned to Monday
 // Nov 2, 2026 9:30 AM). Each run plans the demo Monday (two stories per block) so Today has picks, then
 // shoots Today, Week, a card's detail panel, Capture, Plan the week read-only and Today with a running timer, then
-// (Part B) the unread dot, ⋯ › Notifications, the iPhone install how-to, Settings › Notifications and a toast.
+// (Part B) the unread dot, ⋯ › Notifications, the iPhone install how-to, Settings › Reminders and notices and a toast.
 // Usage: node scripts/screenshot-phone.ts <outDir> [today,week,...]
 import { mkdirSync } from "node:fs";
 import { devices, type Page } from "playwright-core";
@@ -133,7 +133,7 @@ try {
         await shot("install-howto");
         await page.keyboard.press("Escape");
       }
-      // Settings › Notifications: push per device, Show details; a test lands as a toast and in the list.
+      // Settings › Reminders and notices: push per device, Show details; a test lands as a toast and in the list.
       await go("#/settings/notifications");
       await page.waitForSelector(".set-push");
       await page.locator(".set-push").scrollIntoViewIfNeeded();
