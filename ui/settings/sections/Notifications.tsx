@@ -11,7 +11,7 @@ import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from 
 import { useAutoSave } from "../autosave.tsx";
 import { Button, Buttons, Choice, Controls, Group, List, ListItem, Note, Num, Page, Result, Row, Subhead, Sub, Switch, Time, labelOf } from "../parts.tsx";
 import { NOTIFY_SHOWN } from "../registry.ts";
-import { firstLine, markOf, rest } from "./shared.ts";
+import { markOf } from "./shared.ts";
 import type { FormProps } from "./types.ts";
 
 const kindId = (k: NotifyKind) => `notify-${k.replace(/_/g, "-")}`;
@@ -214,8 +214,7 @@ function TeamsKinds(p: { v: TeamsRhythm; on: boolean; last: string; mark: Return
         <Row
           key={k}
           id={`teams-kind-${k}`}
-          help={firstLine(TEAMS_KIND_HINT[k])}
-          more={rest(TEAMS_KIND_HINT[k])}
+          help={TEAMS_KIND_HINT[k]}
           mark={markFor(k)}
           below={
             <Buttons result={test?.kind === k ? test.text : null}>

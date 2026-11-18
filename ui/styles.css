@@ -7918,3 +7918,7 @@ a.sp-btn:hover { background: var(--wash-1); }
   .set-undo-box { max-width: 100%; box-sizing: border-box; }
   .set-undo-box .link-btn { min-height: var(--tap, 44px); min-width: var(--tap, 44px); }
 }
+/* SA-2: on the phone every switch has a full tap box (the label around it takes the tap). */
+@media (max-width: 599.98px) {
+  .sp-switch-box { min-height: var(--tap, 44px); }
+}

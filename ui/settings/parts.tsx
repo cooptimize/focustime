@@ -73,13 +73,34 @@ export function Subhead({ children }: { children: ReactNode }) {
   return <h4 className="sp-subhead">{children}</h4>;
 }
 
+/**
+ * SA-2: a help line keeps to about two lines on a phone: past `max` characters it ends at a sentence (or, failing
+ * that, a clause) and the rest goes behind "More about this", word for word.
+ */
+export function splitHelp(t: string, max = 80): [string, string | null] {
+  if (t.length <= max) return [t, null];
+  const dot = t.lastIndexOf(". ", max);
+  if (dot > 20) return [t.slice(0, dot + 1), t.slice(dot + 2)];
+  for (const sep of [": ", "; ", ", "]) {
+    const j = t.lastIndexOf(sep, max);
+    if (j > 20) return [t.slice(0, j + 1), t.slice(j + 2)];
+  }
+  for (const word of [" (", " when ", " with "]) {
+    const j = t.lastIndexOf(word, max);
+    if (j > 20) return [t.slice(0, j), t.slice(j + 1)];
+  }
+  return max < 90 ? splitHelp(t, max + 12) : [t, null];
+}
+
 /** One setting. */
 export function Row({ id, help, more, mark, team, wide, below, noSid, children }: RowProps) {
   const d = defOf(id);
   const labelId = useId();
   const helpId = useId();
-  const shownHelp = help === undefined ? d.help : help;
-  const shownMore = more === undefined ? d.more : more;
+  const given = help === undefined ? d.help : help;
+  const givenMore = more === undefined ? d.more : more;
+  const [shownHelp, spill] = typeof given === "string" ? splitHelp(given) : [given, null];
+  const shownMore = spill ? (givenMore ? <>{spill} {givenMore}</> : spill) : givenMore;
   const error = mark?.s?.kind === "error" ? mark.s.messages.join("; ") : null;
   return (
     <RowContext.Provider value={{ labelId, helpId, label: d.label, unit: d.unit }}>
@@ -151,7 +172,7 @@ export function TeamDefault({ value, onReset }: { value: string; onReset: (() =>
       {onReset && (
         <>
           {" "}
-          <button type="button" className="sp-link" onClick={onReset}>
+          <button type="button" className="sp-link" aria-label="Reset to team default" onClick={onReset}>
             Reset
           </button>
         </>
