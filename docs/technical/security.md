@@ -7,6 +7,7 @@ For IT first: this is the page to read before approving FocusTime. Engineers cha
 - Only Cooptimize accounts sign in (Entra, single tenant); guests are refused.
 - FocusTime acts as the signed-in person with delegated permissions, never app-only, except its read-only Dataverse reader and the company DevOps read PAT (one per client, used for the shared DevOps store, Code and the patterns page). The Teams bot replies as itself, only in a person's 1:1 chat.
 - Every outside write is a named action with a preview, a confirm, a read back, an audit log and an undo. The few exceptions are listed below.
+- Before a new DevOps item is previewed, DevOps checks it without saving it (`validateOnly=true`, with the person's own write PAT). The request is built in one function that always adds the flag; it is logged as a check by kind and status only, never its fields or the token (RQ-1).
 - One client's data stays in that client's views, drafts, AI requests and DevOps writes; Cooptimize Internal is the one exception. Where another client's name could reach a client's eyes, FocusTime holds it back, replaces it, or flags it first (the client boundary).
 - Client code is the one thing every Cooptimizer may read across clients: read only, never kept, never sent to AI, every file opened logged for admins.
 - Secrets live in Key Vault, set by scripts, never in the UI, the image, the repo, GitHub or logs.

@@ -23,6 +23,10 @@ import { AnswersError, parseAnswers, type Answers } from "../plan/three-question
 import { callWriteWords, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
+import { splitNeeded, type NeededAnswer, type NeededFill } from "../plan/needed.ts";
+
+/** RQ-1: devops.needed's answer as a row reads it. */
+export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
 import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import { atOf, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
@@ -84,6 +88,12 @@ export type MeetingContext = {
    * through the DevOps write framework's one preview (kinds meeting_create and meeting_comment), never from here.
    */
   required?: (clientKey: string, types: readonly string[]) => Promise<{ projectName: string; types: Record<string, RequiredField[]> } | null>;
+  /**
+   * RQ-1: DevOps's own check of a new item without saving it (the write framework's devops.needed): a row's item as it
+   * would be created, and the same item with only a title (what the process requires at all). Its answer wins over
+   * `required`, which stays the first hint for when DevOps can't be asked.
+   */
+  needed?: (clientKey: string, change: Record<string, unknown>) => Promise<NeededCheck | null>;
   /** Whether I have a checked write PAT for the client. */
   canWrite: (clientKey: string) => Promise<boolean>;
   log: (r: LogRecord) => void;
@@ -644,10 +654,29 @@ async function checksOf(ctx: MeetingContext, cfg: AppConfig, clientKey: string, 
     if (model) for (const p of comments) if (p.body.kind === "comment" && !commentLevelOk(model.levels, p.body.itemType)) out[p.id] = { blocked: CALL_ROW.commentAboveStory(p.body.itemType) };
   }
   const gaps = open.filter((p) => p.body.kind === "gap");
-  if (gaps.length && ctx.required) {
-    const req = await ctx.required(clientKey, [...new Set(gaps.map((p) => (p.body.kind === "gap" ? p.body.type : "")))]).catch(() => null);
+  // RQ-1: DevOps checks each row's item without saving it; where it answers, its fields decide.
+  const asked = new Set<number>();
+  if (gaps.length && ctx.needed)
+    for (const p of gaps) {
+      const b = p.body;
+      if (b.kind !== "gap") continue;
+      const now = await ctx.needed(clientKey, { kind: "meeting_create", proposalId: p.id }).catch(() => null);
+      if (!now?.checked) continue;
+      const bare = await ctx.needed(clientKey, { kind: "new_item", type: b.type, title: "", ...(b.parentId !== null ? { parentId: b.parentId } : {}) }).catch(() => null);
+      asked.add(p.id);
+      // The row's controls; the third question is a story's only (RQ-1), so above story level it can't fill acceptance.
+      const has = new Set<NeededFill>(["title", "date", "size", "description", "assignTo", ...(now.level === "story" ? (["check"] as const) : [])]);
+      const { fill, cant } = splitNeeded(now.needed, has);
+      const all = [...(bare?.checked ? bare.needed : []), ...now.needed];
+      const required = [...new Set(all.flatMap((f) => (f.fill && f.fill !== "title" && has.has(f.fill) ? [f.fill as NonNullable<RequiredField["fill"]>] : [])))];
+      const needs = fill.flatMap((f) => (f.fill && f.fill !== "title" ? [{ fill: f.fill as NonNullable<RequiredField["fill"]>, name: f.name }] : []));
+      if (required.length || cant.length || needs.length) out[p.id] = { ...(needs.length ? { needs } : {}), ...(required.length ? { required } : {}), ...(cant.length ? { cant: CALL_ROW.cantFill(now.projectName ?? "This client", cant.map((f) => f.name), b.type) } : {}) };
+    }
+  const unasked = gaps.filter((p) => !asked.has(p.id));
+  if (unasked.length && ctx.required) {
+    const req = await ctx.required(clientKey, [...new Set(unasked.map((p) => (p.body.kind === "gap" ? p.body.type : "")))]).catch(() => null);
     if (req)
-      for (const p of gaps) {
+      for (const p of unasked) {
         const b = p.body;
         if (b.kind !== "gap") continue;
         const fields = req.types[b.type] ?? [];

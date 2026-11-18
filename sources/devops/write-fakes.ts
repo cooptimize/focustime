@@ -41,7 +41,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Scheduling.Effort", name: "Effort", type: "double" },
 ];
 
-export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: a portfolio level above Epics (Domain). */ domain?: boolean; /** QC-1: fields a type always requires, with no default (the create is refused without them). */ required?: Record<string, readonly string[]> } = {}) {
+export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string; /** TX-1: the work item types that have Remaining Work. */ remainingWork?: readonly string[]; /** BD-1: Recurring sits beside Feature at parent level (Cooptimize's internal process). */ recurring?: boolean; /** AH-1: the size field stories have (Story Points by default; Effort like a Scrum process; none). */ sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null; /** QC-1: a portfolio level above Epics (Domain). */ domain?: boolean; /** QC-1: fields a type always requires, with no default (the create is refused without them). */ required?: Record<string, readonly string[]>; /** RQ-1: fields a process rule requires on a new item of a type (not marked always required in its field list). */ rules?: Record<string, readonly string[]>; /** RQ-1: how a refusal names the failing fields: every one (RuleValidationErrors, the default) or only the first, in the message. */ ruleErrors?: "all" | "first" } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
@@ -82,7 +82,8 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     const raw = init?.body instanceof Uint8Array ? init.body : null;
     seen.push({ method, url: url.toString(), authorization: auth, contentType: headers.get("content-type"), body: raw ? { bytes: raw.length } : body });
     const path = url.pathname;
-    const f = failures.findIndex((x) => x.method === method && x.path.test(path));
+    // RQ-1: a failure is meant for the write itself, never for a check made without saving.
+    const f = url.searchParams.get("validateOnly") === "true" ? -1 : failures.findIndex((x) => x.method === method && x.path.test(path));
     const failure = f >= 0 ? failures.splice(f, 1)[0] : undefined;
     if (failure?.mode === "network") throw new TypeError("fetch failed");
     if (url.hostname !== "dev.azure.com" || !path.startsWith(`/${org}/`)) throw new TypeError("unexpected host or org");
@@ -110,7 +111,8 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
-    if (m) return json({ value: [{ referenceName: "System.Title", alwaysRequired: true }, { referenceName: "System.Description" }, ...(opts.required?.[decodeURIComponent(m[1]!)] ?? []).map((r) => ({ referenceName: r, name: r.split(".").pop(), alwaysRequired: true })), ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
+    if (m) return json({ value: [{ referenceName: "System.Title", alwaysRequired: true }, { referenceName: "System.Description" }, ...(opts.required?.[decodeURIComponent(m[1]!)] ?? []).map((r) => ({ referenceName: r, name: r.split(".").pop(), alwaysRequired: true })), // RQ-1: a field a process rule requires is on the type, but not always required (only DevOps' check says so).
+      ...(opts.rules?.[decodeURIComponent(m[1]!)] ?? []).filter((r) => !(m![1] === "Feature" || m![1] === "Epic") || !r.startsWith("Microsoft.VSTS.Scheduling.")).map((r) => ({ referenceName: r, name: r.split(".").pop() })), ...(opts.remainingWork?.includes(decodeURIComponent(m[1]!)) ? [{ referenceName: "Microsoft.VSTS.Scheduling.RemainingWork" }] : []), ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "User Story" && opts.sizeField !== null ? [{ referenceName: opts.sizeField ?? "Microsoft.VSTS.Scheduling.StoryPoints" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
     if (rest === "_apis/wit/wiql") {
       const q = String(body.query);
       const pm = q.match(/\[System\.Parent\] = (\d+)/);
@@ -121,9 +123,18 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     }
     m = rest.match(/^_apis\/wit\/workitems\/\$(.+)$/);
     if (m && method === "POST") {
-      const sent = new Set((body as { path: string }[]).map((o) => o.path.replace(/^\/fields\//, "")));
-      const missing = (opts.required?.[m[1]!] ?? []).find((r) => !sent.has(r));
-      if (missing) return json({ message: `TF401320: Rule Error for field ${missing.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.` }, 400);
+      const sent = new Set((body as { path: string; value?: unknown }[]).filter((o) => o.value !== null && o.value !== "").map((o) => o.path.replace(/^\/fields\//, "")));
+      // RQ-1: a rule's field and an always-required one are refused alike; the answer names every one, or only the first.
+      const failing = [...(opts.required?.[m[1]!] ?? []), ...(opts.rules?.[m[1]!] ?? [])].filter((r, i, a) => a.indexOf(r) === i && !sent.has(r));
+      if (failing.length) {
+        const one = (r: string) => `TF401320: Rule Error for field ${FIELDS.find((f) => f.referenceName === r)?.name ?? r.split(".").pop()}. Error code: Required, HasValues, LimitedToValues, AllowsOldValue, InvalidEmpty.`;
+        return json(opts.ruleErrors === "first" ? { message: one(failing[0]!) } : { message: one(failing[0]!), typeKey: "RuleValidationException", customProperties: { FieldReferenceName: failing[0], RuleValidationErrors: failing.map((r) => ({ fieldReferenceName: r, errorMessage: one(r) })) } }, 400);
+      }
+      // RQ-1: checked without saving: the same checks, then nothing is kept, numbered or linked.
+      if (url.searchParams.get("validateOnly") === "true") {
+        if (!STATES[m[1]!] && m[1] !== "Task") return json({ message: `TF401326: Invalid work item type ${m[1]}` }, 400);
+        return json({ id: 0, rev: 0, fields: { "System.WorkItemType": m[1] } });
+      }
       if (!STATES[m[1]!] && m[1] !== "Task") return json({ message: `TF401326: Invalid work item type ${m[1]}` }, 400);
       const it: FakeItem = { id: nextId++, rev: 1, fields: { "System.WorkItemType": m[1], "System.State": "New", "System.CreatedBy": who.email }, relations: [] };
       for (const op of body as { op: string; path: string; value: unknown }[]) {
@@ -249,6 +260,8 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
       Object.assign(it.fields, fields);
       bump(it);
     },
-    writes: () => seen.filter((s) => s.method !== "GET" && !s.url.includes("/_apis/wit/wiql")),
+    /** RQ-1: a check made without saving (validateOnly) is not a write. */
+    writes: () => seen.filter((s) => s.method !== "GET" && !s.url.includes("/_apis/wit/wiql") && !s.url.includes("validateOnly=true")),
+    checks: () => seen.filter((s) => s.url.includes("validateOnly=true")),
   };
 }

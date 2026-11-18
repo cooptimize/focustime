@@ -81,6 +81,7 @@ import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { SetupFlow } from "./Setup.tsx";
 import { AboutDialog } from "./About.tsx";
+import { SiteTag } from "./SiteTag.tsx";
 import { FeedbackDialog } from "./Feedback.tsx";
 import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { CarryProvider } from "./Carry.tsx";
@@ -2061,6 +2062,8 @@ export function App() {
             <WeekMark height={18} />
             <span className="name">FocusTime</span>
           </button>}
+          {/* EV-1: "Dev" on the dev site, "Local" in the developer loop; nothing on production. */}
+          <SiteTag />
           {data.demo && (
             <button type="button" className="demo-tag" onClick={() => setSettingsAt("data", "demo-reset")} title="Demo mode: fictional data, nothing leaves FocusTime. Settings › Your data has Reset demo">
               {phone ? "Demo" : "Demo data"}

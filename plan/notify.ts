@@ -84,6 +84,11 @@ export type QuietMode = "outside_hours" | "off";
  * production would send them. Never chat reading, meeting capture, background AI or Teams status.
  */
 export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean; fromTestSite: boolean; teams: TeamsRhythm; status: StatusTimes };
+/**
+ * NT-1: the words of Settings › Notifications › Quiet hours' Days off field, in one place (docs/design/wording.md). The
+ * stored setting is still `quietPto` ([notify] quiet_pto): a day off is PTO or a company holiday since NT-1.
+ */
+export const DAYS_OFF_WORDS = { field: "Days off", label: "Quiet on days off", hint: "PTO and company holidays from Dataverse." } as const;
 /** SR-1: kinds that start off (every other kind starts on). */
 export const OFF_BY_DEFAULT: readonly NotifyKind[] = ["status_report"];
 export const DEFAULT_NOTIFY: NotifySettings = {
@@ -158,6 +163,7 @@ export type GateFacts = {
   settings: NotifySettings;
   /** Within today's working hours (any span, an evening counts). */
   inHours: boolean;
+  /** A day off: whole-day PTO or a company holiday (NT-1; the name is from before holidays counted). */
   pto: boolean;
   /** A focus session runs (not a break, not paused counts as running too while it has time left). */
   focusRunning: boolean;
@@ -169,7 +175,7 @@ export type Gate = "send" | "hold" | "off" | "quiet";
  * Whether a notification goes out now:
  * - off: its switch is off.
  * - The timer and meeting warnings belong to a session I started: never quiet, never held.
- * - quiet: outside working hours (unless quiet hours are off) or on a PTO day. Not sent and not marked, so a reminder
+ * - quiet: outside working hours (unless quiet hours are off) or on a day off (PTO or a company holiday, NT-1). Not sent and not marked, so a reminder
  *   still due when quiet hours end goes out then.
  * - hold: during a focus session; sent when the session ends (an urgent ask goes through when Settings allows it).
  * The test notification always goes out.

@@ -8,6 +8,14 @@ import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
 
+/** RQ-1: the three questions are a story's only, and from here the New form opens on another level: choose the story type. */
+async function pickStory(f: Locator) {
+  const r = f.getByRole("radio", { name: "User Story" });
+  await r.waitFor({ timeout: 30_000 });
+  if (!(await r.isChecked())) await r.click();
+}
+
+
 let h: Harness;
 const T = 240_000;
 const VIEW = { width: 1440, height: 900 };
@@ -72,6 +80,7 @@ describe.skipIf(!CHROMIUM)("RB-3b: pages in today's report format and a one-file
     const f = form(page);
     await f.waitFor();
     await choose(page, f, "Client", "Northwind");
+    await pickStory(f);
     await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
     const box = whereBox(f);
     await box.focus();

@@ -21,7 +21,9 @@ import { UNMATCHED_DAYS } from "../plan/asks.ts";
 
 /** An urgent request is notified while its sort is this fresh (a person who signs in later isn't told of old ones). */
 const URGENT_NOTICE_HOURS = 2;
-import { vmAction, type VmStatus } from "../actions/vm-actions.ts";
+import { readAutoStart, vmAction, type VmContext, type VmStatus } from "../actions/vm-actions.ts";
+import { hasHoursOn } from "../actions/plan-actions.ts";
+import { daysOffReader, isDayOff, type DaysOffRead } from "./days-off.ts";
 import { autoStartTick, autoStartWake } from "../actions/vm-autostart.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
@@ -168,29 +170,57 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   const host = { notifications: d.notifications, media: d.media };
   const media = d.media;
   const openRoute = d.openRoute;
-  const loadConfig = liveCtx.loadConfig;
+  // NT-1: the background reads a person's settings one way, as a request does: in production with the sign-in's "me"
+  // (a hosted person's Dataverse user is kept with the sign-in, not in their settings, so the raw settings made a PTO
+  // day look like a working day). Outside production the raw settings, as before: nothing new is read there.
+  // server/ticks-identity.test.ts keeps every part on `bg`.
+  const bg = d.policy.production ? withSignedIn(liveCtx) : liveCtx;
+  const loadConfig = bg.loadConfig;
   const configOrNull = async () => {
     const r = await loadConfig();
     return r.parsed.ok ? r.parsed.config : null;
   };
   const hoursOrNull = async () => (await configOrNull())?.week.hours ?? null;
-  // PTO for a date, kept for 30 minutes (the gate asks every tick; the Dataverse read has its own cache too).
-  const ptoMemo = new Map<string, { at: number; off: boolean }>();
-  const ptoOff = async (d: string) => {
-    const hit = ptoMemo.get(d);
-    if (hit && Date.now() - hit.at < 30 * 60_000) return hit.off;
+  // NT-1: a day off is whole-day PTO or a company holiday, one answer per person per day for everything here (the gate,
+  // the reminders, the Teams rhythm, the VM notice and the VM start), from the VM start's two reads, at most once per 30
+  // minutes (server/days-off.ts). Unknown PTO: the gate sends; the reminders, Plan ahead and the status nudge wait.
+  let rawDaysOff: Promise<DaysOffRead | null> | null = null;
+  const daysOff = daysOffReader({
+    production: d.policy.production,
+    read: () =>
+      (rawDaysOff ??= vmContext(bg)
+        .then((v) => v.daysOff ?? null)
+        .catch((e: unknown) => {
+          rawDaysOff = null;
+          throw e;
+        })),
+    now: instantNow,
+    earlier: async () => (await readAutoStart(store)).ptoRead,
+    log,
+  });
+  const dayOff = async (date: string) => {
     const c = await configOrNull();
-    if (!c?.dataverse.mySystemUserId) return false;
-    const off = (await liveCtx.makeDataverse(c.dataverse, userZone(c)).pto(d, d)).items.some((e) => e.date === d);
-    ptoMemo.set(d, { at: Date.now(), off });
-    return off;
+    return c ? daysOff.day(c, date) : { pto: false, holiday: false };
   };
+  /** Whether a date is off, for a caller whose answer for PTO that can't be read is `unknown`. */
+  const offOn = (unknown: boolean) => async (date: string) => isDayOff(await dayOff(date), unknown);
+  /** The reminders wait (and try again on a later pass) while PTO can't be read. */
+  const ptoOff = offOn(true);
   const focusRunning = async () => {
     const s = (await store.getState<TimerState>(TIMER_KEY));
     return !!s && s.kind === "focus" && !s.ended && !!s.runningSince;
   };
   const todayOf = (c: AppConfig) => localToday(instantNow().toString(), userZone(c));
-  const vmCtx = () => vmContext(liveCtx);
+  /** The VM's context for the background: the shared day-off reads (the VM start's, the chip's "Next:" and its morning prompt). */
+  const vmCtx = async (): Promise<VmContext> => {
+    const v = await vmContext(bg);
+    return {
+      ...v,
+      daysOff: daysOff.read,
+      // The morning prompt's workday (working hours and not PTO), from the shared answer; unknown PTO is a workday.
+      workday: async (cfg, date) => (await hasHoursOn(store, cfg.week.hours, date)) && (await daysOff.day(cfg, date)).pto !== true,
+    };
+  };
 
   /** A button on a notification: the VM's Start (the timer's buttons go to checkTimer). D475: there is no Restore. */
   const act = async (n: Notice, key: string) => {
@@ -287,7 +317,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       const settings = c?.notify ?? DEFAULT_NOTIFY;
       if (!c) return { settings, inHours: false, pto: false, focusRunning: await focusRunning() };
       const today = todayOf(c);
-      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(userZone(c))), pto: await ptoOff(today).catch(() => false), focusRunning: await focusRunning() };
+      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(userZone(c))), pto: await offOn(false)(today).catch(() => false), focusRunning: await focusRunning() };
     },
     now: () => instantNow().toString(),
     open: (route) => openRoute(route),
@@ -400,7 +430,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
         today,
         time: zonedNow(who.zone).toPlainTime().toString().slice(0, 5),
         workStart: hoursOn(c.week.hours, today).segments[0]?.start ?? null,
-        pto: await ptoOff(today).catch(() => true),
+        pto: await offOn(true)(today).catch(() => true),
         weekHasWork: (w) => workWeeks.has(w),
         seen: (k) => seenKeys.has(k),
       });
@@ -418,7 +448,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (!c.notify.kinds.status_report) return;
     const z = zonedNow(userZone(c));
     const date = z.toPlainDate().toString();
-    const due = statusNudgeDue({ localDate: date, localTime: z.toPlainTime().toString({ smallestUnit: "minute" }), s: { ...c.notify.status, friday: true }, dayEnd: dayEndOf(c.week.hours, date), pto: await ptoOff(date).catch(() => true), without: 1 });
+    const due = statusNudgeDue({ localDate: date, localTime: z.toPlainTime().toString({ smallestUnit: "minute" }), s: { ...c.notify.status, friday: true }, dayEnd: dayEndOf(c.week.hours, date), pto: await offOn(true)(date).catch(() => true), without: 1 });
     if (!due || (await store.marked("status_notice", date)) || Date.now() - statusChecked < 30 * 60_000) return;
     statusChecked = Date.now();
     const r = await dispatch(liveCtx, { action: "status.load", input: {} });
@@ -428,7 +458,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (w.without) await send(notices.statusReport(due.occasion, nudgeLineFor(w.needsYou, w.rest), instantNow().toString(), w.needsYou > 0));
     else log({ source: "plan", op: "status_nudge", kind: "skipped" });
   };
-  // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.
+  // Once a workday from work start: follow-ups due or overdue, and expiring secrets. A day off is the gate's (Quiet on days off).
   const workdayNotices = async () => {
     const c = await configOrNull();
     if (!c) return;
@@ -459,17 +489,11 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   // VM-2: start my VM before my day, when I opted in. Production only: autoStartTick asks the gate before anything
   // else (no settings, no store, no token read outside production).
-  // VM-3: with the sign-in's "me", as every request has it. A hosted person's Dataverse user is kept with the sign-in, not
-  // in their settings, so without it PTO was "unknown" and the start left the VM off without a word (Nov 17).
-  // Built on first use, after the start's gate: nothing is read for it outside production.
-  let signed: ActionContext | null = null;
-  const signedCtx = () => (signed ??= withSignedIn(liveCtx));
-  const signedConfig = async () => {
-    const r = await signedCtx().loadConfig();
-    return r.parsed.ok ? r.parsed.config : null;
-  };
+  // VM-3: with the sign-in's "me", as every request has it (NT-1: as every part here has it now, through `bg`). A hosted
+  // person's Dataverse user is kept with the sign-in, not in their settings, so without it PTO was "unknown" and the
+  // start left the VM off without a word (Nov 17). Nothing is read for it outside production (the start's gate first).
   const autoTick = async () => {
-    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: signedConfig, vm: () => vmContext(signedCtx()), now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
+    const r = await autoStartTick({ env: liveCtx.autoStartEnv, plan: store, config: configOrNull, vm: vmCtx, now: instantNow, allows: () => notifier.allows("vm"), send: async (n) => void (await send(n)), log });
     // VM-3: the runner logs each reason itself, once a day; only these two are said here.
     if (r === "no_config" || r === "claimed_elsewhere") log({ source: "azure", op: "vm_autostart", kind: r });
   };
@@ -482,7 +506,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (!c) return;
     const teams = liveCtx.requests?.teams;
     if (teams && notifier.allows("asks")) {
-      const rc = await requestContext(liveCtx);
+      const rc = await requestContext(bg);
       const since = instantNow().subtract({ hours: URGENT_NOTICE_HOURS }).epochMilliseconds;
       const me = await rc.me();
       const urgent = (await urgentRequests(me ? teams.viewer(me) : null, await rc.followed().catch(() => null))).filter((a) => a.sort!.urgency === "now" && !!a.sortedAt && Date.parse(a.sortedAt) >= since);
@@ -548,7 +572,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const at = instantNow();
     const thisWeek = mondayOf(at.toZonedDateTimeISO(who.zone).toPlainDate().toString());
     const first = (n: string) => n.split(/\s+/)[0] || "A teammate";
-    for (const n of await teamNotices(teamCtx(liveCtx), thisWeek, at.subtract({ hours: 72 }).toString())) {
+    for (const n of await teamNotices(teamCtx(bg), thisWeek, at.subtract({ hours: 72 }).toString())) {
       if (!notifier.allows(n.kind)) continue;
       const now = at.toString();
       if (n.kind === "sent_to_you") await send(notices.sentToYou(n.send.id, n.send.to.id, first(n.send.by?.name ?? n.send.from.name), n.send.title, n.send.kind === "must", n.send.weekStart, now));
@@ -663,7 +687,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       // restart). Only while a timer exists or a status FocusTime set is still to clear. ENV-1: production only.
       teams_status: async () => {
         if ((await store.getState(TIMER_KEY)) || (await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set)
-          await presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
+          await presenceContext(bg).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
       },
     };
     for (const [part] of FAST_PARTS) if (allowed.has(part)) await runPart(part, parts2[part]);

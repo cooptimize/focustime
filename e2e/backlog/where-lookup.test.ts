@@ -14,6 +14,14 @@ import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS } from "../shots.ts";
 import { phonePage } from "../mb1-helpers.ts";
 
+/** RQ-1: the three questions are a story's only, and from here the New form opens on another level: choose the story type. */
+async function pickStory(f: Locator) {
+  const r = f.getByRole("radio", { name: "User Story" });
+  await r.waitFor({ timeout: 30_000 });
+  if (!(await r.isChecked())) await r.click();
+}
+
+
 let h: Harness;
 const T = 240_000;
 const VIEW = { width: 1440, height: 900 };
@@ -78,6 +86,7 @@ async function openNew(page: Page, client: string | null) {
   await f.waitFor();
   if (client) {
     await choose(page, f, "Client", client);
+    await pickStory(f);
     await expect.poll(() => f.getByRole("radio", { checked: true }).count(), { timeout: 30_000 }).toBe(1);
   }
   return f;
@@ -270,6 +279,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     await shot(page, "rb3-cant-read");
     // Another client: the text stays as typed, and its names are read when the box is next used.
     await choose(page, f, "Client", "Atlas");
+    await pickStory(f);
     await expect(box.inputValue()).resolves.toBe("Sales report, the margin page\n");
     await box.focus();
     await f.getByText("Atlas's code couldn't be read just now. Type the name, or try again.").waitFor({ timeout: 30_000 });
@@ -352,6 +362,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
     const f = form(page);
     await f.waitFor({ timeout: 30_000 });
     await choose(page, f, "Client", "Northwind");
+    await pickStory(f);
     await f.getByRole("button", { name: /More: details, description and size/ }).click();
     const box = whereBox(f);
     await box.tap();

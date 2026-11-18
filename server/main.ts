@@ -78,6 +78,7 @@ import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, demoAutoStart, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
+import { sitePage } from "./site-env.ts";
 import { backgroundPolicy, type BackgroundName } from "../config/background-policy.ts";
 import { backgroundStatusSource } from "./background-status.ts";
 import { execFileSync } from "node:child_process";
@@ -643,7 +644,8 @@ const entra = app.entra
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
   const { createServer } = await import("vite");
-  const vite = await createServer({ root, configFile: join(root, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa" });
+  // EV-1: the dev UI's page says which site this is, as a built page does (server/site-env.ts).
+  const vite = await createServer({ root, configFile: join(root, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa", plugins: [{ name: "ev1-site-page", transformIndexHtml: (html: string) => sitePage(html, build.env) }] });
   devMiddleware = vite.middlewares;
 }
 
@@ -655,6 +657,8 @@ const media = host.media;
 const demos = new Map<string, Promise<ActionContext>>();
 /** F1 checks (e2e): the demo's pretend feature can be missing or the wrong type, to show the not-set-up state. */
 const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" || v === "no_pat" || v === "no_access" || v === "fail" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
+/** RQ-1 checks (e2e, pictures): "target" makes the demo's Northwind process require a target date on new features and stories by a rule. */
+const demoDevopsRules = process.env.FOCUSTIME_DEMO_DEVOPS_RULES === "target" ? ("target" as const) : undefined;
 const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
 /** DM-1: the app's real AI, lent to the demo for its fictional data: only while the team's switch is on and under the app's cap. */
 const demoRealAi: DemoRealAi = {
@@ -670,7 +674,7 @@ const buildDemo = async (userId: string): Promise<ActionContext> => {
   // VM-2: a verification run (--clock) may move one demo session's clock on (demo.vm_tick); never otherwise.
   let shiftMs = 0;
   const vmTick = clockArg >= 0 ? async (minutes: number) => ((shiftMs += minutes * 60_000), demoAutoStart(ctx)) : undefined;
-  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl });
+  const ctx = createDemoContext({ now: () => instantNow().add({ milliseconds: shiftMs }).toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId), ...(vmTick ? { vmTick } : {}) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi, publicUrl: app.publicUrl, ...(demoDevopsRules ? { devopsRules: demoDevopsRules } : {}) });
   ctx.env = "demo";
   // VM-2: the demo's auto-start gate gets only what is passed in explicitly (the e2e tests: "prod" or "dev"); unset,
   // it never fires. The demo's VM is the fake Resource Manager's, never a real one.

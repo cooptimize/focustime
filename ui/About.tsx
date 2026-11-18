@@ -3,6 +3,7 @@
 // Guide and (DOC-1) the Technical docs. Nothing else. The facts come from /version (env, PR, sha, build time; no secrets, hostnames or user data).
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
+import { siteLine } from "./appenv.ts";
 
 export type Build = { env: string; pr: string; sha: string; builtAt: string | null };
 export const REPO = "https://github.com/cooptimize/focustime";
@@ -79,6 +80,8 @@ export function AboutDialog({ zone, onClose, onGuide, onDocs }: { zone: string; 
               "…"
             ))}
         </p>
+        {/* EV-1: the site in a word and its address. */}
+        {build && <p className="about-site" data-site-line>Site: {siteLine(build.env, location.host)}</p>}
         <div className="about-actions">
           <button
             type="button"
