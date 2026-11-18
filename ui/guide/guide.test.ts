@@ -20,9 +20,9 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
       expect(keysFor(card.keys, card.all), card.label).toEqual(rows.flatMap((r) => ("all" in card && card.all ? r!.keys : [r!.keys[0]!])));
     }
   });
-  it("the cards say what the keys do (the tabs are 1 to 6, capture N or C, midday check-in M, close out E; WD-2: a block opens with A, or W)", () => {
+  it("the cards say what the keys do (the tabs are 1 to 7, capture N or C, midday check-in M, close out E; WD-2: a block opens with A, or W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
-    expect(shown["Day, Week, Backlog, Status, Inbox, Code"]).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(shown["Day, Week, Backlog, Status, Inbox, Calls, Code"]).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     expect(shown["Add work (on Backlog, Grid or Gantt)"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);

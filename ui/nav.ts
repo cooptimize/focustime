@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1, RB-6: where the window is. Six tabs (Day · Week · Backlog · Status · Inbox · Code), a view switch
+// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1, RB-6, MC-3: where the window is. Seven tabs (Day · Week · Backlog · Status · Inbox · Calls · Code), a view switch
 // on Backlog (Grid · Gantt; the code name stays "ahead"), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
@@ -8,13 +8,15 @@ import type { InboxPlace } from "../plan/inbox-items.ts";
 import { tourById } from "./guide/tours.ts";
 import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
+import { LIST_FILTERS, type ListFilter } from "../plan/call-list.ts";
 
-export const TABS = ["today", "week", "ahead", "status", "inbox", "code"] as const;
+export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;
 export type Tab = (typeof TABS)[number];
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
 /** BL-1: the Ahead tab is called Backlog (its code name stays "ahead"). */
 /** RB-6: Code is a tab of its own (was a panel from More), shown only to a person who may read code. */
-export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status", code: "Code" };
+/** MC-3: Calls is a tab of its own between the Inbox and Code (was More › Calls, over Week). */
+export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status", calls: "Calls", code: "Code" };
 
 /** NV-1: Today has no modes. Its Midday check-in and Close out are flows its cards open over the same page. */
 export const TODAY_FLOWS = ["checkin", "closeout"] as const;
@@ -36,7 +38,7 @@ export type AheadPreset = "attention" | "stories";
 export const MODE_NAMES = { board: "Week", grid: "Grid", gantt: "Gantt" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today has none, so no switch). IB-1: the Inbox has views in its rail, not modes. */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [], code: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: [], ahead: ["grid", "gantt"], inbox: [], status: [], calls: [], code: [] };
 
 /** IB-4: the Inbox's three lists, in its address (#/inbox/chats, #/inbox/promises, #/inbox/captures). */
 export const INBOX_LISTS = ["chats", "promises", "captures"] as const;
@@ -87,8 +89,16 @@ export type Nav =
    * RB-1, RB-6: Code at a client, a repo and a file (#/code/<client>/<repo id>/<path>). RB-2: By kind, or a search
    * (no client: every client); RB-4: "inside" is the search set to Inside files. Absent: Files. A tab since RB-6.
    */
-  | ({ tab: "code" } & CodeAt);
+  | ({ tab: "code" } & CodeAt)
+  /** MC-3: Calls, a tab: the list by day with a call open beside it (#/calls, #/calls/<occurrence>…). */
+  | ({ tab: "calls" } & CallsAt);
 
+/**
+ * MC-3: where Calls is. `occurrence` is the call open beside the list (null: none named; Calls opens the newest that
+ * needs me). Its view, line, filter and proposal are MC-1d's and MC-1e's. `show` and `client` are the list's filter
+ * and client chip (absent: the ones remembered in this browser). Nothing of a call but its id is ever in an address.
+ */
+export type CallsAt = { occurrence: number | null; view?: "transcript" | "upload"; line?: number; filter?: "gap" | "commitment" | "comment"; proposal?: number; show?: ListFilter; client?: string };
 /** RB-6: where Code is: a client, a repo, a path, and the view (Files when absent). */
 export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" };
 
@@ -96,9 +106,8 @@ export type CodeAt = { clientKey: string | null; repoId: string | null; path: st
 export type LateFilter = { client: string | null };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
-/** MC-1: a call's review over the place (`occurrence` null: my calls, the ones I review or attend). */
 /** UI-5: a Show me tour running over the real screen in `nav` (only highlights and explains; #/guide/tour/<id>). */
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "meeting"; occurrence: number | null; view?: "transcript" | "upload"; line?: number; /** MC-1e: the Proposals filter, and a proposal to bring into view. */ filter?: "gap" | "commitment" | "comment"; proposal?: number } | { kind: "item"; clientKey: string; itemId: number } | null;
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string; setting?: string | null } | { kind: "guide"; chapter: string | null } | { kind: "docs"; page: string | null; heading: string | null } | { kind: "tour"; id: string } | { kind: "item"; clientKey: string; itemId: number } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -139,11 +148,13 @@ export const navOf = {
   promise: (id: number): Nav => ({ tab: "inbox", view: "promises", item: `c${id}` }),
   /** RB-6: the Code tab, on a client (null: its front page), a repo and a file, in a view. */
   code: (clientKey: string | null = null, repoId: string | null = null, path: string | null = null, view?: CodeAt["view"]): Nav => ({ tab: "code", clientKey, repoId, path, ...(view ? { view } : {}) }),
+  /** MC-3: the Calls tab, with a call open beside the list (null: none named), at its view, line, filter or proposal. */
+  calls: (occurrence: number | null = null, at: Omit<CallsAt, "occurrence"> = {}): Nav => ({ tab: "calls", occurrence, ...Object.fromEntries(Object.entries(at).filter(([, v]) => v !== undefined && v !== null)) }),
 };
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
 /** The mode a tab opens in. */
-export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : tab === "code" ? navOf.code() : navOf.inbox());
+export const defaultNav = (tab: Tab): Nav => (tab === "today" ? navOf.today() : tab === "week" ? navOf.week() : tab === "ahead" ? navOf.ahead() : tab === "status" ? navOf.status() : tab === "code" ? navOf.code() : tab === "calls" ? navOf.calls() : navOf.inbox());
 /** WD-1: the block panel's block on Week (null: closed). */
 export const addOf = (n: Nav): AddAt | null => (n.tab === "week" && n.mode === "board" ? n.add : null);
 
@@ -177,9 +188,9 @@ const mondayOf = (d: IsoDate): IsoDate => {
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
 
-/** 1–6 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; RB-6: 6 is Code; T stays Day, L the Inbox). */
+/** 1–7 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; MC-3: 6 is Calls, 7 Code; T stays Day, L the Inbox). */
 export function tabForKey(key: string): Tab | null {
-  const i = ["1", "2", "3", "4", "5", "6"].indexOf(key);
+  const i = ["1", "2", "3", "4", "5", "6", "7"].indexOf(key);
   return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;
 }
 
@@ -191,14 +202,14 @@ export function locScreens(loc: Loc): ScreenName[] {
   const out: ScreenName[] = [];
   const n = loc.nav;
   if (n.tab === "ahead" || n.tab === "status" || n.tab === "inbox" || n.tab === "code") out.push(n.tab);
+  // MC-1e, MC-3: Calls (the list and a call's page) loads when first opened.
+  else if (n.tab === "calls") out.push("meetings");
   else if (n.tab === "today" && n.flow) out.push(n.flow);
   const o = loc.overlay;
   // A tour is not here: its screen is drawn at once and the tour's card arrives over it (App asks for its file), so
   // the screen's own loading has the same head start on the tour's first step as it always had.
   if (o?.kind === "settings" || o?.kind === "focus" || o?.kind === "guide" || o?.kind === "docs") out.push(o.kind);
-  // MC-1e: a call's page loads when first opened.
-  if (o?.kind === "meeting") out.push("meetings");
-  else if (o?.kind === "item") out.push("card");
+  if (o?.kind === "item") out.push("card");
   return out;
 }
 
@@ -244,15 +255,6 @@ export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "tour") return `#/guide/tour/${l.overlay.id}`;
   // DOC-1: the Technical docs, at a page and a heading.
   if (l.overlay?.kind === "docs") return ["#/docs", l.overlay.page, l.overlay.page ? l.overlay.heading : null].filter(Boolean).join("/");
-  if (l.overlay?.kind === "meeting") {
-    const o = l.overlay;
-    if (!o.occurrence) return "#/meetings";
-    // MC-1d: a call's Transcript view (and a line in it) or its upload, each an address of its own.
-    // MC-1e: the Proposals filter (#/meetings/<id>/new, /promises, /comments) and a proposal in view (/proposal/<id>).
-    if (!o.view && o.proposal) return `#/meetings/${o.occurrence}/proposal/${o.proposal}`;
-    if (!o.view && o.filter) return `#/meetings/${o.occurrence}/${FILTER_WORD[o.filter]}`;
-    return `#/meetings/${o.occurrence}${o.view ? `/${o.view}` : ""}${o.view === "transcript" && o.line ? `/${o.line}` : ""}`;
-  }
   // FN-1: a story card, over the place it opened from.
   if (l.overlay?.kind === "item") return `#/item/${encodeURIComponent(l.overlay.clientKey)}/${l.overlay.itemId}`;
   const n = l.nav;
@@ -268,6 +270,7 @@ export function hashOf(l: Loc): string {
   if (n.tab === "ahead") return (n.mode === "gantt" ? "#/backlog/gantt" : n.item ? `#/backlog/item/${n.item}` : "#/backlog") + (aheadQuery ? `?${aheadQuery}` : "");
   // RB-1: Code at a client, a repo and a file: #/code/<client>/<repo id>/<path, one encoded part>.
   if (n.tab === "code") return codeHash(n);
+  if (n.tab === "calls") return callsHash(n);
   if (n.item) return `#/inbox/item/${n.item}${n.loop ? "/loop" : ""}`;
   if (n.late) return n.late.client ? `#/inbox/promises/late/${encodeURIComponent(n.late.client)}` : "#/inbox/promises/late";
   return n.view ? `#/inbox/${n.view}` : "#/inbox";
@@ -311,7 +314,67 @@ export const queryOf = (hash: string) => (hash.includes("?") ? hash.slice(hash.i
  * on Code's front page.
  */
 export function placeToKeep(l: Loc): string {
+  if (l.nav.tab === "calls") return callsHash({ occurrence: null, ...(l.nav.show ? { show: l.nav.show } : {}), ...(l.nav.client !== undefined ? { client: l.nav.client } : {}) });
   return l.nav.tab === "code" ? hashOf({ nav: navOf.code(), overlay: null }) : hashOf(l);
+}
+
+/**
+ * MC-3: Calls' address. #/calls, and a call beside the list: #/calls/<occurrence>, its Transcript view and a line in it
+ * (/transcript/<line>), its upload (/upload), the Proposals filter (/new, /promises, /comments) and a proposal in view
+ * (/proposal/<id>), as MC-1d and MC-1e had them under #/meetings. The list's filter and client chip are its query
+ * (?show=review&client=<key>; client "" is No client yet). Never a call's name, link, words or key: only its id.
+ */
+export function callsHash(o: CallsAt): string {
+  const q = new URLSearchParams();
+  if (o.show && o.show !== "all") q.set("show", o.show);
+  if (o.client !== undefined) q.set("client", o.client);
+  const query = q.size ? `?${q}` : "";
+  if (!o.occurrence) return `#/calls${query}`;
+  if (!o.view && o.proposal) return `#/calls/${o.occurrence}/proposal/${o.proposal}${query}`;
+  if (!o.view && o.filter) return `#/calls/${o.occurrence}/${FILTER_WORD[o.filter]}${query}`;
+  return `#/calls/${o.occurrence}${o.view ? `/${o.view}` : ""}${o.view === "transcript" && o.line ? `/${o.line}` : ""}${query}`;
+}
+
+/**
+ * MC-3: #/calls… and every #/meetings… address before it (MC-1, MC-1d, MC-1e, MC-2: in notices, the Teams bot's notes,
+ * stored routes and bookmarks), as the same call, view, line, filter and proposal on the Calls tab. Null for anything
+ * else.
+ */
+function parseCalls(full: string): Loc | null {
+  if (full.length > 300) return null;
+  const qi = full.indexOf("?");
+  const hash = qi < 0 ? full : full.slice(0, qi);
+  const parts = hash.replace(/^#\/?(calls|meetings)\/?/, "").split("/").filter((p) => p !== "");
+  const [a, b, c, ...rest] = parts;
+  if (rest.length) return null;
+  const list: Omit<CallsAt, "occurrence"> = {};
+  if (qi >= 0) {
+    const q = new URLSearchParams(full.slice(qi + 1));
+    for (const k of q.keys()) if (k !== "show" && k !== "client") return null;
+    const show = q.get("show");
+    if (show !== null) {
+      if (!(LIST_FILTERS as readonly string[]).includes(show)) return null;
+      if (show !== "all") list.show = show as ListFilter;
+    }
+    const client = q.get("client");
+    if (client !== null) {
+      if (client !== "" && !CLIENT_KEY.test(client)) return null;
+      list.client = client;
+    }
+  }
+  const at = (occurrence: number | null, more: Omit<CallsAt, "occurrence" | "show" | "client"> = {}): Loc => ({ nav: navOf.calls(occurrence, { ...more, ...list }), overlay: null });
+  if (a === undefined) return at(null);
+  if (!ID.test(a)) return null;
+  const occurrence = Number(a);
+  if (b === undefined) return at(occurrence);
+  if (b === "upload") return c !== undefined ? null : at(occurrence, { view: "upload" });
+  // MC-1e: the Proposals filter and a proposal in view.
+  const filter = (Object.keys(FILTER_WORD) as (keyof typeof FILTER_WORD)[]).find((k) => FILTER_WORD[k] === b);
+  if (filter) return c !== undefined ? null : at(occurrence, { filter });
+  if (b === "proposal") return c === undefined || !ID.test(c) ? null : at(occurrence, { proposal: Number(c) });
+  if (b !== "transcript") return null;
+  if (c === undefined) return at(occurrence, { view: "transcript" });
+  return ID.test(c) ? at(occurrence, { view: "transcript", line: Number(c) }) : null;
 }
 
 export function codeHash(o: CodeAt): string {
@@ -356,6 +419,7 @@ function parseCode(hash: string): Loc | null {
 export function parseHash(full: string): Loc | null {
   if (typeof full !== "string") return null;
   if (/^#\/?code(\/|$)/.test(full)) return full.includes("?") ? null : parseCode(full);
+  if (/^#\/?(calls|meetings)(\/|\?|$)/.test(full)) return parseCalls(full);
   // AH-6: only Ahead's addresses carry a query (its filters and view, #/ahead/gantt?c=northwind&l=epic).
   const qi = full.indexOf("?");
   const hash = qi < 0 ? full : full.slice(0, qi);
@@ -421,24 +485,6 @@ export function parseHash(full: string): Loc | null {
       if (a !== DOC_CONTENTS && !DOC_PAGES.some((p) => p.id === a)) return null;
       if (b === undefined) return docs(a, null);
       return a !== DOC_CONTENTS && DOC_ANCHOR.test(b) ? docs(a, b) : null;
-    }
-    // MC-1: #/meetings (my calls) and #/meetings/<occurrence> (Update <client>'s plan from one call), over Week.
-    // MC-1d: #/meetings/<occurrence>/transcript[/<line>] (the Transcript view, at a line) and /upload.
-    case "meetings": {
-      if (a === undefined) return b !== undefined ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence: null } };
-      if (!ID.test(a)) return null;
-      const occurrence = Number(a);
-      if (b === undefined) return { nav: navOf.week(), overlay: { kind: "meeting", occurrence } };
-      if (b === "upload") return c !== undefined || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "upload" } };
-      // MC-1e: the Proposals filter and a proposal in view.
-      const filter = (Object.keys(FILTER_WORD) as (keyof typeof FILTER_WORD)[]).find((k) => FILTER_WORD[k] === b);
-      if (filter) return c !== undefined || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, filter } };
-      if (b === "proposal") return c === undefined || !ID.test(c) || rest.length ? null : { nav: navOf.week(), overlay: { kind: "meeting", occurrence, proposal: Number(c) } };
-      if (b !== "transcript") return null;
-      const line = c;
-      if (rest.length) return null;
-      if (line === undefined) return { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "transcript" } };
-      return ID.test(line) ? { nav: navOf.week(), overlay: { kind: "meeting", occurrence, view: "transcript", line: Number(line) } } : null;
     }
     // WP-1's #/patterns (the DevOps patterns page, removed in RM-1): Today, like it opened for anyone without the switch.
     case "patterns":
@@ -562,7 +608,8 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "planweek": return plain(navOf.weekAdd(r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
-    case "meeting": return { loc: { nav: navOf.week(), overlay: { kind: "meeting", occurrence: r.id } }, vmMenu: false };
+    // MC-3: one call's review, on the Calls tab.
+    case "meeting": return plain(navOf.calls(r.id));
   }
 }
 
@@ -595,7 +642,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "closeout": return { nav: navOf.today("closeout"), overlay: null };
     case "focus": return { nav: null, overlay: { kind: "focus" } };
     case "settings": return { nav: null, overlay: { kind: "settings", section: "you" } };
-    case "meetings": return { nav: null, overlay: { kind: "meeting", occurrence: null } };
+    case "meetings": return { nav: navOf.calls(), overlay: null };
   }
 }
 
@@ -626,7 +673,8 @@ export function viewName(loc: Loc): string {
     : n.tab === "week" ? (n.add ? `${TAB_NAMES.week} › Block` : TAB_NAMES.week)
     : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.tab === "code" ? TAB_NAMES.code
+    : n.tab === "calls" ? TAB_NAMES.calls
     : n.view ? `${TAB_NAMES.inbox} › ${INBOX_LIST_NAMES[n.view]}` : TAB_NAMES.inbox;
   const o = loc.overlay;
-  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "meeting" ? "Calls" : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : o.kind === "item" ? `${place} (story card #${o.itemId})` : o.kind === "tour" ? `${place} (Guide tour: ${o.id})` : o.kind === "docs" ? `Technical docs${o.page ? `: ${docPageLabel(o.page)}` : ""}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
 }

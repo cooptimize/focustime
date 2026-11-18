@@ -8,9 +8,10 @@ import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav,
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
-  it("WD-1, RB-6: six tabs in order, Today named Day, Status and Code tabs of their own; Week, Day, Inbox, Status and Code have no modes", () => {
-    expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox", "code"]);
-    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Code"]);
+  it("WD-1, RB-6, MC-3: seven tabs in order, Today named Day, Status, Calls and Code tabs of their own; Week, Day, Inbox, Status, Calls and Code have no modes", () => {
+    expect(TABS).toEqual(["today", "week", "ahead", "status", "inbox", "calls", "code"]);
+    expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]);
+    expect(MODES.calls).toEqual([]);
     expect(MODES.code).toEqual([]);
     expect(MODES.today).toEqual([]);
     expect(MODES.week).toEqual([]);
@@ -26,9 +27,9 @@ describe("tabs and modes", () => {
     expect(routeLoc({ view: "team" }).loc.nav).toEqual(navOf.week());
   });
 
-  it("keys 1–6 pick the tabs in order (T is Day, L the Inbox, 6 Code); other keys none", () => {
-    expect(["1", "2", "3", "4", "5", "6", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "status", "inbox", "code", "today", "today", "inbox", "inbox"]);
-    expect(tabForKey("7")).toBeNull();
+  it("keys 1–7 pick the tabs in order (T is Day, L the Inbox, 6 Calls, 7 Code); other keys none", () => {
+    expect(["1", "2", "3", "4", "5", "6", "7", "t", "T", "l", "L"].map(tabForKey)).toEqual(["today", "week", "ahead", "status", "inbox", "calls", "code", "today", "today", "inbox", "inbox"]);
+    expect(tabForKey("8")).toBeNull();
     expect(tabForKey("p")).toBeNull();
   });
 

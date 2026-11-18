@@ -7721,3 +7721,87 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* RQ-1: a held create looks held (the reason sits beside it). */
 .wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
 .bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }
+
+/* ---- MC-3: Calls is a tab, one list by day, the call beside it -------------------------------------------------- */
+/* The top bar with seven tabs (Calls for everyone, Code for the people who may read code). It never wraps and a tab's
+   name is never hidden or cut. RB-6's order of giving way goes further: the VM's state in one word up to 1500 px, then
+   its dot alone up to 1400 px (1800 px at Larger text; its state stays for screen readers, in its title and its menu).
+   The words on Focus, Capture and Ask go as RB-6 has them (Large up to 1500 px, Larger up to 1800 px), and the tabs'
+   icons never had to: measured at 1280, 1366 and 1440, at each text size, with and without the Dev mark
+   (e2e/week/calls-tab.test.ts; docs/decisions.md, MC-3). A person without Code keeps RB-6's six-tab bar. */
+.app.medium > .topbar.seven-tabs { flex-wrap: nowrap; }
+/* Six tabs (no Code) with Calls' count: RB-6's one-word VM goes on to 1400 px (it squeezed the bar at 1366 before). */
+@media (max-width: 1400px) {
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.six-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+@media (max-width: 1500px) {
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) :is(.vm-word, .vm-label) { display: none; }
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { display: inline; }
+}
+@media (max-width: 1400px) {
+  .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 1800px) {
+  :root[data-text-size="larger"] .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* The Calls tab: the list by day on the left, the open call beside it; each scrolls on its own. */
+.app > .calls-page { flex: 1; min-height: 0; }
+.calls-page { display: grid; grid-template-columns: clamp(340px, 30vw, 460px) minmax(0, 1fr); min-height: 0; min-width: 0; background: var(--bg); color: var(--text); }
+.calls-page.folded, .calls-page.two-step { grid-template-columns: minmax(0, 1fr); }
+.calls-list { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--border); }
+.calls-page.two-step .calls-list { border-right: 0; }
+.calls-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 16px 8px 24px; }
+.calls-title { display: grid; gap: 2px; min-width: 0; }
+.calls-title h1 { margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.calls-title .muted { font-size: var(--fs-2); }
+.calls-head-actions { display: inline-flex; gap: 6px; flex: none; }
+.calls-filters { flex: none; align-self: flex-start; flex-wrap: wrap; margin: 0 16px 8px 24px; }
+.calls-filters .seg-count { margin-left: 4px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.calls-filters .seg-btn.on .seg-count { color: inherit; }
+.calls-chips { flex: none; padding: 0 16px 8px 24px; }
+.calls-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 24px 24px; }
+.calls-day-head { position: sticky; top: 0; z-index: 2; margin: 0; padding: 8px 0 4px; background: var(--bg); font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.calls-rows { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.calls-row { width: 100%; display: grid; gap: 2px; padding: 6px 10px; border: 1px solid transparent; border-left: 3px solid var(--c, var(--border)); border-radius: 8px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.calls-row:hover { background: var(--wash-1); }
+.calls-row.open { background: var(--surface); border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
+.calls-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.calls-row-one { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.calls-time { flex: none; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.calls-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.calls-state { flex: 0 1 auto; max-width: 48%; color: var(--text-muted); font-size: var(--fs-2); text-align: right; }
+.calls-state.needs { color: var(--text); font-weight: 600; }
+.calls-row-two { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px; min-width: 0; color: var(--text-muted); font-size: var(--fs-2); }
+.calls-row-two .swatch { background: var(--c, var(--border-strong)); }
+.calls-row-two .swatch.none { background: none; border: 1px dashed var(--border-strong); }
+.calls-meta { min-width: 0; overflow-wrap: anywhere; }
+.calls-weekly { grid-column: 2; display: inline-flex; align-items: center; gap: 4px; }
+.calls-note { margin: 8px 0; font-size: var(--fs-2); }
+.calls-privacy { margin: 12px 0 0; font-size: var(--fs-1); }
+.calls-fold { margin-top: 8px; }
+.calls-fold > .link-btn { display: inline-flex; align-items: center; gap: 4px; }
+.calls-fold-body { display: grid; gap: 6px; padding: 4px 0; }
+.calls-fold-body > p { margin: 0; font-size: var(--fs-2); }
+.calls-series { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.calls-series li { display: grid; gap: 2px; padding: 6px 10px; border-left: 3px solid var(--c, var(--border-strong)); border-radius: 8px; background: var(--surface); font-size: var(--fs-2); }
+.calls-series-name { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: var(--fs-3); font-weight: 500; }
+.calls-series-name .swatch { background: var(--c, var(--border-strong)); }
+.calls-page > .calls-beside { min-height: 0; min-width: 0; }
+.calls-beside-pad { display: grid; gap: 12px; align-content: start; }
+.calls-empty p { margin: 24px 0 0; max-width: 40em; color: var(--text-muted); }
+.calls-empty .mini { justify-self: start; }
+.calls-show-list { justify-self: start; display: inline-flex; align-items: center; gap: 4px; }
+.calls-page .mtg-setup { max-width: 760px; }
+/* The phone: the page scrolls (under its sticky top bar), so the day's heading sticks under the bar; rows and controls
+   are a finger's size. */
+.app.phone > .calls-page { display: block; }
+.app.phone .calls-list { min-height: auto; }
+.app.phone .calls-scroll { overflow: visible; padding: 0 16px 24px; }
+.app.phone .calls-head { padding: 12px 16px 8px; }
+.app.phone .calls-filters { margin: 0 16px 8px; }
+.app.phone .calls-chips { padding: 0 16px 8px; }
+.app.phone .calls-day-head { top: var(--mtg-top, 0px); }
+.app.phone .calls-row { min-height: var(--tap, 44px); }
+.app.phone .calls-page :is(.seg-btn, .ib4-chip, .mini, .link-btn) { min-height: var(--tap, 44px); }

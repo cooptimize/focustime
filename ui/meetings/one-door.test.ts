@@ -24,17 +24,18 @@ describe("one door into DevOps (MC-1e)", () => {
   });
 });
 
-describe("the call's address (MC-1e)", () => {
-  it("carries the filter and a proposal to bring into view", () => {
-    for (const [hash, overlay] of [
-      ["#/meetings/7/new", { kind: "meeting", occurrence: 7, filter: "gap" }],
-      ["#/meetings/7/promises", { kind: "meeting", occurrence: 7, filter: "commitment" }],
-      ["#/meetings/7/comments", { kind: "meeting", occurrence: 7, filter: "comment" }],
-      ["#/meetings/7/proposal/31", { kind: "meeting", occurrence: 7, proposal: 31 }],
+describe("the call's address (MC-1e, MC-3)", () => {
+  it("carries the filter and a proposal to bring into view; the #/meetings address before MC-3 lands on the same", () => {
+    for (const [hash, nav] of [
+      ["#/calls/7/new", { tab: "calls", occurrence: 7, filter: "gap" }],
+      ["#/calls/7/promises", { tab: "calls", occurrence: 7, filter: "commitment" }],
+      ["#/calls/7/comments", { tab: "calls", occurrence: 7, filter: "comment" }],
+      ["#/calls/7/proposal/31", { tab: "calls", occurrence: 7, proposal: 31 }],
     ] as const) {
       const loc = parseHash(hash);
-      expect(loc?.overlay, hash).toEqual(overlay);
+      expect(loc?.nav, hash).toEqual(nav);
       expect(hashOf(loc!), hash).toBe(hash);
+      expect(hashOf(parseHash(hash.replace("#/calls", "#/meetings"))!), hash).toBe(hash);
     }
     expect(parseHash("#/meetings/7/proposal/x")).toBeNull();
     expect(parseHash("#/meetings/7/new/2")).toBeNull();

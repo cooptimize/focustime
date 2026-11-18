@@ -319,9 +319,10 @@ export function PhoneMore({ statusNeeds, calls, code, health, unread, focusing, 
   const to = (where: MoreWhere) => (e: React.MouseEvent<HTMLButtonElement>) => go(where, at(e));
   const vmText = vm.status?.vm ? (vm.status.text ?? vm.status.label ?? null) : W.rows.vmNone;
   const rows: MoreRow[] = [
+    // MC-3: Calls first (a tab on the computer; the phone's bar is unchanged), with how many need me.
+    { id: "calls", icon: "calls", label: W.rows.calls, line: calls > 0 ? W.rows.callsLine(calls) : null, run: to("calls") },
     { id: "backlog", icon: "backlog", label: W.rows.backlog, run: to("backlog") },
     { id: "status", icon: "status", label: W.rows.status, line: statusNeeds > 0 ? W.rows.statusLine(statusNeeds) : null, run: to("status") },
-    { id: "calls", icon: "meeting", label: W.rows.calls, line: calls > 0 ? W.rows.callsLine(calls) : null, run: to("calls") },
     ...(code ? [{ id: "code", icon: "code" as const, label: W.rows.code, run: to("code") }] : []),
     // The VM's own menu (Start, Allow Azure access, Refresh, Choose), or Settings › You to find one.
     { id: "vm", icon: "vm", label: W.rows.vm, line: vmText, run: (e) => (vm.status?.vm ? (onClose(), vm.openMenu(at(e))) : go("vm", at(e))) },

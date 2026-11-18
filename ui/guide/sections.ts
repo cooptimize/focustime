@@ -15,6 +15,8 @@ export const SECTIONS = [
   { id: "backlog", name: "Backlog", group: "tabs" },
   { id: "status", name: "Status", group: "tabs" },
   { id: "inbox", name: "Inbox", group: "tabs" },
+  // MC-3: Calls is a tab, so its section moved from Everything else to the tabs, between the Inbox and Code.
+  { id: "calls", name: "Calls", group: "tabs" },
   // RB-6: Code is a tab (for people who may read code), so its section moved from Everything else to the tabs.
   { id: "code", name: "Code", group: "tabs" },
   { id: "writing", name: "Writing work a builder can use", group: "more" },
@@ -22,7 +24,6 @@ export const SECTIONS = [
   { id: "assistant", name: "The assistant", group: "more" },
   { id: "ask", name: "Ask", group: "more" },
   { id: "teams", name: "FocusTime in Teams", group: "more" },
-  { id: "calls", name: "Calls", group: "more" },
   { id: "settings", name: "Settings, phone and keys", group: "more" },
   { id: "renamed", name: "Renamed", group: "more" },
 ] as const;
@@ -33,7 +34,7 @@ export type SectionId = (typeof SECTIONS)[number]["id"];
  * GU-1, RB-6: the tab sections, in the app's own tab order, with the tab each stands for (ui/nav.ts `TABS`), so the rail
  * can draw the tab's icon and a test can check every tab has a section.
  */
-export const TAB_SECTIONS: Readonly<Record<string, "today" | "week" | "ahead" | "status" | "inbox" | "code">> = { day: "today", week: "week", backlog: "ahead", status: "status", inbox: "inbox", code: "code" };
+export const TAB_SECTIONS: Readonly<Record<string, "today" | "week" | "ahead" | "status" | "inbox" | "calls" | "code">> = { day: "today", week: "week", backlog: "ahead", status: "status", inbox: "inbox", calls: "calls", code: "code" };
 
 /** Older addresses, from bookmarks and old links, to where that content lives now (G1's chapters; GU-1: Today is Day; NM-1: Ahead is Backlog). */
 export const OLD_SECTIONS: Readonly<Record<string, SectionId>> = {
