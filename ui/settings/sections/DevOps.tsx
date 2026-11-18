@@ -53,7 +53,7 @@ export function DevOpsCard(p: BodyProps) {
             <Note>No DevOps yet. It comes from each followed client's record in Dataverse.</Note>
           )}
         </Row>
-      <Fold label="More">
+      <Fold label="Write access and Find an item">
         <Subhead sid="devops-write">DevOps write access</Subhead>
         <Note>Your own PAT per client, with Work Items (Read & write). FocusTime checks it is yours, keeps it sealed and never shows it again.</Note>
         {withDevOps.length === 0 ? <Note>No client has DevOps set up in Dataverse.</Note> : withDevOps.map((c) => <WriteAccess key={c.key} client={c} onDone={p.reload} />)}

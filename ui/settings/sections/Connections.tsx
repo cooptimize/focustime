@@ -75,7 +75,7 @@ export function ConnectionsSection(p: BodyProps) {
           </>
         }
       />
-      <OutlookChanges go={p.go} />
+      <OutlookChanges go={p.go} putOn={!!p.data.timebox?.outlookDefault} />
       <Card
         id="google"
         name="Google"
@@ -143,7 +143,7 @@ function SourceList(p: BodyProps & { only: readonly SourceSummary["source"][] })
 }
 
 /** Connections › Outlook calendar changes (step 12): whether FocusTime may change its own Outlook events. */
-function OutlookChanges({ go }: { go: (section: string, setting?: string | null) => void }) {
+function OutlookChanges({ go, putOn }: { go: (section: string, setting?: string | null) => void; putOn: boolean }) {
   const env = useTimeboxes();
   useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!env) return null;
@@ -153,7 +153,8 @@ function OutlookChanges({ go }: { go: (section: string, setting?: string | null)
     <Card
       id="outlook-changes"
       name="Outlook calendar changes"
-      state={!a ? "Checking…" : ok ? "Allowed" : "Not allowed"}
+      // SA-3 walkthrough: "Allowed" alone read as "done"; say whether new timeboxes go on Outlook, with the switch's link.
+      state={!a ? "Checking…" : ok ? (putOn ? "Allowed · new timeboxes go on Outlook" : "Allowed · new timeboxes stay in FocusTime") : "Not allowed"}
       tone={!a ? "muted" : ok ? "live" : "muted"}
       forWhat="Lets FocusTime create, change and remove only the Outlook events it created (timeboxes), each after a preview."
       main={
@@ -161,15 +162,16 @@ function OutlookChanges({ go }: { go: (section: string, setting?: string | null)
           <Button kind="main" onClick={env.connectWrite}>
             Reconnect Outlook with calendar changes
           </Button>
+        ) : ok ? (
+          <GoLink section="planning" setting="outlook-default" go={go}>
+            Put new timeboxes on Outlook
+          </GoLink>
         ) : undefined
       }
       more={
         <>
           {a && !ok && <Note>{a.message}</Note>}
           <Note>It can't change any other event. It asks for this only when you reconnect here.</Note>
-          <GoLink section="planning" setting="outlook-default" go={go}>
-            Put new timeboxes on Outlook
-          </GoLink>
         </>
       }
     />
