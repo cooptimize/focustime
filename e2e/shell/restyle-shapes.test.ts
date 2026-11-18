@@ -368,7 +368,7 @@ describe.skipIf(!CHROMIUM)("RS-1: pill controls, tabs with icons, one-line rows 
     expect(small).toBe(0);
     expect(await marksAndNames(page, MARKS.source), "the phone's Day").toEqual({ chars: [], nameless: [] });
     // The block's sheet: its round Add buttons are 44 px targets too (review 2).
-    await page.locator("main .add-work.ph-add").first().click();
+    await page.locator("main .add-work.dg-add").first().click();
     await page.locator(".block-panel.sheet").waitFor({ timeout: 10_000 });
     const plus = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".block-panel.sheet button.aw-plus, .block-panel.sheet .more-btn")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0).map((r) => Math.round(Math.min(r.width, r.height))));
     expect(plus.length).toBeGreaterThan(0);

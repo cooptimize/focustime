@@ -100,7 +100,8 @@ export function DaySections({ day, blocks, data, picks, now, today, tickable, hi
   const tz = userZone(data);
   const box = (p: Pick) => data.timeboxes.find((t) => t.pickId === p.id && !t.removedAt)?.start ?? null;
   const order = (a: Pick, b: Pick) => (box(a) && box(b) ? ms(box(a)!) - ms(box(b)!) : box(a) ? -1 : box(b) ? 1 : a.position - b.position || a.id - b.id);
-  const mine = (half: Half) => picks.filter((p) => p.half === half && live(p) && p.id !== hideId).sort(order);
+  // The block's live to-dos; the one on today's Now card counts for the block but isn't listed again.
+  const all = (half: Half) => picks.filter((p) => p.half === half && live(p)).sort(order);
   const empty = !picks.some(live);
   const dayWord = day.date === today ? "today" : Temporal.PlainDate.from(day.date).toLocaleString("en-US", { weekday: "long" });
   const band = day.eve ? null : eveningBand(day, data.week, picks);
@@ -112,7 +113,8 @@ export function DaySections({ day, blocks, data, picks, now, today, tickable, hi
         const name = s.half === "EVE" ? W.evening : blockName(day, s);
         const st = blockStatus(s.risks);
         const past = day.date < today;
-        const todos = mine(s.half).filter((p) => !bandIds.has(p.id));
+        const own = all(s.half).filter((p) => !bandIds.has(p.id));
+        const todos = own.filter((p) => p.id !== hideId);
         const ended = ms(s.end) <= ms(now);
         const add = canAddWork({ date: day.date, today, pto: !!day.pto || s.pto, off: s.off }) && !ended;
         const client = s.focus[0]?.clientKey;
@@ -127,9 +129,9 @@ export function DaySections({ day, blocks, data, picks, now, today, tickable, hi
               {st.kind === "at_risk" && !past && <span className="dg-risk">{W.atRisk(st.short ?? null)}</span>}
             </button>
             <TodoRows picks={todos} data={data} tickable={tickable} label={W.todosOf(name)} onTick={onTick} />
-            {!todos.length && !empty && <p className="dg-none">{W.nothingPlanned}</p>}
+            {!own.length && !empty && <p className="dg-none">{W.nothingPlanned}</p>}
             {/* SG-1: an empty block's suggestions with Keep all and Clear, as the phone's Today list had them. */}
-            {!todos.length && s.half !== "EVE" && <BlockSuggestions date={s.date} half={s.half} where="phone" />}
+            {!own.length && s.half !== "EVE" && <BlockSuggestions date={s.date} half={s.half} where="phone" />}
             <Meetings slot={s} tz={tz} label={W.meetingsOf(name)} />
             {!s.pto && !s.off && <p className="dg-line">{meetingsLine(s)}</p>}
             {add && (

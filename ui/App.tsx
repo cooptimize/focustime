@@ -2441,7 +2441,8 @@ export function App() {
           // PH-2: on the phone, the whole week in day rows (ui/phone/PhoneWeek.tsx); a day opens Day on that date.
           if (phone && PhoneM)
             return (
-              <CarryProvider {...carryProps(nowIso)}>
+              // Its own key: Day's provider sits in the same place, and Week reads its suggestions when it opens, as on a computer.
+              <CarryProvider key="phone-week" {...carryProps(nowIso)}>
                 <PhoneM.PhoneWeek
                   week={week}
                   title={read ? weekLabel(askedWeek, weekDates(askedWeek)[4]!) : weekLabel(week.days[0]!.date, week.days[4]!.date)}

@@ -65,7 +65,8 @@ const PLAN_WEEK: Tour = {
       target: "wk-add",
       title: "Add",
       text: "Opens the block's panel on the block under way, or the next one, with the cursor in its Add box. Each block also has its own Add at the bottom, and A opens it on the selected block.",
-      phone: { text: "Add on a block opens its panel as a sheet." },
+      // PH-2: the phone's Week has no Add; a day opens, and Add on its block opens the sheet (the step points at the day).
+      phone: { text: "Tap a day to open it; Add on a block there opens its panel as a sheet." },
     },
     {
       target: "aw-panel",

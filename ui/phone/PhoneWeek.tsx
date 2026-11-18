@@ -154,7 +154,7 @@ export function PhoneWeek({ week, title, today, now, tz, colors, shown, promises
     const eve = b.weekend || b.whole ? null : eveningThings(day, week, picks, tz);
     return (
       <li key={day.date} className={`pw-row${isToday ? " today" : ""}${past ? " past" : ""}`}>
-        <button type="button" className="pw-day" aria-label={`${dayLong(day.date)}${isToday ? `, ${W.today}` : ""}${dueText ? `. ${dueText}` : ""}. ${W.openDay(dayShort(day.date))}`} aria-current={isToday ? "date" : undefined} onClick={() => onOpenDay(day.date)}>
+        <button type="button" className="pw-day" aria-label={`${dayLong(day.date)}${isToday ? `, ${W.today}` : ""}${dueText ? `. ${dueText}` : ""}. ${W.openDay(dayShort(day.date))}`} aria-current={isToday ? "date" : undefined} data-tour={day.date === tourDay ? "wk-add" : undefined} onClick={() => onOpenDay(day.date)}>
           <span className="pw-wd">{dayShort(day.date)}</span>
           <span className="pw-date">{dateShort(day.date)}</span>
           {dueText && <span className="pw-due">{dueText}</span>}
