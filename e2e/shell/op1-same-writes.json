@@ -1,0 +1,547 @@
+{
+ "markdone": [
+  {
+   "op": "state",
+   "clientKey": "Cooptimize",
+   "org": "cooptimize-demo",
+   "project": "Internal",
+   "itemId": 4411,
+   "parentId": null,
+   "title": "Timesheet summary query",
+   "identity": "you@example.com",
+   "before": {
+    "State": "Active",
+    "Comment": null
+   },
+   "after": {
+    "State": "Closed",
+    "Comment": "Done and checked with the team."
+   },
+   "ops": [
+    {
+     "op": "test",
+     "path": "/rev",
+     "value": 4
+    },
+    {
+     "op": "replace",
+     "path": "/fields/System.State",
+     "value": "Closed"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.History",
+     "value": "<div>Done and checked with the team.</div>"
+    }
+   ],
+   "revBefore": 4,
+   "revAfter": 5,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": 7,
+   "status": "confirmed",
+   "undoOf": null
+  }
+ ],
+ "status": [
+  {
+   "op": "comment",
+   "clientKey": "Cooptimize",
+   "org": "cooptimize-demo",
+   "project": "Internal",
+   "itemId": 4410,
+   "parentId": null,
+   "title": "Internal reporting refresh",
+   "identity": "you@example.com",
+   "before": {
+    "Comment": null
+   },
+   "after": {
+    "Comment": "Sign-up form designed; review with purchasing on Friday."
+   },
+   "ops": {
+    "text": "Sign-up form designed; review with purchasing on Friday."
+   },
+   "revBefore": null,
+   "revAfter": null,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "comment",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 1110,
+   "parentId": null,
+   "title": "Order history export",
+   "identity": "you@example.com",
+   "before": {
+    "Comment": null
+   },
+   "after": {
+    "Comment": "Export filter in test; finance checks it Monday."
+   },
+   "ops": {
+    "text": "Export filter in test; finance checks it Monday."
+   },
+   "revBefore": null,
+   "revAfter": null,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "undo_comment",
+   "clientKey": "Cooptimize",
+   "org": "cooptimize-demo",
+   "project": "Internal",
+   "itemId": 4410,
+   "parentId": null,
+   "title": "Internal reporting refresh",
+   "identity": "you@example.com",
+   "before": {
+    "Comment": "Sign-up form designed; review with purchasing on Friday."
+   },
+   "after": {
+    "Comment": "(deleted)"
+   },
+   "ops": null,
+   "revBefore": null,
+   "revAfter": null,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": 0
+  }
+ ],
+ "checkin": [
+  {
+   "op": "remaining_work",
+   "clientKey": "Cooptimize",
+   "org": "cooptimize-demo",
+   "project": "Internal",
+   "itemId": 4411,
+   "parentId": null,
+   "title": "Timesheet summary query",
+   "identity": "you@example.com",
+   "before": {
+    "Remaining Work": null
+   },
+   "after": {
+    "Remaining Work": "1"
+   },
+   "ops": [
+    {
+     "op": "test",
+     "path": "/rev",
+     "value": 4
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
+     "value": 1
+    }
+   ],
+   "revBefore": 4,
+   "revAfter": 5,
+   "draftId": null,
+   "pickIds": [
+    9
+   ],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "remaining_work",
+   "clientKey": "Cooptimize",
+   "org": "cooptimize-demo",
+   "project": "Internal",
+   "itemId": 4412,
+   "parentId": null,
+   "title": "Utilization chart",
+   "identity": "you@example.com",
+   "before": {
+    "Remaining Work": null
+   },
+   "after": {
+    "Remaining Work": "1"
+   },
+   "ops": [
+    {
+     "op": "test",
+     "path": "/rev",
+     "value": 5
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
+     "value": 1
+    }
+   ],
+   "revBefore": 5,
+   "revAfter": 6,
+   "draftId": null,
+   "pickIds": [
+    10
+   ],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  }
+ ],
+ "breakdown": [
+  {
+   "op": "create",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 5100,
+   "parentId": 1120,
+   "title": "Supplier sign-up form",
+   "identity": "you@example.com",
+   "before": {},
+   "after": {
+    "Type": "User Story",
+    "Title": "Supplier sign-up form",
+    "Description": "A supplier enters company details and a contact, and can save a draft to finish later.",
+    "Acceptance criteria": "- A draft can be saved and reopened\n- Required fields are checked before submit",
+    "Assigned to": "Alex Rivera <you@example.com>",
+    "Area": "Portal\\Web",
+    "Iteration": "Portal\\Sprint 23",
+    "Parent": "#1120 Supplier onboarding",
+    "Size in FocusTime": "M · 2h (not written to DevOps)"
+   },
+   "ops": [
+    {
+     "op": "add",
+     "path": "/fields/System.Title",
+     "value": "Supplier sign-up form"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.Description",
+     "value": "<div>A supplier enters company details and a contact, and can save a draft to finish later.</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+     "value": "<div>- A draft can be saved and reopened</div><div>- Required fields are checked before submit</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AssignedTo",
+     "value": "you@example.com"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AreaPath",
+     "value": "Portal\\Web"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.IterationPath",
+     "value": "Portal\\Sprint 23"
+    },
+    {
+     "op": "add",
+     "path": "/relations/-",
+     "value": {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/northwind-demo/_apis/wit/workItems/1120"
+     }
+    }
+   ],
+   "revBefore": null,
+   "revAfter": 1,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "create",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 5101,
+   "parentId": 1120,
+   "title": "Upload supplier certificates",
+   "identity": "you@example.com",
+   "before": {},
+   "after": {
+    "Type": "User Story",
+    "Title": "Upload supplier certificates",
+    "Description": "PDF or image certificates, up to 10 MB each, attached to the supplier's application.\n\nAfter: Supplier sign-up form",
+    "Acceptance criteria": "- PDF, PNG and JPG up to 10 MB\n- Each file shows its name and size after upload",
+    "Assigned to": "Alex Rivera <you@example.com>",
+    "Area": "Portal\\Web",
+    "Iteration": "Portal\\Sprint 23",
+    "Parent": "#1120 Supplier onboarding",
+    "Size in FocusTime": "M · 2h (not written to DevOps)"
+   },
+   "ops": [
+    {
+     "op": "add",
+     "path": "/fields/System.Title",
+     "value": "Upload supplier certificates"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.Description",
+     "value": "<div>PDF or image certificates, up to 10 MB each, attached to the supplier's application.</div><div><br></div><div>After: Supplier sign-up form</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+     "value": "<div>- PDF, PNG and JPG up to 10 MB</div><div>- Each file shows its name and size after upload</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AssignedTo",
+     "value": "you@example.com"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AreaPath",
+     "value": "Portal\\Web"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.IterationPath",
+     "value": "Portal\\Sprint 23"
+    },
+    {
+     "op": "add",
+     "path": "/relations/-",
+     "value": {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/northwind-demo/_apis/wit/workItems/1120"
+     }
+    }
+   ],
+   "revBefore": null,
+   "revAfter": 1,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "create",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 5102,
+   "parentId": 1120,
+   "title": "Choose payment terms",
+   "identity": "you@example.com",
+   "before": {},
+   "after": {
+    "Type": "User Story",
+    "Title": "Choose payment terms",
+    "Description": "The supplier picks payment terms from the ones purchasing offers.\n\nAfter: Supplier sign-up form",
+    "Acceptance criteria": "- Only the terms purchasing set up are offered",
+    "Assigned to": "Alex Rivera <you@example.com>",
+    "Area": "Portal\\Web",
+    "Iteration": "Portal\\Sprint 23",
+    "Parent": "#1120 Supplier onboarding",
+    "Size in FocusTime": "S · 1h (not written to DevOps)"
+   },
+   "ops": [
+    {
+     "op": "add",
+     "path": "/fields/System.Title",
+     "value": "Choose payment terms"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.Description",
+     "value": "<div>The supplier picks payment terms from the ones purchasing offers.</div><div><br></div><div>After: Supplier sign-up form</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+     "value": "<div>- Only the terms purchasing set up are offered</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AssignedTo",
+     "value": "you@example.com"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AreaPath",
+     "value": "Portal\\Web"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.IterationPath",
+     "value": "Portal\\Sprint 23"
+    },
+    {
+     "op": "add",
+     "path": "/relations/-",
+     "value": {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/northwind-demo/_apis/wit/workItems/1120"
+     }
+    }
+   ],
+   "revBefore": null,
+   "revAfter": 1,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "create",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 5103,
+   "parentId": 1120,
+   "title": "Purchasing review and approval",
+   "identity": "you@example.com",
+   "before": {},
+   "after": {
+    "Type": "User Story",
+    "Title": "Purchasing review and approval",
+    "Description": "Purchasing sees new applications, approves or sends one back with a note.\n\nAfter: Supplier sign-up form\nAfter: Upload supplier certificates",
+    "Acceptance criteria": "- Approve and Send back are logged with who and when\n- Sent back applications reopen for the supplier",
+    "Assigned to": "Alex Rivera <you@example.com>",
+    "Area": "Portal\\Web",
+    "Iteration": "Portal\\Sprint 23",
+    "Parent": "#1120 Supplier onboarding",
+    "Size in FocusTime": "L · 4h (not written to DevOps)"
+   },
+   "ops": [
+    {
+     "op": "add",
+     "path": "/fields/System.Title",
+     "value": "Purchasing review and approval"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.Description",
+     "value": "<div>Purchasing sees new applications, approves or sends one back with a note.</div><div><br></div><div>After: Supplier sign-up form</div><div>After: Upload supplier certificates</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+     "value": "<div>- Approve and Send back are logged with who and when</div><div>- Sent back applications reopen for the supplier</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AssignedTo",
+     "value": "you@example.com"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AreaPath",
+     "value": "Portal\\Web"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.IterationPath",
+     "value": "Portal\\Sprint 23"
+    },
+    {
+     "op": "add",
+     "path": "/relations/-",
+     "value": {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/northwind-demo/_apis/wit/workItems/1120"
+     }
+    }
+   ],
+   "revBefore": null,
+   "revAfter": 1,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  },
+  {
+   "op": "create",
+   "clientKey": "Northwind",
+   "org": "northwind-demo",
+   "project": "Portal",
+   "itemId": 5104,
+   "parentId": 1120,
+   "title": "Notify purchasing of a new supplier",
+   "identity": "you@example.com",
+   "before": {},
+   "after": {
+    "Type": "User Story",
+    "Title": "Notify purchasing of a new supplier",
+    "Description": "One notification per submitted application.\n\nAfter: Purchasing review and approval",
+    "Acceptance criteria": "- Exactly one notification per application",
+    "Assigned to": "Alex Rivera <you@example.com>",
+    "Area": "Portal\\Web",
+    "Iteration": "Portal\\Sprint 23",
+    "Parent": "#1120 Supplier onboarding",
+    "Size in FocusTime": "S · 1h (not written to DevOps)"
+   },
+   "ops": [
+    {
+     "op": "add",
+     "path": "/fields/System.Title",
+     "value": "Notify purchasing of a new supplier"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.Description",
+     "value": "<div>One notification per submitted application.</div><div><br></div><div>After: Purchasing review and approval</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+     "value": "<div>- Exactly one notification per application</div>"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AssignedTo",
+     "value": "you@example.com"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.AreaPath",
+     "value": "Portal\\Web"
+    },
+    {
+     "op": "add",
+     "path": "/fields/System.IterationPath",
+     "value": "Portal\\Sprint 23"
+    },
+    {
+     "op": "add",
+     "path": "/relations/-",
+     "value": {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/northwind-demo/_apis/wit/workItems/1120"
+     }
+    }
+   ],
+   "revBefore": null,
+   "revAfter": 1,
+   "draftId": null,
+   "pickIds": [],
+   "followUpId": null,
+   "status": "confirmed",
+   "undoOf": null
+  }
+ ]
+}

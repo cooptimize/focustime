@@ -14,12 +14,11 @@
 import { TextBox } from "./TextBox.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ComponentProps, type KeyboardEvent } from "react";
 import type { CatalogFeature, NoUpdateFeature, ReportClientRef, ReportFeature, StatusClient, StatusComment, StatusFeature, StatusLoad, StatusReport, StatusReportAnswer } from "../plan/status-types.ts";
-import type { DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import { call } from "./api.ts";
 import { useDevOpsChanged, useDevOpsFresh } from "./DevOpsFresh.tsx";
 import { CellPopover, FilterList } from "./CellPopover.tsx";
-import { CloseButton } from "./CloseButton.tsx";
-import { MentionFlag, Modal } from "./DevOpsWrite.tsx";
+import { MentionFlag, useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
+import { partsLine, partsOf } from "../plan/preview-parts.ts";
 import { clientColor } from "./labels.ts";
 import { Stamp } from "./Stamp.tsx";
 import { stampText } from "./stamp.ts";
@@ -32,8 +31,6 @@ export type { Line } from "./status-lines.ts";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
-type Refused = { itemId: number | null; error: string; code: string | null; key?: string };
-type Batch = { previews: DevOpsPreview[]; nothing: string[]; refused: Refused[] };
 /** A line that went to DevOps: its write (for Undo) and how it ended. */
 type Pushed = { key: string; clientKey: string; itemId: number; text: string; kind: Line["kind"]; ok: boolean; message: string; writeId: number | null; undone?: boolean };
 /** SR-3: one suggested line for a feature I worked on: the AI's, or the plain template. */
@@ -86,7 +83,6 @@ const saveScope = (v: string) => {
     /* a convenience only */
   }
 };
-const BATCH = 10;
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
 /** Unsent lines survive a reload in this browser only (a convenience; never the record). */
@@ -158,9 +154,10 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
   const [open, setOpen] = useState<string | null>(null);
   const [drafting, setDrafting] = useState<Record<string, boolean>>({});
   const [draftNote, setDraftNote] = useState<Record<string, string>>({});
-  const [push, setPush] = useState<{ batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null } | null>(null);
+  // OP-1: Push all runs through the app's one preview (one client's lines per preview, 10 at most); `push` is true while it does.
+  const [push, setPush] = useState(false);
   const [pushed, setPushed] = useState<Pushed[]>([]);
-  const [undoing, setUndoing] = useState<{ p: Pushed; preview: DevOpsPreview | null; busy: boolean; error: string | null; done: string | null } | null>(null);
+  const writes = useDevOpsWrite();
   const loaded = useRef<string | null>(null);
   // SR-2: which view, and the clients whose report I may open (none: no switch).
   const [scope, setScopeState] = useState<string>(savedScope);
@@ -355,113 +352,61 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     }
   };
 
-  const change1 = (l: Line, extra: Record<string, unknown> = {}) => ({ key: l.key, kind: l.kind, itemId: l.itemId, ...(l.kind === "comment_delete" ? {} : { text: l.text.trim() }), ...(l.kind !== "comment" ? { commentId: l.commentId } : {}), ...extra });
-  // Push all: preview every line, a client at a time in batches of 10, then show them together, grouped by feature.
-  const startPush = async () => {
+  const change1 = (l: Line): DevOpsChange => (l.kind === "comment" ? { key: l.key, kind: "comment", itemId: l.itemId, text: l.text.trim() } : l.kind === "comment_edit" ? { key: l.key, kind: "comment_edit", itemId: l.itemId, commentId: l.commentId!, text: l.text.trim() } : { key: l.key, kind: "comment_delete", itemId: l.itemId, commentId: l.commentId! });
+  const nameOf = (k: string) => known?.clients.find((c) => c.clientKey === k)?.clientName ?? k;
+  // OP-1: Push all is the app's one preview: a client at a time, 10 lines at most in each preview, in the order the lines
+  // were written. Each line is its own write. What happened to each comes back here, to "Pushed just now".
+  const startPush = () => {
+    if (!writes || !ready.length) return;
     setOpen(null);
-    const byClient = new Map<string, Line[]>();
-    for (const l of ready) (byClient.get(l.clientKey) ?? byClient.set(l.clientKey, []).get(l.clientKey)!).push(l);
-    setPush({ batches: [], busy: true, results: null });
-    const batches: { clientKey: string; batch: Batch; lines: Line[] }[] = [];
-    try {
-      for (const [clientKey, ls] of byClient) {
-        for (let i = 0; i < ls.length; i += BATCH) {
-          const part = ls.slice(i, i + BATCH);
-          try {
-            const batch = await call<Batch>("devops.preview", { clientKey, changes: part.map((l) => change1(l)) });
-            batches.push({ clientKey, batch, lines: part });
-          } catch (e) {
-            batches.push({ clientKey, batch: { previews: [], nothing: [], refused: part.map((l) => ({ itemId: l.itemId, error: errText(e), code: null, key: l.key })) }, lines: part });
-          }
-        }
-      }
-      setPush({ batches, busy: false, results: null });
-    } catch (e) {
-      setError(errText(e));
-      setPush(null);
-    }
+    setPush(true);
+    const parts = partsOf(ready, (l) => l.clientKey);
+    const sent = new Map(ready.map((l) => [l.key, l]));
+    writes.series(
+      parts.map((p) => ({ clientKey: p.clientKey, changes: p.items.map(change1) })),
+      (end) => {
+        const results: Pushed[] = [
+          ...end.results.flatMap((r) => {
+            const l = r.key ? sent.get(r.key) : undefined;
+            // GD-2: a line sent with "another client" written shows as it went.
+            return l ? [{ key: l.key, clientKey: l.clientKey, itemId: l.itemId, text: l.kind === "comment_delete" ? l.text : (r.after ?? l.text), kind: l.kind, ok: r.confirmed, message: r.message, writeId: r.writeId }] : [];
+          }),
+          ...end.refused.flatMap((r) => {
+            const l = sent.get(r.key);
+            return l ? [{ key: l.key, clientKey: l.clientKey, itemId: l.itemId, text: l.text, kind: l.kind, ok: false, message: r.error, writeId: null }] : [];
+          }),
+        ];
+        setPush(false);
+        // A part whose preview couldn't be made (no write access, DevOps unreachable) says why.
+        if (end.errors.length) setError(end.errors.join(" "));
+        if (!results.length) return;
+        // A line that went in leaves the boxes; one that didn't stays, with its reason, for Retry.
+        const ok = new Set(results.filter((x) => x.ok).map((x) => x.key));
+        // GD-2: a line that didn't go in keeps the text it was sent with (after Replace, "another client").
+        const sentText = new Map(results.filter((x) => !x.ok && x.kind !== "comment_delete").map((x) => [x.key, x.text]));
+        setLines((ls) => ls.filter((l) => !ok.has(l.key)).map((l) => (sentText.has(l.key) ? { ...l, text: sentText.get(l.key)! } : l)));
+        setPushed((p) => [...results, ...p.filter((x) => !results.some((y) => y.key === x.key))]);
+        void load().then(onChanged);
+      },
+      { where: (k) => `${nameOf(k)}'s DevOps and Monday's report` },
+    );
   };
-  // GD-2: the flag's one click for a batch: preview it again with "another client" written, and keep the boxes in step.
-  const replacePush = async (i: number) => {
-    if (!push) return;
-    const b = push.batches[i]!;
-    setPush({ ...push, busy: true });
-    try {
-      const batch = await call<Batch>("devops.preview", { clientKey: b.clientKey, changes: b.lines.map((l) => change1(l, l.kind === "comment_delete" ? {} : { mentions: "replace" })) });
-      const after = new Map(batch.previews.map((p) => [p.key, p.fields[0]?.after ?? null]));
-      const lines2 = b.lines.map((l) => (l.kind !== "comment_delete" && after.get(l.key) ? { ...l, text: after.get(l.key)!, from: "me" as const } : l));
-      setLines((ls) => ls.map((l) => lines2.find((x) => x.key === l.key) ?? l));
-      setPush({ ...push, busy: false, batches: push.batches.map((x, j) => (j === i ? { ...x, batch, lines: lines2 } : x)) });
-    } catch (e) {
-      setError(errText(e));
-      setPush({ ...push, busy: false });
-    }
-  };
-  const confirmPush = async () => {
-    if (!push) return;
-    setPush({ ...push, busy: true });
-    const results: Pushed[] = [];
-    for (const b of push.batches) {
-      const ids = b.batch.previews.map((p) => p.previewId);
-      if (!ids.length) continue;
-      let r: { results: (DevOpsResult | { error: string; status: number })[] } | null = null;
-      try {
-        // GD-2: lines I wrote go as written once I've seen the flag (the button says so).
-        r = await call("devops.confirm", { previewIds: ids, ...(b.batch.previews.some((p) => p.mentions?.length) ? { mentionsOk: true } : {}) });
-      } catch (e) {
-        for (const p of b.batch.previews) {
-          const l = b.lines.find((x) => x.key === p.key)!;
-          results.push({ key: l.key, clientKey: l.clientKey, itemId: l.itemId, text: l.text, kind: l.kind, ok: false, message: errText(e), writeId: null });
-        }
-        continue;
-      }
-      b.batch.previews.forEach((p, i) => {
-        const l = b.lines.find((x) => x.key === p.key)!;
-        const res = r!.results[i]!;
-        results.push("error" in res ? { key: l.key, clientKey: l.clientKey, itemId: l.itemId, text: l.text, kind: l.kind, ok: false, message: res.error, writeId: null } : { key: l.key, clientKey: l.clientKey, itemId: l.itemId, text: l.text, kind: l.kind, ok: res.confirmed, message: res.message, writeId: res.entry.id });
-      });
-    }
-    setPush({ ...push, busy: false, results });
-    // A line that went in leaves the boxes; one that didn't stays, with its reason, for Retry.
-    const ok = new Set(results.filter((x) => x.ok).map((x) => x.key));
-    setLines((ls) => ls.filter((l) => !ok.has(l.key)));
-    setPushed((p) => [...results.filter((x) => x.ok || x.writeId !== null), ...p.filter((x) => !results.some((y) => y.key === x.key))]);
-    await load();
-    onChanged();
-  };
-  // Retry a write that went out but wasn't read back (the write framework checks first and never posts twice).
+  // Retry a write that went out but wasn't read back (the one preview's retry: it checks first and never posts twice).
   const retry = async (p: Pushed) => {
-    if (p.writeId === null) return;
-    try {
-      const r = await call<DevOpsResult>("devops.retry", { id: p.writeId });
-      setPushed((all) => all.map((x) => (x.key === p.key ? { ...x, ok: r.confirmed, message: r.message } : x)));
-      if (r.confirmed) setLines((ls) => ls.filter((l) => l.key !== p.key));
-      await load();
-    } catch (e) {
-      setPushed((all) => all.map((x) => (x.key === p.key ? { ...x, message: errText(e) } : x)));
-    }
+    if (p.writeId === null || !writes) return;
+    const r = await writes.retry(p.writeId);
+    if (!r) return;
+    setPushed((all) => all.map((x) => (x.key === p.key ? { ...x, ok: r.confirmed, message: r.message } : x)));
+    if (r.confirmed) setLines((ls) => ls.filter((l) => l.key !== p.key));
+    await load();
   };
-  const startUndo = async (p: Pushed) => {
-    setUndoing({ p, preview: null, busy: true, error: null, done: null });
-    try {
-      const r = await call<{ preview?: DevOpsPreview; nothing?: string }>("devops.preview", { clientKey: p.clientKey, change: { kind: "undo", writeId: p.writeId } });
-      setUndoing({ p, preview: r.preview ?? null, busy: false, error: r.nothing ?? null, done: null });
-    } catch (e) {
-      setUndoing({ p, preview: null, busy: false, error: errText(e), done: null });
-    }
-  };
-  const confirmUndo = async () => {
-    if (!undoing?.preview) return;
-    setUndoing({ ...undoing, busy: true });
-    try {
-      const r = await call<DevOpsResult>("devops.confirm", { previewId: undoing.preview.previewId });
-      setUndoing({ ...undoing, busy: false, done: r.message, error: r.confirmed ? null : r.message });
-      if (r.confirmed) setPushed((all) => all.map((x) => (x.key === undoing.p.key ? { ...x, undone: true } : x)));
-      await load();
-      onChanged();
-    } catch (e) {
-      setUndoing({ ...undoing, busy: false, error: errText(e) });
-    }
+  // Undo is the line's own write undone, through the same preview.
+  const startUndo = (p: Pushed) => {
+    if (p.writeId === null || !writes) return;
+    void writes.begin(p.clientKey, [{ kind: "undo", writeId: p.writeId }], (r) => {
+      if (r.confirmed) setPushed((all) => all.map((x) => (x.key === p.key ? { ...x, undone: true } : x)));
+      if (r.sent) void load().then(onChanged);
+    });
   };
   // SR-3: Add a feature puts it in the report (in stack rank) with its line box open.
   const addFeature = async (f: CatalogFeature) => {
@@ -476,7 +421,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
   };
 
   const counts = useMemo(() => (data ? liveCounts(data, lines) : null), [data, lines]);
-  const scopeSwitch = teams && teams.length > 0 ? <ScopeSwitch scope={onReport ? scope : "mine"} teams={teams} onPick={(v) => { setScope(v); setPush(null); setOpen(null); }} /> : null;
+  const scopeSwitch = teams && teams.length > 0 ? <ScopeSwitch scope={onReport ? scope : "mine"} teams={teams} onPick={(v) => { setScope(v); setOpen(null); }} /> : null;
   const shownMode = readOnly ? "preview" : mode;
   const toggle = !readOnly && (
     <span className="st-toggle" data-tour="st-toggle" role="group" aria-label="Show">
@@ -484,10 +429,14 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       <button type="button" className="ms-btn" aria-pressed={mode === "preview"} onClick={() => (setOpen(null), setMode("preview"))}>Preview</button>
     </span>
   );
+  // OP-1: said before the first preview when the lines take more than one.
+  const parts = partsOf(ready, (l) => l.clientKey);
+  const partsSaid = partsLine(ready.length, parts.length, new Set(parts.map((p) => p.clientKey)).size, "line");
   const pushBar = !readOnly && (
     <>
       {ready.length > 0 && <span className="st-pending-count">{pendingLabel(ready.length)}</span>}
-      <button type="button" className="commit" data-tour="st-push" disabled={!ready.length || !!push} onClick={() => void startPush()}>Push all</button>
+      {partsSaid && <span className="muted st-parts">{partsSaid}</span>}
+      <button type="button" className="commit" data-tour="st-push" disabled={!ready.length || push || !writes} onClick={startPush}>Push all</button>
     </>
   );
 
@@ -525,12 +474,10 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
                 {pushBar}
               </span>
             </div>
-            {pushed.length > 0 && <PushedList pushed={pushed} data={known} onRetry={(p) => void retry(p)} onUndo={(p) => void startUndo(p)} onClear={() => setPushed([])} />}
+            {pushed.length > 0 && <PushedList pushed={pushed} data={known} onRetry={(p) => void retry(p)} onUndo={startUndo} onClear={() => setPushed([])} />}
             <ReportSection r={r} color={clientColor(r.clientKey, colors)} mode={shownMode} readOnly={readOnly} lines={lines.filter((l) => l.clientKey === r.clientKey)} ops={ops} sugg={suggestView} suggNote={suggNote[r.clientKey] ?? ""} onAddFeature={(f) => void addFeature(f)} />
           </>
         )}
-        {push && <PushDialog push={push} data={known} onConfirm={() => void confirmPush()} onReplace={(i) => void replacePush(i)} onClose={() => setPush(null)} />}
-        {undoing && <UndoDialog u={undoing} onConfirm={() => void confirmUndo()} onClose={() => setUndoing(null)} />}
       </main>
     );
   }
@@ -561,15 +508,13 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
             </p>
             {!readOnly && <span className="st-push">{pushBar}</span>}
           </div>
-          {pushed.length > 0 && <PushedList pushed={pushed} data={known ?? data} onRetry={(p) => void retry(p)} onUndo={(p) => void startUndo(p)} onClear={() => setPushed([])} />}
+          {pushed.length > 0 && <PushedList pushed={pushed} data={known ?? data} onRetry={(p) => void retry(p)} onUndo={startUndo} onClear={() => setPushed([])} />}
           {!data.clients.length && <p className="muted">No clients with DevOps this week. The features you plan or work on show here.</p>}
           {data.clients.map((c) => (
             <ClientSection key={c.clientKey} c={c} color={clientColor(c.clientKey, colors)} mode={shownMode} lines={lines.filter((l) => l.clientKey === c.clientKey)} drafting={drafting} draftNote={draftNote[c.clientKey] ?? ""} ops={ops} sugg={suggestView} suggNote={suggNote[c.clientKey] ?? ""} onDraft={(ids) => void draft(c, ids)} />
           ))}
         </>
       )}
-      {push && <PushDialog push={push} data={data} onConfirm={() => void confirmPush()} onReplace={(i) => void replacePush(i)} onClose={() => setPush(null)} />}
-      {undoing && <UndoDialog u={undoing} onConfirm={() => void confirmUndo()} onClose={() => setUndoing(null)} />}
     </main>
   );
 }
@@ -1006,94 +951,6 @@ function featureTitle(data: Known | null, clientKey: string, itemId: number): st
   return [...(c?.features ?? []), ...(c?.also ?? [])].find((f) => f.id === itemId)?.title ?? `#${itemId}`;
 }
 
-const OP_LABEL: Record<string, string> = { comment: "new comment", comment_edit: "edit your comment", comment_delete: "delete your comment" };
-
-function PushDialog({ push, data, onConfirm, onReplace, onClose }: { push: { batches: { clientKey: string; batch: Batch; lines: Line[] }[]; busy: boolean; results: Pushed[] | null }; data: Known | null; onConfirm: () => void; onReplace: (batch: number) => void; onClose: () => void }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => first.current?.focus(), [push.busy]);
-  const n = push.batches.reduce((s, b) => s + b.batch.previews.length, 0);
-  const refused = push.batches.flatMap((b) => b.batch.refused.map((r) => ({ b, r })));
-  const name = (k: string) => data?.clients.find((c) => c.clientKey === k)?.clientName ?? k;
-  const result = (key: string | undefined) => push.results?.find((r) => r.key === key) ?? null;
-  const flagged = push.batches.some((b) => b.batch.previews.some((p) => p.mentions?.length));
-  const label = n === 1 ? "Push 1 line to DevOps" : `Push ${n} lines to DevOps`;
-  // SR-3: grouped by client, then by feature, in the order the lines were written.
-  const clients = [...new Set(push.batches.map((b) => b.clientKey))];
-  return (
-    <Modal label={label} busy={push.busy} onClose={onClose} wide>
-      <div className="cap-dialog-head">
-        <h2>{push.results ? "Pushed to DevOps" : label}</h2>
-        <CloseButton onClose={onClose} disabled={push.busy} />
-      </div>
-      {!push.batches.length && push.busy && <p className="muted">Checking each line with DevOps…</p>}
-      <div className="dw-rows">
-        {clients.map((k) => {
-          const bs = push.batches.map((b, i) => ({ b, i })).filter(({ b }) => b.clientKey === k);
-          const p0 = bs.flatMap(({ b }) => b.batch.previews)[0];
-          const rows = bs.flatMap(({ b, i }) => [
-            ...b.batch.previews.map((p) => ({ itemId: b.lines.find((l) => l.key === p.key)?.itemId ?? 0, p, r: null as Refused | null, l: b.lines.find((l) => l.key === p.key) ?? null, i })),
-            ...b.batch.refused.map((r) => ({ itemId: b.lines.find((l) => l.key === r.key)?.itemId ?? r.itemId ?? 0, p: null as DevOpsPreview | null, r, l: b.lines.find((l) => l.key === r.key) ?? null, i })),
-          ]);
-          if (!rows.length) return null;
-          const items = [...new Set(rows.map((x) => x.itemId))];
-          return (
-            <section key={k} className="st-push-client" aria-label={name(k)}>
-              <h3>{name(k)}</h3>
-              {p0 && <p className="muted dw-note">DevOps · {p0.org} · {p0.project} · writes as {p0.identity}</p>}
-              {p0 && <p className="wd-visibility"><strong>Who can see it:</strong> {p0.visibility}</p>}
-              {items.map((id) => {
-                const mine = rows.filter((x) => x.itemId === id);
-                return (
-                  <div key={id} className="st-push-feature" role="group" aria-label={featureTitle(data, k, id)}>
-                    <h4>{mine.find((x) => x.p)?.p?.item ?? `#${id} ${featureTitle(data, k, id)}`} <span className="muted">· {mine.length === 1 ? "1 line" : `${mine.length} lines`}</span></h4>
-                    {mine.map(({ p, r: refusal, l, i }) => {
-                      if (p) {
-                        const res = result(p.key);
-                        return (
-                          <div key={p.previewId} className={`dw-row${res?.ok ? " done" : ""}`}>
-                            <p className="st-push-op muted">{OP_LABEL[p.op] ?? p.op}</p>
-                            {p.op === "comment_edit" ? (
-                              <table className="wd-fields"><tbody>
-                                <tr><th scope="row">Now</th><td>{p.fields[0]?.before ?? ""}</td></tr>
-                                <tr className="changed"><th scope="row">After</th><td>{p.fields[0]?.after ?? ""}</td></tr>
-                              </tbody></table>
-                            ) : p.op === "comment_delete" ? (
-                              <p className="st-preview-text st-deleted-text">{p.fields[0]?.before ?? ""}</p>
-                            ) : (
-                              <p className="st-preview-text">{p.fields[0]?.after ?? ""}</p>
-                            )}
-                            {p.mentions?.length && !push.results ? <MentionFlag names={p.mentions} where={`${name(k)}'s DevOps and Monday's report`} disabled={push.busy} onReplace={() => onReplace(i)} /> : null}
-                            {res && <p className={res.ok ? "dw-ok" : "set-problem"} role={res.ok ? "status" : "alert"}>{res.message}</p>}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={refusal!.key ?? refusal!.error} className="dw-row st-refused">
-                          <p className="st-push-op muted">{l ? OP_LABEL[l.kind] : "a line"} · not pushed</p>
-                          {l && <p className="st-preview-text">{l.text}</p>}
-                          <p className="set-problem" role="alert">{refusal!.error}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </section>
-          );
-        })}
-      </div>
-      {refused.length > 0 && !push.results && <p className="muted">{refused.length === 1 ? "1 line can't be pushed" : `${refused.length} lines can't be pushed`}: {refused.length === 1 ? "it stays" : "they stay"} in {refused.length === 1 ? "its box" : "their boxes"} to fix.</p>}
-      <div className="wd-actions">
-        {!push.results ? (
-          <button ref={first} type="button" className="commit" disabled={push.busy || !n} onClick={onConfirm}>{push.busy ? "Writing and checking…" : flagged ? `${label} as written` : label}</button>
-        ) : null}
-        <button type="button" className="mini quiet" disabled={push.busy} onClick={onClose}>{push.results ? "Close" : "Not now"}</button>
-        <span className="muted">Each line is its own write, logged in Settings › Activity with Undo.</span>
-      </div>
-    </Modal>
-  );
-}
-
 function PushedList({ pushed, data, onRetry, onUndo, onClear }: { pushed: Pushed[]; data: Known | null; onRetry: (p: Pushed) => void; onUndo: (p: Pushed) => void; onClear: () => void }) {
   return (
     <section className="st-pushed" aria-label="Pushed">
@@ -1115,32 +972,5 @@ function PushedList({ pushed, data, onRetry, onUndo, onClear }: { pushed: Pushed
   );
 }
 
-function UndoDialog({ u, onConfirm, onClose }: { u: { p: Pushed; preview: DevOpsPreview | null; busy: boolean; error: string | null; done: string | null }; onConfirm: () => void; onClose: () => void }) {
-  const p = u.preview;
-  return (
-    <Modal label={p?.summary ?? "Undo"} busy={u.busy} onClose={onClose}>
-      <div className="cap-dialog-head">
-        <h2>{p?.summary ?? "Undo"}</h2>
-        <CloseButton onClose={onClose} disabled={u.busy} />
-      </div>
-      {p && (
-        <>
-          <p className="muted dw-note">{p.item} · DevOps · {p.org} · {p.project}</p>
-          <table className="wd-fields"><tbody>
-            <tr><th scope="row">Now</th><td>{p.fields[0]?.before ?? "(none)"}</td></tr>
-            <tr className="changed"><th scope="row">After</th><td>{p.fields[0]?.after ?? "(none)"}</td></tr>
-          </tbody></table>
-          {p.notes.map((n) => <p key={n} className="muted dw-note">{n}</p>)}
-        </>
-      )}
-      {u.error && <p className="set-problem" role="alert">{u.error}</p>}
-      {u.done && !u.error && <p className="dw-ok" role="status">{u.done}</p>}
-      <div className="wd-actions">
-        {p && !u.done && <button type="button" className="commit" disabled={u.busy} onClick={onConfirm}>{u.busy ? "Undoing…" : "Undo in DevOps"}</button>}
-        <button type="button" className="mini quiet" disabled={u.busy} onClick={onClose}>Close</button>
-      </div>
-    </Modal>
-  );
-}
 
 /** RF-1: what the Status tab needs for its dot: how many features need my update, and when the dot turns amber and red. */

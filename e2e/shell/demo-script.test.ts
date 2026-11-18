@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { blockPicks, CHROMIUM, FAKE_MIC, freshPage, NOW, openInboxItem, openInboxView, selectBlock, startDemo, type Harness } from "../harness.ts";
+import { confirmPreviews } from "../one-preview.ts";
 
 const T = 600_000;
 const SHOTS = process.env.DEMO_SHOTS ?? null;
@@ -85,7 +86,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.locator(".ah-grid tbody .ah-row").first().waitFor({ timeout: 30_000 });
     await shot(page, "ahead-fix-next");
 
-    // 5. Break down Supplier onboarding: five cards from the samples, Preview, Create all.
+    // 5. Break down Supplier onboarding: five cards from the samples, Preview, Confirm in the DevOps preview.
     const needs = page.locator(".ah-grid tbody .ah-row:not(.context)", { hasText: "Supplier onboarding" }).first();
     await needs.getByRole("button", { name: /Break down/ }).first().click();
     const panel = page.getByRole("dialog", { name: /^Break down Feature: / });
@@ -94,7 +95,7 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await panel.getByRole("listitem", { name: "Card Supplier sign-up form" }).waitFor({ timeout: 30_000 });
     await shot(page, "break-down-review", panel);
     await panel.getByRole("button", { name: /^Preview 5 items/ }).click();
-    await panel.getByRole("button", { name: "Create all" }).click();
+    await confirmPreviews(page, 1);
     await panel.getByText(/Created 5|5 created|in DevOps/).first().waitFor({ timeout: 30_000 });
     await shot(page, "break-down-created", panel);
     await panel.getByRole("button", { name: "Done" }).click();
