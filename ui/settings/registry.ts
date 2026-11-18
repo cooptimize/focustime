@@ -4,6 +4,8 @@
 //
 // Old section ids (before ST-1) still open: they map to their new section and, where it moved inside one, the setting.
 
+import { DAYS_OFF_WORDS } from "../../plan/notify.ts";
+
 export type SettingsGroupId = "you" | "planning" | "clients" | "connections" | "data";
 
 export const SETTINGS_GROUPS: readonly (readonly [SettingsGroupId, string])[] = [
@@ -81,7 +83,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "status-report-times", section: "notifications", label: "Status report times", keywords: ["friday", "sunday", "monday report"] },
   { id: "urgent-during-focus", section: "notifications", label: "Urgent requests during focus", old: ["Let urgent asks through"] },
   { id: "quiet", section: "notifications", label: "Quiet hours", keywords: ["outside working hours", "never quiet"] },
-  { id: "quiet-pto", section: "notifications", label: "Quiet on PTO days", old: ["Days off"] },
+  { id: "quiet-pto", section: "notifications", label: DAYS_OFF_WORDS.label, old: ["Days off", "Quiet on PTO days"], keywords: ["pto", "holiday", "holidays", "time off"] },
   { id: "test-notification", section: "notifications", label: "Send a test notification" },
   { id: "devices", section: "notifications", label: "Notify this device", keywords: ["push", "phone", "iphone", "devices"] },
   { id: "push-details", section: "notifications", label: "Show details in notifications", keywords: ["lock screen"] },
