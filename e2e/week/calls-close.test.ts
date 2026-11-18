@@ -37,23 +37,25 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     // Hide: one press, out of Open and into Hidden; Undo puts it back.
     const open0 = await count(page, "open");
     await item(page, "Northwind data model review").locator("[data-call-act='hide']").click();
-    await expect.poll(() => count(page, "hidden")).toBe(1);
-    await expect.poll(() => count(page, "open")).toBe(open0 - 1);
+    await expect.poll(() => count(page, "hidden"), { timeout: 30_000 }).toBe(1);
+    await expect.poll(() => count(page, "open"), { timeout: 30_000 }).toBe(open0 - 1);
     await undo(page).click();
-    await expect.poll(() => count(page, "hidden")).toBe(0);
+    await expect.poll(() => count(page, "hidden"), { timeout: 30_000 }).toBe(0);
     // A repeat is one row in the fold; its menu hides every one.
     await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
     const standup = page.locator("[data-series-row]").filter({ hasText: "Team standup" });
     await expect(standup.locator(".calls-time").textContent()).resolves.toMatch(/· \d+ calls/);
     await standup.locator("[data-call-act='hide-menu']").click();
     await page.locator("[data-hide='every']").click();
-    await expect.poll(() => page.locator("[data-series-row]").filter({ hasText: "Team standup" }).count()).toBe(0);
+    await expect.poll(() => page.locator("[data-series-row]").filter({ hasText: "Team standup" }).count(), { timeout: 30_000 }).toBe(0);
+    // Hidden counts it once, as its list shows it.
+    await expect.poll(() => count(page, "hidden"), { timeout: 30_000 }).toBe(1);
     await filter(page, "hidden").click();
     const hidden = page.locator("[data-section='hidden'] li");
     await expect(hidden.count()).resolves.toBe(1);
     await expect(hidden.textContent()).resolves.toMatch(/Team standup.*Every one, from now on/);
     await hidden.getByRole("button", { name: "Put back" }).click();
-    await expect.poll(() => count(page, "hidden")).toBe(0);
+    await expect.poll(() => count(page, "hidden"), { timeout: 30_000 }).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -66,8 +68,8 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     const line = page.locator("[data-week-calls-line]");
     await expect.poll(() => line.textContent(), { timeout: 30_000 }).toBe("1 call to close this week");
     await line.click();
-    await expect.poll(() => hash(page)).toMatch(/^#\/calls/);
-    await expect.poll(() => filter(page, "open").getAttribute("aria-pressed")).toBe("true");
+    await expect.poll(() => hash(page), { timeout: 30_000 }).toMatch(/^#\/calls/);
+    await expect.poll(() => filter(page, "open").getAttribute("aria-pressed"), { timeout: 30_000 }).toBe("true");
     await go(page, "#/day/closeout/2026-11-02");
     const calls = page.locator("[data-closeout-calls]");
     await calls.waitFor({ timeout: 30_000 });
@@ -82,17 +84,18 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     await openCalls(page);
     const needs = page.locator("[data-section='needs'] li").first();
     await expect(needs.textContent()).resolves.toMatch(/(\d+) left of \1/);
-    page.once("dialog", (d) => void d.accept());
+    // No question first: Undo is the way back.
     await needs.locator("[data-call-act='skip-all']").click();
-    await expect.poll(() => page.locator("[data-section='needs']").count()).toBe(0);
-    await expect.poll(() => page.locator(".topbar .view-tab").filter({ hasText: /^Calls/ }).locator(".count").count()).toBe(0);
+    await expect.poll(() => page.locator("[data-section='needs']").count(), { timeout: 30_000 }).toBe(0);
+    await expect.poll(() => page.locator(".topbar .view-tab").filter({ hasText: /^Calls/ }).locator(".count").count(), { timeout: 30_000 }).toBe(0);
+    // Its closed page is what shows beside the list, not the next call.
+    await page.locator("[data-closed-page]").waitFor({ timeout: 30_000 });
     // Undo: each proposal back as it was, the call open again.
     await undo(page).click();
     await page.locator("[data-section='needs']").waitFor({ timeout: 30_000 });
     // Close it from its page this time.
     await page.locator("[data-section='needs'] [data-call-row]").first().click();
     await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    page.once("dialog", (d) => void d.accept());
     await page.locator("[data-open-head] [data-call-act='skip-all']").click();
     const closed = page.locator("[data-closed-page]");
     await closed.waitFor({ timeout: 30_000 });
@@ -119,9 +122,12 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     await page.close();
   }, T);
 
-  it("on the phone (390 by 844): the row's controls are at least 44 px and nothing is cut", async () => {
+  it("on the phone (390 by 844): the row's controls are at least 44 px and nothing is cut; Week has its Thursday line", async () => {
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });
+    await go(page, "#/week");
+    await expect.poll(() => page.locator("[data-week-calls-line]").textContent(), { timeout: 30_000 }).toMatch(/calls? to close this week$/);
+    expect((await page.locator("[data-week-calls-line]").boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await openCalls(page);
     await page.locator("[data-call-mark]").first().waitFor({ timeout: 30_000 });
     for (const b of await page.locator("[data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] [data-call-row], [data-calls-list] .calls-head-actions button").all()) {

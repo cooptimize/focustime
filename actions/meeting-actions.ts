@@ -679,7 +679,8 @@ function hideItems(input: unknown): { kind: "one" | "every"; key: string }[] {
 }
 
 /** MC-4: what Skip all and close changed on one proposal: its state before, for Undo. */
-type Skipped = { id: number; was: "open" | "failed" };
+/** What Skip all and close changed on one proposal: what it was (and, for a failed one, who decided it and when), and when the skip was. */
+type Skipped = { id: number; was: "open" | "failed"; skippedAt: string; by: string | null; decidedAt: string | null };
 
 /**
  * MC-4: Skip all and close, on one call or several ticked together: every undecided proposal (open, or failed and waiting
@@ -699,7 +700,7 @@ async function skipAll(store: MeetingStore, me: string, input: unknown, ctx: Mee
     for (const p of await store.proposals(oid)) {
       if (!toReview(p)) continue;
       await store.viewer(me).updateProposal(p.id, { state: "skipped", decidedBy: me, decidedAt: at });
-      skipped.push({ id: p.id, was: p.state as Skipped["was"] });
+      skipped.push({ id: p.id, was: p.state as Skipped["was"], skippedAt: at, by: p.state === "failed" ? p.decidedBy : null, decidedAt: p.state === "failed" ? p.decidedAt : null });
     }
     await settledCall(store, oid, me);
     out.push({ occurrenceId: oid, skipped });
@@ -713,9 +714,16 @@ async function unskipAll(store: MeetingStore, me: string, input: unknown, ctx: M
   const o = obj(input, ["items"]);
   if (!Array.isArray(o.items) || !o.items.length || o.items.length > 500) throw new Invalid("items must be what Skip all and close answered");
   const items = o.items.map((x) => {
-    const i = obj(x, ["id", "was"]);
+    const i = obj(x, ["id", "was", "skippedAt"], ["by", "decidedAt"]);
     if (i.was !== "open" && i.was !== "failed") throw new Invalid("was must be open or failed");
-    return { id: id(i.id, "id"), was: i.was as Skipped["was"] };
+    const str = (v: unknown, k: string) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "string" || v.length > 320) throw new Invalid(`${k} must be what Skip all and close answered`);
+      return v;
+    };
+    const skippedAt = str(i.skippedAt, "skippedAt");
+    if (!skippedAt) throw new Invalid("skippedAt must be what Skip all and close answered");
+    return { id: id(i.id, "id"), was: i.was as Skipped["was"], skippedAt, by: str(i.by, "by"), decidedAt: str(i.decidedAt, "decidedAt") };
   });
   const calls = new Set<number>();
   let back = 0;
@@ -723,9 +731,9 @@ async function unskipAll(store: MeetingStore, me: string, input: unknown, ctx: M
     const p = await store.proposal(i.id);
     if (!p) continue;
     await store.viewer(me).reviewer(p.occurrenceId);
-    // Only a skip that is still mine and still a skip: anything decided since stays as it is.
-    if (p.state !== "skipped" || (p.decidedBy ?? "").toLowerCase() !== me.toLowerCase()) continue;
-    await store.viewer(me).updateProposal(p.id, i.was === "open" ? { state: "open", decidedBy: null, decidedAt: null } : { state: "failed" });
+    // Only this Skip all's own skip, still mine and still a skip: anything decided since (even skipped again by me) stays.
+    if (p.state !== "skipped" || (p.decidedBy ?? "").toLowerCase() !== me.toLowerCase() || p.decidedAt !== i.skippedAt) continue;
+    await store.viewer(me).updateProposal(p.id, i.was === "open" ? { state: "open", decidedBy: null, decidedAt: null } : { state: "failed", decidedBy: i.by, decidedAt: i.decidedAt });
     calls.add(p.occurrenceId);
     back++;
   }
@@ -1028,12 +1036,14 @@ async function checkCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConf
   asks.sort((a, b) => b.startAt.localeCompare(a.startAt));
   const answers: Record<string, CheckAnswer> = {};
   const toAsk: ExistsAsk[] = [];
-  for (const a of asks) {
-    const h = ctx.exists.hold.get(me, a.key);
+  const exists = ctx.exists;
+  // Opening Calls and Refresh ask only about the newest 40; only Check more goes past them, 40 at a time.
+  asks.forEach((a, i) => {
+    const h = exists.hold.get(me, a.key);
     if (h) answers[a.key] = h;
-    else if (toAsk.length < CHECK_CAP) toAsk.push(a);
+    else if (toAsk.length < CHECK_CAP && (o.more || i < CHECK_CAP)) toAsk.push(a);
     else answers[a.key] = "unchecked";
-  }
+  });
   let failed = false;
   if (toAsk.length) {
     const grant = ctx.exists.grants.open(me, toAsk.map((a) => a.joinUrl));

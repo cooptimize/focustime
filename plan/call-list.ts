@@ -191,10 +191,20 @@ export function forClient(rows: readonly CallRow[], client: string | null): Call
   return client === null ? [...rows] : rows.filter((r) => (r.clientKey ?? r.suggested ?? "") === client);
 }
 
-/** Each filter's count for a client choice: the calls (a repeating meeting's row counts each of its calls). */
-export function filterCounts(rows: readonly CallRow[], client: string | null, hiddenMissing = 0): Record<ListFilter, number> {
+/**
+ * Each filter's count for a client choice: the calls (a repeating meeting's row counts each of its calls), except that
+ * Hidden counts what its list shows: a meeting hidden every one is one, however many of its calls are in the window.
+ */
+export function filterCounts(rows: readonly CallRow[], client: string | null, hiddenMissing = 0, hiddenSeries: ReadonlySet<string> = new Set()): Record<ListFilter, number> {
   const out: Record<ListFilter, number> = { open: 0, closed: 0, hidden: client === null ? hiddenMissing : 0 };
-  for (const r of forClient(rows, client)) out[r.bucket]++;
+  const seen = new Set<string>();
+  for (const r of forClient(rows, client)) {
+    if (r.bucket === "hidden" && r.seriesKey && hiddenSeries.has(r.seriesKey)) {
+      if (seen.has(r.seriesKey)) continue;
+      seen.add(r.seriesKey);
+    }
+    out[r.bucket]++;
+  }
   return out;
 }
 

@@ -171,6 +171,12 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
   });
 
+  it("MC-4: Hidden counts a meeting hidden every one once, as its list shows it", () => {
+    const rows = [1, 2, 3].map((n) => ({ key: `c${n}`, bucket: "hidden", seriesKey: "standup", clientKey: null, suggested: null }) as unknown as Parameters<typeof filterCounts>[0][number]);
+    expect(filterCounts(rows, null).hidden).toBe(3);
+    expect(filterCounts(rows, null, 0, new Set(["standup"])).hidden).toBe(1);
+  });
+
   it("MC-4: a call that closed with no transcript opens again when my recording goes with it", () => {
     const gone = anOccurrenceView({ id: 30, seriesId: 4, startAt: "2026-10-27T15:00:00Z", endAt: "2026-10-27T16:00:00Z", state: "no_transcript", open: 0, hasTranscript: false });
     const plain = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE });

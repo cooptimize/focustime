@@ -7691,7 +7691,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 .calls-head-note.amber { color: var(--watch); }
 .calls-check-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .calls-menu { position: relative; }
-.calls-menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2, 0 6px 20px rgb(0 0 0 / 0.25)); }
+.calls-menu-pop { position: absolute; left: 0; max-width: calc(100vw - 32px); top: calc(100% + 4px); z-index: 5; display: grid; min-width: 220px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2, 0 6px 20px rgb(0 0 0 / 0.25)); }
 .calls-menu-pop > button { display: grid; gap: 1px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .calls-menu-pop > button:hover, .calls-menu-pop > button:focus-visible { background: var(--wash-1); }
 .calls-menu-pop .muted { font-size: var(--fs-1); }
@@ -7760,7 +7760,13 @@ body.ah-dragging * { cursor: grabbing !important; }
 .app.phone .calls-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* MC-4: Week's line from Thursday, and Close out's open calls. */
-.week-calls-line { display: inline-flex; align-items: center; text-decoration: none; color: var(--text); font-size: var(--fs-2); }
-.week-calls-line:hover { text-decoration: underline; }
+.week-calls-line { display: inline-flex; align-items: center; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font-size: var(--fs-2); }
+.week-calls-line:hover { text-decoration-thickness: 2px; }
 .cp-calls-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .app.phone .week-calls-line, .app.phone .cp-calls-acts .mini { min-height: var(--tap, 44px); }
+
+/* MC-4: in a narrow list a call's name goes under its time rather than squeezing beside it. */
+@container (max-width: 480px) {
+  .calls-row-one { flex-wrap: wrap; row-gap: 0; }
+  .calls-row-one .calls-name { flex-basis: 100%; }
+}

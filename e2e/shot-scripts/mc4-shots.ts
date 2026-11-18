@@ -103,7 +103,6 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-4 screenshots", () => {
         // Skip all and close on a call with proposals, and its Undo.
         await shot(page, `${label}-after-08-skip-all-undo`, async () => {
           await go(page, "#/calls");
-          page.once("dialog", (d) => void d.accept());
           await page.locator("[data-section='needs'] [data-call-act='skip-all']").first().click();
           await page.locator(".toast, [role='status']").filter({ hasText: /closed/ }).first().waitFor({ timeout: 10_000 });
         });

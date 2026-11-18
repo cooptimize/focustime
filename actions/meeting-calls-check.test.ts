@@ -169,6 +169,11 @@ describe("MC-4: meeting.calls_check", () => {
     expect(r.unchecked).toBe(5);
     expect(Object.values(r.answers).filter((v) => v === "yes").length).toBe(CHECK_CAP);
     for (const s of t.g.sent.filter((x) => x.body)) expect((JSON.parse(s.body!) as { requests: unknown[] }).requests.length).toBeLessThanOrEqual(20);
+    // Opening Calls again within the 15 minutes asks Teams nothing new: only Check more goes past the newest 40.
+    const batches = () => t.g.sent.filter((x) => x.body).length;
+    const sent = batches();
+    expect((await t.check()).unchecked).toBe(5);
+    expect(batches()).toBe(sent);
     expect((await t.check({ more: true })).unchecked).toBe(0);
   });
 

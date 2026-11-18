@@ -2488,7 +2488,7 @@ export function App() {
                   promises={inboxToday?.items ?? []}
                   read={<ReadLine read={read} what="week" onRetry={retryRead} />}
                   busy={read !== null}
-                  sub={<><div className="pw-chips">{weekChips}</div>{weekSub}</>}
+                  sub={<><WeekCallsLine today={zonedNow(userZone(data)).toPlainDate().toString()} weekStart={askedWeek} zone={userZone(data)} /><div className="pw-chips">{weekChips}</div>{weekSub}</>}
                   onPrev={() => changeWeek(-1)}
                   onNext={() => changeWeek(1)}
                   onThisWeek={askedWeek !== data.today.weekStart ? goToday : null}

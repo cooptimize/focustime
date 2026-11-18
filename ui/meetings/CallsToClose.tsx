@@ -42,8 +42,6 @@ export function CloseOutCalls({ date, today, zone }: { date: string; today: stri
   const head = CLOSE_TEXT.closeOutHead(date === today ? null : Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long" }));
   if (!list.length) return null;
   const skipAll = async (m: CallMark) => {
-    const words = m.open === 1 ? CLOSE_TEXT.skipLastClose(1) : CLOSE_TEXT.skipAllClose;
-    if (!window.confirm(`${words}: ${m.name}? ${CLOSE_TEXT.skippedNone}`)) return;
     const d = await call<{ calls: { skipped: { id: number; was: "open" | "failed" }[] }[] }>("meeting.skip_all", { occurrenceIds: [m.occurrenceId] });
     const items = d.calls.flatMap((c) => c.skipped);
     reload();

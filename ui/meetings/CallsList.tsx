@@ -186,7 +186,10 @@ export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHid
                 <span className="muted">{CLOSE_TEXT.hideEveryHint}</span>
               </button>
               <button type="button" role="menuitem" onClick={() => (setMenu(false), onHideWeek())} data-hide="week">{CLOSE_TEXT.hideWeek}</button>
-              <button type="button" role="menuitem" onClick={() => (setMenu(false), onExpand(true))} data-hide="each">{CLOSE_TEXT.showEach}</button>
+              <button type="button" role="menuitem" onClick={() => (setMenu(false), onExpand(true))} data-hide="each">
+                {CLOSE_TEXT.showEach}
+                <span className="muted">{CLOSE_TEXT.showEachHint}</span>
+              </button>
             </div>
           )}
         </div>

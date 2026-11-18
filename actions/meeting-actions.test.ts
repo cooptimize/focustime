@@ -31,7 +31,8 @@ const ADMIN = "11111111-1111-4111-8111-111111111111";
 const LEAD = "22222222-2222-4222-8222-222222222222";
 const MATE = "33333333-3333-4333-8333-333333333333";
 const OUTSIDER = "44444444-4444-4444-8444-444444444444";
-const NOW = "2026-11-10T17:00:00Z";
+const NOW0 = "2026-11-10T17:00:00Z";
+let NOW = NOW0;
 const readPdf = pdfReader();
 const JOIN = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_contoso%40thread.v2/0";
 const CLIENT_HOSTED = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_fabrikamhosted%40thread.v2/0";
@@ -493,6 +494,29 @@ describe("MC-4: closing a call", () => {
     const ps = (await review()).proposals;
     expect(ps.find((p) => p.id === a!.id)!.state).toBe("open");
     expect(ps.find((p) => p.id === b!.id)!.state).toBe("skipped");
+  });
+
+  it("Undo leaves alone a proposal I skipped again myself since, and puts a failed one back with who decided it", async () => {
+    const { act, occurrenceId, review } = await aCall();
+    try {
+      const r = data<{ calls: { skipped: { id: number; was: string; skippedAt: string }[] }[] }>(await act(ADMIN, "meeting.skip_all", { occurrenceIds: [occurrenceId] }));
+      const [a, b] = r.calls[0]!.skipped;
+      expect(a!.skippedAt).toBe(NOW0);
+      NOW = "2026-11-10T17:01:00Z";
+      data(await act(ADMIN, "meeting.edit", { proposalId: b!.id, skip: false }));
+      data(await act(ADMIN, "meeting.edit", { proposalId: b!.id, skip: true }));
+      data(await act(ADMIN, "meeting.unskip_all", { items: [a, b] }));
+      const ps = (await review()).proposals;
+      expect(ps.find((p) => p.id === a!.id)!.state).toBe("open");
+      expect(ps.find((p) => p.id === b!.id)!.state).toBe("skipped");
+      // A failed one: Undo restores who decided it and when, as Skip all answered.
+      data(await act(ADMIN, "meeting.unskip_all", { items: [{ ...b!, skippedAt: "2026-11-10T17:01:00Z", was: "failed", by: LEAD, decidedAt: NOW0 }] }));
+      const f = (await review()).proposals.find((p) => p.id === b!.id)!;
+      expect([f.state, f.decidedBy, f.decidedAt]).toEqual(["failed", LEAD, NOW0]);
+      expect(await act(ADMIN, "meeting.unskip_all", { items: [{ id: a!.id, was: "open" }] })).toMatchObject({ ok: false, status: 400 });
+    } finally {
+      NOW = NOW0;
+    }
   });
 
   it("putting one skipped proposal back opens a closed call", async () => {
