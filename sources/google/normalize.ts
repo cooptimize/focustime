@@ -11,6 +11,8 @@ export type GoogleEvent = {
   end: GoogleTime;
   /** Requested with fields=attendees(self,responseStatus) only: no names or emails. */
   attendees?: { self?: boolean; responseStatus?: string }[];
+  /** DY-1: set on an instance of a recurring event; read only for `repeats`, never kept. */
+  recurringEventId?: string;
 };
 
 export function normalizeGoogleEvents(items: readonly GoogleEvent[], calendarId: string): CalEvent[] {
@@ -32,6 +34,7 @@ export function normalizeGoogleEvents(items: readonly GoogleEvent[], calendarId:
       allDay,
       showAs: e.transparency === "transparent" ? "free" : mine === "tentative" ? "tentative" : "busy",
       isPersonal: true,
+      ...(e.recurringEventId ? { repeats: true as const } : {}),
     });
   }
   return out;

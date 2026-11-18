@@ -410,7 +410,9 @@ describe("event menus by editing tier (step 13)", () => {
     expect(ids(reviewer).slice(0, 4)).toEqual(["call-open", "call-transcript", "call-rerun", "call-upload"]);
     expect(items(reviewer)[0]!.label).toBe("Review proposals");
     expect(ids(reviewer).indexOf("open")).toBeGreaterThan(3);
-    expect(reviewer.title).toBe("Contoso weekly status · Review 6 proposals");
+    // DY-1: the call's type is in the title and heads the menu (the group of its items).
+    expect(reviewer.title).toBe("Contoso weekly status · Weekly status call · Review 6 proposals");
+    expect(items(reviewer)[0]!.group).toBe("Weekly status call");
     const attendee = eventMenu(env(web2).e, ev("outlook:B", "Contoso weekly status"), { ...call, review: false, needsMe: false, label: "6 proposals to review" });
     expect(ids(attendee).filter((i) => i.startsWith("call-"))).toEqual(["call-open", "call-transcript"]);
     expect(items(attendee)[0]!.label).toBe("Open the call");

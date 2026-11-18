@@ -7,8 +7,9 @@
 import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDayFold, useHoldWhileInside } from "./dayFold.tsx";
 import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
-import { callForEvent, callsIn, useCallMarks } from "./meetings/calls.ts";
-import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
+import { callForEvent, callsIn, useCallFor, useCallMarks } from "./meetings/calls.ts";
+import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MEETING_WORDS } from "../plan/call-words.ts";
 import { LiveCalls } from "./cowork.tsx";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -283,7 +284,7 @@ export function BlockCard({ earlier, slot, colors, minFocusWindow, overflow, spa
             <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : call ? "is-call" : undefined} title={p.event.title}>
               <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
               <span className="ce-title" {...titleOpensCall(call)}>{p.event.title}</span>
-              {call && <CallMarkButton call={call} tabIndex={selected ? 0 : -1} />}
+              <MeetingMark e={p.event} call={call} tabIndex={selected ? 0 : -1} />
             </li>
             );
           })}
@@ -473,7 +474,7 @@ function DayStrip({ slot, tz, label, now }: { slot: Slot; tz: string; label: str
         ))}
         {events.map((p) => {
           const e = p.event;
-          return <span key={e.id} className={`ds-ev ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"} show-${e.showAs ?? "busy"}`} style={seg(ms(p.clipStart), ms(p.clipEnd))} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} />;
+          return <span key={e.id} className={`ds-ev ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"} show-${e.showAs ?? "busy"}`} style={seg(ms(p.clipStart), ms(p.clipEnd))} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}${e.repeats ? ` · ${MEETING_WORDS.repeats}` : ""}`} />;
         })}
         {now && now.past > 0 && <span className="ds-past" style={{ width: pct(Math.min(1, now.past)) }} aria-hidden="true" />}
       </div>
@@ -630,8 +631,11 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
   const samples = useContext(SampleSources);
   const menu = useEventMenu(e);
   const kind = e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting";
+  // DY-1: Week's slim rail has no room for a mark: a call's type or Repeats is in its hover (and the call heads its menu).
+  const call = useCallFor(e);
+  const mark = call ? ` · ${call.role}` : e.repeats ? ` · ${MEETING_WORDS.repeats}` : "";
   return (
-    <div className={`r-ev ${kind}${e.calendar ? " linked" : ""} show-${e.showAs ?? "busy"}`} style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
+    <div className={`r-ev ${kind}${e.calendar ? " linked" : ""} show-${e.showAs ?? "busy"}`} style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}${mark}`} {...menu}>
       <span>{e.title}</span>
     </div>
   );

@@ -85,3 +85,23 @@ describe("which events aren't meetings (the risk rules' notMeeting)", () => {
     expect(JSON.stringify(e)).not.toMatch(/attendees|isOrganizer/);
   });
 });
+
+describe("DY-1: whether an Outlook event repeats", () => {
+  const ev = (type: string | undefined): GraphEvent => ({ id: `x-${type}`, subject: "Standup", isAllDay: false, isCancelled: false, showAs: "busy", responseStatus: null, start: { dateTime: "2026-11-02T09:00:00", timeZone: NY }, end: { dateTime: "2026-11-02T09:15:00", timeZone: NY }, ...(type ? { type } : {}) });
+  it("is known only from the calendar's own type; nothing else of it is kept", () => {
+    const { events } = normalizeGraphEvents(["occurrence", "exception", "seriesMaster", "singleInstance", undefined].map(ev), NY);
+    expect(events.map((e) => e.repeats ?? false)).toEqual([true, true, true, false, false]);
+    for (const e of events) expect(Object.keys(e).sort()).not.toContain("type");
+  });
+  it("a title that sounds like a series isn't one", () => {
+    const { events } = normalizeGraphEvents([{ ...ev("singleInstance"), subject: "Weekly sync (recurring)" }], NY);
+    expect(events[0]!.repeats).toBeUndefined();
+  });
+});
+
+describe("DY-1: the calendar read asks for type and nothing more", async () => {
+  const { GRAPH_SELECT } = await import("./source.ts");
+  it("selects exactly the fields it did before, plus type", () => {
+    expect(GRAPH_SELECT.split(",")).toEqual(["subject", "start", "end", "isAllDay", "showAs", "responseStatus", "isCancelled", "isOrganizer", "attendees", "type"]);
+  });
+});

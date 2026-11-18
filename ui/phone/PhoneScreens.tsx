@@ -17,6 +17,7 @@ import { todoLine } from "../TodoSheet.tsx";
 import { userZone } from "../../week/zone.ts";
 import { LiveCalls, liveOf, useCoworkData } from "../cowork.tsx";
 import { Icon, type IconName } from "../icons.tsx";
+import { RepeatMark } from "../meetings/CallMark.tsx";
 import { VmCtx } from "../Account.tsx";
 
 export type PhoneTab = "day" | "week" | "inbox" | "more";
@@ -196,6 +197,7 @@ export function NextLines({ lines }: { lines: readonly NextLine[] }) {
             <span className="pn-next-text">
               <Icon name={l.kind === "meeting" ? "meeting" : "day"} />
               <span className="pn-next-title">{l.text}</span>
+              {l.callType ? <span className="pn-call-type">{l.callType}</span> : l.repeats ? <RepeatMark /> : null}
             </span>
             {l.detail && <span className={`pn-next-detail${l.kind === "block" ? " risk" : ""}`}>{l.detail}</span>}
           </li>

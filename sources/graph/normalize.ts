@@ -16,6 +16,8 @@ export type GraphEvent = {
   /** Read for the risk rules only (notMeeting): whether I organize it and how many attendees; addresses are never kept. */
   isOrganizer?: boolean;
   attendees?: unknown[];
+  /** DY-1: singleInstance, occurrence, exception or seriesMaster; read only for `repeats`. */
+  type?: string;
   /** FocusTime's marker, when the read token may expand it (Calendars.Read or more). */
   singleValueExtendedProperties?: { id?: unknown; value?: unknown }[];
 };
@@ -88,6 +90,7 @@ export function normalizeGraphEvents(items: readonly GraphEvent[], timeZone: str
       isPersonal: false,
     };
     if (response) ev.responseStatus = response;
+    if (e.type === "occurrence" || e.type === "exception" || e.type === "seriesMaster") ev.repeats = true;
     const notMeeting = notMeetingOf(e);
     if (notMeeting) ev.notMeeting = notMeeting;
     events.push(ev);

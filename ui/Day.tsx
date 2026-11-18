@@ -46,6 +46,7 @@ import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
 import { DayFoldCtx, useHandFolds, type DayFold } from "./dayFold.tsx";
+import { callForEvent, useCallMarks } from "./meetings/calls.ts";
 import { arrivalScroll, foldsByItself, isFolded } from "../plan/day-fold.ts";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
 import { userZone } from "../week/zone.ts";
@@ -340,6 +341,7 @@ export function Day(props: Props) {
   const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay || catchUpCell);
   // DY-1: which blocks are folded (plan/day-fold.ts). Only today's, in the ordinary view, on a computer or a tablet.
   const handFolds = useHandFolds(realToday);
+  const callMarks = useCallMarks();
   const [dragOpen, setDragOpen] = useState<ReadonlySet<Half>>(new Set());
   const [held, setHeld] = useState<ReadonlySet<Half>>(new Set());
   useEffect(() => {
@@ -552,7 +554,7 @@ export function Day(props: Props) {
           {nudges && (
             <PhoneM.NextLines
               lines={PhoneM.nextLines(
-                (cal?.timed ?? []).filter((e) => isMeeting({ id: e.event.id, title: e.event.title, start: e.start, end: e.end, isPersonal: e.event.isPersonal, unavailable: e.event.unavailable, notMeeting: e.event.notMeeting, allDay: e.event.allDay })).map((e) => ({ title: e.event.title, start: e.start, end: e.end })),
+                (cal?.timed ?? []).filter((e) => isMeeting({ id: e.event.id, title: e.event.title, start: e.start, end: e.end, isPersonal: e.event.isPersonal, unavailable: e.event.unavailable, notMeeting: e.event.notMeeting, allDay: e.event.allDay })).map((e) => ({ title: e.event.title, start: e.start, end: e.end, repeats: !!e.event.repeats, callType: callForEvent(callMarks, e.event)?.role ?? null })),
                 blocks.map((b) => {
                   const st = blockStatus(b.risks);
                   return { start: b.start, name: phoneNameOf(data, nameOf, { half: b.half, clientKey: b.focus[0]?.clientKey ?? null }), risk: st.kind === "at_risk" ? `${st.label}${st.short ? ` · ${st.short}` : ""}` : null };

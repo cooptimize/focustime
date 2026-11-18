@@ -2,7 +2,8 @@
 // off hours, free gaps, meetings side by side, timeboxes and the now line. One copy: ui/WeekGrid.tsx and
 // ui/DayTimeline.tsx both draw this.
 import { useCallFor } from "./meetings/calls.ts";
-import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MEETING_WORDS } from "../plan/call-words.ts";
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -121,13 +122,13 @@ export function EventCard({ placed, tz, style, label = true, overlaps = false }:
     <div
       className={`event ${e.unavailable ? "unavailable" : kind}${call ? " is-call" : ""}${e.calendar ? " linked" : ""} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
+      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${call ? ` · ${call.role}` : e.repeats ? ` · ${MEETING_WORDS.repeats}` : ""}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
       {...menu}
     >
       {label && <><span className="ev-line">
         <span className="ev-time">{e.allDay ? "All day" : shortRange(e, tz)}</span>
         <span className="ev-title" {...titleOpensCall(call)}>{e.title}</span>
-        {call && <CallMarkButton call={call} />}
+        <MeetingMark e={e} call={call} />
         {overlaps && <span className="ev-overlap" title="Another event is booked at the same time">Overlaps</span>}
       </span>
       <span className="ev-meta">

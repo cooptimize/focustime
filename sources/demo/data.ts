@@ -98,12 +98,13 @@ export function demoOutlook(monday: IsoDate): CalEvent[] {
     return { id: `outlook:demo-${id}-${d}`, source: "outlook", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", ...extra };
   };
   return [
-    ...[0, 1, 2].map((d) => o(`standup${d}`, d, "Team standup", "09:00", "09:15")),
+    // DY-1: the standups, the weekly status and the refinement are series on the calendar (repeats); the rest are single.
+    ...[0, 1, 2].map((d) => o(`standup${d}`, d, "Team standup", "09:00", "09:15", { repeats: true })),
     o("prop", 0, "Proposal review with Jordan", "11:00", "11:45"),
-    o("nwstatus", 0, "Northwind weekly status", "13:00", "13:30"),
+    o("nwstatus", 0, "Northwind weekly status", "13:00", "13:30", { repeats: true }),
     o("nwmodel", 0, "Northwind data model review", "15:00", "16:00"),
     o("hhplan", 1, "Harbor sprint planning", "10:00", "11:00"),
-    o("atref", 1, "Atlas backlog refinement", "13:00", "14:00"),
+    o("atref", 1, "Atlas backlog refinement", "13:00", "14:00", { repeats: true }),
     o("atdemo", 1, "Atlas stakeholder demo", "14:00", "15:30", { showAs: "tentative", responseStatus: "tentative" }),
     o("nwshop", 2, "Northwind requirements workshop", "09:30", "11:30"),
     o("lunch", 2, "Lunch and learn: Power Automate", "12:00", "12:45", { showAs: "tentative", responseStatus: "tentative" }),
@@ -135,11 +136,11 @@ export function demoDays(today: IsoDate): { pto: number; out: number } {
 
 /** Personal events (Google): one crosses the morning and afternoon seam on Monday; DM-1: an afternoon out (QF-1: never today). */
 export function demoGoogle(monday: IsoDate, today: IsoDate): CalEvent[] {
-  const g = (id: string, day: number, title: string, from: string, to: string): CalEvent => {
+  const g = (id: string, day: number, title: string, from: string, to: string, repeats = false): CalEvent => {
     const d = plus(monday, day);
-    return { id: `google-demo-${id}-${d}`, source: "google", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: true };
+    return { id: `google-demo-${id}-${d}`, source: "google", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: true, ...(repeats ? { repeats: true as const } : {}) };
   };
-  return [g("dentist", 0, "Dentist", "12:00", "13:00"), g("pickup", 1, "School pickup", "15:30", "16:00"), g("run", 2, "Run club", "17:30", "18:30"), g("out", demoDays(today).out - 1, "Out: school event", "13:30", "16:30")];
+  return [g("dentist", 0, "Dentist", "12:00", "13:00"), g("pickup", 1, "School pickup", "15:30", "16:00", true), g("run", 2, "Run club", "17:30", "18:30", true), g("out", demoDays(today).out - 1, "Out: school event", "13:30", "16:30")];
 }
 
 /** PTO: Thursday is a day off (QF-1, WK-5: Saturday when today is Thursday, so never today). */

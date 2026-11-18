@@ -1,7 +1,7 @@
 // The block agenda (step 13.6, D244): a block's meetings, personal events, unavailable time and timeboxes in time order,
 // with the free gaps between. Moved out of Plan the day (WD-1) for the detail panel.
 import { callForEvent, useCallMarks } from "./meetings/calls.ts";
-import { CallMarkButton, titleOpensCall } from "./meetings/CallMark.tsx";
+import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { agendaOf } from "../plan/agenda.ts";
 import type { DayEventWhen } from "../plan/todaycal.ts";
@@ -58,15 +58,15 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
       );
     const w = r.eventId ? whens?.get(r.eventId) : undefined;
     // MC-1d: a registered call's meeting carries its mark here too (matched on the meeting's own start, not the clipped one).
-    const ev = r.kind === "meeting" && r.eventId ? slot.events.find((p) => p.event.id === r.eventId)?.event : undefined;
-    const call = ev ? callForEvent(calls, ev) : null;
+    const ev = r.eventId ? slot.events.find((p) => p.event.id === r.eventId)?.event : undefined;
+    const call = ev && r.kind === "meeting" ? callForEvent(calls, ev) : null;
     return (
       <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
         <span className="ag-time">{when}</span>
         <span className="ag-title" title={r.title} {...titleOpensCall(call)}>
           {r.title}
         </span>
-        {call && <CallMarkButton call={call} />}
+        {ev ? <MeetingMark e={ev} call={call} /> : null}
         {w === "now" && <span className="cal-tag now">Now</span>}
         {w === "next" && <span className="cal-tag next">Next</span>}
         {r.free && <span className="muted">shown as free</span>}
