@@ -9,7 +9,9 @@ import type { Pick } from "../plan/types.ts";
 import { progressChip } from "../plan/progress.ts";
 import { planAction } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
-import { COPY_LINK, deployForm, timeStep } from "./menu.ts";
+import { COPY_LINK, deployForm, leaveDeployment, timeStep } from "./menu.ts";
+import { HoldLine, PeopleLine } from "./DeployPeople.tsx";
+import { deleteQuestion, forPeopleText, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { PlanCtx } from "./planview.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { PhoneSheet } from "./PhoneShell.tsx";
@@ -75,7 +77,9 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
         to.date === pick.date ? async () => (await planAction("pick.move", { id: pick.id, date: pick.date, half: pick.half }), onChanged())
         : copy ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged())
         : null;
-      note(`${label} · ${pick.title}`, undo);
+      // DP-3: a deployment moves for everyone on it; the undo line counts them.
+      const count = forPeopleText(pick.shared?.people.length ?? 1);
+      note(`${label} · ${pick.title}${count ? ` · ${count}` : ""}`, undo);
     } catch (e) {
       note(errText(e));
     }
@@ -89,6 +93,8 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
   return (
     <PhoneSheet label={`To-do: ${pick.title}`} title={pick.title} onClose={onClose} className="todo-sheet">
       <p className="ts-line muted">{todoLine(pick, data)} · {where}</p>
+      {pick.shared && <PeopleLine pick={pick} me={pick.shared.me} />}
+      {pick.shared && <HoldLine pick={pick} {...(menu.env && pick.shared.people.length > 1 ? { onLeave: () => (onClose(), void leaveDeployment(menu.env!, pick)) } : {})} />}
       <div className="ts-acts">
         {editable && (
           <button type="button" className={done ? "" : "primary"} onClick={tick}>
@@ -119,6 +125,17 @@ export function TodoSheet({ pick, data, now, onClose, onChanged }: { pick: Pick;
           }}>
             Deployment details
           </button>
+        )}
+        {/* DP-3: only me off it (it stays for the others), or Delete for everyone after a question that names them. */}
+        {pick.shared && pick.shared.people.length > 1 && editable && menu.env && (
+          <>
+            <button type="button" onClick={() => (onClose(), void leaveDeployment(menu.env!, pick))}>{PEOPLE_WORDS.leave}</button>
+            <button type="button" className="danger" onClick={() => {
+              if (!window.confirm(deleteQuestion(pick.shared!.people, pick.shared!.me))) return;
+              onClose();
+              void menu.env!.runPlan("deploy.delete", { id: pick.id }).then((ok) => ok && note(PEOPLE_WORDS.deleted(pick.title, pick.shared!.people.length), async () => void (await menu.env!.runPlan("deploy.restore", { id: pick.id }))));
+            }}>{PEOPLE_WORDS.deleteAll}</button>
+          </>
         )}
         {/* FN-1: the story card instead of DevOps; its link is copied, never opened. */}
         {pick.itemUrl && pick.itemId !== null && menu.env && (

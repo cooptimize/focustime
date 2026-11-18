@@ -73,6 +73,7 @@ import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { AfterHoursChip, clientNameFor, DeployedOffer } from "./Deploy.tsx";
+import { holdAction, LeftHolds, useHoldsInStep } from "./DeployPeople.tsx";
 import { DEPLOYED_EVENT, readShowWeekend, TICK_REMOVED_EVENT, writeShowWeekend } from "./weekend.ts";
 import { catchUpWord, hiddenNote, SHOW_ALL, shownDays, stepShown, type ShowDays } from "../plan/weekdays.ts";
 import { MoreButton, PopupMenu } from "./Menus.tsx";
@@ -876,6 +877,8 @@ export function App() {
   // Step 13: the collaboration finder's target, and the timebox env for menus built before render.
   const [helpTarget, setHelpTarget] = useState<HelpTarget | null>(null);
   const tbEnvRef = useRef<TimeboxEnv | null>(null);
+  // DP-3: my holds that fell behind after someone else's change, brought in step on a visit by my own confirm_own rule.
+  useHoldsInStep(data, data ? tbEnvRef.current : null);
   const [writeAccess, setWriteAccess] = useState<WriteState | null>(null);
   const accessAsked = useRef(false);
   const loadAccess = useCallback(() => {
@@ -1717,6 +1720,7 @@ export function App() {
       ...(data.timeboxSettings.enabled !== false ? { timeboxDay: (d: IsoDate) => void timeboxDay(d) } : {}),
       // WD-2: the block panel on a block (Day stays Day; anywhere else it is Week).
       openBlock: (date, half, add) => openBlock(date, half, { add: !!add }),
+      holdAction: (p, on) => void (tbEnvRef.current && holdAction(tbEnvRef.current, p, on).then((err) => err && setNotice(err))),
       takeOff: (p) => void takeOffPick(p.id, { date: p.date, half: p.half }, { changed: reloadQuiet, note: (text, undo) => setUndoToast({ id: Date.now(), text, undo }) }),
       openLink: (k, u) => void openWorkItem(k, u),
       copyLink: (_k: string, u: string) => void copyWorkLink(u),
@@ -2412,6 +2416,7 @@ export function App() {
                 </button>
               )}
               <AfterHoursChip after={data.afterHours} />
+              <LeftHolds holds={data.leftHolds} />
             </div>
             <ModeArea>
               <CardsTimelineSwitch shown={showTimelines} onToggle={() => void saveShowTimelines(!showTimelines)} />

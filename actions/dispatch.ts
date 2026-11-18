@@ -4,8 +4,10 @@ import type { PressGrants } from "./call-press.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
-import { afterHours } from "../plan/deploy.ts";
+import { afterHours, windowHalf } from "../plan/deploy.ts";
 import { deployItemAction, type DeployItemAction } from "./deploy-item-actions.ts";
+import { sharedDeployAction, type PeopleResolver, type SharedDeployAction } from "./shared-deploy-actions.ts";
+import { PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { pickNeed } from "../plan/types.ts";
 import { scopeDepsOf } from "./scope-deps.ts";
 import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
@@ -234,7 +236,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Status's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -580,6 +582,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const unavailable = (await ctx.plan?.unavailableBetween(weekStart, sunday)) ?? [];
   const flex = (await ctx.plan?.flexBetween(weekStart, sunday)) ?? [];
+  // DP-3: a deployment someone else made or moved sits in my own AM, PM or evening, by my own hours.
+  await ctx.plan?.deployPlaceHalves(weekStart, sunday, (d, w) => windowHalf(hoursOn(model, d), w));
   const weekendPicks = (await ctx.plan?.picksBetween(weekDates7(weekStart)[5]!, sunday)) ?? [];
   // WK-3: a weekend day shows when something lands on it: a to-do (a Deployment too), a timebox, a promise due (one
   // I added or one from a chat), or always with Show weekend on. Calendar events count inside buildWeek.
@@ -663,6 +667,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     weekStart,
     week,
     afterHours: after,
+    leftHolds: (await ctx.plan?.deployLeftHolds()) ?? [],
     today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
     plan: weekPlans,
     planClients,
@@ -1552,6 +1557,29 @@ async function pickerAction(ctx: ActionContext, input: unknown): Promise<ActionR
   return { ok: true, data };
 }
 
+/**
+ * DP-3: who can be on a deployment: Cooptimizers (never a guest, an automation account or anyone outside Cooptimize's
+ * domains, by cooptimizers()) who have signed in to FocusTime, so it can show in their own plan. Checked on the server
+ * for every id a form sends; the names are the directory's.
+ */
+export function deployPeopleOf(ctx: ActionContext): PeopleResolver {
+  return async (ids) => {
+    if (!ctx.org) return { ok: false, error: "People can't be read just now. Try again in a moment" };
+    const cc = await conversationContext(ctx);
+    const [lv, directory, peopleClients, users] = await Promise.all([ctx.org.levels(), ctx.org.store.directory(), ctx.org.store.peopleClients(), cc.users().catch(() => [])]);
+    const picker = pickerPeopleOf({ levels: lv, directory, peopleClients, users });
+    const out: { id: string; name: string }[] = [];
+    for (const raw of ids) {
+      const e = lv.people.entry(raw);
+      const c = e && !e.notCooptimizer ? picker.isCooptimizer(e.id) : null;
+      if (!e || !c) return { ok: false, error: PEOPLE_WORDS.onlyCooptimizers };
+      if (!e.signedIn) return { ok: false, error: PEOPLE_WORDS.notOnFocusTime(c.name) };
+      if (!out.some((p) => p.id === e.id)) out.push({ id: e.id, name: c.name });
+    }
+    return { ok: true, people: out };
+  };
+}
+
 /** CV-2: one chat image for FocusTime's own endpoint (server/app.ts), with the member and client checks. */
 export async function chatImage(ctx: ActionContext, id: number): Promise<ServedImage> {
   return serveChatImage(await requestContext(ctx), id);
@@ -1816,6 +1844,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "action") || !isActionName(i.action)) return bad("demo.fail_next takes { action }, a registered action");
       ctx.demo.failNext(i.action);
       return { ok: true, data: { action: i.action } };
+    }
+    case "demo.be": {
+      // DP-3: only in the demo: be one of the demo's teammates who use FocusTime (their own plan on the demo's own
+      // database), or yourself again ("me"), so a shared deployment can be seen from both sides.
+      if (!ctx.demo?.on || !ctx.demo.be) return { ok: false, status: 403, error: "Only in the demo" };
+      const i = (req.input ?? {}) as Record<string, unknown>;
+      if (typeof i !== "object" || Array.isArray(i) || Object.keys(i).some((k) => k !== "who") || (i.who !== undefined && (typeof i.who !== "string" || i.who.length > 64))) return bad("demo.be takes { who?: a teammate's id or \"me\" }");
+      const r = await ctx.demo.be((i.who as string | undefined) ?? null);
+      return r.ok ? { ok: true, data: { current: r.current, people: r.people } } : { ok: false, status: 404, error: r.error };
     }
     case "demo.status": {
       if (!noInput(req.input)) return bad("demo.status takes no input");
@@ -2615,6 +2652,15 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
         action satisfies DeployItemAction,
         req.input,
       );
+    case "deploy.people":
+    case "deploy.leave":
+    case "deploy.rejoin":
+    case "deploy.delete":
+    case "deploy.restore":
+    case "deploy.hold":
+    case "deploy.hold_back":
+    case "deploy.hold_follow":
+      return sharedDeployAction({ plan: ctx.plan, config: () => configured(ctx), people: deployPeopleOf(ctx), now: ctx.now }, action satisfies SharedDeployAction, req.input);
     case "planday.start":
     case "planday.carry":
     case "pick.add":
@@ -2646,6 +2692,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
             const rule = (await ctx.org?.rules())?.clients[clientKey];
             return rule ? { dataPlatform: rule.dataPlatform, deployItems: rule.deployItems } : null;
           },
+          people: deployPeopleOf(ctx),
           now: ctx.now,
           resolved: (cfg, items) => resolvedKeys(ctx.makeDevOps(cfg.dataverse, userZone(cfg)), [...new Set(items.map((i) => i.clientKey))].map((clientKey) => ({ clientKey, clientName: clientKey })), idsByClient(items)),
           storeItem: async (clientKey, itemId) => {
