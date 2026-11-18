@@ -26,7 +26,7 @@ describe.skipIf(!CHROMIUM)("DY-1: meeting marks (browser, demo mode, 3:55 PM)", 
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Day's Timeline: Repeats on a series only, none on a single meeting or a personal one-off; a call shows its type and no repeat mark", async () => {
+  it("Day's Timeline: Repeats on a series only, none on a single meeting or a personal one-off; a call shows its type and state on its second line, no chip (WK-6)", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await call(page, "ui.set_day_fold", { on: false });
     await call(page, "ui.set_today_timeline", { show: true });
@@ -38,11 +38,9 @@ describe.skipIf(!CHROMIUM)("DY-1: meeting marks (browser, demo mode, 3:55 PM)", 
     await expect(event(page, ".day-view", "Northwind data model review").locator(".repeat-mark").count()).resolves.toBe(0);
     await expect(event(page, ".day-view", "Dentist").locator(".repeat-mark").count()).resolves.toBe(0);
     const weekly = event(page, ".day-view", "Northwind weekly status");
-    await expect(weekly.locator(".repeat-mark").count()).resolves.toBe(0);
-    const mark = weekly.locator(".call-mark");
-    await expect(mark.locator(".call-type").textContent()).resolves.toBe("Weekly status call");
-    await expect(mark.getAttribute("aria-label")).resolves.toMatch(/^Weekly status call, /);
-    await expect(mark.getAttribute("title")).resolves.toMatch(/^Weekly status call · /);
+    expect(await weekly.locator(".call-mark, .ev-call").count()).toBe(0);
+    await expect(weekly.locator(".ev-call-state").textContent()).resolves.toBe("Weekly status call · Review 11 proposals");
+    await expect(weekly.getAttribute("title")).resolves.toContain(" · Weekly status call · Review 11 proposals");
     // Its menu leads with the call, under its type.
     await weekly.locator(".ev-meta").click();
     await expect(page.locator(".menu-group").first().textContent()).resolves.toBe("Weekly status call");
@@ -88,7 +86,7 @@ describe.skipIf(!CHROMIUM)("DY-1: meeting marks (browser, demo mode, 3:55 PM)", 
     // Every rail's meeting says it on hover, titles or not.
     await expect(page.locator('main.grid:not(.day-only) :is(.event, .r-ev)[title*="Atlas backlog refinement"]').first().getAttribute("title")).resolves.toMatch(/Repeats/);
     await expect(page.locator('main.grid:not(.day-only) :is(.event, .r-ev)[title*="Harbor sprint planning"]').first().getAttribute("title")).resolves.not.toMatch(/Repeats/);
-    await expect(page.locator('main.grid:not(.day-only) :is(.event, .r-ev)[title*="Northwind weekly status"]').first().getAttribute("title")).resolves.toMatch(/Weekly status call$/);
+    await expect(page.locator('main.grid:not(.day-only) :is(.event, .r-ev)[title*="Northwind weekly status"]').first().getAttribute("title")).resolves.toMatch(/Weekly status call( · Review 11 proposals)?(\n|$)/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

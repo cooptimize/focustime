@@ -99,7 +99,7 @@ export type CalEvent = {
   repeats?: true;
   /**
    * WK-6: the meeting's iCalUId (Outlook; the same on every attendee's calendar, different for each occurrence of a
-   * series), only to tie a kept call to its meeting by the meeting itself. Never shown, logged or kept.
+   * series), only to tie a kept call to its meeting by the meeting itself. Never shown or logged; held only with the week (its snapshot), never in the plan store.
    */
   key?: string;
 };

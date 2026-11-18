@@ -103,10 +103,13 @@ export function tieCalls(marks: readonly CallMark[], events: readonly DrawnMeeti
   const byEvent = new Map<string, CallMark>();
   const tied = new Set<number>();
   const meetings = events.filter(callable);
-  for (const m of marks) {
-    if (!m.eventKey) continue;
+  // The one that needs me first, so two calls on one meeting (registered, and asked to review) show the one to act on;
+  // the other is that meeting's too and never a second row of its own.
+  const keyed = marks.filter((m) => m.eventKey).sort((x, y) => Number(y.needsMe) - Number(x.needsMe));
+  for (const m of keyed) {
     const e = meetings.find((x) => x.key === m.eventKey && !byEvent.has(x.id));
     if (e) byEvent.set(e.id, m), tied.add(m.occurrenceId);
+    else if (meetings.some((x) => x.key === m.eventKey)) tied.add(m.occurrenceId);
   }
   const owned = new Set(marks.flatMap((m) => (m.eventKey ? [m.eventKey] : [])));
   for (const m of marks) {

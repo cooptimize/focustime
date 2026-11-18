@@ -2,8 +2,8 @@
 // off hours, free gaps, meetings side by side, timeboxes and the now line. One copy: ui/WeekGrid.tsx and
 // ui/DayTimeline.tsx both draw this.
 import { useCallFor } from "./meetings/calls.ts";
-import { MeetingMark, titleOpensCall } from "./meetings/CallMark.tsx";
-import { MEETING_WORDS } from "../plan/call-words.ts";
+import { RepeatMark, titleOpensCall } from "./meetings/CallMark.tsx";
+import { CARD_MEETINGS, MEETING_WORDS } from "../plan/call-words.ts";
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
@@ -122,17 +122,18 @@ export function EventCard({ placed, tz, style, label = true, overlaps = false }:
     <div
       className={`event ${e.unavailable ? "unavailable" : kind}${call ? " is-call" : ""}${e.calendar ? " linked" : ""} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={e.calendar ? ({ ...style, "--cal": e.calendar.color } as CSSProperties) : style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${call ? ` · ${call.role}` : e.repeats ? ` · ${MEETING_WORDS.repeats}` : ""}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
+      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${call ? ` · ${CARD_MEETINGS.state(call)}` : e.repeats ? ` · ${MEETING_WORDS.repeats}` : ""}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
       {...menu}
     >
       {label && <><span className="ev-line">
         <span className="ev-time">{e.allDay ? "All day" : shortRange(e, tz)}</span>
         <span className="ev-title" {...titleOpensCall(call)}>{e.title}</span>
-        <MeetingMark e={e} call={call} />
+        {/* WK-6: no call chip on a block; a call that needs me says its state on the meeting's second line. */}
+        {e.repeats && <RepeatMark />}
         {overlaps && <span className="ev-overlap" title="Another event is booked at the same time">Overlaps</span>}
       </span>
       <span className="ev-meta">
-        {e.unavailable ? "Unavailable" : sourceName(e, samples)}
+        {call?.needsMe ? <span className="ev-call-state">{CARD_MEETINGS.state(call)}</span> : e.unavailable ? "Unavailable" : sourceName(e, samples)}
         {show !== "busy" && show !== "unknown" ? ` · ${showAsLabel(e)}` : ""}
       </span></>}
     </div>

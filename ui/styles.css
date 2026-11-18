@@ -7763,3 +7763,10 @@ body.ah-dragging * { cursor: grabbing !important; }
 .pd-agenda .ag-call-icon { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--accent); --icon: calc(13px * var(--text-scale)); }
 .pd-agenda .ag-call-icon .ft-icon { width: var(--icon); height: var(--icon); }
 .card-meetings a.cm-hit, .card-meetings a.cm-hit:visited { color: var(--text); }
+/* WK-6: a call's state on its meeting in a rail or Day's Timeline, in place of the source line. */
+.event .ev-call-state { color: var(--accent); font-weight: 600; }
+/* WK-6 review: names wrap whole words (a long word may still break) and show up to three lines, on the card and in
+   the block panel's agenda; the panel's count is in the link colour, as on the card. */
+.card-meetings .cm-name { overflow-wrap: break-word; -webkit-line-clamp: 3; }
+.block-panel .bp-meetings .ag-title { white-space: normal; overflow-wrap: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; text-overflow: clip; }
+.block-panel .bp-meet-line .ml-needs { color: var(--accent); font-weight: 600; }

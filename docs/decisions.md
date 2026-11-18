@@ -3633,3 +3633,5 @@ Unnumbered until merge.
 | - | Done | The block panel's meetings line reads as the card's folded line with the count of calls that need me, with no mark (the clipped mark was the agenda row's call button, `flex: none` up to 16em). The agenda's meeting rows carry the call's state under the name; a call with no meeting is a row at its time. |
 | - | Done | Day's cards are the day in focus (Week's grid with one day), so Day names every block's meetings; the folded line (DY-1) counts calls in words with no mark. The phone is unchanged. |
 | - | Done | The meetings line's words moved to `ui/meetingsLine.ts` so the panel reads them without importing the card; the words for the rows, the count and the switch are `CARD_MEETINGS` in `plan/call-words.ts`. |
+| - | Done | From the review passes: the rail and Day's Timeline drop the call chip too (a call that needs me says its state on its meeting's second line, the title opens it); two calls on one meeting tie the one that needs me and the other is never a row of its own; names wrap whole words up to three lines on the card and in the panel's agenda; the panel's count is in the link colour. |
+

@@ -132,4 +132,11 @@ describe("WK-6: a call is tied to its meeting by the meeting itself", () => {
     expect(blockCalls(tieCalls(m, []), [], "2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z").needs).toEqual([]);
     expect(callsNeedingMe(m)).toBe(0);
   });
+  it("WK-6: two calls on one meeting tie the one that needs me, and the other is never a row of its own", () => {
+    const ev = { id: "outlook:a", key: "k1", start: "2026-11-04T14:30:00Z", end: "2026-11-04T16:30:00Z", source: "outlook" as const };
+    const mk = (id: number, needsMe: boolean) => ({ occurrenceId: id, eventKey: "k1", startAt: ev.start, endAt: ev.end, needsMe }) as never;
+    const tie = tieCalls([mk(1, false), mk(2, true)], [ev as never]);
+    expect((tie.byEvent.get("outlook:a") as unknown as { occurrenceId: number }).occurrenceId).toBe(2);
+    expect(tie.loose).toEqual([]);
+  });
 });
