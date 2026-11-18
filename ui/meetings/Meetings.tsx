@@ -1227,7 +1227,7 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
         </section>
       )}
       {view !== "transcript" && <p className="muted mtg-intro">
-        {r.transcript ? (r.pocket || r.noSpeakers ? `From the transcript (${r.transcript.lines} lines). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
+        {r.transcript ? (r.pocket || r.noSpeakers ? `From the transcript (${r.transcript.lines} ${r.transcript.lines === 1 ? "line" : "lines"}). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
         {editable && r.proposals.length === 0 ? "" : editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
         {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : m.call === "chat" ? CALLS_TEXT.whoSeesChat : CALLS_TEXT.whoSees}` : ""}
       </p>}

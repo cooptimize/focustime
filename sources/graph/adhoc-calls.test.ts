@@ -151,6 +151,8 @@ describe("MC-2c: finding the transcript and reading it", () => {
     const lines = joinTranscriptParts(r.parts, false);
     // No speaker is taken from the words ("Note:" stays words).
     expect(lines.every((l) => l.speaker === "Unknown")).toBe(true);
+    // Each cue its own line, never joined under one speaker.
+    expect(lines).toHaveLength(4);
     expect(lines[0]!.text).toContain("Note: thanks for joining.");
   });
 

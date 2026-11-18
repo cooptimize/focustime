@@ -236,7 +236,8 @@ export function joinTranscriptParts(parts: readonly { createdAt: string | null; 
     if (!named) text = unnamedCues(text);
     let lines: TranscriptLine[];
     try {
-      lines = parseVtt(text);
+      // Without names, each cue stays its own line (one speaker would join them all): numbered while parsing, then Unknown.
+      lines = parseVtt(text).map((l) => (named ? l : { ...l, speaker: "Unknown" }));
     } catch (e) {
       if (e instanceof TranscriptError) continue;
       throw e;
@@ -251,8 +252,8 @@ export function joinTranscriptParts(parts: readonly { createdAt: string | null; 
 
 /**
  * Graph's format without speaker names ("start --> end", then the words, sometimes after a blank line, as Microsoft's
- * example shows) as WebVTT cues whose words sit behind an empty voice tag, so the "Name: words" reading never names a
- * speaker from the words.
+ * example shows) as WebVTT cues whose words sit behind a numbered voice tag (each cue its own line; the caller names
+ * them all Unknown), so the "Name: words" reading never names a speaker from the words.
  */
 function unnamedCues(text: string): string {
   const cues: { time: string; words: string[] }[] = [];
@@ -262,5 +263,5 @@ function unnamedCues(text: string): string {
     if (r.includes("-->")) cues.push({ time: r, words: [] });
     else cues.at(-1)?.words.push(r);
   }
-  return `WEBVTT\n\n${cues.filter((c) => c.words.length).map((c) => `${c.time}\n<v >${c.words.join(" ")}`).join("\n\n")}\n`;
+  return `WEBVTT\n\n${cues.filter((c) => c.words.length).map((c, i) => `${c.time}\n<v Cue ${i + 1}>${c.words.join(" ")}`).join("\n\n")}\n`;
 }
