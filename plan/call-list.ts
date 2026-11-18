@@ -5,7 +5,6 @@
 // it only arranges what meeting.mine and meeting.calls already returned.
 import type { OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
-import { TRANSCRIPT_DAYS } from "./meetings.ts";
 import { CALL_LIST, callLabel, CALLS_TEXT } from "./call-words.ts";
 
 /** The list's filters, in order. Their counts add up to All: every row is in exactly one of the other three. */
@@ -15,7 +14,7 @@ export type ListFilter = (typeof LIST_FILTERS)[number];
 export type Bucket = Exclude<ListFilter, "all">;
 
 export type CallRow = {
-  /** "o<occurrence id>" for a call FocusTime keeps, "c<n>" for a calendar call nobody has read (in memory only). */
+  /** "o<occurrence id>" for a call FocusTime keeps, "c<its calendar key>" for a calendar call nobody has read (in memory and the page only). */
   key: string;
   occurrenceId: number | null;
   /** A calendar call nobody has read: what its setup needs. */
@@ -53,6 +52,9 @@ export type CallListInput = {
 const dayOf = (iso: string, zone: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDate().toString();
 const daysBetween = (a: string, b: string) => Temporal.PlainDate.from(a).until(Temporal.PlainDate.from(b), { largestUnit: "days" }).days;
 
+/** A calendar call's row: by its own calendar key (in memory and the page only), so a refetch keeps the same row. */
+export const otherRowKey = (c: { key: string }) => `c${c.key}`;
+
 /** Which filter a row is in, from its state. */
 export function bucketOf(o: { state: OccurrenceView["state"]; open: number }, needsMe: boolean): Bucket {
   if (needsMe) return "review";
@@ -70,7 +72,7 @@ function sourceOf(o: OccurrenceView, s: SeriesView): string {
 /**
  * Every call as one row, newest first. A calendar call someone already asked FocusTime to review is listed once, as the
  * call FocusTime keeps (with its people from my calendar). Calls older than the list's OTHER_CALL_DAYS days are left
- * out unless they need me and their transcript isn't dropped yet (TRANSCRIPT_DAYS); `older` has the rest, for the fold.
+ * out unless they need me (kept until their transcript is dropped, 30 days); `older` has the rest, for the fold.
  */
 export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] } {
   const peopleOf = new Map<number, number>();
@@ -100,10 +102,10 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
     });
   }
   const kept = new Set(all.map((r) => r.occurrenceId));
-  (x.others ?? []).forEach((c, i) => {
+  (x.others ?? []).forEach((c) => {
     if (c.occurrenceId && kept.has(c.occurrenceId)) return;
     all.push({
-      key: `c${i}`,
+      key: otherRowKey(c),
       occurrenceId: c.occurrenceId,
       other: c,
       name: c.name,
@@ -126,7 +128,9 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
   const older: CallRow[] = [];
   for (const r of all) {
     const age = daysBetween(r.day, x.today);
-    if (age < OTHER_CALL_DAYS || (r.state.needsMe && age < TRANSCRIPT_DAYS)) rows.push(r);
+    // A call that needs me is always listed (its transcript and proposals go at TRANSCRIPT_DAYS on the server), so the
+    // tab's count and To review never differ.
+    if (age < OTHER_CALL_DAYS || r.state.needsMe) rows.push(r);
     else older.push(r);
   }
   return { rows, older };

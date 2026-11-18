@@ -79,10 +79,18 @@ describe("MC-3: one list by day", () => {
     expect(firstToOpen([])).toBeNull();
   });
 
-  it("an older call that needs me is listed only while its transcript is kept", () => {
+  it("an older call that needs me is listed for as long as the server returns it, so To review is the tab's count", () => {
     const old = anOccurrenceView({ id: 20, seriesId: 1, startAt: "2026-10-01T18:00:00Z", endAt: "2026-10-01T18:30:00Z", state: "ready", open: 2 });
     const r = callRows({ meetings: [weekly], occurrences: [old], others: [], today: TODAY, zone: ZONE });
-    expect(r.rows).toEqual([]);
-    expect(r.older.map((x) => x.occurrenceId)).toEqual([20]);
+    expect(r.rows.map((x) => x.occurrenceId)).toEqual([20]);
+    expect(r.older).toEqual([]);
+    expect(filterCounts(r.rows, null).review).toBe(1);
+  });
+  it("a calendar call is keyed by its own calendar key, so a refetch in another order keeps the same row", () => {
+    const a = anOtherCall({ key: "ical-a", name: "Team standup", startAt: "2026-11-02T14:00:00Z", endAt: "2026-11-02T14:15:00Z" });
+    const b = anOtherCall({ key: "ical-b", name: "Design review", startAt: "2026-11-03T14:00:00Z", endAt: "2026-11-03T15:00:00Z" });
+    const one = callRows({ meetings: [], occurrences: [], others: [a, b], today: TODAY, zone: ZONE }).rows;
+    const two = callRows({ meetings: [], occurrences: [], others: [b, a], today: TODAY, zone: ZONE }).rows;
+    expect(one.map((r) => [r.key, r.name])).toEqual(two.map((r) => [r.key, r.name]));
   });
 });

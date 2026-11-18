@@ -17,14 +17,15 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("six tabs in order (Day · Week · Backlog · Status · Inbox · Code), no Plan or Team tab, no ritual chips, no context line; 1–6 and T switch them", async () => {
+  it("seven tabs in order (Day · Week · Backlog · Status · Inbox · Calls · Code), no Plan or Team tab, no ritual chips, no context line; 1–7 and T switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/), "Code"]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/), expect.stringMatching(/^Calls/), "Code"]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["t", "Day", "#/day"], ["6", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["t", "Day", "#/day"], ["6", "Calls", "#/calls"], ["7", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
-      expect(await hash(page)).toBe(h2);
+      // MC-3: Calls opens the call that needs me beside its list (#/calls/<id>).
+      expect(await hash(page)).toMatch(new RegExp(`^${h2}${h2 === "#/calls" ? "(/\\d+)?" : ""}$`));
     }
     expect(errors).toEqual([]);
     await page.close();
@@ -112,7 +113,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Backlog: Grid · Gantt; the ⋯ menu has Calls (MC-1d; MC-2 renamed it from Client calls), Commands, the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings", async () => {
+  it("Backlog: Grid · Gantt; the ⋯ menu has Commands (MC-3: Calls is a tab now), the Guide, the Technical docs, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
     await expect.poll(() => page.locator(".mode-switch .ms-btn").allTextContents()).toEqual(["Grid", "Gantt"]);
@@ -122,7 +123,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/backlog");
     await page.locator(".top-more").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Calls/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), "Technical docs", expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
     await page.keyboard.press("Escape");
     await page.locator(".person-chip").click();
     await page.getByRole("menuitem", { name: /^Settings/ }).click();

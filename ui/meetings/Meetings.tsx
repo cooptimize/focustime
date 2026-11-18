@@ -23,9 +23,9 @@ import type { OccurrenceView, OtherCallView, SeriesView } from "../../plan/meeti
 import type { CaptureClient } from "../../plan/capture.ts";
 import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
-import { requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
+import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
-import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, type CallRow, type ListFilter } from "../../plan/call-list.ts";
+import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListFilter } from "../../plan/call-list.ts";
 import type { CallsAt } from "../nav.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { useNarrow } from "../PanelShell.tsx";
@@ -44,24 +44,8 @@ const KINDS = ["gap", "commitment", "comment"] as const;
 type CallView = "transcript" | "upload";
 export type CallPlace = { view?: CallView; line?: number; filter?: Exclude<CallFilter, "all">; proposal?: number };
 
-/** MC-3: what this browser keeps for Calls: the list's filter and client, and whether the list is folded. Never a call. */
-const LIST_KEY = "focustime.calls.list";
+/** MC-3: whether this browser keeps Calls' list hidden. Never anything of a call. */
 const FOLD_KEY = "focustime.calls.folded";
-function remembered(): { show?: ListFilter; client?: string } {
-  try {
-    const v = JSON.parse(localStorage.getItem(LIST_KEY) ?? "{}") as { show?: unknown; client?: unknown };
-    return { ...(typeof v.show === "string" && (LIST_FILTERS as readonly string[]).includes(v.show) && v.show !== "all" ? { show: v.show as ListFilter } : {}), ...(typeof v.client === "string" && v.client.length <= 100 ? { client: v.client } : {}) };
-  } catch {
-    return {};
-  }
-}
-function remember(show: ListFilter | undefined, client: string | undefined) {
-  try {
-    localStorage.setItem(LIST_KEY, JSON.stringify({ ...(show && show !== "all" ? { show } : {}), ...(client !== undefined ? { client } : {}) }));
-  } catch {
-    /* a convenience only */
-  }
-}
 function foldedAtFirst(): boolean {
   try {
     return localStorage.getItem(FOLD_KEY) === "1";
@@ -71,7 +55,8 @@ function foldedAtFirst(): boolean {
 }
 
 /** "2:00 PM": a call's start in my zone. */
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+/** A call's start in the person's own zone (its day heading is in that zone too). */
+const timeOf = (iso: string, zone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
 
 export type CallsPageProps = {
   at: CallsAt;
@@ -116,11 +101,15 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   }, [loadMine, onChanged]);
   const atRef = useRef(at);
   atRef.current = at;
-  const go = useCallback((next: Partial<CallsAt> & { occurrence: number | null }, replace = false) => onGo({ ...(atRef.current.show ? { show: atRef.current.show } : {}), ...(atRef.current.client !== undefined ? { client: atRef.current.client } : {}), ...next }, { replace }), [onGo]);
+  // App hands a new onGo on each of its renders; go stays the same, so nothing below runs again because of it.
+  const onGoRef = useRef(onGo);
+  onGoRef.current = onGo;
+  const go = useCallback((next: Partial<CallsAt> & { occurrence: number | null }, replace = false) => onGoRef.current({ ...(atRef.current.show ? { show: atRef.current.show } : {}), ...(atRef.current.client !== undefined ? { client: atRef.current.client } : {}), ...next }, { replace }), []);
   // Review this call from a meeting's menu: taken as Calls opens, so nothing else opens first; its setup opens beside
   // the list once my calendar's calls are read (matched by its start and end).
   const [asked] = useState(takeReviewCall);
-  const wanted = useRef<{ start: string; end: string } | OtherCallView | null>(asked);
+  // While it is matched against my calendar, nothing else opens by itself.
+  const wanted = useRef<{ start: string; end: string } | null>(asked);
   useEffect(() => {
     void loadMine();
     let live = true;
@@ -128,13 +117,15 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       const want = asked;
       if (!live || !want) return;
       const hit = d?.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
-      if (hit?.occurrenceId) (wanted.current = null), go({ occurrence: hit.occurrenceId });
-      else if (hit) wanted.current = hit;
-      else (wanted.current = null), setMissing(true);
+      wanted.current = null;
+      if (hit?.occurrenceId) go({ occurrence: hit.occurrenceId });
+      else if (hit) setSetupKey(otherRowKey(hit));
+      else setMissing(true);
     });
     return () => {
       live = false;
     };
+    // Once, as Calls opens (loadMine, loadOthers and go never change; asked is taken once).
   }, [loadMine, loadOthers, go, asked]);
 
   // The list's filter and client: the address's, else the ones this browser remembered (written into the address).
@@ -149,34 +140,26 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   /** A filter or client chosen: remembered at once (so an address without them doesn't bring back the old ones). */
   const setList = (f: ListFilter, c: string | null) => {
     remember(f, c ?? undefined);
-    onGo({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
+    onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
   };
   const { rows, older } = useMemo(() => callRows({ meetings: data?.meetings ?? [], occurrences: data?.occurrences ?? [], others: others?.calls ?? null, today, zone }), [data, others, today, zone]);
   const shown = useMemo(() => filterRows(rows, show, client), [rows, show, client]);
   const counts = useMemo(() => filterCounts(rows, client), [rows, client]);
   const chips = useMemo(() => chipClients(rows), [rows]);
   const setupRow = setupKey ? [...rows, ...older].find((r) => r.key === setupKey && r.other) ?? null : null;
-  // Review this call from a meeting's menu: once the list has the row, its setup opens.
-  useEffect(() => {
-    const w = wanted.current;
-    if (!w || !("startAt" in w)) return;
-    const r = rows.find((x) => x.other && x.other.startAt === w.startAt && x.other.endAt === w.endAt);
-    if (r) {
-      wanted.current = null;
-      setAdding(false);
-      setSetupKey(r.key);
-      if (at.occurrence) go({ occurrence: null });
-    }
-  }, [rows, at.occurrence, go]);
   // Calls with no call named: the newest call that needs me opens, else the newest call (side by side only; when
   // narrow the list is the first step).
   const loaded = !!data && (!!others || !!othersErr);
   // After I close a call or a setup myself (Cancel, Esc, Back), nothing else opens in its place.
   const closedByMe = useRef(false);
+  // The call Calls opened by itself: its page leaves the focus where the person put it (the tab, the list).
+  const openedByItself = useRef<number | null>(null);
+  // In two steps, a call opened from the list: its Back is the browser's, so history doesn't gain a step each way.
+  const fromList = useRef(false);
   useEffect(() => {
     if (at.occurrence || setupKey || adding || !loaded || narrow || wanted.current || closedByMe.current) return;
     const first = firstToOpen(rows);
-    if (first?.occurrenceId) go({ occurrence: first.occurrenceId }, true);
+    if (first?.occurrenceId) (openedByItself.current = first.occurrenceId), go({ occurrence: first.occurrenceId }, true);
     else if (first?.other) setSetupKey(first.key);
   }, [loaded, narrow, rows, at.occurrence, setupKey, adding, go]);
   // The open call's row is in view in the list (a row already in view stays where it is).
@@ -190,6 +173,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     setMissing(false);
     if (r.occurrenceId) {
       setSetupKey(null);
+      fromList.current = narrow;
       const up = r.state.label === CALL_STATE.upload;
       go({ occurrence: r.occurrenceId, ...(up ? { view: "upload" as const } : {}) });
     } else {
@@ -204,7 +188,9 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     closedByMe.current = true;
     setSetupKey(null);
     setAdding(false);
-    go({ occurrence: null });
+    if (atRef.current.occurrence && fromList.current) history.back();
+    else if (atRef.current.occurrence) go({ occurrence: null }, true);
+    fromList.current = false;
     requestAnimationFrame(() => (k ? document.querySelector<HTMLElement>(`[data-call-row="${k}"]`) : null)?.focus());
   }, [go]);
   const openKeyRef = useRef(openKey);
@@ -316,7 +302,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           <section key={d.day} className="calls-day" aria-labelledby={`calls-day-${d.day}`} data-day={d.day}>
             <h2 id={`calls-day-${d.day}`} className="calls-day-head">{dayHeading(d.day, today)}</h2>
             <ul className="calls-rows">
-              {d.rows.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} onOpen={() => openRow(r)} />)}
+              {d.rows.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} zone={zone} onOpen={() => openRow(r)} />)}
             </ul>
           </section>
         ))}
@@ -324,7 +310,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
         {older.length > 0 && (
           <Fold id="older" title={CALL_LIST.older(older.length)} sub={CALL_LIST.olderSub}>
             <ul className="calls-rows">
-              {older.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} onOpen={() => openRow(r)} withDay={dayLabel(r.day)} />)}
+              {older.map((r) => <CallRowButton key={r.key} r={r} open={openKey === r.key} colors={colors} zone={zone} onOpen={() => openRow(r)} withDay={dayLabel(r.day)} />)}
             </ul>
           </Fold>
         )}
@@ -339,7 +325,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                     <span className="calls-series-name"><span className="swatch" aria-hidden="true" />{m.name}</span>
                     <span className="muted">{m.clientName} · {m.roleLabel} · {m.when} · {m.source === "automatic" ? CALL_LIST.readAfter : CALL_LIST.uploadedByReviewer}</span>
                     <span className="muted">{CALL_LIST.reviewers(m.reviewers.map((x) => x.name))}</span>
-                    {!occs.length && <span className="muted">Nothing in the last five weeks.</span>}
+                    {!occs.length && <span className="muted">{CALL_LIST.noneLately}</span>}
                   </li>
                 );
               })}
@@ -359,7 +345,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       </div>
     );
   else if (at.occurrence)
-    beside = <ReviewScreen key={at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
+    beside = <ReviewScreen key={at.occurrence} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
   else if (setupRow?.other)
     beside = (
       <div className="calls-beside-pad">
@@ -369,6 +355,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           call={setupRow.other}
           clients={clients}
           suggested={suggestClient(setupRow.other.name, clients, blockClientAt(setupRow.other.startAt))}
+          zone={zone}
           onCancel={backToList}
           onStarted={(id, teams) => {
             setSetupKey(null);
@@ -437,14 +424,14 @@ function Fold({ id, title, sub, children }: { id: string; title: string; sub: st
  * about with its color (or No client yet), how long, how many people, where its transcript came from, and the weekly
  * mark on a registered call. The whole row is one button that opens the call beside the list.
  */
-function CallRowButton({ r, open, colors, onOpen, withDay }: { r: CallRow; open: boolean; colors: Record<string, string>; onOpen: () => void; withDay?: string }) {
+function CallRowButton({ r, open, colors, zone, onOpen, withDay }: { r: CallRow; open: boolean; colors: Record<string, string>; zone: string; onOpen: () => void; withDay?: string }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   const bits = [r.clientName ?? CALL_LIST.noClient, lengthLabel(r.minutes), r.people !== null ? CALLS_TEXT.people(r.people) : null, r.source].filter(Boolean);
   return (
     <li>
       <button type="button" className={`calls-row${open ? " open" : ""}${r.state.needsMe ? " needs" : ""}`} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
         <span className="calls-row-one">
-          <span className="calls-time">{withDay ? `${withDay} · ` : ""}{timeOf(r.startAt)}</span>
+          <span className="calls-time">{withDay ? `${withDay} · ` : ""}{timeOf(r.startAt, zone)}</span>
           <span className="calls-name">{r.name}</span>
           <span className={`calls-state${r.state.needsMe ? " needs" : ""}`}>{r.state.label}</span>
         </span>
@@ -464,9 +451,9 @@ function CallRowButton({ r, open, colors, onOpen, withDay }: { r: CallRow; open:
 }
 
 /** "Tue, Nov 10 · 2:00 PM · 45 min": a call's day, start and length in my zone. */
-const whenLine = (startAt: string, endAt: string) => {
+const whenLine = (startAt: string, endAt: string, zone: string) => {
   const d = new Date(startAt);
-  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
+  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
 };
 
 /** The client choices: my clients (Internal among them), the suggestion first and marked; a call is about one client. */
@@ -484,7 +471,7 @@ function ClientPick({ clients, value, suggested, onChange, id }: { clients: Capt
  * MC-2: the setup a call that isn't registered opens with: which client it is about (FocusTime suggests, I choose; one
  * client) and where its transcript comes from. Nothing is kept and nothing goes to AI until Continue.
  */
-function CallSetup({ call: c, clients, suggested, onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; onCancel: () => void; onStarted: (occurrenceId: number, teams: boolean) => void }) {
+function CallSetup({ call: c, clients, suggested, zone, onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; zone: string; onCancel: () => void; onStarted: (occurrenceId: number, teams: boolean) => void }) {
   const [client, setClient] = useState(suggested ?? "");
   const [source, setSource] = useState<"teams" | "upload">(c.teams ? "teams" : "upload");
   const [busy, setBusy] = useState(false);
@@ -509,7 +496,7 @@ function CallSetup({ call: c, clients, suggested, onCancel, onStarted }: { call:
   return (
     <div className="mtg-setup" role="region" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), e.stopPropagation(), onCancel())}>
       <h3 id="mtg-setup-title" tabIndex={-1}>{CALLS_TEXT.setupTitle(c.name)}</h3>
-      <p className="muted">{whenLine(c.startAt, c.endAt)} · {CALLS_TEXT.people(c.people)}</p>
+      <p className="muted">{whenLine(c.startAt, c.endAt, zone)} · {CALLS_TEXT.people(c.people)}</p>
       <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
       <ClientPick id="mtg-setup-client" clients={clients} value={client} suggested={suggested} onChange={setClient} />
       <p className="muted mtg-setup-hint">{CALLS_TEXT.setupClientHint}</p>
@@ -580,7 +567,7 @@ function AddCall({ clients, today, onCancel, onAdded }: { clients: CaptureClient
   );
 }
 
-function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
+function ReviewScreen({ id, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
   const w = useDevOpsWrite();
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -612,8 +599,9 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   useEffect(() => {
     if (!r || headed.current) return;
     headed.current = true;
+    if (quiet) return;
     if ((view !== "transcript" || !line) && !focus) document.querySelector<HTMLElement>(".mtg-view h2")?.focus();
-  }, [r, view, line, focus]);
+  }, [r, view, line, focus, quiet]);
   // MC-1e: a proposal asked for by the address (a transcript line's button): in view and focused, its fold opened.
   useEffect(() => {
     if (!r || !focus || view) return;

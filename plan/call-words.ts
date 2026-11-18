@@ -211,6 +211,8 @@ export const CALL_LIST = {
   /** Calls older than the list's days that don't need me, until their transcript is dropped. */
   older: (n: number) => `Earlier calls (${n})`,
   olderSub: "Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call.",
+  /** A registered call with no occurrence in the weeks FocusTime looks at. */
+  noneLately: "Nothing in the last five weeks.",
   hideList: "Hide the list",
   showList: "Show the list",
   back: "Back to Calls",

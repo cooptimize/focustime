@@ -12,6 +12,28 @@ import type { OccurrenceView, SeriesView, MeetingNudgeView } from "../../plan/me
 import type { CallKind, OccurrenceState } from "../../plan/meetings.ts";
 import { OTHER_CALL_DAYS } from "../../plan/calls.ts";
 import { callLabel } from "../../plan/call-words.ts";
+import { LIST_FILTERS, type ListFilter } from "../../plan/call-list.ts";
+
+/**
+ * MC-3: what this browser keeps for Calls' list: its filter and client (never a call). Read when Calls opens from a
+ * tab, a key or the command menu, so the address carries them from the start (and Back never meets a second step).
+ */
+const LIST_KEY = "focustime.calls.list";
+export function rememberedCallsList(): { show?: ListFilter; client?: string } {
+  try {
+    const v = JSON.parse(localStorage.getItem(LIST_KEY) ?? "{}") as { show?: unknown; client?: unknown };
+    return { ...(typeof v.show === "string" && (LIST_FILTERS as readonly string[]).includes(v.show) && v.show !== "all" ? { show: v.show as ListFilter } : {}), ...(typeof v.client === "string" && v.client.length <= 100 ? { client: v.client } : {}) };
+  } catch {
+    return {};
+  }
+}
+export function rememberCallsList(show: ListFilter | undefined, client: string | undefined) {
+  try {
+    localStorage.setItem(LIST_KEY, JSON.stringify({ ...(show && show !== "all" ? { show } : {}), ...(client !== undefined ? { client } : {}) }));
+  } catch {
+    /* a convenience only */
+  }
+}
 
 export type MineData = { meetings: SeriesView[]; occurrences: OccurrenceView[]; nudges: MeetingNudgeView[] };
 export type CallMark = {

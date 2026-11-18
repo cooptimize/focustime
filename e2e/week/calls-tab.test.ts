@@ -382,6 +382,10 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
       await page.locator("[data-calls-back]").click();
       await rows(page).first().waitFor();
+      // Back was the browser's own step: one more Back leaves Calls rather than reopening the call.
+      expect(await hash(page)).toMatch(/^#\/calls(\?|$)/);
+      await page.goBack();
+      await expect.poll(() => hash(page)).not.toMatch(/^#\/calls/);
       await page.close();
     }, T);
 

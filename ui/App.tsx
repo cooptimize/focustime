@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { callMarks, callsNeedingMe, CallsProvider, useMine } from "./meetings/calls.ts";
+import { callMarks, callsNeedingMe, CallsProvider, rememberedCallsList, useMine } from "./meetings/calls.ts";
 import { addWeeks, mondayOf, weekDates } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
@@ -275,7 +275,8 @@ export function App() {
     const n = typeof next === "function" ? next(l) : next;
     return sameLoc(n, l) ? l : n;
   }), []);
-  const goNav = useCallback((nav: Nav) => go({ nav, overlay: null }), [go]);
+  // MC-3: Calls opened from its tab, key or the command menu carries the list's remembered filter and client.
+  const goNav = useCallback((nav: Nav) => go({ nav: nav.tab === "calls" && nav.occurrence === null && nav.show === undefined && nav.client === undefined ? { ...nav, ...rememberedCallsList() } : nav, overlay: null }), [go]);
   useEffect(() => {
     // PF-1: not before the place's screen is drawn. A screen reads what its address carries as it opens (Backlog's
     // level and filters); written here first, while its file was still arriving, the address had already lost them.
