@@ -1,7 +1,7 @@
 // Was e2e/ui8.test.ts (UI-8) until BT-1.
 // UI-8: the Nov 5 bug round, in demo mode. (1) Friday takes a dropped pick while Week's detail panel is open, and
 // nothing covers the Friday column at 1920 or 1366. (2) Every screen ⋯ opens has the × at its top right (still in view
-// after focus moves to a button at its foot), Send feedback's Back at the top left, and Esc closes. (3) Send feedback:
+// after focus moves to a button at its foot), Send feedback's Not now back to the text, and Esc closes. (3) Send feedback:
 // one create, and the item's number on Sent. (4) DevOps health offers Break down beside the Coop brief, opening the
 // same panel as Ahead's Fix next. Screenshots (dark and light, and Larger text) when FOCUSTIME_SHOTS names a folder.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -133,7 +133,8 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     }
     await shots(page, "ui8-more-menu");
 
-    // Send feedback's preview: focus on Send at its foot, the × still at the top; Back at the top left; Esc closes.
+    // Send feedback's preview: focus on Send at its foot, the × still at the top; OP-1: it shows through the one DevOps
+    // preview's parts, so Not now (at the foot, beside Send) goes back to the text instead of a Back arrow; Esc closes.
     await more.click();
     await page.getByRole("menuitem", { name: "Send feedback" }).click();
     const dialog = page.getByRole("dialog", { name: "Send feedback" });
@@ -141,19 +142,14 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     await box.fill(Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join("\n"));
     await expect(dialog.getByRole("button", { name: "Back" }).count()).resolves.toBe(0);
     await box.press("Enter");
-    await dialog.locator(".feedback-title").waitFor();
+    await dialog.locator(".wd-fields").waitFor();
     await expect(dialog.getByRole("button", { name: /^Send/ }).evaluate((b) => b === document.activeElement)).resolves.toBe(true);
     await xAtTopRight(dialog);
-    const back = dialog.getByRole("button", { name: "Back" });
-    expect(await back.count()).toBe(1);
-    const [db, bb] = [(await dialog.boundingBox())!, (await back.boundingBox())!];
-    expect(bb.x - db.x).toBeLessThan(60);
-    expect(bb.y - db.y).toBeLessThan(80);
     await shots(page, "ui8-feedback-preview");
-    await back.click();
+    await dialog.getByRole("button", { name: "Not now" }).click();
     await expect(box.inputValue()).resolves.toContain("Line 30");
     await box.press("Enter");
-    await dialog.locator(".feedback-title").waitFor();
+    await dialog.locator(".wd-fields").waitFor();
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "detached" });
     expect(errors).toEqual([]);
@@ -169,7 +165,7 @@ describe.skipIf(!CHROMIUM)("UI-8 bug round", () => {
     const dialog = page.getByRole("dialog", { name: "Send feedback" });
     await dialog.getByRole("textbox", { name: "Your feedback" }).fill("Friday should take a pick");
     await page.keyboard.press("Enter");
-    await dialog.locator(".feedback-title").waitFor();
+    await dialog.locator(".wd-fields").waitFor();
     await page.keyboard.press("Control+Enter");
     const done = dialog.locator(".feedback-done");
     await done.waitFor();

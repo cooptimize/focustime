@@ -106,19 +106,24 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     const { page } = await freshPage(h, { width: 390, height: 844 });
     await openStatus(page);
     await addLine(page, "Order history export", "Export filter in test; finance checks it Monday.");
+    await addLine(page, "Internal reporting refresh", "Sign-up form designed; review with purchasing on Friday.");
     await page.getByRole("button", { name: "Push all" }).click();
     const d = onePreview(page);
-    await d.waitFor();
+    await d.locator(".dw-step").waitFor();
     const fits = await page.evaluate(() => {
       const el = document.querySelector('[role="dialog"][data-overlay="modal"]')!;
       const r = el.getBoundingClientRect();
-      return r.left >= 0 && r.right <= window.innerWidth + 0.5 && el.scrollWidth <= el.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth;
+      // Nothing inside sticks out past the dialog's right edge (the head, the ×, the table).
+      const inside = [...el.querySelectorAll("*")].every((c) => c.getBoundingClientRect().right <= r.right + 0.5);
+      return inside && r.left >= 0 && r.right <= window.innerWidth + 0.5 && el.scrollWidth <= el.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth;
     });
     expect(fits).toBe(true);
     const go = d.locator("button.commit");
     expect((await go.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await go.click();
-    await d.waitFor({ state: "detached", timeout: 30_000 });
+    await onePreview(page).locator(".dw-step", { hasText: "Preview 2 of 2" }).waitFor({ timeout: 30_000 });
+    await onePreview(page).locator("button.commit").click();
+    await onePreview(page).waitFor({ state: "detached", timeout: 30_000 });
     await page.close();
   }, T);
 });

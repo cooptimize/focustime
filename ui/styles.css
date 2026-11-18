@@ -4625,6 +4625,16 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .cap-backdrop:has(> .send-dialog) { z-index: 61; }
 /* OP-1: the one DevOps preview opens over the screen that asked for it, a side panel too (Break down). */
 .cap-backdrop:has(> .write-dialog.devops) { z-index: 62; }
+/* OP-1: the one preview's head wraps ("· Preview 1 of 2" on a phone) and its column never grows past the dialog. */
+.write-dialog.devops { grid-template-columns: minmax(0, 1fr); }
+.write-dialog.devops .cap-dialog-head h2 { white-space: normal; min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.write-dialog.devops .cap-dialog-head .dw-step { white-space: nowrap; }
+.write-dialog.devops .cap-dialog-head { flex-wrap: nowrap; }
+.write-dialog.devops .cap-dialog-head .x-close { flex: none; }
+/* Cells break between words ("(none)" never as "(n/on/e)"); a word longer than its column still breaks. */
+.write-dialog.devops .wd-fields th, .write-dialog.devops .wd-fields td { overflow-wrap: break-word; }
+/* Its head stays in view while a long preview scrolls (UI-8: the × never scrolls away). */
+.write-dialog.devops .cap-dialog-head { position: sticky; top: 0; z-index: 1; padding-bottom: 6px; background: var(--surface); box-shadow: 0 -24px 0 var(--surface), -18px 0 0 var(--surface), 18px 0 0 var(--surface), -18px -24px 0 var(--surface), 18px -24px 0 var(--surface); }
 
 /* SG-1: the board's suggestions. Offers in the dotted style (UI-B's dashed edge), quieter than to-dos: no checkbox, muted
    text, a + to keep and a × to clear on each row, one small line over them, and a day's line under its header. */

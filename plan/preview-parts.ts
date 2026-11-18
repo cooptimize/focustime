@@ -37,6 +37,8 @@ export const PREVIEW_WORDS = {
   confirm: { comment_edit: "Save comment in DevOps", comment_delete: "Delete comment in DevOps", remaining_work: "Set Remaining Work in DevOps" },
   /** The timebox check-in's rows after the preview. */
   saved: "Saved",
+  /** Its heading once the preview ran (the question is answered). */
+  checkinAfter: "Time left, in DevOps",
   notSent: "Not sent",
   nothingToChange: "Nothing to change",
   /** Break down when every kept card was sent already. */

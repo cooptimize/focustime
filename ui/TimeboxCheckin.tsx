@@ -234,7 +234,7 @@ export function ProgressOfferCard({ date, version, onDone }: { date: string; /**
     );
   return (
     <div className="done-batch tc-preview" role="group" aria-label="DevOps updates">
-      <p className="db-ask">{ask}</p>
+      <p className="db-ask">{list.some((r) => r.result) ? PREVIEW_WORDS.checkinAfter : ask}</p>
       <ul className="db-rows">
         {list.map((r) => (
           <li key={r.offer.pickId}>
