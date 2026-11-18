@@ -175,6 +175,50 @@ export const CALLS_TEXT = {
   whoSeesHand: "Only you can see this call.",
 } as const;
 
+/**
+ * MC-3: Calls as a tab: one list by day, its filters and client chips, each row's second line, the folds at its foot,
+ * and the space beside the list. A row's state is CALL_STATE's (or CALLS_TEXT.notReviewed).
+ */
+export const CALL_LIST = {
+  /** The tab's title (and its number key's line). */
+  tabTitle: "Calls: review the calls you were on",
+  sub: "The calls you were on, newest first",
+  /** The filters: All, then each bucket. */
+  filters: { all: "All", review: "To review", open: CALLS_TEXT.notReviewed, done: "Done" },
+  filterHint: { all: "Every call in the list", review: "Calls waiting for you: proposals to review, a transcript to upload or a step that failed", open: "Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer", done: "Calls that were reviewed, had nothing to propose or had no transcript" },
+  allClients: "All clients",
+  noClient: "No client yet",
+  today: "Today",
+  yesterday: "Yesterday",
+  /** A row's second line: where the transcript came from, or will. */
+  fromTeams: "Transcript from Teams",
+  uploaded: "Transcript uploaded",
+  readAfter: "Read from Teams after the call",
+  uploadedByReviewer: "Uploaded by a reviewer",
+  teamsOrFile: "From Teams or a file",
+  fileOnly: "Upload only",
+  /** The mark on a registered weekly call, before its type. */
+  weekly: "Weekly",
+  noneHere: "No calls here. Choose All to see every call.",
+  none: (days: number) => `No calls in the last ${days} days. A call on your calendar shows here once it has started.`,
+  privacy: "Only you see the calls from your calendar, and FocusTime keeps nothing about one until you review it.",
+  /** The space beside the list when there's no call at all. */
+  emptyBeside: "Calls turns what was said on a call into DevOps items, promises and comments you confirm. Review any call you were on, or add one that isn't on your calendar.",
+  /** The fold at the list's foot: the registered client calls, each with when it meets and how its transcript arrives. */
+  clientCalls: (n: number) => `Client calls (${n})`,
+  clientCallsSub: "Weekly calls a FocusTime admin registered. Their calls from the last 14 days are in the list above.",
+  reviewers: (names: readonly string[]) => `Reviewed by ${names.join(", ")}`,
+  earlier: "Earlier",
+  /** Calls older than the list's days that don't need me, until their transcript is dropped. */
+  older: (n: number) => `Earlier calls (${n})`,
+  olderSub: "Calls from before the last 14 days that don't need you. Each goes when its transcript does, 30 days after the call.",
+  hideList: "Hide the list",
+  showList: "Show the list",
+  back: "Back to Calls",
+  loading: "Loading calls…",
+  tryAgain: "Try again",
+} as const;
+
 /** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */
 export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable"] as const;
 export type FetchOutcome = (typeof FETCH_OUTCOMES)[number];

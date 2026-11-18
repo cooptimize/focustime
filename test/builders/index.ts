@@ -554,3 +554,20 @@ export type Tp1Brief = { type: string | null; where: string; env: string | null;
 export function aTp1Brief(o: Partial<Tp1Brief> = {}): Tp1Brief {
   return { type: "new-measure", where: "The Sales model", env: "Test", touches: ["Data", "Model"], change: "Gross margin percent", check: "October, East: 31.2%", checkedBy: { name: "the finance lead", email: null }, done: "Only the margin page", doneWhen: "In test", signedOffBy: { name: "Sam Lee", email: null }, notWithout: ["Deploy to production"], ...o };
 }
+
+/** MC-3: a call series as meeting.mine shows it (a registered weekly call unless `call` says otherwise). */
+export function aSeriesView(o: Partial<import("../../plan/meeting-views.ts").SeriesView> = {}): import("../../plan/meeting-views.ts").SeriesView {
+  const n = next();
+  return { id: n, clientKey: "Contoso", clientName: "Contoso", name: `Contoso weekly status call ${n}`, role: "status", roleLabel: "Weekly status call", source: "automatic", detected: "automatic", organizer: "home", when: "Mondays 1:00 PM to 1:30 PM", weekday: 1, start: "13:00", minutes: 30, zone: ZONE, reviewers: [{ id: "user-r", name: "Riley Park" }], attendees: 2, mine: { review: true, attend: true }, call: null, teams: true, ...o } as import("../../plan/meeting-views.ts").SeriesView;
+}
+
+/** MC-3: one occurrence of a call as meeting.mine shows it (Monday Nov 2, 1 PM New York, ready with nothing open). */
+export function anOccurrenceView(o: Partial<import("../../plan/meeting-views.ts").OccurrenceView> = {}): import("../../plan/meeting-views.ts").OccurrenceView {
+  return { id: next(), seriesId: 1, date: WEEK, startAt: "2026-11-02T18:00:00Z", endAt: "2026-11-02T18:30:00Z", state: "ready", transcriptFrom: "automatic", proposals: 0, open: 0, aiOutcome: "done", aiMessage: null, aiNext: null, retryAt: null, hasTranscript: true, readFailed: false, ...o };
+}
+
+/** MC-3: a call on my own calendar nobody has read, as meeting.calls lists it. */
+export function anOtherCall(o: Partial<import("../../plan/meeting-views.ts").OtherCallView> = {}): import("../../plan/meeting-views.ts").OtherCallView {
+  const n = next();
+  return { key: `ical-${n}`, name: `Fabrikam sync ${n}`, startAt: "2026-11-02T15:00:00Z", endAt: "2026-11-02T16:00:00Z", minutes: 60, people: 4, teams: true, outside: false, occurrenceId: null, ...o };
+}
