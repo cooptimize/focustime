@@ -39,11 +39,14 @@ export function Page({ children }: { children: ReactNode }) {
 /** A card of rows, with an optional heading and one intro line. `sid` is the group's own registry id, for deep links. */
 export function Group({ title, intro, more, sid, children, label }: { more?: ReactNode; title?: string | undefined; intro?: ReactNode | undefined; sid?: string | undefined; children: ReactNode; label?: string | undefined }) {
   const name = title ?? label;
+  // The intro is one line too: a long one ends at a sentence or clause, the rest behind More about this.
+  const [shown, spill] = typeof intro === "string" ? splitHelp(intro) : [intro, null];
+  const folded = spill ? (more ? <>{spill} {more}</> : spill) : more;
   return (
     <section className="sp-group" data-setting={sid} aria-label={name}>
       {title && <h3 className="sp-group-h">{title}</h3>}
-      {intro && <p className="sp-intro">{intro}</p>}
-      {more && <More>{more}</More>}
+      {shown && <p className="sp-intro">{shown}</p>}
+      {folded && <More>{folded}</More>}
       {children}
     </section>
   );
