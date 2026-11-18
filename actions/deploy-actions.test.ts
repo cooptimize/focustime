@@ -131,7 +131,8 @@ describe("Deployment to-dos", () => {
     const t = setup();
     const { pick } = await t.run<Added>("deploy.add", { clientKey: "Adatum", date: "2026-11-05", start: "19:00", end: "21:00", note: "SQL objects" });
     const moved = await t.run<Added>("pick.move", { id: pick.id, date: "2026-11-07", half: "AM" });
-    expect(moved.pick).toMatchObject({ date: "2026-11-07", half: "EVE", todoKind: "deployment", window: { start: "19:00", end: "21:00" }, notes: "SQL objects", carriedFrom: pick.id });
+    // DP-3: a deployment is one shared thing: it moves in place (the same to-do, for everyone on it), never copied.
+    expect(moved.pick).toMatchObject({ id: pick.id, date: "2026-11-07", half: "EVE", todoKind: "deployment", window: { start: "19:00", end: "21:00" }, notes: "SQL objects", carriedFrom: null });
     expect(moved.note).toBe("Saturday isn't a working day: this is flex time");
     await t.run("pick.uncarry", { id: moved.pick.id });
     const day = await t.plan.picksFor("2026-11-05");

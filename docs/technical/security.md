@@ -1,6 +1,6 @@
 # Security
 
-For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same pull request. Checked against `2f4c0ea` on Nov 13, 2026; Whose request against the ID-1 branch on Nov 17, 2026.
+For IT first: this is the page to read before approving FocusTime. Engineers changing anything on it update it in the same pull request. Checked against `2f4c0ea` on Nov 13, 2026; Whose request against the ID-1 branch on Nov 17, 2026; shared deployments against the DP-3 branch on Nov 18, 2026.
 
 ## In short
 
@@ -126,6 +126,13 @@ Every Cooptimizer may read every client's code in Code, read only, so people can
 - **Guests** are refused at sign-in, from the token itself and the domains Rule (`server/people.ts`); a session of someone later found to be a guest is ended, with an audit line. Pickers never list them.
 - **Automation accounts** are flagged by an admin. They never show as Cooptimizers in pickers, the Teams bot and the technical docs refuse them, and FocusTime refuses their DevOps writes (`canEdit`, `actions/ahead-actions.ts`).
 
+## Who sees a shared deployment
+
+- **Only the people on it.** A deployment (DP-3) is read and changed only through the person's own to-do for it; `store/deployments.ts` answers about a deployment only to someone in its `deployment_people`. Not an admin, not the client's lead, not a teammate who isn't on it: being an admin or a lead adds nothing.
+- **Who can be added.** Cooptimizers who have signed in to FocusTime, chosen with the shared people picker; checked again on the server for every id a form sends (`deployPeopleOf` in `actions/dispatch.ts`): never a guest, an automation account, someone outside Cooptimize's domains or a typed address.
+- **Anyone on it changes anything**, sees who else a change is for before saving, and a save made on an older version is refused. Each takes only themselves off; the last one off deletes it. Deleting a person's data takes them off and leaves it for the others.
+- **Outlook stays each person's own.** Being added writes nothing to anyone's calendar. A hold is the person's own timebox for the deployment, put on Outlook only by their own press, through the write framework under their own sign-in: no attendees, nobody emailed, only the title, the window and Busy. One person's Outlook state is never shown to another.
+
 ## Who sees a client's status report
 
 - **Everyone on the client's team, nobody else.** Status's client report shows the whole of that client's Monday report to every Cooptimizer on its team: an Account Worker on the client or one of its leads (Dataverse, read by the directory job; `reportTeam` in `actions/team-actions.ts`). Not guests, not automation accounts, and not admins who aren't on the team: being an admin adds nothing here.
@@ -167,7 +174,7 @@ Writes go only through the write framework (see [Architecture](architecture.md#a
 
 | Where | What FocusTime may change | Undo |
 |---|---|---|
-| Outlook calendar | Events it created (with its marker), the time and show-as of your own events with no other attendees, help invites to Cooptimize addresses, your reply to an invitation | Yes (a reply's undo restores the previous reply) |
+| Outlook calendar | Events it created (with its marker; a shared deployment's hold is one, on your own calendar only), the time and show-as of your own events with no other attendees, help invites to Cooptimize addresses, your reply to an invitation | Yes (a reply's undo restores the previous reply) |
 | DevOps | The named writes in [Integrations](integrations.md#azure-devops), Send feedback's story in Cooptimize's own DevOps among them | Yes, refused when the item changed since |
 | Teams presence | Your own preferred presence during focus, with an expiry; no preview | Cleared when focus ends |
 | Teams chat and email | Close the loop: one message in the promise's chat or a 1:1 chat with someone at Cooptimize, or one email draft (or email) in your own mailbox, after its preview and Send; an admin's invite to a Cooptimizer who hasn't signed in, the same way | No (never edited, deleted or resent; Retry only reads back) |

@@ -61,6 +61,10 @@ export type Pick = {
   links?: TodoLink[] | null;
   /** DP-2: what it moves: a snapshot of the ticked items, as planned. Absent on a WK-3 deployment (its text is its note). */
   deployItems?: import("./deploy-items.ts").DeployItem[] | null;
+  /** DP-3: my to-do for a shared deployment (its id in the shared store); absent on every other to-do. */
+  deploymentId?: number | null;
+  /** DP-3: read models only. The shared deployment as I see it: who is on it, its version, my own Outlook state. */
+  shared?: import("./shared-deploy.ts").SharedView | null;
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;

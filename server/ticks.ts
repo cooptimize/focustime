@@ -43,6 +43,7 @@ import type { PushControl } from "./push.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
 import { dayEndOf, hoursOn } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
+import { windowWords } from "../plan/shared-deploy.ts";
 import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue } from "./notify.ts";
 import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
 import type { PassFacts } from "./teams/rhythm.ts";
@@ -565,6 +566,20 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (fresh) await send(notices.datesMoved(`dates_moved:${g[0]!.id}`, first(g[0]!.byName), ids, at.toString()));
     }
   };
+  // DP-3: someone else added me to a deployment, moved its day or time, took me off or deleted it: once each, the last
+  // 3 days only, by my own switch, hours and days off (the notifier's gate). Never to the person who made the change
+  // (the store writes no note for them) and never Teams or email.
+  const deployTick = async () => {
+    if (!notifier.allows("deployments")) return;
+    const at = instantNow();
+    const cfg = await configOrNull().catch(() => null);
+    const zone = cfg ? userZone(cfg) : who.zone;
+    for (const n of await store.deployNotes(at.subtract({ hours: 72 }).toString())) {
+      if (!(await store.markOnce(`deployment_notice:${n.id}`, n.at))) continue;
+      const title = (await store.deploymentTitle(n.deploymentId)) ?? "Deployment";
+      await send(notices.deployment(n.id, n.kind, n.byName.split(/\s+/)[0] || "A teammate", cfg?.clientSettings[n.clientKey]?.name ?? n.clientKey, title, windowWords(n.startAt, n.endAt, zone), at.toString()));
+    }
+  };
   // SW-1: work sent to me, answers on what I sent, a Must another lead's teammate can't take
   // (the last 3 days; once each through the notifier's own marks).
   const teamTick = async () => {
@@ -624,7 +639,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       urgent_asks: () => asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
       chat_text_cleanup: () => chatTextCleanup().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" })),
       takes: () => takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" })),
-      notes: () => notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" })),
+      notes: () => Promise.all([notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" })), deployTick().catch(() => log({ source: "plan", op: "deploy_notes_tick", kind: "failed" }))]),
       team: () => teamTick().catch(() => log({ source: "plan", op: "team_tick", kind: "failed" })),
       meetings: () => meetingsTick().catch(() => log({ source: "plan", op: "meetings_tick", kind: "failed" })),
     };

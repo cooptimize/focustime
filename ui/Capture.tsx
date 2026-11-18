@@ -20,6 +20,8 @@ import { CreateDraftCtx } from "./createdraft-ctx.ts";
 import { DateField } from "./DatePicker.tsx";
 import { TimeField } from "./TimeField.tsx";
 import { DeployChecks } from "./DeployItems.tsx";
+import { DeployPeopleField } from "./DeployPeople.tsx";
+import { PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { itemsSummary, type DeployItem } from "../plan/deploy-items.ts";
 import { Icon } from "./icons.tsx";
 
@@ -218,8 +220,10 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const [depStart, setDepStart] = useState("19:00");
   const [depEnd, setDepEnd] = useState("21:00");
   const [depNote, setDepNote] = useState("");
+  // DP-3: who else is on it (Cooptimizers, from the shared picker); it shows in their plan at once.
+  const [depPeople, setDepPeople] = useState<{ id: string; name: string }[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{ captureId: number; text: string; body: string; client: string | null; pickId?: number } | null>(null);
+  const [saved, setSaved] = useState<{ captureId: number; text: string; body: string; client: string | null; pickId?: number; shared?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
@@ -304,10 +308,12 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (kind === "deployment" && key) {
       // WK-3: a Deployment is a to-do on its date and window (no capture row); Undo removes it.
       try {
-        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: deploymentTitle(body, clientName(key), depDate), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}) });
+        const r = await call<{ pick: { id: number; deployItems?: DeployItem[] | null }; note: string | null }>("deploy.add", { clientKey: key, date: depDate, start: depStart, end: depEnd, title: deploymentTitle(body, clientName(key), depDate), ...(depNote.trim() ? { note: depNote.trim() } : {}), ...(item.itemId ? { itemIds: [item.itemId] } : {}), ...(depItems ? { items: depItems } : {}), ...(depPeople.length ? { people: depPeople.map((x) => x.id) } : {}) });
         const moving = itemsSummary(r.pick.deployItems);
+        const others = depPeople.length;
+        setDepPeople([]);
         reset();
-        setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${moving ? ` · ${moving}` : ""}${r.note ? ` · ${r.note}` : ""}`, body, client: key });
+        setSaved({ captureId: 0, pickId: r.pick.id, text: `${savedText("deployment", clientName(key))} · ${plainDay(depDate)} ${windowText({ start: depStart, end: depEnd })}${moving ? ` · ${moving}` : ""}${others ? ` · for all ${others + 1} on it` : ""}${r.note ? ` · ${r.note}` : ""}`, body, client: key, ...(others ? { shared: true } : {}) });
         onChanged();
         input.current?.focus();
       } catch (e) {
@@ -362,7 +368,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (!sv) return;
     setSaved(null);
     try {
-      if (sv.pickId) await call("pick.remove", { id: sv.pickId });
+      // DP-3: with others on it, Undo deletes the one just made for them too.
+      if (sv.pickId) await call(sv.shared ? "deploy.delete" : "pick.remove", { id: sv.pickId });
       else await call("capture.undo", { id: sv.captureId });
       setText((t) => t || sv.body);
       if (sv.client !== client) setClient(sv.client);
@@ -536,6 +543,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
               <DeployChecks key={depRound} clientKey={client} clientName={client ? clientName(client) : ""} onChange={setDepItems} {...(onOpenedDraft ? { onLeave: onOpenedDraft } : {})} />
               <label className="wide">Note <TextBox aria-label="Note" minRows={1} maxRows={4} maxLength={2000} value={depNote} placeholder="Anything else that's going" onChange={(e) => setDepNote(e.target.value)} onEnter={() => void submit()} /></label>
               <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
+              <div className="wide cap-people"><span>{PEOPLE_WORDS.field}</span><DeployPeopleField key={depRound} name="dep-people" clientKey={client} initial={depPeople} onChange={setDepPeople} /></div>
             </>
           )}
           {kind === "draft_feature" && (
