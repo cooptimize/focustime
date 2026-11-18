@@ -2060,6 +2060,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         const p = await mustPick(id);
         if (p.status !== "planned") throw new PlanError("Only a planned to-do can be taken off the plan");
+        if (p.deploymentId != null || p.todoKind === "deployment") throw new PlanError("A deployment keeps its window. Move it or drop it instead");
         if (p.itemId !== null && ((p.spentMinutes ?? 0) > 0 || (p.remainingMinutes ?? 0) > 0)) throw new PlanError("It has time on it. Move it to another block instead, so its time stays with it");
         if (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id)) throw new PlanError("It was carried on to another day. Move it instead");
         await db.run("DELETE FROM picks WHERE id = ?", id);

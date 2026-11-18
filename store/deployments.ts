@@ -200,18 +200,27 @@ export function sharedDeployments(conn: Conn, now: () => Temporal.Instant) {
           if (!d) throw new StaleDeployment(null);
           await conn.run("DELETE FROM deployment_people WHERE deployment_id = ? AND person_id = ?", [id, me]);
           const last = d.people.length <= 1;
-          if (last) await conn.run("UPDATE deployments SET deleted_at = ?, deleted_by = ?, version = version + 1 WHERE id = ?", [at(), me, id]);
+          if (last) await conn.run("UPDATE deployments SET deleted_at = ?, deleted_by = ?, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?", [at(), me, me, at(), id]);
           else await conn.run("UPDATE deployments SET version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?", [me, at(), id]);
           return { deleted: last, before: d };
         });
       },
-      /** Undo of Take me off: back on it as I was (and it back for everyone when my leaving deleted it). */
+      /**
+       * Undo of Take me off: back on it as I was (and it back for everyone when my leaving deleted it). Only while my own
+       * leaving is still its last change: never after someone else took me off, deleted it or changed it since. My name
+       * is mine as the store knows it; who added me only someone on it (else me), and when never later than now.
+       */
       async rejoin(id: number, was: DeployPerson): Promise<SharedRow> {
         return conn.tx(async () => {
           const d = await one(id);
           if (!d) throw new StaleDeployment(null);
-          if (d.deletedAt && d.deletedBy !== me) throw new StaleDeployment(null);
-          if (!d.people.some((p) => p.id === me)) await conn.run("INSERT INTO deployment_people (deployment_id, person_id, name, added_by, added_at) VALUES (?, ?, ?, ?, ?)", [id, me, was.name.slice(0, 200), was.addedBy, was.addedAt]);
+          if (d.people.some((p) => p.id === me)) return d;
+          if (d.updatedBy !== me || (d.deletedAt && d.deletedBy !== me)) throw new StaleDeployment(null);
+          const now = at();
+          const by = lc(was.addedBy);
+          const addedBy = by === me || d.people.some((p) => p.id === by) ? by : me;
+          const addedAt = typeof was.addedAt === "string" && !Number.isNaN(Date.parse(was.addedAt)) && was.addedAt <= now ? was.addedAt : now;
+          await conn.run("INSERT INTO deployment_people (deployment_id, person_id, name, added_by, added_at) VALUES (?, ?, ?, ?, ?)", [id, me, (await myName()).slice(0, 200), addedBy, addedAt]);
           await conn.run("UPDATE deployments SET deleted_at = NULL, deleted_by = NULL, version = version + 1, updated_by = ?, updated_at = ? WHERE id = ?", [me, at(), id]);
           return (await one(id))!;
         });

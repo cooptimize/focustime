@@ -41,7 +41,6 @@ const posId = (v: unknown, name = "id") => {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be a positive whole number`);
   return v;
 };
-const version = (v: unknown) => (v === undefined || v === null ? null : posId(v, "version"));
 
 /** The person ids a form sends (from the picker): at most 20, each a short id. */
 export function peopleIds(v: unknown): string[] {
@@ -86,12 +85,12 @@ async function run(ctx: SharedDeployContext, action: SharedDeployAction, input: 
   switch (action) {
     case "deploy.people": {
       // Anyone on it changes who is on it. Those added see it at once; those removed are told.
-      const o = fields(input, ["id", "people"], ["version"]);
+      const o = fields(input, ["id", "people", "version"]);
       const id = posId(o.id);
       await mine(id);
       const people = await resolvePeople(ctx.people, peopleIds(o.people), me);
       if (typeof people === "string") return bad(people, 422);
-      const r = await plan.deploySetPeople(id, version(o.version), people);
+      const r = await plan.deploySetPeople(id, posId(o.version, "version"), people);
       return { ok: true, data: { pick: r.pick, before: r.before.map((p) => p.id) } };
     }
     case "deploy.leave": {

@@ -110,6 +110,12 @@ export function deleteQuestion(people: readonly DeployPerson[], me: string): str
   return others.length ? `Delete it for everyone? ${namesText(others.map((p) => p.name))} ${others.length === 1 ? "is" : "are"} on it too, and it comes off their plans.` : "Delete this deployment?";
 }
 
+/** The menu's short form of the question: the title, then who else it comes off, as the Delete item's hint. */
+export function deleteMenuWords(people: readonly DeployPerson[], me: string): { title: string; hint: string | null } {
+  const others = othersOn(people, me);
+  return others.length ? { title: "Delete it for everyone?", hint: `Comes off ${namesText(others.map((p) => firstName(p.name)))}'s plan too` } : { title: "Delete this deployment?", hint: null };
+}
+
 /** "Added by Jordan" on the panel of the person added; null for the person who made it. */
 export function addedByText(view: Pick<SharedView, "addedBy" | "people">): string | null {
   if (!view.addedBy) return null;

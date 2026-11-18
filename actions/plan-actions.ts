@@ -581,7 +581,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (people) {
           // A to-do just made a deployment becomes a shared one first (it is mine alone until someone is added).
           if (pick.deploymentId == null) await plan.picksFor(pick.date);
-          if ((await plan.deploymentOf(pid)) && (people.length || pick.deploymentId != null)) pick = (await plan.deploySetPeople(pid, null, people)).pick;
+          if ((await plan.deploymentOf(pid)) && (people.length || pick.deploymentId != null)) pick = (await plan.deploySetPeople(pid, (await plan.getPick(pid))?.shared?.version ?? null, people)).pick;
         }
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }

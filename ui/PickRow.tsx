@@ -211,7 +211,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         <>
           {badge}
           {actions}
-          {dep && <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /></>}
+          {dep && <><WindowChip pick={pick} /><DeployItemsChip pick={pick} /><PeopleChip pick={pick} /></>}
           <span className="pr-hover">
             {!dep && !(checklist && timed) && <TodoTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
             {more}

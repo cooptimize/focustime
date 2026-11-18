@@ -23,7 +23,7 @@ import { typeNeedsBreakdown } from "../plan/process.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek, type Size } from "../plan/types.ts";
 import { DEPLOYMENT, deploymentTitle, windowText } from "../plan/deploy.ts";
 import { firstName } from "../plan/loop.ts";
-import { changeForLine, deleteQuestion, forPeopleText, HOLD_WORDS, namesText, othersOn, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
+import { addedByText, changeForLine, deleteMenuWords, forPeopleText, HOLD_WORDS, namesText, othersOn, PEOPLE_WORDS } from "../plan/shared-deploy.ts";
 import { placeNote } from "../plan/days.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
@@ -495,10 +495,11 @@ export function leaveDeployment(env: MenuEnv, p: Pick): Promise<boolean> {
 /** DP-3: Delete for everyone asks first and names the others; Undo puts it back for everyone. */
 function deleteStep(env: MenuEnv, p: Pick): MenuStep {
   const sh = p.shared!;
+  const words = deleteMenuWords(sh.people, sh.me);
   return {
-    title: deleteQuestion(sh.people, sh.me),
+    title: words.title,
     items: [
-      { id: "deploy-delete-yes", label: PEOPLE_WORDS.deleteYes, danger: true, action: "deploy.delete", run: () => void env.runPlan("deploy.delete", { id: p.id }).then((ok) => ok && env.undoable?.(PEOPLE_WORDS.deleted(p.title, sh.people.length), () => env.runPlan("deploy.restore", { id: p.id }))) },
+      { id: "deploy-delete-yes", label: PEOPLE_WORDS.deleteYes, ...(words.hint ? { hint: words.hint } : {}), danger: true, action: "deploy.delete", run: () => void env.runPlan("deploy.delete", { id: p.id }).then((ok) => ok && env.undoable?.(PEOPLE_WORDS.deleted(p.title, sh.people.length), () => env.runPlan("deploy.restore", { id: p.id }))) },
       { id: "deploy-delete-no", label: PEOPLE_WORDS.deleteNo, run: () => undefined },
     ],
   };
@@ -561,7 +562,7 @@ export function deployForm(env: MenuEnv, o: { pick?: Pick; date?: IsoDate; clien
   const seen = { stale: false };
   return {
     title: p ? (p.todoKind === "deployment" ? `Deployment: ${p.title}` : `Make "${p.title}" a deployment`) : "Plan a deployment",
-    intro: p?.shared ? changeForLine(p.shared.people, p.shared.me) : null,
+    intro: p?.shared ? [changeForLine(p.shared.people, p.shared.me), addedByText(p.shared)].filter(Boolean).join(". ") || null : null,
     button: p ? "Save" : "Add it",
     fields: [
       ...(p ? [] : [

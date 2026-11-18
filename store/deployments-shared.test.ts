@@ -103,6 +103,35 @@ describe("a shared deployment", () => {
     expect((await alex.s.picksFor(SAT)).filter((p) => p.status !== "dropped")).toEqual([]);
   });
 
+  it("Undo of Take me off only undoes my own leaving: never after someone else took me off or changed it, and never with a made-up name", async () => {
+    const w = world();
+    const alex = await w.person(ALEX, "America/New_York", "Alex Rivera").init();
+    const jordan = await w.person(JORDAN, "America/New_York", "Jordan Lee").init();
+    const a = await alex.s.addDeployment(saturday() as never, [{ id: JORDAN, name: "Jordan Lee" }]);
+    const j = (await jordan.s.picksFor(SAT))[0]!;
+    const was = (await jordan.s.getPick(j.id))!.shared!.people.find((p) => p.id === JORDAN)!;
+    // Alex takes Jordan off: Jordan can't put themselves back, whatever they send.
+    await alex.s.deploySetPeople(a.id, (await alex.s.getPick(a.id))!.shared!.version, []);
+    await expect(jordan.s.deployRejoin(j.id, { ...was, addedBy: JORDAN })).rejects.toThrow(PlanError);
+    expect((await alex.s.getPick(a.id))!.shared!.people.map((p) => p.id)).toEqual([ALEX]);
+    // Added again, Jordan leaves; Alex changes it after: the Undo is refused.
+    await alex.s.deploySetPeople(a.id, (await alex.s.getPick(a.id))!.shared!.version, [{ id: JORDAN, name: "Jordan Lee" }]);
+    const j2 = (await jordan.s.picksFor(SAT)).find((p) => p.status === "planned")!;
+    const left = await jordan.s.deployLeave(j2.id);
+    const now = (await alex.s.getPick(a.id))!;
+    await alex.s.setTodoKind(a.id, { todoKind: "deployment", window: { start: "10:00", end: "12:00" }, links: null, version: now.shared!.version });
+    await expect(jordan.s.deployRejoin(j2.id, left.was)).rejects.toThrow(PlanError);
+    // Left with nothing since: back, under my own name, added by someone on it.
+    await alex.s.deploySetPeople(a.id, (await alex.s.getPick(a.id))!.shared!.version, [{ id: JORDAN, name: "Jordan Lee" }]);
+    const j3 = (await jordan.s.picksFor(SAT)).find((p) => p.status === "planned")!;
+    const left3 = await jordan.s.deployLeave(j3.id);
+    await jordan.s.deployRejoin(j3.id, { ...left3.was, name: "Someone Else", addedBy: OUTSIDER, addedAt: "2099-01-01T00:00:00Z" });
+    const back = (await alex.s.getPick(a.id))!.shared!.people.find((p) => p.id === JORDAN)!;
+    expect(back.name).toBe("Jordan Lee");
+    expect(back.addedBy).toBe(JORDAN);
+    expect(back.addedAt < "2099").toBe(true);
+  });
+
   it("Delete is for everyone on it; Undo puts it back for everyone; a person removed by someone else no longer sees it", async () => {
     const w = world();
     const alex = await w.person(ALEX, "America/New_York", "Alex Rivera").init();

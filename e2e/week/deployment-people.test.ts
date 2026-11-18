@@ -11,6 +11,8 @@ import { phonePage } from "../mb1-helpers.ts";
 import { SHOTS } from "../shots.ts";
 
 const T = 240_000;
+// Under a loaded machine (CI, the shake) a screen can take seconds to settle; vitest's poll gives up after 1 s by default.
+const WAIT = { timeout: 30_000 };
 const SAT = "2026-11-07";
 const JORDAN = "a4d00000-0000-4000-8000-000000000011";
 
@@ -43,45 +45,50 @@ describe.skipIf(!CHROMIUM)("DP-3: other people on a deployment", () => {
     await page.getByRole("button", { name: "Capture", exact: true }).click();
     const box = page.locator(".cap-dialog .cap-box");
     await box.locator("textarea[aria-label='Quick capture']").fill("Release 4.2");
-    await expect.poll(() => box.locator("[role=radio][aria-checked=true]").textContent()).toMatch(/^Deployment/);
+    await expect.poll(() => box.locator("[role=radio][aria-checked=true]").textContent(), WAIT).toMatch(/^Deployment/);
     await box.locator(".cap-client").click();
     await box.locator(".cap-choose").getByRole("button", { name: "Northwind" }).click();
     // The People field: the shared picker, chosen from the list.
     const add = box.getByRole("combobox", { name: "Add someone" });
     await add.fill("Jordan");
     await page.getByRole("option", { name: /Jordan Lee/ }).click();
-    await expect.poll(() => box.locator(".dp-chip").allInnerTexts()).toEqual(["You", "Jordan Lee"]);
+    await expect.poll(() => box.locator(".dp-chip").allInnerTexts(), WAIT).toEqual(["You", "Jordan Lee"]);
     await shot(page, "dp3-capture-1440-dark");
     await box.locator("textarea[aria-label='Quick capture']").press("Enter");
-    await expect.poll(() => page.locator(".cap-saved, .app-undo, [role=status]", { hasText: /for all 2 on it/ }).first().isVisible()).toBe(true);
+    await expect.poll(() => page.locator(".cap-saved, .app-undo, [role=status]", { hasText: /for all 2 on it/ }).first().isVisible(), WAIT).toBe(true);
     await page.keyboard.press("Escape");
 
     await week(page);
-    await expect.poll(() => row(page).isVisible()).toBe(true);
-    await expect.poll(() => row(page).locator(".deploy-people").innerText()).toMatch(/2/);
+    await expect.poll(() => row(page).isVisible(), WAIT).toBe(true);
+    await expect.poll(() => row(page).locator(".deploy-people").innerText(), WAIT).toMatch(/2/);
     await shot(page, "dp3-week-1440-dark");
     // Its details say who a change is for.
     await row(page).click({ button: "right" });
     await page.getByRole("menuitem", { name: /Deployment details/ }).click();
-    await expect.poll(() => page.locator(".menu-form-intro").innerText()).toBe("This changes it for Jordan Lee too");
+    await expect.poll(() => page.locator(".menu-form-intro").innerText(), WAIT).toBe("This changes it for Jordan Lee too");
     await shot(page, "dp3-details-1440-dark");
     await page.keyboard.press("Escape");
 
     // Jordan, a second signed-in person: it's on Jordan's own Week, and counts in Jordan's after hours.
     expect((await call(page, "demo.be", { who: JORDAN })).ok).toBe(true);
     await week(page);
-    await expect.poll(() => row(page).isVisible()).toBe(true);
-    await expect.poll(() => page.locator(".after-hours-chip").innerText()).toMatch(/2h/);
+    await expect.poll(() => row(page).isVisible(), WAIT).toBe(true);
+    await expect.poll(() => page.locator(".after-hours-chip").innerText(), WAIT).toMatch(/2h/);
     await shot(page, "dp3-week-jordan-1440-dark");
     await row(page).click({ button: "right" });
+    await page.getByRole("menuitem", { name: /Delete for everyone/ }).click();
+    await expect.poll(() => page.locator(".menu-title").first().innerText(), WAIT).toMatch(/Delete it for everyone\?/);
+    await expect.poll(() => page.getByRole("menuitem", { name: /Delete it for everyone/ }).innerText(), WAIT).toMatch(/Comes off Alex's plan too/);
+    await page.getByRole("menuitem", { name: /Keep it/ }).click();
+    await row(page).click({ button: "right" });
     await page.getByRole("menuitem", { name: /Take me off/ }).click();
-    await expect.poll(() => row(page).count()).toBe(0);
+    await expect.poll(() => row(page).count(), WAIT).toBe(0);
     await page.locator(".app-undo", { hasText: /Took you off/ }).getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => row(page).isVisible()).toBe(true);
+    await expect.poll(() => row(page).isVisible(), WAIT).toBe(true);
     // Alex's own plan never changed.
     expect((await call(page, "demo.be", { who: "me" })).ok).toBe(true);
     await week(page);
-    await expect.poll(() => row(page).locator(".deploy-people").innerText()).toMatch(/2/);
+    await expect.poll(() => row(page).locator(".deploy-people").innerText(), WAIT).toMatch(/2/);
     // Nothing went to Outlook: being added writes nothing; there's no hold for anyone yet.
     expect(JSON.stringify((await call(page, "write.log", {})).data)).not.toMatch(/Release 4\.2/);
     expect(errors).toEqual([]);
@@ -99,10 +106,17 @@ describe.skipIf(!CHROMIUM)("DP-3: other people on a deployment", () => {
     await page.waitForSelector(".topbar", { timeout: 60_000 });
     await page.getByRole("button", { name: "More for Release 5.0" }).first().tap();
     const sheet = page.locator(".todo-sheet");
-    await expect.poll(() => sheet.locator(".deploy-people-line").innerText()).toMatch(/On it: Alex Rivera and You[\s\S]*Added by Alex/);
-    await expect.poll(() => sheet.locator(".deploy-hold").innerText()).toMatch(/Not on your Outlook[\s\S]*Put on my Outlook/);
-    await expect.poll(() => sheet.getByRole("button", { name: "Take me off" }).isVisible()).toBe(true);
+    await expect.poll(() => sheet.locator(".deploy-people-line").innerText(), WAIT).toMatch(/On it: Alex Rivera and You[\s\S]*Added by Alex/);
+    await expect.poll(() => sheet.locator(".deploy-hold").innerText(), WAIT).toMatch(/Not on your Outlook[\s\S]*Put on my Outlook/);
+    await expect.poll(() => sheet.getByRole("button", { name: "Take me off" }).isVisible(), WAIT).toBe(true);
     await shot(page, "dp3-sheet-390-dark");
+    // Put on my Outlook: my own preview, above the sheet, nobody invited. Cancelled here: nothing is written.
+    await sheet.getByRole("button", { name: "Put on my Outlook" }).tap();
+    const preview = page.locator(".write-dialog");
+    await expect.poll(() => preview.innerText(), WAIT).toMatch(/Attendees[\s\S]*None/);
+    const onTop = await preview.evaluate((el) => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height - 4, 60)); return !!hit && el.contains(hit); });
+    expect(onTop).toBe(true);
+    await page.keyboard.press("Escape");
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(over).toBeLessThanOrEqual(0);
     expect((await call(page, "demo.be", { who: "me" })).ok).toBe(true);

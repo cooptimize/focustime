@@ -1625,3 +1625,11 @@ From the IT review (TD-1):
 - **A person removed while their form is open** gets "That deployment isn't on your plan any more" on Save.
 - **An import into a database where the deployment still exists** makes the person's own copy rather than putting them back on the shared one (an export holds no ids of shared rows).
 - **The demo's second person.** `demo.be` switches the whole demo session to the teammate (their own plan), not a second window. It is the smallest way to see both sides; a side-by-side view would need two demo sessions on one database.
+- **Being added, seen in the demo.** The notice comes from each person's ticks, which the demo doesn't run, so a teammate trying it in the demo learns who added them only from "Added by" where it opens (now on the computer's details too). In the hosted app it is a notice by the person's switch.
+- **Move, Done and the phone's Move to <day> don't say who else they change.** Only Deployment details has the line; the undo line after each counts everyone ("for all 2 on it"). A line on the Move step would be one more place for the same words.
+- **A deployment's narrow weekend card shows no title** (the client and the window, the title on hover, UC-2), and clicking the column's empty space opens the catch-up day's panel. Both before DP-3.
+- **The window's times read three ways** (19:00 on cards, 7:00 PM in the form, 7:00 on the phone's sheet with no AM or PM) and none names a zone. Before DP-3; with people in other zones a zone name might help.
+- **One icon for People on it…, Put on my Outlook and Take me off** in the menu (the deployment icon, as the menu shows each item of a to-do's kind). Before DP-3's items had their own; a people and a calendar icon would read better.
+- **Saves to the hold timebox after someone else's change reach my Outlook without a question when I turned off previews for my own events** (my confirm_own rule, as the brief asks). Whether a shared deployment's hold should always ask is open.
+- **A removed person's notice names the deployment as it is when the notice is sent**, not when they were removed (a rename in between shows the new title). Keeping the title on the note needs a column.
+
