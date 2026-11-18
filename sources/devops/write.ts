@@ -18,11 +18,50 @@ export class WriteFailure extends Error {
   }
 }
 
+/** RQ-1: a field DevOps named when it refused a create's check: its reference name and display name, as far as it said. */
+export type RuleField = { ref: string | null; name: string | null };
+/** RQ-1: DevOps's answer to a create checked without saving: fine, or the fields its rules refused (none named: another refusal). */
+export type CreateCheck = { ok: true } | { ok: false; fields: RuleField[] };
+
+/**
+ * RQ-1: the one builder of a checked-without-saving create's address. validateOnly=true is always on it, so nothing built
+ * here can save an item (Work Items - Create, 7.1: "validate the changes without saving the work item").
+ */
+export const checkCreatePath = (project: string, type: string) => `${encodeURIComponent(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?validateOnly=true`;
+
+/**
+ * RQ-1: the fields a rule failure names. Learn doesn't document the body of a refused create; DevOps answers a
+ * RuleValidationException with customProperties.RuleValidationErrors (each fieldReferenceName) and FieldReferenceName,
+ * and a message "TF401320: Rule Error for field <name>." naming the first. All three are read; only names are kept.
+ */
+export function ruleFieldsOf(body: unknown): RuleField[] {
+  const b = (body && typeof body === "object" ? body : {}) as { message?: unknown; customProperties?: { RuleValidationErrors?: unknown; FieldReferenceName?: unknown } };
+  const out: RuleField[] = [];
+  const add = (ref: string | null, name: string | null) => {
+    if (!ref && !name) return;
+    if (out.some((f) => (ref && f.ref === ref) || (name && f.name === name))) return;
+    out.push({ ref, name });
+  };
+  const nameIn = (m: unknown) => (typeof m === "string" ? (/TF401320: Rule Error for field ([^.]{1,120})\./.exec(m)?.[1]?.trim() ?? null) : null);
+  const list = b.customProperties?.RuleValidationErrors;
+  if (Array.isArray(list))
+    for (const e of list.slice(0, 50)) {
+      if (!e || typeof e !== "object") continue;
+      const x = e as { fieldReferenceName?: unknown; errorMessage?: unknown };
+      add(typeof x.fieldReferenceName === "string" ? x.fieldReferenceName : null, nameIn(x.errorMessage));
+    }
+  const single = b.customProperties?.FieldReferenceName;
+  const first = nameIn(b.message);
+  if (typeof single === "string") add(single, out.length ? null : first);
+  else if (first) add(null, first);
+  return out;
+}
+
 export type Comment = { id: number; text: string; isDeleted: boolean; createdBy: string | null; createdDate: string | null; /** SR-1: when it was last edited (DevOps's modifiedDate), or null. */ modifiedDate?: string | null };
 
 export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeoutMs?: number }) {
   const timeoutMs = d.timeoutMs ?? 20_000;
-  async function req<T>(org: string, pat: Pat, op: string, method: string, path: string, apiVersion: string, body?: unknown, contentType = "application/json"): Promise<T> {
+  async function req<T>(org: string, pat: Pat, op: string, method: string, path: string, apiVersion: string, body?: unknown, contentType = "application/json", check?: (fields: RuleField[]) => T): Promise<T> {
     // connectionData isn't versioned on Learn, so it is called without an api-version.
     const url = apiVersion ? `${orgBase(org)}/${path}${path.includes("?") ? "&" : "?"}api-version=${apiVersion}` : `${orgBase(org)}/${path}`;
     const started = performance.now();
@@ -37,15 +76,17 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
-      d.log({ source: "devops", op: `write_${op}`, kind: "network" });
+      d.log(check ? { source: "devops", op: "check", kind: "create_network" } : { source: "devops", op: `write_${op}`, kind: "network" });
       throw new WriteFailure("network", `DevOps organization ${org} didn't answer`);
     }
-    d.log({ source: "devops", op: `write_${op}`, status: res.status, durationMs: performance.now() - started });
+    // RQ-1: a check is logged as a check, by kind only (it writes nothing).
+    d.log(check ? { source: "devops", op: "check", kind: "create", status: res.status, durationMs: performance.now() - started } : { source: "devops", op: `write_${op}`, status: res.status, durationMs: performance.now() - started });
     if (res.status === 401 || res.status === 203 || (res.status >= 300 && res.status < 400) || res.type === "opaqueredirect")
       throw new WriteFailure("auth", "The DevOps write PAT is expired or invalid. Enter a new one in Settings › DevOps", res.status);
     if (res.status === 403) throw new WriteFailure("forbidden", "DevOps refused: the write PAT needs Work Items (Read & write), or you lack permission on this item", 403);
     if (res.status === 404) throw new WriteFailure("not_found", "Not found in DevOps (deleted, moved, or no access)", 404);
     if (res.status === 409 || res.status === 412) throw new WriteFailure("changed", "Changed in DevOps since you loaded it", res.status);
+    if (check && res.status === 400) return check(ruleFieldsOf(await safeJson(res)));
     if (!res.ok) {
       const msg = await safeMessage(res);
       throw new WriteFailure(res.status === 400 ? "rejected" : "error", msg ? `DevOps refused the change: ${msg}` : `DevOps error (HTTP ${res.status})`, res.status);
@@ -102,6 +143,14 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
       const r = await req<RawItem>(org, pat, "update", "PATCH", `${p(project)}/_apis/wit/workitems/${id}?$expand=relations`, version, ops, "application/json-patch+json");
       return { ...snapshot(r), commentId: typeof r.commentVersionRef?.commentId === "number" ? r.commentVersionRef.commentId : null };
     },
+    /**
+     * RQ-1: the create checked by DevOps without saving it: the same token, type and patch as the create would send,
+     * to the one address `checkCreatePath` builds (validateOnly always on). Not a write: no write log, no Undo.
+     */
+    async checkCreate(org: string, pat: Pat, project: string, type: string, ops: PatchOp[]): Promise<CreateCheck> {
+      const r = await req<CreateCheck | RawItem>(org, pat, "check_create", "POST", checkCreatePath(project, type), WIT_API, ops, "application/json-patch+json", (fields): CreateCheck => ({ ok: false, fields }));
+      return "ok" in r && r.ok === false ? r : { ok: true };
+    },
     async create(org: string, pat: Pat, project: string, type: string, ops: PatchOp[]): Promise<ItemSnapshot> {
       return snapshot(await req<RawItem>(org, pat, "create", "POST", `${p(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?$expand=relations`, WIT_API, ops, "application/json-patch+json"));
     },
@@ -142,6 +191,14 @@ export function createDevOpsWriter(d: { fetch: typeof fetch; log: Logger; timeou
   };
 }
 export type DevOpsWriter = ReturnType<typeof createDevOpsWriter>;
+
+async function safeJson(res: Response): Promise<unknown> {
+  try {
+    return JSON.parse(await res.text()) as unknown;
+  } catch {
+    return null;
+  }
+}
 
 async function safeMessage(res: Response): Promise<string | null> {
   try {

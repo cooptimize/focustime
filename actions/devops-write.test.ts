@@ -1435,13 +1435,23 @@ describe("TP-1b: the three answers at create", () => {
   });
 
   it("the third answer on a type without the acceptance field goes in the description, with a note", async () => {
-    const f = await s.preview({ kind: "new_item", title: "A feature", type: "Feature", answers: { where: "", change: "", check: "One row per order" } });
+    // RQ-1: the three questions are a story's only, so this is a story whose process has no acceptance criteria field.
+    const t = setup({ acceptance: false });
+    await t.enable();
+    const f = await t.preview({ kind: "new_item", title: "A story", type: "User Story", answers: { where: "", change: "", check: "One row per order" } });
     expect(shown(f)["Acceptance criteria"]).toBeUndefined();
     expect(shown(f).Description).toBe("How we'll know it's right: One row per order");
-    expect(f.notes?.join(" ")).toContain("Feature has no acceptance criteria field");
+    expect(f.notes?.join(" ")).toContain("User Story has no acceptance criteria field");
+    await t.confirm(f);
+    expect(sentPaths(t)).not.toContain("/fields/Microsoft.VSTS.Common.AcceptanceCriteria");
+    expect(field(t, "System.Description")).toBe("<p><strong>How we'll know it's right:</strong> One row per order</p>");
+  });
+
+  it("RQ-1: above story level the three answers aren't written, and a draft keeps its own", async () => {
+    const f = await s.preview({ kind: "new_item", title: "A feature", type: "Feature", description: "Typed", answers: { where: "W", change: "C", check: "K" } });
+    expect(shown(f).Description).toBe("Typed");
     await s.confirm(f);
-    expect(sentPaths(s)).not.toContain("/fields/Microsoft.VSTS.Common.AcceptanceCriteria");
-    expect(field(s, "System.Description")).toBe("<p><strong>How we'll know it's right:</strong> One row per order</p>");
+    expect(field(s, "System.Description")).toBe("<div>Typed</div>");
   });
 
   it("text is escaped and its lines kept", async () => {
@@ -1490,5 +1500,128 @@ describe("TP-1b: the three answers at create", () => {
       const fixed = await t.preview({ kind: "new_item", title: `Same as before ${k}`, type: "User Story", answers: a, mentions: "replace" }, Adatum);
       expect(JSON.stringify(shown(fixed)), k).toContain("As we did for another client");
     }
+  });
+});
+
+describe("RQ-1: DevOps checks a new item without saving it", () => {
+  const TARGET = "Microsoft.VSTS.Scheduling.TargetDate";
+  const ruled = async (fake: Parameters<typeof fakeDevOpsWrite>[0] = {}) => {
+    const s = setup({ fake: { rules: { Feature: [TARGET] }, ...fake } });
+    await s.enable();
+    return s;
+  };
+  type Needed = { checked: boolean; needed: { ref: string | null; name: string; fill: string | null }[]; partial?: boolean; level: string | null; parent: { date: string | null } | null };
+  const needed = (s: S, change: Record<string, unknown>) => s.run<Needed>("devops.needed", { clientKey: COOP, change });
+
+  it("the one builder always carries validateOnly", async () => {
+    const { checkCreatePath } = await import("../sources/devops/write.ts");
+    expect(checkCreatePath("Cooptimize Project", "User Story")).toBe("Cooptimize%20Project/_apis/wit/workitems/$User%20Story?validateOnly=true");
+  });
+
+  it("never saves: every check carries the flag, the fake keeps nothing, the write log has nothing and there is no Undo", async () => {
+    const s = await ruled();
+    const items = s.dv.items.size;
+    const early = await needed(s, { kind: "new_item", type: "Feature", title: "", parentId: 600 });
+    expect(early).toMatchObject({ checked: true, needed: [{ ref: TARGET, name: "Target Date", fill: "date" }], level: "above" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", type: "Feature", title: "Statements", parentId: 600 } })).toMatchObject({ code: "required_field", needed: [{ fill: "date" }] });
+    const checks = s.dv.checks();
+    expect(checks.length).toBeGreaterThan(0);
+    for (const c of checks) {
+      expect(c.method).toBe("POST");
+      expect(new URL(c.url).searchParams.get("validateOnly")).toBe("true");
+      expect(c.authorization).toBe(basic(WRITE_PAT));
+    }
+    expect(s.dv.items.size).toBe(items);
+    expect(s.dv.writes()).toEqual([]);
+    expect((await s.run<{ entries: unknown[] }>("devops.log", {})).entries).toEqual([]);
+    // Logged as a check, by kind only: no write op, no body, no token.
+    expect(s.logs.some((l) => (l as { op?: string }).op === "check" && (l as { kind?: string }).kind === "create")).toBe(true);
+    expect(s.logs.some((l) => String((l as { op?: string }).op).includes("write_check"))).toBe(false);
+    expect(JSON.stringify(s.logs)).not.toContain(WRITE_PAT);
+    // With the date the one create is sent, once: the check first, then the write.
+    const r = await s.write({ kind: "new_item", type: "Feature", title: "Statements", parentId: 600, date: "2026-12-04" });
+    expect(r.confirmed).toBe(true);
+    expect(s.dv.writes().filter((w) => w.method === "POST")).toHaveLength(1);
+  });
+
+  it("a field required only by a rule, on a draft's create too", async () => {
+    const s = await ruled();
+    const d = await s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "A feature draft", size: "M", level: "feature" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: d.id } })).toMatchObject({ code: "required_field", needed: [{ fill: "date" }] });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", draftId: d.id } })).toMatchObject({ code: "required_field" });
+    expect(s.dv.writes()).toEqual([]);
+  });
+
+  it("DevOps naming every failing field: each is said once, in one answer", async () => {
+    const s = await ruled({ rules: { Feature: [TARGET, "Microsoft.VSTS.Scheduling.StartDate"] } });
+    const a = await needed(s, { kind: "new_item", type: "Feature", title: "" });
+    expect(a.needed.map((f) => f.fill)).toEqual(["date", "start"]);
+    expect(a.partial).toBe(false);
+  });
+
+  it("DevOps naming only the first: the early check says it, then the next once it is filled; never one twice", async () => {
+    const s = await ruled({ rules: { Feature: [TARGET, "Microsoft.VSTS.Scheduling.StartDate"] }, ruleErrors: "first" });
+    const seen: string[] = [];
+    let change: Record<string, unknown> = { kind: "new_item", type: "Feature", title: "" };
+    for (let i = 0; i < 3; i++) {
+      const a = await needed(s, change);
+      for (const f of a.needed) seen.push(f.fill!);
+      if (!a.needed.length) break;
+      expect(a.partial).toBe(true);
+      change = { ...change, ...(a.needed.some((f) => f.fill === "date") ? { date: "2026-12-04" } : {}), ...(a.needed.some((f) => f.fill === "start") ? { startDate: "2026-11-23" } : {}) };
+    }
+    expect(seen).toEqual(["date", "start"]);
+    expect((await s.write({ ...change, title: "Statements" })).confirmed).toBe(true);
+  });
+
+  it("an always-required field and a rule agree; where DevOps passes the item, the hint doesn't hold it back", async () => {
+    // The type lists Custom.Risk as always required, but DevOps (no rule for it here) creates the item: DevOps wins.
+    const s = setup({ fake: { required: {} } });
+    await s.enable();
+    const r = await s.write({ kind: "new_item", type: "Feature", title: "Fine" });
+    expect(r.confirmed).toBe(true);
+  });
+
+  it("no write token, or DevOps not answering the early check: nothing is said; the preview-time check still decides", async () => {
+    const s = setup({ fake: { rules: { Feature: [TARGET] } } });
+    expect(await needed(s, { kind: "new_item", type: "Feature", title: "" })).toMatchObject({ checked: false, needed: [] });
+    await s.enable();
+    const offline = setup({ fake: { rules: { Feature: [TARGET] } } });
+    await offline.enable();
+    offline.dv.fail("GET", /processconfiguration$/, "network");
+    expect(await needed(offline, { kind: "new_item", type: "Feature", title: "" })).toMatchObject({ checked: false });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", type: "Feature", title: "Statements" } })).toMatchObject({ code: "required_field" });
+  });
+
+  it("a field FocusTime has no control for is named in plain words, never in DevOps's own text", async () => {
+    const s = await ruled({ rules: { Feature: ["Custom.Risk"] } });
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", type: "Feature", title: "Statements" } });
+    expect(r.error).toBe("Cooptimize Project's process needs Risk on a new Feature, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft.");
+    expect(r.error).not.toContain("TF401320");
+  });
+
+  it("a refusal at Confirm reads in plain words and can be tried again; an older stored one reads plainly too", async () => {
+    const rules: Record<string, string[]> = {};
+    const s = await ruled({ rules });
+    const p = await s.preview({ kind: "new_item", type: "Feature", title: "Late rule", parentId: 600 });
+    // The rule lands between the preview and Confirm (as a process can change): DevOps refuses at Confirm.
+    rules.Feature = [TARGET];
+    const r = await s.confirm(p);
+    expect(r).toMatchObject({ confirmed: false, message: "DevOps says Target Date is needed on a new Feature. Fill it in and try again." });
+    expect(s.dv.items.size).toBe(4);
+    const old = await s.plan.logDevopsWrite({ clientKey: COOP, org: "cooptimize", project: "Cooptimize Project", op: "create", itemId: null, parentId: 600, title: "From before", identity: "avery@cooptimize.example", before: {}, after: { Type: "Feature" }, ops: [], revBefore: null, revAfter: null, commentId: null, draftId: null, pickIds: [], followUpId: null, undoOf: null, ask: null, conv: null });
+    await s.plan.settleDevopsWrite(old.id, { status: "failed", message: "DevOps refused the change: TF401320: Rule Error for field Target Date. Error code: Required, InvalidEmpty.", retry: false });
+    const shown = (await s.run<{ entries: { title: string; message: string | null }[] }>("devops.log", {})).entries.find((e) => e.title === "From before")!;
+    expect(shown.message).toBe("DevOps says Target Date is needed on a new Feature. Fill it in and try again.");
+  });
+
+  it("every preview is held in one place, after DevOps's check for a create (no screen can reach a preview around it)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./devops-write-actions.ts", import.meta.url), "utf8");
+    const holds = [...src.matchAll(/hold\(h, env\)/g)].length;
+    // devops.preview's loop (twice on one line) and Send feedback's own preview, each after requireNeeded.
+    expect(holds).toBe(3);
+    expect(src).toMatch(/requireNeeded\(env, h, memo, fillsOf[\s\S]{0,2000}previews\.push\(key \? \{ \.\.\.hold\(h, env\), key \} : hold\(h, env\)\)/);
+    expect(src).toMatch(/await requireNeeded\(env, h, new Map\(\)[\s\S]{0,300}preview: hold\(h, env\)/);
   });
 });

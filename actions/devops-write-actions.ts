@@ -21,7 +21,8 @@ import { exitCheck, nameList, NAME_REMOVED, replaceMentions } from "../plan/boun
 import { AnswersError, parseAnswers, withCarried, written, type Answers } from "../plan/three-questions.ts";
 import { isCoopComment } from "../plan/status-report.ts";
 import { breakdownChildTypes, ladderFromProcessConfig, levelsFromProcessConfig } from "../plan/process.ts";
-import { cleanTitle, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
+import { cleanTitle, createLevels, createLevelsOf, missingRequired, parentProblem } from "../plan/quick-create.ts";
+import { fillOf, mergeNeeded, neededFrom, neededMessage, plainRefusal, type FillRefs, type NeededAnswer, type NeededField, type NeededFill } from "../plan/needed.ts";
 import { commentLevelOk } from "../plan/meetings.ts";
 import type { RequiredField } from "../plan/call-words.ts";
 import type { MeetingWritePort } from "./meeting-actions.ts";
@@ -53,7 +54,7 @@ import { readImage, type ReadImage } from "./chat-images.ts";
 import { chatImageSrc } from "../plan/conversation-views.ts";
 export type { DevOpsPreview, DevOpsResult };
 
-export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer", "devops.wrap_offer", "devops.edit_offer"] as const;
+export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.needed", "devops.preview", "devops.confirm", "devops.retry", "devops.log", "devops.done_offer", "devops.undo_offer", "devops.progress_offer", "devops.wrap_offer", "devops.edit_offer"] as const;
 export type DevOpsWriteAction = (typeof DEVOPS_WRITE_ACTIONS)[number];
 export type { DoneOffer, UndoOffer } from "./types.ts";
 import type { DoneOffer, ItemDoneOffer, ProgressOffer, UndoOffer, WrapOffer } from "./types.ts";
@@ -187,12 +188,14 @@ type Held = {
   looks?: { label: string; before: string; after: string }[];
   /** MC-1e: the call's proposal this write comes from; its row hears how the write ended. */
   meeting?: { proposalId: number };
+  /** RQ-1: the type's always-required fields this create leaves empty: a first hint, used only when DevOps can't be asked. */
+  hint?: NeededField[];
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
 
 class Invalid extends Error {}
-const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
+const bad = (error: string, status = 400, code?: string, needed?: NeededField[]): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}), ...(needed ? { needed } : {}) });
 type Obj = Record<string, unknown>;
 function fields(input: unknown, required: string[], optional: string[] = []): Obj {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Invalid("input must be an object");
@@ -241,7 +244,7 @@ export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsW
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
     if (e instanceof PlanError) return bad(e.message, 409);
-    if (e instanceof Refused) return bad(e.message, e.status, e.code);
+    if (e instanceof Refused) return bad(e.message, e.status, e.code, e.needed);
     if (e instanceof WriteFailure) return bad(e.message, e.kind === "changed" ? 409 : e.kind === "network" ? 503 : 422, e.kind === "changed" ? "changed" : undefined);
     throw e;
   }
@@ -249,10 +252,13 @@ export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsW
 class Refused extends Error {
   readonly status: number;
   readonly code: string | undefined;
-  constructor(message: string, status = 409, code?: string) {
+  /** RQ-1: the fields a create still needs (code "required_field"), so the screen can mark each Needed. */
+  readonly needed: NeededField[] | undefined;
+  constructor(message: string, status = 409, code?: string, needed?: NeededField[]) {
     super(message);
     this.status = status;
     this.code = code;
+    this.needed = needed;
   }
 }
 
@@ -348,7 +354,9 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const log = (await plan.devopsWriteLog(200));
       const tops = undoTops(log);
       // UI-8: Send feedback's creates are listed with neither Undo nor Retry (F1 never deletes and never resends on its own).
-      return { ok: true, data: { entries: log.map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(stackKey(e)) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
+      // RQ-1: a rule refusal stored before RQ-1 reads in plain words too.
+      const plain = (e: DevOpsWriteEntry): DevOpsWriteEntry => (e.message && (e.status === "failed" || e.status === "refused") ? { ...e, message: plainRefusal(e.message, e.after.Type ?? null) } : e);
+      return { ok: true, data: { entries: log.map(plain).map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(stackKey(e)) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
     case "devops.done_offer": {
       // PK-1: read only. For to-dos just checked done: which items to offer "Set #id to <done state>?" for. Only a
@@ -535,6 +543,49 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const offer: UndoOffer = { pickId, writeId: e.id, clientKey: e.clientKey, clientName: clientName(e.clientKey), itemId: e.itemId, title: e.title, before: label ? `${label} ${e.before[label] ?? "empty"}` : (e.before.State ?? null), after: label ? `${label} ${e.after[label] ?? "empty"}` : (e.after.State ?? null) };
       return { ok: true, data: { offer } };
     }
+    case "devops.needed": {
+      // RQ-1: the early check, when a form or a row opens and as its fields are filled: one new item, built exactly as
+      // its preview would build it (an empty title stands in as a placeholder, never saved), checked by DevOps without
+      // saving. Nothing is held, written or logged as a write. The answer is kept in memory about 10 minutes. When it
+      // can't be made (no write token, DevOps not answering, the item can't be built yet) it says so and nothing else.
+      const o = fields(input, ["clientKey", "change"]);
+      const clientKey = str(o.clientKey, "clientKey", 100)!;
+      const c = o.change;
+      if (!c || typeof c !== "object" || Array.isArray(c)) throw new Invalid("change must be an object");
+      const kind = (c as Obj).kind;
+      if (kind !== "new_item" && kind !== "meeting_create" && kind !== "proposal_create") throw new Invalid("change.kind must be new_item, meeting_create or proposal_create");
+      const none: NeededAnswer & { level: null; parent: null } = { checked: false, needed: [], level: null, parent: null };
+      let env: Env;
+      try {
+        env = await envOf(clientKey);
+      } catch {
+        return { ok: true, data: none };
+      }
+      const memo = new Map<string, Promise<unknown>>();
+      const change = kind === "new_item" && !(typeof (c as Obj).title === "string" && ((c as Obj).title as string).trim()) ? { ...(c as Obj), title: CHECK_TITLE } : (c as Obj);
+      let h: HeldIn | string;
+      try {
+        h = await previewOne(env, change, tz, memo);
+      } catch {
+        return { ok: true, data: none };
+      }
+      if (typeof h === "string" || h.op !== "create" || !h.type) return { ok: true, data: none };
+      // The item as it would be sent decides the key: the same person, organization, type and patch ask DevOps once.
+      const key = `${env.me.email.toLowerCase()}|${env.org.toLowerCase()}|${env.project}|${h.type}|${JSON.stringify(h.ops)}`;
+      const neededCache = neededCacheOf(env.writer);
+      const cached = neededCache.get(key);
+      const answer = cached && cached.at > Date.now() - NEEDED_MS ? cached.answer : await askDevOps(env, h, memo);
+      const levels = await once(memo, "pc", () => env.writer.processConfig(env.org, env.pat, env.project)).then((pc) => createLevels(pc)).catch(() => null);
+      const kindOf = levels?.find((l) => l.types.includes(h.type!))?.kind ?? null;
+      const parent = h.parentId !== null ? await parentValues(env, h.parentId, memo, tz).catch(() => null) : null;
+      const data = { ...answer, level: kindOf === "requirement" ? "story" : kindOf === "portfolio" ? "above" : null, parent, projectName: env.projectName };
+      if (answer.checked && !cached) {
+        for (const [k, v] of neededCache) if (v.at < Date.now() - NEEDED_MS) neededCache.delete(k);
+        if (neededCache.size > 500) neededCache.clear();
+        neededCache.set(key, { at: Date.now(), answer });
+      }
+      return { ok: true, data };
+    }
     case "devops.preview": {
       const o = fields(input, ["clientKey"], ["change", "changes"]);
       const clientKey = str(o.clientKey, "clientKey", 100)!;
@@ -548,7 +599,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       // DS-1: a batch reads the same parent and process once.
       const memo = new Map<string, Promise<unknown>>();
       // AH-1: a change set's items are previewed one by one; one that's refused (a conflict, no right) doesn't stop the rest.
-      const refused: { itemId: number | null; error: string; code: string | null; key?: string }[] = [];
+      const refused: { itemId: number | null; error: string; code: string | null; key?: string; needed?: NeededField[] }[] = [];
       for (const c0 of list) {
         // GD-2: a change may ask for another client's names to be replaced ("replace", the preview's one click).
         const { mentions: wants, ...c } = (c0 && typeof c0 === "object" && !Array.isArray(c0) ? c0 : {}) as Obj;
@@ -557,11 +608,13 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         try {
           h = await previewOne(env, c0 && typeof c0 === "object" && !Array.isArray(c0) ? c : c0, tz, memo);
           if (typeof h !== "string") h = await withBoundary(ctx, env, h, wants === "replace" || h.aiText === true);
+          // RQ-1: every create, from every screen, is checked by DevOps without saving before its preview opens.
+          if (typeof h !== "string" && h.op === "create") await requireNeeded(env, h, memo, fillsOf(String((c as { kind?: unknown }).kind)));
         } catch (e) {
           if (o.changes !== undefined && (e instanceof Refused || e instanceof WriteFailure || e instanceof Invalid) && PER_ITEM.has(String((c as { kind?: unknown })?.kind))) {
             // SR-1: Push all's lines carry a key back, so each refusal lands on its own line.
             const k = (c as { key?: unknown }).key;
-            refused.push({ itemId: typeof (c as { itemId?: unknown }).itemId === "number" ? ((c as { itemId: number }).itemId) : null, error: e.message, code: e instanceof Refused ? (e.code ?? null) : e instanceof WriteFailure ? e.kind : null, ...(typeof k === "string" ? { key: k } : {}) });
+            refused.push({ itemId: typeof (c as { itemId?: unknown }).itemId === "number" ? ((c as { itemId: number }).itemId) : null, error: e.message, code: e instanceof Refused ? (e.code ?? null) : e instanceof WriteFailure ? e.kind : null, ...(typeof k === "string" ? { key: k } : {}), ...(e instanceof Refused && e.needed ? { needed: e.needed } : {}) });
             continue;
           }
           throw e;
@@ -774,6 +827,71 @@ async function linkComment(env: Env, o: Record<string, unknown>): Promise<HeldIn
   const item = await env.writer.item(env.org, env.pat, env.project, itemId);
   const text = commentText(edited ? edited.split("\n") : lines, link);
   return { ...base(env), ...none, op: "comment", itemId: item.id, title: item.title, ops: { text }, rev: null, before: { Comment: null }, after: { Comment: text }, type: item.type, conv };
+}
+
+/** RQ-1: the early check's answers, per writer (one per app, one per demo), person, organization and patch, in memory only. */
+const neededCaches = new WeakMap<object, Map<string, { at: number; answer: NeededAnswer }>>();
+const neededCacheOf = (writer: object) => neededCaches.get(writer) ?? neededCaches.set(writer, new Map()).get(writer)!;
+const NEEDED_MS = 10 * 60_000;
+/** RQ-1: the title an early check stands in for one not typed yet (sent only with validateOnly, so never saved). */
+const CHECK_TITLE = "FocusTime check";
+const once = <T,>(memo: Map<string, Promise<unknown>>, k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
+
+/** RQ-1: the controls each screen has for a new item's fields (what it can mark Needed; the rest are said in words). */
+const FILLS: Record<string, readonly NeededFill[]> = {
+  new_item: ["title", "description", "check", "assignTo", "date", "start", "size"],
+  create: ["title", "description", "check", "date", "start"],
+  meeting_create: ["title", "description", "check", "assignTo", "date", "size"],
+  proposal_create: ["title", "description", "check", "assignTo", "date", "start", "size"],
+  conversation_create: ["title", "description", "check", "assignTo"],
+  request_create: ["title"],
+};
+const fillsOf = (kind: string): ReadonlySet<NeededFill> => new Set(FILLS[kind] ?? ["title"]);
+
+/** RQ-1: the type's own fields that FocusTime's controls write (a target date, a start date and a size field only where the type has one). */
+async function fillRefs(env: Env, type: string, memo: Map<string, Promise<unknown>>): Promise<{ refs: FillRefs; all: { referenceName: string; name: string }[] }> {
+  const has = await once(memo, `typefields:${type}`, () => env.writer.typeFields(env.org, env.pat, env.project, type));
+  const all = await once(memo, "fields", () => env.writer.fields(env.org, env.pat, env.project));
+  return {
+    refs: { target: detectTargetField(all, has), start: has.has(START_FIELD) ? START_FIELD : null, size: detectTypeSizeField(has), acceptance: AC_FIELD, description: "System.Description", assignedTo: "System.AssignedTo", title: "System.Title" },
+    all: all.flatMap((f) => (typeof f.referenceName === "string" && typeof f.name === "string" ? [{ referenceName: f.referenceName, name: f.name }] : [])),
+  };
+}
+
+/**
+ * RQ-1: DevOps checks the create without saving it (validateOnly, the same token, type and patch the create sends). Its
+ * fields win over the type's always-required list; when it names only the first (no RuleValidationErrors), the list is
+ * added so a person is sent round once. No answer (no token, not answering): the hint alone, unchecked.
+ */
+async function askDevOps(env: Env, h: HeldIn, memo: Map<string, Promise<unknown>>): Promise<NeededAnswer> {
+  if (h.op !== "create" || !h.type || !Array.isArray(h.ops)) return { checked: true, needed: [], partial: false };
+  let r: Awaited<ReturnType<DevOpsWriter["checkCreate"]>>;
+  try {
+    r = await env.writer.checkCreate(env.org, env.pat, env.project, h.type, h.ops);
+  } catch {
+    return { checked: false, needed: h.hint ?? [] };
+  }
+  // Fine, or refused for something that isn't a field (the create itself says so, as before).
+  if (r.ok || !r.fields.length) return { checked: true, needed: [], partial: false };
+  const { refs, all } = await fillRefs(env, h.type, memo).catch(() => ({ refs: null, all: [] as { referenceName: string; name: string }[] }));
+  const named = refs ? neededFrom(r.fields, all, refs) : r.fields.map((f) => ({ ref: f.ref, name: f.name ?? f.ref ?? "a field", fill: null }));
+  const partial = r.fields.every((f) => !f.ref);
+  return { checked: true, needed: partial ? mergeNeeded(named, h.hint ?? []) : named, partial };
+}
+
+/** RQ-1: the preview opens only once DevOps's check passes; otherwise the fields it still needs, in plain words. */
+async function requireNeeded(env: Env, h: HeldIn, memo: Map<string, Promise<unknown>>, has: ReadonlySet<NeededFill>): Promise<void> {
+  const a = await askDevOps(env, h, memo);
+  if (!a.needed.length) return;
+  throw new Refused(neededMessage(a.needed, { project: env.projectName, type: h.type ?? "item", has }), 409, "required_field", a.needed);
+}
+
+/** RQ-1: a parent's own target and start dates, for stories that start from their feature's (Break down). */
+async function parentValues(env: Env, parentId: number, memo: Map<string, Promise<unknown>>, tz: string): Promise<{ date: string | null; start: string | null }> {
+  const p = await once(memo, `item:${parentId}`, () => env.writer.item(env.org, env.pat, env.project, parentId));
+  const { refs } = await fillRefs(env, p.type, memo);
+  const day = (v: unknown) => dateOnly(v, tz);
+  return { date: refs.target ? day(p.fields[refs.target]) : null, start: refs.start ? day(p.fields[refs.start]) : null };
 }
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
@@ -1106,9 +1224,13 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         if (e instanceof AnswersError) throw new Invalid(e.message);
         throw e;
       }
+      // RQ-1: the three questions are a story's only. Above story level (by the process's levels) they aren't asked or
+      // written; answers a draft already has are kept on the draft, never sent.
+      if (levels.find((l) => l.types.includes(type))?.kind !== "requirement") answers = null;
       const typedAcceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft?.acceptance ?? null);
       const date = o.date !== undefined && o.date !== null && o.date !== "" ? isoDate(o.date, "date") : o.date === undefined ? (draft?.targetDate ?? null) : null;
-      const startDay = draft?.startDate ?? null;
+      // RQ-1: a start date the form asks for when the process needs one (else a draft's, as before).
+      const startDay = o.startDate !== undefined && o.startDate !== null && o.startDate !== "" ? isoDate(o.startDate, "startDate") : (draft?.startDate ?? null);
       const sizeIn = o.size === undefined || o.size === null || o.size === "" ? null : Number(o.size);
       if (sizeIn !== null && (!Number.isFinite(sizeIn) || sizeIn < 0 || sizeIn > 10_000)) throw new Invalid("size must be a number from 0 to 10000");
       const info = await writer.typeFieldInfo(org, pat, project, type);
@@ -1133,9 +1255,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         ...createOps({ org, title, description: w.descriptionHtml, descriptionIsHtml: true, acceptance, acField, assignedTo: assignee?.email ?? null, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, startDate, targetDate, timeZone: tz }),
         ...(sizeField && sizeIn !== null ? [{ op: "add" as const, path: `/fields/${sizeField}`, value: sizeIn }] : []),
       ];
-      // A required field this create leaves empty, that DevOps has no default for: say so now, never half-create.
+      // A required field this create leaves empty, that DevOps has no default for: a first hint. RQ-1: DevOps's own
+      // check (askDevOps, before the preview opens) decides; the hint alone only when DevOps can't be asked.
       const missing = missingRequired(info, new Set(ops.filter((x) => x.path.startsWith("/fields/")).map((x) => x.path.slice(8))));
-      if (missing.length) throw new Refused(`${env.projectName}'s process needs ${missing.map((f) => f.name ?? f.ref).join(", ")} on a new ${type}, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft`, 409, "required_field");
+      const all = missing.length ? await writer.fields(org, pat, project) : [];
+      const hintRefs: FillRefs = { target: detectTargetField(all, typeHas), start: typeHas.has(START_FIELD) ? START_FIELD : null, size: detectTypeSizeField(typeHas), acceptance: AC_FIELD, description: "System.Description", assignedTo: "System.AssignedTo", title: "System.Title" };
+      const hint: NeededField[] = missing.map((f) => ({ ref: f.ref, name: String(f.name ?? all.find((x) => x.referenceName === f.ref)?.name ?? f.ref.split(".").pop()), fill: fillOf(f.ref, hintRefs) }));
       // Never two: a create of this title, type and parent that may have landed (from another tab or a double click).
       const twin = await twinOf(plan, { clientKey: env.clientKey, title, type, parentId: parent?.id ?? null, draftId: draft?.id ?? null }, msOf(env.now()));
       if (twin) throw new Refused(twin.message, 409, "pending_write");
@@ -1146,7 +1271,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       };
       const notes = [`Created as you: DevOps shows ${env.me.name} as who made it.`, ...(draft ? ["The draft becomes this item wherever it is placed, keeping its block, size and time."] : []), ...(assignee && assignee.email !== env.me.email ? ["DevOps tells them as it usually does; FocusTime sends no note of its own."] : []),
         ...(answers?.check && !hasAc ? [`${type} has no acceptance criteria field in ${env.projectName}'s process, so "How will we know it's right?" goes in the description.`] : [])];
-      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes, quick: true, aiText: !!draft?.ai && ((!!draft.ai.title && title === cleanTitleText(draft.ai.title)) || (!!draft.ai.description && description === draft.ai.description)) };
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent?.id ?? null, title, ops, rev: null, before: {}, after, type, draftId: draft?.id ?? null, notes, quick: true, hint, aiText: !!draft?.ai && ((!!draft.ai.title && title === cleanTitleText(draft.ai.title)) || (!!draft.ai.description && description === draft.ai.description)) };
     }
     case "proposal_create": {
       // DS-1: one kept card of a Draft stories draft, as a story under its feature: the process's story type, the
@@ -1173,15 +1298,25 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const type = draft.storyType && valid.includes(draft.storyType) ? draft.storyType : valid[0]!;
       const parentStates = await once(`states:${parent.type}`, () => writer.states(org, pat, project, parent.type));
       if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
-      const typeHas = await once(`fields:${type}`, () => writer.typeFields(org, pat, project, type));
+      const typeHas = await once(`typefields:${type}`, () => writer.typeFields(org, pat, project, type));
       const acField = typeHas.has(AC_FIELD);
       const area = String(parent.fields["System.AreaPath"] ?? "");
       const iteration = String(parent.fields["System.IterationPath"] ?? "");
       if (!area || !iteration) throw new Refused(`#${parent.id} has no area or iteration to copy`, 409);
       const description = publishDescription(p, draft.proposals) || null;
       const acceptance = publishAcceptance(p) || null;
-      const ops = createOps({ org, title: p.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, timeZone: tz });
-      const after: Record<string, string | null> = { Type: type, Title: p.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}`, "Size in FocusTime": `${sizeChipText(p.size, env.cfg.plan.sizes)} (not written to DevOps)` };
+      // RQ-1: the fields the client's process needs on each story (Review asks for them), written only when set.
+      const v = p.values ?? {};
+      const target = v.date ? detectTargetField(await once("fields", () => writer.fields(org, pat, project)), typeHas) : null;
+      if (v.date && !target) throw new Refused(`${type} has no target date in ${env.projectName}'s process. Clear the target date on "${p.title}"`, 409);
+      if (v.start && !typeHas.has(START_FIELD)) throw new Refused(`${type} has no start date in ${env.projectName}'s process. Clear the start date on "${p.title}"`, 409);
+      const sizeField = v.size !== undefined && v.size !== null ? detectTypeSizeField(typeHas) : null;
+      if (v.size !== undefined && v.size !== null && !sizeField) throw new Refused(`${type} has no size field in ${env.projectName}'s process. Clear the size on "${p.title}"`, 409);
+      const ops = [
+        ...createOps({ org, title: p.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, timeZone: tz, ...(v.date && target ? { targetDate: { field: target, date: v.date } } : {}), ...(v.start ? { startDate: { field: START_FIELD, date: v.start } } : {}) }),
+        ...(sizeField && v.size !== undefined && v.size !== null ? [{ op: "add" as const, path: `/fields/${sizeField}`, value: v.size }] : []),
+      ];
+      const after: Record<string, string | null> = { Type: type, Title: p.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(v.date ? { "Target date": v.date } : {}), ...(v.start ? { "Start date": v.start } : {}), ...(sizeField && v.size !== undefined && v.size !== null ? { Size: String(v.size) } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}`, "Size in FocusTime": `${sizeChipText(p.size, env.cfg.plan.sizes)} (not written to DevOps)` };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: p.title, ops, rev: null, before: {}, after, type, proposal: { draftId, proposalId } };
     }
     case "request_create": {
@@ -2027,7 +2162,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (e.kind === "network") return settle("unconfirmed", "DevOps didn't answer, so FocusTime can't tell whether the change landed. Retry checks first and won't write twice");
       if (e.kind === "auth" || e.kind === "forbidden") return settle("failed", e.message);
       if (e.kind === "not_found") return settle("refused", e.message);
-      return settle("failed", e.message);
+      // RQ-1: a rule DevOps still refuses at Confirm: the field in plain words, never DevOps's own text.
+      return settle("failed", e.kind === "rejected" ? plainRefusal(e.message, entry.after.Type ?? null) : e.message);
     }
     if (e instanceof PlanError) return settle("refused", e.message);
     return settle("failed", "The change didn't go through. Retry");
@@ -2198,6 +2334,8 @@ export function feedbackWrites(ctx: DevOpsWriteContext, clients: () => Promise<{
       const h: HeldIn = { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: story.title, ops, rev: null, before: {}, after, type: storyType, notes: [`Created as you: DevOps shows ${env.me.name} as who made it.`] };
       try {
         await checkBoundary(ctx, env, h);
+        // RQ-1: feedback's create is checked by DevOps without saving too, like every other create.
+        await requireNeeded(env, h, new Map(), new Set<NeededFill>(["title", "description"]));
       } catch (e) {
         if (e instanceof Refused) return { check, preview: null, refused: e.message };
         throw e;

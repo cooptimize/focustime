@@ -111,7 +111,7 @@ export type UrgentAsk = { chatId: string; messageId: string; clientKey: string; 
 
 /** A value problem on one config field (Settings shows it next to the field). */
 export type FieldProblem = { field: string; message: string };
-export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string };
+export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string; /** RQ-1: with "required_field", the fields a new item still needs (plan/needed.ts). */ needed?: import("../plan/needed.ts").NeededField[] };
 
 // ---- Settings (step 6b): what settings.load returns. Never a secret value. ----
 export type SettingsClient = {

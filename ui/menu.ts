@@ -1602,6 +1602,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.find":
       return { run: () => env.openSettings("devops", "find-item") };
     case "devops.states":
+    case "devops.needed":
     case "devops.preview":
       return { run: env.openCaptures };
     case "devops.confirm":
