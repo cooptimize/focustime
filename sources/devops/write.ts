@@ -43,16 +43,25 @@ export function ruleFieldsOf(body: unknown): RuleField[] {
     out.push({ ref, name });
   };
   const nameIn = (m: unknown) => (typeof m === "string" ? (/TF401320: Rule Error for field ([^.]{1,120})\./.exec(m)?.[1]?.trim() ?? null) : null);
+  // Only a missing value is "needed". An error that says what kind it is (DevOps's "Error code: …" or the entry's
+  // fieldStatusFlags) and is about a value given (not in the allowed list, not valid) isn't a needed field: it passes
+  // through, and Confirm says it in plain words as before.
+  const said = (m: unknown, flags: unknown) => `${typeof flags === "string" ? flags : ""} ${typeof m === "string" ? (/Error code:\s*([^.]*)/i.exec(m)?.[1] ?? "") : ""}`.trim();
+  const missing = (m: unknown, flags?: unknown) => {
+    const k = said(m, flags);
+    return !k || /required|invalidempty/i.test(k);
+  };
   const list = b.customProperties?.RuleValidationErrors;
   if (Array.isArray(list))
     for (const e of list.slice(0, 50)) {
       if (!e || typeof e !== "object") continue;
-      const x = e as { fieldReferenceName?: unknown; errorMessage?: unknown };
+      const x = e as { fieldReferenceName?: unknown; errorMessage?: unknown; fieldStatusFlags?: unknown };
+      if (!missing(x.errorMessage, x.fieldStatusFlags)) continue;
       add(typeof x.fieldReferenceName === "string" ? x.fieldReferenceName : null, nameIn(x.errorMessage));
     }
   const single = b.customProperties?.FieldReferenceName;
-  const first = nameIn(b.message);
-  if (typeof single === "string") add(single, out.length ? null : first);
+  const first = missing(b.message) ? nameIn(b.message) : null;
+  if (typeof single === "string" && (first || !Array.isArray(list))) add(single, out.length ? null : first);
   else if (first) add(null, first);
   return out;
 }

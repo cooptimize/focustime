@@ -23,7 +23,7 @@ import { useWherePicks, WherePicksLine } from "./WherePicks.tsx";
 import { usePhone } from "./viewport.ts";
 import { Icon } from "./icons.tsx";
 import { CREATED_EVENT, type Created, type NewHooks } from "./newitem-ctx.ts";
-import { isStoryLevel, NEEDED_WORDS, splitNeeded, type NeededFill } from "../plan/needed.ts";
+import { isAboveStory, NEEDED_WORDS, splitNeeded, type NeededFill } from "../plan/needed.ts";
 import { forgetNeeded, useNeeded } from "./needed.ts";
 
 export * from "./newitem-ctx.ts";
@@ -146,7 +146,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const sizeNum = size.trim() ? Number(size) : null;
   const sizeProblem = sizeNum !== null && (!Number.isFinite(sizeNum) || sizeNum < 0) ? "Size is a number" : null;
   // RQ-1: the three questions are a story's only, by the client's process levels (never by a type's name).
-  const storyLevel = isStoryLevel(opts?.levels, type ?? "");
+  const storyLevel = !isAboveStory(opts?.levels, type ?? "");
   // RQ-1: what the client's process needs on this item, as DevOps says when it checks it without saving: asked when
   // the form has a client and type, and again as fields are filled. Free text goes as "filled or not" only.
   const neededChange = canWrite && clientKey && type && opts?.clientKey === clientKey ? { kind: "new_item", type, title: "", ...(parentId !== null ? { parentId } : {}), assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, ...(start ? { startDate: start } : {}), description: description.trim() ? "x" : null, size: sizeNum !== null && !sizeProblem ? sizeNum : null, ...(storyLevel && answers.check.trim() ? { answers: { where: "", change: "", check: "x" } } : {}) } : null;
@@ -371,13 +371,13 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           </p>
         )}
         {/* RQ-1: what the preview still waits for, said once, and read out as it changes. */}
-        <p className="nf-needed" role="status" aria-live="polite">
+        <p id="nf-needed" className="nf-needed" role="status" aria-live="polite">
           {missing.length > 0 && type ? NEEDED_WORDS.fillFirst(missing.map((f) => f.name), type) : cant.length > 0 && type ? NEEDED_WORDS.cant(need.projectName ?? clientName, cant.map((f) => f.name), type) : ""}
         </p>
         {error && <p className="set-problem" role="alert">{error}</p>}
         <div className="wd-actions">
           {canWrite && (
-            <button type="button" className="commit" disabled={!ready} title="Ctrl+Enter" aria-keyshortcuts="Control+Enter" onClick={() => void create()}>
+            <button type="button" className="commit" disabled={!ready} aria-describedby={missing.length || cant.length ? "nf-needed" : undefined} title="Ctrl+Enter" aria-keyshortcuts="Control+Enter" onClick={() => void create()}>
               {busy ? "Opening the preview…" : "Create in DevOps"}
             </button>
           )}

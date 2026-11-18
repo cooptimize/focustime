@@ -31,7 +31,8 @@ export function askNeeded(clientKey: string, change: Record<string, unknown>): P
   const key = `${clientKey}|${JSON.stringify(change)}`;
   const hit = memo.get(key);
   if (hit && hit.at > Date.now() - TTL) return hit.p;
-  const p = call<Answer>("devops.needed", { clientKey, change }).catch(() => null);
+  // A failed ask isn't kept: the next change asks again.
+  const p = call<Answer>("devops.needed", { clientKey, change }).catch(() => (memo.delete(key), null));
   memo.set(key, { at: Date.now(), p });
   if (memo.size > 200) for (const [k, v] of memo) if (v.at < Date.now() - TTL) memo.delete(k);
   return p;

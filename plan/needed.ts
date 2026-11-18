@@ -105,5 +105,10 @@ export function neededMessage(n: readonly NeededField[], o: { project: string; t
 export type LevelOf = { kind: "portfolio" | "requirement" | string; types: readonly string[] };
 /** RQ-1: is this type at story level in the client's process (by its levels' kinds, never by a type's or level's name)? */
 export const isStoryLevel = (levels: readonly LevelOf[] | undefined, type: string): boolean => !!type && levels?.find((l) => l.types.includes(type))?.kind === "requirement";
+/** RQ-1: is this type known to sit above story level? Unknown (no type yet, levels not loaded): no, so the three questions show as before. */
+export const isAboveStory = (levels: readonly LevelOf[] | undefined, type: string): boolean => {
+  const l = type ? levels?.find((x) => x.types.includes(type)) : undefined;
+  return !!l && l.kind !== "requirement";
+};
 /** RQ-1: is this type at the feature tier (the lowest portfolio level of the client's process)? */
 export const isFeatureTier = (levels: readonly LevelOf[] | undefined, type: string): boolean => !!type && !!levels?.filter((l) => l.kind === "portfolio").at(-1)?.types.includes(type);

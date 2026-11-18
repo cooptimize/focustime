@@ -48,7 +48,7 @@ export const CALL_ROW = {
   bringBack: "Bring back",
   needed: "Needed",
   /** A required field the form fills, still empty: on the row, before any preview. */
-  needs: (names: readonly string[]) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new item of this type.`,
+  needs: (names: readonly string[], type: string | null = null) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new ${type ?? "item of this type"}.`,
   cantFill: (project: string, names: readonly string[], type: string) => `${processNeeds(project, names, type)} Create this one in DevOps, then skip it here.`,
   commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",

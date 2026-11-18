@@ -455,6 +455,7 @@ Every word below is in `plan/call-words.ts` (`POCKET_TEXT`, `CALL_ROW`) or, for 
 The needed-field words are in `plan/needed.ts` (`NEEDED_WORDS`); a call's own buttons in `plan/call-words.ts` (`CALL_ROW`).
 
 - A field the client's process needs, as DevOps says when it checks the new item: the mark **"Needed"** beside its label, and **"Required by this client's process"** under it, kept once it's filled. Other fields still say **"Optional"**. An empty needed date reads **"Choose a date"**.
+- A call's row now names the type: **"Target Date is needed: this client's process requires it on a new Feature."** (was "…on a new item of this type.").
 - The line under a form while its preview waits: **"Target Date is needed: this client's process requires it on a new Feature. Fill it in, then preview again."**.
 - A field FocusTime has no control for: **"Northwind's process needs Risk on a new User Story, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft."** (a call's row keeps **"…then skip it here."**).
 - The draft editor, for a field only the New form has: **"Size is needed by this client's process. Create in DevOps opens the New form to fill it in."**.

@@ -202,17 +202,19 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
   // The stories start from the feature's own value for a needed date (once, for the cards that have none).
   const seeded = useRef<string | null>(null);
   useEffect(() => {
-    if (!draft || !need.parent || seeded.current === draft.id) return;
+    // Keyed on the cards too: Regenerate makes new cards, and they start from the feature's value again.
+    const seedKey = draft ? `${draft.id}|${draft.cards.map((c) => c.id).join(",")}` : null;
+    if (!draft || !need.parent || seeded.current === seedKey) return;
     const from: Values = {};
     for (const f of cardNeeds) {
       if (f.fill === "date" && need.parent.date) from.date = need.parent.date;
       if (f.fill === "start" && need.parent.start) from.start = need.parent.start;
     }
     if (!Object.keys(from).length) return;
-    seeded.current = draft.id;
+    seeded.current = seedKey;
     const next = draft.cards.map((c) => (c.status.state !== "not_sent" ? c : { ...c, values: { ...from, ...Object.fromEntries(Object.entries(c.values ?? {}).filter(([, v]) => v !== null && v !== undefined)) } }));
     if (next.some((c, i) => JSON.stringify(c.values ?? {}) !== JSON.stringify(draft.cards[i]!.values ?? {}))) edit(next, true);
-  }, [draft?.id, need.parent, cardNeeds.map((f) => f.fill).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft?.id, draft?.cards.map((c) => c.id).join(), need.parent, cardNeeds.map((f) => f.fill).join()]); // eslint-disable-line react-hooks/exhaustive-deps
   /** "Use for all": one value on every story not yet sent. */
   const useForAll = (f: ValueFill, v: string | number | null) => draft && edit(draft.cards.map((c) => (c.status.state !== "not_sent" ? c : { ...c, values: { ...(c.values ?? {}), [f]: v } })), true);
   // RQ-1: Create and break down opens here with Run started, once; Break down is given what it is for any item.
@@ -448,7 +450,9 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
                       </button>
                     </>
                   )}
-                  <button type="button" className="commit" disabled={!!busy || kept === 0 || waiting > 0 || cardCant.length > 0} title={waiting ? NEEDED_WORDS.holdPublish(waiting) : undefined} onClick={() => void preview()}>
+                  {/* RQ-1: why Preview waits, beside it, and read with it. */}
+                  {waiting > 0 && <span id="bd-hold" className="bd-hold" role="status">{NEEDED_WORDS.holdPublish(waiting)}</span>}
+                  <button type="button" className="commit" disabled={!!busy || kept === 0 || waiting > 0 || cardCant.length > 0} aria-describedby={waiting > 0 ? "bd-hold" : undefined} title={waiting ? NEEDED_WORDS.holdPublish(waiting) : undefined} onClick={() => void preview()}>
                     {kept === 0 ? "Nothing to create" : `Preview ${plural(kept, "item", "items")}…`}
                   </button>
                 </>
@@ -821,7 +825,7 @@ function ReviewStep({ clientKey, draft, busy, onEdit, onRegenerate, needs, cant,
         })}
       </ol>
       <p className="bd-total" aria-live="polite">{reviewTotal(draft.cards, sizes)}</p>
-      {waiting > 0 && <p className="mtg-need" role="status" aria-live="polite">{NEEDED_WORDS.holdPublish(waiting)}</p>}
+      {waiting > 0 && <p className="mtg-need">{NEEDED_WORDS.holdPublish(waiting)}</p>}
     </>
   );
 }

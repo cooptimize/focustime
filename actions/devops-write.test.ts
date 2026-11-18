@@ -1513,6 +1513,35 @@ describe("RQ-1: DevOps checks a new item without saving it", () => {
   type Needed = { checked: boolean; needed: { ref: string | null; name: string; fill: string | null }[]; partial?: boolean; level: string | null; parent: { date: string | null } | null };
   const needed = (s: S, change: Record<string, unknown>) => s.run<Needed>("devops.needed", { clientKey: COOP, change });
 
+  it("sends no typed words: the title and description go to the check only as filled", async () => {
+    const s = await ruled();
+    await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", type: "Feature", title: "Statements for Harbor's audit", description: "Ask Dana about the export", parentId: 600 } });
+    const sent = JSON.stringify(s.dv.checks().map((c) => c.body));
+    expect(sent).not.toContain("Harbor");
+    expect(sent).not.toContain("Dana");
+    expect(sent).toContain("FocusTime check");
+  });
+
+  it("a value DevOps calls invalid isn't a needed field; a missing one is", async () => {
+    const { ruleFieldsOf } = await import("../sources/devops/write.ts");
+    const body = { message: "TF401320: Rule Error for field Priority. Error code: LimitedToValues.", customProperties: { RuleValidationErrors: [
+      { fieldReferenceName: "Microsoft.VSTS.Common.Priority", errorMessage: "TF401320: Rule Error for field Priority. Error code: LimitedToValues.", fieldStatusFlags: "limitedToValues" },
+      { fieldReferenceName: TARGET, errorMessage: "TF401320: Rule Error for field Target Date. Error code: Required, InvalidEmpty.", fieldStatusFlags: "required, invalidEmpty" },
+    ] } };
+    expect(ruleFieldsOf(body)).toEqual([{ ref: TARGET, name: "Target Date" }]);
+    expect(ruleFieldsOf({ message: "TF401320: Rule Error for field Priority. Error code: LimitedToValues." })).toEqual([]);
+    expect(ruleFieldsOf({ message: "TF401320: Rule Error for field Target Date. Error code: Required, InvalidEmpty." })).toEqual([{ ref: null, name: "Target Date" }]);
+  });
+
+  it("an update's refusal keeps DevOps's words (only a create is put in plain words)", async () => {
+    const s = await ruled();
+    const old = await s.plan.logDevopsWrite({ clientKey: COOP, org: "cooptimize", project: "Cooptimize Project", op: "state", itemId: 600, parentId: null, title: "An update", identity: "avery@cooptimize.example", before: {}, after: { State: "Closed" }, ops: [], revBefore: null, revAfter: null, commentId: null, draftId: null, pickIds: [], followUpId: null, undoOf: null, ask: null, conv: null });
+    const raw = "DevOps refused the change: TF401320: Rule Error for field Reason. Error code: Required, InvalidEmpty.";
+    await s.plan.settleDevopsWrite(old.id, { status: "failed", message: raw, retry: false });
+    const shown = (await s.run<{ entries: { title: string; message: string | null }[] }>("devops.log", {})).entries.find((e) => e.title === "An update")!;
+    expect(shown.message).toBe(raw);
+  });
+
   it("the one builder always carries validateOnly", async () => {
     const { checkCreatePath } = await import("../sources/devops/write.ts");
     expect(checkCreatePath("Cooptimize Project", "User Story")).toBe("Cooptimize%20Project/_apis/wit/workitems/$User%20Story?validateOnly=true");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFeatureTier, isStoryLevel } from "./needed.ts";
+import { isAboveStory, isFeatureTier, isStoryLevel } from "./needed.ts";
 
 // RQ-1: the three questions show at story level only, and Create and break down at the feature tier, by the client's
 // process levels (their kinds), never by a type's or a level's name.
@@ -38,5 +38,11 @@ describe("RQ-1: story level and feature tier come from the process levels", () =
     expect(isStoryLevel(undefined, "User Story")).toBe(false);
     expect(isFeatureTier(undefined, "Feature")).toBe(false);
     expect(isStoryLevel(agile, "")).toBe(false);
+    // The questions hide only for a type known to sit above story level; before a client or type is chosen they show.
+    expect(isAboveStory(undefined, "Feature")).toBe(false);
+    expect(isAboveStory(agile, "")).toBe(false);
+    expect(isAboveStory(agile, "Feature")).toBe(true);
+    expect(isAboveStory(custom, "Deliverable")).toBe(true);
+    expect(isAboveStory(custom, "Work Package")).toBe(false);
   });
 });

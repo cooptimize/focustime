@@ -7619,3 +7619,6 @@ body.ah-dragging * { cursor: grabbing !important; }
 .bd-need-why { font-size: var(--fs-2); }
 .bd-card-needs { display: flex; flex-wrap: wrap; gap: 12px; }
 .bd-need-field input { width: 8em; }
+/* RQ-1: a held create looks held (the reason sits beside it). */
+.wd-actions .commit:disabled, .bd-panel .commit:disabled, .mtg-prop-actions .mini:disabled { opacity: 0.45; cursor: not-allowed; }
+.bd-hold { font-size: var(--fs-2); color: var(--watch); margin-right: 8px; }

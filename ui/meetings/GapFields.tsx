@@ -4,7 +4,7 @@
 // (new.options: the client's levels and its open parents). A field the client's process requires shows here marked
 // Needed until it has a value; the row can't be sent before then. Every change is saved on the proposal at once
 // (meeting.edit); the write itself goes only through the one DevOps preview.
-import { isStoryLevel } from "../../plan/needed.ts";
+import { isAboveStory } from "../../plan/needed.ts";
 import { useEffect, useMemo, useState } from "react";
 import { aOr, parentTypesOf, type NewOptions } from "../../plan/quick-create.ts";
 import { CALL_ROW, type ProposalCheck } from "../../plan/call-words.ts";
@@ -45,7 +45,7 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
   const allowed = useMemo(() => new Set(parentTypesOf(ladder, b.type)), [ladder, b.type]);
   const parents = useMemo(() => (opts?.parents ?? []).filter((p) => allowed.has(p.type)), [opts, allowed]);
   // RQ-1: the three questions are a story's only, by the client's process levels (never by a type's name).
-  const storyLevel = isStoryLevel(opts?.levels, b.type);
+  const storyLevel = !isAboveStory(opts?.levels, b.type);
   const inMore = needs.has("description") || needs.has("size") || (storyLevel && needs.has("check"));
   const [more, setMore] = useState(inMore);
   useEffect(() => {

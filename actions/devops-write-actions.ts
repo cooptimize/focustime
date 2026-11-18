@@ -355,7 +355,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const tops = undoTops(log);
       // UI-8: Send feedback's creates are listed with neither Undo nor Retry (F1 never deletes and never resends on its own).
       // RQ-1: a rule refusal stored before RQ-1 reads in plain words too.
-      const plain = (e: DevOpsWriteEntry): DevOpsWriteEntry => (e.message && (e.status === "failed" || e.status === "refused") ? { ...e, message: plainRefusal(e.message, e.after.Type ?? null) } : e);
+      const plain = (e: DevOpsWriteEntry): DevOpsWriteEntry => (e.message && e.op === "create" && (e.status === "failed" || e.status === "refused") ? { ...e, message: plainRefusal(e.message, e.after.Type ?? null) } : e);
       return { ok: true, data: { entries: log.map(plain).map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(stackKey(e)) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
     case "devops.done_offer": {
@@ -579,7 +579,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const kindOf = levels?.find((l) => l.types.includes(h.type!))?.kind ?? null;
       const parent = h.parentId !== null ? await parentValues(env, h.parentId, memo, tz).catch(() => null) : null;
       const data = { ...answer, level: kindOf === "requirement" ? "story" : kindOf === "portfolio" ? "above" : null, parent, projectName: env.projectName };
-      if (answer.checked && !cached) {
+      if (answer.checked && !(cached && cached.at > Date.now() - NEEDED_MS)) {
         for (const [k, v] of neededCache) if (v.at < Date.now() - NEEDED_MS) neededCache.delete(k);
         if (neededCache.size > 500) neededCache.clear();
         neededCache.set(key, { at: Date.now(), answer });
@@ -835,7 +835,15 @@ const neededCacheOf = (writer: object) => neededCaches.get(writer) ?? neededCach
 const NEEDED_MS = 10 * 60_000;
 /** RQ-1: the title an early check stands in for one not typed yet (sent only with validateOnly, so never saved). */
 const CHECK_TITLE = "FocusTime check";
-const neededKey = (env: Env, h: HeldIn) => `${env.me.email.toLowerCase()}|${env.org.toLowerCase()}|${env.project}|${h.type}|${JSON.stringify(h.ops)}`;
+/**
+ * RQ-1: the patch as the check sends it: free text (the title, description, acceptance criteria, repro steps) goes only
+ * as "filled", never its words, so nothing a person typed or a call said reaches the client's DevOps before the preview
+ * and its client-boundary flags. A rule is about a field having a value; the words don't change what's needed.
+ */
+function checkOps(ops: readonly PatchOp[]): PatchOp[] {
+  return ops.map((p) => (TEXT_PATHS.has(p.path) && typeof p.value === "string" && p.value.trim() ? { ...p, value: p.path === "/fields/System.Title" ? "FocusTime check" : "x" } : p));
+}
+const neededKey = (env: Env, h: HeldIn) => `${env.me.email.toLowerCase()}|${env.org.toLowerCase()}|${env.project}|${h.type}|${JSON.stringify(Array.isArray(h.ops) ? checkOps(h.ops as PatchOp[]) : null)}`;
 const once = <T,>(memo: Map<string, Promise<unknown>>, k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
 
 /** RQ-1: the controls each screen has for a new item's fields (what it can mark Needed; the rest are said in words). */
@@ -868,7 +876,7 @@ async function askDevOps(env: Env, h: HeldIn, memo: Map<string, Promise<unknown>
   if (h.op !== "create" || !h.type || !Array.isArray(h.ops)) return { checked: true, needed: [], partial: false };
   let r: Awaited<ReturnType<DevOpsWriter["checkCreate"]>>;
   try {
-    r = await env.writer.checkCreate(env.org, env.pat, env.project, h.type, h.ops);
+    r = await env.writer.checkCreate(env.org, env.pat, env.project, h.type, checkOps(h.ops as PatchOp[]));
   } catch {
     return { checked: false, needed: h.hint ?? [] };
   }
@@ -2175,7 +2183,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
           return settle("failed", plainRefusal(e.message, entry.after.Type), {}, { needed });
         }
       }
-      return settle("failed", e.kind === "rejected" ? plainRefusal(e.message, entry.after.Type ?? null) : e.message);
+      // An update's refusal keeps DevOps's words, as before RQ-1.
+      return settle("failed", e.kind === "rejected" && entry.op === "create" ? plainRefusal(e.message, entry.after.Type ?? null) : e.message);
     }
     if (e instanceof PlanError) return settle("refused", e.message);
     return settle("failed", "The change didn't go through. Retry");

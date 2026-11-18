@@ -502,7 +502,7 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
         )}
         {where && <p className="muted mtg-where">{where}</p>}
         {b.kind === "gap" && (live ? <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable} check={check} onEdit={onEdit} /> : <p className="muted mtg-where">{b.type}{b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ""}</p>)}
-        {live && needs.length > 0 && <p className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name))}</p>}
+        {live && needs.length > 0 && <p id={`mtg-need-${p.id}`} className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name), b.kind === "gap" ? b.type : null)}</p>}
         {live && check?.cant && <p className="mtg-need" role="status">{check.cant}</p>}
         {live && blocked && <p className="mtg-need" role="note">{blocked}</p>}
         {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
@@ -523,9 +523,9 @@ function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, op
             <button type="button" className="mini primary" disabled={busy} onClick={onKeep}>{mainLabel}</button>
           ) : can ? (
             <>
-              <button type="button" className="mini primary" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
+              <button type="button" className="mini primary" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
               {featureTier && onSendBreakDown && !failed && (
-                <button type="button" className="mini" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>
+                <button type="button" className="mini" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>
               )}
             </>
           ) : (
