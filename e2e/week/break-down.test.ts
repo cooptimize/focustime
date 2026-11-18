@@ -2,7 +2,7 @@
 // (reads and writes share what was created) and the stub AI provider. A Needs stories row in Plan the week →
 // "Break down Feature" → the side panel's Prepare (the item, chips, no children yet, what's sent behind a fold) → Run
 // from the note with Enter → Review (edit one, drop one with Undo, reorder by keys, a size, "after <title>", the total)
-// → Publish (the exact batch) → Create all → the row no longer says Needs stories. Also: the AI-off panel, focus back
+// → Preview (the exact batch, in the one DevOps preview) → Confirm → the row no longer says Needs stories. Also: the AI-off panel, focus back
 // on the row after Esc, and the old and PV-1 events opening the panel. Edge cases are unit tests (plan/breakdown.test.ts,
 // plan/stories.test.ts, actions/story-actions.test.ts). Screenshots at 1920, Text size Larger and the phone (390 wide,
 // a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
@@ -21,6 +21,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "../harness.ts";
+import { onePreview } from "../one-preview.ts";
 import { appReady, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "../live.ts";
 import { shotBoth, SHOTS } from "../shots.ts";
 import type { Page } from "playwright-core";
@@ -106,7 +107,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
     await lb?.close();
   }, T);
 
-  it("Needs stories → Break down → Run → drop one, edit one → Create all → the row no longer needs stories", async () => {
+  it("Needs stories → Break down → Run → drop one, edit one → Confirm → the row no longer needs stories", async () => {
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     dv.add(FEATURE, { "System.WorkItemType": "Feature", "System.Title": "My feature with no stories", "System.State": "Active", "System.AreaPath": "Project Ada", "System.IterationPath": "Project Ada\\Sprint 4" });
     const created = () => [...dv.items.values()].filter((i) => i.fields["System.Parent"] === FEATURE);
@@ -244,12 +245,15 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await shotAll(page, "break-down-review");
       await panel.getByRole("button", { name: "Preview 2 items…" }).click();
 
-      // Publish: the exact batch (types, titles, sizes, parent), nothing in DevOps until Create all.
-      await panel.getByRole("listitem", { name: "New User Story: Add a month filter to the export" }).waitFor();
-      await panel.getByRole("listitem", { name: "New User Story: Email the export to finance" }).getByText("S · 1h").waitFor();
+      // OP-1: the exact batch in the app's one preview (types, titles, sizes, parent), nothing in DevOps until Confirm.
+      const one = onePreview(page);
+      await one.waitFor();
+      await expect.poll(() => one.locator(".dw-row h3").allTextContents()).toEqual([expect.stringContaining("Add a month filter to the export"), expect.stringContaining("Email the export to finance")]);
+      await expect.poll(() => one.locator(".dw-row").nth(1).locator(".wd-fields").textContent()).toContain("S · 1h");
       expect(created()).toHaveLength(0);
       await shotAll(page, "break-down-publish");
-      await panel.getByRole("button", { name: "Create all" }).click();
+      await one.locator("button.commit").click();
+      await one.waitFor({ state: "detached", timeout: 30_000 });
       await panel.getByText(/^Created 2 items under/).waitFor();
       expect(created().map((i) => i.fields["System.Title"])).toEqual(["Add a month filter to the export", "Email the export to finance"]);
       expect(created().some((i) => i.fields["System.Title"] === "Review the export with finance")).toBe(false);

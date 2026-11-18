@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS, shotBoth } from "../shots.ts";
+import { confirmPreviews, onePreview } from "../one-preview.ts";
 
 const T = 300_000;
 const THURSDAY = "2026-11-05T10:00:00-05:00";
@@ -90,16 +91,18 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
       await page.screenshot({ path: `${SHOTS}/sr3-needs-1920.png` });
       await shotBoth(page, "sr3-needs-suggest-1920", harbor);
     }
-    // Push all: one preview, by client and then feature.
+    // OP-1: Push all is the app's one preview, one client at a time (the screen says so first), never two clients in one.
+    await expect.poll(() => page.locator(".st-parts").textContent()).toBe("4 lines go in 3 previews, one client at a time.");
     await page.getByRole("button", { name: "Push all" }).click();
-    const dialog = page.getByRole("dialog", { name: "Push 4 lines to DevOps" });
-    await dialog.waitFor();
-    await expect.poll(() => dialog.locator(".st-push-client > h3").allTextContents()).toEqual(expect.arrayContaining(["Harbor", "Atlas", "Northwind"]));
-    await expect.poll(() => dialog.getByRole("group", { name: "Shipment tracking dashboard" }).locator(".dw-row").count()).toBe(2);
-    if (SHOTS) await shotBoth(page, "sr3-push-preview-1920");
-    await dialog.getByRole("button", { name: /Push 4 lines to DevOps/ }).click();
-    await expect.poll(() => dialog.locator(".dw-ok").count(), { timeout: 30_000 }).toBe(4);
-    await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+    if (SHOTS) {
+      await onePreview(page).waitFor();
+      await shotBoth(page, "sr3-push-preview-1920");
+    }
+    const seen = await confirmPreviews(page, 3);
+    expect(seen.map((x) => x.where.split(" · ")[1])).toEqual(expect.arrayContaining(["Harbor", "Atlas", "Northwind"]));
+    expect(new Set(seen.map((x) => x.where)).size).toBe(3);
+    expect(seen.map((x) => x.rows).sort()).toEqual([1, 1, 2]);
+    await expect.poll(() => page.locator(".st-pushed li.ok").count(), { timeout: 30_000 }).toBe(4);
     // Read back: Harbor and Atlas left Needs your update; the Internal one I dismissed is still there.
     await expect.poll(() => page.locator(".st-needs-count").textContent()).toBe(" · 1 feature needs your update");
     expect(errors).toEqual([]);
@@ -174,9 +177,8 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("2 lines to push");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr3-phone-390-pending.png` });
     await page.getByRole("button", { name: "Push all" }).click();
-    const dialog = page.getByRole("dialog", { name: "Push 2 lines to DevOps" });
-    await dialog.getByRole("button", { name: /Push 2 lines to DevOps/ }).click();
-    await expect.poll(() => dialog.locator(".dw-ok").count(), { timeout: 30_000 }).toBe(2);
+    await confirmPreviews(page, (await page.locator(".st-parts").count()) ? 2 : 1);
+    await expect.poll(() => page.locator(".st-pushed li.ok").count(), { timeout: 30_000 }).toBe(2);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

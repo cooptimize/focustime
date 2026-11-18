@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { SHOTS, shotBoth } from "../shots.ts";
+import { confirmPreviews, onePreview } from "../one-preview.ts";
 
 const T = 240_000;
 const MON = "2026-11-02";
@@ -107,14 +108,16 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
     await expect.poll(() => page.locator(".tc-offer").textContent()).toContain("Update Remaining Work on 2 stories?");
     await shotBoth(page, "tx1-end-of-day-offer", page.locator(".tc-offer"));
     const before = (await log(page)).length;
+    // OP-1: Review opens the app's one preview.
     await page.locator(".tc-offer").getByRole("button", { name: "Review" }).click();
-    await page.locator(".tc-preview").waitFor();
-    await expect.poll(() => page.locator(".tc-preview").textContent()).toContain("Remaining Work");
-    await shotBoth(page, "tx1-end-of-day-preview", page.locator(".tc-preview"));
+    const preview = onePreview(page);
+    await preview.waitFor();
+    await expect.poll(() => preview.locator(".wd-fields").first().textContent()).toContain("Remaining Work");
+    await shotBoth(page, "tx1-end-of-day-preview");
     // Previewing wrote nothing.
     expect((await log(page)).length).toBe(before);
-    await page.locator(".tc-preview").getByRole("button", { name: "Confirm 2" }).click();
-    await page.locator(".tc-preview .db-ok").first().waitFor();
+    await confirmPreviews(page, 1);
+    await expect.poll(() => page.locator(".tc-preview .db-ok").count()).toBe(2);
     await expect.poll(async () => (await log(page)).length).toBe(before + 2);
     // Offered once: gone after a reload.
     await go(page, "#/today/closeout");

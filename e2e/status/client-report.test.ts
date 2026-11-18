@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, startDemo, freshPage, type Harness } from "../harness.ts";
 import { SHOTS, shotBoth } from "../shots.ts";
+import { confirmPreviews } from "../one-preview.ts";
 
 const T = 300_000;
 const THURSDAY = "2026-11-05T10:00:00-05:00";
@@ -52,10 +53,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     await expect.poll(() => nu.locator(".st-box-foot .muted").first().textContent()).toContain("Shows as Alex Rivera");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-add-line-1920.png`, fullPage: true });
     await page.getByRole("button", { name: "Push all" }).click();
-    const dialog = page.getByRole("dialog", { name: "Push 1 line to DevOps" });
-    await dialog.getByRole("button", { name: "Push 1 line to DevOps" }).click();
-    await dialog.locator(".dw-ok").waitFor({ timeout: 30_000 });
-    await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+    await confirmPreviews(page, 1);
     // Read back: Supplier onboarding is in the report now (backlog order), out of No update yet.
     await expect.poll(() => titles.allTextContents()).toEqual(["Order history export", "Supplier onboarding", "Loyalty points"]);
     await expect.poll(() => page.locator(".st-noupdate .st-nu").count()).toBe(1);

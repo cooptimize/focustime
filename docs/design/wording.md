@@ -425,6 +425,17 @@ The VM chip's words are in one place, `READ_PROBLEM` and `CHECKING` in `plan/vm.
 - The automatic start: **"Today's start is waiting: FocusTime couldn't read your VM's state yet"** (shown, not told), and at the late limit **"Left off today: FocusTime couldn't read your VM's state"** with **"Start it from the VM menu if you need it."**
 - An unexpected failure: **"That didn't work: FocusTime ran into a problem it didn't expect. Try again, and if it keeps happening, tell an admin (reference K7QH2M)."** A request that can't be read at all: **"FocusTime couldn't read that request. Reload the page and try again."**
 
+## OP-1 words (Nov 17)
+
+Every word below is in `plan/preview-parts.ts` (`partsLine`, `PREVIEW_WORDS`). The one preview's other words (Where, Writes as, Who can see it, Not now, Retry, Reload and review again, the flag and Replace) are unchanged.
+
+- Before the first preview, when the changes take more than one: **"11 lines go in 2 previews, 10 at most in each."**, **"4 lines go in 3 previews, one client at a time."**, **"21 lines go in 4 previews, one client at a time and 10 at most in each."** Status says "lines", the timebox check-in "updates".
+- The preview's head when it is one of several: **"Add comment in DevOps · Preview 2 of 3"**, or **"3 DevOps changes · Preview 1 of 2"**.
+- Its Confirm for the kinds OP-1 brought to it: **"Save comment in DevOps"**, **"Delete comment in DevOps"**, **"Set Remaining Work in DevOps"**. GD-2's flag says where the text goes: **"Northwind's DevOps and Monday's report"** on Status.
+- The timebox check-in after the preview: the heading **"Time left, in DevOps"**, and rows **"Saved"** with **Undo**, the refusal in the framework's words, **Retry** when the answer was lost, **"Not sent"** when Not now stopped the rest, **"Nothing to change"**.
+- Break down: **"Preview 5 items…"** opens the one preview; afterwards **"Created 5 items under #1120:"**, **"Not created yet (2):"** with each reason, **"Retry the rest"**; **"Every kept story is in DevOps already, or waiting for Retry"**. "Create all" is gone.
+- Send feedback's preview, in the same parts: the head **"Send feedback"**; Where **"DevOps · <org> · <project>"**, Writes as the person (or **"Not set up yet"**); the new item's **Title**, **Description** and **Tags**; Who can see it; **"Send feedback"** (Ctrl+Enter) and **"Not now"** (back to the text); **"Sent once; nothing is retried on its own."**
+
 ## DY-1 words (Nov 17)
 
 The meeting words are in one place, `MEETING_WORDS` in `plan/call-words.ts`; the folded line's in `foldWords` (`plan/day-fold.ts`).
