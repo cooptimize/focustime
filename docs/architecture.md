@@ -138,6 +138,7 @@ The web server and what runs beside it.
 - `main.ts` starts FocusTime: it reads the app config (`appconfig.ts`), picks the host, opens the store, builds the background policy and starts `app.ts`. Its header gives the usage.
 - `app.ts` is the HTTP app: `guard.ts` checks Host and Origin on every request, then sign-in (`auth/`), sessions with a CSRF token, the one action endpoint (`POST /api/action`) and the UI. `demo.ts` builds a demo session's context.
 - `scheduler.ts` runs everyone's background work: the app's jobs, which `main.ts` hands it (`retention-job.ts`, `meeting-job.ts`, `standards-job.ts` and the readers in `actions/`), and each person's ticks (`ticks.ts`: the timer, reminders, Teams status). `use.ts` knows whether anyone is using FocusTime, for the idle rule.
+- `job-people.ts` builds one person for the meeting job and the chat poll, with their identity (`signedContext`). `identity-guard.test.ts` fails when a route or job hands the actions a context that didn't come through it.
 - `teams/` is the Teams bot's endpoint: `bot.ts` receives, `assistant.ts` hands a message to the assistant, `cards.ts` and `render.ts` build the cards, `rhythm.ts` the daily messages, `gate.ts` the notification gate.
 - `notify.ts`, `push.ts` and `webpush.ts` deliver notifications; `sw.js` and `pwa.ts` are the service worker and the installable app.
 - `site-env.ts`: on dev and local, the page and the manifest say which site this is (the tab's title, the installed name, the page's `data-site="test"`), rewritten once at start; production's files are served as built.
@@ -158,7 +159,7 @@ Rules: fictional data only; a test waits for what it needs on the page, never a 
 
 ## `test/`
 
-Helpers for every test: `builders/` (test data, never hand-written fixtures), `ports.ts` (a free port for a test that starts a server), `tmp-dir.ts` (a test's own folder), `db.ts` (the databases store tests run on), `workers.ts` (how many test files run at once), `e2e-build.ts` (the UI built once per browser run) and `no-outbound.ts` (proof that a test sends nothing out).
+Helpers for every test: `builders/` (test data, never hand-written fixtures), `ports.ts` (a free port for a test that starts a server), `tmp-dir.ts` (a test's own folder), `db.ts` (the databases store tests run on), `workers.ts` (how many test files run at once), `e2e-build.ts` (the UI built once per browser run), `no-outbound.ts` (proof that a test sends nothing out) and `hosted-person.ts` (a person as the hosted app keeps them: their Dataverse user with their sign-in, not in their settings).
 
 ## `system/`
 

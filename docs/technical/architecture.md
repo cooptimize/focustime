@@ -1,6 +1,6 @@
 # Architecture
 
-For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `2f4c0ea` on Nov 13, 2026.
+For engineers changing FocusTime, and IT wanting the big picture before [Security](security.md). Checked against `2f4c0ea` on Nov 13, 2026; Who is asking against the ID-1 branch on Nov 17, 2026.
 
 FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a React app and a JSON action API, keeps its data in one SQL database, and talks to Microsoft Graph, Dataverse, Azure DevOps, Google Calendar, calendar links, Azure Resource Manager, OpenAI, public GitHub and, for a person who connects it, their own Pocket recorder. Code names that differ from what people see are in the [names table](README.md#names-in-the-code). The per-file detail is in [docs/architecture.md](../architecture.md); this page is the overview.
 
@@ -272,6 +272,14 @@ Some reads, such as `week.load`, are handled in `actions/dispatch.ts` itself rat
 7. An action that throws answers 500 in plain words with a short random reference (`server/unexpected.ts`); the log line `server action_failed` has the action's name, the error's type and the same reference. A body that isn't JSON is a 400 of its own.
 
 Two routes take a raw body instead of an action, behind the same guard, session and CSRF checks: `POST /api/assistant/transcribe` (push-to-talk audio, 60 seconds and 2 MB at most) and `POST /api/meetings/upload` (a reviewer's transcript, 5 MB at most, parsed in memory: a Teams .vtt or .docx, or a Pocket export's PDF or the zip holding it, told apart by content; PK-1). Both are named in `server/app.ts`.
+
+### Who is asking
+
+A person's context (`server/main.ts` `runtimeFor`) holds their settings as stored, and a hosted person's Dataverse user and work email are kept with their sign-in, not in their settings. So nothing about a person is read from a raw context. One function adds it: `signedContext` in `actions/dispatch.ts` gives the context the person's clients only (`onlyClients`) and their settings with "me" and their Dataverse user from the sign-in (`withSignedIn`). Applying it twice changes nothing. Without it a hosted person reads as nobody: DevOps can't be read for a client, Dataverse lists no clients, and the AI guard knows fewer clients than the person has.
+
+- **Requests.** `dispatch` applies it to every action, except that Settings writes its file as is. The routes that reach a person's actions without the dispatcher take their context from it too, through `personCtx` in `server/app.ts`: push-to-talk, a transcript upload and a chat's image. The Teams bot's assistant does the same in `server/assistant.ts`.
+- **Jobs.** The meeting job and the shared chat poll build each person through it (`server/job-people.ts`). A person's ticks use `bg` in `server/ticks.ts`, which is `withSignedIn` in production.
+- **The guard.** `server/identity-guard.test.ts` finds every exported function in `actions/` that takes a person's `ActionContext` first, and fails when a file under `server/` hands one of them a context that didn't come from `signedContext`. `dispatch` may take it as it is, since it signs the context itself. `server/ticks.ts` has its own guard, and the demo is exempt because its fictional person's identity is in its own settings. A new route or job calls `signedContext` once and passes that context on.
 
 ## What the server sends, compressed
 
