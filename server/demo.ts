@@ -40,6 +40,7 @@ import { createUserSecrets, fakeKeyProvider } from "../store/user-secrets.ts";
 import { createPocketClient } from "../sources/pocket/client.ts";
 import { createDemoPocketFetch } from "../sources/demo/pocket.ts";
 import { pocketPort } from "../actions/pocket-actions.ts";
+import { createPocketHold } from "../actions/meeting-pocket.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
 import { createDemoIcsGet } from "../sources/demo/links.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
@@ -338,7 +339,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     },
     team,
     onFocusTime: (id) => id.toLowerCase() !== notYet,
-    meetings: { store: meetingStore, readPdf: pdfReader(), press, cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
+    meetings: { store: meetingStore, readPdf: pdfReader(), press, pocketHold: createPocketHold(() => instant().epochMilliseconds), cooptimizer: async (uid) => [DEMO_PERSON.oid, ...DEMO_PEOPLE.map((p) => p.aadId)].some((x) => x.toLowerCase() === uid.toLowerCase()), users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, emails: [DEMO_PERSON.email] }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, emails: [p.email] }))] },
     requests: { teams, conversations, users: async () => [{ id: DEMO_PERSON.oid, name: DEMO_PERSON.name, deleted: false }, ...DEMO_PEOPLE.map((p) => ({ id: p.aadId, name: p.name, deleted: false }))], refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     // DM-1: the app's own DevOps writer on the session's in-memory DevOps, with a demo write identity per client (set
     // by seedDemo): never a real PAT, and the demo's fetch answers only the demo's fictional orgs.
