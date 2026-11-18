@@ -46,12 +46,17 @@ export function demoMeetingAnswer(input: string): unknown {
       { type: "User Story", parentId: 1110, title: "Monthly statement as a PDF", description: "Northwind's accountants want a monthly statement as a PDF from the order history page. Nothing covers it yet; Dana is sharing last year's statements to match the layout.", lines: find("monthly statement") },
       { type: "Epic", parentId: null, title: "Accountant reporting area", description: "Northwind wants one reporting area for its accountants, with statements and exports in one place. A longer term ask; no feature covers it yet.", lines: find("reporting area") },
       { type: "User Story", parentId: null, title: "Date range in the export file name", description: "The export's file name should carry the date range so files don't overwrite each other.", lines: find("file name") },
+      // MC-2c: the calls started in Northwind's delivery chat (sources/demo/adhoc-calls.ts).
+      { type: "User Story", parentId: null, title: "Reject a carrier file with a bad date format", description: "The carrier file changed its date format again. The rates import should reject such a file and say why, instead of loading bad dates.", lines: find("rejects the file") },
+      { type: "User Story", parentId: null, title: "Region on each holiday", description: "Northwind wants regional holidays too. Each holiday in the calendar import needs a region field.", lines: find("field for the region") },
     ]),
     commitments: keep([
       { who: "Alex Rivera", what: "Send the date range filter for review", toName: "Dana Brooks", due: thursday, lines: find("date range filter") },
       { who: "Dana Brooks", what: "Share three sample statements from last year", toName: null, due: null, lines: find("sample statements") },
       { who: "Priya Shah", what: "Add the row limit warning before the export ships", toName: null, due: null, lines: find("row limit") },
       { who: "Alex Rivera", what: "Book a session with Northwind's accountants to walk through the statements", toName: "Dana Brooks", due: null, lines: find("book a session") },
+      { who: "Priya Shah", what: "Write up the date check as a story under the rates export feature", toName: null, due: date, lines: find("write that up") },
+      { who: "Alex Rivera", what: "Tell Dana the import is paused until the date check is in", toName: "Dana Brooks", due: null, lines: find("import is paused") },
     ]),
     // MC-2: what was discussed and decided, from the lines this part of the call has.
     summary: [
@@ -61,6 +66,8 @@ export function demoMeetingAnswer(input: string): unknown {
       ...(find("file name").length ? ["The export's file name should carry the date range."] : []),
       ...(find("row limit").length ? ["Priya adds a row limit warning to the export before it ships."] : []),
       ...(find("on track").length ? ["The CSV export is on track on Northwind's side, with no blockers."] : []),
+      ...(find("date format").length ? ["The carrier file changed its date format again; the import pauses until a check rejects such files."] : []),
+      ...(find("regional holidays").length ? ["Northwind wants regional holidays in the calendar import, not just national ones."] : []),
     ].slice(0, 5),
     // MC-1e: comments on stories only. The status said about the export (a feature) goes on the story under it.
     comments: keep([

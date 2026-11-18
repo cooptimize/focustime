@@ -1715,7 +1715,13 @@ function UploadBox({ series, occ, onDone, dragging = false, pocketOffered = fals
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+        {series.call === "chat" ? (
+          `${CALLS_TEXT.uploadChat}${pocketOffered ? "" : ` ${POCKET_TEXT.pocketHow}`}`
+        ) : (
+          <>
+            {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+          </>
+        )}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (

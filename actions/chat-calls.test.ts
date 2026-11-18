@@ -173,7 +173,7 @@ describe("MC-2c: who sees a chat call in Calls", () => {
 });
 
 describe("MC-2c: Review and the press", () => {
-  it("Review keeps it as MC-2's call: the presser reviews, the other Cooptimizers in the chat are on it; the chat row gives way", async () => {
+  it("Review keeps it as MC-2's call: the presser reviews, the other Cooptimizers in the chat are on it and can review it too", async () => {
     const t = await setup();
     const s = t.data<{ occurrenceId: number; existed: boolean }>(await t.start(ME));
     expect(s.existed).toBe(false);
@@ -181,11 +181,13 @@ describe("MC-2c: Review and the press", () => {
     expect(kept.series).toMatchObject({ callKind: "chat", clientKey: "contoso", name: `Call in ${CHAT_NAME}`, reviewers: [ME], attendees: [MATE], joinUrl: `chat:${CHAT}`, eventId: chatCallKey(CALL_A) });
     // Only what Review needed: no guest, nobody outside, nobody not in the chat.
     expect(JSON.stringify(kept.series)).not.toMatch(/55555555|44444444|77777777/);
-    // A second press (by a teammate) is the same call.
+    // The chat row gives way to the kept call's row for its reviewer; a teammate in the chat still has a call to review.
+    expect((await t.others(ME)).find((c) => c.key === chatCallKey(CALL_A))!.occurrenceId).toBe(s.occurrenceId);
+    expect((await t.others(MATE)).find((c) => c.key === chatCallKey(CALL_A))!.occurrenceId).toBeNull();
+    // Their own Review (say mine was refused because I wasn't on it) is the same call, and makes them a reviewer too.
     expect(t.data<{ occurrenceId: number; existed: boolean }>(await t.start(MATE))).toEqual({ occurrenceId: s.occurrenceId, existed: true });
-    // The chat row gives way to the kept call's row.
-    const listed = await t.others(ME);
-    expect(listed.find((c) => c.key === chatCallKey(CALL_A))!.occurrenceId).toBe(s.occurrenceId);
+    expect((await t.meetings.callByKey(chatCallKey(CALL_A)))!.series.reviewers).toEqual([ME, MATE]);
+    expect((await t.others(MATE)).find((c) => c.key === chatCallKey(CALL_A))!.occurrenceId).toBe(s.occurrenceId);
     // Pressing Review asked Microsoft nothing.
     expect(t.sent).toEqual([]);
     // The client can be changed in the setup: another call kept for another client.
@@ -281,7 +283,7 @@ describe("MC-2c: each outcome in plain words, with the way on", () => {
     t.answers.teams = { names: "off" };
     const r = t.data<{ outcome: string; noSpeakers: boolean; message: string }>(await t.fetchIt(ME, occurrenceId));
     expect(r).toMatchObject({ outcome: "found", noSpeakers: true });
-    expect(r.message).toContain(CHAT_NO_SPEAKERS);
+    expect(r.message).not.toContain(CHAT_NO_SPEAKERS);
     expect(t.sent.slice(1).map((x) => x.accept)).toEqual(["text/vtt", UNNAMED_FORMAT]);
     const rv = t.data<{ noSpeakers: boolean; pocket: boolean }>(await t.act(ME, "meeting.review", { occurrenceId }));
     expect(rv).toMatchObject({ noSpeakers: true, pocket: false });

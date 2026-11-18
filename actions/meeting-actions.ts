@@ -20,7 +20,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_LIST, CALL_ROW, CHAT_NO_SPEAKERS, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
@@ -322,7 +322,7 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         // MC-2: with the calls that aren't registered that I pressed Review on, was on, or added (their marks on Day and
         // Week, their rows in Calls); nudges stay the registered calls' (nudgesFor).
         // MC-2c: a kept chat call shows to its reviewers, and to the others on it only while they're in its chat and follow its client.
-        const mine = [...(await store.viewer(me).series()), ...(await seenChatCalls(ctx, me, await store.viewer(me).calls(from)))];
+        const mine = [...(await store.viewer(me).series()), ...seenChatCalls(me, await store.viewer(me).calls(from))];
         const occs = await store.recentOccurrences(mine.map((s) => s.id), from);
         const counts = new Map<number, { all: number; open: number; done: CallOutcome; closedAt: string | null }>();
         for (const o of occs) {
@@ -1021,7 +1021,8 @@ async function otherCalls(ctx: MeetingContext, store: MeetingStore, cfg: AppConf
       if (!inWindow(c.startedAt!, w)) continue;
       const key = chatCallKey(c.callId);
       const kept = await store.callByKey(key);
-      const seen = kept ? await v.occurrence(kept.occurrence.id) : null;
+      // Kept by someone else and I'm not its reviewer: still a row I can press Review on (which makes me one).
+      const seen = kept && canConfirm(kept.series, me) ? await v.occurrence(kept.occurrence.id) : null;
       const endAt = chatCallEnd(c);
       rows.push({ key, name: CALL_LIST.chatCallName(c.chatName), startAt: c.startedAt!, endAt, minutes: Math.max(0, Math.round((Date.parse(endAt) - Date.parse(c.startedAt!)) / 60_000)), people: 0, teams: true, outside: false, occurrenceId: seen ? seen.o.id : null, seriesKey: null, allHome: false, chat: { name: c.chatName, clientKey: c.clientKey }, endKnown: !!c.endedAt });
     }
@@ -1046,11 +1047,8 @@ async function seesChatCall(ctx: MeetingContext, me: string, s: MeetingSeries): 
   const chatId = chatIdOf(s);
   return !!chatId && !!ctx.chatCalls && (await ctx.chatCalls.sees(chatId).catch(() => false));
 }
-async function seenChatCalls(ctx: MeetingContext, me: string, calls: MeetingSeries[]): Promise<MeetingSeries[]> {
-  const out: MeetingSeries[] = [];
-  for (const s of calls) if (await seesChatCall(ctx, me, s)) out.push(s);
-  return out;
-}
+/** In my list a kept chat call shows only to its reviewers: the others in the chat see it as a call to review (otherCalls), not twice. */
+const seenChatCalls = (me: string, calls: MeetingSeries[]): MeetingSeries[] => calls.filter((s) => s.callKind !== "chat" || canConfirm(s, me));
 
 /**
  * MC-2c: Review on a call started in a client's registered chat. Checked here before anything is kept: I'm a
@@ -1071,6 +1069,13 @@ async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
   if (isRefusal(client)) return client;
   const kept = await store.callByKey(key);
   if (kept) {
+    // Someone else in the chat kept it first (their Review, perhaps refused): my own Review makes me a reviewer too, so
+    // whoever was on the call can get it from Teams. Only after the checks above (in the chat now, following its client).
+    if (kept.series.callKind === "chat" && !canConfirm(kept.series, me)) {
+      const add = (xs: string[]) => (xs.some((x) => x.toLowerCase() === me.toLowerCase()) ? xs : [...xs, me]);
+      await store.updateSeries(kept.series.id, { reviewers: add(kept.series.reviewers), attendees: add(kept.series.attendees) });
+      ctx.log({ source: "plan", op: "meeting_call_start", kind: "reviewer_added" });
+    }
     const seen = await store.viewer(me).occurrence(kept.occurrence.id);
     if (!seen) return bad("FocusTime can't open this call for you. Upload its transcript with Add a call instead.", 409);
     return { ok: true, data: { occurrenceId: kept.occurrence.id, existed: true } };
@@ -1115,7 +1120,8 @@ async function fetchChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
     await store.updateOccurrence(occ.id, { lastRead: { kind: "found", by: me, at: ctx.now() } });
     const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, (await store.occurrence(occ.id))!, lines);
     ctx.log({ source: "plan", op: "meeting_call_fetch", kind: read.named ? "found" : "found_unnamed", count: lines.length });
-    const message = `${fetchFound(lines.length, r.proposals, r.outcome === "done")}${read.named ? "" : ` ${CHAT_NO_SPEAKERS}`}`;
+    // Without speaker names the review says so once, in its note (noSpeakers).
+    const message = fetchFound(lines.length, r.proposals, r.outcome === "done");
     return { ok: true, data: { ...r, aiOutcome: r.outcome, outcome: "found", message, lines: lines.length, noSpeakers: !read.named } };
   } catch (e) {
     if (e instanceof AdhocRefused) return say("not_in_chat", 403);

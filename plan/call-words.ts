@@ -202,7 +202,9 @@ export const CALLS_TEXT = {
   whoSees: "You and the Cooptimizers on the invite can see this call. Only you can act on it.",
   whoSeesHand: "Only you can see this call.",
   /** MC-2c: a call started in a client's chat. */
-  whoSeesChat: "You and the Cooptimizers in the chat who follow this client can see this call. Only you can act on it.",
+  whoSeesChat: "The Cooptimizers in the chat who follow this client see this call in Calls, and each can review it with their own sign-in.",
+  /** MC-2c: the upload box on a chat call. */
+  uploadChat: "Download it from the call in the chat in Teams. It's kept 30 days, for you and the Cooptimizers in the chat who follow this client only.",
 } as const;
 
 /**
