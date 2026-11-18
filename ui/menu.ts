@@ -783,8 +783,9 @@ export function eventMenu(env: MenuEnv, e: CalEvent, call: CallMark | null = nul
     : x.actions.filter((a) => a.id !== "rsvp").map(item);
   const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
   if (call) return { title: `${e.title} · ${call.label}`, items: [...registeredCallItems(call), ...items.map((i) => ({ ...i, group: "Meeting" }))] };
-  // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup.
-  if (env.callsHere === true && reviewableMeeting(e, Date.now(), Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay().epochMilliseconds))
+  // MC-2: a meeting I was on that nobody reviewed yet: Review this call opens Calls on its setup. The 14 days count
+  // from the app's today (the person's day, and the demo's), not the browser's clock.
+  if (env.callsHere === true && reviewableMeeting(e, Date.now(), (env.today ? Temporal.PlainDate.from(env.today).toZonedDateTime({ timeZone: tz }) : Temporal.Instant.fromEpochMilliseconds(Date.now()).toZonedDateTimeISO(tz).startOfDay()).epochMilliseconds))
     return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items: [{ id: "call-review", label: CALL_ACTIONS.reviewCall, group: "Call", hint: "choose its client first", run: () => requestReviewCall(e) }, ...items.map((i) => ({ ...i, group: "Meeting" }))] };
   return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
 

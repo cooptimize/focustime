@@ -82,10 +82,10 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-2 screenshots", () => {
       const occ = (await call(page, "meeting.mine", {})).data?.occurrences?.find((o: { seriesId: number }) => o.seriesId === id)?.id ?? 0;
       await shot(page, `${size}-10-client-call-summary`, () => go(`#/meetings/${occ}`));
       await shot(page, `${size}-11-meeting-menu`, async () => {
-        await go("#/week");
         await call(page, "ui.set_today_timeline", { show: true });
+        await page.reload();
         await go("#/today/2026-11-03");
-        const ev = page.locator(".event", { hasText: "Atlas" }).first();
+        const ev = page.locator(".today-tl .event", { hasText: "Harbor sprint planning" }).first();
         await ev.locator(".ev-time").click({ timeout: 10_000 });
         await page.locator(".popup-menu").waitFor({ timeout: 5000 });
       });

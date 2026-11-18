@@ -14,7 +14,7 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("both lists; Review with a suggested client and Get it from Teams; a refusal in plain words; Add a call", async () => {
+  it("both lists; Review with a suggested client and Get it from Teams; a refusal in plain words; Add a call; Review this call from Day", async () => {
     const { page, errors } = await freshPage(h);
     await page.evaluate(() => (location.hash = "#/meetings"));
     await page.getByRole("heading", { name: "Calls", exact: true }).waitFor({ timeout: 30_000 });
@@ -68,6 +68,14 @@ describe.skipIf(!CHROMIUM)("Calls (browser, demo mode)", () => {
     await add.getByRole("button", { name: /^Add/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash), { timeout: 30_000 }).toMatch(/^#\/meetings\/\d+\/upload$/);
     await page.getByText("It's kept 30 days, for you only.", { exact: false }).waitFor({ timeout: 30_000 });
+
+    // A meeting's menu on Day leads with Review this call (the 14 days count from the app's day, not the browser's
+    // clock), and it opens that call's setup on Calls.
+    await page.evaluate(() => (location.hash = "#/today/2026-11-03"));
+    await page.getByRole("button", { name: "Timeline" }).click().catch(() => undefined);
+    await page.locator(".today-tl .event", { hasText: "Harbor sprint planning" }).first().locator(".ev-time").click({ timeout: 30_000 });
+    await page.getByRole("menuitem", { name: /^Review this call/ }).click();
+    await page.getByRole("region", { name: /^Review Harbor sprint planning/ }).waitFor({ timeout: 30_000 });
     expect(errors).toEqual([]);
   }, T);
 });
