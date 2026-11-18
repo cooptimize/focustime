@@ -269,6 +269,8 @@
 
   /* 3. Domain tokens: Cooptimize Light */
   --risk: var(--p-co-red-700);
+  --site-mark: var(--p-co-red-700);
+  --on-site-mark: var(--p-white);
   --watch: var(--p-co-amber-700);
   --ok: var(--p-co-green-700);
   /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
@@ -342,6 +344,7 @@
   /* 3. Domain tokens: Neutral light */
   --risk: var(--p-red-700);
   --site-mark: var(--p-red-700);
+  --on-site-mark: var(--p-white);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
   /* RS-1: washes (hover, pressed, the chosen one, a state) and the quiet line for everything that isn't a block card. */
