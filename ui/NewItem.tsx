@@ -23,6 +23,8 @@ import { useWherePicks, WherePicksLine } from "./WherePicks.tsx";
 import { usePhone } from "./viewport.ts";
 import { Icon } from "./icons.tsx";
 import { CREATED_EVENT, type Created, type NewHooks } from "./newitem-ctx.ts";
+import { isStoryLevel, NEEDED_WORDS, splitNeeded, type NeededFill } from "../plan/needed.ts";
+import { forgetNeeded, useNeeded } from "./needed.ts";
 
 export * from "./newitem-ctx.ts";
 
@@ -66,6 +68,8 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const [parentId, setParentId] = useState<number | null>(place.from === "ahead_row" || place.from === "breakdown" ? place.parent.id : null);
   const [assignTo, setAssignTo] = useState<string>("me");
   const [target, setTarget] = useState<string | null>(null);
+  // RQ-1: a start date, asked only when the client's process needs one (a draft's own is kept).
+  const [start, setStart] = useState<string | null>(null);
   const [more, setMore] = useState(false);
   const [description, setDescription] = useState("");
   const [size, setSize] = useState("");
@@ -102,6 +106,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
     setParentId(draft.parentItemId);
     setAssignTo(draft.assignTo === "none" ? "" : (draft.assignTo ?? "me"));
     setTarget(draft.targetDate ?? null);
+    setStart(draft.startDate ?? null);
     // A TP-1 draft's other words (its fourth line and choices) show once at the end of the description.
     const shown = withCarried(draft.description, draft.carried) ?? "";
     setDescription(shown);
@@ -140,7 +145,23 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const titleProblem = !trimmed ? null : trimmed.length > TITLE_MAX ? `A DevOps title is at most ${TITLE_MAX} characters. This one is ${trimmed.length}` : null;
   const sizeNum = size.trim() ? Number(size) : null;
   const sizeProblem = sizeNum !== null && (!Number.isFinite(sizeNum) || sizeNum < 0) ? "Size is a number" : null;
-  const ready = !!clientKey && !!type && !!trimmed && !titleProblem && !sizeProblem && !busy;
+  // RQ-1: the three questions are a story's only, by the client's process levels (never by a type's name).
+  const storyLevel = isStoryLevel(opts?.levels, type ?? "");
+  // RQ-1: what the client's process needs on this item, as DevOps says when it checks it without saving: asked when
+  // the form has a client and type, and again as fields are filled. Free text goes as "filled or not" only.
+  const neededChange = canWrite && clientKey && type && opts?.clientKey === clientKey ? { kind: "new_item", type, title: "", ...(parentId !== null ? { parentId } : {}), assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, ...(start ? { startDate: start } : {}), description: description.trim() ? "x" : null, size: sizeNum !== null && !sizeProblem ? sizeNum : null, ...(storyLevel && answers.check.trim() ? { answers: { where: "", change: "", check: "x" } } : {}) } : null;
+  const need = useNeeded(clientKey, neededChange);
+  const controls = new Set<NeededFill>(["title", "description", "assignTo", "date", "start", "size", ...(storyLevel ? (["check"] as const) : [])]);
+  const hasValue: Record<NeededFill, boolean> = { title: !!trimmed, description: !!description.trim(), check: !!answers.check.trim(), assignTo: assignTo !== "", date: !!target, start: !!start, size: sizeNum !== null && !sizeProblem };
+  const split = splitNeeded(need.needed, controls);
+  const missing = split.fill.filter((f) => f.fill && !hasValue[f.fill]);
+  const cant = split.cant;
+  const mark = (f: NeededFill) => (missing.some((x) => x.fill === f) ? <span className="mtg-needed">{NEEDED_WORDS.needed}</span> : null);
+  const why = (f: NeededFill) => (need.required.has(f) ? NEEDED_WORDS.why : NEEDED_WORDS.optional);
+  useEffect(() => {
+    if (missing.some((f) => f.fill === "description" || f.fill === "size" || (f.fill === "check" && phone))) setMore(true);
+  }, [missing.map((f) => f.fill).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ready = !!clientKey && !!type && !!trimmed && !titleProblem && !sizeProblem && !busy && !missing.length && !cant.length;
   const ai = draft?.ai?.title ? draft.ai : null;
 
   const create = async () => {
@@ -165,10 +186,11 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
         return;
       }
     }
-    const change = { kind: "new_item" as const, title: madeTitle, type, parentId, assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, description: description.trim() || null, size: sizeNum, ...(did !== null ? { draftId: did } : {}), ...answersPart() };
+    const change = { kind: "new_item" as const, title: madeTitle, type, parentId, assignTo: assignTo === "me" ? "me" : assignTo || null, date: target, ...(start ? { startDate: start } : {}), description: description.trim() || null, size: sizeNum, ...(did !== null ? { draftId: did } : {}), ...answersPart() };
     await w.begin(clientKey, [change], (r) => {
       if (r.confirmed && r.created?.[0]) {
         forgetNewOptions();
+        forgetNeeded();
         const c: Created = { clientKey, itemId: r.created[0].itemId, url: r.created[0].url, title: madeTitle, type, parentId, assignTo: change.assignTo };
         window.dispatchEvent(new CustomEvent(CREATED_EVENT, { detail: c }));
         hooks.onCreated?.(c);
@@ -179,6 +201,8 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
       // Not confirmed: the form comes back as I left it, with why when DevOps or FocusTime refused.
       setHidden(false);
       setBusy(false);
+      // RQ-1: DevOps named fields at preview time: each is marked Needed; what was typed stays.
+      if (r.code === "required_field" && r.needed?.length) need.add(r.needed);
       if (r.error) setError(r.error);
       requestAnimationFrame(() => titleRef.current?.focus());
     }, { inline: true });
@@ -190,7 +214,8 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
     onClose();
   };
   // The answers go only when something is in them (a title-only create sends what it always did), or to clear a draft's.
-  const answersPart = (): { answers?: Answers | null } => (!answersEmpty(answers) ? { answers } : draft?.answers || draft?.carried ? { answers: null } : {});
+  // RQ-1: above story level nothing is asked or sent, and a draft's own answers stay on the draft.
+  const answersPart = (): { answers?: Answers | null } => (!storyLevel ? {} : !answersEmpty(answers) ? { answers } : draft?.answers || draft?.carried ? { answers: null } : {});
   const draftBody = () => ({ clientKey: clientKey!, title: trimmed, ...(type ? { type } : {}), parentItemId: parentId, assignTo: assignTo === "me" ? null : assignTo || "none", description: description.trim() || null, targetDate: target, ...answersPart() });
   const saveDraft = async () => {
     if (!clientKey || !trimmed || titleProblem || busy) return;
@@ -282,7 +307,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             />
             {titleProblem && <span className="set-problem nf-line" role="alert">{titleProblem}</span>}
           </span>
-          {!phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
+          {!phone && storyLevel && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
           <span className="set-label">Parent</span>
           <span className="nf-parent">
             {type && !allowedParents.size ? (
@@ -294,21 +319,30 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
               </>
             )}
           </span>
-          <span className="set-label">Assigned to</span>
+          <span className="set-label">Assigned to{mark("assignTo")}</span>
           <span className="nf-people">{clientKey ? <PeopleField clientKey={clientKey} value={assignTo} onChange={setAssignTo} /> : <span className="muted">Me</span>}</span>
-          <span className="set-label">Target date</span>
+          <span className="set-label">Target date{mark("date")}</span>
           <span className="nf-date">
-            <DateField value={target} onChange={setTarget} label="Target date" today={today} placeholder="None" />
-            <span className="muted nf-why">Optional</span>
+            <DateField value={target} onChange={setTarget} label={`Target date${mark("date") ? ", needed" : ""}`} today={today} placeholder={mark("date") ? "Choose a date" : "None"} />
+            <span className={mark("date") ? "mtg-need-why" : "muted nf-why"}>{why("date")}</span>
           </span>
+          {(need.required.has("start") || start) && (
+            <>
+              <span className="set-label">Start date{mark("start")}</span>
+              <span className="nf-date">
+                <DateField value={start} onChange={setStart} label={`Start date${mark("start") ? ", needed" : ""}`} today={today} placeholder={mark("start") ? "Choose a date" : "None"} />
+                <span className={mark("start") ? "mtg-need-why" : "muted nf-why"}>{why("start")}</span>
+              </span>
+            </>
+          )}
         </div>
         <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-          <Icon name={more ? "open" : "closed"} /> {phone ? "More: details, description and size" : "More: description and size"}
+          <Icon name={more ? "open" : "closed"} /> {phone && storyLevel ? "More: details, description and size" : "More: description and size"}
         </button>
-        {more && phone && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
+        {more && phone && storyLevel && <ThreeQuestions answers={answers} onChange={setAnswers} idPrefix="nf-q" layout="stack" lookup={{ clientKey, clientName, from: "new_form", onPicked: picks.onPicked }} />}
         {more && (
           <div className="nf-grid nf-more-body">
-            <label className="set-label" htmlFor="nf-desc">Description</label>
+            <label className="set-label" htmlFor="nf-desc">Description{mark("description")}</label>
             <span>
               <TextBox id="nf-desc" minRows={3} maxRows={12} maxLength={descriptionMax(draft?.carried)} value={description} onChange={(e) => setDescription(e.target.value)} />
               {ai && (
@@ -321,7 +355,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
               )}
               {!ai && dv?.view && draftId !== null && dv.view.draft.ai?.state === "writing" && <span className="muted nf-ai">AI is still writing a version; yours works now.</span>}
             </span>
-            <label className="set-label" htmlFor="nf-size">Size</label>
+            <label className="set-label" htmlFor="nf-size">Size{mark("size")}</label>
             <span className="nf-size">
               <input id="nf-size" inputMode="decimal" value={size} onChange={(e) => setSize(e.target.value)} placeholder="None" aria-describedby="nf-size-why" />
               <span className="muted nf-why" id="nf-size-why">{sizeProblem ?? "The process's size field (points or effort), if the type has one"}</span>
@@ -336,6 +370,10 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             </button>
           </p>
         )}
+        {/* RQ-1: what the preview still waits for, said once, and read out as it changes. */}
+        <p className="nf-needed" role="status" aria-live="polite">
+          {missing.length > 0 && type ? NEEDED_WORDS.fillFirst(missing.map((f) => f.name), type) : cant.length > 0 && type ? NEEDED_WORDS.cant(need.projectName ?? clientName, cant.map((f) => f.name), type) : ""}
+        </p>
         {error && <p className="set-problem" role="alert">{error}</p>}
         <div className="wd-actions">
           {canWrite && (

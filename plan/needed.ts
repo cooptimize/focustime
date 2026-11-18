@@ -72,6 +72,8 @@ export const NEEDED_WORDS = {
   fillFirst: (names: readonly string[], type: string) => `${and(names)} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new ${type}. Fill ${names.length === 1 ? "it" : "them"} in, then preview again.`,
   /** A field FocusTime has no control for (the New form's way out). */
   cant: (project: string, names: readonly string[], type: string) => `${project}'s process needs ${and(names)} on a new ${type}, which FocusTime doesn't fill. Create this one in DevOps, or save it as a draft.`,
+  /** The draft editor: a field only the New form has; Create in DevOps opens it there. */
+  inNewForm: (names: readonly string[]) => `${and(names)} ${names.length === 1 ? "is" : "are"} needed by this client's process. Create in DevOps opens the New form to fill ${names.length === 1 ? "it" : "them"} in.`,
   /** Break down: a story still needs a value. */
   storyNeeds: (names: readonly string[]) => `Needs ${and(names)} before it can be created`,
   /** Break down's button: one value on every story. */
@@ -102,3 +104,10 @@ export function neededMessage(n: readonly NeededField[], o: { project: string; t
   const { fill, cant } = splitNeeded(n, o.has);
   return [fill.length ? NEEDED_WORDS.fillFirst(fill.map((f) => f.name), o.type) : "", cant.length ? NEEDED_WORDS.cant(o.project, cant.map((f) => f.name), o.type) : ""].filter(Boolean).join(" ");
 }
+
+/** A process level as the New form's options carry it: its kind and the types at it, highest first. */
+export type LevelOf = { kind: "portfolio" | "requirement" | string; types: readonly string[] };
+/** RQ-1: is this type at story level in the client's process (by its levels' kinds, never by a type's or level's name)? */
+export const isStoryLevel = (levels: readonly LevelOf[] | undefined, type: string): boolean => !!type && levels?.find((l) => l.types.includes(type))?.kind === "requirement";
+/** RQ-1: is this type at the feature tier (the lowest portfolio level of the client's process)? */
+export const isFeatureTier = (levels: readonly LevelOf[] | undefined, type: string): boolean => !!type && !!levels?.filter((l) => l.kind === "portfolio").at(-1)?.types.includes(type);
