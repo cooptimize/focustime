@@ -116,11 +116,11 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     await page.reload();
     await openSettings(page);
     await settingsSection(page, "connections");
-    const row = page.locator(".perms li", { hasText: "Chat.ReadBasic" });
+    const row = page.locator('[data-setting="permissions"] .sp-status li', { hasText: "Chat.ReadBasic" });
     await row.waitFor();
     await expect(row.textContent()).resolves.toContain("never messages");
-    await expect(page.locator(".perms li").count()).resolves.toBeGreaterThanOrEqual(8);
-    await shotBoth(page, "connections-permissions", page.locator(".perms"));
+    await expect(page.locator('[data-setting="permissions"] .sp-status li').count()).resolves.toBeGreaterThanOrEqual(8);
+    await shotBoth(page, "connections-permissions", page.locator('[data-setting="permissions"]'));
     expect(errors).toEqual([]);
   }, 60_000);
 });

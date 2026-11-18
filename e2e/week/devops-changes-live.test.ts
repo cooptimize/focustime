@@ -150,10 +150,11 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
     const find = async (n: string) => {
       await group.getByLabel("Item number").fill(n);
       await group.getByRole("button", { name: "Find" }).click();
-      await group.locator(".find-item-answer").waitFor();
-      await group.locator(".find-item-answer").scrollIntoViewIfNeeded();
+      const answer = group.locator('ul[aria-label^="What FocusTime knows about"]');
+      await answer.waitFor();
+      await answer.scrollIntoViewIfNeeded();
       await page.waitForTimeout(200);
-      return (await group.locator(".find-item-answer li").allTextContents()).join("\n");
+      return (await answer.locator("li").allTextContents()).join("\n");
     };
     const out = await find("1710");
     expect(out).toMatch(/DevOps has #1710/);

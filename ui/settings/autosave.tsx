@@ -126,6 +126,11 @@ type Options<V> = {
   onSaved: (d: SettingsData) => void;
   /** Words for the Undo toast, per field: "Focus length". Default: the section's name. */
   label?: (key: keyof V) => string;
+  /**
+   * SA-2: reads a typed value before it saves: the value in the app's one format (shown and saved), or a problem
+   * with an example (shown under the field, nothing saved). Fields it returns nothing for save as typed.
+   */
+  read?: (key: keyof V, value: unknown) => { value: unknown } | { problem: string } | null;
 };
 
 export type AutoSave<V> = {
@@ -167,6 +172,15 @@ export function useAutoSave<V extends Record<string, unknown>>(o: Options<V>): A
     (key: keyof V) => {
       const p = (chain.current = chain.current.then(async () => {
         const before = saved.current;
+        const r0 = opts.current.read?.(key, shown.current[key]) ?? null;
+        if (r0 && "problem" in r0) {
+          setStatus(key, { kind: "error", messages: [r0.problem] });
+          return;
+        }
+        if (r0 && !same(r0.value, shown.current[key])) {
+          shown.current = { ...shown.current, [key]: r0.value };
+          if (live.current) setV(shown.current);
+        }
         const next = { ...before, [key]: shown.current[key] } as V;
         if (same(next[key], before[key])) {
           // Typed back to the saved value: nothing to save, and an old error no longer applies.

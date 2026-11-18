@@ -67,19 +67,19 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
       await head(page).waitFor();
       await page.waitForTimeout(600);
       // An autosaved field (it has a save mark), not a button-run switch like Teams or a push subscription.
-      const sw = page.locator('.ps-body [data-setting]:has(.set-mark) input[type="checkbox"]:not([disabled])').first();
+      const sw = page.locator('.ps-body [data-setting]:has(:is(.sp-mark, .set-mark)) input[type="checkbox"]:not([disabled])').first();
       if (!(await sw.count())) continue;
       const setting = await sw.evaluate((el) => el.closest("[data-setting]")!.getAttribute("data-setting"));
       const before = await sw.isChecked();
       await sw.click();
-      await page.locator(`.ps-body [data-setting="${setting}"] .set-saved`).first().waitFor({ timeout: 10_000 });
+      await page.locator(`.ps-body [data-setting="${setting}"] :is(.sp-saved, .set-saved)`).first().waitFor({ timeout: 10_000 });
       await page.reload();
       await head(page).waitFor();
       const again = page.locator(`.ps-body [data-setting="${setting}"] input[type="checkbox"]`).first();
       await again.waitFor();
       await expect.poll(() => again.isChecked(), { timeout: 10_000 }).toBe(!before);
       await again.click();
-      await page.locator(`.ps-body [data-setting="${setting}"] .set-saved`).first().waitFor({ timeout: 10_000 });
+      await page.locator(`.ps-body [data-setting="${setting}"] :is(.sp-saved, .set-saved)`).first().waitFor({ timeout: 10_000 });
       saved.push(`${id}/${setting}`);
     }
     // Every section with switches saved one (a check the list didn't quietly shrink).
@@ -101,11 +101,11 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     }
     // The client sub-page: Back to Clients, then × back to Week.
     await openAt(page, "#/week", "#/settings/clients");
-    await page.locator(".set-client-row").first().click();
+    await page.locator(".ps-body .sp-links a").first().click();
     await page.waitForFunction(() => location.hash.startsWith("#/settings/client/"));
     await page.locator(".ps-head").getByRole("button", { name: "Clients" }).click();
     await expect.poll(() => hash(page)).toBe("#/settings/clients");
-    await page.locator(".set-client-row").first().click();
+    await page.locator(".ps-body .sp-links a").first().click();
     await page.waitForFunction(() => location.hash.startsWith("#/settings/client/"));
     await page.keyboard.press("Escape");
     await expect.poll(() => hash(page)).toBe("#/week");
@@ -243,7 +243,7 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     const bodies: string[] = [];
     page.on("response", (r) => void (r.url().includes("/api/") ? r.text().then((t) => bodies.push(t), () => {}) : undefined));
     await openAt(page, "#/week", "#/settings/devops");
-    const form = page.locator("form.devops-write").first();
+    const form = page.locator('form[aria-label^="DevOps write access for"]').first();
     await form.waitFor({ timeout: 20_000 });
     await form.locator('input[type="password"]').fill(fake);
     await form.getByRole("button", { name: "Check and save" }).click();
