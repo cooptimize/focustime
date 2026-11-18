@@ -391,9 +391,10 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     await whole.click();
     await expect.poll(() => row(page, "Finance close automation").count()).toBe(0);
     // An admin sets By area path to Finance only: Northwind shows only that (and my own items).
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
-    const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
-    const scope = card.locator(".adm-scope");
+    // SA-4: on Northwind's page in Admin › Clients, its Backlog rules tab.
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/backlog"));
+    const card = page.locator(".adm-client-page");
+    const scope = card.getByRole("region", { name: "Cooptimize's work in this project" });
     await scope.waitFor({ timeout: 30_000 });
     await expect(scope.textContent()).resolves.toContain("Automatic: 14 of 19 open items.");
     await scope.getByRole("radio", { name: /By area path/ }).check();
@@ -535,22 +536,22 @@ describe.skipIf(!CHROMIUM)("Backlog (browser, demo mode)", () => {
     // An admin turns Needs stories off for Northwind: its Break down fixes go; Atlas's stay.
     const breakDowns = (where: typeof nw) => where.getByRole("button", { name: /^Break down: / }).count();
     expect(await breakDowns(nw)).toBeGreaterThan(0);
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
-    const card = page.locator(".adm-client", { has: page.getByRole("heading", { name: "Northwind" }) });
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/backlog"));
+    const card = page.locator(".adm-client-page");
     const sw = card.getByRole("switch", { name: "Northwind: count Needs stories" });
     await sw.waitFor({ timeout: 30_000 });
     await sw.uncheck();
-    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
+    await expect.poll(() => card.locator(".sp-row", { hasText: "What Needs attention counts" }).textContent()).toMatch(/Saved/);
     await page.evaluate(() => (location.hash = "#/backlog"));
     await nw.waitFor({ timeout: 30_000 });
     await expect.poll(() => breakDowns(nw)).toBe(0);
     const atlas = page.locator(".ah-client", { has: page.getByRole("heading", { name: /Atlas Freight/ }) });
     await expect(breakDowns(atlas)).resolves.toBeGreaterThan(0);
     // Back on, for the tests after this one.
-    await page.evaluate(() => (location.hash = "#/settings/admin-clients"));
+    await page.evaluate(() => (location.hash = "#/admin/clients/Northwind/backlog"));
     await sw.waitFor({ timeout: 30_000 });
     await sw.check();
-    await expect.poll(() => card.locator(".adm-fixgaps").textContent()).toMatch(/Saved/);
+    await expect.poll(() => card.locator(".sp-row", { hasText: "What Needs attention counts" }).textContent()).toMatch(/Saved/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

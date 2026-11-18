@@ -129,8 +129,8 @@ export const ANSWER_SCHEMA: JsonSchema = { type: "object", properties: { reply: 
 
 /** Plain words for every status but ok. */
 function statusReply(s: Exclude<HandleStatus, "ok">, clientName: string | null, kind?: AiErrorKind): string {
-  if (s === "off") return "The assistant is off: AI is off for FocusTime. A FocusTime admin turns it on in Admin › AI. Everything is still in the command menu.";
-  if (s === "client_off") return `The assistant is off for ${clientName ?? "this client"}. A FocusTime admin allows AI for it in Admin › AI. The command menu still does everything.`;
+  if (s === "off") return "The assistant is off: AI is off for FocusTime. A FocusTime admin turns it on in Admin › Team defaults › AI. Everything is still in the command menu.";
+  if (s === "client_off") return `The assistant is off for ${clientName ?? "this client"}. A FocusTime admin allows AI for it on its page in Admin › Clients. The command menu still does everything.`;
   if (s === "not_set_up") return "The assistant isn't set up here (no AI key). The command menu still does everything.";
   if (s === "over_budget") return kind === "zero_budget" ? "The assistant's AI budget is set to $0. The command menu still does everything." : "This month's AI budget is reached. The command menu still does everything.";
   if (s === "which_client") return "That names more than one client. Ask about one client at a time.";
@@ -610,7 +610,7 @@ export function createAssistant(env: AssistantEnv) {
    */
   async function standardsAnswer(turnId: number, a: AnswerOpts): Promise<HandleResult> {
     const found = await env.standards?.(a.said).catch(() => null);
-    if (!found) return finish(turnId, "ok", "The standards haven't been read yet, so I can't answer that. A FocusTime admin can check Admin › Standards.", [], [], []);
+    if (!found) return finish(turnId, "ok", "The standards haven't been read yet, so I can't answer that. A FocusTime admin can check Admin › Team defaults › Standards.", [], [], []);
     if (!found.retrieved.included.length) return finish(turnId, "ok", NOT_IN_STANDARDS, [], [], []);
     if (!env.ai) return finish(turnId, "not_set_up", statusReply("not_set_up", null), [], [], [COMMANDS]);
     const r = await env.ai.run<StandardsAskAnswer>({ name: STANDARDS_ASK_TASK, client: NO_CLIENT, instructions: STANDARDS_ASK_INSTRUCTIONS, mentions: { input: "words", answer: "allow" } }, standardsAskInput(a.said, found.retrieved), STANDARDS_ASK_SCHEMA);

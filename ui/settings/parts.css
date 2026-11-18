@@ -20,6 +20,8 @@
 .sp-label { font-size: var(--fs-3); font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
 .sp-help { font-size: var(--fs-2); color: var(--text-muted); overflow-wrap: anywhere; }
 .sp-team { color: var(--text-muted); }
+/* SA-4: Admin's kind of setting beside a row's label. */
+.sp-badge { display: inline-block; margin-inline-start: 8px; padding: 0 6px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--border); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); vertical-align: 1px; white-space: nowrap; }
 .sp-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-control); justify-self: end; min-width: 0; max-width: 100%; }
 .sp-row.sp-wide > .sp-control { justify-self: stretch; }
 .sp-error, .sp-below { grid-column: 1 / -1; margin: 0; min-width: 0; }
@@ -116,8 +118,9 @@ a.sp-btn:hover { background: var(--wash-1); }
 .ps-body .sp-table, .sp-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); display: table; }
 .sp-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .sp-table td { padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--border); overflow-wrap: normal; }
-.sp-table tr:first-child td { border-top: 0; }
-.sp-table .failed td:first-child, .sp-table .refused td:first-child { box-shadow: inset 2px 0 0 var(--risk); }
+.sp-table tbody th { font-weight: 500; color: var(--text); white-space: normal; vertical-align: top; border-bottom: 0; border-top: 1px solid var(--border); }
+.sp-table tr:first-child :is(td, th) { border-top: 0; }
+.sp-table .failed :is(td, th):first-child, .sp-table .refused :is(td, th):first-child { box-shadow: inset 2px 0 0 var(--risk); }
 /* A narrow column (the phone, a narrow window, the largest text): the control under its label, full width. */
 @container (max-width: 560px) {
   .sp-row { grid-template-columns: minmax(0, 1fr); }
@@ -158,3 +161,12 @@ a.sp-btn:hover { background: var(--wash-1); }
 @media (max-width: 599.98px) {
   .sp-switch-box { min-height: var(--tap, 44px); }
 }
+
+/* SA-4: Admin's confirm at the control that asked (a row's below, or under a button row). */
+.sp-confirm { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; padding: 8px 12px; border-radius: var(--radius-input); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--risk) 40%, var(--border)); }
+.sp-confirm > .sp-note { margin: 0; color: var(--text); }
+.sp-block { display: block; }
+.sp-table tr.sp-after td { border-top: 0; padding-top: 0; }
+.sp-check-box { display: inline-grid; place-items: center; min-width: var(--target, 28px); min-height: var(--target, 28px); cursor: pointer; }
+.sp-check { margin: 0; width: 16px; height: 16px; accent-color: var(--action); cursor: pointer; }
+@media (max-width: 599.98px) { .sp-check-box { min-width: var(--tap, 44px); min-height: var(--tap, 44px); } }

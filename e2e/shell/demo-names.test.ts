@@ -12,7 +12,7 @@ const VIEWS = [
   "#/today", "#/today/checkin", "#/today/closeout", "#/week", "#/week/day/2026-11-02", "#/week/commit/2026-11-02",
   "#/ahead", "#/ahead/gantt", "#/ahead/fix", "#/inbox/conversations", "#/inbox/my-promises", "#/inbox/captures",
   "#/settings/you", "#/settings/clients", "#/settings/connections", "#/settings/data", "#/settings/demo",
-  "#/settings/admin-clients", "#/settings/admin-people", "#/settings/admin-ai", "#/settings/admin-status", "#/guide",
+  "#/admin/clients", "#/admin/clients/Northwind/chats", "#/admin/people", "#/admin/defaults/ai", "#/admin/health", "#/guide",
 ];
 
 /** Everything a person can read on the page: text, and the words in titles, labels, placeholders and alt text. */

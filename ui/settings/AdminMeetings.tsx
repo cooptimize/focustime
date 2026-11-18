@@ -1,8 +1,9 @@
-// MC-1: Admin › Clients › <client> › Meetings. The client's registered weekly calls (only these, and meetings
+// MC-1: Admin › Clients › <client> › Calls. The client's registered weekly calls (only these, and meetings
 // FocusTime scheduled, are ever read): Register a meeting from a recurring series on my calendar or a pasted Teams join
 // link, with a name, a role (Weekly status call or Planning) and its reviewers (me and the client's leads by default).
 // Automatic when Cooptimize organizes it, Upload when the client does (detected from the organizer; Upload is always
 // allowed, Automatic only for a Cooptimize organizer). The server checks the admin on every action.
+import { adminChanged } from "./admin/shared.tsx";
 import { useCallback, useEffect, useState } from "react";
 import { ActionRefusal, call } from "../api.ts";
 import { SignInAgainButton } from "../Reopen.tsx";
@@ -36,7 +37,8 @@ export function MeetingsField({ clientKey, clientName }: { clientKey: string; cl
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
-  const load = useCallback(() => call<ListData>("meeting.list", { clientKey }).then((d) => (setData(d), setError(null)), (e: unknown) => setError(errText(e))), [clientKey]);
+  // SA-4: Admin's Calls mark reads again after each change here.
+  const load = useCallback(() => call<ListData>("meeting.list", { clientKey }).then((d) => void (setData(d), setError(null), adminChanged()), (e: unknown) => setError(errText(e))), [clientKey]);
   useEffect(() => void load(), [load]);
   const act = async (action: string, input: Record<string, unknown>, done: string) => {
     setSaved(null);

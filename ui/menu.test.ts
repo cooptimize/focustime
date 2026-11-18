@@ -52,7 +52,7 @@ function env(over: Partial<MenuEnv> = {}) {
     setViewRange: (r) => calls.push(["range", r]),
     hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }),
     runTime: async (a, i) => (calls.push([a, i]), true),
-    openSettings: (x) => calls.push(["settings", x]),
+    openSettings: (x, y) => calls.push(["settings", x, ...(x === "admin" && y ? [y] : [])]),
     exportPlan: () => calls.push(["export"]),
     timer: null,
     runTimer: async (a, i) => (calls.push([a, i ?? {}]), true),
@@ -190,10 +190,11 @@ describe("NM-2: the command menu offers only what still exists", () => {
     expect(calls).toEqual([["code", null], ["view", "ahead"], ["settings", "activity"], ["settings", undefined]]);
     expect(list.find((c) => c.id === "checkin.answer")!.disabled).toBe("At the top of the Midday check-in and Close out");
     // From the newcomer review: invites open Who's set up, the VM opens My VM, an admin's chat commands open Admin › Clients.
+    // SA-4: Admin is its own place (#/admin/<path>).
     calls.length = 0;
     const admin = commandList({ ...e, admin: true });
     for (const id of ["admin.invite_send", "vm.choose", "chats.add"]) await admin.find((c) => c.id === id)!.run!();
-    expect(calls).toEqual([["settings", "admin-people"], ["settings", "connections"], ["settings", "admin-clients"]]);
+    expect(calls).toEqual([["settings", "admin", "people/setup"], ["settings", "connections"], ["settings", "admin", "clients"]]);
     expect(list.find((c) => c.id === "checkin.offer_close")!.disabled).toBe("At the end of Close out");
   });
 });

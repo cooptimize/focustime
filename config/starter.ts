@@ -7,7 +7,7 @@ import { WEEKDAY_KEYS } from "../week/hours.ts";
 export function starterToml(timeZone: string, team?: NewPersonDefaults): string {
   let t = STARTER.replace("@TIME_ZONE@", timeZone);
   if (!team) return t;
-  // ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Organization), which the
+  // ADM-1: the team's working week, day shape and risk thresholds for new people (Admin › Team defaults › Planning and new people), which the
   // first-run Setup then shows prefilled; theirs to change.
   const list = (xs: readonly string[]) => `[${xs.map((x) => JSON.stringify(x)).join(", ")}]`;
   t = t.replace(/^lunch = .*$/m, `lunch = ${JSON.stringify(team.lunch)}`);

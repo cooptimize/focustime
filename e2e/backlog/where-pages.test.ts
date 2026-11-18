@@ -133,7 +133,7 @@ describe.skipIf(!CHROMIUM)("RB-3b: pages in today's report format and a one-file
 
     // The admin's page names each listing.
     await f.getByRole("button", { name: "Cancel" }).click();
-    await page.evaluate(() => (location.hash = "#/settings/admin-audit/code-views"));
+    await page.evaluate(() => (location.hash = "#/admin/audit/code"));
     const table = page.locator('[data-setting="code-views"] table');
     await table.waitFor({ timeout: 30_000 });
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.slice(0, 4).map((tr) => [...tr.querySelectorAll("td")].slice(3).map((td) => td.textContent)));

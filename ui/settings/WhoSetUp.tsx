@@ -7,6 +7,8 @@
 // per person) and Create Outlook draft or Send email now (one email each, or one to everyone) send from FocusTime as
 // the admin, after a preview of who, how and the final text; each is read back and the row reads "Invited by <admin>
 // via Teams, <day>". Without the permission the sheet keeps the links with LP-1's note. The server checks it all again.
+// SA-4 F: the list is drawn with SA-2's parts (the counts line, the filter and Invite several as a button row, the one
+// table style); the invite sheet keeps its own dialog.
 import { TextBox } from "../TextBox.tsx";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { call } from "../api.ts";
@@ -16,6 +18,7 @@ import type { InviteAccessView, InvitePreviewView, InviteResultView, EmailSplit 
 import type { ChannelAccess } from "../../actions/loop-types.ts";
 import { invitedLine, matchesFilter, NAME_TOKEN, mailtoLink, outlookComposeLink, personalize, SETUP_FILTERS, setupCounts, teamsChatLink, validEmail, type SetupFilter, type SetupRow } from "../../plan/invite.ts";
 import { Icon } from "../icons.tsx";
+import { Button, Buttons, Check, Choice, Faint, Note, State, Table } from "./parts.tsx";
 
 type SetupData = {
   people: SetupRow[];
@@ -26,13 +29,9 @@ type SetupData = {
 type Via = "teams" | "outlook" | "email" | "copy";
 
 function Mark({ yes, label }: { yes: boolean; label: string }) {
-  return yes ? (
-    <span className="adm-ok" aria-label={`${label}: yes`}>
-      <Icon name="done" /> Yes
-    </span>
-  ) : (
-    <span className="muted" aria-label={`${label}: no`}>
-      No
+  return (
+    <span aria-label={`${label}: ${yes ? "yes" : "no"}`}>
+      <State tone={yes ? "live" : "muted"}>{yes ? "Yes" : "No"}</State>
     </span>
   );
 }
@@ -53,14 +52,10 @@ export function WhoSetUp() {
     }
   };
   useEffect(() => void load(), []);
-  // A deep link (#/settings/admin-people/whos-set-up, or the command menu) lands here once the list is in.
-  useEffect(() => {
-    if (!data || !/\/whos-set-up$/.test(location.hash)) return;
-    document.querySelector<HTMLElement>('[data-setting="whos-set-up"]')?.scrollIntoView?.({ block: "start" });
-  }, [data]);
+  // SA-4: Who's set up is a tab of Admin › People (#/admin/people/setup); a deep link opens the tab itself.
   const shown = useMemo(() => (data ? data.people.filter((p) => matchesFilter(p, filter)) : []), [data, filter]);
-  if (error) return <p className="field-problem">{error}</p>;
-  if (!data) return <p className="muted">Loading…</p>;
+  if (error) return <Note tone="problem">{error}</Note>;
+  if (!data) return <Note>Loading…</Note>;
   const counts = setupCounts(data.people);
   const invitable = (p: SetupRow) => !p.signedIn;
   const pickedRows = data.people.filter((p) => picked.has(p.id) && invitable(p));
@@ -73,86 +68,63 @@ export function WhoSetUp() {
     });
   const notSignedShown = shown.filter(invitable);
   const allPicked = notSignedShown.length > 0 && notSignedShown.every((p) => picked.has(p.id));
+  const head: ReactNode[] = [
+    <Check key="all" label="Select everyone shown who hasn't signed in" disabled={notSignedShown.length === 0} checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(notSignedShown.map((p) => p.id)))} />,
+    "Name",
+    "Signed in",
+    "DevOps connected",
+    "Calendar connected",
+    ...(data.teamsKnown ? ["Teams app added"] : []),
+    <State key="i" sr>
+      Invite
+    </State>,
+  ];
   return (
-    <section className="adm-setup" data-setting="whos-set-up" aria-labelledby="whos-set-up-h">
-      <h3 id="whos-set-up-h">Who's set up</h3>
-      <p className="adm-setup-counts" role="status">
-        {counts.text}
-      </p>
-      <p className="muted">Cooptimizers only. Yes or no for each; FocusTime never shows which DevOps clients or PATs anyone has.{data.teamsKnown ? "" : " Teams app added isn't known here: the Teams app isn't set up for this FocusTime."}</p>
-      <div className="set-row-actions adm-setup-bar">
-        <div className="adm-filter" role="radiogroup" aria-label="Show">
-          {SETUP_FILTERS.map(([id, label]) => (
-            <button key={id} type="button" role="radio" aria-checked={filter === id} onClick={() => setFilter(id)}>
-              {label}
-              {id === "not_signed_in" ? ` (${counts.notSignedIn})` : id === "partly" ? ` (${counts.partly})` : ` (${counts.total})`}
-            </button>
-          ))}
-        </div>
-        <button type="button" className="mini adm-setup-several" disabled={pickedRows.length === 0 || !data.invite} title={pickedRows.length ? undefined : "Tick the people who haven't signed in first"} onClick={() => setInviting(pickedRows)}>
+    <section data-setting="whos-set-up" aria-label="Who's set up">
+      <Note live>
+        <span data-setup-counts="">{counts.text}</span>
+      </Note>
+      <Note>Cooptimizers only. Yes or no for each; FocusTime never shows which DevOps clients or PATs anyone has.{data.teamsKnown ? "" : " Teams app added isn't known here: the Teams app isn't set up for this FocusTime."}</Note>
+      <Buttons result={msg ?? undefined}>
+        <Choice label="Show" value={filter} onChange={setFilter} options={SETUP_FILTERS.map(([id, label]) => ({ value: id, label: `${label}${id === "not_signed_in" ? ` (${counts.notSignedIn})` : id === "partly" ? ` (${counts.partly})` : ` (${counts.total})`}` }))} />
+        <Button disabled={pickedRows.length === 0 || !data.invite} title={pickedRows.length ? undefined : "Tick the people who haven't signed in first"} onClick={() => setInviting(pickedRows)}>
           Invite several{pickedRows.length ? ` (${pickedRows.length})` : ""}
-        </button>
-        {msg && (
-          <span className="set-hint" role="status">
-            {msg}
-          </span>
-        )}
-      </div>
-      {!data.invite && <p className="set-problem">FocusTime has no public address set, so there is no link to invite people to.</p>}
-      <div className="adm-scroll">
-        <table className="adm-table adm-setup-table" aria-label="Who's set up">
-          <thead>
-            <tr>
-              <th scope="col">
-                <input type="checkbox" aria-label="Select everyone shown who hasn't signed in" disabled={notSignedShown.length === 0} checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(notSignedShown.map((p) => p.id)))} />
-              </th>
-              <th scope="col">Name</th>
-              <th scope="col">Signed in</th>
-              <th scope="col">DevOps connected</th>
-              <th scope="col">Calendar connected</th>
-              {data.teamsKnown && <th scope="col">Teams app added</th>}
-              <th scope="col">
-                <span className="sr-only">Invite</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.length === 0 && (
-              <tr>
-                <td colSpan={data.teamsKnown ? 7 : 6} className="muted">
-                  {filter === "not_signed_in" ? "Everyone has signed in." : filter === "partly" ? "Nobody is set up partly." : "No Cooptimizers yet. They come from Dataverse (Refresh from Dataverse above)."}
-                </td>
-              </tr>
-            )}
-            {shown.map((p) => (
-              <tr key={p.id} data-person={p.id}>
-                <td>{invitable(p) && <input type="checkbox" aria-label={`Select ${p.name}`} checked={picked.has(p.id)} onChange={() => toggle(p.id)} />}</td>
-                <th scope="row">
-                  {p.name}
-                  {p.me && <span className="muted"> (you)</span>}
-                </th>
-                <td>
-                  <Mark yes={p.signedIn} label="Signed in" />
-                  {p.lastActiveDay && <span className="set-hint adm-block">Last active {shortDate(p.lastActiveDay)}</span>}
-                </td>
-                <td>{p.signedIn ? <Mark yes={p.devops} label="DevOps connected" /> : <span className="muted">No</span>}</td>
-                <td>{p.signedIn ? <Mark yes={p.calendar} label="Calendar connected" /> : <span className="muted">No</span>}</td>
-                {data.teamsKnown && <td>{<Mark yes={p.teams === true} label="Teams app added" />}</td>}
-                <td>
-                  {invitable(p) && (
-                    <>
-                      <button type="button" className="mini" disabled={!data.invite} onClick={() => setInviting([p])}>
-                        Invite
-                      </button>
-                      {p.invited && <span className="set-hint adm-block">{invitedLine(p.invited, shortDate)}</span>}
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        </Button>
+      </Buttons>
+      {!data.invite && <Note tone="problem">FocusTime has no public address set, so there is no link to invite people to.</Note>}
+      {shown.length === 0 ? (
+        <Note>{filter === "not_signed_in" ? "Everyone has signed in." : filter === "partly" ? "Nobody is set up partly." : "No Cooptimizers yet. They come from Dataverse (Refresh from Dataverse above)."}</Note>
+      ) : (
+        <Table
+          label="Who's set up"
+          head={head}
+          rowKey={(i) => shown[i]!.id}
+          rows={shown.map((p) => [
+            invitable(p) ? <Check key="c" label={`Select ${p.name}`} checked={picked.has(p.id)} onChange={() => toggle(p.id)} /> : "",
+            <span key="n">
+              {p.name}
+              {p.me && <Faint> (you)</Faint>}
+            </span>,
+            <span key="s">
+              <Mark yes={p.signedIn} label="Signed in" />
+              {p.lastActiveDay && <Faint block>Last active {shortDate(p.lastActiveDay)}</Faint>}
+            </span>,
+            p.signedIn ? <Mark key="d" yes={p.devops} label="DevOps connected" /> : "No",
+            p.signedIn ? <Mark key="k" yes={p.calendar} label="Calendar connected" /> : "No",
+            ...(data.teamsKnown ? [<Mark key="t" yes={p.teams === true} label="Teams app added" />] : []),
+            invitable(p) ? (
+              <span key="i">
+                <Button disabled={!data.invite} onClick={() => setInviting([p])}>
+                  Invite
+                </Button>
+                {p.invited && <Faint block>{invitedLine(p.invited, shortDate)}</Faint>}
+              </span>
+            ) : (
+              ""
+            ),
+          ])}
+        />
+      )}
       {inviting && data.invite && (
         <InviteSheet
           people={inviting}

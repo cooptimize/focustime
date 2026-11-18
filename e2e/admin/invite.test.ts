@@ -37,18 +37,18 @@ describe.skipIf(!CHROMIUM)("Who's set up and Invite", () => {
     await page.keyboard.press("Control+k");
     await page.keyboard.type("who's set up");
     await page.keyboard.press("Enter");
-    await page.waitForFunction(() => location.hash === "#/settings/admin-people/whos-set-up");
+    await page.waitForFunction(() => location.hash === "#/admin/people/setup");
     const table = page.getByRole("table", { name: "Who's set up" });
     await table.waitFor();
-    await expect(page.locator(".adm-setup-counts").textContent()).resolves.toBe("4 of 5 signed in · 2 set up partly");
-    const names = await table.locator("tbody th").allTextContents();
+    await expect(page.locator("[data-setup-counts]").textContent()).resolves.toBe("4 of 5 signed in · 2 set up partly");
+    const names = await table.locator("tbody tr td:nth-child(2)").allTextContents();
     expect(names.map((n) => n.replace(" (you)", "")).sort()).toEqual(["Alex Rivera", "Jordan Lee", "Priya Shah", "Sam Ortiz", "Taylor Kim"]);
     // Yes or no only; nothing says which DevOps clients anyone has.
     expect(await table.textContent()).not.toMatch(/Northwind|Harbor|Atlas|PAT/);
     await page.getByRole("radio", { name: /Set up partly/ }).click();
-    expect((await table.locator("tbody th").allTextContents()).sort()).toEqual(["Jordan Lee", "Priya Shah"]);
+    expect((await table.locator("tbody tr td:nth-child(2)").allTextContents()).sort()).toEqual(["Jordan Lee", "Priya Shah"]);
     await page.getByRole("radio", { name: /Not signed in/ }).click();
-    expect(await table.locator("tbody th").allTextContents()).toEqual(["Taylor Kim"]);
+    expect(await table.locator("tbody tr td:nth-child(2)").allTextContents()).toEqual(["Taylor Kim"]);
     await shotBoth(page, "in1-whos-set-up", table);
 
     // Invite: the sheet, the note, the editable message.
