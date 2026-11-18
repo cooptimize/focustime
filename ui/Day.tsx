@@ -9,7 +9,7 @@ import { DaySuggestLine, useMorningSuggestions } from "./Suggest.tsx";
 import type { SetupStep } from "../plan/setup.ts";
 import { CardsTimelineSwitch, ModeArea } from "./ModeSwitch.tsx";
 import { DueBadge, Fading } from "./FollowUps.tsx";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
 import type { NowStrip } from "../plan/now.ts";
 import { PickRow } from "./PickRow.tsx";
@@ -45,6 +45,8 @@ import { blockStatus } from "../plan/blockstatus.ts";
 import { WeekDnd } from "./WeekStories.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { offWord, ptoLabel, WeekGrid } from "./WeekGrid.tsx";
+import { DayFoldCtx, useHandFolds, type DayFold } from "./dayFold.tsx";
+import { arrivalScroll, foldsByItself, isFolded } from "../plan/day-fold.ts";
 import { NextTodoCtx, type NextTodo, type PanelFocus, type Selection } from "./weekctx.ts";
 import { userZone } from "../week/zone.ts";
 import type { Moment } from "../plan/modes.ts";
@@ -78,6 +80,9 @@ type Props = {
   /** TY-1: the Cards | Timeline switch (saved for the person). */
   timeline?: boolean;
   onTimeline?: (show: boolean) => void;
+  /** DY-1: "Fold blocks that have ended" (on to start) and its switch in Day's menu. */
+  fold?: boolean;
+  onFold?: (on: boolean) => void;
   /** QF-1: a past day's Close out. */
   onCloseOutOn?: (date: IsoDate) => void;
   data: WeekLoadData;
@@ -333,6 +338,28 @@ export function Day(props: Props) {
 
   // TY-1: the timeline shows on a day with blocks or PTO (a weekend day stays its plain list; so do the flows).
   const timelineShown = mode === "now" && !weekendDay && !!day && (!!props.timeline || tlForced) && (workday || ptoDay || catchUpCell);
+  // DY-1: which blocks are folded (plan/day-fold.ts). Only today's, in the ordinary view, on a computer or a tablet.
+  const handFolds = useHandFolds(realToday);
+  const [dragOpen, setDragOpen] = useState<ReadonlySet<Half>>(new Set());
+  const [held, setHeld] = useState<ReadonlySet<Half>>(new Set());
+  useEffect(() => {
+    if (!dnd?.dragging && dragOpen.size) setDragOpen(new Set());
+  }, [dnd?.dragging, dragOpen]);
+  const ordinary = mode === "now" && !phone && !props.read && !(proposals && proposals.date === date);
+  const focusHalf = data.timer && !data.timer.ended && data.timer.kind === "focus" && data.timer.pickId !== null ? (picks.find((p) => p.id === data.timer!.pickId)?.half ?? null) : null;
+  const slotOf = (half: Half) => blocks.find((s) => s.half === half);
+  const factsOf = (half: Half) => {
+    const s = slotOf(half);
+    return { isToday, ordinary, option: props.fold !== false, ended: !!s && ended(s), working: focusHalf === half, panelOpen: panelHere?.half === half, inside: held.has(half), dragOver: dragOpen.has(half), hand: handFolds.hand[half] };
+  };
+  const dayFold: DayFold = {
+    folded: (half) => !!slotOf(half) && isFolded(factsOf(half)),
+    canFold: (half) => isToday && ordinary && !!slotOf(half) && !slotOf(half)!.pto,
+    toggle: (half) => handFolds.set(half, !isFolded(factsOf(half))),
+    dragOver: (half) => setDragOpen((d) => (d.has(half) ? d : new Set([...d, half]))),
+    hold: (half, inside) => setHeld((h) => (h.has(half) === inside ? h : inside ? new Set([...h, half]) : new Set([...h].filter((x) => x !== half)))),
+    wants: (half) => !!slotOf(half) && foldsByItself({ ...factsOf(half), inside: false }),
+  };
   const startTimebox = () => {
     if (!day || !canTimebox) return;
     const slots: Partial<Record<Half, Slot>> = {};
@@ -389,8 +416,28 @@ export function Day(props: Props) {
     ro.observe(head);
     return () => ro.disconnect();
   }, [phoneToday, timelineShown, mode]);
+  // DY-1: on arrival at today, once a block has ended, Day opens on the block under way (or the next one): its header
+  // and first to-dos on screen and the now line in view. Once per day and view; never again while the person is here.
+  const arrived = useRef<string | null>(null);
+  const arrivalKey = isToday && mode === "now" && !phone && !props.read && day && blocks.length && blocks.some((s) => ended(s)) ? `${date}|${timelineShown}` : null;
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!arrivalKey || arrived.current === arrivalKey || !main) return;
+    arrived.current = arrivalKey;
+    const half = blocks.find((s) => !ended(s))?.half;
+    const el = half ? main.querySelector<HTMLElement>(`[data-half="${half}"]`) : null;
+    if (!el) return;
+    const head = main.querySelector<HTMLElement>(":scope > .day-bar");
+    const box = main.getBoundingClientRect();
+    const top = head ? head.getBoundingClientRect().bottom : box.top;
+    const line = el.querySelector<HTMLElement>(".now-line:not(.now-tick)");
+    const blockHead = el.querySelector<HTMLElement>(".card-head")?.getBoundingClientRect().height ?? 40;
+    const d = arrivalScroll({ top, bottom: Math.min(box.bottom, window.innerHeight), target: el.getBoundingClientRect().top, firstRows: Math.min(el.getBoundingClientRect().height, blockHead + 120), now: line ? line.getBoundingClientRect().top : null, blockHead });
+    if (d) main.scrollTop += d;
+  });
 
   return (
+    <DayFoldCtx.Provider value={dayFold}>
     <main ref={mainRef} className={`today-view day-view u2 mode-${mode}${panelHere && !phone ? " with-panel" : ""}${props.read ? " reading" : ""}`} aria-label="Day" aria-busy={props.read === "loading"}>
       {/* PH-1: Now has no header of its own: the date is the top bar's, and another day is reached from Week. */}
       {/* PH-1: a phone that turned the timeline on (TY-1) keeps the header: its Timebox my day, and the switch back. */}
@@ -474,6 +521,7 @@ export function Day(props: Props) {
             { id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) },
             ...(props.onSuggest ? [{ id: "suggestions", label: "Suggestions", group: "Show", checked: props.suggestOn !== false, hint: props.suggestOn !== false ? "on" : "off", run: () => props.onSuggest!(props.suggestOn === false) }] : []),
             ...(mode === "now" && !weekendDay && props.onTimeline ? [{ id: "timeline", label: "Timeline", group: "Show", checked: timelineShown, hint: "B", run: () => toggleTimeline() }] : []),
+            ...(mode === "now" && !weekendDay && !phoneToday && props.onFold ? [{ id: "fold", label: "Fold blocks that have ended", group: "Show", toggle: true, checked: props.fold !== false, run: () => props.onFold!(props.fold === false) }] : []),
             ...(mode === "now" && past && props.onCloseOutOn && !props.asked ? [{ id: "closeout", label: `Close out ${dayWord}`, run: () => props.onCloseOutOn!(date) }] : []),
           ] }}
           onClose={() => setMoreAt(null)}
@@ -661,6 +709,7 @@ export function Day(props: Props) {
         <CloseOutM.CloseOutPanel date={closeDate ?? date} st={st} data={data} nameOf={nameOf} reload={loadClose} onChanged={props.onChanged} onError={setError} onDate={props.onCloseOutDate} onLeave={props.onLeave} onInbox={props.onInbox} onCaptures={props.onCaptures} act={act} onShown={date !== (closeDate ?? date)} />
       )}
     </main>
+    </DayFoldCtx.Provider>
   );
 }
 

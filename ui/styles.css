@@ -7613,3 +7613,18 @@ body.ah-dragging * { cursor: grabbing !important; }
 /* A card clips its content (overflow: hidden made it the sticky header's scroller); clip draws the same and lets the
    header stick to Day's scroll. */
 .app:not(.phone) .today-view.u2.mode-now .day-cards .half.card, .app:not(.phone) .today-view.u2.mode-now .day-cards .half .card-body { overflow: clip; }
+
+/* DY-1: a block on today's Day folds to one line once it has ended; the arrow folds or unfolds it by hand. */
+.day-fold-arrow { flex: none; align-self: center; display: inline-grid; place-items: center; width: calc(28px * var(--text-scale)); height: calc(28px * var(--text-scale)); margin: -4px 0 -4px 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.day-fold-arrow:hover { background: var(--raised); color: var(--text); }
+.day-fold-arrow:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
+.tt-head .day-fold-arrow, .card-head .day-fold-arrow { margin-left: auto; }
+.tt-head .status-pill ~ .day-fold-arrow, .card-head .head-chip ~ .day-fold-arrow { margin-left: 4px; }
+.card-head .day-fold-arrow + .card-more { margin-left: 0; }
+.day-fold-sum { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; margin-left: 8px; color: var(--muted); font-size: var(--fs-2); font-weight: 400; }
+.day-fold-sum .dfs-left.late { color: var(--watch); font-weight: 600; }
+.day-fold-sum .call-mark { align-self: center; }
+.half.day-folded { cursor: pointer; }
+.half.tt-block.day-folded { opacity: 1; }
+.half.tt-block.day-folded .tt-head { border-bottom: 0; }
+.today-view .day-cards .half.day-folded { flex-grow: 0; align-self: flex-start; height: auto; min-height: 0; }

@@ -44,6 +44,8 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
 
   it("asks only at the two moments; Partly, Didn't get to it and Done work, with Undo; the chip shows what's left", async () => {
     const { page, errors } = await freshPage(h);
+    // DY-1: these read the to-dos of the morning, which has ended by 4:40 PM: Day draws it open, as it did before.
+    await call(page, "ui.set_day_fold", { on: false });
     const ids = await monday(page);
     await go(page, "#/today");
     await page.locator(".day-view .half.card, .tt-check, .pick-row").first().waitFor();
@@ -85,6 +87,8 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
 
   it("Close out rolls up what's unanswered and offers one batched DevOps update, previewed and confirmed", async () => {
     const { page, errors } = await freshPage(h);
+    // DY-1: these read the to-dos of the morning, which has ended by 4:40 PM: Day draws it open, as it did before.
+    await call(page, "ui.set_day_fold", { on: false });
     await monday(page);
     // The earlier test's answers belong to its own demo session, so this one starts clean.
     await go(page, "#/today/closeout");
@@ -123,6 +127,8 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
 
   it("TX-1b: All went to plan on a page left open: an error offers Retry, a row answered elsewhere goes, every applied row has Undo, a Done gets PK-1's offer", async () => {
     const { page, errors } = await freshPage(h);
+    // DY-1: these read the to-dos of the morning, which has ended by 4:40 PM: Day draws it open, as it did before.
+    await call(page, "ui.set_day_fold", { on: false });
     const ids = await monday(page);
     await go(page, "#/today/checkin");
     await page.locator(".tc-box").waitFor();
@@ -166,6 +172,8 @@ describe.skipIf(!CHROMIUM)("TX-1 timeboxes and check-ins (browser, demo mode)", 
 
   it("TX-1c: a plain tick takes the story's later to-do off with one notice, and Undo puts it back", async () => {
     const { page, errors } = await freshPage(h);
+    // DY-1: these read the to-dos of the morning, which has ended by 4:40 PM: Day draws it open, as it did before.
+    await call(page, "ui.set_day_fold", { on: false });
     const ids = await monday(page);
     const TUE = "2026-11-03";
     expect((await call(page, "planday.start", { date: TUE })).ok).toBe(true);

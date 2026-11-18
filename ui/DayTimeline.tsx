@@ -5,6 +5,8 @@
 // shows its suggestions as dashed placeholders to accept, drop or move. The phone keeps TY-1's in-block tray, all by tap.
 // Own-plan changes run at once with Undo. A timebox on Outlook goes through the usual preview; nothing else leaves FocusTime.
 import { BlockSuggestions } from "./Suggest.tsx";
+import { useDayFold, useHoldWhileInside } from "./dayFold.tsx";
+import { FoldArrow, FoldSummary } from "./DayFoldLine.tsx";
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { TimeboxView, WeekLoadData } from "../actions/types.ts";
 import { didntFitText, openGaps, type DayPlacement, type Unplaced, type AgendaTimebox } from "../plan/agenda.ts";
@@ -520,6 +522,12 @@ function TimelineBlock(b: BlockProps) {
   const earlier = new Set(slot.half === "PM" ? day.am.events.map((p) => p.event.id) : slot.half === "EVE" ? day.pm.events.map((p) => p.event.id) : []);
   const openHead = b.onOpen;
   const showTray = b.phone && b.timing && !slot.pto && (untimed.length > 0 || b.canChange);
+  // DY-1: a block that has ended folds to one line (Day decides, plan/day-fold.ts); the line or its arrow unfolds it.
+  const fold = useDayFold();
+  const articleRef = useRef<HTMLElement>(null);
+  useHoldWhileInside(articleRef, slot.half, fold);
+  const folded = !b.phone && !!fold?.folded(slot.half);
+  const canFold = !b.phone && !!fold?.canFold(slot.half);
   const hours = (
     <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={!slot.open} minFocusWindow={data.thresholds.minFocusWindowMinutes} now={b.nowLine} className="tt-hours" style={{ height: `calc(${minutes} * var(--tl-hour) / 60)` }} rootRef={b.hoursRef} firstHour={!b.phone} markOverlaps={!b.phone}>
       <RulerPromises rail={{ key: `${slot.date}|${slot.half}`, start: slot.view.start, end: slot.view.end }} tz={tz} />
@@ -535,19 +543,21 @@ function TimelineBlock(b: BlockProps) {
     </Timeline>
   );
   return (
-    <article className={`half ${state} tt-block${sev ? ` ${sev}` : ""}${ended ? " ended" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties} aria-label={`${name}, ${slotRange(slot, tz)}`}>
-      <header className="tt-head card-head" title={watchTip(slot.risks) ?? undefined} onClick={openHead ? () => openHead() : undefined}>
+    <article ref={articleRef} data-half={slot.half} className={`half ${state} tt-block${sev ? ` ${sev}` : ""}${ended ? " ended" : ""}${folded ? " day-folded" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties} aria-label={`${name}, ${slotRange(slot, tz)}${folded ? ", folded" : ""}`}>
+      <header className="tt-head card-head" title={folded ? "Unfold this block" : (watchTip(slot.risks) ?? undefined)} onClick={folded ? () => fold!.toggle(slot.half) : openHead ? () => openHead() : undefined}>
         <span className="swatch" aria-hidden="true" />
         <span className="card-client" title={name}>{name}</span>
         <CardWhen slot={slot} tz={tz} />
-        {status.kind !== "none" && (
+        {status.kind !== "none" && !folded && (
           <span className={`status-pill ${status.kind}`} title={status.detail ?? undefined}>
             {pill}
           </span>
         )}
+        {folded && <FoldSummary slot={slot} picks={b.picks} ended={ended} />}
         {b.late.length > 0 && <LateChip late={b.late} tabIndex={0} onPromise={b.onPromise} onLate={b.onLate} />}
+        {canFold && <FoldArrow fold={fold!} half={slot.half} name={name} folded={folded} />}
       </header>
-      {showTray && (
+      {!folded && showTray && (
         <section ref={b.trayRef} className="tt-tray" aria-label={`Not timeboxed yet, ${halfName(slot.half)}`}>
           <h3 className="tt-tray-label">Not timeboxed yet</h3>
           {untimed.length > 0 ? (
@@ -561,7 +571,7 @@ function TimelineBlock(b: BlockProps) {
           )}
         </section>
       )}
-      {b.phone ? hours : (
+      {folded ? null : b.phone ? hours : (
         <div className="tt-split">
           {hours}
           <TodoChecklist b={b} />

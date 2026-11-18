@@ -773,6 +773,21 @@ export function App() {
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, [phone]);
+  // DY-1: Day's "Fold blocks that have ended", on to start; the person's own setting, like the Timeline switch.
+  const [dayFold, setDayFold] = useState(true);
+  const savedDayFold = data?.ui.foldEnded;
+  useEffect(() => {
+    if (savedDayFold !== undefined) setDayFold(savedDayFold);
+  }, [savedDayFold]);
+  const saveDayFold = useCallback(async (on: boolean) => {
+    setDayFold(on);
+    try {
+      await call("ui.set_day_fold", { on });
+    } catch (e) {
+      setDayFold(!on);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
   // Ctrl+plus, Ctrl+minus, Ctrl+0: step the text size, only when no text field has focus and no dialog is on top
   // (then the browser's own zoom keys do what they always do).
   useEffect(() => {
@@ -1739,6 +1754,8 @@ export function App() {
       saveShowTimelines: (show) => void saveShowTimelines(show),
       dayTimeline,
       saveDayTimeline: (show) => void saveDayTimeline(show),
+      dayFold,
+      saveDayFold: (on) => void saveDayFold(on),
       showWeekend,
       saveShowWeekend,
       weekDays,
@@ -2300,6 +2317,8 @@ export function App() {
           timeboxAsk={timeboxAsk}
           timeline={dayTimeline}
           onTimeline={(show) => void saveDayTimeline(show)}
+          fold={dayFold}
+          onFold={(on) => void saveDayFold(on)}
           onCloseOutOn={(d) => goNav(navOf.today("closeout", d))}
           data={shownData ?? data}
           strip={strip}

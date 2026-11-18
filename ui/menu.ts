@@ -200,6 +200,9 @@ export type MenuEnv = {
   /** TY-1: Today's Timeline switch. */
   dayTimeline: boolean;
   saveDayTimeline: (show: boolean) => void;
+  /** DY-1: Day's "Fold blocks that have ended". */
+  dayFold: boolean;
+  saveDayFold: (on: boolean) => void;
   /** WK-3: Saturday and Sunday on Week always (remembered per viewer in this browser), not only when something is there. */
   showWeekend?: boolean;
   saveShowWeekend?: (show: boolean) => void;
@@ -1259,6 +1262,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       ] }) };
     }
     case "ui.set_today_timeline": return { run: () => env.saveDayTimeline(!env.dayTimeline) };
+    case "ui.set_day_fold": return { run: () => env.saveDayFold(!env.dayFold) };
     case "ui.tour_offer": return { run: () => env.showGuide() };
     case "guide.checklist": return { run: () => env.showGuide("first-day") };
     case "docs.access": return env.showDocs ? { run: () => env.showDocs!() } : { disabled: "Sign in to read the Technical docs" };
