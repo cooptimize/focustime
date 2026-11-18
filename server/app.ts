@@ -3,6 +3,7 @@
 // (http://localhost:<port>) and the hosted app.
 import type { BuildInfo } from "./buildinfo.ts";
 import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
+import { markedEnv, sitePage } from "./site-env.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { posix } from "node:path";
 import { writeJson } from "./compress-data.ts";
@@ -185,6 +186,13 @@ export function createApp(opts: AppOptions) {
    */
   const files: Map<string, StaticFile> | null = opts.distDir && !opts.devMiddleware ? loadStaticFiles(opts.distDir) : null;
   if (files) files.set(SW_PATH, makeStaticFile(SW_PATH, Buffer.from(serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!))), "no-cache"));
+  // EV-1: on dev and local, the page and the manifest say which site this is (server/site-env.ts), made once here like
+  // every other file. Production's files are the build's, untouched.
+  const marked = markedEnv(opts.build?.env);
+  if (files && marked) {
+    const page = files.get("/index.html");
+    if (page) files.set("/index.html", makeStaticFile("/index.html", Buffer.from(sitePage(page.plain.toString("utf8"), marked)), page.cache, true));
+  }
   const https = opts.publicUrl.startsWith("https://");
   const redirect = (res: ServerResponse, to: string, cookies: string[] = []) => {
     res.writeHead(302, { location: to, "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });

@@ -53,6 +53,7 @@
   .ph1-top .ph1-date { margin: 0; min-width: auto; flex: none; white-space: nowrap; font: 600 var(--ph-body)/1.2 var(--font-ui); color: var(--text); }
   .app.phone .ph1-top .brand { flex: none; display: flex; align-items: center; gap: 8px; min-width: auto; max-width: none; overflow: visible; }
   .app.phone .ph1-top .demo-tag { flex: none; max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
+  .app.phone .ph1-top .site-tag { margin-left: 0; font-size: var(--fs-1); }
   .ph1-top .top-actions { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; }
   /* Two words, "VM Stopped", as the computer's narrower widths say it; the full state is in its sheet. */
   .ph1-top .vm-chip .vm-label { display: none; }

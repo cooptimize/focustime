@@ -78,6 +78,7 @@ import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, demoAutoStart, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
+import { sitePage } from "./site-env.ts";
 import { backgroundPolicy, type BackgroundName } from "../config/background-policy.ts";
 import { backgroundStatusSource } from "./background-status.ts";
 import { execFileSync } from "node:child_process";
@@ -639,7 +640,8 @@ const entra = app.entra
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
   const { createServer } = await import("vite");
-  const vite = await createServer({ root, configFile: join(root, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa" });
+  // EV-1: the dev UI's page says which site this is, as a built page does (server/site-env.ts).
+  const vite = await createServer({ root, configFile: join(root, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa", plugins: [{ name: "ev1-site-page", transformIndexHtml: (html: string) => sitePage(html, build.env) }] });
   devMiddleware = vite.middlewares;
 }
 
