@@ -7,6 +7,12 @@ import type { OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.
 import { OTHER_CALL_DAYS } from "./calls.ts";
 import { CALL_LIST, callLabel, CALLS_TEXT } from "./call-words.ts";
 
+/**
+ * MC-2b: one of my own Pocket recordings as the page holds it (meeting.pocket_list's answer, in the page's memory only
+ * while Calls is open): never who recorded it or any of its words.
+ */
+export type ListedRecording = { id: string; startAt: string; endAt: string; minutes: number; title: string };
+
 /** The list's filters, in order. Their counts add up to All: every row is in exactly one of the other three. */
 export const LIST_FILTERS = ["all", "review", "open", "done"] as const;
 export type ListFilter = (typeof LIST_FILTERS)[number];
@@ -37,6 +43,10 @@ export type CallRow = {
   bucket: Bucket;
   /** I review it (I can act on it), else I look. */
   review: boolean;
+  /** MC-2b: my Pocket recordings that go with this call, the longer overlap first (only while it has no transcript). */
+  pocket: ListedRecording[];
+  /** MC-2b: a recording that goes with no call is its own row (no occurrence, no calendar call). */
+  recording: ListedRecording | null;
 };
 
 export type CallListInput = {
@@ -47,9 +57,11 @@ export type CallListInput = {
   /** Today in my zone, and the zone (for each call's own day). */
   today: string;
   zone: string;
+  /** MC-2b: adds my Pocket recordings to the rows (`pocketRows` in plan/call-list-pocket.ts); `takes` are the rows a recording may go on. */
+  addPocket?: ((all: CallRow[], takes: ReadonlySet<CallRow>) => void) | undefined;
 };
 
-const dayOf = (iso: string, zone: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDate().toString();
+export const dayOf = (iso: string, zone: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(zone).toPlainDate().toString();
 const daysBetween = (a: string, b: string) => Temporal.PlainDate.from(a).until(Temporal.PlainDate.from(b), { largestUnit: "days" }).days;
 
 /** A calendar call's row: by its own calendar key (in memory and the page only), so a refetch keeps the same row. */
@@ -78,11 +90,13 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
   const peopleOf = new Map<number, number>();
   for (const c of x.others ?? []) if (c.occurrenceId) peopleOf.set(c.occurrenceId, c.people);
   const all: CallRow[] = [];
+  /** MC-2b: the rows a recording may go on: no transcript yet and I can act on it. */
+  const takes = new Set<CallRow>();
   for (const o of x.occurrences) {
     const s = x.meetings.find((m) => m.id === o.seriesId);
     if (!s) continue;
     const state = callLabel(o, s.mine.review);
-    all.push({
+    const row: CallRow = {
       key: `o${o.id}`,
       occurrenceId: o.id,
       other: null,
@@ -99,12 +113,16 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
       state,
       bucket: bucketOf(o, state.needsMe),
       review: s.mine.review,
-    });
+      pocket: [],
+      recording: null,
+    };
+    all.push(row);
+    if (s.mine.review && !o.hasTranscript && o.state !== "reviewed") takes.add(row);
   }
   const kept = new Set(all.map((r) => r.occurrenceId));
   (x.others ?? []).forEach((c) => {
     if (c.occurrenceId && kept.has(c.occurrenceId)) return;
-    all.push({
+    const row: CallRow = {
       key: otherRowKey(c),
       occurrenceId: c.occurrenceId,
       other: c,
@@ -121,8 +139,14 @@ export function callRows(x: CallListInput): { rows: CallRow[]; older: CallRow[] 
       state: { label: CALLS_TEXT.notReviewed, needsMe: false },
       bucket: "open",
       review: true,
-    });
+      pocket: [],
+      recording: null,
+    };
+    all.push(row);
+    takes.add(row);
   });
+  // MC-2b: my Pocket recordings, matched by plan/call-list-pocket.ts (loaded with Calls, not in the first download).
+  x.addPocket?.(all, takes);
   all.sort((a, b) => Date.parse(b.startAt) - Date.parse(a.startAt) || a.name.localeCompare(b.name));
   const rows: CallRow[] = [];
   const older: CallRow[] = [];

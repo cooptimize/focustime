@@ -25,7 +25,11 @@ import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
-import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListFilter } from "../../plan/call-list.ts";
+import { byDay, callRows, chipClients, dayHeading, filterCounts, filterRows, firstToOpen, LIST_FILTERS, otherRowKey, type CallRow, type ListedRecording, type ListFilter } from "../../plan/call-list.ts";
+import { pocketRows } from "../../plan/call-list-pocket.ts";
+import { gotLine, othersLeftOut, POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
+import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
+import type { PocketView } from "../../actions/pocket-types.ts";
 import type { CallsAt } from "../nav.ts";
 import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { useNarrow } from "../PanelShell.tsx";
@@ -34,7 +38,7 @@ import { Icon } from "../icons.tsx";
 import { RepeatMark } from "./CallMark.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -86,6 +90,26 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const [adding, setAdding] = useState(false);
   const [missing, setMissing] = useState(false);
   const [folded, setFolded] = useState(foldedAtFirst);
+  // MC-2b: whether my Pocket is connected (what FocusTime kept; Pocket isn't asked), and my last press's list, in this
+  // page's memory only while Calls is open.
+  const [pocketOn, setPocketOn] = useState<boolean | null>(null);
+  const [pocket, setPocket] = useState<{ recordings: ListedRecording[]; others: number; more: boolean; at: string } | null>(null);
+  const [pocketBusy, setPocketBusy] = useState(false);
+  const [pocketErr, setPocketErr] = useState<string | null>(null);
+  useEffect(() => {
+    void call<PocketView>("pocket.status", {}).then((v) => setPocketOn(v.connected), () => setPocketOn(false));
+  }, []);
+  const getPocket = async () => {
+    setPocketBusy(true);
+    setPocketErr(null);
+    try {
+      setPocket(await call<{ recordings: ListedRecording[]; others: number; more: boolean; at: string }>("meeting.pocket_list", {}));
+    } catch (e) {
+      setPocketErr(errText(e));
+    } finally {
+      setPocketBusy(false);
+    }
+  };
   const loadMine = useCallback(() => call<MineData>("meeting.mine", {}).then((d) => (setData(d), setError(null)), (e: unknown) => setError(errText(e))), []);
   const loadOthers = useCallback(
     () =>
@@ -143,11 +167,11 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     onGoRef.current({ occurrence: at.occurrence, ...pick(at), ...(f !== "all" ? { show: f } : {}), ...(c !== null ? { client: c } : {}) });
   };
   // Without the calls FocusTime keeps there is no list: my calendar's calls alone would read as nothing to review.
-  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone }) : { rows: [], older: [] }), [data, others, today, zone]);
+  const { rows, older } = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, addPocket: pocketRows(pocket?.recordings ?? null, zone) }) : { rows: [], older: [] }), [data, others, today, zone, pocket]);
   const shown = useMemo(() => filterRows(rows, show, client), [rows, show, client]);
   const counts = useMemo(() => filterCounts(rows, client), [rows, client]);
   const chips = useMemo(() => chipClients(rows), [rows]);
-  const setupRow = setupKey ? [...rows, ...older].find((r) => r.key === setupKey && r.other) ?? null : null;
+  const setupRow = setupKey ? [...rows, ...older].find((r) => r.key === setupKey && (r.other || r.recording)) ?? null : null;
   // Calls with no call named: the newest call that needs me opens, else the newest call (side by side only; when
   // narrow the list is the first step).
   const loaded = !!data && (!!others || !!othersErr);
@@ -295,6 +319,23 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           ))}
         </div>
       )}
+      {data && pocketOn !== null && (
+        <div className="calls-pocket" data-calls-pocket="">
+          {pocketOn ? (
+            <>
+              <button type="button" className="mini" disabled={pocketBusy} onClick={() => void getPocket()} data-pocket-get="">{pocketBusy ? PW.getting : PW.get}</button>
+              <span className="muted" role="status">
+                {pocket ? gotLine(pocket.recordings.length, timeOf(pocket.at, zone)) : ""}
+                {pocket?.others ? ` ${othersLeftOut(pocket.others)}` : ""}
+                {pocket?.more ? ` ${PW.more}` : ""}
+              </span>
+              {pocketErr && <span className="error-line" role="alert">{pocketErr}</span>}
+            </>
+          ) : (
+            <span className="muted">{PW.connectLine.slice(0, PW.connectLine.indexOf(PW.connectLink))}<a href="#/settings/connections/pocket">{PW.connectLink}</a>.</span>
+          )}
+        </div>
+      )}
       <div className="calls-scroll">
         {missing && <p className="muted calls-note" role="status">{CALLS_TEXT.notFound}</p>}
         {(error || othersErr) && (
@@ -357,7 +398,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       </div>
     );
   else if (at.occurrence)
-    beside = <ReviewScreen key={at.occurrence} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
+    beside = <ReviewScreen key={at.occurrence} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
   else if (setupRow?.other)
     beside = (
       <div className="calls-beside-pad">
@@ -368,13 +409,33 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           clients={clients}
           suggested={suggestClient(setupRow.other.name, clients, blockClientAt(setupRow.other.startAt))}
           zone={zone}
+          pocket={setupRow.pocket}
           onCancel={backToList}
-          onStarted={(id, teams) => {
+          onStarted={(id, then) => {
             setSetupKey(null);
             changed();
             void loadOthers();
-            if (teams) requestFetch(id);
-            go({ occurrence: id, ...(teams ? {} : { view: "upload" as const }) });
+            if (then === "teams") requestFetch(id);
+            go({ occurrence: id, ...(then === "upload" ? { view: "upload" as const } : {}) });
+          }}
+        />
+      </div>
+    );
+  else if (setupRow?.recording)
+    beside = (
+      <div className="calls-beside-pad">
+        {twoStep && <BackHead onBack={backToList} title="" />}
+        <PocketAddSetup
+          key={setupRow.key}
+          rec={setupRow.recording}
+          clients={clients}
+          suggested={blockClientAt(setupRow.recording.startAt)}
+          zone={zone}
+          onCancel={backToList}
+          onAdded={(id) => {
+            setSetupKey(null);
+            changed();
+            go({ occurrence: id });
           }}
         />
       </div>
@@ -485,9 +546,12 @@ function ClientPick({ clients, value, suggested, onChange, id }: { clients: Capt
  * MC-2: the setup a call that isn't registered opens with: which client it is about (FocusTime suggests, I choose; one
  * client) and where its transcript comes from. Nothing is kept and nothing goes to AI until Continue.
  */
-function CallSetup({ call: c, clients, suggested, zone, onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; zone: string; onCancel: () => void; onStarted: (occurrenceId: number, teams: boolean) => void }) {
+function CallSetup({ call: c, clients, suggested, zone, pocket = [], onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; zone: string; /** MC-2b: my Pocket recordings that go with it. */ pocket?: ListedRecording[]; onCancel: () => void; onStarted: (occurrenceId: number, then: "teams" | "upload" | "none") => void }) {
   const [client, setClient] = useState(suggested ?? "");
-  const [source, setSource] = useState<"teams" | "upload">(c.teams ? "teams" : "upload");
+  const [source, setSource] = useState<"teams" | "upload" | "pocket">(pocket.length ? "pocket" : c.teams ? "teams" : "upload");
+  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(pocket));
+  // The call kept by a first Continue whose Pocket recording asked again (no line times): the second goes to it.
+  const [kept, setKept] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -500,8 +564,16 @@ function CallSetup({ call: c, clients, suggested, zone, onCancel, onStarted }: {
     setBusy(true);
     setErr(null);
     try {
+      if (source === "pocket") {
+        const id = kept ?? (await call<{ occurrenceId: number }>("meeting.call_start", { key: c.key, startAt: c.startAt, endAt: c.endAt, clientKey: client })).occurrenceId;
+        setKept(id);
+        const r = await bringPocket(id, choice);
+        if (r.ask === "whole") return setChoice((x) => ({ ...x, whole: r.length ?? "" })), setBusy(false);
+        if (r.ask === "replace") return setChoice((x) => ({ ...x, replace: true })), setBusy(false);
+        return onStarted(id, "none");
+      }
       const r = await call<{ occurrenceId: number; existed: boolean }>("meeting.call_start", { key: c.key, startAt: c.startAt, endAt: c.endAt, clientKey: client });
-      onStarted(r.occurrenceId, source === "teams" && !r.existed);
+      onStarted(r.occurrenceId, source === "teams" && !r.existed ? "teams" : "upload");
     } catch (e) {
       setErr(errText(e));
       setBusy(false);
@@ -524,13 +596,148 @@ function CallSetup({ call: c, clients, suggested, zone, onCancel, onStarted }: {
           <input type="radio" name="mtg-source" value="upload" checked={source === "upload"} onChange={() => setSource("upload")} />
           <span><strong>{CALLS_TEXT.sourceUpload}</strong><span className="muted">{CALLS_TEXT.sourceUploadHint}</span></span>
         </label>
+        {pocket.length > 0 && (
+          <label>
+            <input type="radio" name="mtg-source" value="pocket" checked={source === "pocket"} onChange={() => setSource("pocket")} data-source="pocket" />
+            <span><strong>{PW.source}</strong><span className="muted">{pocket.length === 1 ? `${pocket[0]!.title ? `${pocket[0]!.title} · ` : ""}${recordingLine(whenShort(pocket[0]!.startAt, zone), lengthLabel(pocket[0]!.minutes))}` : PW.pick}</span></span>
+          </label>
+        )}
       </fieldset>
+      {source === "pocket" && <PocketFields recs={pocket} call={c} zone={zone} value={choice} onChange={setChoice} who={PW.seeCall} named />}
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">
-        <button type="button" className="mini primary" disabled={busy || !client} onClick={() => void start()}>{busy ? "Starting…" : CALLS_TEXT.start}</button>
+        <button type="button" className="mini primary" disabled={busy || !client} onClick={() => void start()}>{busy ? "Starting…" : source === "pocket" && choice.replace ? PW.replaceYes : CALLS_TEXT.start}</button>
         <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
       </span>
     </div>
+  );
+}
+
+/** MC-2b: which of my recordings, which part of it, and what the server asked back (no line times, a transcript there). */
+type PocketChoice = { id: string; part: "call" | "all"; whole: string | null; replace: boolean };
+const firstChoice = (recs: readonly ListedRecording[]): PocketChoice => ({ id: recs[0]?.id ?? "", part: "call", whole: null, replace: false });
+/** "Mon, Nov 16 · 10:58 AM": a recording's start in my zone. */
+const whenShort = (iso: string, zone: string) => `${new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${timeOf(iso, zone)}`;
+const spanOf = (r: ListedRecording) => ({ id: r.id, startAt: r.startAt, seconds: (Date.parse(r.endAt) - Date.parse(r.startAt)) / 1000 });
+
+/** One press of Continue with my Pocket recording: one call to Pocket on the server, or a question back. */
+async function bringPocket(occurrenceId: number, v: PocketChoice): Promise<{ ask?: "whole" | "replace"; length?: string }> {
+  const r = await call<{ ask?: "whole" | "replace"; length?: string }>("meeting.pocket_bring", { recordingId: v.id, occurrenceId, part: v.whole !== null ? "all" : v.part, ...(v.replace ? { replace: true } : {}) });
+  return r.ask ? r : {};
+}
+
+/**
+ * MC-2b: the setup's Pocket part: the recording (a choice when two go with the call, the longer overlap first), its
+ * start and length, which part comes in when it runs more than 10 minutes past the call, what the server said back,
+ * and who will see it, all before Continue.
+ */
+function PocketFields({ recs, call: c, zone, value, onChange, who, named = false }: { recs: readonly ListedRecording[]; call: { startAt: string; endAt: string }; zone: string; value: PocketChoice; onChange: (v: PocketChoice) => void; who: string; /** The one recording is already named above (the setup's source option). */ named?: boolean }) {
+  const rec = recs.find((r) => r.id === value.id) ?? recs[0];
+  if (!rec) return null;
+  const longer = longerThanCall(spanOf(rec), c);
+  return (
+    <div className="mtg-pocket-pick" data-pocket-pick="">
+      {recs.length > 1 && (
+        <fieldset className="mtg-setup-source">
+          <legend>{PW.pick}</legend>
+          {recs.map((r) => (
+            <label key={r.id}>
+              <input type="radio" name="mtg-pocket-rec" checked={r.id === rec.id} onChange={() => onChange({ ...firstChoice([r]), replace: value.replace })} />
+              <span><strong>{r.title || PW.rowKind}</strong><span className="muted">{recordingLine(whenShort(r.startAt, zone), lengthLabel(r.minutes))}</span></span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {recs.length === 1 && !named && <p className="muted">{rec.title ? `${rec.title} · ` : ""}{recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>}
+      {longer && value.whole === null && (
+        <fieldset className="mtg-setup-source" data-pocket-part="">
+          <legend>{PW.partAsk(lengthWords(spanOf(rec).seconds), lengthWords((Date.parse(c.endAt) - Date.parse(c.startAt)) / 1000))}</legend>
+          <label>
+            <input type="radio" name="mtg-pocket-part" checked={value.part === "call"} onChange={() => onChange({ ...value, part: "call" })} />
+            <span>{PW.part}</span>
+          </label>
+          <label>
+            <input type="radio" name="mtg-pocket-part" checked={value.part === "all"} onChange={() => onChange({ ...value, part: "all" })} />
+            <span>{PW.all}</span>
+          </label>
+        </fieldset>
+      )}
+      {value.whole !== null && <p role="status" className="mtg-pocket-ask">{PW.whole(value.whole)}</p>}
+      {value.replace && <p role="status" className="mtg-pocket-ask">{PW.replaceAsk}</p>}
+      <p className="mtg-pocket-who" data-pocket-who="">{who} {PW.ai}</p>
+    </div>
+  );
+}
+
+/** MC-2b: a recording that goes with no call: a name (its title, mine to change), a client, and Continue. Only I see it. */
+function PocketAddSetup({ rec, clients, suggested, zone, onCancel, onAdded }: { rec: ListedRecording; clients: CaptureClient[]; suggested: string | null; zone: string; onCancel: () => void; onAdded: (occurrenceId: number) => void }) {
+  const [name, setName] = useState(rec.title);
+  const [client, setClient] = useState(suggested && clients.some((x) => x.clientKey === suggested) ? suggested : "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [kept, setKept] = useState<number | null>(null);
+  const first = useRef<HTMLInputElement | null>(null);
+  useEffect(() => first.current?.focus(), []);
+  const save = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const id = kept ?? (await call<{ occurrenceId: number }>("meeting.pocket_add", { recordingId: rec.id, name: name.trim(), clientKey: client })).occurrenceId;
+      setKept(id);
+      await bringPocket(id, { id: rec.id, part: "all", whole: null, replace: false });
+      onAdded(id);
+    } catch (e) {
+      setErr(errText(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="mtg-setup mtg-add" aria-labelledby="mtg-padd-title" onSubmit={(e) => (e.preventDefault(), void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())} data-pocket-add="">
+      <h3 id="mtg-padd-title">{PW.addTitle}</h3>
+      <p className="muted">{PW.rowKind} · {recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>
+      <div className="mtg-add-grid">
+        <label>{PW.addName}<input ref={first} value={name} maxLength={200} required disabled={kept !== null} onChange={(e) => setName(e.target.value)} /></label>
+        <span className="mtg-add-field"><label htmlFor="mtg-padd-client">{PW.addClient}</label><ClientPick id="mtg-padd-client" clients={clients} value={client} suggested={suggested} onChange={setClient} /></span>
+      </div>
+      <p className="mtg-pocket-who" data-pocket-who="">{PW.seeMe} {PW.ai}</p>
+      {err && <p className="error-line" role="alert">{err}</p>}
+      <span className="mtg-setup-actions">
+        <button type="submit" className="mini primary" disabled={busy || !name.trim() || !client}>{busy ? PW.bringing : CALLS_TEXT.start}</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
+      </span>
+    </form>
+  );
+}
+
+/** MC-2b: on a call I review with no transcript yet, my Pocket recordings that go with it, brought in on a press. */
+function PocketBringBox({ recs, occ, series, zone, onDone }: { recs: readonly ListedRecording[]; occ: OccurrenceView; series: SeriesView; zone: string; onDone: () => Promise<void> }) {
+  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(recs));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const who = series.call === "hand" ? PW.seeMe : series.call ? PW.seeCall : PW.seeClient;
+  const bring = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await bringPocket(occ.id, choice);
+      if (r.ask === "whole") setChoice((x) => ({ ...x, whole: r.length ?? "" }));
+      else if (r.ask === "replace") setChoice((x) => ({ ...x, replace: true }));
+      else await onDone();
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="mtg-setup mtg-pocket-box" aria-labelledby="mtg-pocket-head" data-pocket-bring="">
+      <h3 id="mtg-pocket-head">{PW.bringHead}</h3>
+      <PocketFields recs={recs} call={occ} zone={zone} value={choice} onChange={setChoice} who={who} />
+      {err && <p className="error-line" role="alert">{err}</p>}
+      <span className="mtg-setup-actions">
+        <button type="button" className="mini primary" disabled={busy} onClick={() => void bring()}>{busy ? PW.bringing : choice.replace ? PW.replaceYes : PW.bring}</button>
+      </span>
+    </section>
   );
 }
 
@@ -581,7 +788,7 @@ function AddCall({ clients, today, onCancel, onAdded }: { clients: CaptureClient
   );
 }
 
-function ReviewScreen({ id, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
+function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; /** MC-2b: my Pocket recordings that go with this call (from my last press). */ pocketRecs?: readonly ListedRecording[]; zone: string; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
   const w = useDevOpsWrite();
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -770,7 +977,7 @@ function ReviewScreen({ id, quiet = false, view, line, filter, focus, colors, to
           </div>
         ) : null}
       </div>
-      {r.pocket && <p className="mtg-pocket-note" role="note">{POCKET_TEXT.note}</p>}
+      {r.pocket && <p className="mtg-pocket-note" role="note">{r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note}</p>}
       {view !== "transcript" && r.summary && r.summary.length > 0 && (
         // MC-2: what was discussed and decided, above the proposals, on every call.
         <section className="mtg-summary" aria-labelledby="mtg-summary-head">
@@ -783,6 +990,7 @@ function ReviewScreen({ id, quiet = false, view, line, filter, focus, colors, to
         {editable && r.proposals.length === 0 ? "" : editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
         {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : CALLS_TEXT.whoSees}` : ""}
       </p>}
+      {editable && !r.transcript && pocketRecs.length > 0 && <PocketBringBox key={pocketRecs.map((x) => x.id).join()} recs={pocketRecs} occ={o} series={m} zone={zone} onDone={load} />}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
@@ -792,7 +1000,7 @@ function ReviewScreen({ id, quiet = false, view, line, filter, focus, colors, to
         </section>
       )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} />}
+      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} pocketOffered={editable && !r.transcript && pocketRecs.length > 0} />}
       {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
       {view === "transcript" ? (
         <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
@@ -1250,7 +1458,7 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
   );
 }
 
-function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean }) {
+function UploadBox({ series, occ, onDone, dragging = false, pocketOffered = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean; /** MC-2b: my Pocket recording is offered above: no export tip. */ pocketOffered?: boolean }) {
   const up = useTranscriptUpload(series, occ, onDone);
   const [msg, setMsg] = useState<string | null>(null);
   const none = async () => {
@@ -1266,7 +1474,7 @@ function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesVi
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} {series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
+        {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (

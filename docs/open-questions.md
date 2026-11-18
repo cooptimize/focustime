@@ -1734,3 +1734,14 @@ Readings taken where the brief left room (the one that changes less), for the pr
   - Search Admin's client settings (Allow AI and the like) go to the Clients list unless a client's page is open, since the setting is per client.
   - People, like a client's page, opens on the tab last used this visit while the address says `#/admin/people`.
 - **Taller rows.** With the parts, Team defaults › AI and Planning and new people are about one screen longer at 1440 than A to E's moved rows (`docs/ux/sa4/after.md`). Kept: the row style is SA-2's, one setting per row.
+
+## MC-2b: Your Pocket recordings in Calls (Nov 18)
+
+- **Pocket's terms.** The Terms of Use say credentials "must not [be disclosed] to any other person or entity" and forbid "robots… for unauthorized purposes"; the Privacy Policy allows sharing "To third parties or integrations you choose". Read as allowing a person to give FocusTime their own key, but worth asking Pocket before the pilot.
+- **The unit of line times.** Pocket's docs don't say; FocusTime reads seconds and switches to milliseconds when the times run far past the recording's length. A real key on dev should confirm which.
+- **Is the list's recorder address always there?** A record without `recorded_by.email` is dropped; if Pocket leaves it out for a personal key, the person would see nothing. A real key on dev should show.
+- **An organization key.** It may list everyone's recordings; FocusTime drops others' unread, but still receives them from Pocket. Pocket offers no filter by recorder on the public API.
+- **"Pocket recording found" only on calls without a transcript.** The reading that shows less. A person who wants to replace a Teams transcript with their recording uses the call's page only if it has none; replacing from the list isn't offered.
+- **A second read when Pocket gives no times.** The first Continue reads the recording, finds no times and keeps nothing; the second reads it again. Asking Pocket once and holding the transcript for the second press would keep a transcript in memory longer than needed.
+- **Starting a calendar call before the recording is read.** Continue keeps the call first (as Upload does), so a failed read leaves it waiting for a transcript, with the offer on its page.
+- **From the consultant walkthrough, left as they are.** "1 recording by other people was left out." is the prompt's own wording, though a consultant asked why their Pocket holds others' recordings; a recording's own setup suggests the client of the focus block it fell in; the Settings link lands on the Pocket card, not its top; the security review's note that the one-recorder rule keeps a colleague's recordings when a shared key lists only theirs (the prompt's decision; a real key on dev should show whether a personal key can list anyone else's).

@@ -11,6 +11,7 @@ import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { createPocketClient } from "../sources/pocket/client.ts";
 import { pocketPort } from "../actions/pocket-actions.ts";
+import { createPocketHold } from "../actions/meeting-pocket.ts";
 import { createPushDevices } from "../store/push-devices.ts";
 import { createCalendarLinks } from "../store/calendar-links.ts";
 import { createLinkCalendars } from "../sources/ics/source.ts";
@@ -336,6 +337,8 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
 };
 /** PK-2: the Pocket client (one list call and no other); each call takes the person's own key from their secrets. */
 const pocketClient = createPocketClient({ fetch, log });
+/** MC-2b: each person's last list of Pocket recordings, 5 minutes, in this server's memory only. */
+const pocketHold = createPocketHold(() => Date.now());
 const azureFor = (token: () => Promise<string>) => createAzureClient({ fetch, token, log });
 const googleFor = (who: Person) => (cfg: GoogleConfig, timeZone: string) =>
   memo(who, "google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(who, timeZone), config: cfg, web: { login: () => "/auth/google/login", redirectUri: urls.google } }));
@@ -989,7 +992,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     // ENV-1: Check now looks once with this person's sign-in (the job below; production and test sites alike).
-    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
+    meetings: { store: meetingStore, users: meetingUsers, press: callPresses, cooptimizer: async (uid) => (await org.levels()).people.isCooptimizer(uid), checkNow: (seriesId, uid) => meetings.checkNow(seriesId, uid), readPdf: pdfReader(), pocketHold, ...(background.production && background.allows(MEETING_JOB) ? { retriesHere: true } : {}) },
     account: accountFor(who),
     photoCache: host.photos,
     push,
