@@ -84,6 +84,9 @@ describe.skipIf(!CHROMIUM)("SA-4: Admin as its own place", () => {
     const customers = await list.locator(".adm-client-row").count();
     await page.getByRole("radio", { name: /^All accounts/ }).click();
     await page.getByRole("switch", { name: /^Treat .* as a client$/ }).first().waitFor();
+    // Every account, client or not, links to its own page (its AI switches are there).
+    const accounts = page.locator(".adm-accounts tbody th a");
+    expect(await accounts.count()).toBeGreaterThan(customers);
     await page.getByRole("radio", { name: /^Customers/ }).click();
     await expect.poll(() => list.locator(".adm-client-row").count()).toBe(customers);
     expect(errors).toEqual([]);

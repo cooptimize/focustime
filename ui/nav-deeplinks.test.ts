@@ -33,6 +33,8 @@ describe("Settings and Admin sections", () => {
       ["#/settings/admin-status", "health", "#/admin/health"],
       ["#/settings/admin-audit", "audit", "#/admin/audit"],
       ["#/settings/admin-audit/code-views", "audit/code", "#/admin/audit/code"],
+      // DP-2's old link to one client's deployment settings.
+      ["#/settings/admin-clients/deploy-Harbor%20Co", "clients/Harbor Co/deployments", "#/admin/clients/Harbor%20Co/deployments"],
     ];
     expect(Object.keys(OLD_ADMIN_SECTIONS)).toHaveLength(8);
     for (const [old, path, now] of landing) {

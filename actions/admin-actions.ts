@@ -210,7 +210,8 @@ export const groupLink = (groupId: string | null) => (groupId ? `https://entra.m
 /** SA-4: why a chat can't be registered under this client by this admin (the words chats.add would refuse with), or null. */
 export function chatRefusal(clientKey: string, targets: ReadonlySet<string> | null | undefined): string | null {
   if (targets === undefined) return null;
-  if (targets === null) return "Dataverse couldn't be read, so FocusTime can't check the client. Try again in a moment.";
+  // Dataverse couldn't be read just now: don't block the picker on it; chats.add checks again and says why if it refuses.
+  if (targets === null) return null;
   return targets.has(clientKey) ? null : `${clientKey} isn't one of your clients, so a chat can't be registered under it with your sign-in. An admin who follows ${clientKey} can add it.`;
 }
 

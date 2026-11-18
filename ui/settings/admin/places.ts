@@ -115,6 +115,18 @@ export const RETIRED_ADMIN_SECTIONS: readonly string[] = ["admin-templates"];
 export function oldAdminAt(section: string, setting: string | null | undefined): AdminAt | null {
   const at = OLD_ADMIN_SECTIONS[section];
   if (!at) return null;
+  // DP-2's old link to a client's deployment settings: #/settings/admin-clients/deploy-<client>.
+  const deploy = section === "admin-clients" && setting ? /^deploy-(.+)$/.exec(setting) : null;
+  if (deploy) {
+    const client = (() => {
+      try {
+        return decodeURIComponent(deploy[1]!);
+      } catch {
+        return null;
+      }
+    })();
+    if (client && parseAdminPath(`clients/${client}/deployments`)) return { part: "clients", tab: "deployments", client };
+  }
   const tab = setting ? OLD_SETTINGS[section]?.[setting] : undefined;
   return tab ? { ...at, tab } : at;
 }

@@ -42,7 +42,8 @@ function AllAccounts({ rows, saver }: { rows: ClientRow[]; saver: Saver }) {
             return (
               <tr key={c.key}>
                 <th scope="row">
-                  {c.key}
+                  {/* Any account's own page, client or not (its AI switches live there now). */}
+                  <a href={adminHref({ part: "clients", client: c.key })}>{c.key}</a>
                   {c.names.length > 0 && c.names.join(", ") !== c.key && <span className="muted adm-email">{c.names.join(", ")}</span>}
                 </th>
                 <td data-label="In Dataverse">{c.types.length ? c.types.map((t) => TYPE_WORDS[t] ?? t).join(", ") : <span className="muted">No type</span>}</td>

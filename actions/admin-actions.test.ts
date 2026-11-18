@@ -95,7 +95,8 @@ describe("admin actions", () => {
     expect(chatRefusal("fabrikam", undefined)).toBeNull();
     expect(chatRefusal("fabrikam", new Set(["fabrikam"]))).toBeNull();
     expect(chatRefusal("northwind", new Set(["fabrikam"]))).toMatch(/^northwind isn't one of your clients/);
-    expect(chatRefusal("northwind", null)).toMatch(/Dataverse couldn't be read/);
+    // Dataverse unread just now: nothing is blocked ahead; chats.add checks again on the press.
+    expect(chatRefusal("northwind", null)).toBeNull();
     const s = await setup();
     const withTargets: AdminContext = { ...s.admin, chatTargets: async () => new Set(["fabrikam"]) };
     const r = (await adminAction(withTargets, "admin.load", { section: "clients", filter: "all" })) as { ok: true; data: { clients: { key: string; chatRefusal: string | null }[] } };
