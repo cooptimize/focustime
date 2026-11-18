@@ -66,7 +66,7 @@ export function NotificationsSection(p: FormProps) {
   const t = a.v.teams;
   const st = a.v.status;
   /** "Also in Teams": the reminder's Teams switch. It keeps its value, greyed with the reason, while In Teams is off. */
-  const also = (k: "checkin" | "closeout" | "status") => <Switch sid={`teams-kind-${k}`} text={teamsOff ? `Also in Teams (${TEAMS_OFF.toLowerCase()})` : "Also in Teams"} checked={t[k]} disabled={teamsOff} onChange={(on) => setTeams(k, { [k]: on })} />;
+  const also = (k: "checkin" | "closeout" | "status") => <Switch sid={`teams-kind-${k}`} text={teamsOff ? `Also in Teams (${TEAMS_OFF})` : "Also in Teams"} checked={t[k]} disabled={teamsOff} onChange={(on) => setTeams(k, { [k]: on })} />;
   const changedKinds = NOTICE_KINDS_SHOWN.filter((k) => a.v.kinds[k] !== DEFAULT_NOTIFY.kinds[k]).length + TEAMS_IN_FOLD.filter((k) => t[k] !== DEFAULT_TEAMS_RHYTHM[k]).length;
   const rituals = nextRituals(Temporal.Now.plainDateISO().toString());
   const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -208,7 +208,7 @@ export function NotificationsSection(p: FormProps) {
         </Row>
       </Group>
       <Group sid="kinds">
-        <Fold label={FOLDS.kinds} count={NOTICE_KINDS_SHOWN.length + TEAMS_IN_FOLD.length} changed={changedKinds}>
+        <Fold label={FOLDS.kinds} count={NOTICE_KINDS_SHOWN.length + TEAMS_IN_FOLD.length} more changed={changedKinds}>
           {NOTICE_KINDS_SHOWN.map((k) => (
             <Row key={k} id={kindId(k)} help={KIND_HINT[k]} mark={kindMark(k)}>
               <Switch checked={a.v.kinds[k]} onChange={(on) => setKind(k, on)} />

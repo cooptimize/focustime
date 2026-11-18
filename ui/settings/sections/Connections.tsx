@@ -99,8 +99,9 @@ export function ConnectionsSection(p: BodyProps) {
         <PocketRecorder timeZone={Temporal.Now.timeZoneId()} />
       </Card>
       <TeamsApp go={p.go} />
-      <Card id="vm" name="My VM" forWhat="The one Azure VM you confirmed: its status in the header, and Start." more={<VmStartForm />}>
+      <Card id="vm" name="My VM" forWhat="The one Azure VM you confirmed: its status in the header, and Start.">
         <YouAccount part="vm" />
+        <VmStartForm />
       </Card>
     </Page>
   );
