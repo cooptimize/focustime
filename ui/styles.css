@@ -7814,3 +7814,14 @@ body.ah-dragging * { cursor: grabbing !important; }
 .card-agenda-fold .ml-needs { display: inline-block; color: var(--accent); font-weight: 600; }
 .calls-need { align-self: flex-start; display: inline-flex; align-items: center; min-height: var(--target); padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: var(--fs-2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .day-fold-sum .dfs-calls { color: var(--accent); font-weight: 600; }
+
+/* WK-6: Week's Meetings switch, beside Cards | Timeline: a small track and its word, the target's height. */
+.meetings-switch { display: inline-flex; align-items: center; gap: 6px; min-height: var(--target); height: calc(28px * var(--text-scale)); padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-2); font-weight: 500; white-space: nowrap; cursor: pointer; }
+.meetings-switch:hover, .meetings-switch:focus-visible { color: var(--text); border-color: var(--border); }
+.meetings-switch .ms-track { position: relative; flex: none; width: calc(26px * var(--text-scale)); height: calc(14px * var(--text-scale)); border-radius: 99px; background: color-mix(in oklab, var(--text) 18%, transparent); transition: background 120ms; }
+.meetings-switch .ms-knob { position: absolute; top: 2px; left: 2px; width: calc(10px * var(--text-scale)); height: calc(10px * var(--text-scale)); border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong); transition: transform 120ms; }
+.meetings-switch.on { color: var(--text); }
+.meetings-switch.on .ms-track { background: var(--action); }
+.meetings-switch.on .ms-knob { transform: translateX(calc(12px * var(--text-scale))); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .meetings-switch .ms-track, .meetings-switch .ms-knob { transition: none; } }
+:root[data-reduce-motion] .meetings-switch .ms-track, :root[data-reduce-motion] .meetings-switch .ms-knob { transition: none; }
