@@ -1,7 +1,7 @@
 // VM-2: the auto-start's production-only gate and its rule (pure). Fictional data only.
 import { describe, expect, it } from "vitest";
 import type { TimeModel } from "../week/hours.ts";
-import { autoStartDue, autoStartEnvAllowed, autoStartStateOf, DEFAULT_AUTOSTART, EMPTY_AUTOSTART_STATE, nextAutoStart, plannedAt, shouldPause, skipText, stopEndsToday, withoutSkip, withSkip, type AutoStartSettings, type AutoStartState, type DueFacts } from "./vm-autostart.ts";
+import { autoStartDue, autoStartEnvAllowed, autoStartStateOf, DEFAULT_AUTOSTART, EMPTY_AUTOSTART_STATE, nextAutoStart, plannedAt, shouldPause, skipText, stopEndsDays, stopEndsToday, withoutSkip, withSkip, type AutoStartSettings, type AutoStartState, type DueFacts } from "./vm-autostart.ts";
 
 const LA = "America/Los_Angeles";
 const BERLIN = "Europe/Berlin";
@@ -187,6 +187,17 @@ describe("VM-5: a Stop and the day's start", () => {
     expect(ends("2026-11-10T23:50", LA)).toBe(true);
     // Los Angeles 12:10 AM Wed: before Wednesday's planned time.
     expect(ends("2026-11-11T00:10", LA)).toBe(false);
+  });
+
+  it("review: hours that start at midnight put tomorrow's planned time this evening; a Stop after it ends tomorrow's too", () => {
+    const midnight = hours(LA, "00:00");
+    const days = (local: string) => stopEndsDays({ now: at(local, LA), zone: LA, hours: midnight, minutes: 15 });
+    // Thursday's start is planned Wed 11:45 PM: a Stop at 11:50 PM Wed ends Wednesday's and Thursday's.
+    expect(days("2026-11-11T23:50")).toEqual(["2026-11-11", "2026-11-12"]);
+    expect(days("2026-11-11T23:40")).toEqual(["2026-11-11"]);
+    // Ordinary hours: only today, as stopEndsToday says.
+    expect(stopEndsDays({ now: at("2026-11-11T23:50", LA), zone: LA, hours: hours(LA), minutes: 5 })).toEqual(["2026-11-11"]);
+    expect(stopEndsDays({ now: at("2026-11-11T02:51", LA), zone: LA, hours: hours(LA), minutes: 5 })).toEqual([]);
   });
 
   it("a day with no planned time (no working hours) is skipped as before: there is no start to keep", () => {

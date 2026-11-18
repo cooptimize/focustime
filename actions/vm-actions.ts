@@ -13,7 +13,7 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
-import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsToday, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
+import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsDays, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { AutoStartView, ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
@@ -209,8 +209,9 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       // starts again a VM I stopped during my day. One before it (the night before, after midnight) leaves it alone.
       // VM-5: before it, "Skip today's start too" ticked skips today as Skip this one does (its reason: with a Stop).
       if (r.ok && held.op === "deallocate" && ctx.plan && cfg) {
-        const ends = stopEndsToday({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes });
-        if (ends || input.skipToday === true) await writeAutoStart(ctx.plan, (s) => withSkip(s, today, "stop"));
+        const ends = stopEndsDays({ now: Temporal.Instant.from(ctx.now()), zone: tz, hours: cfg.week.hours, minutes: cfg.azure.autoStart.minutes });
+        const days = [...new Set([...ends, ...(input.skipToday === true ? [today] : [])])];
+        if (days.length) await writeAutoStart(ctx.plan, (s) => days.reduce((x, d) => withSkip(x, d, "stop"), s));
         // The message after says when it starts again, when it still does today.
         const again = await startLaterToday(ctx, cfg, today);
         if (again) return { ...r, data: { ...(r.data as object), startsAgainAt: again.toString(), startsAgain: clock(again, tz) } };

@@ -245,6 +245,18 @@ export function stopEndsToday(o: { now: Temporal.Instant; zone: string; hours: T
   return !at || Temporal.Instant.compare(o.now, at) >= 0;
 }
 
+/**
+ * VM-5 review: the days a Stop confirmed now ends: today by stopEndsToday, and tomorrow too when tomorrow's planned time
+ * is already behind (working hours that start at midnight put it the evening before), so a VM stopped at 11:50 PM is
+ * never started at 12:00 AM.
+ */
+export function stopEndsDays(o: { now: Temporal.Instant; zone: string; hours: TimeModel; minutes: number }): IsoDate[] {
+  const today = o.now.toZonedDateTimeISO(o.zone).toPlainDate();
+  const tomorrow = today.add({ days: 1 }).toString();
+  const next = plannedAt(o.hours, tomorrow, o.zone, o.minutes);
+  return [...(stopEndsToday(o) ? [today.toString()] : []), ...(next && Temporal.Instant.compare(o.now, next) >= 0 ? [tomorrow] : [])];
+}
+
 /** The weekdays my working hours cover (the form offers these, each switchable off). */
 export function workingWeekdays(hours: TimeModel): WeekdayKey[] {
   return WEEKDAY_KEYS.filter((k) => (hours.weekdays[k] ?? []).length > 0);
