@@ -21,7 +21,6 @@ import { FocusSection } from "./settings/sections/Focus.tsx";
 import { ClientSection, ClientsSection } from "./settings/sections/Clients.tsx";
 import { ConnectionsSection } from "./settings/sections/Connections.tsx";
 import { AiSection } from "./settings/sections/Ai.tsx";
-import { ActivitySection } from "./settings/sections/Activity.tsx";
 import { DataSection } from "./settings/sections/Data.tsx";
 import { AboutSection } from "./settings/sections/About.tsx";
 import type { BodyProps, Props } from "./settings/sections/types.ts";
@@ -262,12 +261,7 @@ function SectionBody(p: BodyProps) {
     case "display":
       return <DisplaySection {...p} />;
     case "data":
-      return (
-        <>
-          <DataSection {...p} />
-          <ActivitySection {...p} />
-        </>
-      );
+      return <DataSection {...p} />;
     case "about":
       return <AboutSection onGuide={p.onGuide} go={p.go} />;
   }

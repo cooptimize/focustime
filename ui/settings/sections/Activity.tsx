@@ -1,4 +1,4 @@
-// SA-2: Settings › Activity, drawn with the parts: every change FocusTime made in other apps. The Outlook write log is
+// SA-3: Your data › What FocusTime changed in other apps (was Settings › Activity), one log per tab. The Outlook write log is
 // drawn here; the DevOps, Azure, Teams status and Close the loop logs are shared components that keep their insides
 // (in the parts' one table style) until a later step (docs/open-questions.md, SA-2).
 import { useEffect, useState } from "react";
@@ -10,29 +10,26 @@ import { AzureWriteLog, LoopSendsLog, TeamsStatusLog } from "../../Account.tsx";
 import { call } from "../../api.ts";
 import { DevOpsWriteLog } from "../../DevOpsWrite.tsx";
 import { useTimeboxes } from "../../Timeboxes.tsx";
-import { Button, Buttons, Group, List, ListItem, Note, Page, Row, State, Subhead, Table } from "../parts.tsx";
+import { Button, Buttons, Group, List, ListItem, Note, Row, State, Subhead, Table } from "../parts.tsx";
 import type { BodyProps } from "./types.ts";
 
-export function ActivitySection(p: BodyProps) {
+export type LogTab = "write-log" | "devops-log" | "azure-log" | "teams-log" | "loop-log";
+/** The tabs, in Activity's order, named for where the change went. */
+export const LOG_TABS: readonly { id: LogTab; label: string }[] = [
+  { id: "write-log", label: "Outlook" },
+  { id: "devops-log", label: "DevOps" },
+  { id: "azure-log", label: "Azure" },
+  { id: "teams-log", label: "Teams status" },
+  { id: "loop-log", label: "Close the loop" },
+];
+
+export function ActivityLog({ tab, ...p }: BodyProps & { tab: LogTab }) {
   const tz = userZone(p.data.you);
+  if (tab === "write-log") return <WriteLog />;
   return (
-    <Page>
-      <Group>
-        <WriteLog />
-      </Group>
-      <Group sid="devops-log">
-        <DevOpsWriteLog />
-      </Group>
-      <Group sid="azure-log">
-        <AzureWriteLog tz={tz} />
-      </Group>
-      <Group sid="teams-log">
-        <TeamsStatusLog tz={tz} />
-      </Group>
-      <Group sid="loop-log">
-        <LoopSendsLog tz={tz} />
-      </Group>
-    </Page>
+    <Group sid={tab} label={LOG_TABS.find((t) => t.id === tab)!.label}>
+      {tab === "devops-log" ? <DevOpsWriteLog /> : tab === "azure-log" ? <AzureWriteLog tz={tz} /> : tab === "teams-log" ? <TeamsStatusLog tz={tz} /> : <LoopSendsLog tz={tz} />}
+    </Group>
   );
 }
 
