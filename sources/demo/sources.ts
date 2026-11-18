@@ -8,6 +8,7 @@ import type { DataverseSource } from "../dataverse/source.ts";
 import type { DevOpsSource, ScopeDeps } from "../devops/source.ts";
 import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/types.ts";
 import { createGraphWriter, type GraphWriter } from "../graph/write.ts";
+import { createScheduleReader } from "../graph/schedule.ts";
 import type { DemoOutlook } from "./outlook.ts";
 import { demoDirectory } from "./directory.ts";
 import { DEMO_CLIENTS, DEMO_ME, DEMO_TZ, ME, DEMO_PEOPLE, demoGoogle, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, demoWorkItem, isDemoClient, demoAheadClient, demoProjectPeople, demoScopeItems, demoAreas, areaOf, type DemoClientKey } from "./data.ts";
@@ -76,7 +77,9 @@ export function createDemoSources(world: DemoDevOps, cal: DemoOutlook, now: () =
     const inWeek = (e: CalEvent) => Temporal.PlainDate.compare(Temporal.PlainDate.from(e.start.slice(0, 10)), from) >= 0 && Temporal.PlainDate.compare(Temporal.PlainDate.from(e.start.slice(0, 10)), to) < 0;
     return [...demoOutlook(monday).map(answered), ...cal.ownEvents().filter(inWeek)];
   };
-  const outlook = { ...calendar("outlook", weekEvents), write: { access: async () => ({ status: "write" as const }), writer } };
+  // CO-1: the teammates' fictional free/busy through the app's own getSchedule reader.
+  const schedule = createScheduleReader({ fetch: cal.fetch, token: async () => "demo", invalidate: () => {}, log: () => {} });
+  const outlook = { ...calendar("outlook", weekEvents), write: { access: async () => ({ status: "write" as const }), writer }, schedule };
   const google = calendar("google", (monday) => demoGoogle(monday, demoToday()));
   const last = new Map<string, ClientWork>();
   const work = (k: DemoClientKey) => demoWork(world, k, now());

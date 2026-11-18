@@ -609,6 +609,16 @@ The words are `CARD_MEETINGS` in `plan/call-words.ts`; the line's in `ui/meeting
 - The switch: **"Meetings"**, on hover **"Name the meetings on every card. Off: only the day in focus names them"**.
 - The folded line, unchanged from WD-1: **"3 meetings · 2h 45m · 45m free"** (**"No meetings · 3h free"**).
 
+## CO-1 words (Nov 18)
+
+- **When**, with "times in <zone>" ("times in Eastern Time"); **Day**, **Start**, **End**, the length chips.
+- **Check who is free**; while it runs "Checking who is free…"; before anyone is chosen "Choose who to ask first"; Who's legend "N chosen" or "choose who to ask".
+- The answer, one line each: **"Everyone is free"** or **"2 of 3 are free"**; "You: Free", "You: A day off", "You: Outside your working hours (8:00 AM–5:00 PM)", "You: Design review 10:00–10:45 AM" (my own events by name; "Lunch"); "<Name>: Free", "<Name>: Free (hours not shared, 9:00 AM–5:00 PM assumed)", "<Name>: Busy 10:00–11:00 AM", "<Name>: Outside their working hours (8:00 AM–4:00 PM Pacific Time, 11:00 AM–7:00 PM your time)", "<Name>: Outside their working hours (not a working day for them)", "<Name>: Away that day", "<Name>: Couldn't read their calendar".
+- Refusals: "That start has passed. Pick a later start", "The end is before the start. Pick a later end", "A help session is 15 minutes to 2 hours. Change the end or the length", "Times are to the minute"; at Confirm "That start has passed. Pick a later start and preview again".
+- **Or let FocusTime find a time** (Find times folded under When); "Times when everyone is free inside their own working hours and yours. Free/busy only, no event details. Pick one to put it in When."; "<length>, the length in When"; suggestions read "Mon, Nov 2, 2:00–2:30 PM with Jordan Lee".
+- The footer: "Check who is free first. Nothing is sent until you confirm the preview." until checked, then "Nothing is sent until you confirm the preview."
+- The preview: **"Not everyone is free then. You can still send it."** above its fields, with the lines; "Couldn't check who is free just now".
+
 ## MC-4 words (Nov 18)
 
 From `plan/call-words.ts` (`MARK_TEXT`, `CLOSE_TEXT`, `CALL_LIST`, `FETCH_WORDS`). The words **"Hide"**, **"Skip"** and **"Closed"** are used everywhere for these three things, and nothing else is called by them in Calls. MC-3's filters (All, To review, Not reviewed, Done) and its **"Earlier calls"** fold are gone; an old address with `show=all`, `review` or `open` opens Open, `done` opens Closed.

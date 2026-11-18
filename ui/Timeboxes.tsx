@@ -239,6 +239,16 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
             {p.system} · {p.account} · {p.calendar}
           </dd>
         </dl>
+        {p.kind === "invite" && p.notFree && p.notFree.length > 0 && (
+          <div className="wd-notfree" role="note" aria-label="Who isn't free then">
+            <strong>Not everyone is free then. You can still send it.</strong>
+            <ul>
+              {p.notFree.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {p.kind === "invite" && p.attendees.length > 0 && <InvitePeople op={p.op} attendees={p.attendees} />}
         <table className="wd-fields">
           <thead>

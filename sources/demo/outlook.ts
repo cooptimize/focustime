@@ -5,7 +5,7 @@
 // here. Only graph.microsoft.com/v1.0/me/... is answered; any other URL throws before anything happens.
 import type { CalEvent } from "../../week/types.ts";
 import { MARKER_PROP } from "../graph/write.ts";
-import { demoOrganizer, demoOutlook } from "./data.ts";
+import { DEMO_PEOPLE, DEMO_TZ, demoOrganizer, demoOutlook } from "./data.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
 type Ev = {
@@ -74,6 +74,8 @@ export function createDemoOutlook(o: { now: () => string }) {
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
     const path = url.pathname.replace(/^\/v1\.0\/me\//, "");
     if (path === "calendar") return json({ name: "Calendar", owner: { address: "you@example.com", name: "Alex Rivera" } });
+    // CO-1: the teammates' free/busy (fictional): availability and working hours only, as getSchedule answers.
+    if (path === "calendar/getSchedule" && method === "POST") return json(demoSchedule(body!));
     if (path === "calendarView") {
       const from = url.searchParams.get("startDateTime")!, to = url.searchParams.get("endDateTime")!;
       const a = Temporal.Instant.from(from), b = Temporal.Instant.from(to);
@@ -134,5 +136,35 @@ export function createDemoOutlook(o: { now: () => string }) {
     /** FocusTime's own events in this session, for the calendar's read (cancelled ones left out). */
     ownEvents: (): CalEvent[] => [...own.values()].filter((e) => !e.cancelled).map((e) => ({ id: `outlook:${e.id}`, source: "outlook", title: e.subject, start: e.start, end: e.end, allDay: false, showAs: (e.showAs || "busy") as NonNullable<CalEvent["showAs"]>, isPersonal: false, responseStatus: "organizer", ...(e.marker?.startsWith("tb-") ? { notMeeting: "timebox" as const } : e.attendees.length ? {} : { notMeeting: "solo" as const }) })),
     seen,
+  };
+}
+
+/**
+ * CO-1: the demo teammates' free/busy, every weekday: Jordan busy 1:00 to 2:00 PM, Priya busy 10:00 to 11:00 AM (both
+ * 9:00 to 5:00 Eastern), Sam working 8:00 to 4:00 Pacific, and Taylor's calendar not shared. Only what getSchedule
+ * gives: an availability string and working hours, never an event.
+ */
+const DEMO_FREEBUSY: Record<string, { busy: [string, string][]; graphZone: string; start: string; end: string } | null> = {
+  [DEMO_PEOPLE[0]!.email]: { busy: [["13:00", "14:00"]], graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
+  [DEMO_PEOPLE[1]!.email]: { busy: [["10:00", "11:00"]], graphZone: "Eastern Standard Time", start: "09:00", end: "17:00" },
+  [DEMO_PEOPLE[2]!.email]: { busy: [], graphZone: "Pacific Standard Time", start: "08:00", end: "16:00" },
+  [DEMO_PEOPLE[3]!.email]: null,
+};
+function demoSchedule(b: Record<string, unknown>) {
+  const from = instantOf(b.startTime as { dateTime?: string }), to = instantOf(b.endTime as { dateTime?: string });
+  const step = Number(b.availabilityViewInterval ?? 15);
+  const n = Math.max(0, Math.ceil(Temporal.Instant.from(from).until(Temporal.Instant.from(to)).total("minutes") / step));
+  return {
+    value: ((b.schedules as string[] | undefined) ?? []).map((id) => {
+      const p = DEMO_FREEBUSY[id.toLowerCase()];
+      if (!p) return { scheduleId: id, availabilityView: "", error: { message: "Not shared", responseCode: "ErrorAccessDenied" } };
+      let view = "";
+      for (let i = 0; i < n; i++) {
+        const z = Temporal.Instant.from(from).add({ minutes: i * step }).toZonedDateTimeISO(DEMO_TZ);
+        const hm = `${String(z.hour).padStart(2, "0")}:${String(z.minute).padStart(2, "0")}`;
+        view += z.dayOfWeek <= 5 && p.busy.some(([a, e]) => hm >= a && hm < e) ? "2" : "0";
+      }
+      return { scheduleId: id, availabilityView: view, workingHours: { daysOfWeek: ["monday", "tuesday", "wednesday", "thursday", "friday"], startTime: `${p.start}:00.0000000`, endTime: `${p.end}:00.0000000`, timeZone: { name: p.graphZone } } };
+    }),
   };
 }

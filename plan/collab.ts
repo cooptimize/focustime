@@ -235,6 +235,9 @@ export function suggestSlots(o: SuggestInput): Slot[] {
     }
   }
   const t = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
+  // CO-1: suggestions start on the hour or the half hour (in my zone); a quarter hour only when none of those fits.
+  const onHalf = (x: Slot) => Temporal.Instant.from(x.start).toZonedDateTimeISO(o.tz).minute % 30 === 0;
+  if (all.some(onHalf)) all.splice(0, all.length, ...all.filter(onHalf));
   all.sort((x, y) => Number(y.inFocus) - Number(x.inFocus) || x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
   const picked: Slot[] = [];
   const take = (limit: number) => {
@@ -249,6 +252,133 @@ export function suggestSlots(o: SuggestInput): Slot[] {
   take(perDay);
   if (picked.length < max) take(Infinity);
   return picked.sort((x, y) => Number(y.inFocus) - Number(x.inFocus) || x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
+}
+
+// ---------- CO-1: one time, checked ----------
+
+/** My side of a time: a day off, outside my working hours, or what of mine is in the way (my own calendar, by name). */
+export type MeCheck =
+  | { state: "free" }
+  | { state: "off" }
+  | { state: "outside"; hours: { start: string; end: string }[] }
+  | { state: "busy"; things: { title: string; start: string; end: string }[] };
+/**
+ * A teammate's side of a time: only free/busy and working hours. Busy carries the busy stretches (never a subject);
+ * outside carries their hours in their own zone and, when that zone isn't mine, the same hours in mine.
+ */
+export type PersonCheck = { email: string; name: string } & (
+  | { state: "free"; hoursUnknown?: true }
+  | { state: "busy"; busy: { start: string; end: string }[] }
+  | { state: "outside"; hours: { start: string; end: string; zone: string; workday: boolean; mine: { start: string; end: string } | null }; hoursUnknown?: true }
+  | { state: "away" }
+  | { state: "unknown" }
+);
+export type TimeCheck = { start: string; end: string; me: MeCheck; people: PersonCheck[]; free: number; of: number };
+
+export type CheckInput = {
+  start: number;
+  end: number;
+  tz: string;
+  me: {
+    /** PTO, or no working hours that day. */
+    off: boolean;
+    /** That day's working spans (lunch inside them), as epoch ms. */
+    windows: readonly [number, number][];
+    lunch: [number, number] | null;
+    /** My meetings, personal events and unavailable time, with their own titles (my calendar). */
+    busy: readonly { title: string; start: number; end: number }[];
+  };
+  people: readonly { email: string; name: string; away: boolean }[];
+  availability: readonly Availability[];
+};
+
+const isoIn = (t: number, tz: string) => Temporal.Instant.fromEpochMilliseconds(t).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" });
+
+/**
+ * The answer for one time, for me and for each chosen person (CO-1). Me: a day off, then outside my working hours,
+ * then my events and lunch in the way, else free. Each person: away, then a calendar that couldn't be read, then
+ * outside their own working hours (read in their zone), then busy, else free. Nothing but busy stretches and working
+ * hours is read from their availability.
+ */
+export function checkTime(o: CheckInput): TimeCheck {
+  const { start: a, end: b, tz } = o;
+  let me: MeCheck;
+  if (o.me.off || !o.me.windows.length) me = { state: "off" };
+  else if (!o.me.windows.some(([x, y]) => a >= x && b <= y)) me = { state: "outside", hours: o.me.windows.map(([x, y]) => ({ start: isoIn(x, tz), end: isoIn(y, tz) })) };
+  else {
+    const things = o.me.busy.filter((e) => e.start < b && e.end > a).map((e) => ({ title: e.title, start: e.start, end: e.end }));
+    if (o.me.lunch && o.me.lunch[0] < b && o.me.lunch[1] > a) things.push({ title: "Lunch", start: o.me.lunch[0], end: o.me.lunch[1] });
+    things.sort((x, y) => x.start - y.start || x.end - y.end);
+    me = things.length ? { state: "busy", things: things.map((x) => ({ title: x.title, start: isoIn(x.start, tz), end: isoIn(x.end, tz) })) } : { state: "free" };
+  }
+  const byEmail = new Map(o.availability.map((x) => [x.email, x]));
+  const people: PersonCheck[] = o.people.map((p) => {
+    const who = { email: p.email, name: p.name };
+    if (p.away) return { ...who, state: "away" };
+    const av = byEmail.get(p.email.toLowerCase());
+    if (!av || av.problem || !av.workingHours || a < av.covers[0] || b > av.covers[1]) return { ...who, state: "unknown" };
+    const unknown = av.hoursUnknown ? { hoursUnknown: true as const } : {};
+    const wh = av.workingHours;
+    if (!withinWorkingHours(a, b, wh)) {
+      const day = Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(wh.zone).toPlainDate();
+      const workday = wh.days.includes(DAY_NAMES[day.dayOfWeek]!);
+      // Graph's end of "00:00" (or "24:00") is midnight at the end of their day, as withinWorkingHours reads it.
+      const midnight = (hm: string, isEnd: boolean) => hm === "24:00" || (isEnd && hm === "00:00");
+      const at = (hm: string, isEnd = false) => day.toZonedDateTime({ timeZone: wh.zone, plainTime: midnight(hm, isEnd) ? "00:00" : hm }).add({ days: midnight(hm, isEnd) ? 1 : 0 });
+      const sameZone = Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(wh.zone).offsetNanoseconds === Temporal.Instant.fromEpochMilliseconds(a).toZonedDateTimeISO(tz).offsetNanoseconds;
+      const mine = workday && !sameZone ? { start: isoIn(at(wh.start).epochMilliseconds, tz), end: isoIn(at(wh.end, true).epochMilliseconds, tz) } : null;
+      return { ...who, state: "outside", hours: { start: wh.start, end: wh.end, zone: wh.zone, workday, mine }, ...unknown };
+    }
+    const busy = av.busy.filter(([x, y]) => x < b && y > a);
+    if (busy.length) return { ...who, state: "busy", busy: busy.map(([x, y]) => ({ start: isoIn(x, tz), end: isoIn(y, tz) })) };
+    return { ...who, state: "free", ...unknown };
+  });
+  const free = people.filter((p) => p.state === "free").length + (me.state === "free" ? 1 : 0);
+  return { start: isoIn(a, tz), end: isoIn(b, tz), me, people, free, of: people.length + 1 };
+}
+
+/** "10:00–11:00 AM", or "11:30 AM–12:30 PM" across noon, as the times read where they were written (my zone). */
+export function clockRange(start: string, end: string): string {
+  const p = (iso: string) => {
+    const z = Temporal.PlainDateTime.from(iso);
+    return { c: `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`, m: z.hour < 12 ? "AM" : "PM" };
+  };
+  const a = p(start), b = p(end);
+  return a.m === b.m ? `${a.c}–${b.c} ${b.m}` : `${a.c} ${a.m}–${b.c} ${b.m}`;
+}
+/** Working hours as written ("08:00", "17:00"): "8:00 AM–5:00 PM". */
+const hoursRange = (start: string, end: string) => clockRange(`2000-01-01T${start === "24:00" ? "00:00" : start}`, `2000-01-01T${end === "24:00" ? "00:00" : end}`);
+/** "Pacific Time" for a zone, or the zone's own name. */
+export function zoneName(zone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longGeneric" }).formatToParts(new Date(0)).find((p) => p.type === "timeZoneName")?.value ?? zone;
+  } catch {
+    return zone;
+  }
+}
+
+/** The answer in words, one line each (CO-1). The dialog and the invite's preview both say these. */
+export function checkWords(c: TimeCheck): { me: string; people: { email: string; text: string; free: boolean }[]; summary: string; notFree: string[] } {
+  // The check's times are written in my zone, so they are shown as written.
+  const r = (x: { start: string; end: string }) => clockRange(x.start, x.end);
+  const me =
+    c.me.state === "free" ? "You: Free"
+    : c.me.state === "off" ? "You: A day off"
+    : c.me.state === "outside" ? `You: Outside your working hours (${c.me.hours.map(r).join(", ")})`
+    : `You: ${c.me.things.map((t) => `${t.title} ${r(t)}`).join(", ")}`;
+  const people = c.people.map((p) => {
+    const text =
+      p.state === "free" ? `${p.name}: Free${p.hoursUnknown ? " (hours not shared, 9:00 AM–5:00 PM assumed)" : ""}`
+      : p.state === "busy" ? `${p.name}: Busy ${p.busy.map(r).join(", ")}`
+      : p.state === "away" ? `${p.name}: Away that day`
+      : p.state === "unknown" ? `${p.name}: Couldn't read their calendar`
+      : !p.hours.workday ? `${p.name}: Outside their working hours (not a working day for them)`
+      : `${p.name}: Outside their working hours (${hoursRange(p.hours.start, p.hours.end)} ${p.hoursUnknown ? "assumed" : zoneName(p.hours.zone)}${p.hours.mine ? `, ${r(p.hours.mine)} your time` : ""})`;
+    return { email: p.email, text, free: p.state === "free" };
+  });
+  const summary = c.free === c.of ? "Everyone is free" : `${c.free} of ${c.of} are free`;
+  const notFree = [...(c.me.state === "free" ? [] : [me]), ...people.filter((p) => !p.free).map((p) => p.text)];
+  return { me, people, summary, notFree };
 }
 
 // ---------- the invite ----------
