@@ -521,9 +521,10 @@ export function VmToday() {
 type Found = { tag: string; value: string; vms: { id: string; name: string; resourceGroup: string; location: string; power: string }[]; chosen: string | null };
 
 /** ST-1: Profile shows the account part (who is signed in, photos), Accounts and calendars the VM part. */
-export function YouAccount({ part }: { part: "account" | "vm" }) {
+/** My VM (Settings › Accounts and calendars, and Setup). SA-2: Profile's Signed in is drawn in ui/settings/sections/Profile.tsx. */
+export function YouAccount({ part }: { part: "vm" }) {
   const dev = useDeveloperLoop();
-  const { status, signIn, signOut } = useContext(AuthCtx);
+  const { status, signIn } = useContext(AuthCtx);
   const vm = useContext(VmCtx);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -550,31 +551,10 @@ export function YouAccount({ part }: { part: "account" | "vm" }) {
     notify(vmId ? "This VM is yours in FocusTime" : "VM choice cleared");
   });
   if (!status?.configured) return <p className="muted">{dev ? "Microsoft sign-in needs an app registration: set [outlook] client_id in config." : "Microsoft sign-in isn't set up for this FocusTime yet."}</p>;
-  const p = status.person;
+
   const signedIn = status.state !== "signed_out";
   return (
     <div className="set-account">
-      {part === "account" && (
-      <div className="set-field" data-setting="signed-in">
-        <span className="set-label">Signed in</span>
-        <span className="set-value">{p && signedIn ? <>{p.name} <span className="muted">{p.username}</span></> : <span className="muted">Not signed in</span>}</span>
-        <span className="set-hint">{status.state === "unavailable" ? `Offline or keyring locked: showing who was signed in. ${status.message ?? ""}` : "One Microsoft sign-in for you, your calendar and your Azure VM."}</span>
-        <span className="set-actions">
-          {signedIn ? (
-            <button type="button" className="mini" disabled={busy} onClick={() => void run(signOut)}>Sign out</button>
-          ) : (
-            <button type="button" className="mini primary" disabled={busy} onClick={() => void run(async () => setMessage(await signIn(true)))}>Sign in with Microsoft</button>
-          )}
-        </span>
-        {signedIn && <span className="set-hint">Your plan stays in your FocusTime account.</span>}
-      </div>
-      )}
-      {part === "account" && signedIn && (
-        <div className="set-field" data-setting="photos">
-          <span className="set-label">Photos</span>
-          <PhotosAccessLine />
-        </div>
-      )}
       {part === "vm" && !signedIn && <p className="muted" data-setting="vm">Sign in with Microsoft to find your VM.</p>}
       {part === "vm" && signedIn && (
         <div className="set-field set-vm" data-setting="vm">
@@ -778,33 +758,30 @@ export function LoopSendsLog({ tz }: { tz: string }) {
  * Settings > You (step 16.4): whether profile photos show. ProfilePhoto.Read.All needs an admin's consent in Entra;
  * until then (or with no photo) everyone shows as initials.
  */
-export function PhotosAccessLine() {
+/** SA-2: what the photos row says and its one action, for Settings › Profile (drawn there with the parts). */
+export function usePhotosAccess(): { text: string; allow: (() => void) | null; busy: boolean; message: string | null } {
   const { signIn } = useContext(AuthCtx);
   const [v, setV] = useState<PhotosData | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const check = useCallback(() => void call<PhotosData>("people.photos", { me: true }).then(setV, () => setV(null)), []);
   useEffect(check, [check]);
-  if (!v) return <span className="set-hint">Checking photos…</span>;
+  if (!v) return { text: "Checking photos…", allow: null, busy, message };
   const text = v.available
     ? v.me ? "Photos show for you and Cooptimizers. Cached for 7 days on this device, cleared when you sign out." : "Photos are allowed. You have no photo in Microsoft, so your initials show."
     : v.reason === "consent" ? "Photos need your OK, and an admin's approval in Entra (Profile photos, read). Until then, initials show." : v.reason === "signed_out" ? "Sign in to show photos." : "Photos can't be read right now; initials show.";
-  return (
-    <span className="set-photos-access">
-      <span className="set-hint">{text}</span>
-      {!v.available && v.reason === "consent" && (
-        <button type="button" className="mini primary" disabled={busy} onClick={async () => {
-          setBusy(true);
-          const m = await signIn(true, false, true).catch((e: unknown) => errText(e));
+  const allow = !v.available && v.reason === "consent"
+    ? () => {
+        setBusy(true);
+        void signIn(true, false, true).catch((e: unknown) => errText(e)).then((m) => {
           setMessage(m);
           setBusy(false);
           forgetPhotos();
           check();
-        }}>Allow photos</button>
-      )}
-      {message && <span className="set-problem" role="alert">{message}</span>}
-    </span>
-  );
+        });
+      }
+    : null;
+  return { text, allow, busy, message };
 }
 
 export function TeamsAccessLine() {

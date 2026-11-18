@@ -98,8 +98,7 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "email", section: "you", label: "Email", old: ["Email when signed out"], kind: "status" },
   { id: "dataverse-user", section: "you", label: "Dataverse user", kind: "status" },
   { id: "environment", section: "you", label: "Dataverse environment", old: ["Environment"], kind: "status" },
-  { id: "saving", section: "you", label: "Where your settings save", kind: "status", part: true },
-  { id: "setup", section: "you", label: "Setup", group: "Setup", old: ["Run setup again", "Finish setup", "Start over"], kind: "action", keywords: ["first run"] },
+  { id: "setup", section: "you", label: "Setup", old: ["Run setup again", "Finish setup", "Start over"], kind: "action", keywords: ["first run"] },
   // Working hours
   { id: "weekdays", section: "hours", label: "Hours per day", old: ["Working hours", "Day shape"], kind: "text", keywords: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "evening"] },
   ...WEEKDAYS.map(([k, label]) => ({ id: `hours-${k}`, section: "hours", label, group: "Hours per day", kind: "text" as const, part: true })),

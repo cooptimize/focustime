@@ -178,7 +178,7 @@ export function Fold({ label, count, children, sid }: { label: string; count?: n
 }
 
 /** One table style: a head row, rows of cells, its own sideways scroll on a narrow screen. */
-export function Table({ label, head, rows, rowKey, rowTone }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: (i: number) => string | undefined }) {
+export function Table({ label, head, rows, rowKey, rowTone }: { label: string; head: readonly ReactNode[]; rows: readonly (readonly ReactNode[])[]; rowKey?: (i: number) => string | number | undefined; rowTone?: ((i: number) => string) | undefined }) {
   return (
     <div className="sp-table-wrap">
       <table className="sp-table" aria-label={label}>
@@ -230,7 +230,7 @@ export function Result({ children, tone }: { children: ReactNode; tone?: "proble
 
 type ButtonKind = "main" | "plain" | "quiet" | "danger";
 /** The style guide's small button (28, 44 on the phone): main (the row's one main action), plain, quiet, danger. */
-export function Button({ kind = "plain", children, onClick, disabled, type = "button", label, pressed, expanded, title, buttonRef, describedBy }: { kind?: ButtonKind | undefined; children: ReactNode; onClick?: () => void | undefined; disabled?: boolean | undefined; type?: "button" | "submit" | undefined; label?: string | undefined; pressed?: boolean | undefined; expanded?: boolean | undefined; title?: string | undefined; buttonRef?: Ref<HTMLButtonElement> | undefined; describedBy?: string | undefined }) {
+export function Button({ kind = "plain", children, onClick, disabled, type = "button", label, pressed, expanded, title, buttonRef, describedBy }: { kind?: ButtonKind | undefined; children: ReactNode; onClick?: (() => unknown) | undefined; disabled?: boolean | undefined; type?: "button" | "submit" | undefined; label?: string | undefined; pressed?: boolean | undefined; expanded?: boolean | undefined; title?: string | undefined; buttonRef?: Ref<HTMLButtonElement> | undefined; describedBy?: string | undefined }) {
   return (
     <button ref={buttonRef} type={type} className={`sp-btn ${kind}`} onClick={onClick} disabled={disabled} aria-label={label} aria-pressed={pressed} aria-expanded={expanded} title={title} aria-describedby={describedBy}>
       {children}
@@ -298,7 +298,7 @@ export function List({ children, add, empty, label }: { children?: ReactNode | u
     </div>
   );
 }
-export function ListItem({ children, onRemove, removeLabel, removeText = "Remove", disabled, below, extra }: { children: ReactNode; onRemove?: () => void | undefined; removeLabel?: string | undefined; removeText?: string | undefined; disabled?: boolean | undefined; below?: ReactNode | undefined; extra?: ReactNode | undefined }) {
+export function ListItem({ children, onRemove, removeLabel, removeText = "Remove", disabled, below, extra }: { children: ReactNode; onRemove?: (() => void) | undefined; removeLabel?: string | undefined; removeText?: string | undefined; disabled?: boolean | undefined; below?: ReactNode | undefined; extra?: ReactNode | undefined }) {
   return (
     <li className="sp-item">
       <span className="sp-item-main">{children}</span>

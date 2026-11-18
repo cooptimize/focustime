@@ -89,7 +89,7 @@ describe("SA-2: one name per setting", () => {
   it("every row has a kind of choice; every part row names its group; labels carry no unit in brackets", () => {
     for (const d of SETTINGS) {
       expect(d.kind, d.id).toBeTruthy();
-      if (d.part && d.section !== "client" && d.id !== "saving") expect(d.group, d.id).toBeTruthy();
+      if (d.part && d.section !== "client") expect(d.group, d.id).toBeTruthy();
       expect(d.label, d.id).not.toMatch(/\((minutes|days|weeks|months|seconds)[^)]*\)/);
     }
   });

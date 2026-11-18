@@ -8,17 +8,17 @@ import { AzureWriteLog, LoopSendsLog, TeamsAccessLine, TeamsStatusLog, VmStartFo
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
+import type { SettingsClient, SettingsData } from "../actions/types.ts";
 import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
-import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
+import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
-import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
+import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS } from "../week/hours.ts";
 import { call } from "./api.ts";
 import type { AiView } from "../ai/view.ts";
-import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf, type Calendar } from "./status.ts";
+import { notConnected, SOURCE_NAMES, sourceActions, sourceKey, sourceLabel, stateOf } from "./status.ts";
 import { CalendarLinks } from "./settings/CalendarLinks.tsx";
 import { PocketRecorder } from "./settings/Pocket.tsx";
 import { POCKET_WORDS } from "../plan/pocket-words.ts";
@@ -39,7 +39,6 @@ import { PhoneReadOnly } from "./Phone.tsx";
 import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from "./pwa.ts";
 import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
-import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { WRITES_HREF, type FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
@@ -49,59 +48,12 @@ import { DemoSection } from "./settings/Demo.tsx";
 import { DiagnosticsPanel } from "./settings/Diagnostics.tsx";
 import { DeploySettings } from "./DeployItems.tsx";
 import { Icon } from "./icons.tsx";
+import { ProfileSection } from "./settings/sections/Profile.tsx";
+import type { BodyProps, FormProps, Props } from "./settings/sections/types.ts";
 
 /** ST-1: every section id Settings opens (the registry's, then Admin's, for admins only). */
 export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = [...SECTIONS.map((s) => [s.id, s.label] as const), ...ADMIN_UI_SECTIONS];
 export type SettingsSectionId = string;
-
-type Props = {
-  /** The section in the address ("" is the rail: a list on the phone, Profile on a big screen); old ids still open. */
-  section: string;
-  /** A setting in the section (it scrolls into view with a brief highlight), or a client's key on its own page. */
-  setting?: string | null;
-  onSection: (s: string, setting?: string | null) => void;
-  onClose: () => void;
-  /** Called after any save, so the week reloads with the new settings. */
-  onSaved: () => void;
-  sources: SourceSummary[];
-  /** DevOps per client from the week (step 6c): a client's own PAT or project problem shows here too. */
-  devops: ClientWork[] | null;
-  busy: Calendar | null;
-  loading: boolean;
-  onRefresh: () => void;
-  onConnect: (c: Calendar) => void;
-  onDisconnect: (c: Calendar) => void;
-  /** Step 17.5: a calendar that just reconnected here (BR-1: one plain line). */
-  reconnected?: Calendar | null;
-  theme: Theme;
-  setTheme: (t: Theme) => void;
-  viewRange: ViewRange;
-  setViewRange: (r: ViewRange) => void;
-  /** Step 17.5: no opening animation (BR-1: the loader's mark holds still). */
-  reduceMotion: boolean;
-  setReduceMotion: (on: boolean) => void;
-  /** U5 (D401): Default, Large or Larger. */
-  textSize: TextSize;
-  setTextSize: (s: TextSize) => void;
-  /** U5.1 (D408): personal events shown on Week and Today. */
-  showPersonal: boolean;
-  setShowPersonal: (show: boolean) => void;
-  /** WK-5: the days Week shows, and the catch-up day's name in the loaded week ("Friday"). */
-  weekDays: { catchUp: boolean; weekend: boolean };
-  setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;
-  catchUpName: string;
-  /** Step 15 (D272): demo mode and its switch. */
-  demo: boolean;
-  setDemo: (on: boolean) => void;
-  /** Clears an override (hours.clear_day) and reloads. */
-  runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
-  /** A setting that couldn't be saved after its form closed (said out loud, never dropped). */
-  onNotice?: (message: string) => void;
-  /** S1 (D451): opens first-run setup at a step (Settings > Profile > Setup runs it again; it edits these same settings). */
-  onSetup?: (step: SetupStep) => void;
-  /** ST-1: About's Open the Guide. */
-  onGuide?: () => void;
-};
 
 /** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
 const ADMIN = "Set by your FocusTime admin";
@@ -354,7 +306,6 @@ export function Settings(props: Props) {
   );
 }
 
-type BodyProps = Props & { section: string; data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void>; client: SettingsClient | null; go: (section: string, setting?: string | null) => void };
 
 function SectionBody(p: BodyProps) {
   const d = p.data;
@@ -363,28 +314,7 @@ function SectionBody(p: BodyProps) {
     default:
       return null;
     case "you":
-      return (
-        <>
-          <YouAccount part="account" />
-          {d.you && (
-            <div className="set-grid">
-              <ReadOnly sid="email" label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
-              <ReadOnly sid="dataverse-user" label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
-              <ReadOnly sid="environment" label="Dataverse environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
-            </div>
-          )}
-          <p className="muted set-intro">
-            Your settings save as you change them, to {d.configPath}. Your time zone is under{" "}
-            <a href={settingsHref("hours", "time-zone")} onClick={(e) => (e.preventDefault(), p.go("hours", "time-zone"))}>
-              Working hours
-            </a>
-            .
-          </p>
-          <Group title="Setup" sid="setup">
-            <SetupSection {...p} />
-          </Group>
-        </>
-      );
+      return <ProfileSection {...p} />;
     case "hours":
       return (
         <>
@@ -541,7 +471,6 @@ function SectionBody(p: BodyProps) {
 /** "09:00-17:00, 20:00-22:00" ⇄ spans. */
 const spansIn = (s: string) => s.split(/[,;]/).map((x) => x.replace(/\s+/g, "")).filter(Boolean);
 
-type FormProps = Props & { data: SettingsData; onSavedData: (d: SettingsData) => void };
 
 /** A field that saves itself: its input (from `children`), "Saved" or "Couldn't save. Retry" by it, an error under it. */
 /** ST-1: a field's key → its setting id in the registry, where the two differ only in name. */
@@ -1950,63 +1879,6 @@ function SiteLine() {
   const env = useKnownEnv();
   if (!env) return null;
   return <p className="set-hint" data-site-line>Site: {siteLine(env, location.host)}</p>;
-}
-
-/**
- * S1 (D451): Settings > Setup. Run setup again opens the four screens on the same settings (nothing is duplicated:
- * each screen saves Working hours, Clients, Standing blocks or Connections as those sections do). Start over forgets
- * the setup record so the flow opens by itself again; dev and local only.
- */
-function SetupSection(p: Props) {
-  const [view, setView] = useState<SetupView | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const env = useAppEnv();
-  // Start over is for dev and local only (the server refuses it on prod too).
-  const prod = env === null || env === "prod";
-  useEffect(() => {
-    call<SetupView>("setup.load", {}).then(setView, () => setView(null));
-  }, []);
-  if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
-  // RF-1: what's left, even once Today stopped offering it.
-  const left = view?.left?.text;
-  return (
-    <div className="set-form">
-      <p className="muted">The four first-run screens: your day, your clients, standing blocks and calendars. They change the same settings as the sections here.</p>
-      <p>{view ? (left ? `${left}.` : "Every step is done.") : ""}</p>
-      <div className="set-save">
-        <button type="button" className="mini primary" onClick={() => p.onSetup?.(view?.left?.step ?? "day")}>
-          {left ? "Finish setup" : "Run setup again"}
-        </button>
-        {left && (
-          <button type="button" className="mini" onClick={() => p.onSetup?.("day")}>
-            Run setup from the start
-          </button>
-        )}
-        {!prod && (
-        <button
-          type="button"
-          className="mini quiet"
-          title="Forget your setup record, so the screens open by themselves next time (dev and local only)"
-          onClick={async () => {
-            try {
-              setView(await call<SetupView>("setup.reset", {}));
-              setStatus("Setup record cleared. The screens open by themselves the next time FocusTime opens");
-            } catch (e) {
-              setStatus(e instanceof Error ? e.message : "Not cleared");
-            }
-          }}
-        >
-          Start over
-        </button>
-        )}
-        {status && (
-          <span className="muted" role="status">
-            {status}
-          </span>
-        )}
-      </div>
-    </div>
-  );
 }
 
 /** Reset local plan (Q37): type "reset" to confirm; the server backs the store up first. */
