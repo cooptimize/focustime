@@ -21,7 +21,8 @@ const series = (p: Partial<NewSeries> = {}): NewSeries => ({
   weekday: 2, start: "10:00", minutes: 60, zone: "America/New_York", interval: 1, reviewers: [REG], attendees: [], ...p,
 });
 const LINES = [{ n: 1, speaker: "Sam Reviewer", at: 0, text: "We talked about the rates export." }, { n: 2, speaker: "Dana Client", at: 20, text: "CSV only for now." }];
-const EMPTY = JSON.stringify({ gaps: [], commitments: [], comments: [] });
+// MC-2: with the summary the schema requires now.
+const EMPTY = JSON.stringify({ gaps: [], commitments: [], comments: [], summary: [] });
 
 async function setup(reply: () => string | ProviderReply) {
   let now = Temporal.Instant.from("2026-11-10T17:00:00Z");

@@ -133,14 +133,14 @@ export function joinKey(url: string): string {
  */
 export type Press = { cooptimizer: boolean; onInvite: boolean; thisCall: boolean };
 export function mayRead(m: { registered: MeetingSeries | null; scheduledByFocusTime?: boolean; press?: Press | null }): boolean {
-  if (m.registered && !m.registered.removedAt && m.registered.callKind === null) return true;
+  if (m.registered && !m.registered.removedAt && !m.registered.callKind) return true;
   if (m.scheduledByFocusTime === true) return true;
   const p = m.press;
   return !!p && p.cooptimizer && p.onInvite && p.thisCall;
 }
 
 /** MC-2: a call that isn't registered (from my calendar or added by hand), never one of the registered client calls. */
-export const isCall = (s: Pick<MeetingSeries, "callKind">) => s.callKind !== null;
+export const isCall = (s: Partial<Pick<MeetingSeries, "callKind">>) => !!s.callKind;
 
 /** Automatic for a meeting organized in Cooptimize's tenant; Upload for anyone else's or an unknown organizer. */
 export function detectSource(organizerEmail: string | null, homeDomains: readonly string[]): { organizer: MeetingSeries["organizer"]; source: TranscriptSource } {
@@ -151,7 +151,7 @@ export function detectSource(organizerEmail: string | null, homeDomains: readonl
 }
 
 /** May a transcript be asked of Graph for this series? Only Automatic, home-tenant, registered meetings. */
-export const graphReadable = (s: MeetingSeries) => !s.removedAt && s.callKind === null && s.source === "automatic" && s.organizer !== "other";
+export const graphReadable = (s: MeetingSeries) => !s.removedAt && !s.callKind && s.source === "automatic" && s.organizer !== "other";
 
 export const canView = (s: MeetingSeries, userId: string) => has(s.reviewers, userId) || has(s.attendees, userId);
 export const canConfirm = (s: MeetingSeries, userId: string) => has(s.reviewers, userId);

@@ -1,5 +1,8 @@
-// MC-1: Client calls, over the page (#/meetings, #/meetings/<occurrence>). The list: the registered calls I review
-// or attend and their recent occurrences. The review: "Update <client>'s plan · <meeting> <date>", one row per
+// MC-1: Calls (MC-2; Client calls before), over the page (#/meetings, #/meetings/<occurrence>). The list: the
+// registered client calls I review or attend and their recent occurrences; MC-2: then Your other calls (the calls on my
+// own calendar in my last 14 days that aren't registered, read when this opens and kept only in this page's memory),
+// the calls I added, and Add a call. Review on one of them opens its setup (the client it is about, suggested and my
+// choice; where its transcript comes from) and then the same page as a client call. The review: "Update <client>'s plan · <meeting> <date>", one row per
 // proposal with the words it came from. MC-1e: made like the rest of the app. Nothing is ticked to start; each row has
 // its own main button (Create in DevOps, Add comment, Add to Promises or Note with this call) and Skip. A new item is
 // edited with the New form's fields; DevOps changes go only through the one DevOps preview (ui/DevOpsWrite.tsx), for
@@ -11,15 +14,17 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useReturnFocus } from "../CloseButton.tsx";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
-import type { OccurrenceView, SeriesView } from "../../plan/meeting-views.ts";
+import type { OccurrenceView, OtherCallView, SeriesView } from "../../plan/meeting-views.ts";
+import type { CaptureClient } from "../../plan/capture.ts";
+import { lengthLabel, suggestClient } from "../../plan/calls.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
-import { callFrom, callLabel, rememberCallFrom, takeRerun, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
+import { callFrom, callLabel, rememberCallFrom, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_ROW, CALL_STATE, CALLS_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type ProposalCheck } from "../../plan/call-words.ts";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -28,9 +33,9 @@ const KINDS = ["gap", "commitment", "comment"] as const;
 
 type CallView = "transcript" | "upload";
 export type CallPlace = { view?: CallView; line?: number; filter?: Exclude<CallFilter, "all">; proposal?: number };
-export function Meetings({ occurrence, view = null, line = null, filter = null, proposal = null, onOpen, onClose, onChanged, colors, today, undoable }: { occurrence: number | null; view?: CallView | null; line?: number | null; filter?: Exclude<CallFilter, "all"> | null; proposal?: number | null; onOpen: (id: number | null, at?: CallPlace) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string>; today: string; undoable?: (text: string, undo: () => Promise<unknown>) => void }) {
+export function Meetings({ occurrence, view = null, line = null, filter = null, proposal = null, onOpen, onClose, onChanged, colors, today, undoable, clients = [], blockClientAt = () => null }: { occurrence: number | null; view?: CallView | null; line?: number | null; filter?: Exclude<CallFilter, "all"> | null; proposal?: number | null; onOpen: (id: number | null, at?: CallPlace) => void; onClose: () => void; onChanged?: () => void; colors: Record<string, string>; today: string; undoable?: (text: string, undo: () => Promise<unknown>) => void; /** MC-2: the clients a call can be about (mine, with Internal). */ clients?: CaptureClient[]; /** MC-2: the focus block's client a moment falls in, for the suggestion. */ blockClientAt?: (iso: string) => string | null }) {
   useReturnFocus();
-  // MC-1e: Back returns to where the call was opened from (Day, Week or Client calls); after a reload, Client calls.
+  // MC-1e: Back returns to where the call was opened from (Day, Week or Calls); after a reload, Calls.
   const back = useCallback(() => {
     const from = occurrence ? callFrom(occurrence) : null;
     if (from && from !== location.hash) location.hash = from;
@@ -42,53 +47,241 @@ export function Meetings({ occurrence, view = null, line = null, filter = null, 
     return () => window.removeEventListener("keydown", k);
   }, [occurrence, back, onClose]);
   return (
-    <main className="mtg-view" aria-label="Client calls" tabIndex={-1}>
-      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} filter={filter} focus={proposal} colors={colors} today={today} undoable={undoable} onBack={back} onPlace={(at) => onOpen(occurrence, at)} onChanged={onChanged} /> : <CallsList colors={colors} onOpen={(id) => (rememberCallFrom(id, "#/meetings"), onOpen(id))} onClose={onClose} />}
+    <main className="mtg-view" aria-label={CALLS_TEXT.heading} tabIndex={-1}>
+      {occurrence ? <ReviewScreen id={occurrence} view={view} line={line} filter={filter} focus={proposal} colors={colors} today={today} undoable={undoable} onBack={back} onPlace={(at) => onOpen(occurrence, at)} onChanged={onChanged} /> : <CallsList colors={colors} clients={clients} blockClientAt={blockClientAt} today={today} onOpen={(id, at) => (rememberCallFrom(id, "#/meetings"), onOpen(id, at))} onClose={onClose} onChanged={onChanged} />}
     </main>
   );
 }
 
-function CallsList({ colors, onOpen, onClose }: { colors: Record<string, string>; onOpen: (id: number) => void; onClose: () => void }) {
+function CallsList({ colors, clients, blockClientAt, today, onOpen, onClose, onChanged }: { colors: Record<string, string>; clients: CaptureClient[]; blockClientAt: (iso: string) => string | null; today: string; onOpen: (id: number, at?: CallPlace) => void; onClose: () => void; onChanged?: (() => void) | undefined }) {
   const [data, setData] = useState<MineData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => call<MineData>("meeting.mine", {}).then(setData, (e: unknown) => setError(errText(e))), []);
   useEffect(() => void load(), [load]);
+  // MC-2: my other calls, read from my own calendar now; held in this component's memory only.
+  const [others, setOthers] = useState<{ calls: OtherCallView[]; days: number } | null>(null);
+  const [othersErr, setOthersErr] = useState<string | null>(null);
+  const [setup, setSetup] = useState<OtherCallView | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    let live = true;
+    call<{ calls: OtherCallView[]; days: number }>("meeting.calls", {}).then((d) => {
+      if (!live) return;
+      setOthers(d);
+      // Review this call from a meeting's menu: its setup opens here (matched by its start and end).
+      const want = takeReviewCall();
+      if (want) {
+        const hit = d.calls.find((c) => Date.parse(c.startAt) === Date.parse(want.start) && Date.parse(c.endAt) === Date.parse(want.end));
+        if (hit?.occurrenceId) onOpen(hit.occurrenceId);
+        else if (hit) setSetup(hit);
+        else setMissing(true);
+      }
+    }, (e: unknown) => live && setOthersErr(errText(e)));
+    return () => {
+      live = false;
+    };
+  }, [onOpen]);
+  const registered = data?.meetings.filter((m) => !m.call) ?? [];
+  const occOf = (id: number | null) => (id && data ? data.occurrences.find((o) => o.id === id) ?? null : null);
+  const seriesOf = (o: OccurrenceView | null) => (o && data ? data.meetings.find((m) => m.id === o.seriesId) ?? null : null);
+  // The calls I added by hand, and calls kept by someone on them that my calendar list doesn't show (a hand-added one is mine only).
+  const listed = new Set((others?.calls ?? []).map((c) => c.occurrenceId).filter((x): x is number => !!x));
+  const kept = (data?.meetings.filter((m) => m.call) ?? []).flatMap((m) => data!.occurrences.filter((o) => o.seriesId === m.id && !listed.has(o.id)).map((o) => ({ m, o })));
   return (
     <>
       <header className="page-head">
         <div className="ph-title">
-          <h2>Client calls</h2>
-          <span className="muted">The weekly calls you review or attend</span>
+          <h2>{CALLS_TEXT.heading}</h2>
+          <span className="muted">{CALLS_TEXT.sub}</span>
         </div>
-        <button type="button" className="mini" onClick={onClose}>Close</button>
+        <span className="mtg-head-actions">
+          <button type="button" className="mini" onClick={() => setAdding(true)} aria-expanded={adding}>{CALLS_TEXT.add}</button>
+          <button type="button" className="mini" onClick={onClose}>Close</button>
+        </span>
       </header>
-      {error && <p className="error-line" role="alert">{error}</p>}
-      {!data && !error && <p className="muted">Loading…</p>}
-      {data && data.meetings.length === 0 && <p className="muted">No client calls yet. A FocusTime admin registers a client's weekly call in Admin › Clients › Meetings, and you see it here once you review or attend it.</p>}
-      {data?.meetings.map((m) => (
-        <section key={m.id} className="mtg-series" style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} aria-label={m.name}>
-          <header className="mtg-series-head">
-            <h3><span className="swatch" aria-hidden="true" /> {m.name}</h3>
-            <span className="muted">{m.clientName} · {m.roleLabel} · {m.when} · {m.source === "automatic" ? "Transcript read after the call" : "Transcript uploaded by a reviewer"}</span>
-          </header>
-          <ul className="mtg-occs">
-            {data.occurrences.filter((o) => o.seriesId === m.id).map((o) => {
-              const l = callLabel(o, m.mine.review);
-              return (
-                <li key={o.id} className={l.needsMe ? "needs" : undefined}>
-                  <span className="mtg-date">{dayLabel(o.date)}</span>
-                  <span className="mtg-state">{l.label}</span>
-                  <button type="button" className={`mini${l.needsMe ? " primary" : ""}`} onClick={() => onOpen(o.id)}>
-                    {o.state === "needs_upload" && m.mine.review ? "Upload" : o.state === "ready" && m.mine.review && o.open ? "Review" : "Open"}
-                  </button>
-                </li>
-              );
-            })}
-            {!data.occurrences.some((o) => o.seriesId === m.id) && <li className="muted">Nothing in the last five weeks.</li>}
-          </ul>
-        </section>
-      ))}
+      {adding && <AddCall clients={clients} today={today} onCancel={() => setAdding(false)} onAdded={(id) => (setAdding(false), onChanged?.(), onOpen(id, { view: "upload" }))} />}
+      {setup && <CallSetup call={setup} clients={clients} suggested={suggestClient(setup.name, clients, blockClientAt(setup.startAt))} onCancel={() => setSetup(null)} onStarted={(id, teams) => { setSetup(null); onChanged?.(); if (teams) requestFetch(id); onOpen(id, teams ? undefined : { view: "upload" }); }} />}
+      <section className="mtg-calls" aria-labelledby="mtg-client-calls">
+        <header className="mtg-calls-head">
+          <h3 id="mtg-client-calls">{CALLS_TEXT.clientCalls}</h3>
+          <span className="muted">{CALLS_TEXT.clientCallsSub}</span>
+        </header>
+        {error && <p className="error-line" role="alert">{error}</p>}
+        {!data && !error && <p className="muted">Loading…</p>}
+        {data && registered.length === 0 && <p className="muted">{CALLS_TEXT.noClientCalls}</p>}
+        {registered.map((m) => (
+          <section key={m.id} className="mtg-series" style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} aria-label={m.name}>
+            <header className="mtg-series-head">
+              <h4><span className="swatch" aria-hidden="true" /> {m.name}</h4>
+              <span className="muted">{m.clientName} · {m.roleLabel} · {m.when} · {m.source === "automatic" ? "Transcript read after the call" : "Transcript uploaded by a reviewer"}</span>
+            </header>
+            <ul className="mtg-occs">
+              {data!.occurrences.filter((o) => o.seriesId === m.id).map((o) => {
+                const l = callLabel(o, m.mine.review);
+                return (
+                  <li key={o.id} className={l.needsMe ? "needs" : undefined}>
+                    <span className="mtg-date">{dayLabel(o.date)}</span>
+                    <span className="mtg-state">{l.label}</span>
+                    <button type="button" className={`mini${l.needsMe ? " primary" : ""}`} onClick={() => onOpen(o.id)}>
+                      {o.state === "needs_upload" && m.mine.review ? "Upload" : o.state === "ready" && m.mine.review && o.open ? "Review" : "Open"}
+                    </button>
+                  </li>
+                );
+              })}
+              {!data!.occurrences.some((o) => o.seriesId === m.id) && <li className="muted">Nothing in the last five weeks.</li>}
+            </ul>
+          </section>
+        ))}
+      </section>
+      <section className="mtg-calls" aria-labelledby="mtg-other-calls">
+        <header className="mtg-calls-head">
+          <h3 id="mtg-other-calls">{CALLS_TEXT.others}</h3>
+          <span className="muted">{CALLS_TEXT.othersSub(others?.days ?? 14)}</span>
+        </header>
+        {missing && <p className="muted" role="status">{CALLS_TEXT.notFound}</p>}
+        {othersErr && <p className="error-line" role="alert">{othersErr}</p>}
+        {!others && !othersErr && <p className="muted">Loading…</p>}
+        {others && others.calls.length === 0 && kept.length === 0 && <p className="muted">{CALLS_TEXT.noOthers(others.days)}</p>}
+        <ul className="mtg-others">
+          {kept.map(({ m, o }) => <OtherRow key={`k${o.id}`} name={m.name} when={whenLine(o.startAt, o.endAt)} detail={m.call === "hand" ? CALLS_TEXT.byHand : m.clientName} color={clientColor(m.clientKey, colors)} state={callLabel(o, m.mine.review)} onPress={() => onOpen(o.id)} pressLabel={CALLS_TEXT.open} />)}
+          {(others?.calls ?? []).map((c) => {
+            const o = occOf(c.occurrenceId);
+            const sv = seriesOf(o);
+            const st = o && sv ? callLabel(o, sv.mine.review) : null;
+            return <OtherRow key={c.key} name={c.name} when={whenLine(c.startAt, c.endAt)} detail={CALLS_TEXT.people(c.people)} color={sv ? clientColor(sv.clientKey, colors) : null} state={st ?? { label: CALLS_TEXT.notReviewed, needsMe: false }} onPress={() => (o ? onOpen(o.id) : setSetup(c))} pressLabel={o ? CALLS_TEXT.open : CALLS_TEXT.review} />;
+          })}
+        </ul>
+      </section>
     </>
+  );
+}
+
+/** "Tue, Nov 10 · 2:00 PM · 45 min": a call's day, start and length in my zone. */
+const whenLine = (startAt: string, endAt: string) => {
+  const d = new Date(startAt);
+  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
+};
+
+function OtherRow({ name, when, detail, color, state, onPress, pressLabel }: { name: string; when: string; detail: string; color: string | null; state: { label: string; needsMe: boolean }; onPress: () => void; pressLabel: string }) {
+  return (
+    <li className={`mtg-other${state.needsMe ? " needs" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
+      <span className="mtg-other-name">{color && <span className="swatch" aria-hidden="true" />}{name}</span>
+      <span className="muted mtg-other-when">{when} · {detail}</span>
+      <span className="mtg-state">{state.label}</span>
+      <button type="button" className={`mini${state.needsMe || pressLabel === CALLS_TEXT.review ? " primary" : ""}`} onClick={onPress} aria-label={`${pressLabel}: ${name}`}>{pressLabel}</button>
+    </li>
+  );
+}
+
+/** The client choices: my clients (Internal among them), the suggestion first and marked; a call is about one client. */
+function ClientPick({ clients, value, suggested, onChange, id }: { clients: CaptureClient[]; value: string; suggested: string | null; onChange: (k: string) => void; id: string }) {
+  const sorted = [...clients].sort((a, b) => Number(b.clientKey === suggested) - Number(a.clientKey === suggested) || a.clientName.localeCompare(b.clientName));
+  return (
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} required>
+      <option value="" disabled>{CALLS_TEXT.pickClient}</option>
+      {sorted.map((c) => <option key={c.clientKey} value={c.clientKey}>{c.clientName}{c.clientKey === suggested ? ` (${CALLS_TEXT.suggested})` : ""}</option>)}
+    </select>
+  );
+}
+
+/**
+ * MC-2: the setup a call that isn't registered opens with: which client it is about (FocusTime suggests, I choose; one
+ * client) and where its transcript comes from. Nothing is kept and nothing goes to AI until Continue.
+ */
+function CallSetup({ call: c, clients, suggested, onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; onCancel: () => void; onStarted: (occurrenceId: number, teams: boolean) => void }) {
+  const [client, setClient] = useState(suggested ?? "");
+  const [source, setSource] = useState<"teams" | "upload">(c.teams ? "teams" : "upload");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("h3")?.focus();
+    ref.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
+  const start = async () => {
+    if (!client) return setErr(CALLS_TEXT.pickClient);
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await call<{ occurrenceId: number; existed: boolean }>("meeting.call_start", { key: c.key, startAt: c.startAt, endAt: c.endAt, clientKey: client });
+      onStarted(r.occurrenceId, source === "teams" && !r.existed);
+    } catch (e) {
+      setErr(errText(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mtg-setup" role="dialog" aria-modal="false" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+      <h3 id="mtg-setup-title" tabIndex={-1}>{CALLS_TEXT.setupTitle(c.name)}</h3>
+      <p className="muted">{whenLine(c.startAt, c.endAt)} · {CALLS_TEXT.people(c.people)}</p>
+      <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
+      <ClientPick id="mtg-setup-client" clients={clients} value={client} suggested={suggested} onChange={setClient} />
+      <p className="muted mtg-setup-hint">{CALLS_TEXT.setupClientHint}</p>
+      <fieldset className="mtg-setup-source">
+        <legend>{CALLS_TEXT.setupSource}</legend>
+        <label className={c.teams ? undefined : "disabled"}>
+          <input type="radio" name="mtg-source" value="teams" checked={source === "teams"} disabled={!c.teams} onChange={() => setSource("teams")} />
+          <span><strong>{CALLS_TEXT.sourceTeams}</strong><span className="muted">{c.teams ? CALLS_TEXT.sourceTeamsHint : c.outside ? CALLS_TEXT.outsideHint : CALLS_TEXT.notTeamsHint}</span></span>
+        </label>
+        <label>
+          <input type="radio" name="mtg-source" value="upload" checked={source === "upload"} onChange={() => setSource("upload")} />
+          <span><strong>{CALLS_TEXT.sourceUpload}</strong><span className="muted">{CALLS_TEXT.sourceUploadHint}</span></span>
+        </label>
+      </fieldset>
+      {err && <p className="error-line" role="alert">{err}</p>}
+      <span className="mtg-setup-actions">
+        <button type="button" className="mini primary" disabled={busy || !client} onClick={() => void start()}>{busy ? "Starting…" : CALLS_TEXT.start}</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
+      </span>
+    </div>
+  );
+}
+
+/** MC-2: Add a call that isn't on my calendar: only I see it, and its transcript is uploaded. */
+function AddCall({ clients, today, onCancel, onAdded }: { clients: CaptureClient[]; today: string; onCancel: () => void; onAdded: (occurrenceId: number) => void }) {
+  const [name, setName] = useState("");
+  const [date, setDate] = useState(today);
+  const [start, setStart] = useState("10:00");
+  const [minutes, setMinutes] = useState(30);
+  const [client, setClient] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const first = useRef<HTMLInputElement | null>(null);
+  useEffect(() => first.current?.focus(), []);
+  const min = Temporal.PlainDate.from(today).subtract({ days: 13 }).toString();
+  const save = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await call<{ occurrenceId: number }>("meeting.call_add", { name: name.trim(), date, start, minutes, clientKey: client });
+      onAdded(r.occurrenceId);
+    } catch (e) {
+      setErr(errText(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="mtg-setup mtg-add" aria-labelledby="mtg-add-title" onSubmit={(e) => (e.preventDefault(), void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+      <h3 id="mtg-add-title">{CALLS_TEXT.add}</h3>
+      <p className="muted">{CALLS_TEXT.addSub}</p>
+      <div className="mtg-add-grid">
+        <label>{CALLS_TEXT.addName}<input ref={first} value={name} maxLength={200} required onChange={(e) => setName(e.target.value)} /></label>
+        <label>{CALLS_TEXT.addDay}<input type="date" value={date} min={min} max={today} required onChange={(e) => setDate(e.target.value)} /></label>
+        <label>{CALLS_TEXT.addStart}<input type="time" value={start} required onChange={(e) => setStart(e.target.value)} /></label>
+        <label>{CALLS_TEXT.addLength}
+          <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
+            {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{lengthLabel(m)}</option>)}
+          </select>
+        </label>
+        <label>{CALLS_TEXT.addClient}<ClientPick id="mtg-add-client" clients={clients} value={client} suggested={null} onChange={setClient} /></label>
+      </div>
+      {err && <p className="error-line" role="alert">{err}</p>}
+      <span className="mtg-setup-actions">
+        <button type="submit" className="mini primary" disabled={busy || !name.trim() || !client}>{busy ? "Adding…" : CALLS_TEXT.addSave}</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
+      </span>
+    </form>
   );
 }
 
@@ -161,8 +354,8 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
   // PK-1: a file dragged over the call's page shows where it goes; dropped elsewhere it does nothing.
   const dragging = usePageDrag(!!r?.canConfirm);
 
-  if (error) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="error-line" role="alert">{error}</p></>);
-  if (!r) return (<><BackHead onBack={onBack} to={backTo} title="Client call" /><p className="muted">Loading…</p></>);
+  if (error) return (<><BackHead onBack={onBack} to={backTo} title="Call" /><p className="error-line" role="alert">{error}</p></>);
+  if (!r) return (<><BackHead onBack={onBack} to={backTo} title="Call" /><p className="muted">Loading…</p></>);
   const m = r.meeting;
   const o = r.occurrence;
   const color = clientColor(m.clientKey, colors);
@@ -277,9 +470,17 @@ function ReviewScreen({ id, view, line, filter, focus, colors, today, undoable, 
         ) : null}
       </div>
       {r.pocket && <p className="mtg-pocket-note" role="note">{POCKET_TEXT.note}</p>}
+      {view !== "transcript" && r.summary && r.summary.length > 0 && (
+        // MC-2: what was discussed and decided, above the proposals, on every call.
+        <section className="mtg-summary" aria-labelledby="mtg-summary-head">
+          <h3 id="mtg-summary-head">{CALLS_TEXT.summary}</h3>
+          <ul>{r.summary.map((l, i) => <li key={i}>{l}</li>)}</ul>
+        </section>
+      )}
       {view !== "transcript" && <p className="muted mtg-intro">
         {r.transcript ? (r.pocket ? `From the transcript (${r.transcript.lines} lines). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
-        {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
+        {editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
+        {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : CALLS_TEXT.whoSees}` : ""}
       </p>}
       {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
       {o.state === "failed" && (
@@ -439,7 +640,7 @@ function BackHead({ onBack, title, sub, to = "Calls" }: { onBack: () => void; ti
   return (
     <header className="page-head">
       <div className="ph-title">
-        <button type="button" className="mini quiet" onClick={onBack} aria-label={to === "Calls" ? "Back to client calls" : `Back to ${to}`}><Icon name="back" /> {to}</button>
+        <button type="button" className="mini quiet" onClick={onBack} aria-label={`Back to ${to}`}><Icon name="back" /> {to}</button>
         <h2 tabIndex={-1}>{title}</h2>
         {sub && <span className="muted">{sub}</span>}
       </div>
@@ -662,7 +863,7 @@ function DateAsk({ text, onAnswer }: { text: string; onAnswer: (yes: boolean) =>
  * file is dropped.
  */
 function CallActions({ series, occ, onDone, focusUpload = false, dropHere = false, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean; dropHere?: boolean; dragging?: boolean }) {
-  const [busy, setBusy] = useState<"rerun" | null>(null);
+  const [busy, setBusy] = useState<"rerun" | "teams" | null>(null);
   const up = useTranscriptUpload(series, occ, onDone);
   // MC-1d: "Upload a transcript" from a meeting's menu lands here with the file button focused (the browser opens a
   // file picker only from a press, so the person presses it once more).
@@ -670,12 +871,28 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
   useEffect(() => {
     if (focusUpload) fileRef.current?.focus();
   }, [focusUpload]);
-  // MC-1d: Propose again chosen from the meeting's menu runs here, once, where its result shows.
+  // MC-1d: Propose again chosen from the meeting's menu runs here, once, where its result shows. MC-2: so does the
+  // setup's Get it from Teams (the same one press).
   useEffect(() => {
     if (takeRerun(occ.id)) void rerun();
+    if (takeFetch(occ.id)) void fromTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [occ.id]);
   const [msg, setMsg] = useState<string | null>(null);
+  /** MC-2: one try with my sign-in, for this call only; what came of it in plain words. */
+  const fromTeams = async () => {
+    setBusy("teams");
+    setMsg(null);
+    try {
+      const r = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ.id });
+      setMsg(r.message);
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
   const rerun = async (ask = true) => {
     // It replaces the open proposals, with any words changed in them; the ones done or skipped stay.
     if (ask && occ.open > 0 && !window.confirm(`Propose again? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out.`)) return;
@@ -700,6 +917,11 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
         {canRerun && (
           <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done, skipped or failed stay, and the same thing again is left out.">
             {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
+          </button>
+        )}
+        {series.teams && (
+          <button type="button" className={`mini${!occ.hasTranscript ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void fromTeams()} title={CALLS_TEXT.sourceTeamsHint}>
+            {busy === "teams" ? "Asking Teams…" : CALL_ACTIONS.fromTeams}
           </button>
         )}
         <label className={`mini file-button${busy || up.busy ? " disabled" : ""}`} title={POCKET_TEXT.takes}>
@@ -730,7 +952,7 @@ function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesVi
     <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
       <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
       <p className="muted">
-        {series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} It's kept 30 days, for this call's reviewers and attendees only.
+        {series.call ? (series.teams ? "Use Get it from Teams above, or download it from the meeting's recap in Teams." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {POCKET_TEXT.pocketHow} {series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
       </p>
       <p className="muted">{POCKET_TEXT.takes}</p>
       {up.ask ? (
@@ -742,7 +964,7 @@ function UploadBox({ series, occ, onDone, dragging = false }: { series: SeriesVi
             <input type="file" accept={ACCEPT} disabled={up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
           </label>
           <span className="muted mtg-drop-or">{dragging ? POCKET_TEXT.dropHere : POCKET_TEXT.orDrop}</span>
-          {occ.state !== "no_transcript" && <button type="button" className="mini quiet" onClick={() => void none()}>No transcript this week</button>}
+          {occ.state !== "no_transcript" && !series.call && <button type="button" className="mini quiet" onClick={() => void none()}>No transcript this week</button>}
         </span>
       )}
       {line && !up.ask && <p className="muted" role="status">{line}</p>}

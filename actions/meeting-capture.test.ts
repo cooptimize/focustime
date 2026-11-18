@@ -8,7 +8,7 @@ import type { ProviderCall } from "../ai/types.ts";
 import { buildProcessModel } from "../plan/process.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../test/builders/index.ts";
-import { capturePass, type CaptureInput } from "./meeting-capture.ts";
+import { capturePass, summaryOf, type CaptureInput } from "./meeting-capture.ts";
 
 const lines: TranscriptLine[] = [
   { n: 1, speaker: "Sam Tester", at: 5, text: "Morning. Rates export first, like we did for Fabrikam on Orion." },
@@ -20,7 +20,8 @@ const lines: TranscriptLine[] = [
 function setup(answer: unknown, o: { internal?: boolean; allowed?: string[] } = {}) {
   const calls: ProviderCall[] = [];
   const ai = createAi({
-    provider: async () => stubProvider({ respond: (c) => (calls.push(c), JSON.stringify(answer)) }),
+    // MC-2: the answer has a summary now (the schema requires one); the tests' answers get an empty one.
+    provider: async () => stubProvider({ respond: (c) => (calls.push(c), JSON.stringify({ summary: [], ...(answer as object) })) }),
     app: anAiApp(),
     rules: async () => anAiRules({ allowedClients: o.allowed ?? ["contoso", "internal"] }),
     guard: async () => ({ directory: [aClientEntry({ key: "contoso", names: ["Contoso"], projects: ["Rates"], itemIds: [1201, 1202] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: ["Orion"], itemIds: [4410] })], homeDomains: ["cooptimize.example"], forbidden: [], internal: !!o.internal }),
@@ -193,5 +194,17 @@ describe("a transcript whose speakers aren't named (PK-1)", () => {
     expect(r.proposals.filter((p) => p.body.kind === "comment").map((p) => p.body)).toEqual([expect.objectContaining({ itemId: 1202 })]);
     // Quotes carry no time.
     expect(r.proposals.flatMap((p) => p.quotes).every((q) => q.at === "")).toBe(true);
+  });
+});
+
+describe("a call's summary (MC-2)", () => {
+  const directory = [aClientEntry({ key: "contoso", names: ["Contoso"] }), aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: ["Orion"] })];
+  it("is at most 5 lines, taken in turn from each part, without repeats or another client's name", () => {
+    const s = summaryOf([["Rates export first.", "Fabrikam wants the same.", "Orion slips a week.", "  Spec   by Friday. "], ["Rates export first.", "CSV only.", "Ops owns the import.", "Six."]], { clientKey: "contoso", directory });
+    expect(s).toEqual(["Rates export first.", "another client wants the same.", "CSV only.", "another client slips a week.", "Ops owns the import."]);
+  });
+  it("names no other client even for Internal, and drops what isn't text", () => {
+    expect(summaryOf([["Fabrikam asked about rates.", 7, null, ""]], { clientKey: "internal", directory })).toEqual(["another client asked about rates."]);
+    expect(summaryOf([], { clientKey: "contoso", directory })).toEqual([]);
   });
 });

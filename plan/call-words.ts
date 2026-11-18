@@ -1,6 +1,7 @@
 // MC-1d: every word a registered client call shows about itself, in one place: the mark on a meeting (Day, Week, the
-// block panel, the phone), the Client calls list, the call's page, its menu and the reviewer's notice all read them from
-// here, so they always agree. docs/design/wording.md "MC-1d words" has the same words. Pure: no I/O, no clock.
+// block panel, the phone), the Calls list (MC-2; Client calls before), the call's page, its menu and the reviewer's
+// notice all read them from here, so they always agree. docs/design/wording.md "MC-1d words" and "MC-2 words" have the
+// same words. Pure: no I/O, no clock.
 import { AI_MESSAGES } from "../ai/types.ts";
 import { AI_RETRIES, parseOutcome, type OccurrenceState } from "./meetings.ts";
 
@@ -108,8 +109,75 @@ export const CALL_ACTIONS = {
   rerun: "Propose again",
   upload: "Upload a transcript",
   showLines: "Show in transcript",
-  list: "Client calls",
+  /** MC-2: the area (More, the command menu, the phone, its heading). A registered weekly call is still a client call. */
+  list: "Calls",
+  /** MC-2: on a meeting I was on that isn't registered or reviewed yet. */
+  reviewCall: "Review this call",
+  /** MC-2: on a calendar call's page, one try with my sign-in. */
+  fromTeams: "Get it from Teams",
 } as const;
+
+/** MC-2: Calls (#/meetings): its two lists, Add a call, and the setup a call that isn't registered opens with. */
+export const CALLS_TEXT = {
+  heading: "Calls",
+  sub: "Your client calls and the other calls you were on",
+  clientCalls: "Client calls",
+  clientCallsSub: "Weekly calls a FocusTime admin registered",
+  noClientCalls: "No client calls yet. A FocusTime admin registers a client's weekly call in Admin › Clients › Meetings, and you see it here once you review or attend it.",
+  others: "Your other calls",
+  othersSub: (days: number) => `Calls you were on in the last ${days} days. Only you see this list, and FocusTime keeps nothing about a call until you review it.`,
+  noOthers: (days: number) => `No other calls in the last ${days} days.`,
+  add: "Add a call",
+  addSub: "A call that isn't on your calendar. Only you see it.",
+  addName: "Name",
+  addDay: "Day",
+  addStart: "Starts",
+  addLength: "Length",
+  addClient: "About",
+  addSave: "Add and upload the transcript",
+  notReviewed: "Not reviewed",
+  review: "Review",
+  open: "Open",
+  people: (n: number) => `${n} ${n === 1 ? "person" : "people"}`,
+  byHand: "Added by you",
+  setupTitle: (name: string) => `Review ${name}`,
+  setupClient: "Which client is this call about?",
+  setupClientHint: "FocusTime suggests one; you choose. Proposals go to this client's plan only, and nothing goes to AI until you choose.",
+  suggested: "suggested",
+  internal: "Internal",
+  pickClient: "Choose a client",
+  setupSource: "Where does the transcript come from?",
+  sourceTeams: "Get it from Teams",
+  sourceTeamsHint: "FocusTime asks Teams once, now, with your sign-in, for this call only.",
+  sourceUpload: "Upload a file",
+  sourceUploadHint: "A Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf).",
+  outsideHint: "Organized outside Cooptimize, so FocusTime doesn't ask Teams for it. Upload its transcript instead.",
+  notTeamsHint: "Not a Teams meeting, so there's no transcript to get. Upload one instead.",
+  start: "Continue",
+  cancel: "Cancel",
+  notFound: "FocusTime couldn't find this call on your calendar in the last 14 days.",
+  summary: "What was said",
+  whoSees: "You and the Cooptimizers on the invite can see this call. Only you can act on it.",
+  whoSeesHand: "Only you can see this call.",
+} as const;
+
+/** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */
+export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable"] as const;
+export type FetchOutcome = (typeof FETCH_OUTCOMES)[number];
+export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
+  none: "Teams has no transcript for this call. Transcription may not have been on. Upload a file instead.",
+  outside: "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. Download the transcript from the meeting's recap in Teams, or ask the organizer for it, and upload it here.",
+  not_allowed: "Microsoft didn't let your sign-in read this call's transcript. The organizer may have turned transcripts off for attendees. Ask the organizer for the file and upload it here.",
+  not_on_invite: "This call isn't on your calendar now, so FocusTime can't ask Teams for it. Upload the transcript instead.",
+  not_online: "This isn't a Teams meeting, so there's no transcript to get. Upload one instead.",
+  signin: "Sign in with Microsoft again, then try once more. Or upload the file.",
+  consent: "Your sign-in needs the meetings permission first. Sign in again and allow it, or upload the file.",
+  busy: "Microsoft isn't answering right now. Try again in a minute, or upload the file.",
+  unreadable: "The transcript from Teams couldn't be read. Upload the file instead.",
+  not_cooptimizer: "Only a Cooptimizer who was on a call can ask FocusTime to read it.",
+  unavailable: "Getting a transcript from Teams isn't available here. Upload a file instead.",
+};
+export const fetchFound = (lines: number, proposals: number, ran = true) => `Got the transcript from Teams (${lines} ${lines === 1 ? "line" : "lines"}). ${!ran ? `${CALL_STATE.aiFailed}.` : proposals ? `${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.` : "Nothing to propose from it."}`;
 
 /** MC-1d: the reviewer's notice (in the app and the Teams card) when the AI step failed and FocusTime stopped trying. */
 export const CALL_NOTICE = {
