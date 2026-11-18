@@ -117,6 +117,7 @@ The washes are derived (`color-mix` with transparent), so they sit on any surfac
 | `--show-elsewhere` | muted surface, dotted rule | same | same | "working elsewhere" |
 | `--personal` | `#F07AA6` | `#B8336A` | `#F2729C` | "Personal" group label |
 | `--sample` | `#A58BFF` | `#6A52D6` | `#A58BFF` | "Sample" pill |
+| `--site-mark` (DD-1) | `#B42F1D` | `#B42F1D` | `#A7370D` | the top bar's "Dev" or "Local" in white (`--on-site-mark`), a solid pill, never a wash; the palette's deep red in every theme, so the white letters pass AA (6.2:1; 6.6:1 on Graphite) |
 
 ### 3.4 Client colors
 

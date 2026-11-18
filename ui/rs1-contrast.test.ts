@@ -122,6 +122,15 @@ describe("RS-1 tokens: contrast", () => {
       expect(Math.abs(line! - surface!)).toBeGreaterThan(0.01);
       expect(Math.abs(line! - surface!)).toBeLessThan(Math.abs(strong! - surface!));
     });
+
+    // DD-1: the Dev (and Local) mark is a solid pill in one of the palette's reds, never a wash, with white letters at AA.
+    it(`${name}: the Dev mark's white letters pass AA on its solid red (DD-1)`, () => {
+      const red = color(t, t["--site-mark"]!);
+      expect(red[3]).toBe(1);
+      expect(["--p-co-red-700", "--p-red-700"]).toContain(/^var\((--[\w-]+)\)$/.exec(t["--site-mark"]!)?.[1]);
+      expect(toHex(color(t, t["--on-site-mark"]!))).toBe("#ffffff");
+      expect(contrast("#ffffff", toHex(red))).toBeGreaterThanOrEqual(4.5);
+    });
   }
 
   // RS-2: a client's block card is filled in its color at the timeline bands' strength (--client-tint over the
