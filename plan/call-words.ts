@@ -368,6 +368,10 @@ export const TRANSCRIPT_TEXT = {
   gone: "The transcript is kept 30 days after the call. This one is gone; the proposals and what was done stay.",
   missing: "No transcript yet.",
   who: "Kept 30 days, for this call's reviewers and attendees only. Read only.",
+  /** MC-7: pasted notes: the view's tab and heading, and its filter's hint (no names in notes). */
+  notes: "Your notes",
+  notesHint: "Words",
+  notesWho: "Notes pasted by a reviewer, not what was said word for word. Kept 30 days, for this call's reviewers and attendees only.",
 } as const;
 
 /** What an occurrence needs, in words, for a reviewer or an attendee, and whether it needs me now. */
@@ -558,7 +562,7 @@ export const LIST_TEXT = {
 export const PAGE_TEXT = {
   menu: "More for this call",
   /** Where a call came from, when not a calendar or a registered call. */
-  origin: { hand: "Added by you", pocket: "Pocket" },
+  origin: { hand: "Added by you", pocket: "Pocket", pasted: "Pasted transcript", notes: "Pasted notes" },
   /** Who sees it: short on the line, the full sentence on hover. */
   who: {
     hand: { short: "Only you see it", full: CALLS_TEXT.whoSeesHand },
@@ -585,6 +589,8 @@ export const PAGE_TEXT = {
   on: (id: number, title: string) => `On #${id} ${title}`,
   quoteGone: "Its words went after 30 days",
   openQuote: (who: string) => `Open the transcript at ${who}'s words`,
+  /** MC-7: a proposal from pasted notes rests on a note line, with no speaker and no time. */
+  openNote: "Open your notes at this line",
   describe: "Description and size",
   needed: "needed",
   /** The transcript choices: Add a call's, and a call's page with no transcript. */

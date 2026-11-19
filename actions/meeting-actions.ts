@@ -19,7 +19,7 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { fromPocket, pastedAs, speakersNamed, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT, DISMISS_TEXT } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
@@ -643,6 +643,8 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       pocket: fromPocket(r.o.transcriptKind),
       // MC-2c: Teams gave this chat call's transcript without speaker names.
       noSpeakers: r.o.transcriptKind === "teams_unnamed",
+      // MC-7: what a reviewer pasted, a transcript or their notes; null for any other source.
+      pasted: pastedAs(r.o.transcriptKind),
       // MC-2b: whose Pocket recording it was, said only as mine or a reviewer's (never a name); null otherwise.
       pocketFrom: r.o.transcriptKind === "pocket_api" && lines ? ((await store.transcriptBy(r.o.id))?.toLowerCase() === me.toLowerCase() ? "mine" : "reviewer") : null,
       canConfirm: reviewer,
@@ -941,7 +943,7 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
     // MC-2: a call that isn't registered has no role (it isn't a weekly status or planning call): none is said.
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: !unnamedSpeakers(occ.transcriptKind) });
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: speakersNamed(occ.transcriptKind, [...new Set(lines.map((l) => l.speaker))]) });
     if (r.ok) {
       await d.store.saveSummary(occ.id, r.summary);
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.

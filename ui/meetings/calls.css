@@ -227,3 +227,8 @@
 .mtg-in-list { display: inline-block; vertical-align: baseline; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }
 @media (hover: none) { .need-row .calls-dismiss { display: inline-flex; } }
 .app.phone .need-row .calls-dismiss { min-height: 44px; padding: 0 8px; }
+
+/* MC-7: pasted notes in the Transcript view: headed Your notes, one column of lines (no speaker, no time). */
+.mtg-tr-head { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.mtg-transcript.notes .mtg-lines li { grid-template-columns: minmax(0, 1fr) auto; }
+.phone .mtg-transcript.notes .mtg-lines li { grid-template-columns: minmax(0, 1fr); }

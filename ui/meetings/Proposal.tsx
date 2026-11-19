@@ -109,8 +109,8 @@ export function ProposalRow({ p, check, err, ticked, editable, can, busy, client
         </button>
       )}
       {q ? (
-        <button type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(q.n)} aria-label={PAGE_TEXT.openQuote(q.speaker)} title={q.text}>
-          <span className="mtg-who">{q.speaker}</span>
+        <button type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(q.n)} aria-label={q.speaker ? PAGE_TEXT.openQuote(q.speaker) : PAGE_TEXT.openNote} title={q.text}>
+          {q.speaker && <span className="mtg-who">{q.speaker}</span>}
           {q.at && <span className="mtg-at" title={clockOf?.(q.at) ?? undefined}>{q.at}</span>}
           <span className="mtg-said">{q.text}</span>
         </button>
@@ -130,8 +130,8 @@ export function ProposalRow({ p, check, err, ticked, editable, can, busy, client
           {p.quotes && p.quotes.length > 1 && (
             <div className="mtg-quotes">
               {p.quotes.slice(1).map((x) => (
-                <button key={x.n} type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(x.n)} aria-label={PAGE_TEXT.openQuote(x.speaker)} title={x.text}>
-                  <span className="mtg-who">{x.speaker}</span>
+                <button key={x.n} type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(x.n)} aria-label={x.speaker ? PAGE_TEXT.openQuote(x.speaker) : PAGE_TEXT.openNote} title={x.text}>
+                  {x.speaker && <span className="mtg-who">{x.speaker}</span>}
                   {x.at && <span className="mtg-at">{x.at}</span>}
                   <span className="mtg-said">{x.text}</span>
                 </button>

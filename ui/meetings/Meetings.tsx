@@ -44,7 +44,7 @@ import { forgetCallOptions, useNewOptions } from "./GapFields.tsx";
 import { opensItself, ProposalRow } from "./Proposal.tsx";
 import "./calls.css";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; /** MC-6: my own promises, by the server. */ mine?: number[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; /** MC-6: my own promises, by the server. */ mine?: number[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-7: pasted by a reviewer, as a transcript or as their notes. */ pasted?: "transcript" | "notes" | null; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -1334,7 +1334,8 @@ function ReviewScreen(props: ReviewProps) {
   const decided = r.proposals.length - open.length;
   const people = m.call ? props.people ?? null : m.attendees || null;
   const who = m.call === "hand" ? PAGE_TEXT.who.hand : m.call === "chat" ? PAGE_TEXT.who.chat : m.call ? PAGE_TEXT.who.calendar : PAGE_TEXT.who.registered;
-  const origin = r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : m.call === "chat" ? { text: CALL_LIST.fromChat, hint: r.noSpeakers ? CHAT_NO_SPEAKERS : null } : null;
+  const notes = r.pasted === "notes";
+  const origin = r.pasted ? { text: r.pasted === "notes" ? PAGE_TEXT.origin.notes : PAGE_TEXT.origin.pasted, hint: null } : r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : m.call === "chat" ? { text: CALL_LIST.fromChat, hint: r.noSpeakers ? CHAT_NO_SPEAKERS : null } : null;
   const shownFilters = CALL_FILTERS.filter((f) => counts[f.key] > 0);
   const skipWords = open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length);
   // A call with no transcript, or one waiting on it or marked as having none this week (as the old upload box showed): the choices.
@@ -1357,7 +1358,7 @@ function ReviewScreen(props: ReviewProps) {
             {r.transcript && (
               <span className="seg mtg-switch" role="group" aria-label="This call">
                 <button type="button" className={`seg-btn${view !== "transcript" ? " on" : ""}`} aria-pressed={view !== "transcript"} onClick={() => onPlace(filter ? { filter } : undefined)}>{TRANSCRIPT_TEXT.tabProposals}</button>
-                <button type="button" className={`seg-btn${view === "transcript" ? " on" : ""}`} aria-pressed={view === "transcript"} onClick={() => onPlace({ view: "transcript" })}>{TRANSCRIPT_TEXT.tab}</button>
+                <button type="button" className={`seg-btn${view === "transcript" ? " on" : ""}`} aria-pressed={view === "transcript"} onClick={() => onPlace({ view: "transcript" })}>{notes ? TRANSCRIPT_TEXT.notes : TRANSCRIPT_TEXT.tab}</button>
               </span>
             )}
             {editable && open.length > 0 && closedAt === null && (
@@ -1434,7 +1435,7 @@ function ReviewScreen(props: ReviewProps) {
         <TranscriptChoices series={m} occ={o} recs={m.call === "hand" ? anyRecs : pocketRecs} startRec={startRec} pocketOn={pocketOn} zone={zone} up={up} dragging={dragging} start={view === "upload" ? "file" : null} onTeams={() => void run.fromTeams()} teamsBusy={run.busy === "teams"} teamsRefused={run.refused} onDone={load} />
       )}
       {view === "transcript" ? (
-        <TranscriptView occurrenceId={o.id} startAt={o.startAt} zone={zone} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
+        <TranscriptView occurrenceId={o.id} startAt={o.startAt} zone={zone} proposals={r.proposals} line={line} notes={notes} onProposal={(pid) => onPlace({ proposal: pid })} />
       ) : (<>
         {shownKinds.map((kind) => {
           const all = r.proposals.filter((p) => p.body.kind === kind);
@@ -1499,7 +1500,7 @@ type Line = { n: number; speaker: string; at: string; sec: number | null; text: 
  * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
  * is scrolled to and focused.
  */
-function TranscriptView({ occurrenceId, startAt, zone, proposals, line, onProposal }: { occurrenceId: number; startAt: string; zone: string; proposals: Proposal[]; line: number | null; /** MC-1e: back to a proposal, in view and focused. */ onProposal: (id: number) => void }) {
+function TranscriptView({ occurrenceId, startAt, zone, proposals, line, notes = false, onProposal }: { occurrenceId: number; startAt: string; zone: string; proposals: Proposal[]; line: number | null; /** MC-7: pasted notes: headed Your notes, no speaker column, no times. */ notes?: boolean; /** MC-1e: back to a proposal, in view and focused. */ onProposal: (id: number) => void }) {
   // MC-6: a line shows its time into the call, as its quotes do; its clock time (the call's start plus that) on hover.
   const time = (sec: number) => TRANSCRIPT_TEXT.clockAt(timeOf(new Date(Date.parse(startAt) + sec * 1000).toISOString(), zone));
   const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
@@ -1532,19 +1533,20 @@ function TranscriptView({ occurrenceId, startAt, zone, proposals, line, onPropos
   const needle = q.trim().toLowerCase();
   const shown = needle ? data.lines.filter((l) => l.text.toLowerCase().includes(needle) || l.speaker.toLowerCase().includes(needle)) : data.lines;
   return (
-    <section className="mtg-transcript" aria-label={TRANSCRIPT_TEXT.tab}>
+    <section className={`mtg-transcript${notes ? " notes" : ""}`} aria-label={notes ? TRANSCRIPT_TEXT.notes : TRANSCRIPT_TEXT.tab} {...(notes ? { "data-notes": "" } : {})}>
+      {notes && <h3 className="mtg-tr-head" data-notes-head="">{TRANSCRIPT_TEXT.notes}</h3>}
       <div className="mtg-tr-bar">
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={TRANSCRIPT_TEXT.filterHint} aria-label={TRANSCRIPT_TEXT.filter} />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={notes ? TRANSCRIPT_TEXT.notesHint : TRANSCRIPT_TEXT.filterHint} aria-label={TRANSCRIPT_TEXT.filter} />
         <span className="muted" role="status">{needle && !shown.length ? TRANSCRIPT_TEXT.none(q.trim()) : TRANSCRIPT_TEXT.count(shown.length, data.lines.length)}</span>
       </div>
-      <p className="muted mtg-tr-who">{TRANSCRIPT_TEXT.who}</p>
+      <p className="muted mtg-tr-who">{notes ? TRANSCRIPT_TEXT.notesWho : TRANSCRIPT_TEXT.who}</p>
       <ol className={`mtg-lines${data.lines.every((l) => l.sec === null) ? " untimed" : ""}`}>
         {shown.map((l) => {
           const on = marks.get(l.n);
           return (
             <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.map((x) => x.what).join("; ")}` } : {})}>
               {l.sec !== null && <span className="mtg-line-at" title={time(l.sec)}>{l.at}</span>}
-              <span className="mtg-who">{l.speaker}</span>
+              {!notes && <span className="mtg-who">{l.speaker}</span>}
               <span className="mtg-line-text">{l.text}</span>
               {on && (
                 // MC-1e: from the line to its proposal (a short list when several rest on it).
