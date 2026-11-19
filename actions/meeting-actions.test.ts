@@ -158,6 +158,22 @@ describe("meeting capture actions (MC-1)", () => {
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode("%PDF") })).toMatchObject({ ok: false, status: 422 });
   });
 
+  it("MC-6: the server says which promises are mine; mine says \"your Promises\", another person's never does", async () => {
+    const { act, ctxAs } = await setup();
+    const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    const { occurrenceId } = data<{ occurrenceId: number }>(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: new TextEncoder().encode(transcriptVtt(cues)) }));
+    type R = { proposals: { id: number; body: { kind: string; side?: string; who?: string } }[]; mine: number[] };
+    const r = data<R>(await act(ADMIN, "meeting.review", { occurrenceId }));
+    const lees = r.proposals.find((p) => p.body.kind === "commitment" && p.body.side === "cooptimize")!;
+    // To me (the admin) Lee's promise isn't mine; to Lee it is.
+    expect(r.mine).toEqual([]);
+    expect(data<R>(await act(MATE, "meeting.review", { occurrenceId })).mine).toEqual([lees.id]);
+    // Keep by another reviewer names Lee; Keep by Lee says "your".
+    expect(await act(ADMIN, "meeting.update", { seriesId: m.id, reviewers: [ADMIN, LEAD, MATE] }, { admin: true })).toMatchObject({ ok: true });
+    const kept = data<{ message: string }>(await act(MATE, "meeting.keep", { proposalId: lees.id })).message;
+    expect(kept).toBe("Added to your Promises");
+  });
+
   it("keeps a promise from its row at once, sends DevOps changes only through the write framework, and writes nothing for a skipped one (MC-1e)", async () => {
     const { act, ctxAs, conversations, meetings } = await setup();
     const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;

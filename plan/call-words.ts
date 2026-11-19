@@ -93,6 +93,10 @@ export const CALL_ROW = {
   commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
+  /** MC-6: my own promise, by the server's word that it is mine (never a name compared). */
+  keptMine: "Added to your Promises",
+  inMine: "in your Promises",
+  inTheirs: (who: string) => `in ${who.split(/\s+/)[0]}'s Promises`,
   /** MC-6: one Undo message at a time, each saying what it undoes. */
   undoKept: (title: string) => `Kept: ${title}`,
   undoKeptMany: (n: number) => `Kept: ${n} promises`,

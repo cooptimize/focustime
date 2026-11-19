@@ -240,4 +240,25 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
       expect(t).toMatch(/· \d+(h|m)( \d+m)?\b/);
     }
   }, T);
+
+  it("13: my own promise says your Promises, in the row and in its message; another person's never says your", async () => {
+    const { page } = await open();
+    await weeklyCall(page);
+    const rows = page.locator("[data-group='commitment'] [data-prop]");
+    const lines = await rows.locator(".mtg-p2").allTextContents();
+    expect(lines.filter((l) => /in your Promises/.test(l)).length).toBeGreaterThan(0);
+    // A promise someone else made names them (or is noted with the call), never "your".
+    const theirs = lines.filter((l) => !/in your Promises/.test(l));
+    expect(theirs.length).toBeGreaterThan(0);
+    for (const l of theirs) expect(l).not.toMatch(/\byour\b/i);
+    expect(lines.join(" ")).not.toMatch(/Alex's Promises/);
+    // Keep on mine says so in its message (the decided row's words).
+    const pid = await rows.filter({ has: page.locator(".mtg-p2", { hasText: "in your Promises" }) }).first().getAttribute("data-prop");
+    const mine = page.locator(`[data-prop='${pid}']`);
+    await mine.getByRole("button", { name: "Keep" }).click();
+    await page.locator(".undo-toast", { hasText: "Kept:" }).waitFor({ timeout: W });
+    const id = (await call(page, "meeting.mine", {})).data.occurrences[0].id as number;
+    const kept = (await call(page, "meeting.review", { occurrenceId: id })).data.proposals.find((p: { id: number }) => String(p.id) === pid);
+    expect(kept.result.message).toBe("Added to your Promises");
+  }, T);
 });

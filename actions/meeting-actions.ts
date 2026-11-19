@@ -580,6 +580,9 @@ function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
   return { ...b, ...(o.text !== undefined ? { text: text(o.text, "text", 2000)! } : {}) };
 }
 
+/** MC-6: a promise that goes to my own Promises: a Cooptimizer's, and that Cooptimizer is me. */
+const isMine = (p: Proposal, me: string) => p.body.kind === "commitment" && p.body.side === "cooptimize" && !!p.body.whoId && p.body.whoId.toLowerCase() === me.toLowerCase();
+
 /** The review screen: the call, the occurrence, its proposals in order with quotes, and what I may do. */
 async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceId"]);
@@ -612,6 +615,8 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       meeting: viewOf(r.series, (await namesOf(ctx, [r.series.clientKey]))(r.series.clientKey), users, me),
       occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter(toReview).length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
+      // MC-6: which promises are mine ("your Promises"), said by the server; the page never compares a name.
+      mine: ps.filter((p) => isMine(p, me)).map((p) => p.id),
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
       // MC-2: what was discussed and decided (at most 5 lines), on every call; null for one reviewed before MC-2.
       summary: lines ? await store.summary(r.o.id) : null,
@@ -665,7 +670,7 @@ async function keep(ctx: MeetingContext, store: MeetingStore, me: string, input:
     conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.side === "unknown" ? CALL_ROW.someone : b.who, toId: b.side === "cooptimize" ? null : me, toName: b.side === "cooptimize" ? b.toName : null,
     what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
   });
-  const message = b.side === "cooptimize" ? CALL_ROW.keptPromise(b.who) : b.side === "unknown" ? CALL_ROW.keptNobody : CALL_ROW.keptNote(b.who);
+  const message = b.side === "cooptimize" ? (isMine(p, me) ? CALL_ROW.keptMine : CALL_ROW.keptPromise(b.who)) : b.side === "unknown" ? CALL_ROW.keptNobody : CALL_ROW.keptNote(b.who);
   const next = await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id, message }, decidedBy: me, decidedAt: ctx.now() });
   await settledCall(store, occ.id, me);
   ctx.log({ source: "plan", op: "meeting_kept", count: 1 });

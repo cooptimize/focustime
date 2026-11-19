@@ -42,7 +42,7 @@ import { forgetCallOptions, useNewOptions } from "./GapFields.tsx";
 import { opensItself, ProposalRow } from "./Proposal.tsx";
 import "./calls.css";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; /** MC-6: my own promises, by the server. */ mine?: number[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -1299,7 +1299,7 @@ function ReviewScreen(props: ReviewProps) {
   const row = (p: Proposal, live: boolean) => (
     <ProposalRow key={p.id} p={p} check={live ? checkOf(p) : undefined} err={live ? rowErr[p.id] ?? null : null} ticked={live && ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today}
       open={isOpen(p)} onOpen={(on) => setOpen(p, on)} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onSendBreakDown={() => void send([p], { breakDown: true })} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)}
-      onQuote={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} clockOf={(at) => { const sec = secondsOf(at); return sec === null ? null : TRANSCRIPT_TEXT.clockAt(timeOf(new Date(Date.parse(o.startAt) + sec * 1000).toISOString(), zone)); }} />
+      onQuote={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} mine={!!r.mine?.includes(p.id)} clockOf={(at) => { const sec = secondsOf(at); return sec === null ? null : TRANSCRIPT_TEXT.clockAt(timeOf(new Date(Date.parse(o.startAt) + sec * 1000).toISOString(), zone)); }} />
   );
 
   return (
