@@ -75,13 +75,7 @@ export const branchName = (ref: string | null | undefined): string | null => {
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) || null : ref;
 };
 
-/**
- * RB-7: a name a branch can have, as far as Code needs (git's own rules: no control characters, spaces, ~ ^ : ? * [ or
- * backslash, no "..", no empty part, not ending in ".lock" or "/"). Every branch Code reads by name passes this.
- */
-export const isBranchName = (n: unknown): n is string =>
-  // eslint-disable-next-line no-control-regex
-  typeof n === "string" && /^[^\u0000-\u001f\u007f\s~^:?*[\\]{1,250}$/.test(n) && !n.startsWith("/") && !n.endsWith("/") && !n.includes("//") && !n.includes("..") && !n.endsWith(".lock") && n !== "@" && !n.includes("@{");
+export { isBranchName } from "./branch-name.ts";
 
 export type CodeEntry = { name: string; path: string; folder: boolean };
 /** D3: folders first, then files, A to Z (case-insensitive, then exact, so the order is stable). */
@@ -103,7 +97,7 @@ export const extOf = (name: string): string => {
 export type FileKind = "text" | "lfs" | "binary" | "image" | "too_large";
 /** What the panel gets (shared with the UI): a repo in a client's list, and a file with its text or why there is none. */
 export type CodeRepoView = { id: string; name: string; defaultBranch: string | null; state: "ok" | "empty" | "disabled" };
-export type CodeFileView = { path: string; size: number | null; sizeText: string; kind: FileKind; text: string | null; devopsUrl: string | null };
+export type CodeFileView = { path: string; size: number | null; sizeText: string; kind: FileKind; text: string | null; /** The file's page in DevOps, on the branch it was read on (RB-7). */ devopsUrl: string | null };
 
 /**
  * D4: what a file is shown as, from its name, DevOps's own content flags and its first bytes. Text up to

@@ -15,6 +15,7 @@ function fakeGit() {
   const reads: string[] = [];
   const git: CodeGit = {
     repos: async (k) => (reads.push(`repos ${k}`), [REPO]),
+    branches: async (k) => (reads.push(`branches ${k}`), { names: ["main"], cut: false }),
     folder: async (k, _r, p) => (reads.push(`folder ${k} ${p}`), { commit: "c", entries: [{ name: "a.sql", path: "/a.sql", folder: false }], cut: false }),
     files: async (k) => (reads.push(`files ${k}`), { commit: "c", paths: ["/a.sql"], cut: false }),
     file: async (k, _r, p) => (reads.push(`file ${k} ${p}`), { path: p, commit: "c", size: 9, kind: "text", text: "SELECT 1;" }),
@@ -37,6 +38,7 @@ function ctx(o: { why?: Awaited<ReturnType<CodeContext["notCooptimizer"]>> | "th
       { clientKey: "Fabrikam", name: "Fabrikam", color: "#123456" },
     ],
     rule: async (k) => o.rules?.[k] ?? "company",
+    opening: async () => null,
     team: async () => ({ myClients: o.onTeam ?? [], onClient: (k) => (o.onTeam ?? []).includes(k) }),
     git: o.git === undefined ? g.git : o.git,
     views: { add: async (v) => (o.views === "fail" ? Promise.reject(new Error("db down")) : void views.push(v)) },

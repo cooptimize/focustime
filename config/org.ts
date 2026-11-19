@@ -17,7 +17,7 @@ import { GAP_KINDS, type GapKind } from "../plan/fixnext.ts";
 import { DeployItemsInputError, parseDeployItems, parsePlatform, type DeployItemsRule } from "../plan/deploy-items.ts";
 import type { DataPlatform } from "./deploy-catalog.ts";
 import { DEFAULT_STANDARDS_REPO, parseRepoUrl, SOURCE_SYSTEMS, validBranch, type SourceSystem } from "../plan/standards.ts";
-import { CODE_ACCESS, type CodeAccess } from "../plan/code.ts";
+import { CODE_ACCESS, isBranchName, type CodeAccess } from "../plan/code.ts";
 
 export type SettingKind = "rule" | "default" | "level" | "personal";
 export const KIND_NAMES: Record<SettingKind, string> = { rule: "Rule", default: "Default", level: "Default by level", personal: "Personal" };
@@ -321,6 +321,12 @@ export const CLIENT_SPECS = {
     if (!(CODE_ACCESS as readonly unknown[]).includes(v)) throw new OrgInputError(`One of: ${CODE_ACCESS.join(", ")}`);
     return v as CodeAccess;
   } },
+  // RB-7: the branch Code opens this client's repos on ("dev"), where a repo has a branch of that name; null: each
+  // repo's own default. Offered in Admin from the names of the client's own branches, never typed blind.
+  code_branch: { kind: "rule", area: "clients", label: "Code opens on", builtin: null as string | null, parse: orNull((v) => {
+    if (!isBranchName(v)) throw new OrgInputError("A branch's name");
+    return v;
+  }) },
   // AH-3: the gaps Fix next (and Ahead's Readiness) counts for this client; all four by default. Turning Unsized off
   // suits a client that doesn't size in DevOps.
   fix_gaps: { kind: "rule", area: "clients", label: "What Needs attention counts", builtin: [...GAP_KINDS] as GapKind[], parse: (v) => {
@@ -394,8 +400,8 @@ export type OrgRules = {
   /** ADM-2 (D604): team values stored that no longer validate, each read as its built-in value (Status shows them). */
   problems: { key: string; label: string; fallback: unknown }[];
 };
-export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** KB-1: null is not set (both D365 systems), [] is None. */ sourceSystems: SourceSystem[] | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null; /** RB-1. */ codeAccess: CodeAccess };
-export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, sourceSystems: null, deployItems: null, codeAccess: "company" };
+export type ClientRules = { color: string | null; allowAi: boolean; /** CV-3: rules-only grouping while AI is off (on by default). */ groupWithoutAi: boolean; attachmentsAi: boolean; openStates: string[]; /** GD-2: other names for the client, for the boundary's match. */ aliases: string[]; /** HK-7: match names only as written; null is the default rule. */ exactCase: boolean | null; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean; /** AH-2: null is automatic. */ devopsScope: DevOpsScope | null; /** AH-3: the gaps Fix next counts. */ fixGaps: GapKind[]; /** DP-2: null is not set. */ dataPlatform: DataPlatform | null; /** KB-1: null is not set (both D365 systems), [] is None. */ sourceSystems: SourceSystem[] | null; /** DP-2: null follows the catalog. */ deployItems: DeployItemsRule | null; /** RB-1. */ codeAccess: CodeAccess; /** RB-7: the branch Code opens this client's repos on, or null for each repo's default. */ codeBranch: string | null };
+export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, groupWithoutAi: true, attachmentsAi: false, openStates: [], aliases: [], exactCase: null, noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false, devopsScope: null, fixGaps: [...GAP_KINDS], dataPlatform: null, sourceSystems: null, deployItems: null, codeAccess: "company", codeBranch: null };
 
 const parsed = (r: OrgRow): unknown => {
   try {
@@ -435,7 +441,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
   for (const k of clientKeys) {
     const s = `client:${k}`;
     const c = <K extends ClientKeyName>(key: K) => valueOf(m, s, key, CLIENT_SPECS[key] as Spec, CLIENT_SPECS[key].builtin) as (typeof CLIENT_SPECS)[K]["builtin"];
-    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), sourceSystems: c("source_systems"), deployItems: c("deploy_items"), codeAccess: c("code_access") };
+    clients[k] = { color: c("color"), allowAi: c("allow_ai"), groupWithoutAi: c("group_without_ai"), attachmentsAi: c("attachments_ai"), openStates: c("open_states"), aliases: c("aliases"), exactCase: c("exact_case"), noBreakdown: c("no_breakdown"), background: c("background"), houseStyle: c("house_style"), treatAsClient: c("treat_as_client"), hidden: c("hidden"), devopsScope: c("devops_scope"), fixGaps: c("fix_gaps"), dataPlatform: c("data_platform"), sourceSystems: c("source_systems"), deployItems: c("deploy_items"), codeAccess: c("code_access"), codeBranch: c("code_branch") };
   }
   const levels = Object.fromEntries(
     LEVELS.map((l) => {

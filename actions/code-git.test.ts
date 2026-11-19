@@ -41,22 +41,22 @@ describe("code memory", () => {
 describe("createCodeGit", () => {
   it("reads the token from Dataverse for a read and serves repeats from memory for 5 minutes", async () => {
     const s = setup();
-    await s.git.folder("Contoso", REPO, "/");
-    await s.git.folder("Contoso", REPO, "/");
+    await s.git.folder("Contoso", REPO, "/", "main");
+    await s.git.folder("Contoso", REPO, "/", "main");
     expect(s.calls).toHaveLength(1);
     expect(s.reads()).toBe(1);
-    const f = await s.git.file("Contoso", REPO, "/a.sql");
+    const f = await s.git.file("Contoso", REPO, "/a.sql", "main");
     expect(f).toMatchObject({ kind: "text", text: "SELECT 1;", commit: COMMIT });
-    await s.git.file("Contoso", REPO, "/a.sql");
+    await s.git.file("Contoso", REPO, "/a.sql", "main");
     expect(s.calls).toHaveLength(3);
     s.advance(5 * 60_000);
-    await s.git.folder("Contoso", REPO, "/");
+    await s.git.folder("Contoso", REPO, "/", "main");
     expect(s.calls).toHaveLength(4);
   });
   it("one client's memory never answers another", async () => {
     const s = setup(() => ({ ok: true, targets: [...(target() as unknown as { targets: never[] }).targets, { accountId: "y", clientKey: "Fabrikam", clientName: "Fabrikam", org: "fabrikam", project: "P", projectName: "P", email: null, pat: new Pat("u") }] }));
-    await s.git.folder("Contoso", REPO, "/");
-    await s.git.folder("Fabrikam", REPO, "/");
+    await s.git.folder("Contoso", REPO, "/", "main");
+    await s.git.folder("Fabrikam", REPO, "/", "main");
     expect(s.calls.map((u) => new URL(u).pathname.split("/")[1])).toEqual(["contoso", "fabrikam"]);
   });
   it.each([

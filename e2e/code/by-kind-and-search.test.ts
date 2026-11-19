@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await file.waitFor();
     expect(await file.getAttribute("data-code-file")).toBe("/model/Sales.SemanticModel/definition/tables/Date.tmdl");
     expect(await hash(page)).toBe("#/code/Northwind/kinds/a1b2c3d4-0001-4000-8000-00000000a001/%2Fmodel%2FSales.SemanticModel%2Fdefinition%2Ftables%2FDate.tmdl");
-    expect(await panel(page).locator("[data-code-lives] span").textContent()).toBe("In sales-analytics, /model/Sales.SemanticModel/definition/tables");
+    expect(await panel(page).locator("[data-code-lives] > span").textContent()).toBe("In sales-analytics, /model/Sales.SemanticModel/definition/tables");
     // Still no folder read: By kind opens a file without the tree.
     expect(sent.some((s) => s.action === "code.folder" || s.action === "code.find")).toBe(false);
     await shots(page, "03-file-open");

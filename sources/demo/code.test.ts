@@ -7,7 +7,7 @@ import { fileLabels, listedThings, NO_SCHEMA, searchThings, sortRepo, sqlTree } 
 
 const git = demoCodeGit();
 const CLIENTS = ["Northwind", "Atlas", "Cooptimize", "Fabrikam", "Tailspin"];
-const reposOf = async (client: string) => Promise.all((await git.repos(client)).filter((r) => r.defaultBranch).map(async (r) => ({ repo: r, paths: (await git.files(client, r)).paths })));
+const reposOf = async (client: string) => Promise.all((await git.repos(client)).filter((r) => r.defaultBranch).map(async (r) => ({ repo: r, paths: (await git.files(client, r, "main")).paths })));
 
 describe("names in the demo's repos (RB-4 A)", () => {
   it.each(CLIENTS)("A5: in %s, searching any file's own name finds that file", async (client) => {

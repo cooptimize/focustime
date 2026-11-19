@@ -74,6 +74,7 @@ function fake(o: { fail?: string } = {}) {
   const repo = (id: string, name: string): GitRepo => ({ id, name, defaultBranch: "main", disabled: false, webUrl: null });
   const git: CodeGit = {
     repos: async () => [repo(REPO, "ops-reporting"), repo(OTHER, "other")],
+    branches: async () => ({ names: ["main"], cut: false }),
     folder: async () => ({ commit: "c", entries: [], cut: false }),
     files: async (_c, r) => ({ commit: "c", paths: r.id === REPO ? Object.keys(FILES).sort() : ["/x/Y.Report/report.json", "/x/Y.Report/definition.pbir"], cut: false }),
     search: async () => ({ count: 0, hits: [], info: 0 }),
@@ -102,6 +103,7 @@ function ctx(git: CodeGit, o: { why?: "guest"; rule?: CodeAccess; views?: "fail"
     notCooptimizer: async () => o.why ?? null,
     clients: async () => [{ clientKey: "Contoso", name: "Contoso", color: null }],
     rule: async () => o.rule ?? "company",
+    opening: async () => null,
     team: async () => ({ myClients: [], onClient: () => false }),
     git,
     views: { add: async (v) => (o.views === "fail" ? Promise.reject(new Error("db down")) : void views.push(v)) },

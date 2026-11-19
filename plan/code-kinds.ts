@@ -82,7 +82,7 @@ export type Thing = {
 export type RepoFile = { file: string; kind: Kind; detail: string; /** The item's folder: a folder inside it is found by name too. */ item: string };
 
 /** One repo of a client as By kind and Search names get it: its things, or one line saying why there are none. */
-export type RepoThings = { repo: CodeRepoView; things: Thing[]; /** RB-4: the files inside items that are no thing of their own. */ files: RepoFile[]; cut: boolean; problem: string | null };
+export type RepoThings = { repo: CodeRepoView; things: Thing[]; /** RB-4: the files inside items that are no thing of their own. */ files: RepoFile[]; cut: boolean; problem: string | null; /** RB-7: the branch these names were read on, when it isn't the repo's opening branch (a result opens on it). */ branch?: string };
 
 // ---------- 1. Fabric items ----------
 
@@ -581,9 +581,11 @@ export function sqlTree<T extends SqlObject>(objects: readonly T[], grouping: Sq
 }
 
 /** RB-4: one file a search inside files found: where it is, what it is by its name, and how many matches DevOps counted. */
-export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null; /** For a file inside an item, the item's kind. */ itemKind?: Kind };
+export type InsideFile = { repoId: string; repoName: string; path: string; kind: Kind; detail: string; matches: number | null; /** For a file inside an item, the item's kind. */ itemKind?: Kind; /** RB-7: the branch it was found on, when it isn't the repo's opening branch (the result opens on it). */ branch?: string };
+/** RB-7: a repo whose branch on screen DevOps doesn't search: its results are the default branch's. */
+export type InsideNotSearched = { repoId: string; repoName: string; branch: string; shown: string };
 /** RB-4: one client's answer to a search inside files. */
-export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps counted in all. */ total: number; /** DevOps has more files than the ones here. */ more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to the kind's file type. */ narrowed: boolean; /** Files DevOps found that aren't on their repo's default branch, or in a repo that isn't read: not listed. */ notListed: number };
+export type InsideAnswer = { files: InsideFile[]; /** How many files DevOps counted in all. */ total: number; /** DevOps has more files than the ones here. */ more: boolean; /** DevOps is still indexing: results may be missing. */ indexing: boolean; /** DevOps was asked to narrow to the kind's file type. */ narrowed: boolean; /** Files DevOps found that aren't on their repo's branch (RB-7; its default branch before), or in a repo that isn't read: not listed. */ notListed: number; /** RB-7: the repos shown from their default branch because DevOps doesn't search the branch on screen. */ notSearched?: InsideNotSearched[] };
 
 /**
  * RB-4: a kind DevOps's code search can narrow by itself, by file type (its documented "ext:" filter). Only where the

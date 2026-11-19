@@ -62,6 +62,7 @@ function ctx(git: CodeGit | null, o: { why?: "guest" | "domain" | "automation"; 
     notCooptimizer: async () => o.why ?? null,
     clients: async () => CLIENTS.map((k) => ({ clientKey: k, name: k, color: null })),
     rule: async (k) => o.rules?.[k] ?? "company",
+    opening: async () => null,
     team: async () => ({ myClients: o.onTeam ?? [], onClient: (k) => (o.onTeam ?? []).includes(k) }),
     git,
     views: { add: async (v) => (o.views === "fail" ? Promise.reject(new Error("db down")) : (o.order?.push("row"), void views.push(v))) },

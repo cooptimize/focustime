@@ -5,7 +5,7 @@
 //     renamed) falls back to the opening branch, and the answer says which was asked for.
 // No branch name is written into the code: the opening branch is the client's Rule (config/org.ts code_branch), the
 // default is what DevOps says, and the rest come from the repo's own branch list.
-import { isBranchName } from "./code.ts";
+import { isBranchName } from "./branch-name.ts";
 
 export type BranchWhy = "chosen" | "opening" | "default";
 /** The branch a read is made on, and what the screen needs to say about it. */

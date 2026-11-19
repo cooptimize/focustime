@@ -257,10 +257,10 @@ export function createGitReader(d: GitReaderDeps) {
       }
       return list.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
     },
-    /** One folder's entries on the default branch, folders first then files, A to Z. */
-    async folder(t: GitTarget, repo: GitRepo, path: string): Promise<GitFolder> {
+    /** One folder's entries on a branch (RB-7; the default branch before), folders first then files, A to Z. */
+    async folder(t: GitTarget, repo: GitRepo, path: string, branch: string): Promise<GitFolder> {
       if (!repo.defaultBranch) return { commit: null, entries: [], cut: false };
-      const r = await json<{ value?: RawItem[] }>(t, "folder", repo.id, { scopePath: path, recursionLevel: "OneLevel", ...branchQuery(repo.defaultBranch) });
+      const r = await json<{ value?: RawItem[] }>(t, "folder", repo.id, { scopePath: path, recursionLevel: "OneLevel", ...branchQuery(branch) });
       let commit: string | null = null;
       const entries: CodeEntry[] = [];
       for (const it of items(r)) {
@@ -280,9 +280,9 @@ export function createGitReader(d: GitReaderDeps) {
       return { commit, entries: sorted.slice(0, FOLDER_MAX), cut: sorted.length > FOLDER_MAX };
     },
     /** Every file name in the repo (Find), at most FIND_MAX, kept only in memory. */
-    async files(t: GitTarget, repo: GitRepo): Promise<GitFileList> {
+    async files(t: GitTarget, repo: GitRepo, branch: string): Promise<GitFileList> {
       if (!repo.defaultBranch) return { commit: null, paths: [], cut: false };
-      const r = await json<{ value?: RawItem[] }>(t, "files", repo.id, { scopePath: "/", recursionLevel: "Full", ...branchQuery(repo.defaultBranch) });
+      const r = await json<{ value?: RawItem[] }>(t, "files", repo.id, { scopePath: "/", recursionLevel: "Full", ...branchQuery(branch) });
       let commit: string | null = null;
       const paths: string[] = [];
       let total = 0;
@@ -297,10 +297,10 @@ export function createGitReader(d: GitReaderDeps) {
       paths.sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
       return { commit, paths, cut: total > FIND_MAX };
     },
-    /** A file's commit on the default branch and DevOps's content flags; not found for a folder. */
-    async fileMeta(t: GitTarget, repo: GitRepo, path: string): Promise<GitFileMeta> {
+    /** A file's commit on a branch (RB-7; the default branch before) and DevOps's content flags; not found for a folder. */
+    async fileMeta(t: GitTarget, repo: GitRepo, path: string, branch: string): Promise<GitFileMeta> {
       if (!repo.defaultBranch) throw new GitFailure("not_found");
-      const it = await json<RawItem>(t, "file_meta", repo.id, { path, includeContentMetadata: "true", ...branchQuery(repo.defaultBranch) });
+      const it = await json<RawItem>(t, "file_meta", repo.id, { path, includeContentMetadata: "true", ...branchQuery(branch) });
       if (it.isFolder === true || it.gitObjectType === "tree" || typeof it.commitId !== "string" || !COMMIT.test(it.commitId)) throw new GitFailure("not_found");
       return { commit: it.commitId.toLowerCase(), isBinary: it.contentMetadata?.isBinary === true, isImage: it.contentMetadata?.isImage === true };
     },

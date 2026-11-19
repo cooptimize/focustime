@@ -439,7 +439,27 @@ const HTML = `<!doctype html>
 `;
 
 /** The demo's repos: per client, per repo, each file by path. */
-type DemoRepo = { id: string; name: string; files: Record<string, Content> };
+/**
+ * A demo repo: its files on its default branch ("main"), and (RB-7) its other branches, each as the files that differ
+ * from main (null: not on that branch). `searched` names the branches the fake code search looks in besides main, as
+ * DevOps's "Searchable branches" would.
+ */
+type DemoRepo = { id: string; name: string; files: Record<string, Content>; branches?: Record<string, Record<string, Content | null>>; searched?: readonly string[] };
+const MAIN = "main";
+/** RB-7: a demo repo's branch names (heads only), A to Z. */
+const branchNamesOf = (r: DemoRepo): string[] => (Object.keys(r.files).length ? [MAIN, ...Object.keys(r.branches ?? {})].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })) : []);
+/** RB-7: a demo repo's files on one branch; not found for a branch it doesn't have. */
+function filesOn(r: DemoRepo, branch: string): Record<string, Content> {
+  if (branch === MAIN) return r.files;
+  const over = r.branches?.[branch];
+  if (!over) throw new CodeFailure("not_found");
+  const out: Record<string, Content> = { ...r.files };
+  for (const [p, c] of Object.entries(over)) {
+    if (c === null) delete out[p];
+    else out[p] = c;
+  }
+  return out;
+}
 const STORE_TMDL = `table Store
 	lineageTag: 4a5b6c7d-8e9f-4012-a345-b6c7d8e9f012
 
@@ -709,9 +729,29 @@ const internal = (): Record<string, Content> => ({
   "/templates/model/model.tmdl": MODEL_TMDL,
 });
 
+// RB-7: Northwind's sales-analytics has branches besides main (invented): dev, where the returns work is (a view only it
+// has, and a changed pipeline and README), a feature branch off it with one more view, a release branch and a long name
+// (cut in the middle on screen). Code search looks in main and dev only, as DevOps's "Searchable branches" would.
+const RETURNS_BY_STORE_SQL = "CREATE VIEW [rpt].[vReturnsByStore]\nAS\nSELECT r.[StoreKey], COUNT(*) AS [Returns], SUM(r.[Amount]) AS [Returned]\nFROM [fact].[Returns] AS r\nGROUP BY r.[StoreKey];\n";
+const RETURN_RATE_SQL = "CREATE VIEW [rpt].[vReturnRate]\nAS\nSELECT s.[StoreKey], s.[Returned] / NULLIF(d.[Amount], 0) AS [ReturnRate]\nFROM [rpt].[vReturnsByStore] AS s\nJOIN [fact].[vDailySales] AS d ON d.[StoreKey] = s.[StoreKey];\n";
+const salesBranches = (): Record<string, Record<string, Content | null>> => {
+  const main = sales();
+  const dev: Record<string, Content | null> = {
+    "/README.md": `${main["/README.md"] as string}\n## On dev\n\nThe returns views are here until they go to main.\n`,
+    "/lake/Gold.Warehouse/rpt/Views/vReturnsByStore.sql": RETURNS_BY_STORE_SQL,
+    "/pipelines/Load sales.DataPipeline/pipeline-content.json": (main["/pipelines/Load sales.DataPipeline/pipeline-content.json"] as string).replace(/"timeout":\s*"[^"]*"/, '"timeout": "0.02:00:00"'),
+  };
+  return {
+    dev,
+    "feature/returns-model": { ...dev, "/lake/Gold.Warehouse/rpt/Views/vReturnRate.sql": RETURN_RATE_SQL },
+    "release/2026-11": {},
+    "feature/store-region-dimension-cleanup-before-the-quarterly-refresh": { "/lake/Gold.Warehouse/dim/Views/vStoreRegion.sql": null },
+  };
+};
+
 const REPOS: Record<string, DemoRepo[] | "needs_code_read"> = {
   Northwind: [
-    { id: "a1b2c3d4-0001-4000-8000-00000000a001", name: "sales-analytics", files: sales() },
+    { id: "a1b2c3d4-0001-4000-8000-00000000a001", name: "sales-analytics", files: sales(), branches: salesBranches(), searched: ["dev"] },
     { id: "a1b2c3d4-0002-4000-8000-00000000a002", name: "store-portal", files: portal() },
     { id: "a1b2c3d4-0006-4000-8000-00000000a006", name: "archive", files: {} },
   ],
@@ -780,27 +820,37 @@ export function demoSearch(repos: readonly DemoRepo[], text: string, top: number
   }
   const hits: GitSearchHit[] = [];
   let count = 0;
+  // RB-7: one result per file, with every searched branch it is found on (main, and a repo's `searched` branches).
+  const byFile = new Map<string, { repoId: string; path: string; branches: string[]; matches: number }>();
   for (const r of repos) {
-    for (const [path, c] of Object.entries(r.files)) {
-      if (typeof c !== "string") continue;
-      const body = c.toLowerCase();
-      const tokens = body.split(/[^a-z0-9_]+/).filter(Boolean);
-      let best = -1;
-      for (const g of groups) {
-        if (!g.length) continue;
-        let n = 0;
-        let ok = true;
-        for (const t of g) {
-          const found = t.test(path, body, tokens);
-          if (t.not ? found > 0 : found === 0) { ok = false; break; }
-          if (!t.not && !t.filter) n += found;
+    for (const branch of [MAIN, ...(r.searched ?? [])]) {
+      for (const [path, c] of Object.entries(filesOn(r, branch))) {
+        if (typeof c !== "string") continue;
+        const body = c.toLowerCase();
+        const tokens = body.split(/[^a-z0-9_]+/).filter(Boolean);
+        let best = -1;
+        for (const g of groups) {
+          if (!g.length) continue;
+          let n = 0;
+          let ok = true;
+          for (const t of g) {
+            const found = t.test(path, body, tokens);
+            if (t.not ? found > 0 : found === 0) { ok = false; break; }
+            if (!t.not && !t.filter) n += found;
+          }
+          if (ok) best = Math.max(best, n);
         }
-        if (ok) best = Math.max(best, n);
+        if (best < 0) continue;
+        const k = `${r.id}\u0000${path}`;
+        const had = byFile.get(k);
+        if (had) had.branches.push(branch);
+        else byFile.set(k, { repoId: r.id, path, branches: [branch], matches: best });
       }
-      if (best < 0) continue;
-      count++;
-      if (hits.length < top) hits.push({ repoId: r.id, path, branches: ["main"], matches: best });
     }
+  }
+  for (const f of byFile.values()) {
+    count++;
+    if (hits.length < top) hits.push(f);
   }
   return { count, hits, info: 0 };
 }
@@ -830,11 +880,14 @@ export function demoCodeGit(): CodeGit {
         .map((r) => ({ id: r.id, name: r.name, defaultBranch: Object.keys(r.files).length ? "main" : null, disabled: false, webUrl: o ? `https://dev.azure.com/${o.org}/${encodeURIComponent(o.project)}/_git/${r.name}` : null }))
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    async folder(clientKey, repo, path) {
-      const r = find(clientKey, repo);
+    async branches(clientKey, repo) {
+      return { names: branchNamesOf(find(clientKey, repo)), cut: false };
+    },
+    async folder(clientKey, repo, path, branch) {
+      const files = filesOn(find(clientKey, repo), branch);
       const prefix = path === "/" ? "/" : `${path}/`;
       const seen = new Map<string, CodeEntry>();
-      for (const p of Object.keys(r.files)) {
+      for (const p of Object.keys(files)) {
         if (!p.startsWith(prefix)) continue;
         const rest = p.slice(prefix.length);
         const slash = rest.indexOf("/");
@@ -844,17 +897,17 @@ export function demoCodeGit(): CodeGit {
       if (path !== "/" && seen.size === 0) throw new CodeFailure("not_found");
       return { commit: COMMIT, entries: sortEntries([...seen.values()]), cut: false };
     },
-    async files(clientKey, repo) {
-      const r = find(clientKey, repo);
-      return { commit: COMMIT, paths: Object.keys(r.files).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })), cut: false };
+    async files(clientKey, repo, branch) {
+      const files = filesOn(find(clientKey, repo), branch);
+      return { commit: COMMIT, paths: Object.keys(files).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })), cut: false };
     },
     /** RB-4: the fake of DevOps's code search, over the invented files above. Nothing leaves this process. */
     async search(clientKey, text, top) {
       if (NO_CODE_SEARCH.has(clientKey)) throw new CodeFailure("no_code_search");
       return demoSearch(reposOf(clientKey), text, top);
     },
-    async file(clientKey, repo, path): Promise<CodeFile> {
-      const c = find(clientKey, repo).files[path];
+    async file(clientKey, repo, path, branch): Promise<CodeFile> {
+      const c = filesOn(find(clientKey, repo), branch)[path];
       if (c === undefined) throw new CodeFailure("not_found");
       const size = sizeOf(c);
       const bytes = size > TEXT_MAX_BYTES ? null : bytesOf(c);

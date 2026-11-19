@@ -201,7 +201,8 @@ export const ACTIONS = [
   // in the command menu's results, never in assistant/allowlist.ts). Each checks who may read the client on the server.
   { name: "code.clients", title: "Code", group: "Code", target: "none", shortcut: "7", summary: "Read any client's repos, read only: walk the tree and read a file down to the code. Opening a file is logged for FocusTime admins; nothing of the code is kept", aka: ["code", "repo", "repos", "git", "source", "browse code", "pipeline", "sql", "tmdl"] },
   { name: "code.repos", title: "Code: a client's repos", group: "Code", target: "none", summary: "The repos in one client's registered DevOps project (read only)" },
-  { name: "code.folder", title: "Code: a folder", group: "Code", target: "none", summary: "One folder of a client's repo on its default branch (read only)" },
+  { name: "code.folder", title: "Code: a folder", group: "Code", target: "none", summary: "One folder of a client's repo on a branch: the one chosen, else the client's opening branch, else the repo's default (read only)" },
+  { name: "code.branches", title: "Code: a repo's branches", group: "Code", target: "none", summary: "The branch names of one client's repo, for Code's branch picker: branch heads only, never tags (read only)" },
   { name: "code.find", title: "Code: find a file", group: "Code", target: "none", summary: "Every file name in one client's repo, to find a file (read only; logged as Find used)" },
   { name: "code.kinds", title: "Code: a client by kind", group: "Code", target: "none", summary: "One client's repos listed by kind (reports, semantic models, pipelines, notebooks, SQL and more), from file names only; no file is opened (read only; logged as Listed by kind)" },
   { name: "code.search", title: "Code: search names", group: "Code", target: "none", summary: "One client's things by kind for a search by name, from file names only; the words typed stay in the browser (read only; logged as Searched names)" },

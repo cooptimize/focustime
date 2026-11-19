@@ -72,7 +72,7 @@ describe("the reads", () => {
   });
   it("reads one folder level on the default branch, folders first, without submodules", async () => {
     const { reader, calls } = fake(() => json({ value: [{ path: "/sql", isFolder: true, commitId: COMMIT }, { path: "/sql/b.sql", gitObjectType: "blob", commitId: COMMIT }, { path: "/sql/Views", gitObjectType: "tree", isFolder: true, commitId: COMMIT }, { path: "/sql/A.sql", gitObjectType: "blob", commitId: COMMIT }, { path: "/sql/sub", gitObjectType: "commit" }] }));
-    const f = await reader.folder(T, REPO, "/sql");
+    const f = await reader.folder(T, REPO, "/sql", "main");
     expect(f.entries.map((e) => e.name)).toEqual(["Views", "A.sql", "b.sql"]);
     expect(f.commit).toBe(COMMIT);
     const u = new URL(calls[0]!.url);
@@ -82,12 +82,12 @@ describe("the reads", () => {
   });
   it("an empty repo is read as empty, without a request", async () => {
     const { reader, calls } = fake(() => json({}));
-    expect(await reader.folder(T, { ...REPO, defaultBranch: null }, "/")).toEqual({ commit: null, entries: [], cut: false });
+    expect(await reader.folder(T, { ...REPO, defaultBranch: null }, "/", "main")).toEqual({ commit: null, entries: [], cut: false });
     expect(calls).toHaveLength(0);
   });
   it("lists every file name for Find, and a file's bytes pinned to the commit", async () => {
     const { reader, calls } = fake((u) => (u.searchParams.get("recursionLevel") === "Full" ? json({ value: [{ path: "/", isFolder: true, commitId: COMMIT }, { path: "/a/x.json", gitObjectType: "blob" }, { path: "/a", isFolder: true }] }) : new Response("SELECT 1;", { headers: { "content-length": "9" } })));
-    expect((await reader.files(T, REPO)).paths).toEqual(["/a/x.json"]);
+    expect((await reader.files(T, REPO, "main")).paths).toEqual(["/a/x.json"]);
     const b = await reader.fileBytes(T, REPO, "/a/x.sql", COMMIT);
     expect(new TextDecoder().decode(b.bytes!)).toBe("SELECT 1;");
     const u = new URL(calls[1]!.url);
@@ -126,7 +126,7 @@ describe("refusals", () => {
   });
   it("429 is busy, 404 is not found, a network error is unreachable", async () => {
     await expect(fake(() => new Response("", { status: 429 })).reader.repos(T)).rejects.toMatchObject({ reason: "busy" });
-    await expect(fake(() => new Response("", { status: 404 })).reader.fileMeta(T, REPO, "/x")).rejects.toMatchObject({ reason: "not_found" });
+    await expect(fake(() => new Response("", { status: 404 })).reader.fileMeta(T, REPO, "/x", "main")).rejects.toMatchObject({ reason: "not_found" });
     await expect(fake(() => Promise.reject(new TypeError(`fetch failed for ${SECRET_PATH}`))).reader.repos(T)).rejects.toMatchObject({ reason: "unreachable" });
   });
   it("a client DevOps asked to wait gets no request", async () => {
@@ -137,8 +137,8 @@ describe("refusals", () => {
   });
   it("no path, repo name, client, token or content reaches a log line or an error", async () => {
     const { reader, logs } = fake((u) => (u.searchParams.get("path") ? new Response("", { status: 500 }) : json({ value: [{ path: `${SECRET_PATH}`, gitObjectType: "blob", commitId: COMMIT }] })));
-    await reader.folder(T, REPO, "/secret-folder");
-    const e = await reader.fileMeta(T, REPO, SECRET_PATH).catch((x: unknown) => x);
+    await reader.folder(T, REPO, "/secret-folder", "main");
+    const e = await reader.fileMeta(T, REPO, SECRET_PATH, "main").catch((x: unknown) => x);
     expect(e).toBeInstanceOf(GitFailure);
     const all = JSON.stringify(logs) + String((e as Error).message) + String((e as Error).stack);
     for (const s of ["secret-folder", "payroll", "warehouse", "Contoso", "contoso", "secret-token-value", "Data Platform"]) expect(all).not.toContain(s);

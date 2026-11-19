@@ -2196,6 +2196,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "code.search":
     case "code.inside":
     case "code.inner":
+    case "code.branches":
       return codeAction(codeCtx(ctx), action as CodeAction, req.input);
     case "docs.access":
       // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).
@@ -2834,6 +2835,8 @@ function codeCtx(ctx: ActionContext): CodeContext {
       return ca.keys.filter((k) => ca.isClient(k)).map((k) => ({ clientKey: k, name: k, color: colors[k] ?? null }));
     },
     rule: async (k) => (ctx.org ? clientRules(await ctx.org.rules(), k).codeAccess : "team"),
+    // RB-7: the client's opening branch; without the team's rules, each repo's default.
+    opening: async (k) => (ctx.org ? clientRules(await ctx.org.rules(), k).codeBranch : null),
     team: async () => {
       const t = await reportTeam(teamCtx(ctx));
       return { myClients: t.myClients, onClient: t.onClient };
