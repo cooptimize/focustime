@@ -19,11 +19,11 @@ It runs in Azure (Container Apps, Azure SQL, Key Vault) in two environments, dev
 | Day | The first tab (1 or T), `#/day` | One date's blocks as cards, the urgent strip, a line of chips and the moment card |
 | Week | The second tab (2), `#/week` | The week's blocks, Monday to Thursday, Friday as the catch-up day, and Saturday or Sunday when they have work |
 | Backlog | The third tab (3), `#/backlog` | Every client's DevOps items as a Grid or a Gantt, edited through a change set |
-| Status | The fourth tab (4), `#/status` | My features' updates for Monday's status report, and each client's whole report |
-| Inbox | The fifth tab (5 or L), `#/inbox` | Three lists: From chats, Promises, Captures |
+| Inbox | The fourth tab (4 or L), `#/inbox` | Three lists: From chats, Promises, Captures |
 | Block panel | Beside Week and Day | One block: what's on it, its meetings, and one Add box |
 | Story card | Over any screen, `#/item/<client>/<id>` | A DevOps item as FocusTime shows it, with Edit and Wrap it up |
-| Calls | The sixth tab (6; on a phone More › Calls), `#/calls` | Every call I was on, by day, with the one I choose beside the list: its proposals, transcript or setup |
+| Calls | The fifth tab (5; on a phone More › Calls), `#/calls` | Every call I was on, by day, with the one I choose beside the list: its proposals, transcript or setup |
+| Status | The sixth tab (6), `#/status` | My features' updates for Monday's status report, and each client's whole report |
 | Code | The Code tab (7; on a phone More › Code), `#/code` | Any client's repos, read only |
 | Settings and Admin | More › Settings, More › Admin | A person's preferences; the team's values (admins only) |
 | The Guide and these docs | More › Guide, More › Technical docs | How to use FocusTime; how it works |

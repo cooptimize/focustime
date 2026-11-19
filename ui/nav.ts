@@ -34,7 +34,7 @@ export const tabKey = (t: Tab): string => String(TABS.indexOf(t) + 1);
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
 /** BL-1: the Ahead tab is called Backlog (its code name stays "ahead"). */
 /** RB-6: Code is a tab of its own (was a panel from More), shown only to a person who may read code. */
-/** MC-3: Calls is a tab of its own between the Inbox and Code (was More › Calls, over Week). */
+/** MC-3: Calls is a tab of its own (was More › Calls, over Week); TB-1: after the Inbox, before Status. */
 export const TAB_NAMES: Record<Tab, string> = { today: "Day", week: "Week", ahead: "Backlog", inbox: "Inbox", status: "Status", calls: "Calls", code: "Code" };
 
 /** NV-1: Today has no modes. Its Midday check-in and Close out are flows its cards open over the same page. */
@@ -209,7 +209,7 @@ const mondayOf = (d: IsoDate): IsoDate => {
   return p.subtract({ days: p.dayOfWeek - 1 }).toString();
 };
 
-/** 1–7 switch tabs in their order (RF-1: 4 is Status, 5 the Inbox; MC-3: 6 is Calls, 7 Code; T stays Day, L the Inbox). */
+/** 1–7 switch tabs in their order (TB-1: 4 the Inbox, 5 Calls, 6 Status, 7 Code; T stays Day, L the Inbox). */
 export function tabForKey(key: string): Tab | null {
   const i = ["1", "2", "3", "4", "5", "6", "7"].indexOf(key);
   return i >= 0 ? TABS[i]! : key === "t" || key === "T" ? "today" : key === "l" || key === "L" ? "inbox" : null;

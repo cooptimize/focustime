@@ -686,5 +686,7 @@ describe("CO-1: every door into Ask to collaborate opens it with what it passed 
     expect(KEYS.filter((k) => Object.values(cmd).includes(k.command ?? "")).map((k) => k.command)).toEqual(TABS.map((t) => cmd[t]));
     const views = list.filter((c) => c.group === "Views" && ["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"].includes(c.action ?? "")).map((c) => c.action);
     expect(views).toEqual(["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"]);
+    // Since the tabs come first, Enter on a tab's word opens that tab (deliberately: "code" ran Code: search names).
+    for (const [q, id] of [["code", "code.clients"], ["calls", "meeting.mine"], ["status", "view.status"], ["inbox", "view.inbox"]] as const) expect(filterCommands(list, q)[0]!.id, q).toBe(id);
   });
 });

@@ -1,5 +1,5 @@
 // Was e2e/nav.test.ts until BT-1.
-// Step 16.2, NV-1, WD-1, RF-1, RB-6: six tabs (1–6: Day · Week · Backlog · Status · Inbox · Code), Week with no switch and the Add work panel,
+// Step 16.2, NV-1, WD-1, RF-1, RB-6: seven tabs (TB-1, 1–7: Day · Week · Backlog | Inbox · Calls | Status · Code), Week with no switch and the Add work panel,
 // Backlog's Grid · Gantt (BL-1; Ahead's Readiness and Backlog modes folded into the Grid), addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";

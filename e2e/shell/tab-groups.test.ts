@@ -45,7 +45,7 @@ const fit = (page: Page) =>
     const mids = kids.map((e) => e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2);
     const dividers = [...top.querySelectorAll<HTMLElement>(".tab-divider")].map((d) => {
       const em = parseFloat(getComputedStyle(d).fontSize);
-      return { full: d.getBoundingClientRect().width >= 1.2 * em, line: getComputedStyle(d.firstElementChild!).display !== "none" };
+      return { full: d.getBoundingClientRect().width >= 1.45 * em, line: getComputedStyle(d.firstElementChild!).display !== "none" };
     });
     return {
       wraps: Math.max(...mids) - Math.min(...mids) > 4,
@@ -75,7 +75,7 @@ describe.skipIf(!CHROMIUM)("TB-1: tabs in three groups, Status after Calls", () 
         const i = document.querySelector<HTMLElement>(".tab-divider > i")!;
         const word = document.querySelector<HTMLElement>(".view-tab")!;
         const probe = document.createElement("span");
-        probe.style.color = "var(--border)";
+        probe.style.color = "var(--border-strong)";
         document.body.append(probe);
         const border = getComputedStyle(probe).color;
         probe.remove();

@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1, RF-1, BL-1: tabs (Day · Week · Backlog · Status · Inbox), Week with no modes and its Add work panel,
+// Step 16.2, NV-1, WD-1, RF-1, BL-1, TB-1: tabs (Day · Week · Backlog | Inbox · Calls | Status · Code), Week with no modes and its Add work panel,
 // Backlog's Grid and Gantt (BL-1: Ahead's Gaps and Backlog modes land on the Grid with a filter), Day's flows, addresses (back and reopen), every older address landing with
 // its date, block, week or id, P, keys 1–6, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";

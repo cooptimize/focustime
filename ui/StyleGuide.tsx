@@ -314,7 +314,7 @@ export function StyleGuide() {
         <h3>Tabs</h3>
         <div className="sg-row">
           <nav className="views" aria-label="Sample tabs">
-            {(["day", "week", "backlog", "status", "inbox"] as const).map((t, i) => (
+            {(["day", "week", "backlog", "inbox", "status"] as const).map((t, i) => (
               <button key={t} type="button" className="view-tab" aria-current={i === 1 ? "page" : undefined} style={i === 2 ? { background: "var(--wash-1)", color: "var(--text)" } : undefined}>
                 <Icon name={t} />
                 {{ day: "Day", week: "Week", backlog: "Backlog (hover)", status: "Status", inbox: "Inbox" }[t]}
