@@ -312,6 +312,11 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
           <span>{step.title}</span>
         </div>
       )}
+      {"items" in step && step.note?.length ? (
+        <div className="menu-note" role="note">
+          {step.note.map((line, i) => <p key={i}>{line}</p>)}
+        </div>
+      ) : null}
       <StepView step={step} query="" onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList popup />
     </div>
   );

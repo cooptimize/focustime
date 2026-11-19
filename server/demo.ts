@@ -5,6 +5,7 @@
 // (sources/demo/devops.ts, outlook.ts), so preview, confirm, read back, the audit log and undo are the real ones and
 // nothing leaves FocusTime. Its AI is the app's real provider on this fictional data when the app has one, with stored
 // sample answers when it hasn't or is slow (sources/demo/ai.ts). Its starting data comes from sources/demo/seeds/.
+import type { VmReadFail as ReadFail } from "../plan/vm.ts";
 import { pdfReader } from "./pdf-text.ts";
 import { demoStandards } from "../sources/demo/standards.ts";
 import { createScheduler } from "./scheduler.ts";
@@ -84,7 +85,7 @@ export type DemoControl = {
   /** VM-3: verification runs only (set where vmTick is): Admin › Health's pretend slow pass holds (true) or lets go. */
   passStall?: (on: boolean) => void;
   /** VM-4: verification runs only (set where vmTick is): reads of the demo VM's state fail this way (null: they work). */
-  vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void;
+  vmFail?: (kind: ReadFail | null) => void;
   /** VM-4: verification runs only: the next call of this action fails in a way the server didn't expect. */
   failNext?: (action: string) => void;
   /** VM-4: whether this call is the one to fail (and forgets it). */
@@ -361,7 +362,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       ...(opts.demo.vmTick ? { passStall: (on: boolean) => void (stalled = on) } : {}),
       ...(opts.demo.vmTick
         ? {
-            vmFail: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void (demoAzure.readFails.kind = kind),
+            vmFail: (kind: ReadFail | null) => void (demoAzure.readFails.kind = kind),
             failNext: (action: string) => void (failNext = action),
             takeFail: (action: string) => (failNext === action ? ((failNext = null), true) : false),
           }

@@ -93,7 +93,8 @@ describe("lead 2: Azure itself", () => {
     const c = createAzureClient({ fetch: flaky, token: async () => "SAME-TOKEN", log: (r) => void logs.push(r) });
     expect(await c.power(ref)).toBe("running");
     const e = await c.power(ref).catch((x: unknown) => x);
-    expect(problemOf(e)).toBe("refused");
+    // VM-6: AuthorizationFailed now says Azure's reason (not allowed right now); production's 403s had no code.
+    expect(problemOf(e)).toBe("not_allowed");
     expect(await c.power(ref)).toBe("running");
     expect(logs.map((l) => [l.status, l.kind ?? null])).toEqual([[200, null], [403, "AuthorizationFailed"], [200, null]]);
   });

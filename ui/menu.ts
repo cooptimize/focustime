@@ -73,7 +73,7 @@ export const COPY_LINK = "Copy DevOps link";
 /** A row menu's header: a label naming the row it was opened from, never an action (D459). */
 export type MenuHead = { text: string; full: string };
 export type MenuStep =
-  | { title: string; items: MenuItem[]; head?: MenuHead }
+  | { title: string; items: MenuItem[]; head?: MenuHead; /** VM-6: a few lines of plain text under the title (the VM's reason and when it was read); never an action. */ note?: readonly string[] }
   | {
       title: string;
       prompt: string;

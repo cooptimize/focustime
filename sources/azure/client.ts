@@ -58,12 +58,15 @@ export class AzureError extends Error {
   readonly status: number;
   /** The Azure permission this call needs, when Azure refused it. */
   readonly permission: string | null;
-  constructor(kind: AzureErrorKind, status: number, message: string, permission: string | null = null) {
+  /** VM-6: Azure's error code as one plain word (AuthorizationFailed), "" when it gave none. Never its message. */
+  readonly code: string;
+  constructor(kind: AzureErrorKind, status: number, message: string, permission: string | null = null, code = "") {
     super(message);
     this.name = "AzureError";
     this.kind = kind;
     this.status = status;
     this.permission = permission;
+    this.code = code;
   }
 }
 
@@ -124,6 +127,15 @@ export function allowedCall(method: string, url: string): AzureCall | null {
 /** VM-4: Azure's error code as a log kind: one plain code word (AuthorizationFailed), else "other"; none: "none". */
 export const azureCodeWord = (code: string): string => (!code ? "none" : /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(code) ? code : "other");
 
+/** VM-6: Azure's codes for a token it won't take (expired, for another tenant or resource): the sign-in, not a no. */
+const TOKEN_CODES = /^(InvalidAuthenticationToken\w*|ExpiredAuthenticationToken|AuthenticationFailed\w*)$/;
+/**
+ * VM-6: whether a Bearer challenge (WWW-Authenticate) names the token: `invalid_token` (expired, revoked, the wrong one)
+ * or `insufficient_claims` (Azure wants a fresh sign-in, a claims challenge). Only that one word is read; nothing of the
+ * header is kept or logged. `insufficient_scope` and anything else is a no, not a sign-in.
+ */
+export const challengeNamesToken = (header: string | null): boolean => !!header && /^\s*Bearer\b/i.test(header) && /\berror\s*=\s*"?(invalid_token|insufficient_claims)"?/i.test(header);
+
 export type VmCandidate = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; power: PowerState };
 export type VmInfo = { id: string; name: string; location: string };
 /** Where to poll a start or stop: Azure-AsyncOperation (status in the body) or Location (202 until done). */
@@ -170,19 +182,22 @@ export function createAzureClient(d: AzureDeps) {
     // VM-4: the code goes in the log as the failure's kind (a word Azure defines, never its message), so a refusal
     // like Nov 17's 403s says which kind of no it was. Anything that isn't one plain code word is "other".
     d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started, kind: azureCodeWord(code) });
-    throw failure(call, res.status, code);
+    throw failure(call, res.status, code, challengeNamesToken(res.headers.get("www-authenticate")));
   }
 
-  function failure(call: AzureCall, status: number, code: string): AzureError {
-    if (status === 401) return new AzureError("not_signed_in", status, "Azure didn't accept the sign-in. Sign in again");
-    if (status === 403) return new AzureError("forbidden", status, `Azure says you don't have permission: ${PERMISSION[call]}`, PERMISSION[call]);
+  function failure(call: AzureCall, status: number, raw: string, tokenChallenge = false): AzureError {
+    const code = raw && azureCodeWord(raw) !== "other" ? raw : "";
+    // VM-6: Azure asking for the sign-in again is the sign-in, whether it says so with a 401, a challenge naming the
+    // token or a token code on a 403 (before, a 403 was always read as "you don't have permission").
+    if (status === 401 || (status === 403 && (tokenChallenge || TOKEN_CODES.test(code)))) return new AzureError("not_signed_in", status, "Azure didn't accept the sign-in. Sign in again", null, code);
+    if (status === 403) return new AzureError("forbidden", status, `Azure says you don't have permission: ${PERMISSION[call]}`, PERMISSION[call], code);
     if (status === 404 || /NotFound$/.test(code)) {
       const what = call.startsWith("schedule") ? "No auto-shutdown schedule found for this VM" : code === "SubscriptionNotFound" ? "Subscription not found, or you can't see it" : "VM not found. It may have been deleted or moved";
-      return new AzureError("not_found", status, what);
+      return new AzureError("not_found", status, what, null, code);
     }
-    if (status === 429) return new AzureError("throttled", status, "Azure is busy (throttled). Try again in a minute");
-    if (status === 409) return new AzureError("failed", status, `Azure refused that right now${code ? ` (${code})` : ""}. Another operation may be running`);
-    return new AzureError("failed", status, `Azure error (HTTP ${status}${code ? `, ${code}` : ""})`);
+    if (status === 429) return new AzureError("throttled", status, "Azure is busy (throttled). Try again in a minute", null, code);
+    if (status === 409) return new AzureError("failed", status, `Azure refused that right now${code ? ` (${code})` : ""}. Another operation may be running`, null, code);
+    return new AzureError("failed", status, `Azure error (HTTP ${status}${code ? `, ${code}` : ""})`, null, code);
   }
 
   /** VMs I can see, across every subscription I can see, whose tag matches. Pages through $skipToken. */
