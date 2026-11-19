@@ -242,4 +242,4 @@
 .mtg-paste-line .error-line { margin: 0; }
 .mtg-paste-replace { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .app.phone .mtg-paste-flip, .app.phone .mtg-paste [data-paste-use], .app.phone .mtg-paste .mtg-upload-actions .mini { min-height: var(--tap, 44px); }
-.app.phone .mtg-paste-box { min-height: 12em; font-size: 16px; }
+.app.phone .mtg-paste-box { min-height: 12em; font-size: max(16px, var(--fs-3)); }
