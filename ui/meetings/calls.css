@@ -93,6 +93,11 @@
 .app.phone .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr); grid-template-rows: auto auto; padding: 4px 4px; }
 .app.phone .calls-row.one .calls-row-end { grid-column: time / -1; grid-row: 2; justify-content: flex-start; margin-left: 0; }
 .app.phone .calls-row.one .calls-row-main { min-height: 28px; }
+/* MC-6: on the phone a long title has the whole first line, its time and square the next, its client and mark the last. */
+.app.phone .calls-row.one.long .calls-row-main { grid-column: time / -1; grid-row: 1; }
+.app.phone .calls-row.one.long .calls-time, .app.phone .calls-row.one.long .calls-sq { grid-row: 2; align-self: center; }
+.app.phone .calls-row.one.long { grid-template-rows: auto auto auto; }
+.app.phone .calls-row.one.long .calls-row-end { grid-column: time / -1; grid-row: 3; }
 .app.phone .calls-row.closed .calls-row-end, .app.phone .calls-row.hidden-row .calls-row-end { grid-row: 2; }
 .app.phone .calls-row-main { min-height: 0; }
 .app.phone .calls-filters { display: inline-flex; }

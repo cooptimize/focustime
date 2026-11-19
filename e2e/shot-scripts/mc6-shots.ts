@@ -143,7 +143,9 @@ async function mc6Measures(page: Page) {
         if (Math.abs(r.top - lastTop) > 4) {
           lastTop = r.top;
           const before = getComputedStyle(k, "::before").content;
-          const sep = /·/.test(before) || (k.textContent ?? "").trim().startsWith("·");
+          // A separator is drawn only where it isn't clipped: MC-6 clips the strip left of the title's edge.
+          const edge = meta.parentElement?.querySelector("h2")?.getBoundingClientRect().left ?? meta.getBoundingClientRect().left;
+          const sep = (/·/.test(before) && r.left >= edge - 1) || (k.textContent ?? "").trim().startsWith("·");
           if (sep) sepFirst++;
           starts.push(`${sep ? "· " : ""}${(k.textContent ?? "").trim().slice(0, 12)}`);
         }
