@@ -1008,9 +1008,8 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
   const fields = (
     <div className="mtg-add-grid">
       <label>{ADD_TEXT.name}<input value={name} maxLength={200} required onChange={(e) => (setName(e.target.value), setNamed(true))} data-add-name="" /></label>
-      {mode === "pocket" ? (
-        rec && <p className="muted mtg-add-when" data-add-when="">{whenLine(rec.rec.startAt, rec.rec.endAt, zone)}</p>
-      ) : (
+      {/* MC-6: a chosen recording's time is said once, on its own line in the list above. */}
+      {mode === "pocket" ? null : (
         <>
           <label>{ADD_TEXT.day}<input type="date" value={date} min={min} max={today} required onChange={(e) => setDate(e.target.value)} /></label>
           <label>{ADD_TEXT.starts}<input type="time" value={start} required onChange={(e) => setStart(e.target.value)} data-add-start="" /></label>

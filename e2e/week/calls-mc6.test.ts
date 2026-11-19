@@ -174,4 +174,15 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await expect(page.locator("[data-calls-tickbar]").count()).resolves.toBe(1);
     await expect(page.locator("[data-calls-tickbar] [data-tickbar='done']").count()).resolves.toBe(1);
   }, T);
+
+  it("8: in Add a call a chosen recording's time is on screen once, on its line", async () => {
+    const { page } = await open();
+    await calls(page);
+    await page.getByRole("button", { name: "Add a call" }).first().click();
+    const add = page.locator("[data-add-call]");
+    const rec = add.locator("[data-rec-pick]").first();
+    await rec.click();
+    const when = (await rec.textContent())!.match(/[A-Z][a-z]{2}, [A-Z][a-z]{2} \d+ · \d+:\d\d [AP]M/)![0];
+    await expect(onScreen(page, "[data-add-call]", new RegExp(when.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).resolves.toBe(1);
+  }, T);
 });
