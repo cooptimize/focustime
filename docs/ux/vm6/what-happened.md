@@ -4,7 +4,7 @@ Read from production's logs on Nov 18, read only (Log Analytics `ft-prod-log`, t
 
 ## In two sentences
 
-Azure refused the VM's state to one copy of the app at a time: every read from revision 34 (Nov 18, 15:29 to 19:17) and about one in five from revision 29 (Nov 17, 21:11 to Nov 18, 01:11), whatever the token, the sign-in or the page, while every other revision since Nov 16 was never refused. The refusals carried no Azure error code and came back in about 25 to 110 ms, so they were not a missing role (Azure says `AuthorizationFailed` for that) and not FocusTime's code (nothing on the VM path changed between a refusing revision and the next working one); what on Azure's side refused that one copy isn't in the logs.
+Azure refused the VM's state to one copy of the app at a time: every read from revision 34 (Nov 18, 15:29 to 19:17) and about one in five from revision 29 (Nov 17, 21:11 to Nov 18, 01:11), whatever the token, the sign-in or the page, while every other revision since Nov 17 was never refused. Revision 34's refusals carried no Azure error code (revision 29's code wasn't logged yet), so they weren't a missing role, which Azure names `AuthorizationFailed`. They weren't FocusTime's code either: revision 29 both answered and refused on the same code, a minute apart on one token. What on Azure's side refused that one copy isn't in the logs.
 
 ## Every Azure call since VM-4 reached production
 
@@ -46,7 +46,7 @@ The auto-shutdown time is read only after the state is read, so in the refused h
 | Nov 17, 21:11 to Nov 18, 01:11 | 29 | 403 | not logged yet (before VM-4) | 33 of 175 | 66 ms |
 | Nov 18, 15:29:02 to 19:17:41 | 34 | 403 | `none`: no error code in Azure's answer | 466 of 466 | 48 ms |
 
-An answered read takes about 150 to 500 ms (median 220 ms). The refused ones came back in a fifth of that, so Azure said no before it looked at the VM.
+An answered read takes about 150 to 500 ms (median 220 ms); the refused ones about a fifth to a third of that. A quick no doesn't by itself say which part of Azure gave it.
 
 ## By revision
 
@@ -119,8 +119,8 @@ Yes, on a day a refusing revision is running at someone's planned time. A refuse
 |---|---|---|
 | One of several calls refused, shown as the whole state refused | Ruled out: only the state read was refused, and the chip makes only the state and auto-shutdown reads (no list at a subscription or resource group). | `actions/vm6-refused.test.ts`: the chip asks Azure for exactly those two; a refused auto-shutdown read leaves the state shown and says the time couldn't be read (that part was missing: fixed, D). |
 | A token for the wrong resource or tenant on some reads | Ruled out: one token got both answers; five tokens were all refused in one revision; the next revision's first was answered. | `sources/oauth/oauth.test.ts`: the Azure token asks only for Azure, is kept apart from the others, and a sign-in drops it. |
-| Azure asking for the sign-in again, read as refused | Not this time: a sign-in ask from Azure comes as a 401 or with a challenge naming the token; these 403s carried no code. But a 403 with such a challenge was read as refused. | `sources/azure/client.test.ts`: a 403 with a challenge naming the token is a sign-in problem (that was wrong: fixed, C). |
-| The person's access coming and going | Not supported: a missing role comes back as `AuthorizationFailed`; these had no code, and the refusals started and stopped with revisions to the second. Only Azure's code can show it next time, and the chip now says so in plain words. | `actions/vm6-refused.test.ts`: `AuthorizationFailed` says "not allowed right now" with what to do. |
+| Azure asking for the sign-in again, read as refused | The logs can't show it either way: a sign-in ask comes as a 401 or a 403 with a challenge header, and the header wasn't logged. Revision 34's 403s carried no token code, and new tokens and sign-ins didn't help, which points away from it. A 403 with such a challenge was read as refused. | `sources/azure/client.test.ts`: a 403 with a challenge naming the token is a sign-in problem (that was wrong: fixed, C). |
+| The person's access coming and going | Not supported for revision 34: a missing role comes back as `AuthorizationFailed`; these had no code (revision 29's wasn't logged), and the refusals started and stopped with revisions to the second. Only Azure's code can show it next time, and the chip now says so in plain words. | `actions/vm6-refused.test.ts`: `AuthorizationFailed` says "not allowed right now" with what to do. |
 
 ## Left open
 

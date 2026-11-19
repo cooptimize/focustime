@@ -1,5 +1,5 @@
 // VM-6: why Azure refused the VM's state now and then (docs/ux/vm6/what-happened.md). Production's logs: every state
-// read from one revision (and one in five from another) answered 403 with no Azure code in about 25 to 110 ms, whatever
+// read from one revision (and one in five from another) answered 403, with no Azure code where it was logged, whatever
 // the token or the sign-in; the next revision's were answered. Not FocusTime's code and not a missing role. What the
 // chip does about it: Azure's reason in plain words with when the state was last read, a sign-in ask shown as one, and
 // a refused auto-shutdown read no longer hiding anything. Fictional VM and person only.
