@@ -1171,6 +1171,11 @@ async function fetchChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
   const callId = series.eventId ? callIdOfKey(series.eventId) : null;
   const c = callId ? await ctx.chatCalls.one(callId) : null;
   if (!c || c.chatId !== chatIdOf(series)) return say("not_in_chat", 403);
+  // MC-6: a chat call kept under another client before the rule is never read again under it: nothing is asked of Teams and nothing goes to the AI.
+  if (!(await chatClientAllowed(ctx, c.clientKey, series.clientKey))) {
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: "chat_other_client" });
+    return { ok: false, status: 403, error: CHAT_OTHER_CLIENT, code: "chat_other_client" };
+  }
   const client = ctx.adhoc?.(cfg) ?? null;
   if (!client) return say("signin");
   const press = ctx.chatPress.open(me, c.callId);

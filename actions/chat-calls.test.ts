@@ -273,6 +273,15 @@ describe("MC-6: a chat call keeps its chat's client", () => {
     expect((await t.act(MATE, "meeting.update", { seriesId: kept.series.id, clientKey: "fabrikam" }, { admin: true })).ok).toBe(false);
   });
 
+  it("a chat call kept under another client before MC-6 is never read under it: Get it from Teams is refused before Teams is asked", async () => {
+    const t = await setup();
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.start(ME));
+    await t.db.conn.run("UPDATE meeting_series SET client_key = ? WHERE call_kind = ?", ["fabrikam", "chat"]);
+    expect(await t.fetchIt(ME, occurrenceId)).toMatchObject({ ok: false, status: 403, code: "chat_other_client", error: CHAT_OTHER_CLIENT });
+    expect(t.sent).toEqual([]);
+    expect(await t.meetings.transcript(occurrenceId)).toBeNull();
+  });
+
   it("the rule asks the team's Internal answer when it has one", async () => {
     expect(await chatClientAllowed({ isInternal: async (k) => k === "Inside" }, "contoso", "Inside")).toBe(true);
     expect(await chatClientAllowed({ isInternal: async (k) => k === "Inside" }, "contoso", "Cooptimize")).toBe(false);
