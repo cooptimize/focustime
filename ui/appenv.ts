@@ -7,8 +7,8 @@ const askKnownEnv = (): Promise<string | null> =>
   (envCache ??= fetch("/version", { credentials: "same-origin" })
     .then((r) => (r.ok ? (r.json() as Promise<{ env?: string }>) : Promise.reject(new Error(String(r.status)))))
     .then((b) => b.env ?? null, () => null));
-/** As before EV-1: "prod" when it can't be read. */
-const askEnv = (): Promise<string> => askKnownEnv().then((e) => e ?? "prod");
+/** As before EV-1: "prod" when it can't be read. SA-5: the command menu asks it on its first open, never at start. */
+export const askEnv = (): Promise<string> => askKnownEnv().then((e) => e ?? "prod");
 
 /** The app's environment from /version ("local" is the developer loop; "dev" and "prod" are hosted), null while asking. */
 export function useAppEnv(): string | null {

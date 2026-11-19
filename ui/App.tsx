@@ -88,7 +88,7 @@ import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { CarryProvider } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { useAdmin } from "./settings/use-admin.ts";
-import { useDeveloperLoop } from "./appenv.ts";
+import { askEnv } from "./appenv.ts";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
 import { InstallHowTo, PhoneReadOnly } from "./Phone.tsx";
@@ -254,12 +254,13 @@ export function App() {
   const [dragAt, setDragAt] = useState<{ date: IsoDate; half: Half } | null>(null);
   // ADM-1: whether the signed-in person is a FocusTime admin (Admin in ⋯ and the Settings sidebar).
   const isAdmin = useAdmin();
-  const devLoop = useDeveloperLoop();
   const [cmdOpen, setCmdOpen] = useState(false);
-  // SA-5: Settings' search in the command menu, loaded the first time the menu opens (it stays out of the first download).
-  const [settingsSearch, setSettingsSearch] = useState<typeof import("./settings/menu-results.ts") | null>(null);
+  // SA-5: Settings' search in the command menu, loaded the first time the menu opens (it stays out of the first
+  // download), with whether this is the developer loop (asked then too: production's start asks /version for nothing).
+  const [settingsSearch, setSettingsSearch] = useState<{ mod: typeof import("./settings/menu-results.ts"); dev: boolean } | null>(null);
   useEffect(() => {
-    if (cmdOpen && !settingsSearch) void import("./settings/menu-results.ts").then(setSettingsSearch, () => {});
+    if (cmdOpen && !settingsSearch)
+      void Promise.all([import("./settings/menu-results.ts"), askEnv()]).then(([mod, env]) => setSettingsSearch({ mod, dev: env === "local" }), () => {});
   }, [cmdOpen, settingsSearch]);
   const [keysOpen, setKeysOpen] = useState(false);
   /**
@@ -2744,7 +2745,7 @@ export function App() {
           extra={(q) =>
             !settingsSearch
               ? []
-              : settingsSearch.settingsResults(q, { demo: !!data.demo, dev: devLoop, phone, admin: isAdmin === true }, {
+              : settingsSearch.mod.settingsResults(q, { demo: !!data.demo, dev: settingsSearch.dev, phone, admin: isAdmin === true }, {
               openSettings: env.openSettings,
               clients: deployClients(env).map((c) => ({ key: c.value, name: c.label })),
               go: (href) => {

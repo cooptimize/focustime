@@ -109,7 +109,8 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
       await menu.waitFor();
       if (q) await page.keyboard.type(q);
       await page.waitForTimeout(250);
-      seen[`command menu: ${q || "all"}`] = oldWords(await menu.innerText());
+      // SA-5: the menu's Settings results are Settings' own names (a send's Must stays, CF-1 G5), checked on their pages.
+      seen[`command menu: ${q || "all"}`] = oldWords(await menu.evaluate((m) => [...m.querySelectorAll<HTMLElement>(".menu-item:not([data-group=\"Settings\"])")].map((e) => e.innerText).join("\n")));
       await page.keyboard.press("Escape");
       await menu.waitFor({ state: "detached" });
     }
