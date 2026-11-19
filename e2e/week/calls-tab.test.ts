@@ -164,7 +164,8 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     const sections = await page.locator("[data-calls-list] .calls-scroll > .calls-day").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-section")));
     expect(sections.slice(0, 2)).toEqual(["needs", "week-this"]);
     expect(sections).toContain("week-last");
-    await expect(page.locator("#calls-week-last").textContent()).resolves.toMatch(/1 closed/);
+    // MC-7: the weekly call's week before, and the two calls the demo reviewed from a paste.
+    await expect(page.locator("#calls-week-last").textContent()).resolves.toMatch(/3 closed/);
     const keys = await rows(page).evaluateAll((rs) => rs.map((r) => r.getAttribute("data-call-row")));
     expect(new Set(keys).size).toBe(keys.length);
     // The calls with no transcript are folded at the end, with their count.
@@ -262,7 +263,7 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await expect(page.evaluate(() => document.activeElement?.tagName)).resolves.toBe("INPUT");
     // A registered call opens its page beside the list, with the list's filter left as it was.
     await page.locator('[data-calls-filter="closed"]').click();
-    await page.locator("[data-section='closed'] [data-call-row]").first().click();
+    await page.locator("[data-section='closed'] [data-call-row]").filter({ hasText: "Northwind weekly status call" }).first().click();
     await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     await expect.poll(() => hash(page)).toMatch(/^#\/calls\/\d+\?show=closed$/);
     await expect(page.locator('[data-calls-filter="closed"]').getAttribute("aria-pressed")).resolves.toBe("true");

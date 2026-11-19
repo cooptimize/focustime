@@ -31,11 +31,54 @@ export function demoMeetingVtt(): string {
   return ["WEBVTT", "", ...CUES.flatMap(([who, words], i) => [`${at(5 + i * 20)} --> ${at(5 + i * 20 + 18)}`, `<v ${who}>${words}</v>`, ""])].join("\n");
 }
 
+/**
+ * MC-7: two calls added by hand and reviewed from what the demo's person pasted: a transcript copied from another
+ * note-taker (a name and a time, the words under it) and their own notes typed during a call. Fictional words.
+ */
+export const DEMO_PASTED = {
+  transcript: {
+    name: "Northwind export check-in",
+    start: "11:00",
+    text: [
+      "Alex Rivera  0:04",
+      "Quick check-in on the export before the weekly call.",
+      "Dana Brooks  0:21",
+      "Small one: the export file name should carry the date range, so files don't overwrite each other.",
+      "Alex Rivera  0:48",
+      "Makes sense. I'll book a session with your accountants next week to walk through the statements.",
+      "Dana Brooks  1:10",
+      "Good. The CSV part of the export is on track from our side, no blockers.",
+      "Alex Rivera  1:32",
+      "Thanks Dana, talk Monday.",
+    ].join("\n"),
+  },
+  notes: {
+    name: "Northwind statements chat",
+    start: "15:30",
+    text: [
+      "Statements with Dana",
+      "- Export: CSV only for now, Excel can wait until next quarter",
+      "- Accountants need a monthly statement as a PDF from the same page, nothing like that exists yet",
+      "- I'll send the date range filter for review by Thursday",
+      "- Dana to share three sample statements from last year",
+      "- Longer term: one reporting area for the accountants",
+    ].join("\n"),
+  },
+} as const;
+
 /** The demo's answer for the meeting capture task, built from the numbered transcript it was given. */
 export function demoMeetingAnswer(input: string): unknown {
   // PK-1: a line from a Pocket export has no time ("L4 Speaker 2: words").
-  const lines = [...input.matchAll(/^L(\d+)(?: \[[^\]]*\])? ([^:]+): (.*)$/gm)].map((m) => ({ n: Number(m[1]), who: m[2]!, text: m[3]! }));
+  // MC-7: a note line has no speaker ("L4 words"), and the input then lists no speakers.
+  const notes = !/^Speakers:/m.test(input);
+  const lines = [...input.matchAll(notes ? /^L(\d+)() (.*)$/gm : /^L(\d+)(?: \[[^\]]*\])? ([^:]+): (.*)$/gm)].map((m) => ({ n: Number(m[1]), who: m[2]!, text: m[3]! }));
   const find = (words: string) => lines.filter((l) => l.text.toLowerCase().includes(words)).map((l) => l.n).slice(0, 1);
+  // MC-7: from notes, as the notes sentence asks: "I" where the note says I, a name only where the note writes it.
+  const whoIn = (who: string, words: string) => {
+    if (!notes) return who;
+    const t = lines.find((l) => l.text.toLowerCase().includes(words))?.text ?? "";
+    return /\bI('ll| will)\b/.test(t) ? "I" : t.toLowerCase().includes(who.split(" ")[0]!.toLowerCase()) ? who : "";
+  };
   // MC-2: "Meeting: <name> (<role>), <date> (<weekday>)", or with no role for a call that isn't registered.
   const date = /, (\d{4}-\d{2}-\d{2}) \(/.exec(input)?.[1] ?? null;
   // "by Thursday": the next Thursday on or after the meeting.
@@ -51,12 +94,12 @@ export function demoMeetingAnswer(input: string): unknown {
       { type: "User Story", parentId: null, title: "Region on each holiday", description: "Northwind wants regional holidays too. Each holiday in the calendar import needs a region field.", lines: find("field for the region") },
     ]),
     commitments: keep([
-      { who: "Alex Rivera", what: "Send the date range filter for review", toName: "Dana Brooks", due: thursday, lines: find("date range filter") },
-      { who: "Dana Brooks", what: "Share three sample statements from last year", toName: null, due: null, lines: find("sample statements") },
-      { who: "Priya Shah", what: "Add the row limit warning before the export ships", toName: null, due: null, lines: find("row limit") },
-      { who: "Alex Rivera", what: "Book a session with Northwind's accountants to walk through the statements", toName: "Dana Brooks", due: null, lines: find("book a session") },
-      { who: "Priya Shah", what: "Write up the date check as a story under the rates export feature", toName: null, due: date, lines: find("write that up") },
-      { who: "Alex Rivera", what: "Tell Dana the import is paused until the date check is in", toName: "Dana Brooks", due: null, lines: find("import is paused") },
+      { who: whoIn("Alex Rivera", "date range filter"), what: "Send the date range filter for review", toName: "Dana Brooks", due: thursday, lines: find("date range filter") },
+      { who: whoIn("Dana Brooks", "sample statements"), what: "Share three sample statements from last year", toName: null, due: null, lines: find("sample statements") },
+      { who: whoIn("Priya Shah", "row limit"), what: "Add the row limit warning before the export ships", toName: null, due: null, lines: find("row limit") },
+      { who: whoIn("Alex Rivera", "book a session"), what: "Book a session with Northwind's accountants to walk through the statements", toName: "Dana Brooks", due: null, lines: find("book a session") },
+      { who: whoIn("Priya Shah", "write that up"), what: "Write up the date check as a story under the rates export feature", toName: null, due: date, lines: find("write that up") },
+      { who: whoIn("Alex Rivera", "import is paused"), what: "Tell Dana the import is paused until the date check is in", toName: "Dana Brooks", due: null, lines: find("import is paused") },
     ]),
     // MC-2: what was discussed and decided, from the lines this part of the call has.
     summary: [

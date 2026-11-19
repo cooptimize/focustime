@@ -236,10 +236,10 @@
 /* MC-7: Paste: one box tall enough for a page, its line under it (what it was taken for, and the switch). */
 .mtg-paste { display: grid; gap: 6px; min-width: 0; }
 .mtg-paste-label { font-weight: 500; }
-.mtg-paste-box { width: 100%; box-sizing: border-box; min-height: 14em; max-height: 60vh; resize: vertical; font: inherit; font-size: var(--fs-3); line-height: 1.45; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mtg-paste-box { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-3); line-height: 1.45; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mtg-paste-box:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .mtg-paste-line { margin: 0; min-height: 1.4em; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: var(--fs-2); }
 .mtg-paste-line .error-line { margin: 0; }
 .mtg-paste-replace { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .app.phone .mtg-paste-flip, .app.phone .mtg-paste [data-paste-use], .app.phone .mtg-paste .mtg-upload-actions .mini { min-height: var(--tap, 44px); }
-.app.phone .mtg-paste-box { min-height: 12em; font-size: max(16px, var(--fs-3)); }
+.app.phone .mtg-paste-box { font-size: max(16px, var(--fs-3)); }

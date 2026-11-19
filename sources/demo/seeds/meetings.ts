@@ -2,10 +2,11 @@
 // pasted join link, as Upload, with me and Priya as Cooptimize attendees; the latest call's transcript is uploaded through
 // the app's own upload, so the AI pass (the demo's sample answer) makes the proposals: a gap, three commitments and two
 // comments, ready on the review screen (MC-1e: and one older comment on a feature, which won't be sent). Attendees are written directly, as only a calendar read sets them.
+// MC-7: and two calls added by hand, reviewed from a pasted transcript and from pasted notes.
 import { meetingContext } from "../../../actions/dispatch.ts";
 import { uploadTranscript } from "../../../actions/meeting-actions.ts";
 import { DEMO_PEOPLE } from "../data.ts";
-import { DEMO_MEETING, demoMeetingVtt } from "../meetings.ts";
+import { DEMO_MEETING, DEMO_PASTED, demoMeetingVtt } from "../meetings.ts";
 import type { DemoSeed } from "./types.ts";
 import { atOf } from "../../../plan/transcript.ts";
 
@@ -40,5 +41,16 @@ export const meetingsSeed: DemoSeed = {
     const before = call.subtract({ days: 7 });
     const at = (d: Temporal.PlainDate, m: number) => d.toZonedDateTime({ timeZone: zone, plainTime: Temporal.PlainTime.from(DEMO_MEETING.start).add({ minutes: m }) }).toInstant().toString();
     await store.ensureOccurrence(seriesId, before.toString(), at(before, 0), at(before, DEMO_MEETING.minutes), "no_transcript", null);
+    // MC-7: two calls added by hand, reviewed from a pasted transcript and from pasted notes (fictional words), through
+    // the paste's own action, so the demo's AI makes their proposals as it does for a file. Both are older than the
+    // weekly call and already reviewed (closed with Skip all), so nothing about them needs me: they show how a pasted
+    // call reads, and every other count in the demo stays as it was.
+    for (const [as, x, back] of [["transcript", DEMO_PASTED.transcript, 9], ["notes", DEMO_PASTED.notes, 10]] as const) {
+      const added = await run("meeting.call_add", { name: x.name, date: day.subtract({ days: back }).toString(), start: x.start, minutes: 30, clientKey: DEMO_MEETING.clientKey });
+      const occ = (await store.occurrence((added as { occurrenceId: number }).occurrenceId))!;
+      const pasted = await uploadTranscript(await meetingContext(ctx), { seriesId: occ.seriesId, date: occ.date, bytes: new TextEncoder().encode(x.text), paste: as });
+      if (!pasted.ok) throw new Error(`demo seed pasted ${as}: ${pasted.error}`);
+      await run("meeting.skip_all", { occurrenceIds: [occ.id] });
+    }
   },
 };

@@ -6,6 +6,7 @@
 import { useDeferredValue, useEffect, useId, useMemo, useState } from "react";
 import { readPaste, type PasteAs, type PasteRead } from "../../plan/transcript.ts";
 import { PASTE_TEXT } from "../../plan/call-words.ts";
+import { TextBox } from "../TextBox.tsx";
 
 export type Paste = { text: string; as: PasteAs };
 
@@ -46,7 +47,7 @@ export function PasteField({ p, autoFocus = false, children }: { p: PasteState; 
   return (
     <div className="mtg-paste" data-paste="">
       <label htmlFor={`${id}-box`} className="mtg-paste-label">{PASTE_TEXT.label}</label>
-      <textarea id={`${id}-box`} className="mtg-paste-box" rows={12} value={p.text} onChange={(e) => p.setText(e.target.value)} autoComplete="off" autoFocus={autoFocus} aria-describedby={`${id}-hint ${id}-line`} data-paste-box="" />
+      <TextBox id={`${id}-box`} className="mtg-paste-box" minRows={12} maxRows={24} value={p.text} onChange={(e) => p.setText(e.target.value)} autoComplete="off" autoFocus={autoFocus} aria-describedby={`${id}-hint ${id}-line`} data-paste-box="" />
       <span id={`${id}-hint`} className="mtg-drop-kinds">{PASTE_TEXT.hint}</span>
       <p id={`${id}-line`} className="mtg-paste-line" role="status" aria-live="polite" data-paste-line={r ? (r.tooLong ? "long" : r.tooShort ? "short" : r.as) : ""}>
         {!r ? null : r.tooLong ? (
