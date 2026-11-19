@@ -65,6 +65,10 @@ export type VmStatus = {
   autoStart: AutoStartView | null;
   /** VM-4: when the state shown was read from Azure (null: none read yet). */
   readAt?: string | null;
+  /** VM-6: the same, in words for the menu: "Last read 2:14 PM" (the last good read; never a failed one). */
+  lastRead?: string | null;
+  /** VM-6: the state was read but the auto-shutdown time wasn't: the menu's line saying so (null: it was, or none). */
+  scheduleUnread?: string | null;
   /** VM-4: the server's time when it answered, so the page can say "how long ago" on its own clock (ui/vm-status.ts). */
   answeredAt?: string;
   /**

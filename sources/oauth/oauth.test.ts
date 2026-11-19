@@ -256,6 +256,28 @@ describe("one Microsoft sign-in (step 15.4)", () => {
     expect(await client.identity()).toMatchObject({ username: "pat@example.com" });
   });
 
+  // VM-6, lead 2: production's refusals came with one token answering 200 and 403, and with five tokens all refused on one
+  // revision (docs/ux/vm6/what-happened.md). Still, the Azure token must be its own: asked only for Azure, never handed
+  // out for another kind, and dropped at a sign-in so the next read gets a fresh one.
+  it("VM-6: the Azure token asks only for Azure, is kept apart from the others, and a sign-in drops it", async () => {
+    const { client, tok } = ms({ consented: [READ, "user_impersonation"], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await client.accessToken("arm");
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe(`offline_access ${ARM}`);
+    const n = tok.calls.length;
+    await client.accessToken("arm");
+    expect(tok.calls).toHaveLength(n);
+    // Another kind is its own request, never the Azure token reused.
+    await client.accessToken("read");
+    expect(tok.calls).toHaveLength(n + 1);
+    expect(tok.calls.at(-1)!.body.get("scope")).not.toContain("management.azure.com");
+    // A sign-in: the Azure token held before it is gone, and the next one is asked for again.
+    expect(await client.connect({ azure: true, loginHint: "pat@example.com" })).toMatchObject({ status: "connected" });
+    const m = tok.calls.length;
+    await client.accessToken("arm");
+    expect(tok.calls).toHaveLength(m + 1);
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe(`offline_access ${ARM}`);
+  });
+
   it("an older Outlook sign-in keeps working and learns who it is without a new consent", async () => {
     const { client, tok, browser } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
     expect(await client.accessToken()).toBe(FAKE_ACCESS);
