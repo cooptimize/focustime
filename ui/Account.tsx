@@ -290,7 +290,9 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
         note.push(s.problem ? s.problem.text : "FocusTime couldn't read your VM's state just now and is asking again.");
         // The reason, then what to do (review: the menu said only the reason). A sign-in is one item that signs in.
         const next = s.problem ? READ_NEXT[s.problem.kind] : null;
-        const head: MenuItem[] = [s.problem?.kind === "sign_in" ? { id: "checking", label: "Sign in to Azure again…", ...(ago ? { hint: `Read ${ago}` } : {}), run: consent } : { id: "checking", label: s.problem?.short ?? CHECKING, ...(ago ? { hint: `Read ${ago}` } : {}), run: () => void notify(said) }];
+        // VM-6: the note under the title says when it was last read; the age stays as the item's hint only without it.
+        const age = ago && !s.lastRead ? { hint: `Read ${ago}` } : {};
+        const head: MenuItem[] = [s.problem?.kind === "sign_in" ? { id: "checking", label: "Sign in to Azure again…", ...age, run: consent } : { id: "checking", label: s.problem?.short ?? CHECKING, ...age, run: () => void notify(said) }];
         if (next) head.push({ id: "checking-next", label: next, run: () => void notify(said) });
         items.unshift(...head);
       }

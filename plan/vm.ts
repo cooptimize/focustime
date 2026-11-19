@@ -100,7 +100,7 @@ export const READ_NEXT: Record<ReadProblem | "app", string | null> = {
 export const READ_PROBLEM: Record<ReadProblem | "app", { short: string; text: string }> = {
   network: { short: "Can't reach Azure", text: "FocusTime can't reach Azure to read your VM's state. It keeps trying; nothing to do unless this lasts." },
   busy: { short: "Azure is busy", text: "Azure is busy and asked FocusTime to wait. It keeps trying; nothing to do." },
-  sign_in: { short: "Sign in to Azure again", text: "Azure wants you to sign in again before FocusTime can read your VM. Choose Allow Azure access." },
+  sign_in: { short: "Sign in to Azure again", text: "Azure wants you to sign in again before FocusTime can read your VM. Choose Sign in to Azure again." },
   // VM-6: Azure's own reasons, from its code. The face stays short; the menu says the rest.
   not_allowed: { short: "Azure refused", text: "Azure says your sign-in isn't allowed to read this VM right now. If your access is switched on for a time, switch it on again in Azure." },
   not_found: { short: "VM not found", text: "Azure can't find this VM. It may have been moved or deleted." },
