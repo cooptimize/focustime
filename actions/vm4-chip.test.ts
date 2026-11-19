@@ -2,6 +2,7 @@
 // read in four answered 403 for about two hours) and stayed so for a minute. Now it keeps the last state it knew with a
 // checking mark and asks again in about 10 seconds; after 2 minutes it says why; Unknown only when Azure answers with no
 // state. Nothing is started or stopped on an older reading. Fictional VM and person only.
+import type { VmReadFail as ReadFail } from "../plan/vm.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML } from "../fixtures/four-day-week.ts";
@@ -24,7 +25,7 @@ async function setup() {
   clearVmState();
   let t = Date.parse("2026-11-17T21:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (ms: number) => void (t += ms) };
-  const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
+  const readFails: { kind: ReadFail | null } = { kind: null };
   const arm = fakeArm({ now: () => t, transitionMs: 45_000, readFails });
   arm.addVm({ id: VM, name: "vm-pat-01", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", tags: { Owner: "Pat Example" }, power: "running" }, { time: "1900" });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });

@@ -1,5 +1,6 @@
 // Demo mode (step 15.4): a fictional signed-in person and VM. The Azure side is the fake Resource Manager behind a fetch
 // that never leaves the process: a start takes about 20 seconds, the auto-shutdown is 7:00 PM (read only). No Azure calls.
+import type { VmReadFail as ReadFail } from "../../plan/vm.ts";
 import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
@@ -49,7 +50,7 @@ export const DEMO_VM_NO_SHUTDOWN_ID = "/subscriptions/00000000-0000-4000-8000-00
 /** MC-2: `meetingsGate`, the same gate the hosted app puts before every transcript read (the press, in the demo). */
 export function createDemoAzure(o: { meetingsGate?: MeetingGate; /** PK-4: "long" adds 30 one-off calendar calls. */ calls?: "long"; /** MC-2c: the chat call press gate; absent: no chat call transcripts here. */ adhocGate?: AdhocGate } = {}) {
   // VM-4: verification runs only (demo.vm_fail): reads of the demo VM's state fail in the way asked, to see the chip.
-  const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
+  const readFails: { kind: ReadFail | null } = { kind: null };
   const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000, readFails });
   arm.addVm({ id: DEMO_VM_ID, name: "vm-demo-alex", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: { Owner: DEMO_PERSON.name }, power: "deallocated" }, { time: "1900", timeZoneId: "Eastern Standard Time" });
   arm.addVm({ id: DEMO_VM_NO_SHUTDOWN_ID, name: "vm-demo-spare", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: {}, power: "deallocated" });

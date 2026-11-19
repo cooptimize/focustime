@@ -93,6 +93,14 @@ export const READ_PROBLEM: Record<ReadProblem | "app", { short: string; text: st
 };
 export const CHECKING = "Checking…";
 
+/**
+ * VM-4 and VM-6, for tests and demo verification runs only (demo.vm_fail): how the fake Azure fails a read of the VM's
+ * state. VM-6 adds the 403 production got (no body, so no Azure code), a 403 asking for the sign-in again (a challenge
+ * naming the token), Azure not finding the VM, and `schedule`: the state is read, the auto-shutdown read is refused.
+ */
+export const VM_READ_FAILS = ["network", "busy", "sign_in", "refused", "no_state", "no_code", "challenge", "not_found", "schedule"] as const;
+export type VmReadFail = (typeof VM_READ_FAILS)[number];
+
 /** "just now", "40 seconds ago", "1 minute ago", "3 minutes ago", "2 hours ago": how old the state shown is. */
 export function agoText(at: string | null, nowMs: number): string | null {
   if (!at) return null;
