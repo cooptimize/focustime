@@ -103,8 +103,11 @@
 .mtg-head .mtg-back { grid-area: back; }
 .mtg-head h2 { grid-area: title; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-4); font-weight: 600; }
 .mtg-head-acts { grid-area: acts; display: inline-flex; align-items: center; gap: 8px; }
-.mtg-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0; color: var(--text-muted); font-size: var(--fs-2); }
-.mtg-meta > span:not(.calls-sq):not(:nth-child(2))::before { content: "·"; margin-right: 6px; color: var(--text-faint, var(--text-muted)); }
+/* MC-6: each piece after the first carries its separator in front (12px); the line is drawn 12px to the left and that
+   strip clipped, so a piece that wraps to the start of a line never shows a separator first. */
+.mtg-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0 0 0 -12px; clip-path: inset(0 0 0 12px); color: var(--text-muted); font-size: var(--fs-2); }
+.mtg-meta > :first-child { margin-left: 12px; }
+.mtg-meta > span:not(.calls-sq):not(:nth-child(2))::before { content: "·"; display: inline-block; width: 12px; color: var(--text-faint, var(--text-muted)); }
 .mtg-meta > span[title] { cursor: help; text-decoration: underline dotted; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 /* The Show row: the kinds as chips with their counts (the only place the count is), and how much is decided. */
 .mtg-show { display: flex; align-items: center; gap: 8px; min-width: 0; }
