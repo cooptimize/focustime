@@ -155,6 +155,12 @@ const TAB_TITLES: Record<Tab, string> = {
   code: "Code: every client's repos, read only: search for something, or look around a client's repos",
 };
 
+/**
+ * UC-3: a tab's tooltip ends with how to reach it by key, "Press 6", never "(6)" (beside a count it read as a second
+ * one). Status's reason, when there is one, goes before it.
+ */
+const tabTip = (title: string, key: number, more: string) => `${title}.${more ? ` ${more.replace(/\.?$/, ".")}` : ""} Press ${key}`;
+
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /** PF-1: a tab's file fetched ahead, on its button's hover or focus (the key and the click ask for it anyway). */
@@ -2114,7 +2120,7 @@ export function App() {
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
           {TABS.filter(tabShown).map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={TAB_TITLES[t] + ` (${n + 1})` + (t === "status" && statusTone !== "none" ? `. ${statusText}` : "")} data-tour={t === "status" ? "tab-status" : undefined}>
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={tabTip(TAB_TITLES[t], n + 1, t === "status" && statusTone !== "none" ? statusText : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}
