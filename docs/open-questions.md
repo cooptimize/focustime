@@ -1910,3 +1910,7 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **The refused auto-shutdown read was never seen on production.** It waits on the state read, which was the one refused. The line for it is built from the brief, not from an event.
 - **Words for a refusal with no code.** The brief keeps VM-4's sentence, which points at checking access in the portal; production's refusals weren't access. Left as the brief has it.
 - **The 403 with a challenge as a sign-in for the automatic start.** It now claims the day as VM-2's sign_in, as a 401 does, rather than being read again until the late limit. Taken as the reading that matches the existing rule for a sign-in.
+
+## VM-7: a refused Azure answer's three facts (Nov 18)
+
+- **Admin › Health's line for Azure answers.** Left out: Health keeps nothing it could count them from. If admins want it, a small in-memory count of today's answers by the three words (per copy of the app, lost on a restart) is the least that would do; it isn't built here.

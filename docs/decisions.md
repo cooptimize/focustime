@@ -3850,3 +3850,11 @@ Unnumbered until merge.
 | - | Done | Nothing new is logged. `AzureError` carries Azure's code word for the chip's reason; the log keeps its one `kind` as before. |
 | - | Done | Unchanged: the Azure client's allowed calls (`ALLOWED`, its test), the Azure hard rule, VM-4's retry and 2 minutes, VM-5's rules, the background policy and its test. No migration, dependency or new background work. `demo.vm_fail` takes the new failures for verification runs only. |
 | - | Open | What on Azure's side refused one copy, and whether the product owner's access is switched on for a time, are in `docs/open-questions.md` under VM-6. |
+
+## VM-7: A refused Azure answer says enough to explain the next one (Nov 18)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | Admin › Health gets no Azure line. Health keeps nothing it could count today's Azure answers from: its rows are the status registry's (DevOps polling, client accounts, telemetry batches sent and dropped, the background passes) and the scheduler's runs, none of which records an Azure answer. Counting them would mean keeping something new, which this step doesn't do. The answers are counted from the logs instead, with the queries in `docs/technical/operations.md`. |
