@@ -562,7 +562,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </p>
         )}
         {rowStatus._page?.error && <p className="error-line calls-note" role="alert">{rowStatus._page.error}</p>}
-        {selecting && <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} onDone={() => (setSelecting(false), setTicked(new Set()))} />}
+        {selecting && ticked.size > 0 && <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} onDone={() => (setSelecting(false), setTicked(new Set()))} />}
         {show === "open" && open.needs.length > 0 && (
           <section className="calls-day calls-needs" aria-labelledby="calls-needs" data-section="needs">
             <h2 id="calls-needs" className="calls-day-head">{CLOSE_TEXT.needs} <span className="calls-head-count">{open.needs.length}</span></h2>
