@@ -1856,3 +1856,13 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **A hand-added call may take a recording that also fits another listed call.** The recording is mine and the call only I see. The other call still shows it as fitting, and bringing it there too would give both calls the same words; that isn't refused.
 - **On the phone Skip all reads "Skip all" or "Skip last N"** in the call's header, its full words as its label, so the header keeps one row.
 - **CLAUDE.md's Pocket sentence** changes only to name the presses as they are now and the hand-added call; it is quoted in the pull request for the product owner's OK.
+- **From the demo walkthrough, left for a later step** (each would reach past MC-5's brief or into words other screens share):
+  - My own promise reads "in Alex's Promises" and the toast "Added to Alex's Promises" (MC-1's words). "your Promises" needs my id on each proposal.
+  - With a call open, Skip all is on its selected row and in its header. The brief puts it on the selected row; hiding it there while the same call is open would say it once.
+  - The Show chips' counts repeat their group heads' counts ("New in DevOps 3" and "NEW IN DEVOPS 3"), and the chip says "Comments" where the head says "Comments on stories".
+  - Add a call offers a recording that already has a row ("Which client?"). Choosing the client on that row is shorter. Leaving rows with a client question out of Add a call's list would be a change to what Add a call offers.
+  - In Add a call, a chosen recording's time shows on its card and again beside About.
+  - A quote says time into the call ("1:05"), the Transcript says clock time ("1:01 PM").
+  - "2 people" counts the invite; a Pocket transcript names "Speaker 2" with no way to name a speaker.
+  - The Undo toast from Keep stays through a later Skip, so its Undo can look like it undoes the Skip.
+  - "Open 24" counts the calls in the folds too.
