@@ -1,0 +1,12 @@
+## WK-6: Meetings named on the day in focus, a call's state on its meeting, no call chips (Nov 18)
+
+- **A past day with the switch on.** The brief keeps a day before today on its quiet card; with the Meetings switch on it stays quiet too (the count only). Should the switch name a past day's meetings?
+- **Timeline view.** The switch is hidden in Timeline view (the rails already draw every meeting). A call that needs me whose meeting isn't titled on the rail shows as the count line under the card.
+- **A plain meeting row opens the meeting's menu** (as the rail's meetings do); only a row whose call needs me opens the call. Should a row whose call needs nothing open the call too?
+- **A call with no meeting shows only while it needs me** (a reviewed hand call disappears from the card). It stays in Calls.
+- **The demo's registered call** was registered by join link, so it has no series id; with no key on its occurrence it ties by time (exactly one meeting fits). Real calls registered by meeting gain their key on the next layout.
+- **Occurrences laid out before this step** have no key until the job lays them out again (it fills a missing key); until then they tie by time as before.
+- **The fallback by time** refuses a meeting that is another call's keyed meeting, and two meetings at the same time with no key. Is "exactly one fits" too strict for back-to-back series at the same slot?
+- **From the review passes, left as they are (outside WK-6 or a choice for later):** the Meetings switch changes nothing visible when no other day has meetings (its hover says what it does); calls that need me aren't in Day's urgent strip, so at 1280x720 they can sit below the fold; the live-call banner and the rows both say "Call"; with the panel open and another day in focus a narrow day squeezes the live-call banner (it breaks inside words, from before WK-6); which day is in focus shows only by its selected card; the heading reads "2h 45m · 45m free" (two times) rather than "2h 45m in meetings"; a meeting across 12:30 is named in both halves; Review this call is offered on a meeting that hasn't started; the phone's day glance keeps its call mark (the phone is unchanged in WK-6); `ui/DayCalendar.tsx` still draws the mark but nothing imports it.
+- **The calendar snapshot holds the iCalUId.** The per-person week snapshot (in memory hosted, a 0600 file in the developer loop) keeps the normalized events as they are, now with `key`, beside the titles it already held. Nothing else stores it.
+

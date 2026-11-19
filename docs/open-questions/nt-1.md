@@ -1,0 +1,14 @@
+## NT-1
+
+- **STEP 0.4 rows with a different cause.** The Teams rhythm's own settings (`configOf` in `server/main.ts`), the chat poll's and meeting capture's person contexts read raw settings; none of them uses the Dataverse user today, so they were left. The VM chip's morning prompt counts PTO but not holidays (its own rule, also in requests); a holiday reaches the notice only through the gate.
+- **The first morning back (the second review).** Up to six app notices at once (Plan today, the week, the direction review, promises due, expiring secrets, the VM), each pushed to every device, plus the Teams brief; nothing merges them as "While you were focused" does. Sends, assignments and notes older than 72 hours and urgent requests older than their window never notify (Week › Plan, Backlog and the Inbox still show them). A quiet notice leaves no row in More › Notifications. A direction review missed until the next month is never sent. Should a "While you were off" notice gather them?
+- **A holiday for someone who chose to work it.** It quiets their notices like PTO (with the setting on) and skips their reminders whatever the setting. Should working a holiday (planning it, or a setting) undo that?
+- **Is 24 hours right for notices?** Taken from the VM start. If PTO reads keep failing for longer (a missing Dataverse role, an outage), the reminders, the Ahead rituals and the status nudge wait every working day with one log line a day and nothing told (the first review). A person with that problem sees "no reminders"; should it say so, or fall back to a working day after a while?
+- **The Teams rhythm and unknown PTO.** It takes the gate's fact, so with PTO unknown its status nudge and brief send while the app's status nudge waits. Left as it was (the rhythm uses the gate's facts).
+- **The stored last read's time.** The start and the chip stamp their read `now`, though the shared read may be up to 30 minutes old, so the 24 hour rule can stretch to about 24.5 hours, and PTO entered in the last 30 minutes can be missed by the start. VM-3 left the stamp; not changed.
+- **Cost.** In production every background settings read also reads the stored identity (as requests do); a failing PTO read also reads the start's stored state on each gate pass. Small; not cached further.
+- **The background's morning prompt now knows PTO** in production (as the chip in a request always did), so a PTO morning no longer gets "Your VM is off" even with the setting off.
+- **A flaky browser test, not this step's:** the shake of `e2e/settings/notifications.test.ts` failed once in 40 on "clicking a notification opens its view" (its poll for `#/week/2026-11-09/add`); the new Days off test passed 40 of 40.
+
+- **VM-3's "the notices' own PTO check has the same cause"** is answered by this step (marked there).
+

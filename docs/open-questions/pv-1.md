@@ -1,0 +1,36 @@
+## PV-1
+
+- The zip and its 32 pictures of a real session, and the 32 that were in `docs/ux/U1/screens/live/`, remain in the repository's history and in the refs GitHub keeps for every pull request (`refs/pull/<n>/head`). Anyone can still fetch them from a commit before CI-3 or PV-1. There are two ways to close that, both the product owner's decision: make the repository private, or rewrite history to drop them (a force push to `main` and every branch that has them), then ask GitHub Support to remove the cached views and pull request refs that still hold them. A rewrite changes every later commit id, so open pull requests and worktrees would need rebuilding.
+- These 29 files under `docs/demo/` may hold real screens: the scripts for steps 15.4 to 16.3 use demo mode only when given `--demo` and nothing records that they were, and step 17.6's four have no script on main and no record that they came from the demo. They are not opened, described or removed here (`docs/ux/pv1/step0.md`). Check them, and remove any that aren't demo?
+  - `docs/demo/154-inbox-sort-chips.png`
+  - `docs/demo/154-settings-you.png`
+  - `docs/demo/154-today-vm-prompt-light.png`
+  - `docs/demo/154-today-vm-prompt.png`
+  - `docs/demo/154-vm-delay-preview.png`
+  - `docs/demo/154-vm-menu.png`
+  - `docs/demo/154-vm-stop-preview.png`
+  - `docs/demo/155-settings-notifications-light.png`
+  - `docs/demo/155-settings-notifications.png`
+  - `docs/demo/155-settings-you.png`
+  - `docs/demo/162-menu-person-light.png`
+  - `docs/demo/162-roadmap-ahead.png`
+  - `docs/demo/162-today-checkin-light.png`
+  - `docs/demo/162-today-now.png`
+  - `docs/demo/162-today-plan.png`
+  - `docs/demo/162-week-plan.png`
+  - `docs/demo/162-week.png`
+  - `docs/demo/163-focus-deep.png`
+  - `docs/demo/163-help-presence-light.png`
+  - `docs/demo/163-help-presence-word.png`
+  - `docs/demo/163-roadmap-presence.png`
+  - `docs/demo/163-settings-focus.png`
+  - `docs/demo/163-today-vm-prompt.png`
+  - `docs/demo/163-vm-menu.png`
+  - `docs/demo/163-week-vm-running.png`
+  - `docs/demo/176-1920-dark-planday.png`
+  - `docs/demo/176-1920-dark-today.png`
+  - `docs/demo/176-1920-light-planday.png`
+  - `docs/demo/176-1920-light-today.png`
+- The archive rule names the common archive types (zip, 7z, rar, tar, tgz, gz, bz2, xz, zst, jar). Office files (docx, pptx, xlsx) are zip files inside and can hold pictures too; they aren't refused because none is on main and the step names archives. Add them?
+- The rule covers `docs/` only, as the step says. An archive elsewhere (for example under `assets/`) is still allowed below 300 KB. Widen it to the whole repository?
+

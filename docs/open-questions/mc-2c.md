@@ -1,0 +1,18 @@
+## MC-2c: Calls started in a client's chat (Nov 18)
+
+- **The event's `callId` as the ad hoc call's id.** No Microsoft page says they are the same. If production answers 404 for every list and content request, this is the first thing to check.
+- **The event's transcript id as a fallback.** Used only when the list answers 400, 404 or 405. `callTranscriptICalUid` may not be the transcript's `id`; the pages don't say.
+- **A chat call with no known start is dropped.** The poll keeps a call's start from its started event (or the ended event's `startDateTime`); a transcript event for a call held with no start isn't listed.
+- **A chat call's end when no end event came.** The row shows its start alone; the kept call's end (for the Pocket fit, the call's page and Week's rule for a call with no meeting) is when Teams said its transcript was ready.
+- **A transcript event for a call still "live".** A call with no end event counts as live for 10 hours (CW-1's limit), so a transcript event during that time doesn't list it until then. Transcription stopped mid-call would show only after the call ends.
+- **Settings doesn't ask for the token.** The row is missing until a token another scope set asked for happens to list `CallTranscripts.Read.All`. Probing it would ask for a token outside a press, which the brief rules out.
+- **A full run of `app-registration.sh` and the portal consent.** The script sets the registration's permissions from its own list; the portal consent for `CallTranscripts.Read.All` would need adding again after a full run (as Q-HK1-1).
+- **Who sees a kept chat call.** Its attendees are the Cooptimizers in the chat when Review was pressed. Someone who joins the chat later doesn't see it; someone who leaves or stops following stops seeing it.
+- **"Refused" covers every other 4xx.** Only a 403 is named in the brief; a 400 on content is shown the same way.
+- **The organization's setting off uses MC-4's words**, which point to "the meeting's recap in Teams". For a chat call the recap is in the chat; the words weren't changed.
+- **A chat's call kept under another client.** The brief makes the chat's client a suggestion the presser can change. Then the transcript goes to the AI under the chosen client's Allow AI, and its proposals go to that client's DevOps, though the words came from another client's chat. Should Review on a chat call keep the chat's own client only (a client-facing chat certainly), or allow Internal only as the other choice?
+- **A reviewer after leaving the chat.** The presser keeps seeing the call and its transcript (MC-2's reviewer), even after leaving its chat or no longer following its client; Get it from Teams checks again. The others on it don't.
+- **Following, for the others on a kept chat call's promises.** The conversation store's membership checks that they're in the chat now; whether they follow the client can't be read there (only for the signed-in person), so only the chat is checked for promises. The call's own page checks both.
+- (Answered by MC-6, item 15, for the Hide message and the chat call's mark.) **Calendar words elsewhere in Calls.** Calls' header ("The calls you were on"), the Hide toast ("1 meeting hidden"), the Hidden filter's note about Outlook and the footer ("Only you see the calls from your calendar") are MC-4's, written for calendar calls; they now sit beside chat calls too. Left as they are here (less change); worth one wording pass across Calls.
+- (Answered by MC-6, item 16.) **A refused chat call's row.** After a refusal it moves to Needs you as "Upload the transcript", like any kept call without one; it doesn't say Teams refused. Left as MC-2's states.
+

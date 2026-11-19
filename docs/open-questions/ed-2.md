@@ -1,0 +1,21 @@
+## ED-2
+
+- Should a moved item take its new parent's area and iteration? Still open from ED-1. ED-2 changes only the link, from the Grid as from the card.
+- Should description ever be edited in the Grid? Not in ED-2: it stays on the story card with its own preview. E on a row opens the card ready to edit.
+- Should bulk offer tags or priority? Not in ED-2: only what the Grid shows (owner, state, size, parent, target date).
+- From the DevOps documentation (STEP 0.6), left unsaid: the Update page never says in words that fields and relations may share one patch (its "Add a hyperlink" and "Add an attachment" examples do it); it doesn't say that a patch is applied all or nothing, or what a failed `test` returns; it doesn't say a `remove` on `/relations/{index}` uses the index as last read (ED-1 relies on the rev test for that); and no page read states the Title's 255 character limit (FocusTime keeps QC-1's 255). Recheck if DevOps ever returns a partial result.
+- Conflicts are per field in the Grid (a comment doesn't block a title) and per revision on the card (any newer revision refuses). ED-2 was told to keep the Grid's way. Should the card move to per field too (ED-1's open question)?
+- A row's staged title and parent are laid over the item everywhere the Backlog model is read (`buildRows`), the assistant's reads included, so the assistant names an item by the title I staged. Should it say the DevOps title instead?
+- Assign to… in bulk needs rows from one client (each client has its own people). Should it instead take a mixed selection and assign per client where the person is on both?
+- State… lists a state only some rows' types take but doesn't let it be picked. Should it be pickable, staging the rows it fits and skipping the rest with the reason? Answered in UC-2 (item 8): it can be picked, stages the rows it fits and skips the rest with the reason; UC-3 adds a browser test that follows it to the save.
+- The drag only reaches parents that are rows on screen (it doesn't scroll the page while dragging, and at the Stories level no parent is a row). Move… reaches all of them. Should the drag scroll, or a level always show its parents as drop rows?
+- A row's menu shows only on rows I may change; a read-only row has no menu, and E still opens its card. Should a read-only row have a menu with the reasons?
+- The move rule's words use "a" or "an" by the first letter ("An User Story doesn't go under…"), as QC-1's and ED-1's do. Fix the article for words like User? Answered in UC-3: the article goes by sound ("a User Story", "an MVP"), and the move rule and the New form's rule need none.
+- Renaming in the Grid writes the title only; the card's Edit can fix the title and the description in one preview. Two ways to do one thing: keep both?
+- The Grid's hover buttons (Rename, New under, the menu) take room in the Item cell while a row is pointed at. On narrow windows the title gets short. Move Rename into the menu only?
+- The demo's features now have a state stories don't (On hold). It exists only to show State… on mixed types.
+- From review 1, left: a click elsewhere cancels a rename (as the other cells' editors do) and the typed words go; should it keep them instead? A staged title or move says so in words, a staged date, owner, state or size only with the cell's tint and dot: give all of them words? A cell's editor says Save where it only stages. Enter on a title cell opens nothing (it folds a row with children); double-click doesn't rename. Esc in Review closes it only with focus inside. The bulk bar is a long way from a row by Tab. Move…'s popover sits over the rows above its own.
+- From review 1: after a drop, the story shows among its new parent's stories where its own rank puts it, which can be first. That is its true place, but it can read as a reorder for a moment. Say "by rank" there?
+- From review 1 (not ED-2's): "N changes to save" and Save span every client whatever the client filter shows, and the demo starts with three seeded changes.
+- From review 2, left: an item with two parent links in DevOps whose first is the staged parent is skipped as already there (the card's Move… would repair it); a title that differs only by inner spaces is announced as staged but there is nothing to stage.
+
