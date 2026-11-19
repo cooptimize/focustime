@@ -88,9 +88,13 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
 export type RowStatus = { busy: string | null; error: string | null; occurrenceId: number | null };
 
 /** MC-5: a week row's mark, short, with its full words as its label and on hover. */
-export function MarkShort({ mark }: { mark: CallMarkKind }) {
+export function MarkShort({ mark, check }: { mark: CallMarkKind; check?: CallRow["check"] }) {
   const m = markShort(mark);
-  if (!m) return null;
+  // No mark yet: while Teams is asked, "Checking…"; past the cap, "Not checked" (MC-4's words, kept).
+  if (!m) {
+    const w = check === "checking" ? MARK_TEXT.checking : check === "unchecked" ? MARK_TEXT.unchecked : null;
+    return w ? <span className="calls-mark quiet" data-call-mark={check ?? ""}>{w}</span> : null;
+  }
   return <span className={`calls-mark ${mark}`} title={m.full} aria-label={m.full} data-call-mark={mark ?? ""}>{m.short}</span>;
 }
 
@@ -137,7 +141,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
           // A recording that fits says so by its mark alone.
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
-        <MarkShort mark={r.mark} />
+        <MarkShort mark={r.mark} check={r.check} />
         {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}
@@ -219,7 +223,7 @@ export function ClosedRow({ r, open, zone, today, colors, onOpen }: { r: CallRow
       </button>
       <span className="calls-row-end">
         <span className="calls-state" data-closed-line="">{r.closed ? closedLine(r.closed) : ""}</span>
-        <MarkShort mark={r.mark} />
+        <MarkShort mark={r.mark} check={r.check} />
       </span>
     </li>
   );

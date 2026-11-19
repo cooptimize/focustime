@@ -418,6 +418,12 @@ describe("MC-5: a call added by hand takes its time from any of my recordings", 
     // Without move it is refused as before: the recording doesn't fit the call's time.
     expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId })).toMatchObject({ ok: false, status: 422, code: "pocket_not_this_call" });
     expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: "yes" })).toMatchObject({ ok: false, status: 400 });
+    // Pocket failing on the read leaves the call where it was: it moves only once the words are in.
+    const read = t.ports[ME]!.client.recording;
+    t.ports[ME]!.client.recording = async () => { throw new Error("pocket down"); };
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: true })).toMatchObject({ ok: false });
+    expect((await t.meetings.occurrence(occurrenceId))!.startAt).not.toBe("2026-11-08T12:00:00Z");
+    t.ports[ME]!.client.recording = read;
     t.data(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: true }));
     const occ = (await t.meetings.occurrence(occurrenceId))!;
     expect([occ.startAt, occ.endAt]).toEqual(["2026-11-08T12:00:00Z", "2026-11-08T12:20:00Z"]);

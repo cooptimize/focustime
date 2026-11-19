@@ -221,9 +221,9 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const recChoices = useMemo<RecChoice[]>(() => {
     const done = (data?.occurrences ?? []).filter((o) => o.hasTranscript);
     return (pocket?.recordings ?? [])
-      .filter((x) => !done.some((o) => goesWith(spanOf(x), o)))
+      .filter((x) => !done.some((o) => goesWith(spanOf(x), o)) && !hides?.keys.has(`pocket:${x.id}`))
       .map((x) => ({ rec: x, fits: rows.find((r) => r.bucket !== "hidden" && r.pocket.some((p) => p.id === x.id)) ?? null }));
-  }, [pocket, data, rows]);
+  }, [pocket, data, rows, hides]);
   const goneCount = gone.keys.length + gone.series.length;
   const counts = useMemo(() => filterCounts(rows, client, goneCount, hides?.series), [rows, client, goneCount, hides]);
   const nameOfClient = useCallback((k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k, [clients]);
@@ -510,7 +510,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       {data && pocketOn === false && (
         <p className="calls-pocket muted" data-calls-pocket=""><a href="#/settings/connections/pocket">{LIST_TEXT.connect}</a></p>
       )}
-      {data && pocketOn && (pocketErr || (pocket && pocket.counts.address > 0) || addressOpen || pocketNote) && (
+      {data && pocketOn && (pocketErr || (pocket && (pocket.counts.address > 0 || pocket.more)) || addressOpen || pocketNote) && (
         // MC-5: Pocket's one quiet line, only when there is something to do (its counts are in Settings › Connections › Pocket).
         <div className="calls-pocket" data-calls-pocket="">
           {pocketErr ? (
@@ -525,6 +525,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           ) : pocketNote && !addressOpen ? (
             <span className="muted" role="status" data-pocket-line="">{pocketNote}</span>
           ) : null}
+          {/* Something to know: Pocket had more than FocusTime reads at once. */}
+          {!pocketErr && pocket?.more && !addressOpen && <span className="muted" role="status" data-pocket-more="">{PW.more}</span>}
           {addressOpen && (
             <PocketAddressForm
               onCancel={() => setAddressOpen(false)}
@@ -963,6 +965,8 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
+  // A call kept by a first press whose recording then failed: a second press brings the recording to it, never a second call.
+  const kept = useRef<{ recId: string; id: number } | null>(null);
   const min = Temporal.PlainDate.from(today).subtract({ days: 13 }).toString();
   // The recording's title is the name until I type one.
   useEffect(() => {
@@ -974,7 +978,8 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
     setErr(null);
     try {
       if (mode === "pocket" && rec) {
-        const id = (await call<{ occurrenceId: number }>("meeting.pocket_add", { recordingId: rec.rec.id, name: name.trim(), clientKey: client })).occurrenceId;
+        const id = kept.current?.recId === rec.rec.id ? kept.current.id : (await call<{ occurrenceId: number }>("meeting.pocket_add", { recordingId: rec.rec.id, name: name.trim(), clientKey: client })).occurrenceId;
+        kept.current = { recId: rec.rec.id, id };
         await bringPocket(id, { id: rec.rec.id, part: "all", whole: null, replace: false });
         return onAdded(id, null);
       }
@@ -1046,6 +1051,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
       ) : (
         <p className="muted">{PAGE_TEXT.noRecordings}</p>
       ))}
+      {mode === "pocket" && rec && <p className="mtg-pocket-who" data-pocket-who="">{PW.seeMe} {PW.ai}</p>}
       {mode === "file" && (
         <div className={`mtg-drop mtg-dropzone${dropping ? " dropping" : ""}`} data-drop=""
           onDragOver={(e) => [...e.dataTransfer.types].includes("Files") && (e.preventDefault(), setDropping(true))} onDragLeave={() => setDropping(false)}
@@ -1362,7 +1368,7 @@ function ReviewScreen(props: ReviewProps) {
           <h3>{CALL_STATE.aiFailed}</h3>
           {o.aiMessage && <p>{o.aiMessage.replace(`${CALL_STATE.aiFailed}: `, "").replace(/^./, (c) => c.toUpperCase())}</p>}
           {o.aiNext && <p className="muted">{o.aiNext}</p>}
-          {editable && run.canRerun && <button type="button" className="mini primary" disabled={!!run.busy} onClick={() => void run.rerun(false)}>{run.busy === "rerun" ? "Proposing…" : CALL_ROW.tryAgain}</button>}
+          {editable && run.canRerun && <button type="button" className="mini primary" disabled={!!run.busy} onClick={() => void run.rerun()}>{run.busy === "rerun" ? "Proposing…" : CALL_ROW.tryAgain}</button>}
         </section>
       )}
       {note && <p className="error-line" role="alert">{note}</p>}
@@ -1704,7 +1710,7 @@ function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>) {
   const id = occ?.id ?? null;
   useEffect(() => {
     if (id === null) return;
-    if (takeRerun(id)) void rerun(false);
+    if (takeRerun(id)) void rerun();
     if (takeFetch(id)) void fromTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -1788,7 +1794,7 @@ function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone,
         <div className="mtg-choice-body" data-pocket-bring="">
           {recs.length ? (
             <>
-              <PocketFields recs={sorted} call={moves && chosen ? chosen : occ} zone={zone} value={choice} onChange={setChoice} who="" listed />
+              <PocketFields recs={sorted} call={moves && chosen ? chosen : occ} zone={zone} value={choice} onChange={setChoice} who={series.call === "hand" ? PW.seeMe : series.call ? PW.seeCall : PW.seeClient} listed />
               {moves && chosen && <p className="mtg-run-line" role="note" data-takes-time="">{PAGE_TEXT.takesTime(whenLine(chosen.startAt, chosen.endAt, zone))}</p>}
               {err && <p className="error-line" role="alert">{err}</p>}
               <span><button type="button" className="mini primary" disabled={busy} onClick={() => void bring()} data-use-recording="">{busy ? PW.bringing : choice.replace ? PW.replaceYes : PAGE_TEXT.useRecording}</button></span>
