@@ -107,7 +107,7 @@ Fit is never red. QT-1 and QT-2: nothing a person reads says they planned too mu
 - The form's title: **New in <client>'s DevOps**, or **New work item** before a client is chosen. Labels: Client, Level, Title, Parent, Assigned to, Target date; **More: description and size**. The title's placeholder: "What is this feature?" in the chosen type.
 - **Create in DevOps** (opens the preview; nothing is created until it is confirmed: "Nothing is created until you confirm the preview."), **Save as draft** ("Saved in FocusTime only."), **Cancel**.
 - Without a write PAT: **"DevOps is read-only for <client> until you add your own write PAT. Add it in Settings"**. Never "disabled" or "not allowed".
-- The parent: "Optional. Any open feature or capability" (the types one level up), "A domain is at the top: no parent". Refusals say the rule: "A User Story doesn't go under an Epic in this process. Under an Epic go: Feature".
+- The parent: "Optional. Any open feature or capability" (the types one level up), "A domain is at the top: no parent". Refusals say the rule in the move rule's words (UC-3): "In Logistics's process, Epic isn't the level above User Story. Under Epic go: Feature" ("In this process" where the project isn't known), "In Logistics's process, nothing goes under Product Backlog Item".
 - Backlog after a create: **"Created #5101"**, or **"Created #5101. Shown until you leave Backlog. Hidden by: Assigned to me"**.
 - The block panel: **"New feature: <text>"** beside New to-do and New draft story; Break down: **"Add one by hand…"**.
 
@@ -318,7 +318,7 @@ All in one place in code: `WHERE_TEXT` in `plan/where-lookup.ts`. The three ques
 
 All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change) and `WHERE_TEXT` in `plan/where-lookup.ts` (the lookup).
 
-- After a client change took out picked names, one line under the Client field: **"Took out 2 names picked from Northwind's code."** (**"1 name"** for one; **"Northwind's and Atlas's code"** when they came from two) with **Undo** (its name for a screen reader: **"Undo: put back the 2 names"**). After Undo: **"Put back 2 names. They're from Northwind's code, not Atlas's."** (**"It's"** for one). Screen readers hear each line once.
+- After a client change took out picked names, one line under the Client field: **"Took out 2 names picked from Northwind's code."** (**"1 name"** for one; **"Northwind's and Atlas's code"** when they came from two) with **Undo** (its name for a screen reader: **"Undo: put back the 2 names and the client"**). After Undo (UC-3: the client comes back too): **"Put back 2 names and the client, Northwind."** (**"1 name"** for one). Screen readers hear each line once.
 - A row that opens: **Pages** for a report in either format, **Tables** for any semantic model (review 3: TMDL models said **Open** before), **Measures and columns** for a table (a one-file model's table too).
 - The browse button's tooltip: **"Browse Northwind's code (Alt+Down)"** (its name for a screen reader stays **"Browse Northwind's code"**, with Alt+Down as its key shortcut).
 - A hidden page's row: **"Page of Region review · Hidden"**; what its pick writes: **"Store drill-through (hidden page, Region review report)"**. A one-file model's table writes **"Returns (table, Returns semantic model)"**, like any model table.
@@ -343,6 +343,15 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - Backlog's bulk State… on mixed types: see ED-2 words (rewritten for UC-2).
 - The move rule: **"In <project>'s process, Epic isn't the level above User Story"**, **"In <project>'s process, Epic is the top level, so it has no parent to change"**. No "a" or "an" before a type's name.
 - Admin: **"Client chats"** (never "Delivery chats"); the missing Chat.Read line: **"A FocusTime admin adds a client's chats in Admin › Clients"**.
+
+## UC-3 words (Nov 18)
+
+- The Teams bot's calls note and the assistant's links: **"Open Calls"**, to `#/calls` (were "Open client calls" and "Open Client calls", to `#/meetings`). The note's header stays **"Client calls"**, the name of its switch in Settings.
+- "a" or "an" before a type's name goes by sound: **"a User Story"**, **"an Epic"**, **"an MVP"**, **"a UAT task"**, **"an hour block"**.
+- The New form's parent rule: **"In Logistics's process, Epic isn't the level above User Story. Under Epic go: Feature"** (see QC-1 above).
+- The Inbox's group headings: **"2 need you"**, **"1 needs you · 3"** (what needs me, then the rows when they differ), **"none need you · 3"**; Captures' headings show only their rows (**"3"**). The phone's chips include **"No client"**, without a number like its others.
+- Every tab's tooltip ends with **"Press 1"** to **"Press 7"**: **"Calls: review the calls you were on. Press 6"**. Status's reason, when it has one, comes before it.
+- After a client change, Undo: **"Undo: put back the 2 names and the client"**, then **"Put back 2 names and the client, Northwind."**
 
 ## VM-3 words (Nov 17)
 
@@ -382,7 +391,7 @@ From `plan/call-words.ts` (`CALLS_TEXT`, `FETCH_WORDS`).
 
 From `plan/call-words.ts` (`CALL_LIST`). A row's state keeps MC-1d's and MC-2's words (`CALL_STATE`, `CALLS_TEXT.notReviewed`); nothing was reworded.
 
-- The tab: **"Calls"**, between Inbox and Code, its title **"Calls: review the calls you were on (6)"**, its count read as **"1 needs you"** / **"3 need you"**. The command menu says **"Calls"** (still found by "my calls" and "client calls"). Key 6 is **"Calls: the calls you were on, by day, with the one you choose beside the list"**; 7 is Code.
+- The tab: **"Calls"**, between Inbox and Code, its title **"Calls: review the calls you were on. Press 6"** (UC-3; was "(6)"), its count read as **"1 needs you"** / **"3 need you"**. The command menu says **"Calls"** (still found by "my calls" and "client calls"). Key 6 is **"Calls: the calls you were on, by day, with the one you choose beside the list"**; 7 is Code.
 - The list's head: **"Calls"**, **"The calls you were on, newest first"**, **"Add a call"**, **"Hide the list"** (and **"Show the list"** beside the call when it is hidden).
 - Filters: **"All"**, **"To review"**, **"Not reviewed"**, **"Done"**, each with its count; their titles **"Every call in the list"**, **"Calls waiting for you: proposals to review, a transcript to upload or a step that failed"**, **"Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer"**, **"Calls that were reviewed, had nothing to propose or had no transcript"**. Client chips: **"All clients"**, each client, **"No client yet"**.
 - Day headings: **"Today"**, **"Yesterday"**, then **"Mon, Nov 2"**.
